@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace HexCrawl.Domain.Spatial;
 
 public enum DistanceUnitKind
@@ -7,8 +9,20 @@ public enum DistanceUnitKind
     Custom
 }
 
-public readonly record struct DistanceUnit(DistanceUnitKind Kind, string Symbol, double? MetersPerUnit)
+public readonly record struct DistanceUnit
 {
+    [JsonConstructor]
+    public DistanceUnit(DistanceUnitKind kind, string symbol, double? metersPerUnit)
+    {
+        Kind = kind;
+        Symbol = symbol;
+        MetersPerUnit = metersPerUnit;
+    }
+
+    public DistanceUnitKind Kind { get; }
+    public string Symbol { get; }
+    public double? MetersPerUnit { get; }
+
     public static DistanceUnit Miles { get; } = new(DistanceUnitKind.Mile, "mi", 1609.344);
     public static DistanceUnit Kilometers { get; } = new(DistanceUnitKind.Kilometer, "km", 1000);
 
@@ -30,6 +44,7 @@ public readonly record struct DistanceUnit(DistanceUnitKind Kind, string Symbol,
 
 public readonly record struct DistanceMeasure
 {
+    [JsonConstructor]
     public DistanceMeasure(double value, DistanceUnit unit)
     {
         if (value < 0 || double.IsNaN(value) || double.IsInfinity(value))
