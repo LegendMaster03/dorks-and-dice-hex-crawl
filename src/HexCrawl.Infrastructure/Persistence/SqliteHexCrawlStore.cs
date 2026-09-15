@@ -235,7 +235,7 @@ public sealed class SqliteHexCrawlStore(string connectionString) : IHexCrawlStor
         }
 
         var name = reader.GetString(0);
-        var state = Deserialize<ExpeditionState>(reader.GetString(1));
+        var state = Deserialize<ExpeditionStateSnapshot>(reader.GetString(1)).ToDomain();
         var knowledge = Deserialize<PlayerKnowledgeState>(reader.GetString(2));
         var procedure = Deserialize<CrawlProcedureProfile>(reader.GetString(3));
         RuntimePauseReason? pauseReason = reader.IsDBNull(4)
@@ -308,7 +308,7 @@ public sealed class SqliteHexCrawlStore(string connectionString) : IHexCrawlStor
         command.Parameters.AddWithValue("$id", updated.State.Id.ToString("D"));
         command.Parameters.AddWithValue("$owner", updated.OwnerUserId);
         command.Parameters.AddWithValue("$name", updated.Name);
-        command.Parameters.AddWithValue("$state", Serialize(updated.State with { History = [] }));
+        command.Parameters.AddWithValue("$state", Serialize(ExpeditionStateSnapshot.FromDomain(updated.State)));
         command.Parameters.AddWithValue("$knowledge", Serialize(updated.Knowledge));
         command.Parameters.AddWithValue("$procedure", Serialize(updated.Procedure));
         command.Parameters.AddWithValue("$pause", updated.PauseReason?.ToString() is { } pause ? pause : DBNull.Value);
@@ -421,7 +421,7 @@ public sealed class SqliteHexCrawlStore(string connectionString) : IHexCrawlStor
         command.Parameters.AddWithValue("$world", expedition.State.OverworldId.ToString("D"));
         command.Parameters.AddWithValue("$owner", expedition.OwnerUserId);
         command.Parameters.AddWithValue("$name", expedition.Name);
-        command.Parameters.AddWithValue("$state", Serialize(expedition.State with { History = [] }));
+        command.Parameters.AddWithValue("$state", Serialize(ExpeditionStateSnapshot.FromDomain(expedition.State)));
         command.Parameters.AddWithValue("$knowledge", Serialize(expedition.Knowledge));
         command.Parameters.AddWithValue("$procedure", Serialize(expedition.Procedure));
         command.Parameters.AddWithValue("$pause", expedition.PauseReason?.ToString() is { } pause ? pause : DBNull.Value);
@@ -445,6 +445,149 @@ public sealed class SqliteHexCrawlStore(string connectionString) : IHexCrawlStor
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
         options.Converters.Add(new JsonStringEnumConverter());
         return options;
+    }
+
+    private sealed record ExpeditionStateSnapshot(
+        Guid Id,
+        Guid OverworldId,
+        WorldPoint Position,
+        WorldPositionPrecision PositionPrecision,
+        HexCoordinate CurrentHex,
+        int? EntryDirection,
+        int? LastTravelDirection,
+        DistanceMeasure Progress,
+        DistanceMeasure? CurrentExitRequirement,
+        int? IntendedDirection,
+        int? ActualDirection,
+        bool IsLost,
+        int VeerSteps,
+        DistanceMeasure DistanceTraveled,
+        long ElapsedTravelTicks,
+        int CompletedWatches,
+        ActiveWatchSnapshot? ActiveWatch)
+    {
+        public static ExpeditionStateSnapshot FromDomain(ExpeditionState state) => new(
+            state.Id,
+            state.OverworldId,
+            state.Position,
+            state.PositionPrecision,
+            state.Traversal.CurrentHex,
+            state.Traversal.EntryDirection?.Value,
+            state.Traversal.LastTravelDirection?.Value,
+            state.Traversal.Progress,
+            state.Traversal.CurrentExitRequirement,
+            state.IntendedDirection?.Value,
+            state.ActualDirection?.Value,
+            state.Navigation.IsLost,
+            state.Navigation.VeerSteps,
+            state.DistanceTraveled,
+            state.ElapsedTravelTime.Ticks,
+            state.CompletedWatches,
+            state.ActiveWatch is null ? null : ActiveWatchSnapshot.FromDomain(state.ActiveWatch));
+
+        public ExpeditionState ToDomain() => new()
+        {
+            Id = Id,
+            OverworldId = OverworldId,
+            Position = Position,
+            PositionPrecision = PositionPrecision,
+            Traversal = new HexTraversalState
+            {
+                CurrentHex = CurrentHex,
+                EntryDirection = EntryDirection.HasValue ? new HexDirection(EntryDirection.Value) : null,
+                LastTravelDirection = LastTravelDirection.HasValue ? new HexDirection(LastTravelDirection.Value) : null,
+                Progress = Progress,
+                CurrentExitRequirement = CurrentExitRequirement
+            },
+            IntendedDirection = IntendedDirection.HasValue ? new HexDirection(IntendedDirection.Value) : null,
+            ActualDirection = ActualDirection.HasValue ? new HexDirection(ActualDirection.Value) : null,
+            Navigation = new NavigationRuntimeState(IsLost, VeerSteps),
+            DistanceTraveled = DistanceTraveled,
+            ElapsedTravelTime = TimeSpan.FromTicks(ElapsedTravelTicks),
+            CompletedWatches = CompletedWatches,
+            ActiveWatch = ActiveWatch?.ToDomain(),
+            History = []
+        };
+    }
+
+    private sealed record ActiveWatchSnapshot(
+        int WatchNumber,
+        long TotalDurationTicks,
+        long ElapsedTicks,
+        WatchTravelPlanSnapshot Plan,
+        ResolvedEncounterSnapshot Encounter,
+        bool EncounterHandled,
+        RuntimePauseReason? PendingDecision)
+    {
+        public static ActiveWatchSnapshot FromDomain(ActiveWatchState active) => new(
+            active.WatchNumber,
+            active.TotalDuration.Ticks,
+            active.Elapsed.Ticks,
+            WatchTravelPlanSnapshot.FromDomain(active.Plan),
+            ResolvedEncounterSnapshot.FromDomain(active.Encounter),
+            active.EncounterHandled,
+            active.PendingDecision);
+
+        public ActiveWatchState ToDomain() => new(
+            WatchNumber,
+            TimeSpan.FromTicks(TotalDurationTicks),
+            TimeSpan.FromTicks(ElapsedTicks),
+            Plan.ToDomain(),
+            Encounter.ToDomain(),
+            EncounterHandled,
+            PendingDecision);
+    }
+
+    private sealed record WatchTravelPlanSnapshot(
+        int IntendedDirection,
+        string PaceKey,
+        IReadOnlyList<string> Activities,
+        string NavigationAidKey,
+        bool SuppressesNavigationCheck,
+        bool ResetsVeerAtBoundary,
+        bool DeliberateDoubleBack,
+        bool ContinueAcrossBoundaries)
+    {
+        public static WatchTravelPlanSnapshot FromDomain(WatchTravelPlan plan) => new(
+            plan.IntendedDirection.Value,
+            plan.Mode.PaceKey,
+            plan.Mode.Activities.ToArray(),
+            plan.NavigationAid.Key,
+            plan.NavigationAid.SuppressesNavigationCheck,
+            plan.NavigationAid.ResetsVeerAtBoundary,
+            plan.DeliberateDoubleBack,
+            plan.ContinueAcrossBoundaries);
+
+        public WatchTravelPlan ToDomain() => new(
+            new HexDirection(IntendedDirection),
+            new TravelModeSelection(PaceKey, Activities.ToArray()),
+            new NavigationAidSelection(NavigationAidKey, SuppressesNavigationCheck, ResetsVeerAtBoundary),
+            DeliberateDoubleBack,
+            ContinueAcrossBoundaries);
+    }
+
+    private sealed record ResolvedEncounterSnapshot(
+        EncounterOutcomeKind Kind,
+        long? OccursAtTicks,
+        Guid? LocationId,
+        string? Note,
+        ResolutionSource Source,
+        string? ProvenanceNote)
+    {
+        public static ResolvedEncounterSnapshot FromDomain(ResolvedEncounter encounter) => new(
+            encounter.Kind,
+            encounter.OccursAt?.Ticks,
+            encounter.LocationId,
+            encounter.Note,
+            encounter.Provenance.Source,
+            encounter.Provenance.Note);
+
+        public ResolvedEncounter ToDomain() => new(
+            Kind,
+            OccursAtTicks.HasValue ? TimeSpan.FromTicks(OccursAtTicks.Value) : null,
+            LocationId,
+            Note,
+            new ResolutionProvenance(Source, ProvenanceNote));
     }
 
     private sealed record FeatureSnapshot(
