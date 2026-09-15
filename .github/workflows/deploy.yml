@@ -1,0 +1,133 @@
+name: Deploy Hex Crawl
+run-name: Deploy ${{ github.event.workflow_run.head_branch || github.ref_name }} at ${{ github.event.workflow_run.head_sha || github.sha }}
+
+on:
+  workflow_run:
+    workflows: [ "Validate Hex Crawl" ]
+    types: [ completed ]
+  workflow_dispatch:
+
+concurrency:
+  group: dorks-and-dice-hex-crawl
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref_name == 'main') ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.conclusion == 'success')
+    runs-on: [self-hosted, dorks-and-dice-hex-crawl]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Build image
+        timeout-minutes: 10
+        run: docker build -t dorks-and-dice-hex-crawl:latest -f src/HexCrawl.Web/Dockerfile .
+
+      - name: Smoke test container
+        timeout-minutes: 5
+        run: |
+          docker rm -f dorks-and-dice-hex-crawl-smoketest 2>/dev/null || true
+          docker network create dorks-and-dice-hex-crawl-test 2>/dev/null || true
+
+          docker run -d --name dorks-and-dice-hex-crawl-smoketest \
+            --network dorks-and-dice-hex-crawl-test \
+            dorks-and-dice-hex-crawl:latest
+
+          ready=false
+          for i in {1..20}; do
+            if [ "$(docker inspect -f '{{.State.Running}}' dorks-and-dice-hex-crawl-smoketest 2>/dev/null)" != "true" ]; then
+              echo "Hex Crawl smoke-test container exited before becoming ready."
+              docker logs dorks-and-dice-hex-crawl-smoketest || true
+              exit 1
+            fi
+
+            health=$(docker run --rm \
+              --network dorks-and-dice-hex-crawl-test \
+              curlimages/curl:8.12.1 \
+              -fsS http://dorks-and-dice-hex-crawl-smoketest:8080/health 2>/dev/null || true)
+            readiness=$(docker run --rm \
+              --network dorks-and-dice-hex-crawl-test \
+              curlimages/curl:8.12.1 \
+              -fsS http://dorks-and-dice-hex-crawl-smoketest:8080/ready 2>/dev/null || true)
+            appjs=$(docker run --rm \
+              --network dorks-and-dice-hex-crawl-test \
+              curlimages/curl:8.12.1 \
+              -fsS http://dorks-and-dice-hex-crawl-smoketest:8080/app.js 2>/dev/null || true)
+
+            if [ "$health" = "Healthy" ] \
+              && echo "$readiness" | grep -q '"status":"ready"' \
+              && echo "$appjs" | grep -q 'tool-root'; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+
+          if [ "$ready" != "true" ]; then
+            echo "Hex Crawl smoke test failed."
+            docker logs dorks-and-dice-hex-crawl-smoketest || true
+            exit 1
+          fi
+
+      - name: Cleanup smoke-test infrastructure
+        if: always()
+        timeout-minutes: 3
+        run: |
+          docker rm -f dorks-and-dice-hex-crawl-smoketest 2>/dev/null || true
+          docker network rm dorks-and-dice-hex-crawl-test 2>/dev/null || true
+
+      - name: Deploy
+        timeout-minutes: 5
+        run: |
+          docker compose \
+            --project-name dorks-and-dice-hex-crawl \
+            -f docker-compose.yml \
+            config >/dev/null
+
+          docker rm -f dorks-and-dice-hex-crawl 2>/dev/null || true
+
+          docker compose \
+            --project-name dorks-and-dice-hex-crawl \
+            -f docker-compose.yml \
+            up -d --force-recreate --remove-orphans
+
+      - name: Verify deployed service
+        timeout-minutes: 5
+        run: |
+          ready=false
+          for i in {1..30}; do
+            health=$(docker run --rm \
+              --network dorks-and-dice-backend \
+              curlimages/curl:8.12.1 \
+              -fsS http://dorks-and-dice-hex-crawl:8080/health 2>/dev/null || true)
+            readiness=$(docker run --rm \
+              --network dorks-and-dice-backend \
+              curlimages/curl:8.12.1 \
+              -fsS http://dorks-and-dice-hex-crawl:8080/ready 2>/dev/null || true)
+            appjs=$(docker run --rm \
+              --network dorks-and-dice-backend \
+              curlimages/curl:8.12.1 \
+              -fsS http://dorks-and-dice-hex-crawl:8080/app.js 2>/dev/null || true)
+
+            if [ "$health" = "Healthy" ] \
+              && echo "$readiness" | grep -q '"status":"ready"' \
+              && echo "$appjs" | grep -q 'tool-root'; then
+              echo "$readiness"
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+
+          if [ "$ready" != "true" ]; then
+            echo "Deployed Hex Crawl did not become ready."
+            docker logs dorks-and-dice-hex-crawl || true
+            exit 1
+          fi
