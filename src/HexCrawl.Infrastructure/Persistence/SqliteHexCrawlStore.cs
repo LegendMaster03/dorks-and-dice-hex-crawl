@@ -93,7 +93,7 @@ public sealed class SqliteHexCrawlStore(string connectionString) : IHexCrawlStor
         CancellationToken cancellationToken = default)
     {
         await using var connection = await OpenAsync(cancellationToken);
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken);
         var currentVersion = await ReadVersionAsync(
             connection,
             transaction,
@@ -163,7 +163,7 @@ public sealed class SqliteHexCrawlStore(string connectionString) : IHexCrawlStor
         CancellationToken cancellationToken = default)
     {
         await using var connection = await OpenAsync(cancellationToken);
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
         command.CommandText = """
@@ -238,7 +238,7 @@ public sealed class SqliteHexCrawlStore(string connectionString) : IHexCrawlStor
         var state = Deserialize<ExpeditionState>(reader.GetString(1));
         var knowledge = Deserialize<PlayerKnowledgeState>(reader.GetString(2));
         var procedure = Deserialize<CrawlProcedureProfile>(reader.GetString(3));
-        var pauseReason = reader.IsDBNull(4)
+        RuntimePauseReason? pauseReason = reader.IsDBNull(4)
             ? null
             : Enum.Parse<RuntimePauseReason>(reader.GetString(4), true);
         var remaining = TimeSpan.FromTicks(reader.GetInt64(5));
@@ -267,7 +267,7 @@ public sealed class SqliteHexCrawlStore(string connectionString) : IHexCrawlStor
         CancellationToken cancellationToken = default)
     {
         await using var connection = await OpenAsync(cancellationToken);
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken);
         var currentVersion = await ReadVersionAsync(
             connection,
             transaction,
