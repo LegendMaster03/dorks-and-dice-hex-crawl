@@ -90,7 +90,7 @@ public sealed class RuntimeEndpointsTests
                 category = "river",
                 kind = "Line",
                 position = (object?)null,
-                path = new[] { new { x = 0, y = 0 }, new { x = 1.5, y = 2 }, new { x = 3, y = 1 } },
+                path = new[] { new { x = 0d, y = 0d }, new { x = 1.5d, y = 2d }, new { x = 3d, y = 1d } },
                 boundary = (object?)null,
                 expectedVersion = version
             });
