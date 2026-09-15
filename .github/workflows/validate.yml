@@ -41,7 +41,7 @@ jobs:
         run: dotnet build dorks-and-dice-hex-crawl.slnx --configuration Release --no-restore -p:BuildClient=false
 
       - name: Test .NET solution
-        run: dotnet test dorks-and-dice-hex-crawl.slnx --configuration Release --no-restore --no-build -p:BuildClient=false
+        run: dotnet test dorks-and-dice-hex-crawl.slnx --configuration Release --no-restore --no-build -p:BuildClient=false --blame-hang --blame-hang-timeout 60s --logger "console;verbosity=normal"
 
       - name: Build container
         run: docker build -t dorks-and-dice-hex-crawl:test -f src/HexCrawl.Web/Dockerfile .
