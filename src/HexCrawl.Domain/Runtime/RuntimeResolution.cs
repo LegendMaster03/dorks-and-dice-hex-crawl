@@ -133,6 +133,7 @@ public sealed record ActiveWatchState(
     int WatchNumber,
     TimeSpan TotalDuration,
     TimeSpan Elapsed,
+    WatchTravelPlan Plan,
     ResolvedEncounter Encounter,
     bool EncounterHandled,
     RuntimePauseReason? PendingDecision)
