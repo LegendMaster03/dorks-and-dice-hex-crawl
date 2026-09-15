@@ -21,7 +21,12 @@ public readonly record struct HexCoordinate(int Q, int R)
         return new HexCoordinate(Q + offset.Q, R + offset.R);
     }
 
-    public IReadOnlyList<HexCoordinate> Neighbors() => NeighborOffsets.Select(offset => new HexCoordinate(Q + offset.Q, R + offset.R)).ToArray();
+    public IReadOnlyList<HexCoordinate> Neighbors()
+    {
+        var q = Q;
+        var r = R;
+        return NeighborOffsets.Select(offset => new HexCoordinate(q + offset.Q, r + offset.R)).ToArray();
+    }
 
     public int DistanceTo(HexCoordinate other) =>
         (Math.Abs(Q - other.Q) + Math.Abs(R - other.R) + Math.Abs(S - other.S)) / 2;
