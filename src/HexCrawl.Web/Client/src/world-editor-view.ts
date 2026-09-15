@@ -1,6 +1,6 @@
 import type { HexCrawlApi } from "./api";
 import { MapSurface } from "./map-surface";
-import type { Location, Overworld, SpatialFeature, WorldPoint } from "./types";
+import type { DistanceUnit, Location, Overworld, SpatialFeature, WorldPoint } from "./types";
 
 export async function renderWorldEditor(
     root: HTMLElement,
@@ -122,8 +122,7 @@ export async function renderWorldEditor(
         const host = required<HTMLElement>(root, "[data-location-list]");
         host.replaceChildren();
         for (const location of world.locations) {
-            const button = resourceButton(`${location.name} · ${location.category}`, () => loadLocation(location));
-            host.append(button);
+            host.append(resourceButton(`${location.name} · ${location.category}`, () => loadLocation(location)));
         }
     };
 
@@ -235,7 +234,9 @@ export async function renderWorldEditor(
             const unit = world.grid.neighborCenterDistance.unit;
             const symbol = input(gridForm, "unitSymbol").value.trim();
             const metersRaw = input(gridForm, "metersPerUnit").value.trim();
-            const nextKind = unit.kind === "Custom" ? "Custom" : symbol === "mi" ? "Mile" : symbol === "km" ? "Kilometer" : "Custom";
+            const nextKind: DistanceUnit["kind"] = unit.kind === "Custom"
+                ? "Custom"
+                : symbol === "mi" ? "Mile" : symbol === "km" ? "Kilometer" : "Custom";
             const nextGrid = {
                 ...world.grid,
                 orientation: select(gridForm, "orientation").value === "FlatTop" ? "FlatTop" as const : "PointyTop" as const,
@@ -244,11 +245,7 @@ export async function renderWorldEditor(
                 hexRadiusWorldUnits: numeric(input(gridForm, "radius")),
                 neighborCenterDistance: {
                     value: numeric(input(gridForm, "scale")),
-                    unit: {
-                        kind: nextKind,
-                        symbol,
-                        metersPerUnit: metersRaw ? Number(metersRaw) : null
-                    }
+                    unit: { kind: nextKind, symbol, metersPerUnit: metersRaw ? Number(metersRaw) : null }
                 }
             };
             applyWorld(await api.updateOverworld(world.id, input(gridForm, "name").value, nextGrid, world.version));
