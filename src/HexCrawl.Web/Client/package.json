@@ -4,7 +4,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "test": "sh -c 'rm -rf .test-dist; tsc --ignoreConfig src/hex-math.ts src/viewport.ts src/render-lifecycle.ts src/api.ts src/tool-route.ts --outDir .test-dist --module ESNext --target ES2022 --moduleResolution Bundler --skipLibCheck; status=$?; if [ $status -eq 0 ]; then node --test test/hex-math.test.mjs test/render-lifecycle.test.mjs test/tool-host.test.mjs test/tool-route.test.mjs test/contract-source.test.mjs; status=$?; fi; rm -rf .test-dist; exit $status'",
+    "test": "sh -c 'rm -rf .test-dist; tsc --ignoreConfig src/hex-math.ts src/viewport.ts src/render-lifecycle.ts src/api.ts src/tool-route.ts src/runtime-view.ts --outDir .test-dist --module ESNext --target ES2022 --moduleResolution Bundler --skipLibCheck; status=$?; if [ $status -eq 0 ]; then node --test test/hex-math.test.mjs test/render-lifecycle.test.mjs test/tool-host.test.mjs test/tool-route.test.mjs test/contract-source.test.mjs test/runtime-view.test.mjs; status=$?; fi; rm -rf .test-dist; exit $status'",
+    "smoke:embedded": "sh -c 'rm -rf .embedded-smoke-dist; tsc --ignoreConfig src/api.ts --outDir .embedded-smoke-dist --module ESNext --target ES2022 --moduleResolution Bundler --skipLibCheck; status=$?; if [ $status -eq 0 ]; then node --test test/embedded-module-smoke.test.mjs; status=$?; fi; rm -rf .embedded-smoke-dist; exit $status'",
     "typecheck": "tsc --noEmit",
     "build": "npm run test && npm run typecheck && vite build"
   },

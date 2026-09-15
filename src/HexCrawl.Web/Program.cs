@@ -4,6 +4,7 @@ using HexCrawl.Web.Demo;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddHealthChecks();
+builder.Services.AddSingleton<DemoRuntimeSessionStore>();
 
 var app = builder.Build();
 
@@ -15,8 +16,8 @@ app.MapGet("/ready", () => Results.Ok(new { status = "ready" }));
 app.MapGet("/api", () => Results.Ok(new
 {
     service = "Hex Crawl API",
-    version = "0.1-dev",
-    status = "spatial-foundation"
+    version = "0.2-dev",
+    status = "crawl-runtime-demonstrator"
 }));
 
 app.MapGet("/api/demo/world", (string? orientation, double? scale, string? unit) =>
@@ -31,6 +32,16 @@ app.MapGet("/api/demo/world", (string? orientation, double? scale, string? unit)
         : DistanceUnit.Miles;
     return Results.Ok(DemoWorldResponse.From(DemoWorldFactory.Create(parsedOrientation, distance, distanceUnit)));
 });
+
+app.MapGet("/api/demo/runtime/profiles", () => Results.Ok(
+    DemoRuntimeProfiles.All.Select(DemoRuntimeProfileResponse.From).ToArray()));
+app.MapGet("/api/demo/runtime", (DemoRuntimeSessionStore sessions) => Results.Ok(sessions.Snapshot()));
+app.MapPost("/api/demo/runtime/reset", (DemoRuntimeStartRequest request, DemoRuntimeSessionStore sessions) =>
+    ResolveDemoRequest(() => sessions.Reset(request)));
+app.MapPost("/api/demo/runtime/advance", (DemoRuntimeAdvanceRequest request, DemoRuntimeSessionStore sessions) =>
+    ResolveDemoRequest(() => sessions.Advance(request)));
+app.MapPost("/api/demo/runtime/discover", (DemoDiscoveryRequest request, DemoRuntimeSessionStore sessions) =>
+    ResolveDemoRequest(() => sessions.Discover(request)));
 
 app.MapGet("/", () => Results.Content(
     """
@@ -50,5 +61,21 @@ app.MapGet("/", () => Results.Content(
     "text/html; charset=utf-8"));
 
 app.Run();
+
+static IResult ResolveDemoRequest(Func<DemoRuntimeResponse> action)
+{
+    try
+    {
+        return Results.Ok(action());
+    }
+    catch (ArgumentException exception)
+    {
+        return Results.BadRequest(new { error = exception.Message });
+    }
+    catch (InvalidOperationException exception)
+    {
+        return Results.BadRequest(new { error = exception.Message });
+    }
+}
 
 public partial class Program;

@@ -1,9 +1,11 @@
-import { hexCorners, visibleHexBounds } from "./hex-math";
+import { hexCorners, hexToWorld, visibleHexBounds } from "./hex-math";
 import type { DemoWorld, HexCoordinate, SpatialFeature, WorldPoint } from "./types";
 import { Viewport } from "./viewport";
 
 export class CanvasMapRenderer {
     public selectedHex: HexCoordinate | null = null;
+    public expeditionHex: HexCoordinate | null = null;
+    public discoveredSubjectIds = new Set<string>();
 
     public constructor(
         private readonly canvas: HTMLCanvasElement,
@@ -37,6 +39,7 @@ export class CanvasMapRenderer {
         this.drawLinesAndPoints(ctx, world.features, width, height);
         this.drawLocations(ctx, world, width, height);
         this.drawSelection(ctx, world, width, height);
+        this.drawExpedition(ctx, world, width, height);
     }
 
     private drawGrid(ctx: CanvasRenderingContext2D, world: DemoWorld, width: number, height: number): void {
@@ -63,10 +66,7 @@ export class CanvasMapRenderer {
                 ctx.closePath();
                 ctx.stroke();
                 if (this.viewport.zoom >= 38) {
-                    const center = this.toScreen({
-                        x: screenCorners.reduce((sum, point) => sum + point.x, 0) / 6,
-                        y: screenCorners.reduce((sum, point) => sum + point.y, 0) / 6
-                    }, width, height, true);
+                    const center = this.toScreen(hexToWorld(world.grid, hex), width, height);
                     ctx.fillText(`${q},${r}`, center.x, center.y);
                 }
             }
@@ -81,6 +81,11 @@ export class CanvasMapRenderer {
             ctx.closePath();
             ctx.fillStyle = feature.category === "forest" ? "rgba(79, 118, 77, .22)" : "rgba(118, 106, 77, .18)";
             ctx.fill();
+            if (this.discoveredSubjectIds.has(feature.id)) {
+                ctx.strokeStyle = "#2f6b3b";
+                ctx.lineWidth = 3;
+                ctx.stroke();
+            }
         }
     }
 
@@ -93,12 +98,24 @@ export class CanvasMapRenderer {
                 ctx.strokeStyle = feature.category === "river" ? "#4479a1" : "#775f41";
                 ctx.lineWidth = feature.category === "river" ? 4 : 3;
                 ctx.stroke();
+                if (this.discoveredSubjectIds.has(feature.id)) {
+                    ctx.strokeStyle = "#2f6b3b";
+                    ctx.lineWidth += 3;
+                    ctx.stroke();
+                }
             } else if (feature.kind === "Point" && feature.position) {
                 const point = this.toScreen(feature.position, width, height);
                 ctx.beginPath();
                 ctx.arc(point.x, point.y, 5, 0, Math.PI * 2);
                 ctx.fillStyle = "#4b3d32";
                 ctx.fill();
+                if (this.discoveredSubjectIds.has(feature.id)) {
+                    ctx.beginPath();
+                    ctx.arc(point.x, point.y, 9, 0, Math.PI * 2);
+                    ctx.strokeStyle = "#2f6b3b";
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
             }
         }
     }
@@ -113,6 +130,13 @@ export class CanvasMapRenderer {
             ctx.arc(point.x, point.y, 7, 0, Math.PI * 2);
             ctx.fillStyle = location.discoverability === "Hidden" ? "#7b3d52" : "#302d29";
             ctx.fill();
+            if (this.discoveredSubjectIds.has(location.id)) {
+                ctx.beginPath();
+                ctx.arc(point.x, point.y, 11, 0, Math.PI * 2);
+                ctx.strokeStyle = "#2f6b3b";
+                ctx.lineWidth = 3;
+                ctx.stroke();
+            }
             ctx.fillStyle = "#1f2420";
             ctx.fillText(location.name, point.x + 10, point.y);
         }
@@ -131,7 +155,24 @@ export class CanvasMapRenderer {
         ctx.stroke();
     }
 
-    private toScreen(point: WorldPoint, width: number, height: number, alreadyScreen = false): WorldPoint {
-        return alreadyScreen ? point : this.viewport.worldToScreen(point, width, height);
+    private drawExpedition(ctx: CanvasRenderingContext2D, world: DemoWorld, width: number, height: number): void {
+        if (!this.expeditionHex) return;
+        const point = this.toScreen(hexToWorld(world.grid, this.expeditionHex), width, height);
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, 10, 0, Math.PI * 2);
+        ctx.fillStyle = "#b22626";
+        ctx.fill();
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.font = "700 11px system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = "#fff";
+        ctx.fillText("E", point.x, point.y + .5);
+    }
+
+    private toScreen(point: WorldPoint, width: number, height: number): WorldPoint {
+        return this.viewport.worldToScreen(point, width, height);
     }
 }
