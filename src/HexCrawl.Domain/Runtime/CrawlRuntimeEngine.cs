@@ -44,8 +44,10 @@ public sealed class CrawlRuntimeEngine
             (state, active) = StartWatch(profile, state, plan, inputs, events);
         }
 
+        active = active with { Plan = plan };
         state = state with
         {
+            ActiveWatch = active,
             IntendedDirection = plan.IntendedDirection,
             ActualDirection = ResolveActualDirection(state.Navigation, plan.IntendedDirection)
         };
@@ -175,16 +177,20 @@ public sealed class CrawlRuntimeEngine
             state.CompletedWatches + 1,
             profile.WatchLength,
             TimeSpan.Zero,
+            plan,
             encounter,
             encounter.Kind == EncounterOutcomeKind.None,
             null);
+        var activities = plan.Mode.Activities.Count == 0
+            ? "none"
+            : string.Join(", ", plan.Mode.Activities);
 
         events.Add(
             active.WatchNumber,
             CrawlRuntimeEventKind.WatchStarted,
             state.ElapsedTravelTime,
             state.CurrentHex,
-            $"Watch {active.WatchNumber} started ({profile.Name}).");
+            $"Watch {active.WatchNumber} started ({profile.Name}); pace {plan.Mode.PaceKey}; activities {activities}.");
 
         state = state with { ActiveWatch = active };
         state = ResolveNavigationAtWatchStart(
