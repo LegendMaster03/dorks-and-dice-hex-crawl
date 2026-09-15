@@ -75,6 +75,9 @@ export type RuntimeExpedition = {
     elapsedTravelHours: number;
     completedWatches: number;
     activeWatchNumber: number | null;
+    activePaceKey: string | null;
+    activeActivities: string[];
+    activeNavigationAidKey: string | null;
 };
 
 export type RuntimeKnowledgeEntry = {
