@@ -36,7 +36,7 @@ public sealed class SqliteSchemaMigrator(string connectionString)
             return;
         }
 
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
         command.CommandText = """
