@@ -1,17 +1,19 @@
 services:
-  hex-crawl:
-    build:
-      context: .
-      dockerfile: src/HexCrawl.Web/Dockerfile
-    ports:
-      - "8092:8080"
+  dorks-and-dice-hex-crawl:
+    image: dorks-and-dice-hex-crawl:latest
+    container_name: dorks-and-dice-hex-crawl
+    restart: unless-stopped
     environment:
       ConnectionStrings__HexCrawl: "Data Source=/data/hex-crawl.db"
-      ToolHost__StandaloneIdentity__Enabled: "true"
-      ToolHost__StandaloneIdentity__UserId: "standalone-development"
-      ToolHost__StandaloneIdentity__DisplayName: "Standalone Hex Crawl DM"
+      ToolHost__BaseUrl: "http://dorks-and-dice-site:8080"
     volumes:
       - hex-crawl-data:/data
+    networks:
+      - dorks-and-dice-backend
 
 volumes:
   hex-crawl-data:
+
+networks:
+  dorks-and-dice-backend:
+    external: true
