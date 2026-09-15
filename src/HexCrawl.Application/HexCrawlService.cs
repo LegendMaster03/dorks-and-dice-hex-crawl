@@ -567,7 +567,7 @@ public sealed class HexCrawlService(IHexCrawlStore store)
             return null;
         }
         var kind = command.EncounterOutcome ?? EncounterOutcomeKind.None;
-        var occursAt = kind == EncounterOutcomeKind.None
+        TimeSpan? occursAt = kind == EncounterOutcomeKind.None
             ? null
             : TimeSpan.FromHours(command.EncounterHour
                 ?? throw new InvalidOperationException("A triggered encounter requires an encounter hour."));
