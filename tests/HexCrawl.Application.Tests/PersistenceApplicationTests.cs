@@ -294,9 +294,13 @@ public sealed class PersistenceApplicationTests
 
         var first = engine.Advance(loadedWorld.World, loaded.Procedure, loaded.State, loaded.Knowledge, plan, inputs);
         var second = engine.Advance(loadedWorld.World, loaded.Procedure, loaded.State, loaded.Knowledge, plan, inputs);
-        Assert.Equal(first.Expedition, second.Expedition);
+        var sharedEmptyHistory = Array.Empty<CrawlRuntimeEvent>();
+        Assert.Equal(
+            first.Expedition with { History = sharedEmptyHistory },
+            second.Expedition with { History = sharedEmptyHistory });
         Assert.Equal(first.Knowledge, second.Knowledge);
-        Assert.Equal(first.Events, second.Events);
+        Assert.True(first.Expedition.History.SequenceEqual(second.Expedition.History));
+        Assert.True(first.Events.SequenceEqual(second.Events));
     }
 
     [Fact]
