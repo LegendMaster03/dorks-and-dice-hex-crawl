@@ -27,61 +27,22 @@ public sealed class CrawlRuntimeEngine
 
         profile.Validate();
         world.Grid.Validate();
-
-        if (expedition.OverworldId != world.Id || knowledge.OverworldId != world.Id)
-        {
-            throw new InvalidOperationException("Runtime state and player knowledge must belong to the supplied overworld.");
-        }
-
-        if (expedition.Traversal.CurrentHex != expedition.CurrentHex)
-        {
-            throw new InvalidOperationException("Expedition traversal and current hex are inconsistent.");
-        }
+        ValidateOwnership(world, expedition, knowledge);
 
         var events = new EventCollector(expedition.History);
         var state = expedition;
         var currentKnowledge = knowledge;
         var active = state.ActiveWatch;
-        var startingNewWatch = active is null;
 
-        if (active is not null)
+        if (active is not null && active.PendingDecision is not null)
         {
-            (state, active) = ResolvePendingDecision(state, active, inputs, events);
+            (state, active) = ResumePendingDecision(state, active, inputs, events);
         }
 
-        if (startingNewWatch)
+        if (active is null)
         {
-            var encounter = ResolveEncounterForNewWatch(profile, inputs.Encounter);
-            active = new ActiveWatchState(
-                state.CompletedWatches + 1,
-                profile.WatchLength,
-                TimeSpan.Zero,
-                encounter,
-                encounter.Kind == EncounterOutcomeKind.None,
-                null);
-
-            events.Add(
-                active.WatchNumber,
-                CrawlRuntimeEventKind.WatchStarted,
-                state.ElapsedTravelTime,
-                state.CurrentHex,
-                $"Watch {active.WatchNumber} started ({profile.Name}).");
-
-            state = state with { ActiveWatch = active };
-            state = ResolveNavigationAtWatchStart(profile, state, plan, inputs.Navigation, events, active.WatchNumber);
-
-            if (profile.EncounterCadence != EncounterCheckCadence.None)
-            {
-                events.Add(
-                    active.WatchNumber,
-                    CrawlRuntimeEventKind.EncounterCheckPerformed,
-                    state.ElapsedTravelTime,
-                    state.CurrentHex,
-                    $"Encounter check resolved as {encounter.Kind}.");
-            }
+            (state, active) = StartWatch(profile, state, plan, inputs, events);
         }
-
-        active ??= throw new InvalidOperationException("An active watch is required after initialization.");
 
         state = state with
         {
@@ -108,76 +69,77 @@ public sealed class CrawlRuntimeEngine
 
         var actualDirection = state.ActualDirection
             ?? throw new InvalidOperationException("Travel requires an actual hex direction.");
+        state = ApplyDirectionContext(
+            profile,
+            world.Grid,
+            state,
+            actualDirection,
+            plan.DeliberateDoubleBack,
+            active.WatchNumber,
+            events);
 
-        state = ApplyDirectionChange(profile, world.Grid, state, actualDirection, plan.DeliberateDoubleBack, active.WatchNumber, events);
         ValidateTravelAmount(profile, inputs.Travel);
         EmitTravelResolution(state, active.WatchNumber, inputs.Travel, events);
 
         if (!active.EncounterHandled && active.Encounter.Kind != EncounterOutcomeKind.None)
         {
-            var dueAt = active.Encounter.OccursAt
+            var due = active.Encounter.OccursAt
                 ?? throw new InvalidOperationException("A triggered encounter requires a time within the watch.");
-
-            if (dueAt <= active.Elapsed)
+            if (due <= active.Elapsed)
             {
                 return TriggerEncounter(world, state, currentKnowledge, active, events);
             }
         }
 
-        var remainingAtCallStart = active.Remaining;
-        var targetDuration = remainingAtCallStart;
-        var encounterDueThisSegment = false;
-
+        var callRemaining = active.Remaining;
+        var segmentDuration = callRemaining;
+        var encounterDueAtSegmentEnd = false;
         if (!active.EncounterHandled && active.Encounter.Kind != EncounterOutcomeKind.None)
         {
-            var dueAt = active.Encounter.OccursAt!.Value;
-            if (dueAt < active.TotalDuration && dueAt > active.Elapsed)
+            var due = active.Encounter.OccursAt!.Value;
+            if (due > active.Elapsed && due <= active.TotalDuration)
             {
-                targetDuration = dueAt - active.Elapsed;
-                encounterDueThisSegment = true;
-            }
-            else if (dueAt == active.TotalDuration)
-            {
-                encounterDueThisSegment = true;
+                var untilEncounter = due - active.Elapsed;
+                if (untilEncounter <= segmentDuration)
+                {
+                    segmentDuration = untilEncounter;
+                    encounterDueAtSegmentEnd = true;
+                }
             }
         }
 
-        WatchAdvanceResult movementResult = profile.TravelResolution switch
+        var movement = profile.TravelResolution switch
         {
-            TravelResolutionMode.ContinuousDistance => AdvanceDistance(
+            TravelResolutionMode.ContinuousDistance => MoveContinuous(
                 world,
                 profile,
                 state,
-                currentKnowledge,
+                active,
                 plan,
                 inputs.Travel,
-                active,
-                remainingAtCallStart,
-                targetDuration,
+                callRemaining,
+                segmentDuration,
                 events),
-            TravelResolutionMode.HexSteps => AdvanceHexSteps(
+            TravelResolutionMode.HexSteps => MoveHexSteps(
                 world,
                 state,
-                currentKnowledge,
+                active,
                 plan,
                 inputs.Travel,
-                active,
-                remainingAtCallStart,
-                targetDuration,
+                callRemaining,
+                segmentDuration,
                 events),
             _ => throw new ArgumentOutOfRangeException(nameof(profile.TravelResolution))
         };
 
-        if (movementResult.PauseReason is not null)
+        state = movement.State;
+        active = movement.Active;
+        if (movement.PauseReason is not null)
         {
-            return movementResult;
+            return Finish(state, currentKnowledge, movement.PauseReason, active.Remaining, events);
         }
 
-        state = movementResult.Expedition;
-        currentKnowledge = movementResult.Knowledge;
-        active = state.ActiveWatch ?? active;
-
-        if (encounterDueThisSegment && !active.EncounterHandled && active.Encounter.Kind != EncounterOutcomeKind.None)
+        if (encounterDueAtSegmentEnd && !active.EncounterHandled && active.Encounter.Kind != EncounterOutcomeKind.None)
         {
             return TriggerEncounter(world, state, currentKnowledge, active, events);
         }
@@ -190,7 +152,63 @@ public sealed class CrawlRuntimeEngine
         return Finish(state, currentKnowledge, null, active.Remaining, events);
     }
 
-    private static (ExpeditionState State, ActiveWatchState Active) ResolvePendingDecision(
+    private static void ValidateOwnership(
+        OverworldDefinition world,
+        ExpeditionState expedition,
+        PlayerKnowledgeState knowledge)
+    {
+        if (expedition.OverworldId != world.Id || knowledge.OverworldId != world.Id)
+        {
+            throw new InvalidOperationException("Runtime state and player knowledge must belong to the supplied overworld.");
+        }
+    }
+
+    private static (ExpeditionState State, ActiveWatchState Active) StartWatch(
+        CrawlProcedureProfile profile,
+        ExpeditionState state,
+        WatchTravelPlan plan,
+        WatchAdvanceInputs inputs,
+        EventCollector events)
+    {
+        var encounter = ResolveEncounterForNewWatch(profile, inputs.Encounter);
+        var active = new ActiveWatchState(
+            state.CompletedWatches + 1,
+            profile.WatchLength,
+            TimeSpan.Zero,
+            encounter,
+            encounter.Kind == EncounterOutcomeKind.None,
+            null);
+
+        events.Add(
+            active.WatchNumber,
+            CrawlRuntimeEventKind.WatchStarted,
+            state.ElapsedTravelTime,
+            state.CurrentHex,
+            $"Watch {active.WatchNumber} started ({profile.Name}).");
+
+        state = state with { ActiveWatch = active };
+        state = ResolveNavigationAtWatchStart(
+            profile,
+            state,
+            plan,
+            inputs.Navigation,
+            events,
+            active.WatchNumber);
+
+        if (profile.EncounterCadence != EncounterCheckCadence.None)
+        {
+            events.Add(
+                active.WatchNumber,
+                CrawlRuntimeEventKind.EncounterCheckPerformed,
+                state.ElapsedTravelTime,
+                state.CurrentHex,
+                $"Encounter check resolved as {encounter.Kind}.");
+        }
+
+        return (state, active);
+    }
+
+    private static (ExpeditionState State, ActiveWatchState Active) ResumePendingDecision(
         ExpeditionState state,
         ActiveWatchState active,
         WatchAdvanceInputs inputs,
@@ -200,7 +218,6 @@ public sealed class CrawlRuntimeEngine
         {
             var decision = inputs.BoundaryDecision
                 ?? throw new InvalidOperationException("A lost-recognition boundary decision is required before travel can continue.");
-
             if (decision.RecognizedLost && decision.Reorient)
             {
                 state = state with { Navigation = new NavigationRuntimeState(false, 0) };
@@ -211,18 +228,10 @@ public sealed class CrawlRuntimeEngine
                     state.CurrentHex,
                     "The expedition recognized that it was lost and reoriented.");
             }
-
-            active = active with { PendingDecision = null };
-            state = state with { ActiveWatch = active };
-            return (state, active);
         }
 
-        if (active.PendingDecision is not null)
-        {
-            active = active with { PendingDecision = null };
-            state = state with { ActiveWatch = active };
-        }
-
+        active = active with { PendingDecision = null };
+        state = state with { ActiveWatch = active };
         return (state, active);
     }
 
@@ -237,7 +246,6 @@ public sealed class CrawlRuntimeEngine
 
         var encounter = supplied
             ?? throw new InvalidOperationException("This procedure requires an explicit resolved encounter-check outcome.");
-
         if (encounter.Kind == EncounterOutcomeKind.None)
         {
             return encounter;
@@ -264,17 +272,12 @@ public sealed class CrawlRuntimeEngine
         EventCollector events,
         int watchNumber)
     {
-        var navigationRequired = profile.UsesNavigationChecks
+        var checkRequired = profile.UsesNavigationChecks
             && !plan.NavigationAid.SuppressesNavigationCheck
             && !plan.DeliberateDoubleBack;
-
-        if (!navigationRequired)
+        if (!checkRequired)
         {
-            if (!profile.UsesNavigationChecks || plan.NavigationAid.SuppressesNavigationCheck || plan.DeliberateDoubleBack)
-            {
-                state = state with { Navigation = new NavigationRuntimeState(false, 0) };
-            }
-
+            state = state with { Navigation = new NavigationRuntimeState(false, 0) };
             events.Add(
                 watchNumber,
                 CrawlRuntimeEventKind.NavigationCheckResolved,
@@ -286,7 +289,6 @@ public sealed class CrawlRuntimeEngine
 
         var navigation = resolved
             ?? throw new InvalidOperationException("This watch requires an explicit resolved navigation outcome.");
-
         if (navigation.Outcome == NavigationCheckOutcome.NotRequired)
         {
             throw new InvalidOperationException("A required navigation check can not be resolved as NotRequired.");
@@ -294,7 +296,6 @@ public sealed class CrawlRuntimeEngine
 
         var previous = state.Navigation;
         var next = previous;
-
         if (navigation.Outcome == NavigationCheckOutcome.Succeeded)
         {
             if (!previous.IsLost)
@@ -306,7 +307,6 @@ public sealed class CrawlRuntimeEngine
         {
             var candidate = navigation.VeerStepsOnFailure
                 ?? throw new InvalidOperationException("A failed navigation check requires a resolved veer.");
-
             if (candidate == 0)
             {
                 throw new InvalidOperationException("A failed navigation check must produce a non-zero veer.");
@@ -316,11 +316,7 @@ public sealed class CrawlRuntimeEngine
             {
                 next = new NavigationRuntimeState(true, candidate);
             }
-            else if (profile.UsesPersistentVeer && Math.Abs(candidate) <= Math.Abs(previous.VeerSteps))
-            {
-                next = previous;
-            }
-            else
+            else if (!profile.UsesPersistentVeer || Math.Abs(candidate) > Math.Abs(previous.VeerSteps))
             {
                 next = new NavigationRuntimeState(true, candidate);
             }
@@ -332,7 +328,6 @@ public sealed class CrawlRuntimeEngine
             state.ElapsedTravelTime,
             state.CurrentHex,
             $"Navigation check {navigation.Outcome.ToString().ToLowerInvariant()}.");
-
         if (!previous.IsLost && next.IsLost)
         {
             events.Add(
@@ -342,7 +337,6 @@ public sealed class CrawlRuntimeEngine
                 state.CurrentHex,
                 $"The expedition became lost with a veer of {next.VeerSteps} hex step(s).");
         }
-
         if (previous.VeerSteps != next.VeerSteps)
         {
             events.Add(
@@ -356,10 +350,15 @@ public sealed class CrawlRuntimeEngine
         return state with { Navigation = next };
     }
 
-    private static HexDirection ResolveActualDirection(NavigationRuntimeState navigation, HexDirection intended) =>
+    private static HexDirection ResolveActualDirection(
+        NavigationRuntimeState navigation,
+        HexDirection intended) =>
         navigation.IsLost ? intended.Rotate(navigation.VeerSteps) : intended;
 
-    private static void ValidateDoubleBack(CrawlProcedureProfile profile, ExpeditionState state, WatchTravelPlan plan)
+    private static void ValidateDoubleBack(
+        CrawlProcedureProfile profile,
+        ExpeditionState state,
+        WatchTravelPlan plan)
     {
         if (!profile.SupportsDeliberateDoubleBack)
         {
@@ -368,14 +367,13 @@ public sealed class CrawlRuntimeEngine
 
         var entryDirection = state.Traversal.EntryDirection
             ?? throw new InvalidOperationException("The expedition can only deliberately double back after entering through a known hex face.");
-
-        if (plan.IntendedDirection != entryDirection.Value.Opposite)
+        if (plan.IntendedDirection != entryDirection.Opposite)
         {
             throw new InvalidOperationException("A deliberate double back must target the face through which the expedition entered.");
         }
     }
 
-    private static ExpeditionState ApplyDirectionChange(
+    private static ExpeditionState ApplyDirectionContext(
         CrawlProcedureProfile profile,
         HexGridDefinition grid,
         ExpeditionState state,
@@ -385,42 +383,38 @@ public sealed class CrawlRuntimeEngine
         EventCollector events)
     {
         var traversal = state.Traversal;
-        if (traversal.LastTravelDirection is not { } previous || previous == actualDirection)
-        {
-            return state with
-            {
-                Traversal = traversal with
-                {
-                    CurrentExitRequirement = DetermineExitRequirement(profile, grid, traversal, actualDirection, deliberateDoubleBack)
-                }
-            };
-        }
-
+        var changed = traversal.LastTravelDirection is { } previous && previous != actualDirection;
         var progress = Convert(traversal.Progress, grid.NeighborCenterDistance.Unit);
-        if (profile.DirectionChangesCostProgress && !deliberateDoubleBack && profile.TracksIntraHexProgress)
+
+        if (changed && profile.DirectionChangesCostProgress && !deliberateDoubleBack && profile.TracksIntraHexProgress)
         {
             var cost = grid.NeighborCenterDistance.Value * profile.DirectionChangeProgressCostFactor;
-            progress = new DistanceMeasure(Math.Max(0, progress.Value - cost), grid.NeighborCenterDistance.Unit);
+            progress = new DistanceMeasure(Math.Max(0d, progress.Value - cost), progress.Unit);
         }
 
-        var changedTraversal = traversal with
+        var updated = traversal with
         {
             Progress = progress,
             LastTravelDirection = actualDirection
         };
-        changedTraversal = changedTraversal with
+        updated = updated with
         {
-            CurrentExitRequirement = DetermineExitRequirement(profile, grid, changedTraversal, actualDirection, deliberateDoubleBack)
+            CurrentExitRequirement = profile.TracksIntraHexProgress
+                ? DetermineExitRequirement(profile, grid, updated, actualDirection, deliberateDoubleBack)
+                : null
         };
 
-        events.Add(
-            watchNumber,
-            CrawlRuntimeEventKind.DirectionChanged,
-            state.ElapsedTravelTime,
-            state.CurrentHex,
-            $"Travel direction changed from {previous.Value} to {actualDirection.Value}; abstract progress is now {Format(progress.Value)} {progress.Unit.Symbol}.");
+        if (changed)
+        {
+            events.Add(
+                watchNumber,
+                CrawlRuntimeEventKind.DirectionChanged,
+                state.ElapsedTravelTime,
+                state.CurrentHex,
+                $"Travel direction changed; abstract progress is now {Format(progress.Value)} {progress.Unit.Symbol}.");
+        }
 
-        return state with { Traversal = changedTraversal };
+        return state with { Traversal = updated };
     }
 
     private static DistanceMeasure DetermineExitRequirement(
@@ -432,21 +426,15 @@ public sealed class CrawlRuntimeEngine
     {
         var unit = grid.NeighborCenterDistance.Unit;
         var progress = Convert(traversal.Progress, unit);
-
         if (deliberateDoubleBack)
         {
             return new DistanceMeasure(progress.Value, unit);
         }
 
-        double factor;
-        if (traversal.EntryDirection is null)
+        var factor = profile.StartingExitProgressFactor;
+        if (traversal.EntryDirection is { } entry)
         {
-            factor = profile.StartingExitProgressFactor;
-        }
-        else
-        {
-            var separation = direction.SeparationFrom(traversal.EntryDirection.Value);
-            factor = separation switch
+            factor = direction.SeparationFrom(entry) switch
             {
                 0 or 1 => profile.FarExitProgressFactor,
                 2 => profile.NearExitProgressFactor,
@@ -458,7 +446,9 @@ public sealed class CrawlRuntimeEngine
         return new DistanceMeasure(grid.NeighborCenterDistance.Value * factor, unit);
     }
 
-    private static void ValidateTravelAmount(CrawlProcedureProfile profile, ResolvedTravelAmount travel)
+    private static void ValidateTravelAmount(
+        CrawlProcedureProfile profile,
+        ResolvedTravelAmount travel)
     {
         if (profile.TravelResolution == TravelResolutionMode.ContinuousDistance)
         {
@@ -466,8 +456,10 @@ public sealed class CrawlRuntimeEngine
             {
                 throw new InvalidOperationException("Continuous-distance travel requires expected and actual distance values only.");
             }
+            return;
         }
-        else if (travel.HexSteps is null || travel.HexSteps < 0 || travel.ExpectedDistance is not null || travel.ActualDistance is not null)
+
+        if (travel.HexSteps is null || travel.HexSteps < 0 || travel.ExpectedDistance is not null || travel.ActualDistance is not null)
         {
             throw new InvalidOperationException("Hex-step travel requires a non-negative resolved step count only.");
         }
@@ -482,7 +474,6 @@ public sealed class CrawlRuntimeEngine
         var message = travel.ActualDistance is { } actual && travel.ExpectedDistance is { } expected
             ? $"Travel resolved at {Format(actual.Value)} {actual.Unit.Symbol} actual versus {Format(expected.Value)} {expected.Unit.Symbol} expected."
             : $"Travel resolved at {travel.HexSteps ?? 0} hex step(s).";
-
         events.Add(
             watchNumber,
             CrawlRuntimeEventKind.TravelResolved,
@@ -493,96 +484,101 @@ public sealed class CrawlRuntimeEngine
             travel.ActualDistance?.Unit.Symbol);
     }
 
-    private static WatchAdvanceResult AdvanceDistance(
+    private static MovementOutcome MoveContinuous(
         OverworldDefinition world,
         CrawlProcedureProfile profile,
         ExpeditionState state,
-        PlayerKnowledgeState knowledge,
+        ActiveWatchState active,
         WatchTravelPlan plan,
         ResolvedTravelAmount travel,
-        ActiveWatchState active,
-        TimeSpan remainingAtCallStart,
-        TimeSpan targetDuration,
+        TimeSpan callRemaining,
+        TimeSpan segmentDuration,
         EventCollector events)
     {
-        var gridUnit = world.Grid.NeighborCenterDistance.Unit;
-        var fullDistance = Convert(travel.ActualDistance!.Value, gridUnit);
-        var targetFraction = remainingAtCallStart <= TimeSpan.Zero
+        if (!profile.TracksIntraHexProgress)
+        {
+            throw new InvalidOperationException("Continuous-distance travel requires intra-hex progress tracking in this runtime engine.");
+        }
+
+        var unit = world.Grid.NeighborCenterDistance.Unit;
+        var suppliedDistance = Convert(travel.ActualDistance!.Value, unit);
+        var segmentFraction = callRemaining <= TimeSpan.Zero
             ? 0d
-            : targetDuration.TotalSeconds / remainingAtCallStart.TotalSeconds;
-        var targetDistance = fullDistance.Value * Math.Clamp(targetFraction, 0d, 1d);
+            : Math.Clamp(segmentDuration.TotalSeconds / callRemaining.TotalSeconds, 0d, 1d);
+        var targetDistance = suppliedDistance.Value * segmentFraction;
+        var remainingDistance = targetDistance;
         var consumed = 0d;
         var traversal = state.Traversal;
-        var actualDirection = state.ActualDirection!.Value;
+        var direction = state.ActualDirection!.Value;
         RuntimePauseReason? pause = null;
 
-        while (consumed + Epsilon < targetDistance || IsImmediateExit(profile, world.Grid, traversal, actualDirection, plan.DeliberateDoubleBack))
+        while (remainingDistance > Epsilon)
         {
-            if (!profile.TracksIntraHexProgress)
-            {
-                throw new InvalidOperationException("Continuous-distance travel requires intra-hex progress tracking in this runtime engine.");
-            }
-
-            var requirement = DetermineExitRequirement(profile, world.Grid, traversal, actualDirection, plan.DeliberateDoubleBack);
-            var progress = Convert(traversal.Progress, gridUnit);
-            traversal = traversal with { CurrentExitRequirement = requirement, LastTravelDirection = actualDirection };
-
-            var distanceNeeded = plan.DeliberateDoubleBack
+            var requirement = DetermineExitRequirement(profile, world.Grid, traversal, direction, plan.DeliberateDoubleBack);
+            var progress = Convert(traversal.Progress, unit);
+            var needed = plan.DeliberateDoubleBack
                 ? progress.Value
                 : Math.Max(0d, requirement.Value - progress.Value);
-            var available = Math.Max(0d, targetDistance - consumed);
 
-            if (available + Epsilon < distanceNeeded)
+            traversal = traversal with
             {
-                var nextProgressValue = plan.DeliberateDoubleBack
-                    ? Math.Max(0d, progress.Value - available)
-                    : progress.Value + available;
+                LastTravelDirection = direction,
+                CurrentExitRequirement = requirement
+            };
+
+            if (remainingDistance + Epsilon < needed)
+            {
+                var nextProgress = plan.DeliberateDoubleBack
+                    ? Math.Max(0d, progress.Value - remainingDistance)
+                    : progress.Value + remainingDistance;
+                consumed += remainingDistance;
+                remainingDistance = 0d;
                 traversal = traversal with
                 {
-                    Progress = new DistanceMeasure(nextProgressValue, gridUnit),
+                    Progress = new DistanceMeasure(nextProgress, unit),
                     CurrentExitRequirement = plan.DeliberateDoubleBack
-                        ? new DistanceMeasure(nextProgressValue, gridUnit)
-                        : requirement,
-                    LastTravelDirection = actualDirection
+                        ? new DistanceMeasure(nextProgress, unit)
+                        : requirement
                 };
-                consumed += available;
                 break;
             }
 
-            consumed += distanceNeeded;
-            var eventTime = state.ElapsedTravelTime + ScaleTime(
-                remainingAtCallStart,
-                fullDistance.Value <= Epsilon ? 0d : Math.Clamp(consumed / fullDistance.Value, 0d, 1d));
-            var exitedHex = traversal.CurrentHex;
-            var enteredHex = exitedHex.Neighbor(actualDirection.Value);
+            consumed += needed;
+            remainingDistance = Math.Max(0d, remainingDistance - needed);
+            var elapsedForCrossing = suppliedDistance.Value <= Epsilon
+                ? TimeSpan.Zero
+                : ScaleTime(callRemaining, Math.Clamp(consumed / suppliedDistance.Value, 0d, 1d));
+            var eventTime = state.ElapsedTravelTime + elapsedForCrossing;
+            var exited = traversal.CurrentHex;
+            var entered = exited.Neighbor(direction.Value);
 
             events.Add(
                 active.WatchNumber,
                 CrawlRuntimeEventKind.HexExited,
                 eventTime,
-                exitedHex,
-                $"Exited hex {exitedHex} toward direction {actualDirection.Value}.");
+                exited,
+                $"Exited hex {exited} toward direction {direction.Value}.");
             events.Add(
                 active.WatchNumber,
                 CrawlRuntimeEventKind.HexEntered,
                 eventTime,
-                enteredHex,
-                $"Entered hex {enteredHex}; keyed contents remain undiscovered until separately encountered.");
+                entered,
+                $"Entered hex {entered}; keyed contents remain undiscovered until separately encountered.");
 
             traversal = new HexTraversalState
             {
-                CurrentHex = enteredHex,
-                EntryDirection = actualDirection,
-                LastTravelDirection = actualDirection,
-                Progress = new DistanceMeasure(0, gridUnit),
+                CurrentHex = entered,
+                EntryDirection = direction,
+                LastTravelDirection = direction,
+                Progress = new DistanceMeasure(0, unit),
                 CurrentExitRequirement = new DistanceMeasure(
                     world.Grid.NeighborCenterDistance.Value * profile.FarExitProgressFactor,
-                    gridUnit)
+                    unit)
             };
             state = state with
             {
                 Traversal = traversal,
-                Position = HexGeometry.HexToWorld(world.Grid, enteredHex),
+                Position = HexGeometry.HexToWorld(world.Grid, entered),
                 PositionPrecision = WorldPositionPrecision.HexAnchor
             };
 
@@ -601,7 +597,7 @@ public sealed class CrawlRuntimeEngine
                         active.WatchNumber,
                         CrawlRuntimeEventKind.VeerReset,
                         eventTime,
-                        enteredHex,
+                        entered,
                         $"{plan.NavigationAid.Key} reset veer at the hex boundary; the expedition has not necessarily recognized that it was lost.");
                 }
 
@@ -609,7 +605,7 @@ public sealed class CrawlRuntimeEngine
                     active.WatchNumber,
                     CrawlRuntimeEventKind.NavigationDecisionRequired,
                     eventTime,
-                    enteredHex,
+                    entered,
                     "The expedition crossed a boundary while lost; recognition/reorientation input is required before continuing.");
                 pause = RuntimePauseReason.LostRecognitionRequired;
                 break;
@@ -621,30 +617,28 @@ public sealed class CrawlRuntimeEngine
                     active.WatchNumber,
                     CrawlRuntimeEventKind.ConditionsReviewRequired,
                     eventTime,
-                    enteredHex,
+                    entered,
                     "Hex boundary crossed; review terrain/travel conditions before continuing the remaining watch.");
                 pause = RuntimePauseReason.ConditionsReviewRequired;
                 break;
             }
 
-            if (distanceNeeded <= Epsilon && targetDistance - consumed <= Epsilon)
+            if (needed <= Epsilon && remainingDistance <= Epsilon)
             {
                 break;
             }
         }
 
         var consumedTime = pause is null
-            ? targetDuration
-            : ScaleTime(
-                remainingAtCallStart,
-                fullDistance.Value <= Epsilon ? 0d : Math.Clamp(consumed / fullDistance.Value, 0d, 1d));
-        consumedTime = ClampTime(consumedTime, TimeSpan.Zero, targetDuration);
-
-        var distanceTraveled = Add(state.DistanceTraveled, new DistanceMeasure(consumed, gridUnit));
+            ? segmentDuration
+            : suppliedDistance.Value <= Epsilon
+                ? TimeSpan.Zero
+                : ScaleTime(callRemaining, Math.Clamp(consumed / suppliedDistance.Value, 0d, 1d));
+        consumedTime = ClampTime(consumedTime, TimeSpan.Zero, segmentDuration);
         state = state with
         {
             Traversal = traversal,
-            DistanceTraveled = distanceTraveled,
+            DistanceTraveled = Add(state.DistanceTraveled, new DistanceMeasure(consumed, unit)),
             ElapsedTravelTime = state.ElapsedTravelTime + consumedTime
         };
         active = active with
@@ -661,57 +655,58 @@ public sealed class CrawlRuntimeEngine
                 CrawlRuntimeEventKind.DistanceTraveled,
                 state.ElapsedTravelTime,
                 state.CurrentHex,
-                $"Traveled {Format(consumed)} {gridUnit.Symbol} during this watch segment.",
+                $"Traveled {Format(consumed)} {unit.Symbol} during this watch segment.",
                 consumed,
-                gridUnit.Symbol);
+                unit.Symbol);
         }
 
-        return Finish(state, knowledge, pause, active.Remaining, events);
+        return new MovementOutcome(state, active, pause);
     }
 
-    private static WatchAdvanceResult AdvanceHexSteps(
+    private static MovementOutcome MoveHexSteps(
         OverworldDefinition world,
         ExpeditionState state,
-        PlayerKnowledgeState knowledge,
+        ActiveWatchState active,
         WatchTravelPlan plan,
         ResolvedTravelAmount travel,
-        ActiveWatchState active,
-        TimeSpan remainingAtCallStart,
-        TimeSpan targetDuration,
+        TimeSpan callRemaining,
+        TimeSpan segmentDuration,
         EventCollector events)
     {
-        var totalSteps = travel.HexSteps!.Value;
-        var targetFraction = remainingAtCallStart <= TimeSpan.Zero
+        var suppliedSteps = travel.HexSteps!.Value;
+        var segmentFraction = callRemaining <= TimeSpan.Zero
             ? 0d
-            : targetDuration.TotalSeconds / remainingAtCallStart.TotalSeconds;
-        var stepsBeforeTarget = targetDuration == remainingAtCallStart
-            ? totalSteps
-            : (int)Math.Floor(totalSteps * Math.Clamp(targetFraction, 0d, 1d) + Epsilon);
-        var stepDuration = totalSteps == 0 ? TimeSpan.Zero : ScaleTime(remainingAtCallStart, 1d / totalSteps);
-        var actualDirection = state.ActualDirection!.Value;
+            : Math.Clamp(segmentDuration.TotalSeconds / callRemaining.TotalSeconds, 0d, 1d);
+        var targetSteps = segmentDuration == callRemaining
+            ? suppliedSteps
+            : (int)Math.Floor(suppliedSteps * segmentFraction + Epsilon);
+        var direction = state.ActualDirection!.Value;
         var completed = 0;
         RuntimePauseReason? pause = null;
 
-        for (var index = 0; index < stepsBeforeTarget; index++)
+        for (var index = 0; index < targetSteps; index++)
         {
-            var exitedHex = state.CurrentHex;
-            var enteredHex = exitedHex.Neighbor(actualDirection.Value);
             completed++;
-            var eventTime = state.ElapsedTravelTime + ScaleTime(stepDuration, completed);
+            var elapsedForCrossing = suppliedSteps == 0
+                ? TimeSpan.Zero
+                : ScaleTime(callRemaining, (double)completed / suppliedSteps);
+            var eventTime = state.ElapsedTravelTime + elapsedForCrossing;
+            var exited = state.CurrentHex;
+            var entered = exited.Neighbor(direction.Value);
 
-            events.Add(active.WatchNumber, CrawlRuntimeEventKind.HexExited, eventTime, exitedHex, $"Exited hex {exitedHex}.");
-            events.Add(active.WatchNumber, CrawlRuntimeEventKind.HexEntered, eventTime, enteredHex, $"Entered hex {enteredHex}; keyed contents remain undiscovered until separately encountered.");
+            events.Add(active.WatchNumber, CrawlRuntimeEventKind.HexExited, eventTime, exited, $"Exited hex {exited}.");
+            events.Add(active.WatchNumber, CrawlRuntimeEventKind.HexEntered, eventTime, entered, $"Entered hex {entered}; keyed contents remain undiscovered until separately encountered.");
 
             state = state with
             {
                 Traversal = new HexTraversalState
                 {
-                    CurrentHex = enteredHex,
-                    EntryDirection = actualDirection,
-                    LastTravelDirection = actualDirection,
+                    CurrentHex = entered,
+                    EntryDirection = direction,
+                    LastTravelDirection = direction,
                     Progress = new DistanceMeasure(0, world.Grid.NeighborCenterDistance.Unit)
                 },
-                Position = HexGeometry.HexToWorld(world.Grid, enteredHex),
+                Position = HexGeometry.HexToWorld(world.Grid, entered),
                 PositionPrecision = WorldPositionPrecision.HexAnchor
             };
 
@@ -720,28 +715,30 @@ public sealed class CrawlRuntimeEngine
                 if (plan.NavigationAid.ResetsVeerAtBoundary && state.Navigation.VeerSteps != 0)
                 {
                     state = state with { Navigation = new NavigationRuntimeState(true, 0) };
-                    events.Add(active.WatchNumber, CrawlRuntimeEventKind.VeerReset, eventTime, enteredHex, $"{plan.NavigationAid.Key} reset veer at the boundary.");
+                    events.Add(active.WatchNumber, CrawlRuntimeEventKind.VeerReset, eventTime, entered, $"{plan.NavigationAid.Key} reset veer at the boundary.");
                 }
-
-                events.Add(active.WatchNumber, CrawlRuntimeEventKind.NavigationDecisionRequired, eventTime, enteredHex, "Lost-recognition input is required before continuing.");
+                events.Add(active.WatchNumber, CrawlRuntimeEventKind.NavigationDecisionRequired, eventTime, entered, "Lost-recognition input is required before continuing.");
                 pause = RuntimePauseReason.LostRecognitionRequired;
                 break;
             }
 
             if (!plan.ContinueAcrossBoundaries)
             {
-                events.Add(active.WatchNumber, CrawlRuntimeEventKind.ConditionsReviewRequired, eventTime, enteredHex, "Review travel conditions before continuing.");
+                events.Add(active.WatchNumber, CrawlRuntimeEventKind.ConditionsReviewRequired, eventTime, entered, "Review travel conditions before continuing.");
                 pause = RuntimePauseReason.ConditionsReviewRequired;
                 break;
             }
         }
 
-        var consumedTime = pause is null ? targetDuration : ScaleTime(stepDuration, completed);
-        consumedTime = ClampTime(consumedTime, TimeSpan.Zero, targetDuration);
+        var consumedTime = pause is null
+            ? segmentDuration
+            : suppliedSteps == 0
+                ? TimeSpan.Zero
+                : ScaleTime(callRemaining, (double)completed / suppliedSteps);
+        consumedTime = ClampTime(consumedTime, TimeSpan.Zero, segmentDuration);
         var physicalDistance = new DistanceMeasure(
             world.Grid.NeighborCenterDistance.Value * completed,
             world.Grid.NeighborCenterDistance.Unit);
-
         state = state with
         {
             DistanceTraveled = Add(state.DistanceTraveled, physicalDistance),
@@ -766,26 +763,7 @@ public sealed class CrawlRuntimeEngine
                 physicalDistance.Unit.Symbol);
         }
 
-        return Finish(state, knowledge, pause, active.Remaining, events);
-    }
-
-    private static bool IsImmediateExit(
-        CrawlProcedureProfile profile,
-        HexGridDefinition grid,
-        HexTraversalState traversal,
-        HexDirection direction,
-        bool deliberateDoubleBack)
-    {
-        if (!profile.TracksIntraHexProgress)
-        {
-            return false;
-        }
-
-        var requirement = DetermineExitRequirement(profile, grid, traversal, direction, deliberateDoubleBack);
-        var progress = Convert(traversal.Progress, requirement.Unit);
-        return deliberateDoubleBack
-            ? progress.Value <= Epsilon
-            : progress.Value + Epsilon >= requirement.Value;
+        return new MovementOutcome(state, active, pause);
     }
 
     private static WatchAdvanceResult TriggerEncounter(
@@ -801,9 +779,9 @@ public sealed class CrawlRuntimeEngine
             CrawlRuntimeEventKind.EncounterTriggered,
             state.ElapsedTravelTime,
             state.CurrentHex,
-            encounter.Note is { Length: > 0 }
-                ? $"{encounter.Kind}: {encounter.Note}"
-                : $"{encounter.Kind} triggered.",
+            string.IsNullOrWhiteSpace(encounter.Note)
+                ? $"{encounter.Kind} triggered."
+                : $"{encounter.Kind}: {encounter.Note}",
             subjectId: encounter.LocationId);
 
         if (encounter.Kind == EncounterOutcomeKind.KeyedLocationDiscovery)
@@ -811,8 +789,7 @@ public sealed class CrawlRuntimeEngine
             var locationId = encounter.LocationId!.Value;
             var location = world.Locations.SingleOrDefault(candidate => candidate.Id == locationId)
                 ?? throw new InvalidOperationException("The resolved keyed location does not exist in this overworld.");
-            var locationHex = HexGeometry.WorldToHex(world.Grid, location.Position);
-            if (locationHex != state.CurrentHex)
+            if (HexGeometry.WorldToHex(world.Grid, location.Position) != state.CurrentHex)
             {
                 throw new InvalidOperationException("A keyed-location encounter can only discover a location in the expedition's current hex.");
             }
@@ -825,7 +802,6 @@ public sealed class CrawlRuntimeEngine
                 $"Encountered keyed location {location.Name}.",
                 subjectId: location.Id,
                 subjectType: KnowledgeSubjectType.Location);
-
             knowledge = KnowledgeDiscovery.Discover(
                 knowledge,
                 location.Id,
@@ -912,7 +888,6 @@ public sealed class CrawlRuntimeEngine
         {
             state = state with { History = state.History.Concat(newEvents).ToArray() };
         }
-
         return new WatchAdvanceResult(state, knowledge, pause, remaining, newEvents);
     }
 
@@ -931,19 +906,23 @@ public sealed class CrawlRuntimeEngine
         {
             return TimeSpan.Zero;
         }
-
         if (factor >= 1d)
         {
             return value;
         }
-
         return TimeSpan.FromTicks((long)Math.Round(value.Ticks * factor, MidpointRounding.AwayFromZero));
     }
 
     private static TimeSpan ClampTime(TimeSpan value, TimeSpan minimum, TimeSpan maximum) =>
         value < minimum ? minimum : value > maximum ? maximum : value;
 
-    private static string Format(double value) => value.ToString("0.###", CultureInfo.InvariantCulture);
+    private static string Format(double value) =>
+        value.ToString("0.###", CultureInfo.InvariantCulture);
+
+    private sealed record MovementOutcome(
+        ExpeditionState State,
+        ActiveWatchState Active,
+        RuntimePauseReason? PauseReason);
 
     private sealed class EventCollector
     {
