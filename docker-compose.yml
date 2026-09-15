@@ -1,0 +1,7 @@
+services:
+  hex-crawl:
+    build:
+      context: .
+      dockerfile: src/HexCrawl.Web/Dockerfile
+    ports:
+      - "8092:8080"

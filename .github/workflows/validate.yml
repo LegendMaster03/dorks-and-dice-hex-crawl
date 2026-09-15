@@ -1,0 +1,57 @@
+name: Validate Hex Crawl
+
+on:
+  pull_request:
+    branches: [ "main" ]
+  push:
+    branches: [ "**" ]
+
+concurrency:
+  group: validate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.x"
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Build frontend
+        working-directory: src/HexCrawl.Web/Client
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+
+      - name: Restore
+        run: dotnet restore dorks-and-dice-hex-crawl.slnx
+
+      - name: Test
+        run: dotnet test dorks-and-dice-hex-crawl.slnx --configuration Release --no-restore -p:BuildClient=false
+
+      - name: Build container
+        run: docker build -t dorks-and-dice-hex-crawl:test -f src/HexCrawl.Web/Dockerfile .
+
+      - name: Smoke test standalone container
+        run: |
+          docker run -d --name hex-crawl-smoke -p 127.0.0.1:18092:8080 dorks-and-dice-hex-crawl:test
+          trap 'docker rm -f hex-crawl-smoke >/dev/null 2>&1 || true' EXIT
+          ready=false
+          for i in {1..20}; do
+            if curl -fsS http://127.0.0.1:18092/health | grep -q 'Healthy' \
+              && curl -fsS http://127.0.0.1:18092/ready | grep -q '"status":"ready"' \
+              && curl -fsS http://127.0.0.1:18092/ | grep -q 'tool-root' \
+              && curl -fsS http://127.0.0.1:18092/app.js | grep -q 'tool-root'; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          test "$ready" = true

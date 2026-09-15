@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+    <BuildClient Condition="'$(BuildClient)' == ''">true</BuildClient>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../HexCrawl.Domain/HexCrawl.Domain.csproj" />
+  </ItemGroup>
+
+  <Target Name="BuildClientApplication"
+          BeforeTargets="Build"
+          Condition="'$(BuildClient)' == 'true' and '$(DesignTimeBuild)' != 'true'">
+    <Exec WorkingDirectory="$(MSBuildProjectDirectory)/Client"
+          Command="npm install --no-audit --no-fund"
+          Condition="!Exists('$(MSBuildProjectDirectory)/Client/node_modules')" />
+    <Exec WorkingDirectory="$(MSBuildProjectDirectory)/Client"
+          Command="npm run build" />
+  </Target>
+</Project>

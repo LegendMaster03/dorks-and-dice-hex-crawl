@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="src/HexCrawl.Domain/HexCrawl.Domain.csproj" />
+  <Project Path="src/HexCrawl.Web/HexCrawl.Web.csproj" />
+  <Project Path="tests/HexCrawl.Domain.Tests/HexCrawl.Domain.Tests.csproj" />
+  <Project Path="tests/HexCrawl.IntegrationTests/HexCrawl.IntegrationTests.csproj" />
+</Solution>
