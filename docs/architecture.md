@@ -39,7 +39,7 @@ The initial persistent provider is **SQLite**, accessed through `Microsoft.Data.
 
 SQLite fits the current Hex Crawl deployment because the tool is one service with deployment-owned storage, does not require a separate database server for development or CI, supports transactions and optimistic concurrency, and can be mounted as a durable file in the container deployment. It is not exposed to the domain model, so a later operational need can replace the provider without changing spatial/runtime types.
 
-The default development connection string is `Data Source=hex-crawl.db`. Deployments are expected to override `ConnectionStrings:HexCrawl`; the Docker Compose development configuration uses `/data/hex-crawl.db` on a named volume. Credentials and storage locations remain deployment configuration and are not committed as secrets.
+The default development connection string is `Data Source=hex-crawl.db`. Production Compose overrides this with `Data Source=/data/hex-crawl.db` and mounts the named `hex-crawl-data` volume at `/data`. The production deployment replaces the application container without deleting that named volume, so SQLite state survives ordinary redeployment. Credentials and machine-specific storage locations remain deployment configuration and are not committed as secrets.
 
 The schema is versioned through the non-destructive `schema_migrations` table. Startup applies missing forward migrations and never drops or recreates existing production data. Tests create real empty SQLite files and apply the migration from zero.
 
