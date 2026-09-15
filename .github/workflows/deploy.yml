@@ -5,6 +5,7 @@ on:
   workflow_run:
     workflows: [ "Validate Hex Crawl" ]
     types: [ completed ]
+    branches: [ "main" ]
   workflow_dispatch:
 
 concurrency:
