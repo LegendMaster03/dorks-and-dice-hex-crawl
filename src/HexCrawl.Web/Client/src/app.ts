@@ -110,12 +110,23 @@ async function boot(rootElement: HTMLElement): Promise<void> {
         shell.hexProgress.textContent = next.expedition.exitRequirement
             ? `${formatDistance(next.expedition.hexProgress)} / ${formatDistance(next.expedition.exitRequirement)}`
             : formatDistance(next.expedition.hexProgress);
+
+        const activeActivities = next.expedition.activeActivities.length === 0
+            ? "no activities"
+            : next.expedition.activeActivities.join(", ");
         shell.watchState.textContent = next.expedition.activeWatchNumber === null
             ? `${next.expedition.completedWatches} completed`
-            : `Watch ${next.expedition.activeWatchNumber} active`;
+            : `Watch ${next.expedition.activeWatchNumber} active · ${next.expedition.activePaceKey ?? "normal"} · ${activeActivities}`;
         shell.remainingWatch.textContent = formatHours(next.remainingWatchHours);
         shell.elapsedTravel.textContent = formatHours(next.expedition.elapsedTravelHours);
         shell.pauseReason.textContent = next.pauseReason ?? "—";
+
+        if (next.expedition.activePaceKey) shell.pace.value = next.expedition.activePaceKey;
+        if (next.expedition.activeNavigationAidKey) shell.navigationAid.value = next.expedition.activeNavigationAidKey;
+        const activeActivitySet = new Set(next.expedition.activeActivities);
+        for (const input of rootElement.querySelectorAll<HTMLInputElement>("[data-runtime-activity]")) {
+            input.checked = activeActivitySet.has(input.value);
+        }
 
         const newWatch = next.expedition.activeWatchNumber === null;
         shell.navigationInputs.hidden = !(newWatch && next.profile.usesNavigationChecks);
@@ -440,6 +451,8 @@ function renderShell(rootElement: HTMLElement) {
                     <fieldset class="hc-inline-fieldset"><legend>Activities</legend>
                         <label><input data-runtime-activity type="checkbox" value="exploration"> Exploration</label>
                         <label><input data-runtime-activity type="checkbox" value="foraging"> Foraging</label>
+                        <label><input data-runtime-activity type="checkbox" value="rest"> Rest</label>
+                        <label><input data-runtime-activity type="checkbox" value="preparation"> Preparation</label>
                     </fieldset>
                     <label class="hc-control">Navigation aid
                         <select data-role="navigation-aid"><option value="none">None</option><option value="compass">Compass / bearing</option><option value="route">Road / trail / landmark</option></select>
