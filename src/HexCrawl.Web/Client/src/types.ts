@@ -9,6 +9,8 @@ export type DistanceUnit = {
     metersPerUnit: number | null;
 };
 
+export type DistanceValue = { value: number; unit: DistanceUnit };
+
 export type GridDefinition = {
     id: string;
     orientation: HexOrientation;
@@ -16,7 +18,7 @@ export type GridDefinition = {
     origin: WorldPoint;
     rotationDegrees: number;
     hexRadiusWorldUnits: number;
-    neighborCenterDistance: { value: number; unit: DistanceUnit };
+    neighborCenterDistance: DistanceValue;
 };
 
 export type SpatialFeature = {
@@ -43,6 +45,90 @@ export type DemoWorld = {
     grid: GridDefinition;
     features: SpatialFeature[];
     locations: Location[];
+};
+
+export type RuntimeProfile = {
+    key: string;
+    name: string;
+    watchHours: number;
+    travelResolution: "ContinuousDistance" | "HexSteps";
+    actualDistanceResolution: "Fixed" | "VariableResolved";
+    encounterCadence: "None" | "PerWatch" | "PerDay" | "Custom";
+    usesNavigationChecks: boolean;
+    usesPersistentVeer: boolean;
+    tracksIntraHexProgress: boolean;
+};
+
+export type RuntimeExpedition = {
+    id: string;
+    currentHex: HexCoordinate;
+    position: WorldPoint;
+    positionPrecision: "Exact" | "HexAnchor";
+    intendedDirection: number | null;
+    actualDirection: number | null;
+    isLost: boolean;
+    veerSteps: number;
+    veerDegrees: number;
+    distanceTraveled: DistanceValue;
+    hexProgress: DistanceValue;
+    exitRequirement: DistanceValue | null;
+    elapsedTravelHours: number;
+    completedWatches: number;
+    activeWatchNumber: number | null;
+};
+
+export type RuntimeKnowledgeEntry = {
+    subjectId: string;
+    subjectType: "Location" | "Feature" | "Terrain" | "Route";
+    state: "Observed" | "Discovered" | "Revealed";
+    source: string | null;
+};
+
+export type RuntimeEvent = {
+    sequence: number;
+    watchNumber: number;
+    kind: string;
+    expeditionElapsedHours: number;
+    hex: HexCoordinate;
+    message: string;
+    distanceValue: number | null;
+    distanceUnit: string | null;
+    subjectId: string | null;
+    subjectType: string | null;
+};
+
+export type RuntimeState = {
+    profile: RuntimeProfile;
+    hexCenterDistance: DistanceValue;
+    expedition: RuntimeExpedition;
+    pauseReason: "ConditionsReviewRequired" | "LostRecognitionRequired" | "EncounterTriggered" | "BacktrackBoundaryReached" | null;
+    remainingWatchHours: number;
+    knowledge: RuntimeKnowledgeEntry[];
+    history: RuntimeEvent[];
+};
+
+export type RuntimeAdvanceRequest = {
+    intendedDirection: number;
+    paceKey: string;
+    activities: string[];
+    navigationAidKey: string;
+    suppressesNavigationCheck: boolean;
+    resetsVeerAtBoundary: boolean;
+    expectedDistance?: number;
+    actualDistance?: number;
+    hexSteps?: number;
+    resolutionSource: "ProcedureDefault" | "AutomaticRoll" | "ManualRoll" | "ExternalSystem" | "DmOverride";
+    navigationOutcome?: "success" | "failure";
+    veerSteps?: number;
+    encounterOutcome?: "none" | "wandering" | "location" | "manual";
+    encounterHour?: number;
+    locationId?: string;
+    encounterNote?: string;
+    deliberateDoubleBack: boolean;
+    continueAcrossBoundaries: boolean;
+    recognizedLost?: boolean;
+    reorient?: boolean;
+    dmOverrideNote?: string;
 };
 
 export type ToolHostContext = {
