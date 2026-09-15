@@ -11,7 +11,7 @@ import {
 } from "./runtime-view";
 import { ensureStyles } from "./styles";
 import { deriveToolRoute } from "./tool-route";
-import type { DemoWorld, RuntimeAdvanceRequest, RuntimeProfile, RuntimeState } from "./types";
+import type { DemoWorld, RuntimeAdvanceRequest, RuntimeState } from "./types";
 import { Viewport } from "./viewport";
 
 const root = document.getElementById("tool-root");
@@ -25,10 +25,10 @@ async function boot(rootElement: HTMLElement): Promise<void> {
     const viewport = new Viewport();
     let world: DemoWorld | null = null;
     let runtime: RuntimeState | null = null;
-    let profiles: RuntimeProfile[] = [];
     let orientation: "pointy" | "flat" = "pointy";
     let scale = 12;
     let unit: "mi" | "km" = "mi";
+
     const lifecycle = new RenderLifecycle();
     const renderer = new CanvasMapRenderer(shell.canvas, viewport, () => world);
     lifecycle.register("map", () => renderer.render());
@@ -40,68 +40,22 @@ async function boot(rootElement: HTMLElement): Promise<void> {
         shell.error.hidden = false;
         shell.error.textContent = error instanceof Error ? error.message : String(error);
     };
+
     const clearError = (): void => {
         shell.error.hidden = true;
         shell.error.textContent = "";
     };
 
-    const refreshWorld = async (): Promise<void> => {
-        clearError();
-        try {
-            world = await api.getDemoWorld(orientation, scale, unit);
-            shell.scaleValue.textContent = `${world.grid.neighborCenterDistance.value} ${world.grid.neighborCenterDistance.unit.symbol} center-to-center`;
-            updateCoordinate();
-            renderDiscoveryList();
-            lifecycle.requestRender();
-        } catch (error) {
-            showError(error);
-        }
-    };
-
-    const applyRuntime = (next: RuntimeState): void => {
-        runtime = next;
-        renderer.expeditionHex = next.expedition.currentHex;
-        renderer.discoveredSubjectIds = discoveredSubjectIds(next);
-        shell.profile.value = next.profile.key;
-        shell.runtimeGrid.textContent = formatDistance(next.hexCenterDistance);
-        shell.currentHex.textContent = `${next.expedition.currentHex.q}, ${next.expedition.currentHex.r}`;
-        shell.intendedCourse.textContent = directionLabel(next.expedition.intendedDirection);
-        shell.actualCourse.textContent = directionLabel(next.expedition.actualDirection);
-        shell.lostState.textContent = next.expedition.isLost
-            ? `Lost · veer ${next.expedition.veerSteps} (${next.expedition.veerDegrees}°)`
-            : "Oriented";
-        shell.distanceTraveled.textContent = formatDistance(next.expedition.distanceTraveled);
-        shell.hexProgress.textContent = next.expedition.exitRequirement
-            ? `${formatDistance(next.expedition.hexProgress)} / ${formatDistance(next.expedition.exitRequirement)}`
-            : formatDistance(next.expedition.hexProgress);
-        shell.watchState.textContent = next.expedition.activeWatchNumber === null
-            ? `${next.expedition.completedWatches} completed`
-            : `Watch ${next.expedition.activeWatchNumber} active`;
-        shell.remainingWatch.textContent = formatHours(next.remainingWatchHours);
-        shell.pauseReason.textContent = next.pauseReason ?? "—";
-        shell.elapsedTravel.textContent = formatHours(next.expedition.elapsedTravelHours);
-
-        const newWatch = next.expedition.activeWatchNumber === null;
-        shell.navigationInputs.hidden = !(newWatch && next.profile.usesNavigationChecks);
-        shell.encounterInputs.hidden = !(newWatch && next.profile.encounterCadence !== "None");
-        shell.continuousInputs.hidden = next.profile.travelResolution !== "ContinuousDistance";
-        shell.hexStepInputs.hidden = next.profile.travelResolution !== "HexSteps";
-        shell.lostDecision.hidden = next.pauseReason !== "LostRecognitionRequired";
-        shell.variableDistanceHelper.hidden = next.profile.actualDistanceResolution !== "VariableResolved";
-
-        renderDiscoveryList();
-        renderHistory();
-        lifecycle.requestRender();
-    };
-
     const renderDiscoveryList = (): void => {
         shell.discoveryList.replaceChildren();
         if (!world) return;
+
         const discovered = discoveredSubjectIds(runtime);
         const subjects = [
             ...world.locations.map(item => ({ id: item.id, name: item.name, type: "Location" as const })),
             ...world.features.map(item => ({ id: item.id, name: item.name, type: "Feature" as const }))
         ];
+
         for (const subject of subjects) {
             const row = document.createElement("div");
             row.className = "hc-discovery-row";
@@ -127,6 +81,7 @@ async function boot(rootElement: HTMLElement): Promise<void> {
     const renderHistory = (): void => {
         shell.history.replaceChildren();
         if (!runtime) return;
+
         for (const runtimeEvent of runtime.history.slice(-40).reverse()) {
             const item = document.createElement("li");
             const title = document.createElement("strong");
@@ -138,6 +93,68 @@ async function boot(rootElement: HTMLElement): Promise<void> {
         }
     };
 
+    const applyRuntime = (next: RuntimeState): void => {
+        runtime = next;
+        renderer.expeditionHex = next.expedition.currentHex;
+        renderer.discoveredSubjectIds = discoveredSubjectIds(next);
+
+        shell.profile.value = next.profile.key;
+        shell.runtimeGrid.textContent = formatDistance(next.hexCenterDistance);
+        shell.currentHex.textContent = `${next.expedition.currentHex.q}, ${next.expedition.currentHex.r}`;
+        shell.intendedCourse.textContent = directionLabel(next.expedition.intendedDirection);
+        shell.actualCourse.textContent = directionLabel(next.expedition.actualDirection);
+        shell.lostState.textContent = next.expedition.isLost
+            ? `Lost · veer ${next.expedition.veerSteps} (${next.expedition.veerDegrees}°)`
+            : "Oriented";
+        shell.distanceTraveled.textContent = formatDistance(next.expedition.distanceTraveled);
+        shell.hexProgress.textContent = next.expedition.exitRequirement
+            ? `${formatDistance(next.expedition.hexProgress)} / ${formatDistance(next.expedition.exitRequirement)}`
+            : formatDistance(next.expedition.hexProgress);
+        shell.watchState.textContent = next.expedition.activeWatchNumber === null
+            ? `${next.expedition.completedWatches} completed`
+            : `Watch ${next.expedition.activeWatchNumber} active`;
+        shell.remainingWatch.textContent = formatHours(next.remainingWatchHours);
+        shell.elapsedTravel.textContent = formatHours(next.expedition.elapsedTravelHours);
+        shell.pauseReason.textContent = next.pauseReason ?? "—";
+
+        const newWatch = next.expedition.activeWatchNumber === null;
+        shell.navigationInputs.hidden = !(newWatch && next.profile.usesNavigationChecks);
+        shell.encounterInputs.hidden = !(newWatch && next.profile.encounterCadence !== "None");
+        shell.continuousInputs.hidden = next.profile.travelResolution !== "ContinuousDistance";
+        shell.hexStepInputs.hidden = next.profile.travelResolution !== "HexSteps";
+        shell.lostDecision.hidden = next.pauseReason !== "LostRecognitionRequired";
+        shell.variableDistanceHelper.hidden = next.profile.actualDistanceResolution !== "VariableResolved";
+
+        renderDiscoveryList();
+        renderHistory();
+        lifecycle.requestRender();
+    };
+
+    const refreshWorld = async (): Promise<DemoWorld | null> => {
+        clearError();
+        try {
+            const loaded = await api.getDemoWorld(orientation, scale, unit);
+            world = loaded;
+            shell.scaleValue.textContent = `${loaded.grid.neighborCenterDistance.value} ${loaded.grid.neighborCenterDistance.unit.symbol} center-to-center`;
+            updateCoordinate();
+            renderDiscoveryList();
+            lifecycle.requestRender();
+            return loaded;
+        } catch (error) {
+            showError(error);
+            return null;
+        }
+    };
+
+    const populateEncounterLocations = (loadedWorld: DemoWorld): void => {
+        shell.encounterLocation.replaceChildren(...loadedWorld.locations.map(location => {
+            const option = document.createElement("option");
+            option.value = location.id;
+            option.textContent = location.name;
+            return option;
+        }));
+    };
+
     const markMapSettingsChanged = (): void => {
         shell.mapSettingsNote.textContent = "Map settings changed. Reset the expedition to make the runtime use this grid scale/orientation.";
     };
@@ -145,20 +162,23 @@ async function boot(rootElement: HTMLElement): Promise<void> {
     shell.orientation.addEventListener("change", () => {
         orientation = shell.orientation.value === "flat" ? "flat" : "pointy";
         markMapSettingsChanged();
-        void refreshWorld();
+        void refreshWorld().then(loaded => { if (loaded) populateEncounterLocations(loaded); });
     });
+
     shell.unit.addEventListener("change", () => {
         unit = shell.unit.value === "km" ? "km" : "mi";
         markMapSettingsChanged();
-        void refreshWorld();
+        void refreshWorld().then(loaded => { if (loaded) populateEncounterLocations(loaded); });
     });
+
     shell.scale.addEventListener("change", () => {
         const parsed = Number(shell.scale.value);
         scale = Number.isFinite(parsed) && parsed > 0 ? parsed : 12;
         shell.scale.value = String(scale);
         markMapSettingsChanged();
-        void refreshWorld();
+        void refreshWorld().then(loaded => { if (loaded) populateEncounterLocations(loaded); });
     });
+
     shell.resetView.addEventListener("click", () => {
         viewport.center = { x: 0, y: 0 };
         viewport.zoom = 56;
@@ -199,13 +219,16 @@ async function boot(rootElement: HTMLElement): Promise<void> {
     shell.advance.addEventListener("click", async () => {
         if (!runtime) return;
         clearError();
+
         try {
             const newWatch = runtime.expedition.activeWatchNumber === null;
             const navigationAid = shell.navigationAid.value;
             const request: RuntimeAdvanceRequest = {
                 intendedDirection: Number(shell.direction.value),
                 paceKey: shell.pace.value,
-                activities: Array.from(rootElement.querySelectorAll<HTMLInputElement>("[data-runtime-activity]:checked"), item => item.value),
+                activities: Array.from(
+                    rootElement.querySelectorAll<HTMLInputElement>("[data-runtime-activity]:checked"),
+                    item => item.value),
                 navigationAidKey: navigationAid,
                 suppressesNavigationCheck: navigationAid === "route",
                 resetsVeerAtBoundary: navigationAid === "route",
@@ -229,7 +252,7 @@ async function boot(rootElement: HTMLElement): Promise<void> {
             }
 
             if (newWatch && runtime.profile.encounterCadence !== "None") {
-                request.encounterOutcome = shell.encounterOutcome.value as RuntimeAdvanceRequest["encounterOutcome"];
+                request.encounterOutcome = shell.encounterOutcome.value as "none" | "wandering" | "location" | "manual";
                 if (request.encounterOutcome !== "none") {
                     request.encounterHour = numericValue(shell.encounterHour, runtime.profile.watchHours / 2);
                     request.encounterNote = shell.encounterNote.value.trim() || undefined;
@@ -286,6 +309,7 @@ async function boot(rootElement: HTMLElement): Promise<void> {
         shell.canvas.releasePointerCapture(event.pointerId);
         shell.canvas.dataset.dragging = "false";
         pointerId = null;
+
         if (!moved && world) {
             const point = eventToWorld(event);
             renderer.selectedHex = worldToHex(world.grid, point);
@@ -301,7 +325,12 @@ async function boot(rootElement: HTMLElement): Promise<void> {
     shell.canvas.addEventListener("wheel", event => {
         event.preventDefault();
         const rect = shell.canvas.getBoundingClientRect();
-        viewport.zoomAt(event.deltaY < 0 ? 1.12 : 1 / 1.12, event.clientX - rect.left, event.clientY - rect.top, rect.width, rect.height);
+        viewport.zoomAt(
+            event.deltaY < 0 ? 1.12 : 1 / 1.12,
+            event.clientX - rect.left,
+            event.clientY - rect.top,
+            rect.width,
+            rect.height);
         lifecycle.requestRender();
     }, { passive: false });
 
@@ -311,7 +340,11 @@ async function boot(rootElement: HTMLElement): Promise<void> {
 
     function eventToWorld(event: PointerEvent) {
         const rect = shell.canvas.getBoundingClientRect();
-        return viewport.screenToWorld(event.clientX - rect.left, event.clientY - rect.top, rect.width, rect.height);
+        return viewport.screenToWorld(
+            event.clientX - rect.left,
+            event.clientY - rect.top,
+            rect.width,
+            rect.height);
     }
 
     function updateCoordinate(event?: PointerEvent): void {
@@ -325,24 +358,23 @@ async function boot(rootElement: HTMLElement): Promise<void> {
     }
 
     shell.route.textContent = routeFor(rootElement, context?.toolBasePath ?? "/");
-    await refreshWorld();
+    const initialWorld = await refreshWorld();
+
     try {
-        [profiles, runtime] = await Promise.all([api.getRuntimeProfiles(), api.getRuntime()]);
-        shell.profile.replaceChildren(...profiles.map(profile => {
+        const [availableProfiles, initialRuntime] = await Promise.all([
+            api.getRuntimeProfiles(),
+            api.getRuntime()
+        ]);
+        shell.profile.replaceChildren(...availableProfiles.map(profile => {
             const option = document.createElement("option");
             option.value = profile.key;
             option.textContent = profile.name;
             return option;
         }));
-        applyRuntime(runtime);
-        shell.expectedDistance.value = String(runtime.hexCenterDistance.value);
-        shell.actualDistance.value = String(runtime.hexCenterDistance.value);
-        shell.encounterLocation.replaceChildren(...(world?.locations ?? []).map(location => {
-            const option = document.createElement("option");
-            option.value = location.id;
-            option.textContent = location.name;
-            return option;
-        }));
+        applyRuntime(initialRuntime);
+        shell.expectedDistance.value = String(initialRuntime.hexCenterDistance.value);
+        shell.actualDistance.value = String(initialRuntime.hexCenterDistance.value);
+        if (initialWorld) populateEncounterLocations(initialWorld);
     } catch (error) {
         showError(error);
     }
@@ -400,7 +432,7 @@ function renderShell(rootElement: HTMLElement) {
                 </dl>
                 <div class="hc-runtime-form">
                     <label class="hc-control">Direction
-                        <select data-role="direction">${[0,1,2,3,4,5].map(value => `<option value="${value}">Direction ${value}</option>`).join("")}</select>
+                        <select data-role="direction">${[0, 1, 2, 3, 4, 5].map(value => `<option value="${value}">Direction ${value}</option>`).join("")}</select>
                     </label>
                     <label class="hc-control">Pace
                         <select data-role="pace"><option value="normal">Normal</option><option value="cautious">Cautious</option><option value="fast">Fast / hustle</option></select>
