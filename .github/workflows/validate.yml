@@ -40,8 +40,14 @@ jobs:
       - name: Build .NET solution
         run: dotnet build dorks-and-dice-hex-crawl.slnx --configuration Release --no-restore -p:BuildClient=false
 
-      - name: Test .NET solution
-        run: dotnet test dorks-and-dice-hex-crawl.slnx --configuration Release --no-restore --no-build -p:BuildClient=false --blame-hang --blame-hang-timeout 60s --logger "console;verbosity=normal"
+      - name: Test domain
+        run: timeout 120s dotnet test tests/HexCrawl.Domain.Tests/HexCrawl.Domain.Tests.csproj --configuration Release --no-restore --no-build -p:BuildClient=false --blame-hang --blame-hang-timeout 30s --logger "console;verbosity=normal"
+
+      - name: Test application and persistence
+        run: timeout 120s dotnet test tests/HexCrawl.Application.Tests/HexCrawl.Application.Tests.csproj --configuration Release --no-restore --no-build -p:BuildClient=false --blame-hang --blame-hang-timeout 30s --logger "console;verbosity=normal"
+
+      - name: Test HTTP integration
+        run: timeout 120s dotnet test tests/HexCrawl.IntegrationTests/HexCrawl.IntegrationTests.csproj --configuration Release --no-restore --no-build -p:BuildClient=false --blame-hang --blame-hang-timeout 30s --logger "console;verbosity=normal"
 
       - name: Build container
         run: docker build -t dorks-and-dice-hex-crawl:test -f src/HexCrawl.Web/Dockerfile .
