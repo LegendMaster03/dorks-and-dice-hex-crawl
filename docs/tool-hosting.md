@@ -2,6 +2,8 @@
 
 Hex Crawl targets **Embedded Module integration contract version 2**.
 
+That integration contract version is separate from the Tool Host context payload contract. The current Site supplies **Tool Host context payload contract version 1** to embedded tools.
+
 The frontend mounts only into `#tool-root`. Hosted mode loads Tool Host context and sends backend requests through `${apiBaseUrl}/upstream`; standalone mode calls the same backend directly.
 
 ## Trusted hosted identity
@@ -13,7 +15,7 @@ For an upstream request, the Tool Host provides two reserved backend headers:
 - `X-Dorks-Tool-Auth-Ticket`
 - `X-Dorks-Tool-Auth-Introspection-Path`
 
-Hex Crawl requires exactly one value for each. The introspection path is fixed to `/tool-host/hex-crawl/api/introspect`; a browser can not select an alternate introspection endpoint. `DorksAndDiceToolHostAuthenticationClient` redeems the one-time ticket with `Authorization: Bearer <ticket>` against the deployment-configured `ToolHost:BaseUrl` and validates contract version 1, tool slug `hex-crawl`, and a non-empty stable user ID.
+Hex Crawl requires exactly one value for each. The introspection path is fixed to `/tool-host/hex-crawl/api/introspect`; a browser can not select an alternate introspection endpoint. `DorksAndDiceToolHostAuthenticationClient` redeems the one-time ticket with `Authorization: Bearer <ticket>` against the deployment-configured `ToolHost:BaseUrl` and validates Tool Host authentication/context payload contract version 1, tool slug `hex-crawl`, and a non-empty stable user ID.
 
 A valid context becomes the request `ClaimsPrincipal`; `ClaimTypes.NameIdentifier` is the authoritative owner key used by persistent application services. A missing/malformed ticket is unauthorized. Tool Host configuration/network failures fail closed with service/gateway errors rather than falling back to a browser identity.
 
@@ -62,7 +64,7 @@ Application-owned DOM uses explicit route/state transitions. Canvas drawing is i
 
 CI validates both hosting paths.
 
-The Embedded Module smoke test supplies a contract-version-2 Tool Host context and proves persistent GET/POST calls use `${apiBaseUrl}/upstream` instead of bypassing the host gateway.
+The Embedded Module smoke test exercises **Embedded Module integration contract v2** while supplying the Site's current **Tool Host context payload v1**. It proves persistent GET/POST calls use `${apiBaseUrl}/upstream` instead of bypassing the host gateway.
 
 The standalone container smoke test uses an explicit development identity and deployment-owned SQLite volume. It verifies health/readiness, direct deep-route shell refresh, creates a persisted overworld, destroys/restarts the application container against the same volume, and confirms that the overworld is still present.
 
