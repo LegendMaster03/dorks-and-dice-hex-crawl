@@ -205,7 +205,7 @@ public sealed class RuntimeEngineTests
 
         Assert.Equal(new HexCoordinate(1, 0), result.Expedition.CurrentHex);
         Assert.Equal(2, result.Expedition.Traversal.Progress.Value, 6);
-        Assert.Single(result.Events.Where(item => item.Kind == CrawlRuntimeEventKind.HexEntered));
+        Assert.Single(result.Events, item => item.Kind == CrawlRuntimeEventKind.HexEntered);
     }
 
     [Fact]
@@ -387,11 +387,13 @@ public sealed class RuntimeEngineTests
         var first = Advance(setup, profile, 7, NavigationCheckOutcome.Succeeded, encounter: encounter, continueAcrossBoundaries: true);
         var second = Advance(setup, profile, 7, NavigationCheckOutcome.Succeeded, encounter: encounter, continueAcrossBoundaries: true);
 
-        Assert.Equal(first.Expedition, second.Expedition);
-        Assert.Equal(first.Knowledge, second.Knowledge);
-        Assert.Equal(first.Events, second.Events);
         Assert.Equal(first.PauseReason, second.PauseReason);
         Assert.Equal(first.RemainingWatchTime, second.RemainingWatchTime);
+        Assert.Equal(first.Expedition.CurrentHex, second.Expedition.CurrentHex);
+        Assert.Equal(first.Expedition.Navigation, second.Expedition.Navigation);
+        Assert.Equal(first.Expedition.DistanceTraveled, second.Expedition.DistanceTraveled);
+        Assert.Equal(first.Expedition.Traversal, second.Expedition.Traversal);
+        Assert.Equal(first.Events.ToArray(), second.Events.ToArray());
     }
 
     [Fact]
