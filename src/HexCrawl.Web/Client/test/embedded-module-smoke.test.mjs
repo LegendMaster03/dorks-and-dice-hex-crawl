@@ -6,7 +6,7 @@ test("Embedded Module mode routes persistent reads and writes through Tool Host 
     const originalFetch = globalThis.fetch;
     const calls = [];
     const context = {
-        contractVersion: 2,
+        contractVersion: 1,
         toolSlug: "hex-crawl",
         siteMode: "dorks",
         apiBaseUrl: "/tool-host/hex-crawl/api/",
