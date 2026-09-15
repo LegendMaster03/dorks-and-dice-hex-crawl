@@ -30,6 +30,10 @@ jobs:
           npm install --no-audit --no-fund
           npm run build
 
+      - name: Smoke test Embedded Module client mode
+        working-directory: src/HexCrawl.Web/Client
+        run: npm run smoke:embedded
+
       - name: Restore
         run: dotnet restore dorks-and-dice-hex-crawl.slnx
 
