@@ -1,5 +1,5 @@
 export type HexOrientation = "PointyTop" | "FlatTop";
-
+export type HexCoordinateConvention = "AxialQr";
 export type WorldPoint = { x: number; y: number };
 export type HexCoordinate = { q: number; r: number };
 
@@ -14,7 +14,7 @@ export type DistanceValue = { value: number; unit: DistanceUnit };
 export type GridDefinition = {
     id: string;
     orientation: HexOrientation;
-    coordinateConvention: "AxialQr";
+    coordinateConvention: HexCoordinateConvention;
     origin: WorldPoint;
     rotationDegrees: number;
     hexRadiusWorldUnits: number;
@@ -26,9 +26,9 @@ export type SpatialFeature = {
     name: string;
     category: string;
     kind: "Point" | "Line" | "Region";
-    position?: WorldPoint;
-    path?: WorldPoint[];
-    boundary?: WorldPoint[];
+    position: WorldPoint | null;
+    path: WorldPoint[] | null;
+    boundary: WorldPoint[] | null;
 };
 
 export type Location = {
@@ -39,13 +39,38 @@ export type Location = {
     discoverability: "Obvious" | "Hidden" | "Conditional";
 };
 
-export type DemoWorld = {
+export type SourceMapRepresentation = {
+    id: string;
+    geographyKey: string;
+    name: string;
+    role: "Gm" | "Player" | "Neutral" | "Other";
+    assetKey: string;
+    containsBakedGrid: boolean;
+    alignment: unknown | null;
+    worldCoverageBoundary: WorldPoint[];
+};
+
+export type OverworldSummary = {
     id: string;
     name: string;
+    version: number;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type Overworld = {
+    id: string;
+    name: string;
+    version: number;
+    createdAt: string;
+    updatedAt: string;
     grid: GridDefinition;
     features: SpatialFeature[];
     locations: Location[];
+    sourceMaps: SourceMapRepresentation[];
 };
+
+export type DemoWorld = Overworld;
 
 export type RuntimeProfile = {
     key: string;
@@ -57,6 +82,13 @@ export type RuntimeProfile = {
     usesNavigationChecks: boolean;
     usesPersistentVeer: boolean;
     tracksIntraHexProgress: boolean;
+    directionChangesCostProgress: boolean;
+    supportsDeliberateDoubleBack: boolean;
+    startingExitProgressFactor: number;
+    nearExitProgressFactor: number;
+    farExitProgressFactor: number;
+    backExitProgressFactor: number;
+    directionChangeProgressCostFactor: number;
 };
 
 export type RuntimeExpedition = {
@@ -84,6 +116,7 @@ export type RuntimeKnowledgeEntry = {
     subjectId: string;
     subjectType: "Location" | "Feature" | "Terrain" | "Route";
     state: "Observed" | "Discovered" | "Revealed";
+    learnedAt: string | null;
     source: string | null;
 };
 
@@ -100,17 +133,35 @@ export type RuntimeEvent = {
     subjectType: string | null;
 };
 
-export type RuntimeState = {
+export type ExpeditionSummary = {
+    id: string;
+    overworldId: string;
+    name: string;
+    procedureName: string;
+    version: number;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type ExpeditionDetail = {
+    id: string;
+    overworldId: string;
+    name: string;
+    version: number;
+    createdAt: string;
+    updatedAt: string;
     profile: RuntimeProfile;
-    hexCenterDistance: DistanceValue;
-    expedition: RuntimeExpedition;
     pauseReason: "ConditionsReviewRequired" | "LostRecognitionRequired" | "EncounterTriggered" | "BacktrackBoundaryReached" | null;
     remainingWatchHours: number;
+    expedition: RuntimeExpedition;
     knowledge: RuntimeKnowledgeEntry[];
     history: RuntimeEvent[];
 };
 
+export type RuntimeState = ExpeditionDetail;
+
 export type RuntimeAdvanceRequest = {
+    expectedVersion: number;
     intendedDirection: number;
     paceKey: string;
     activities: string[];
@@ -121,9 +172,9 @@ export type RuntimeAdvanceRequest = {
     actualDistance?: number;
     hexSteps?: number;
     resolutionSource: "ProcedureDefault" | "AutomaticRoll" | "ManualRoll" | "ExternalSystem" | "DmOverride";
-    navigationOutcome?: "success" | "failure";
+    navigationOutcome?: "NotRequired" | "Succeeded" | "Failed";
     veerSteps?: number;
-    encounterOutcome?: "none" | "wandering" | "location" | "manual";
+    encounterOutcome?: "None" | "WanderingEncounter" | "KeyedLocationDiscovery" | "ManualCustom";
     encounterHour?: number;
     locationId?: string;
     encounterNote?: string;
