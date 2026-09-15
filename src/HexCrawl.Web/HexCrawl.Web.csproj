@@ -6,7 +6,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../HexCrawl.Application/HexCrawl.Application.csproj" />
     <ProjectReference Include="../HexCrawl.Domain/HexCrawl.Domain.csproj" />
+    <ProjectReference Include="../HexCrawl.Infrastructure/HexCrawl.Infrastructure.csproj" />
   </ItemGroup>
 
   <Target Name="BuildClientApplication"

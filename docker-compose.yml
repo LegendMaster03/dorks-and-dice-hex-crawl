@@ -5,3 +5,13 @@ services:
       dockerfile: src/HexCrawl.Web/Dockerfile
     ports:
       - "8092:8080"
+    environment:
+      ConnectionStrings__HexCrawl: "Data Source=/data/hex-crawl.db"
+      ToolHost__StandaloneIdentity__Enabled: "true"
+      ToolHost__StandaloneIdentity__UserId: "standalone-development"
+      ToolHost__StandaloneIdentity__DisplayName: "Standalone Hex Crawl DM"
+    volumes:
+      - hex-crawl-data:/data
+
+volumes:
+  hex-crawl-data:
