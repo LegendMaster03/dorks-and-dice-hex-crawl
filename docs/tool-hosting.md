@@ -4,7 +4,9 @@ Hex Crawl targets **Embedded Module integration contract version 2**.
 
 This matches the current Dorks & Dice Tool Host because Hex Crawl benefits from the normal site shell, nested route ownership under `/tools/{slug}`, Tool Host context, campaign/session APIs, and the authenticated upstream gateway. The map canvas does not require ownership of the entire HTTP response subtree, cookie sessions, redirects, WebSockets, or another capability that would justify Proxied Application.
 
-The frontend mounts only into `#tool-root`. In hosted mode it reads `data-tool-context-url`, loads the host context, and sends backend requests through `${apiBaseUrl}/upstream`. In standalone mode it calls the same backend directly. The current backend exposes only anonymous/read-only demonstrator endpoints, so no authentication middleware is claimed yet.
+The frontend mounts only into `#tool-root`. In hosted mode it reads `data-tool-context-url`, loads the host context, and sends backend requests through `${apiBaseUrl}/upstream`. In standalone mode it calls the same backend directly.
+
+The current runtime demonstrator exposes GET and POST endpoints. Its POST operations mutate only process-local demonstration state; they do not persist campaign data, mutate the main site's Identity store, or establish a privileged account boundary. No authentication middleware is therefore claimed for this demonstrator slice.
 
 Before persistent or privileged backend mutations are introduced, Hex Crawl must implement the current Tool Host ticket/introspection contract rather than accepting browser-controlled identity headers.
 
@@ -18,8 +20,16 @@ Application-owned DOM uses explicit state transitions and an explicit render lif
 
 No `MutationObserver` is used. `ResizeObserver` is used only for the external layout boundary that determines canvas dimensions.
 
+## Validation modes
+
+The validation workflow exercises both supported hosting paths.
+
+The standalone container smoke test starts the built Docker image and verifies health, readiness, the standalone shell, and the built `app.js` surface.
+
+Embedded Module mode is smoke-tested at the client/Tool Host contract boundary. The test supplies a contract-version-2 Tool Host context through `data-tool-context-url`, then verifies that both a runtime GET and runtime POST are routed through `${apiBaseUrl}/upstream`. This proves the hosted client selects the Tool Host gateway instead of directly calling the backend. A production Site instance is not required for this repository-level validation.
+
 ## Deployment
 
-The validation workflow follows the existing first-party Tool convention: Node 24 builds the ES module, .NET 10 restores/tests the solution, Docker builds the deployable image, and a container smoke test exercises health/readiness, the standalone shell, and `/app.js`.
+The validation workflow follows the existing first-party Tool convention: Node 24 builds and tests the ES module, .NET 10 restores/tests the solution, the Embedded Module client-mode smoke test validates the hosted gateway path, Docker builds the deployable image, and a standalone container smoke test exercises the built service.
 
 A production deploy workflow is intentionally not added in this foundation. The existing first-party deploy workflows encode a specific self-hosted runner label, shared Docker network, service name, and deployment target. Those values do not yet exist for Hex Crawl and inventing them would create a workflow that fails or targets infrastructure that has not been provisioned. Once the service/runner is provisioned, the Block Initiative pattern can be adopted without changing application architecture.
