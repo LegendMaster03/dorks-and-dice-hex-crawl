@@ -105,7 +105,10 @@ public sealed record DemoExpeditionResponse(
     DemoDistanceResponse? ExitRequirement,
     double ElapsedTravelHours,
     int CompletedWatches,
-    int? ActiveWatchNumber)
+    int? ActiveWatchNumber,
+    string? ActivePaceKey,
+    IReadOnlyList<string> ActiveActivities,
+    string? ActiveNavigationAidKey)
 {
     public static DemoExpeditionResponse From(ExpeditionState expedition) => new(
         expedition.Id,
@@ -124,7 +127,10 @@ public sealed record DemoExpeditionResponse(
             : null,
         expedition.ElapsedTravelTime.TotalHours,
         expedition.CompletedWatches,
-        expedition.ActiveWatch?.WatchNumber);
+        expedition.ActiveWatch?.WatchNumber,
+        expedition.ActiveWatch?.Plan.Mode.PaceKey,
+        expedition.ActiveWatch?.Plan.Mode.Activities ?? [],
+        expedition.ActiveWatch?.Plan.NavigationAid.Key);
 }
 
 public sealed record DemoKnowledgeEntryResponse(
