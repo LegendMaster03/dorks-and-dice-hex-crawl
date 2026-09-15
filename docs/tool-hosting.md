@@ -68,8 +68,12 @@ The standalone container smoke test uses an explicit development identity and de
 
 The .NET integration suite separately verifies that persistent APIs are unauthorized when neither a Tool Host ticket nor the explicit standalone-development identity is present.
 
-## Deployment configuration
+## Production deployment
 
-Production deployments must provide the durable `ConnectionStrings:HexCrawl` location and, for hosted authentication, `ToolHost:BaseUrl`. No credentials or environment-specific absolute source-map file paths are committed.
+Hex Crawl has a dedicated production deployment workflow in `.github/workflows/deploy.yml`. Automatic deployment is permitted only when `Validate Hex Crawl` completes successfully for a **push to `main`**. Manual `workflow_dispatch` deployment is also restricted to `main`. Feature-branch validation therefore exercises the complete validation suite without deploying production, and the deployment workflow's branch/event gate prevents feature workflow completions from entering the production deployment job.
 
-A production deploy workflow is still intentionally absent because Hex Crawl does not yet have an assigned deployment service/runner/network target in this repository. That provisioning decision does not affect the Embedded Module or persistence architecture.
+The deployment runs on the dedicated `dorks-and-dice-hex-crawl` self-hosted runner, builds `dorks-and-dice-hex-crawl:latest`, smoke-tests the image, replaces the deployed application container, and verifies health/readiness and frontend availability on the shared backend network.
+
+Production Compose uses the service/container identity `dorks-and-dice-hex-crawl`, joins the external `dorks-and-dice-backend` network, and configures `ToolHost__BaseUrl=http://dorks-and-dice-site:8080`. It does not expose the development-only `8092:8080` host port and does not enable the standalone development identity.
+
+Persistent SQLite state is deployment-owned. Production Compose mounts the named `hex-crawl-data` volume at `/data` and sets `ConnectionStrings__HexCrawl=Data Source=/data/hex-crawl.db`. Replacing the application container during deployment does not remove that named volume, so application state survives normal redeployment. Credentials and machine-specific source-map paths remain outside the repository; future large map assets continue to use logical `AssetKey` references until a separate asset-storage provider is selected.
