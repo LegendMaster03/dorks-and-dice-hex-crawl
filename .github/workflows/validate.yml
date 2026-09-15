@@ -56,7 +56,8 @@ jobs:
         run: |
           set -euo pipefail
           data_dir="$RUNNER_TEMP/hex-crawl-smoke-data"
-          mkdir -p "$data_dir"
+          response_dir="$RUNNER_TEMP/hex-crawl-smoke-responses"
+          mkdir -p "$data_dir" "$response_dir"
 
           start_container() {
             docker run -d --name hex-crawl-smoke \
@@ -71,8 +72,10 @@ jobs:
 
           wait_ready() {
             for i in {1..30}; do
-              if curl -fsS http://127.0.0.1:18092/health | grep -q 'Healthy' \
-                && curl -fsS http://127.0.0.1:18092/ready | grep -q '"status":"ready"'; then
+              if curl -fsS http://127.0.0.1:18092/health -o "$response_dir/health.txt" \
+                && grep -q 'Healthy' "$response_dir/health.txt" \
+                && curl -fsS http://127.0.0.1:18092/ready -o "$response_dir/ready.json" \
+                && grep -q '"status":"ready"' "$response_dir/ready.json"; then
                 return 0
               fi
               sleep 1
@@ -85,16 +88,21 @@ jobs:
           start_container
           wait_ready
 
-          curl -fsS http://127.0.0.1:18092/ | grep -q 'tool-root'
-          curl -fsS http://127.0.0.1:18092/worlds/00000000-0000-0000-0000-000000000001/edit | grep -q 'tool-root'
-          curl -fsS http://127.0.0.1:18092/app.js | grep -q 'tool-root'
+          curl -fsS http://127.0.0.1:18092/ -o "$response_dir/root.html"
+          grep -q 'tool-root' "$response_dir/root.html"
+          curl -fsS http://127.0.0.1:18092/worlds/00000000-0000-0000-0000-000000000001/edit -o "$response_dir/deep-route.html"
+          grep -q 'tool-root' "$response_dir/deep-route.html"
+          curl -fsS http://127.0.0.1:18092/app.js -o "$response_dir/app.js"
+          grep -q 'tool-root' "$response_dir/app.js"
 
           curl -fsS -X POST http://127.0.0.1:18092/api/overworlds \
             -H 'Content-Type: application/json' \
             --data '{"name":"CI restart proof","orientation":"PointyTop","origin":{"x":0,"y":0},"rotationDegrees":0,"hexRadiusWorldUnits":1,"neighborCenterDistance":12,"distanceUnit":{"kind":"Mile","symbol":"mi","metersPerUnit":1609.344}}' \
-            | grep -q 'CI restart proof'
+            -o "$response_dir/create-world.json"
+          grep -q 'CI restart proof' "$response_dir/create-world.json"
 
           docker rm -f hex-crawl-smoke >/dev/null
           start_container
           wait_ready
-          curl -fsS http://127.0.0.1:18092/api/overworlds | grep -q 'CI restart proof'
+          curl -fsS http://127.0.0.1:18092/api/overworlds -o "$response_dir/worlds-after-restart.json"
+          grep -q 'CI restart proof' "$response_dir/worlds-after-restart.json"
