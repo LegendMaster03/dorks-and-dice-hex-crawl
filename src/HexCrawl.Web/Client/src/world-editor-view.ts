@@ -87,7 +87,7 @@ export async function renderWorldEditor(
                             <button type="submit" class="hc-primary-action">Start expedition</button>
                         </form>
                     </details>
-                    <details><summary>Source-map metadata</summary><p data-source-maps></p><p class="hc-hint">Binary image upload and registration UI are deferred. Persisted representation metadata is reserved for the import cycle.</p></details>
+                    <details><summary>Source-map metadata</summary><p data-source-maps></p></details>
                 </aside>
             </div>
         </section>`;

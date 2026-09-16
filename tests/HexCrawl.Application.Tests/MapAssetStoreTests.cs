@@ -4,6 +4,15 @@ namespace HexCrawl.Application.Tests;
 
 public sealed class MapAssetStoreTests
 {
+    private static readonly byte[] CompletePng = Convert.FromBase64String(
+        "iVBORw0KGgoAAAANSUhEUgAAAAMAAAACCAIAAAASFvFNAAAAFUlEQVR4nGPkEpFjYGBgYGBgYoABAARgAEB5qHZqAAAAAElFTkSuQmCC");
+
+    private static readonly byte[] CompleteJpeg = Convert.FromBase64String(
+        "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAACAAMDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDxGiiitjI//9k=");
+
+    private static readonly byte[] CompleteWebP = Convert.FromBase64String(
+        "UklGRh4AAABXRUJQVlA4TBEAAAAvD8ABAAdQiirUo/+BiOh/AAA=");
+
     [Fact]
     public async Task GeneratedAssetKeyDoesNotUseUserPathContentAndRoundTripsByStream()
     {
@@ -91,27 +100,45 @@ public sealed class MapAssetStoreTests
     }
 
     [Fact]
-    public async Task RasterInspectorRecognizesPngJpegAndWebPFromContentSignatures()
+    public async Task RasterInspectorAcceptsCompletePngAndExtractsDimensions()
     {
-        var png = new byte[]
-        {
-            137,80,78,71,13,10,26,10, 0,0,0,13, 73,72,68,82,
-            0,0,8,0, 0,0,4,0
-        };
-        var jpeg = new byte[] { 0xff,0xd8,0xff,0xc0,0x00,0x07,0x08,0x00,0x02,0x00,0x03,0x00 };
-        var webp = new byte[]
-        {
-            82,73,70,70, 22,0,0,0, 87,69,66,80,
-            86,80,56,88, 10,0,0,0,
-            0,0,0,0, 0x0f,0,0, 0x07,0,0
-        };
+        var info = await RasterImageInspector.InspectAsync(new MemoryStream(CompletePng, writable: false));
+        Assert.Equal(("image/png", 3, 2), (info.MediaType, info.Width, info.Height));
+    }
 
-        var pngInfo = await RasterImageInspector.InspectAsync(new MemoryStream(png));
-        var jpegInfo = await RasterImageInspector.InspectAsync(new MemoryStream(jpeg));
-        var webpInfo = await RasterImageInspector.InspectAsync(new MemoryStream(webp));
-        Assert.Equal(("image/png", 2048, 1024), (pngInfo.MediaType, pngInfo.Width, pngInfo.Height));
-        Assert.Equal(("image/jpeg", 3, 2), (jpegInfo.MediaType, jpegInfo.Width, jpegInfo.Height));
-        Assert.Equal(("image/webp", 16, 8), (webpInfo.MediaType, webpInfo.Width, webpInfo.Height));
+    [Fact]
+    public async Task RasterInspectorRejectsPngWithCompleteIhdrButNoImageOrIend()
+    {
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            RasterImageInspector.InspectAsync(new MemoryStream(CompletePng[..33], writable: false)));
+    }
+
+    [Fact]
+    public async Task RasterInspectorAcceptsCompleteJpegAndExtractsDimensions()
+    {
+        var info = await RasterImageInspector.InspectAsync(new MemoryStream(CompleteJpeg, writable: false));
+        Assert.Equal(("image/jpeg", 3, 2), (info.MediaType, info.Width, info.Height));
+    }
+
+    [Fact]
+    public async Task RasterInspectorRejectsJpegWithCompleteSofButNoScanOrEoi()
+    {
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            RasterImageInspector.InspectAsync(new MemoryStream(CompleteJpeg[..177], writable: false)));
+    }
+
+    [Fact]
+    public async Task RasterInspectorAcceptsCompleteWebPAndExtractsDimensions()
+    {
+        var info = await RasterImageInspector.InspectAsync(new MemoryStream(CompleteWebP, writable: false));
+        Assert.Equal(("image/webp", 16, 8), (info.MediaType, info.Width, info.Height));
+    }
+
+    [Fact]
+    public async Task RasterInspectorRejectsWebPWithValidPrimaryHeaderButTruncatedContainer()
+    {
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            RasterImageInspector.InspectAsync(new MemoryStream(CompleteWebP[..25], writable: false)));
     }
 
     [Fact]

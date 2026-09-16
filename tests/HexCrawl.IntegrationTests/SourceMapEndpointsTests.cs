@@ -72,6 +72,43 @@ public sealed class SourceMapEndpointsTests
     }
 
     [Fact]
+    public async Task HeaderValidTruncatedRasterIsRejectedBeforeAssetOrWorldMutation()
+    {
+        var database = TestWebHost.NewDatabasePath();
+        try
+        {
+            using var factory = TestWebHost.Create(database);
+            using var client = factory.CreateClient();
+            var world = await CreateWorld(client, "Malformed structure");
+            var worldId = world.GetProperty("id").GetGuid();
+            var version = world.GetProperty("version").GetInt64();
+
+            using var malformed = await UploadResponse(
+                client,
+                worldId,
+                version,
+                "Other",
+                "Header-valid truncated PNG",
+                "Other",
+                false,
+                TinyPng[..33]);
+            Assert.Equal(HttpStatusCode.BadRequest, malformed.StatusCode);
+
+            var reopened = await client.GetFromJsonAsync<JsonElement>($"/api/overworlds/{worldId:D}");
+            Assert.Equal(version, reopened.GetProperty("version").GetInt64());
+            Assert.Empty(reopened.GetProperty("sourceMaps").EnumerateArray());
+
+            var assetRoot = database + ".assets";
+            Assert.True(Directory.Exists(assetRoot));
+            Assert.Empty(Directory.EnumerateFiles(assetRoot, "*", SearchOption.AllDirectories));
+        }
+        finally
+        {
+            TestWebHost.DeleteDatabase(database);
+        }
+    }
+
+    [Fact]
     public async Task MetadataAndBinarySurviveApplicationRestart()
     {
         var database = TestWebHost.NewDatabasePath();
