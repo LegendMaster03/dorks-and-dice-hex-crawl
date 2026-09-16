@@ -39,15 +39,46 @@ export type Location = {
     discoverability: "Obvious" | "Hidden" | "Conditional";
 };
 
+export type SourceMapRole = "Gm" | "Player" | "Neutral" | "Other";
+
+export type MapRegistrationTransform = {
+    kind: "Affine" | "Projective";
+    m11: number;
+    m12: number;
+    m13: number;
+    m21: number;
+    m22: number;
+    m23: number;
+    m31: number;
+    m32: number;
+};
+
+export type RegistrationControlPoint = {
+    sourcePixel: WorldPoint;
+    worldPoint: WorldPoint;
+};
+
 export type SourceMapRepresentation = {
     id: string;
     geographyKey: string;
     name: string;
-    role: "Gm" | "Player" | "Neutral" | "Other";
+    role: SourceMapRole;
     assetKey: string;
     containsBakedGrid: boolean;
-    alignment: unknown | null;
+    alignment: MapRegistrationTransform | null;
     worldCoverageBoundary: WorldPoint[];
+};
+
+export type SourceMapDetail = SourceMapRepresentation & {
+    pixelWidth: number;
+    pixelHeight: number;
+    mediaType: string;
+    originalFileName: string | null;
+};
+
+export type SourceMapList = {
+    overworldVersion: number;
+    sourceMaps: SourceMapDetail[];
 };
 
 export type OverworldSummary = {

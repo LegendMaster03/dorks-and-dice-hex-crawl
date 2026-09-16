@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { HexCrawlApi } from "../.embedded-smoke-dist/api.js";
 
-test("Embedded Module mode routes persistent reads and writes through Tool Host upstream", async () => {
+test("Embedded Module mode routes persistent reads, writes, map upload, and map assets through Tool Host upstream", async () => {
     const originalFetch = globalThis.fetch;
     const calls = [];
     const context = {
@@ -16,11 +16,15 @@ test("Embedded Module mode routes persistent reads and writes through Tool Host 
 
     globalThis.fetch = async (input, init = {}) => {
         const url = String(input);
-        calls.push({ url, method: init.method ?? "GET" });
+        const method = init.method ?? "GET";
+        calls.push({ url, method, form: init.body instanceof FormData });
         if (url === "/tool-context") return Response.json(context);
         if (url === "/tool-host/hex-crawl/api/upstream/api/overworlds") {
-            if ((init.method ?? "GET") === "POST") return Response.json({ id: "world-1" });
+            if (method === "POST") return Response.json({ id: "world-1", version: 1 });
             return Response.json([]);
+        }
+        if (url === "/tool-host/hex-crawl/api/upstream/api/overworlds/world-1/source-maps" && method === "POST") {
+            return Response.json({ id: "world-1", version: 2, sourceMaps: [] });
         }
         throw new Error(`Unexpected smoke-test fetch: ${url}`);
     };
@@ -40,11 +44,27 @@ test("Embedded Module mode routes persistent reads and writes through Tool Host 
             distanceUnit: { kind: "Mile", symbol: "mi", metersPerUnit: 1609.344 }
         });
         assert.equal(created.id, "world-1");
-        assert.deepEqual(calls, [
+
+        const file = new File([new Uint8Array([137, 80, 78, 71])], "map.png", { type: "image/png" });
+        await api.uploadSourceMap("world-1", {
+            file,
+            name: "Hosted map",
+            geographyKey: "Hosted geography",
+            role: "Neutral",
+            containsBakedGrid: false,
+            expectedVersion: 1
+        });
+        assert.equal(
+            api.sourceMapAssetUrl("world-1", "map-1"),
+            "/tool-host/hex-crawl/api/upstream/api/overworlds/world-1/source-maps/map-1/asset");
+
+        assert.deepEqual(calls.map(call => ({ url: call.url, method: call.method })), [
             { url: "/tool-context", method: "GET" },
             { url: "/tool-host/hex-crawl/api/upstream/api/overworlds", method: "GET" },
-            { url: "/tool-host/hex-crawl/api/upstream/api/overworlds", method: "POST" }
+            { url: "/tool-host/hex-crawl/api/upstream/api/overworlds", method: "POST" },
+            { url: "/tool-host/hex-crawl/api/upstream/api/overworlds/world-1/source-maps", method: "POST" }
         ]);
+        assert.equal(calls.at(-1).form, true);
     } finally {
         globalThis.fetch = originalFetch;
     }

@@ -7,15 +7,24 @@ import type {
     Location,
     Overworld,
     OverworldSummary,
+    RegistrationControlPoint,
     RuntimeAdvanceRequest,
     RuntimeProfile,
+    SourceMapList,
+    SourceMapRole,
     SpatialFeature,
     ToolHostContext,
     WorldPoint
 } from "./types";
 
+let activeBackendBaseUrl = "";
+
 export function backendBaseFromContext(apiBaseUrl?: string | null): string {
     return apiBaseUrl ? `${apiBaseUrl.replace(/\/$/, "")}/upstream` : "";
+}
+
+export function sourceMapAssetUrl(worldId: string, sourceMapId: string): string {
+    return `${activeBackendBaseUrl}/api/overworlds/${encodeURIComponent(worldId)}/source-maps/${encodeURIComponent(sourceMapId)}/asset`;
 }
 
 export type CreateOverworldInput = {
@@ -30,6 +39,15 @@ export type CreateOverworldInput = {
 
 export type LocationMutationInput = Omit<Location, "id"> & { expectedVersion: number };
 export type FeatureMutationInput = Omit<SpatialFeature, "id"> & { expectedVersion: number };
+export type SourceMapUploadInput = {
+    file: File;
+    name: string;
+    geographyKey: string;
+    role: SourceMapRole;
+    containsBakedGrid: boolean;
+    expectedVersion: number;
+};
+export type SourceMapMetadataInput = Omit<SourceMapUploadInput, "file">;
 export type ApiErrorKind = "validation" | "auth" | "not-found" | "conflict" | "server";
 
 export class HexCrawlApiError extends Error {
@@ -43,7 +61,9 @@ export class HexCrawlApiError extends Error {
 }
 
 export class HexCrawlApi {
-    private constructor(private readonly backendBaseUrl: string) {}
+    private constructor(private readonly backendBaseUrl: string) {
+        activeBackendBaseUrl = backendBaseUrl;
+    }
 
     public static async create(root: HTMLElement): Promise<{ api: HexCrawlApi; context: ToolHostContext | null }> {
         const contextUrl = root.dataset.toolContextUrl;
@@ -95,6 +115,50 @@ export class HexCrawlApi {
         return this.deleteJson(`/api/overworlds/${encodeURIComponent(worldId)}/features/${encodeURIComponent(featureId)}?expectedVersion=${expectedVersion}`, "Delete feature");
     }
 
+    public listSourceMaps(worldId: string): Promise<SourceMapList> {
+        return this.getJson(`/api/overworlds/${encodeURIComponent(worldId)}/source-maps`, "Source maps");
+    }
+
+    public uploadSourceMap(worldId: string, input: SourceMapUploadInput): Promise<Overworld> {
+        const form = new FormData();
+        form.append("file", input.file, input.file.name);
+        form.append("name", input.name);
+        form.append("geographyKey", input.geographyKey);
+        form.append("role", input.role);
+        form.append("containsBakedGrid", String(input.containsBakedGrid));
+        form.append("expectedVersion", String(input.expectedVersion));
+        return this.sendForm("POST", `/api/overworlds/${encodeURIComponent(worldId)}/source-maps`, form, "Upload source map");
+    }
+
+    public updateSourceMap(worldId: string, sourceMapId: string, input: SourceMapMetadataInput): Promise<Overworld> {
+        return this.sendJson("PUT", `/api/overworlds/${encodeURIComponent(worldId)}/source-maps/${encodeURIComponent(sourceMapId)}`, {
+            geographyKey: input.geographyKey,
+            name: input.name,
+            role: input.role,
+            containsBakedGrid: input.containsBakedGrid,
+            expectedVersion: input.expectedVersion
+        }, "Update source map");
+    }
+
+    public registerSourceMap(
+        worldId: string,
+        sourceMapId: string,
+        controlPoints: RegistrationControlPoint[],
+        expectedVersion: number): Promise<Overworld> {
+        return this.sendJson("PUT", `/api/overworlds/${encodeURIComponent(worldId)}/source-maps/${encodeURIComponent(sourceMapId)}/registration`, {
+            controlPoints,
+            expectedVersion
+        }, "Register source map");
+    }
+
+    public deleteSourceMap(worldId: string, sourceMapId: string, expectedVersion: number): Promise<Overworld> {
+        return this.deleteJson(`/api/overworlds/${encodeURIComponent(worldId)}/source-maps/${encodeURIComponent(sourceMapId)}?expectedVersion=${expectedVersion}`, "Delete source map");
+    }
+
+    public sourceMapAssetUrl(worldId: string, sourceMapId: string): string {
+        return `${this.backendBaseUrl}/api/overworlds/${encodeURIComponent(worldId)}/source-maps/${encodeURIComponent(sourceMapId)}/asset`;
+    }
+
     public getRuntimeProfiles(): Promise<RuntimeProfile[]> {
         return this.getJson("/api/runtime/profiles", "Runtime profiles");
     }
@@ -140,6 +204,16 @@ export class HexCrawlApi {
         return await response.json() as T;
     }
 
+    private async sendForm<T>(method: "POST", path: string, body: FormData, label: string): Promise<T> {
+        const response = await fetch(`${this.backendBaseUrl}${path}`, {
+            method,
+            headers: { Accept: "application/json" },
+            body
+        });
+        if (!response.ok) throw await apiError(response, label);
+        return await response.json() as T;
+    }
+
     private async deleteJson<T>(path: string, label: string): Promise<T> {
         const response = await fetch(`${this.backendBaseUrl}${path}`, { method: "DELETE", headers: { Accept: "application/json" } });
         if (!response.ok) throw await apiError(response, label);
@@ -163,7 +237,7 @@ export async function apiError(response: Response, label: string): Promise<HexCr
 }
 
 function errorKind(status: number): ApiErrorKind {
-    if (status === 400 || status === 422) return "validation";
+    if (status === 400 || status === 413 || status === 422) return "validation";
     if (status === 401 || status === 403) return "auth";
     if (status === 404) return "not-found";
     if (status === 409 || status === 412) return "conflict";
@@ -172,8 +246,9 @@ function errorKind(status: number): ApiErrorKind {
 
 async function validationDetail(response: Response): Promise<string | null> {
     try {
-        const body = await response.json() as { error?: unknown };
-        return typeof body.error === "string" && body.error.trim() ? body.error.trim() : null;
+        const body = await response.json() as { error?: unknown; detail?: unknown };
+        if (typeof body.error === "string" && body.error.trim()) return body.error.trim();
+        return typeof body.detail === "string" && body.detail.trim() ? body.detail.trim() : null;
     } catch {
         return null;
     }

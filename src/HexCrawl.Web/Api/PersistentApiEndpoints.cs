@@ -26,10 +26,6 @@ public static class PersistentApiEndpoints
         api.MapPut("/overworlds/{overworldId:guid}/features/{featureId:guid}", UpdateFeatureAsync);
         api.MapDelete("/overworlds/{overworldId:guid}/features/{featureId:guid}", DeleteFeatureAsync);
 
-        api.MapPost("/overworlds/{overworldId:guid}/source-maps", CreateSourceMapAsync);
-        api.MapPut("/overworlds/{overworldId:guid}/source-maps/{sourceMapId:guid}", UpdateSourceMapAsync);
-        api.MapDelete("/overworlds/{overworldId:guid}/source-maps/{sourceMapId:guid}", DeleteSourceMapAsync);
-
         api.MapGet("/overworlds/{overworldId:guid}/expeditions", ListExpeditionsAsync);
         api.MapPost("/overworlds/{overworldId:guid}/expeditions", StartExpeditionAsync);
         api.MapGet("/expeditions/{expeditionId:guid}", GetExpeditionAsync);
@@ -125,35 +121,6 @@ public static class PersistentApiEndpoints
         CancellationToken cancellationToken) =>
         Results.Ok(OverworldContract.From(await service.DeleteFeatureAsync(
             overworldId, featureId, UserId(context), expectedVersion, cancellationToken)));
-
-    private static async Task<IResult> CreateSourceMapAsync(
-        Guid overworldId,
-        SourceMapMutationRequest request,
-        HttpContext context,
-        HexCrawlService service,
-        CancellationToken cancellationToken) =>
-        Results.Ok(OverworldContract.From(await service.CreateSourceMapAsync(
-            overworldId, UserId(context), request.ToCreateCommand(), cancellationToken)));
-
-    private static async Task<IResult> UpdateSourceMapAsync(
-        Guid overworldId,
-        Guid sourceMapId,
-        SourceMapMutationRequest request,
-        HttpContext context,
-        HexCrawlService service,
-        CancellationToken cancellationToken) =>
-        Results.Ok(OverworldContract.From(await service.UpdateSourceMapAsync(
-            overworldId, sourceMapId, UserId(context), request.ToUpdateCommand(), cancellationToken)));
-
-    private static async Task<IResult> DeleteSourceMapAsync(
-        Guid overworldId,
-        Guid sourceMapId,
-        long expectedVersion,
-        HttpContext context,
-        HexCrawlService service,
-        CancellationToken cancellationToken) =>
-        Results.Ok(OverworldContract.From(await service.DeleteSourceMapAsync(
-            overworldId, sourceMapId, UserId(context), expectedVersion, cancellationToken)));
 
     private static async Task<IResult> ListExpeditionsAsync(
         Guid overworldId,

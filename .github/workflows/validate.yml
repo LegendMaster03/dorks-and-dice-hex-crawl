@@ -49,10 +49,17 @@ jobs:
       - name: Test HTTP integration
         run: timeout 120s dotnet test tests/HexCrawl.IntegrationTests/HexCrawl.IntegrationTests.csproj --configuration Release --no-restore --no-build -p:BuildClient=false --blame-hang --blame-hang-timeout 30s --logger "console;verbosity=normal"
 
+      - name: Explicit render-lifecycle guard
+        run: |
+          if grep -R --line-number --include='*.ts' 'MutationObserver' src/HexCrawl.Web/Client/src; then
+            echo 'Application-owned frontend code must not use MutationObserver.' >&2
+            exit 1
+          fi
+
       - name: Build container
         run: docker build -t dorks-and-dice-hex-crawl:test -f src/HexCrawl.Web/Dockerfile .
 
-      - name: Smoke test standalone container and restart persistence
+      - name: Smoke test standalone container and source-map restart persistence
         run: |
           set -euo pipefail
           data_dir="$RUNNER_TEMP/hex-crawl-smoke-data"
@@ -64,6 +71,8 @@ jobs:
               -p 127.0.0.1:18092:8080 \
               -v "$data_dir:/data" \
               -e 'ConnectionStrings__HexCrawl=Data Source=/data/hex-crawl.db' \
+              -e 'MapAssets__RootPath=/data/assets' \
+              -e 'MapImport__MaxFileBytes=104857600' \
               -e 'ToolHost__StandaloneIdentity__Enabled=true' \
               -e 'ToolHost__StandaloneIdentity__UserId=ci-smoke-dm' \
               -e 'ToolHost__StandaloneIdentity__DisplayName=CI Smoke DM' \
@@ -100,9 +109,34 @@ jobs:
             --data '{"name":"CI restart proof","orientation":"PointyTop","origin":{"x":0,"y":0},"rotationDegrees":0,"hexRadiusWorldUnits":1,"neighborCenterDistance":12,"distanceUnit":{"kind":"Mile","symbol":"mi","metersPerUnit":1609.344}}' \
             -o "$response_dir/create-world.json"
           grep -q 'CI restart proof' "$response_dir/create-world.json"
+          world_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$response_dir/create-world.json")"
+          world_version="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$response_dir/create-world.json")"
+
+          printf '%s' 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=' | base64 -d > "$response_dir/tiny.png"
+          curl -fsS -X POST "http://127.0.0.1:18092/api/overworlds/$world_id/source-maps" \
+            -F "file=@$response_dir/tiny.png;type=image/png;filename=ci-map.png" \
+            -F 'name=CI raster' \
+            -F 'geographyKey=CI geography' \
+            -F 'role=Neutral' \
+            -F 'containsBakedGrid=false' \
+            -F "expectedVersion=$world_version" \
+            -o "$response_dir/upload-map.json"
+          grep -q 'CI raster' "$response_dir/upload-map.json"
+          source_map_id="$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d["sourceMaps"][-1]["id"])' "$response_dir/upload-map.json")"
+
+          curl -fsS "http://127.0.0.1:18092/api/overworlds/$world_id/source-maps/$source_map_id/asset" -o "$response_dir/map-before-restart.png"
+          cmp "$response_dir/tiny.png" "$response_dir/map-before-restart.png"
+          test -d "$data_dir/assets/maps"
+          test "$(find "$data_dir/assets/maps" -type f | wc -l)" -eq 1
 
           docker rm -f hex-crawl-smoke >/dev/null
           start_container
           wait_ready
+
           curl -fsS http://127.0.0.1:18092/api/overworlds -o "$response_dir/worlds-after-restart.json"
           grep -q 'CI restart proof' "$response_dir/worlds-after-restart.json"
+          curl -fsS "http://127.0.0.1:18092/api/overworlds/$world_id/source-maps" -o "$response_dir/maps-after-restart.json"
+          grep -q '"pixelWidth":1' "$response_dir/maps-after-restart.json"
+          grep -q '"mediaType":"image/png"' "$response_dir/maps-after-restart.json"
+          curl -fsS "http://127.0.0.1:18092/api/overworlds/$world_id/source-maps/$source_map_id/asset" -o "$response_dir/map-after-restart.png"
+          cmp "$response_dir/tiny.png" "$response_dir/map-after-restart.png"

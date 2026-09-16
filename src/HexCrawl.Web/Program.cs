@@ -1,11 +1,14 @@
 using System.Text.Json.Serialization;
 using HexCrawl.Application;
+using HexCrawl.Application.Assets;
 using HexCrawl.Application.Hosting;
 using HexCrawl.Application.Persistence;
+using HexCrawl.Infrastructure.Assets;
 using HexCrawl.Infrastructure.Hosting;
 using HexCrawl.Infrastructure.Persistence;
 using HexCrawl.Web.Api;
 using HexCrawl.Web.Authentication;
+using Microsoft.AspNetCore.Http.Features;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,6 +19,19 @@ var connectionString = builder.Configuration.GetConnectionString("HexCrawl");
 if (string.IsNullOrWhiteSpace(connectionString))
 {
     connectionString = "Data Source=hex-crawl.db";
+}
+
+var mapImportOptions = builder.Configuration.GetSection(MapImportOptions.SectionName).Get<MapImportOptions>() ?? new MapImportOptions();
+mapImportOptions.Validate();
+var requestBodyCeiling = checked(mapImportOptions.MaxFileBytes + (4L * 1024 * 1024));
+builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = requestBodyCeiling);
+builder.Services.Configure<FormOptions>(options => options.MultipartBodyLengthLimit = requestBodyCeiling);
+builder.Services.Configure<MapImportOptions>(builder.Configuration.GetSection(MapImportOptions.SectionName));
+
+var assetRoot = builder.Configuration["MapAssets:RootPath"];
+if (string.IsNullOrWhiteSpace(assetRoot))
+{
+    assetRoot = Path.Combine(builder.Environment.ContentRootPath, "data", "assets");
 }
 
 var toolHostBaseUrl = builder.Configuration["ToolHost:BaseUrl"];
@@ -31,7 +47,9 @@ if (!string.IsNullOrWhiteSpace(toolHostBaseUrl))
 }
 
 builder.Services.AddSingleton<IHexCrawlStore>(_ => new SqliteHexCrawlStore(connectionString));
+builder.Services.AddSingleton<IMapAssetStore>(_ => new FilesystemMapAssetStore(assetRoot));
 builder.Services.AddScoped<HexCrawlService>();
+builder.Services.AddScoped<SourceMapApplicationService>();
 builder.Services
     .AddHttpClient<IToolHostAuthenticationClient, DorksAndDiceToolHostAuthenticationClient>(client =>
     {
@@ -61,18 +79,20 @@ app.MapGet("/ready", () => Results.Ok(new
 {
     status = "ready",
     database = "sqlite",
-    persistence = "initialized"
+    persistence = "initialized",
+    mapAssets = "filesystem"
 }));
 
 app.MapGet("/api", () => Results.Ok(new
 {
     service = "Hex Crawl API",
-    version = "0.3-dev",
-    status = "persistent-world-authoring",
+    version = "0.4-dev",
+    status = "source-map-import",
     endpointFamilies = new[] { "overworlds", "features", "locations", "source-maps", "expeditions", "runtime" }
 }));
 
 PersistentApiEndpoints.Map(app);
+SourceMapApiEndpoints.Map(app);
 
 app.MapGet("/", () => Shell());
 app.MapFallback((HttpContext context) =>

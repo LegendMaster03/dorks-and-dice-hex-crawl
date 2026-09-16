@@ -1,16 +1,22 @@
+import { sourceMapAssetUrl } from "./api";
 import { hexCorners, hexToWorld, visibleHexBounds } from "./hex-math";
-import type { DemoWorld, HexCoordinate, SpatialFeature, WorldPoint } from "./types";
+import { RasterImageCache } from "./raster-image-cache";
+import type { DemoWorld, HexCoordinate, MapRegistrationTransform, SourceMapRepresentation, SpatialFeature, WorldPoint } from "./types";
 import { Viewport } from "./viewport";
 
 export class CanvasMapRenderer {
     public selectedHex: HexCoordinate | null = null;
     public expeditionHex: HexCoordinate | null = null;
     public discoveredSubjectIds = new Set<string>();
+    public hiddenSourceMapIds = new Set<string>();
+    public registrationPreview: { sourceMapId: string; transform: MapRegistrationTransform } | null = null;
+    private readonly rasterCache = new RasterImageCache();
 
     public constructor(
         private readonly canvas: HTMLCanvasElement,
         private readonly viewport: Viewport,
-        private getWorld: () => DemoWorld | null) {}
+        private getWorld: () => DemoWorld | null,
+        private readonly requestRender: () => void = () => {}) {}
 
     public resizeToDisplaySize(): boolean {
         const ratio = Math.max(1, window.devicePixelRatio || 1);
@@ -34,12 +40,55 @@ export class CanvasMapRenderer {
         ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
         ctx.clearRect(0, 0, width, height);
 
+        this.drawSourceMaps(ctx, world, width, height);
         this.drawRegions(ctx, world, width, height);
         this.drawGrid(ctx, world, width, height);
         this.drawLinesAndPoints(ctx, world.features, width, height);
         this.drawLocations(ctx, world, width, height);
         this.drawSelection(ctx, world, width, height);
         this.drawExpedition(ctx, world, width, height);
+    }
+
+    public dispose(): void {
+        this.rasterCache.dispose();
+    }
+
+    private drawSourceMaps(ctx: CanvasRenderingContext2D, world: DemoWorld, width: number, height: number): void {
+        const activeUrls = new Set<string>();
+        for (const map of world.sourceMaps) {
+            const url = sourceMapAssetUrl(world.id, map.id);
+            activeUrls.add(url);
+            if (this.hiddenSourceMapIds.has(map.id)) continue;
+            const transform = this.registrationPreview?.sourceMapId === map.id
+                ? this.registrationPreview.transform
+                : map.alignment;
+            if (!transform || transform.kind !== "Affine") continue;
+            const image = this.rasterCache.get(url, this.requestRender);
+            if (!image) continue;
+            this.drawAffineRaster(ctx, image, transform, width, height, this.registrationPreview?.sourceMapId === map.id);
+        }
+        this.rasterCache.prune(activeUrls);
+    }
+
+    private drawAffineRaster(
+        ctx: CanvasRenderingContext2D,
+        image: CanvasImageSource,
+        transform: MapRegistrationTransform,
+        width: number,
+        height: number,
+        preview: boolean): void {
+        const zoom = this.viewport.zoom;
+        const a = zoom * transform.m11;
+        const b = zoom * transform.m21;
+        const c = zoom * transform.m12;
+        const d = zoom * transform.m22;
+        const e = width / 2 + zoom * (transform.m13 - this.viewport.center.x);
+        const f = height / 2 + zoom * (transform.m23 - this.viewport.center.y);
+        ctx.save();
+        ctx.globalAlpha = preview ? 0.72 : 1;
+        ctx.transform(a, b, c, d, e, f);
+        ctx.drawImage(image, 0, 0);
+        ctx.restore();
     }
 
     private drawGrid(ctx: CanvasRenderingContext2D, world: DemoWorld, width: number, height: number): void {

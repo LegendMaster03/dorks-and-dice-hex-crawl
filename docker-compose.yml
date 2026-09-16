@@ -5,6 +5,10 @@ services:
     restart: unless-stopped
     environment:
       ConnectionStrings__HexCrawl: "Data Source=/data/hex-crawl.db"
+      MapAssets__RootPath: "/data/assets"
+      MapImport__MaxFileBytes: "104857600"
+      MapImport__MaxPixelCount: "100000000"
+      MapImport__MaxDimension: "32768"
       ToolHost__BaseUrl: "http://dorks-and-dice-site:8080"
     volumes:
       - hex-crawl-data:/data
