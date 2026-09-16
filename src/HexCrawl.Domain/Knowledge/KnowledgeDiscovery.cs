@@ -1,3 +1,5 @@
+using HexCrawl.Domain.Spatial;
+
 namespace HexCrawl.Domain.Knowledge;
 
 public static class KnowledgeDiscovery
@@ -20,5 +22,15 @@ public static class KnowledgeDiscovery
         };
 
         return knowledge with { Entries = entries };
+    }
+
+    public static PlayerKnowledgeState KnowHex(PlayerKnowledgeState knowledge, HexCoordinate hex)
+    {
+        if (knowledge.KnownHexes.Contains(hex))
+        {
+            return knowledge;
+        }
+
+        return knowledge with { KnownHexes = [.. knowledge.KnownHexes, hex] };
     }
 }

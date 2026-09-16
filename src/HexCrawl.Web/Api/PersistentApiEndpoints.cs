@@ -12,6 +12,8 @@ public static class PersistentApiEndpoints
 
         api.MapGet("/runtime/profiles", () => Results.Ok(
             CrawlProcedureCatalog.All.Select(RuntimeProfileContract.From).ToArray()));
+        api.MapGet("/presentation/presets", () => Results.Ok(
+            MapPresentationPolicyCatalog.All.Select(PresentationProfileContract.From).ToArray()));
 
         api.MapGet("/overworlds", ListOverworldsAsync);
         api.MapPost("/overworlds", CreateOverworldAsync);
@@ -131,14 +133,14 @@ public static class PersistentApiEndpoints
 
     private static async Task<IResult> StartExpeditionAsync(
         Guid overworldId,
-        StartExpeditionRequest request,
+        StartExpeditionWorkbenchRequest request,
         HttpContext context,
-        HexCrawlService service,
+        ExpeditionWorkbenchService workbench,
         CancellationToken cancellationToken)
     {
-        var expedition = await service.StartExpeditionAsync(
+        var expedition = await workbench.StartAsync(
             overworldId, UserId(context), request.ToCommand(), cancellationToken);
-        return Results.Created($"/api/expeditions/{expedition.State.Id:D}", ExpeditionContract.From(expedition));
+        return Results.Created($"/api/expeditions/{expedition.State.Id:D}", ExpeditionWorkbenchContract.From(expedition));
     }
 
     private static async Task<IResult> GetExpeditionAsync(
@@ -146,16 +148,16 @@ public static class PersistentApiEndpoints
         HttpContext context,
         HexCrawlService service,
         CancellationToken cancellationToken) =>
-        Results.Ok(ExpeditionContract.From(await service.GetExpeditionAsync(
+        Results.Ok(ExpeditionWorkbenchContract.From(await service.GetExpeditionAsync(
             expeditionId, UserId(context), cancellationToken)));
 
     private static async Task<IResult> AdvanceExpeditionAsync(
         Guid expeditionId,
-        AdvanceExpeditionRequest request,
+        AdvanceExpeditionWorkbenchRequest request,
         HttpContext context,
-        HexCrawlService service,
+        ExpeditionWorkbenchService workbench,
         CancellationToken cancellationToken) =>
-        Results.Ok(ExpeditionContract.From(await service.AdvanceExpeditionAsync(
+        Results.Ok(ExpeditionWorkbenchContract.From(await workbench.AdvanceAsync(
             expeditionId, UserId(context), request.ToCommand(), cancellationToken)));
 
     private static async Task<IResult> DiscoverAsync(
@@ -164,7 +166,7 @@ public static class PersistentApiEndpoints
         HttpContext context,
         HexCrawlService service,
         CancellationToken cancellationToken) =>
-        Results.Ok(ExpeditionContract.From(await service.DiscoverAsync(
+        Results.Ok(ExpeditionWorkbenchContract.From(await service.DiscoverAsync(
             expeditionId, UserId(context), request.ToCommand(), cancellationToken)));
 
     private static string UserId(HttpContext context) =>

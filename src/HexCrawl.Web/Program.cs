@@ -49,6 +49,7 @@ if (!string.IsNullOrWhiteSpace(toolHostBaseUrl))
 builder.Services.AddSingleton<IHexCrawlStore>(_ => new SqliteHexCrawlStore(connectionString));
 builder.Services.AddSingleton<IMapAssetStore>(_ => new FilesystemMapAssetStore(assetRoot));
 builder.Services.AddScoped<HexCrawlService>();
+builder.Services.AddScoped<ExpeditionWorkbenchService>();
 builder.Services.AddScoped<SourceMapApplicationService>();
 builder.Services
     .AddHttpClient<IToolHostAuthenticationClient, DorksAndDiceToolHostAuthenticationClient>(client =>
@@ -86,9 +87,9 @@ app.MapGet("/ready", () => Results.Ok(new
 app.MapGet("/api", () => Results.Ok(new
 {
     service = "Hex Crawl API",
-    version = "0.4-dev",
-    status = "source-map-import",
-    endpointFamilies = new[] { "overworlds", "features", "locations", "source-maps", "expeditions", "runtime" }
+    version = "0.5-dev",
+    status = "dm-expedition-workbench",
+    endpointFamilies = new[] { "overworlds", "features", "locations", "source-maps", "expeditions", "runtime", "presentation" }
 }));
 
 PersistentApiEndpoints.Map(app);

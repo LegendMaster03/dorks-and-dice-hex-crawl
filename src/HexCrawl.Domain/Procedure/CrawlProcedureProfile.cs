@@ -64,6 +64,22 @@ public sealed record CrawlProcedureProfile
         {
             throw new InvalidOperationException("Hex-step travel can not simultaneously use intra-hex progress.");
         }
+        if (TravelResolution == TravelResolutionMode.HexSteps && ActualDistanceResolution != ActualDistanceResolutionMode.Fixed)
+        {
+            throw new InvalidOperationException("Hex-step travel does not use variable resolved physical distance.");
+        }
+        if (TravelResolution == TravelResolutionMode.ContinuousDistance && !TracksIntraHexProgress)
+        {
+            throw new InvalidOperationException("Continuous-distance travel currently requires intra-hex progress tracking.");
+        }
+        if (UsesPersistentVeer && !UsesNavigationChecks)
+        {
+            throw new InvalidOperationException("Persistent veer requires navigation checks to be enabled.");
+        }
+        if (DirectionChangesCostProgress && !TracksIntraHexProgress)
+        {
+            throw new InvalidOperationException("Direction-change progress costs require intra-hex progress tracking.");
+        }
     }
 
     public static CrawlProcedureProfile AlexandrianAdvancedBaseline() => new()
