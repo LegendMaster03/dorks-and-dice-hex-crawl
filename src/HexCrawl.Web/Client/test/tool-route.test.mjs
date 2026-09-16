@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { deriveToolRoute, parseToolRoute, toolRelativeHref } from "../.test-dist/tool-route.js";
+import { canonicalExpeditionRoute, deriveToolRoute, parseToolRoute, toolRelativeHref } from "../.test-dist/tool-route.js";
 
 test("derives nested hosted tool routes from the Tool Host base path", () => {
     assert.equal(deriveToolRoute("/tools/hex-crawl", "/tools/hex-crawl/worlds/abc/edit", "/"), "/worlds/abc/edit");
@@ -20,4 +20,14 @@ test("parses persistent world editor and expedition routes", () => {
 test("builds hosted and standalone hrefs without teaching the site internal routes", () => {
     assert.equal(toolRelativeHref("/tools/hex-crawl", "/worlds/abc/edit"), "/tools/hex-crawl/worlds/abc/edit");
     assert.equal(toolRelativeHref("/", "/worlds/abc/edit"), "/worlds/abc/edit");
+});
+
+test("canonical expedition route rejects a world/expedition mismatch", () => {
+    assert.equal(
+        canonicalExpeditionRoute("wrong-world", { id: "exp-1", overworldId: "actual-world" }),
+        "/worlds/actual-world/expeditions/exp-1");
+});
+
+test("canonical expedition route leaves a matching route unchanged", () => {
+    assert.equal(canonicalExpeditionRoute("actual-world", { id: "exp-1", overworldId: "actual-world" }), null);
 });

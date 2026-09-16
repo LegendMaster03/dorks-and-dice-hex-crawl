@@ -30,6 +30,13 @@ export function parseToolRoute(path: string): ToolRoute {
     return { kind: "unknown", path: normalized };
 }
 
+export function canonicalExpeditionRoute(
+    routeWorldId: string,
+    expedition: { id: string; overworldId: string }): string | null {
+    if (routeWorldId === expedition.overworldId) return null;
+    return `/worlds/${encodeURIComponent(expedition.overworldId)}/expeditions/${encodeURIComponent(expedition.id)}`;
+}
+
 export function toolRelativeHref(basePath: string, route: string): string {
     const base = normalizeBase(basePath);
     const normalizedRoute = normalizeRoute(route);

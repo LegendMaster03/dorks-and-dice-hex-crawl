@@ -1,39 +1,54 @@
 import type { HexCrawlApi } from "./api";
 import { MapSurface } from "./map-surface";
-import type { DistanceUnit, Location, Overworld, SpatialFeature, WorldPoint } from "./types";
+import type { Location, Overworld, SpatialFeature, WorldPoint } from "./types";
+import { clearUiError, showUiError } from "./ui-error";
+import { customUnitFieldsVisible, gridWithSelectedUnit } from "./world-form";
+import type { DistanceUnitKind } from "./world-form";
 
 export async function renderWorldEditor(
     root: HTMLElement,
     api: HexCrawlApi,
     worldId: string,
-    navigate: (route: string) => void): Promise<() => void> {
+    navigate: (route: string, replace?: boolean) => void): Promise<() => void> {
     let world = await api.getOverworld(worldId);
+    const [profiles, initialExpeditions] = await Promise.all([
+        api.getRuntimeProfiles(),
+        api.listExpeditions(worldId)
+    ]);
     let selectedLocation: Location | null = null;
     let selectedFeature: SpatialFeature | null = null;
     let placement: "location" | "point" | "line" | "region" | null = null;
     let draft: WorldPoint[] = [];
+    let disposed = false;
 
     root.innerHTML = `
         <section class="hc-page hc-workspace">
             <header class="hc-page-header">
-                <div><h1 data-title></h1><p>Authoring · version <span data-version></span></p></div>
-                <nav><button type="button" data-worlds>Worlds</button><button type="button" data-reset-view>Reset view</button></nav>
+                <div><h1 data-title></h1><p>Overworld authoring</p></div>
+                <nav><button type="button" data-worlds>Overworlds</button><button type="button" data-reset-view>Reset map view</button></nav>
             </header>
-            <div class="hc-error" data-error hidden></div>
+            <div class="hc-error" data-error hidden role="alert"></div>
             <div class="hc-workspace-grid">
-                <div class="hc-map-panel"><div class="hc-map-host" data-map></div><p class="hc-hint" data-map-hint>Use the authoring buttons to place geometry. Shift-drag or middle-drag pans; wheel zooms.</p></div>
-                <aside class="hc-sidebar">
-                    <details open><summary>Grid</summary><form class="hc-form" data-grid-form>
+                <section class="hc-map-panel" aria-label="Overworld map">
+                    <div class="hc-map-host" data-map></div>
+                    <p class="hc-hint" data-map-hint>Use the authoring controls to place geometry. Shift-drag or middle-drag pans; wheel zooms.</p>
+                </section>
+                <aside class="hc-sidebar" aria-label="Overworld authoring controls">
+                    <details open><summary>World and grid</summary><form class="hc-form" data-grid-form>
                         <label>Name <input name="name" required></label>
                         <label>Orientation <select name="orientation"><option value="PointyTop">Pointy top</option><option value="FlatTop">Flat top</option></select></label>
-                        <label>Center distance <input name="scale" type="number" min="0.001" step="any"></label>
-                        <label>Unit symbol <input name="unitSymbol"></label>
-                        <label>Meters/unit <input name="metersPerUnit" type="number" min="0.001" step="any"></label>
-                        <label>Origin X <input name="originX" type="number" step="any"></label>
-                        <label>Origin Y <input name="originY" type="number" step="any"></label>
-                        <label>Rotation <input name="rotation" type="number" step="any"></label>
-                        <label>Hex radius <input name="radius" type="number" min="0.001" step="any"></label>
-                        <button type="submit">Save grid/world</button>
+                        <label>Hex center distance <input name="scale" type="number" min="0.001" step="any" required><span class="hc-hint">Center-to-center distance between adjacent hexes.</span></label>
+                        <label>Unit <select name="unitKind"><option value="Mile">Miles</option><option value="Kilometer">Kilometers</option><option value="Custom">Custom</option></select></label>
+                        <div class="hc-custom-unit-fields" data-custom-unit hidden>
+                            <label>Custom symbol <input name="unitSymbol" value="u"></label>
+                            <label>Custom meters per unit <input name="metersPerUnit" type="number" min="0.001" step="any" value="1"></label>
+                        </div>
+                        <details><summary>Advanced grid alignment</summary><div class="hc-form">
+                            <div class="hc-inline"><label>Origin X <input name="originX" type="number" step="any"></label><label>Origin Y <input name="originY" type="number" step="any"></label></div>
+                            <label>Rotation degrees <input name="rotation" type="number" step="any"></label>
+                            <label>Hex radius (world units) <input name="radius" type="number" min="0.001" step="any"></label>
+                        </div></details>
+                        <button type="submit" class="hc-primary-action">Save world and grid</button>
                     </form></details>
 
                     <details open><summary>Locations</summary>
@@ -44,11 +59,11 @@ export async function renderWorldEditor(
                             <label>Category <input name="category" required></label>
                             <label>Discoverability <select name="discoverability"><option>Obvious</option><option>Hidden</option><option>Conditional</option></select></label>
                             <div class="hc-inline"><label>X <input name="x" type="number" step="any" required></label><label>Y <input name="y" type="number" step="any" required></label></div>
-                            <div class="hc-button-row"><button type="button" data-place-location>Place on map</button><button type="submit">Save location</button><button type="button" data-new-location>New</button><button type="button" data-delete-location>Delete</button></div>
+                            <div class="hc-button-row"><button type="button" data-place-location>Place on map</button><button type="submit" class="hc-primary-action">Save location</button><button type="button" data-new-location>New</button><button type="button" class="hc-danger-action" data-delete-location>Delete</button></div>
                         </form>
                     </details>
 
-                    <details open><summary>Spatial features</summary>
+                    <details><summary>Spatial features</summary>
                         <datalist id="hc-feature-categories"><option value="forest"><option value="swamp"><option value="mountain"><option value="grassland"><option value="desert"><option value="road"><option value="trail"><option value="river"><option value="border"></datalist>
                         <div data-feature-list></div>
                         <form class="hc-form" data-feature-form>
@@ -58,16 +73,16 @@ export async function renderWorldEditor(
                             <label>Kind <select name="kind"><option value="Point">Point</option><option value="Line">Line/polyline</option><option value="Region">Region/polygon</option></select></label>
                             <div class="hc-inline" data-point-fields><label>X <input name="x" type="number" step="any"></label><label>Y <input name="y" type="number" step="any"></label></div>
                             <p class="hc-hint" data-draft>Geometry: none.</p>
-                            <div class="hc-button-row"><button type="button" data-author-geometry>Author geometry on map</button><button type="button" data-clear-geometry>Clear geometry</button><button type="submit">Save feature</button><button type="button" data-new-feature>New</button><button type="button" data-delete-feature>Delete</button></div>
+                            <div class="hc-button-row"><button type="button" data-author-geometry>Author geometry on map</button><button type="button" data-clear-geometry>Clear geometry</button><button type="submit" class="hc-primary-action">Save feature</button><button type="button" data-new-feature>New</button><button type="button" class="hc-danger-action" data-delete-feature>Delete</button></div>
                         </form>
                     </details>
 
-                    <details open><summary>Expeditions</summary><div data-expedition-list></div>
+                    <details><summary>Expeditions</summary><div data-expedition-list></div>
                         <form class="hc-form" data-expedition-form>
                             <label>Name <input name="name" required value="Expedition"></label>
                             <label>Procedure <select name="procedure"></select></label>
                             <div class="hc-inline"><label>Start q <input name="q" type="number" step="1" value="0"></label><label>Start r <input name="r" type="number" step="1" value="0"></label></div>
-                            <button type="submit">Start expedition</button>
+                            <button type="submit" class="hc-primary-action">Start expedition</button>
                         </form>
                     </details>
                     <details><summary>Source-map metadata</summary><p data-source-maps></p><p class="hc-hint">Binary image upload and registration UI are deferred. Persisted representation metadata is reserved for the import cycle.</p></details>
@@ -77,7 +92,6 @@ export async function renderWorldEditor(
 
     const error = required<HTMLElement>(root, "[data-error]");
     const title = required<HTMLElement>(root, "[data-title]");
-    const version = required<HTMLElement>(root, "[data-version]");
     const mapHint = required<HTMLElement>(root, "[data-map-hint]");
     const mapSurface = new MapSurface(required(root, "[data-map]"), () => world, point => onMapClick(point));
     const gridForm = required<HTMLFormElement>(root, "[data-grid-form]");
@@ -85,20 +99,35 @@ export async function renderWorldEditor(
     const featureForm = required<HTMLFormElement>(root, "[data-feature-form]");
     const expeditionForm = required<HTMLFormElement>(root, "[data-expedition-form]");
     const draftLabel = required<HTMLElement>(root, "[data-draft]");
+    const unitKindSelect = select(gridForm, "unitKind");
+    const customUnitFields = required<HTMLElement>(gridForm, "[data-custom-unit]");
+    const unitSymbolInput = input(gridForm, "unitSymbol");
+    const metersPerUnitInput = input(gridForm, "metersPerUnit");
 
-    const showError = (value: unknown): void => {
-        error.hidden = false;
-        error.textContent = value instanceof Error ? value.message : String(value);
+    const run = async (form: HTMLFormElement | null, action: () => Promise<void>): Promise<void> => {
+        if (form?.dataset.pending === "true") return;
+        clearUiError(error);
+        if (form) setFormPending(form, true);
+        try {
+            await action();
+        } catch (value) {
+            if (!disposed) showUiError(error, value);
+        } finally {
+            if (form && !disposed) setFormPending(form, false);
+        }
     };
-    const run = async (action: () => Promise<void>): Promise<void> => {
-        error.hidden = true;
-        try { await action(); } catch (value) { showError(value); }
+
+    const syncCustomUnit = (): void => {
+        const visible = customUnitFieldsVisible(unitKindSelect.value as DistanceUnitKind);
+        customUnitFields.hidden = !visible;
+        unitSymbolInput.required = visible;
+        metersPerUnitInput.required = visible;
     };
+    unitKindSelect.addEventListener("change", syncCustomUnit);
 
     const applyWorld = (next: Overworld): void => {
         world = next;
         title.textContent = next.name;
-        version.textContent = String(next.version);
         fillGrid();
         renderLocations();
         renderFeatures();
@@ -110,28 +139,42 @@ export async function renderWorldEditor(
         input(gridForm, "name").value = world.name;
         select(gridForm, "orientation").value = world.grid.orientation;
         input(gridForm, "scale").value = String(world.grid.neighborCenterDistance.value);
-        input(gridForm, "unitSymbol").value = world.grid.neighborCenterDistance.unit.symbol;
-        input(gridForm, "metersPerUnit").value = world.grid.neighborCenterDistance.unit.metersPerUnit?.toString() ?? "";
+        unitKindSelect.value = world.grid.neighborCenterDistance.unit.kind;
+        if (world.grid.neighborCenterDistance.unit.kind === "Custom") {
+            unitSymbolInput.value = world.grid.neighborCenterDistance.unit.symbol;
+            metersPerUnitInput.value = world.grid.neighborCenterDistance.unit.metersPerUnit?.toString() ?? "";
+        }
         input(gridForm, "originX").value = String(world.grid.origin.x);
         input(gridForm, "originY").value = String(world.grid.origin.y);
         input(gridForm, "rotation").value = String(world.grid.rotationDegrees);
         input(gridForm, "radius").value = String(world.grid.hexRadiusWorldUnits);
+        syncCustomUnit();
     };
 
     const renderLocations = (): void => {
         const host = required<HTMLElement>(root, "[data-location-list]");
         host.replaceChildren();
-        for (const location of world.locations) {
-            host.append(resourceButton(`${location.name} · ${location.category}`, () => loadLocation(location)));
+        if (world.locations.length === 0) {
+            const hint = document.createElement("p");
+            hint.className = "hc-hint";
+            hint.textContent = "No locations yet.";
+            host.append(hint);
+            return;
         }
+        for (const location of world.locations) host.append(resourceButton(`${location.name} · ${location.category}`, () => loadLocation(location)));
     };
 
     const renderFeatures = (): void => {
         const host = required<HTMLElement>(root, "[data-feature-list]");
         host.replaceChildren();
-        for (const feature of world.features) {
-            host.append(resourceButton(`${feature.name} · ${feature.kind} · ${feature.category}`, () => loadFeature(feature)));
+        if (world.features.length === 0) {
+            const hint = document.createElement("p");
+            hint.className = "hc-hint";
+            hint.textContent = "No spatial features yet.";
+            host.append(hint);
+            return;
         }
+        for (const feature of world.features) host.append(resourceButton(`${feature.name} · ${feature.kind} · ${feature.category}`, () => loadFeature(feature)));
     };
 
     const loadLocation = (location: Location): void => {
@@ -163,6 +206,7 @@ export async function renderWorldEditor(
             input(featureForm, "y").value = String(feature.position.y);
         }
         draft = feature.kind === "Line" ? [...(feature.path ?? [])] : feature.kind === "Region" ? [...(feature.boundary ?? [])] : [];
+        updatePointFieldVisibility();
         updateDraftLabel();
     };
 
@@ -171,7 +215,12 @@ export async function renderWorldEditor(
         featureForm.reset();
         input(featureForm, "id").value = "";
         draft = [];
+        updatePointFieldVisibility();
         updateDraftLabel();
+    };
+
+    const updatePointFieldVisibility = (): void => {
+        required<HTMLElement>(featureForm, "[data-point-fields]").hidden = select(featureForm, "kind").value !== "Point";
     };
 
     const updateDraftLabel = (): void => {
@@ -225,36 +274,35 @@ export async function renderWorldEditor(
     });
     select(featureForm, "kind").addEventListener("change", () => {
         draft = [];
+        updatePointFieldVisibility();
         updateDraftLabel();
     });
 
     gridForm.addEventListener("submit", event => {
         event.preventDefault();
-        void run(async () => {
-            const unit = world.grid.neighborCenterDistance.unit;
-            const symbol = input(gridForm, "unitSymbol").value.trim();
-            const metersRaw = input(gridForm, "metersPerUnit").value.trim();
-            const nextKind: DistanceUnit["kind"] = unit.kind === "Custom"
-                ? "Custom"
-                : symbol === "mi" ? "Mile" : symbol === "km" ? "Kilometer" : "Custom";
-            const nextGrid = {
-                ...world.grid,
-                orientation: select(gridForm, "orientation").value === "FlatTop" ? "FlatTop" as const : "PointyTop" as const,
+        void run(gridForm, async () => {
+            const kind = unitKindSelect.value as DistanceUnitKind;
+            const centerDistance = numeric(input(gridForm, "scale"));
+            let nextGrid = gridWithSelectedUnit(
+                world.grid,
+                kind,
+                centerDistance,
+                unitSymbolInput.value,
+                kind === "Custom" ? numeric(metersPerUnitInput) : null);
+            nextGrid = {
+                ...nextGrid,
+                orientation: select(gridForm, "orientation").value === "FlatTop" ? "FlatTop" : "PointyTop",
                 origin: { x: numeric(input(gridForm, "originX")), y: numeric(input(gridForm, "originY")) },
                 rotationDegrees: numeric(input(gridForm, "rotation")),
-                hexRadiusWorldUnits: numeric(input(gridForm, "radius")),
-                neighborCenterDistance: {
-                    value: numeric(input(gridForm, "scale")),
-                    unit: { kind: nextKind, symbol, metersPerUnit: metersRaw ? Number(metersRaw) : null }
-                }
+                hexRadiusWorldUnits: numeric(input(gridForm, "radius"))
             };
-            applyWorld(await api.updateOverworld(world.id, input(gridForm, "name").value, nextGrid, world.version));
+            applyWorld(await api.updateOverworld(world.id, input(gridForm, "name").value.trim(), nextGrid, world.version));
         });
     });
 
     locationForm.addEventListener("submit", event => {
         event.preventDefault();
-        void run(async () => {
+        void run(locationForm, async () => {
             const payload = {
                 name: input(locationForm, "name").value,
                 category: input(locationForm, "category").value,
@@ -269,7 +317,7 @@ export async function renderWorldEditor(
         });
     });
 
-    required<HTMLButtonElement>(root, "[data-delete-location]").addEventListener("click", () => void run(async () => {
+    required<HTMLButtonElement>(root, "[data-delete-location]").addEventListener("click", () => void run(null, async () => {
         if (!selectedLocation) throw new Error("Select a location to delete.");
         applyWorld(await api.deleteLocation(world.id, selectedLocation.id, world.version));
         newLocation();
@@ -277,7 +325,7 @@ export async function renderWorldEditor(
 
     featureForm.addEventListener("submit", event => {
         event.preventDefault();
-        void run(async () => {
+        void run(featureForm, async () => {
             const kind = select(featureForm, "kind").value as "Point" | "Line" | "Region";
             const payload = {
                 name: input(featureForm, "name").value,
@@ -295,13 +343,12 @@ export async function renderWorldEditor(
         });
     });
 
-    required<HTMLButtonElement>(root, "[data-delete-feature]").addEventListener("click", () => void run(async () => {
+    required<HTMLButtonElement>(root, "[data-delete-feature]").addEventListener("click", () => void run(null, async () => {
         if (!selectedFeature) throw new Error("Select a feature to delete.");
         applyWorld(await api.deleteFeature(world.id, selectedFeature.id, world.version));
         newFeature();
     }));
 
-    const profiles = await api.getRuntimeProfiles();
     const procedure = select(expeditionForm, "procedure");
     for (const profile of profiles) {
         const option = document.createElement("option");
@@ -310,19 +357,26 @@ export async function renderWorldEditor(
         procedure.append(option);
     }
 
-    const renderExpeditions = async (): Promise<void> => {
-        const host = required<HTMLElement>(root, "[data-expedition-list]");
-        host.replaceChildren();
-        for (const expedition of await api.listExpeditions(world.id)) {
-            host.append(resourceButton(`${expedition.name} · ${expedition.procedureName}`, () =>
+    const expeditionHost = required<HTMLElement>(root, "[data-expedition-list]");
+    const renderExpeditions = (expeditions = initialExpeditions): void => {
+        expeditionHost.replaceChildren();
+        if (expeditions.length === 0) {
+            const hint = document.createElement("p");
+            hint.className = "hc-hint";
+            hint.textContent = "No expeditions yet.";
+            expeditionHost.append(hint);
+            return;
+        }
+        for (const expedition of expeditions) {
+            expeditionHost.append(resourceButton(`${expedition.name} · ${expedition.procedureName}`, () =>
                 navigate(`/worlds/${world.id}/expeditions/${expedition.id}`)));
         }
     };
-    await renderExpeditions();
+    renderExpeditions();
 
     expeditionForm.addEventListener("submit", event => {
         event.preventDefault();
-        void run(async () => {
+        void run(expeditionForm, async () => {
             const expedition = await api.startExpedition(
                 world.id,
                 input(expeditionForm, "name").value,
@@ -332,8 +386,12 @@ export async function renderWorldEditor(
         });
     });
 
+    updatePointFieldVisibility();
     applyWorld(world);
-    return () => mapSurface.dispose();
+    return () => {
+        disposed = true;
+        mapSurface.dispose();
+    };
 }
 
 function resourceButton(text: string, action: () => void): HTMLButtonElement {
@@ -343,6 +401,20 @@ function resourceButton(text: string, action: () => void): HTMLButtonElement {
     button.textContent = text;
     button.addEventListener("click", action);
     return button;
+}
+
+function setFormPending(form: HTMLFormElement, pending: boolean): void {
+    form.dataset.pending = String(pending);
+    for (const button of form.querySelectorAll<HTMLButtonElement>("button")) button.disabled = pending;
+    const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+    if (!submit) return;
+    if (pending) {
+        submit.dataset.idleText = submit.textContent ?? "Save";
+        submit.textContent = "Saving…";
+    } else if (submit.dataset.idleText) {
+        submit.textContent = submit.dataset.idleText;
+        delete submit.dataset.idleText;
+    }
 }
 
 function required<T extends Element>(root: ParentNode, selector: string): T {
