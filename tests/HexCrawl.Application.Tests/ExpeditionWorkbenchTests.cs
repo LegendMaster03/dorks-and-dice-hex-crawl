@@ -213,7 +213,7 @@ public sealed class ExpeditionWorkbenchTests
             EncounterResolutionNote = "UI helper"
         });
 
-        var audit = Assert.Single(expedition.State.History.Where(item => item.Kind == CrawlRuntimeEventKind.ResolutionProvenanceRecorded));
+        var audit = Assert.Single(expedition.State.History, item => item.Kind == CrawlRuntimeEventKind.ResolutionProvenanceRecorded);
         Assert.Contains("travel=ManualRoll (physical dice)", audit.Message);
         Assert.Contains("navigation=ExternalSystem (Rules Core result)", audit.Message);
         Assert.Contains("encounter=AutomaticRoll (UI helper)", audit.Message);
