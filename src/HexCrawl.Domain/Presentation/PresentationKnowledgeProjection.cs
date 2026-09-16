@@ -53,7 +53,11 @@ public static class PresentationKnowledgeProjection
         IEnumerable<HexCoordinate> enteredHexes)
     {
         policy.Validate();
-        if (policy.AutomationMode == PresentationAutomationMode.DmControlled || !policy.MarkEnteredHexKnown)
+        if (policy.AutomationMode == PresentationAutomationMode.DmControlled)
+        {
+            return RemoveAutomaticRuntimeDiscoveries(knowledge);
+        }
+        if (!policy.MarkEnteredHexKnown)
         {
             return knowledge;
         }
@@ -64,5 +68,16 @@ public static class PresentationKnowledgeProjection
             result = KnowledgeDiscovery.KnowHex(result, hex);
         }
         return result;
+    }
+
+    private static PlayerKnowledgeState RemoveAutomaticRuntimeDiscoveries(PlayerKnowledgeState knowledge)
+    {
+        var retained = knowledge.Entries
+            .Where(pair => pair.Value.Source is null
+                || !pair.Value.Source.StartsWith("runtime:", StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(pair => pair.Key, pair => pair.Value);
+        return retained.Count == knowledge.Entries.Count
+            ? knowledge
+            : knowledge with { Entries = retained };
     }
 }
