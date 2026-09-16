@@ -1,0 +1,47 @@
+import type { ExpeditionDetail } from "./types";
+
+export type WatchPhase = "ready" | "active" | "paused";
+
+export function watchPhase(runtime: ExpeditionDetail): WatchPhase {
+    if (runtime.expedition.activeWatchNumber === null) return "ready";
+    return runtime.pauseReason === null ? "active" : "paused";
+}
+
+export function encounterCheckDue(runtime: ExpeditionDetail): boolean {
+    if (runtime.expedition.activeWatchNumber !== null) return false;
+    const cadence = runtime.profile.encounterCadence;
+    if (cadence === "None") return false;
+    if (cadence === "PerWatch" || cadence === "Custom") return true;
+
+    const dayIndex = runtime.expedition.currentDay - 1;
+    return !runtime.history.some(event =>
+        event.kind === "EncounterCheckPerformed"
+        && Math.floor(event.expeditionElapsedHours / 24) === dayIndex);
+}
+
+export function navigationResolutionDue(runtime: ExpeditionDetail, suppressesNavigationCheck: boolean, deliberateDoubleBack: boolean): boolean {
+    return runtime.expedition.activeWatchNumber === null
+        && runtime.profile.usesNavigationChecks
+        && !suppressesNavigationCheck
+        && !deliberateDoubleBack;
+}
+
+export function watchActionLabel(runtime: ExpeditionDetail): string {
+    if (runtime.expedition.activeWatchNumber === null) return "Run watch";
+    return `Resume watch ${runtime.expedition.activeWatchNumber}`;
+}
+
+export function pauseInstruction(runtime: ExpeditionDetail): string | null {
+    switch (runtime.pauseReason) {
+        case "ConditionsReviewRequired":
+            return "A hex boundary was crossed before the watch ended. Review the new travel conditions, then resume this same watch with its remaining time.";
+        case "LostRecognitionRequired":
+            return "The party crossed a boundary while lost. Resolve whether the party recognizes the problem and whether it reorients before travel continues.";
+        case "EncounterTriggered":
+            return "An encounter interrupted the watch. Resolve it at the table, then resume this same watch with its remaining time.";
+        case "BacktrackBoundaryReached":
+            return "The deliberate double-back reached the known entry boundary. Review the resulting position before resuming travel.";
+        default:
+            return null;
+    }
+}

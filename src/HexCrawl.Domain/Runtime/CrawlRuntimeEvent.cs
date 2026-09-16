@@ -24,7 +24,8 @@ public enum CrawlRuntimeEventKind
     FeatureDiscovered,
     NavigationDecisionRequired,
     ConditionsReviewRequired,
-    DmOverrideApplied
+    DmOverrideApplied,
+    ResolutionProvenanceRecorded
 }
 
 public sealed record CrawlRuntimeEvent(

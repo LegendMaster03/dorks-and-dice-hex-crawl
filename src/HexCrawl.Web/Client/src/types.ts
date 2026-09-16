@@ -103,13 +103,18 @@ export type Overworld = {
 
 export type DemoWorld = Overworld;
 
+export type EncounterCadence = "None" | "PerWatch" | "PerDay" | "Custom";
+export type TravelResolutionMode = "ContinuousDistance" | "HexSteps";
+export type ActualDistanceResolutionMode = "Fixed" | "VariableResolved";
+export type ResolutionSource = "ProcedureDefault" | "AutomaticRoll" | "ManualRoll" | "ExternalSystem" | "DmOverride";
+
 export type RuntimeProfile = {
     key: string;
     name: string;
     watchHours: number;
-    travelResolution: "ContinuousDistance" | "HexSteps";
-    actualDistanceResolution: "Fixed" | "VariableResolved";
-    encounterCadence: "None" | "PerWatch" | "PerDay" | "Custom";
+    travelResolution: TravelResolutionMode;
+    actualDistanceResolution: ActualDistanceResolutionMode;
+    encounterCadence: EncounterCadence;
     usesNavigationChecks: boolean;
     usesPersistentVeer: boolean;
     tracksIntraHexProgress: boolean;
@@ -122,11 +127,27 @@ export type RuntimeProfile = {
     directionChangeProgressCostFactor: number;
 };
 
+export type PresentationProfile = {
+    key: string;
+    name: string;
+    playerGrid: "Hidden" | "Visible";
+    terrainMode: "HiddenUntilKnown" | "AlwaysVisible" | "Manual";
+    automationMode: "Automatic" | "DmControlled";
+    markEnteredHexKnown: boolean;
+    initiallyKnownFeatureCategories: string[];
+    initiallyKnownLocationCategories: string[];
+    allowPlayerAnnotations: boolean;
+};
+
+export type RuntimePauseReason = "ConditionsReviewRequired" | "LostRecognitionRequired" | "EncounterTriggered" | "BacktrackBoundaryReached";
+
 export type RuntimeExpedition = {
     id: string;
     currentHex: HexCoordinate;
     position: WorldPoint;
     positionPrecision: "Exact" | "HexAnchor";
+    entryDirection: number | null;
+    lastTravelDirection: number | null;
     intendedDirection: number | null;
     actualDirection: number | null;
     isLost: boolean;
@@ -136,11 +157,21 @@ export type RuntimeExpedition = {
     hexProgress: DistanceValue;
     exitRequirement: DistanceValue | null;
     elapsedTravelHours: number;
+    currentDay: number;
     completedWatches: number;
     activeWatchNumber: number | null;
+    activeWatchTotalHours: number | null;
+    activeWatchElapsedHours: number | null;
+    activeWatchRemainingHours: number | null;
+    activeWatchPendingDecision: RuntimePauseReason | null;
     activePaceKey: string | null;
     activeActivities: string[];
     activeNavigationAidKey: string | null;
+    activeDeliberateDoubleBack: boolean;
+    activeContinueAcrossBoundaries: boolean;
+    activeEncounterKind: "None" | "WanderingEncounter" | "KeyedLocationDiscovery" | "ManualCustom" | null;
+    activeEncounterHour: number | null;
+    activeEncounterHandled: boolean | null;
 };
 
 export type RuntimeKnowledgeEntry = {
@@ -182,14 +213,24 @@ export type ExpeditionDetail = {
     createdAt: string;
     updatedAt: string;
     profile: RuntimeProfile;
-    pauseReason: "ConditionsReviewRequired" | "LostRecognitionRequired" | "EncounterTriggered" | "BacktrackBoundaryReached" | null;
+    presentation: PresentationProfile;
+    pauseReason: RuntimePauseReason | null;
     remainingWatchHours: number;
     expedition: RuntimeExpedition;
+    knownHexes: HexCoordinate[];
     knowledge: RuntimeKnowledgeEntry[];
     history: RuntimeEvent[];
 };
 
 export type RuntimeState = ExpeditionDetail;
+
+export type StartExpeditionInput = {
+    name: string;
+    procedureKey: string;
+    presentationKey: string;
+    startHex: HexCoordinate;
+    procedureSnapshot?: RuntimeProfile;
+};
 
 export type RuntimeAdvanceRequest = {
     expectedVersion: number;
@@ -199,10 +240,19 @@ export type RuntimeAdvanceRequest = {
     navigationAidKey: string;
     suppressesNavigationCheck: boolean;
     resetsVeerAtBoundary: boolean;
+    effectiveDistance?: number;
     expectedDistance?: number;
     actualDistance?: number;
     hexSteps?: number;
-    resolutionSource: "ProcedureDefault" | "AutomaticRoll" | "ManualRoll" | "ExternalSystem" | "DmOverride";
+    resolutionSource: ResolutionSource;
+    travelResolutionSource?: ResolutionSource;
+    travelResolutionNote?: string;
+    navigationResolutionSource?: ResolutionSource;
+    navigationResolutionNote?: string;
+    encounterResolutionSource?: ResolutionSource;
+    encounterResolutionNote?: string;
+    boundaryResolutionSource?: ResolutionSource;
+    boundaryResolutionNote?: string;
     navigationOutcome?: "NotRequired" | "Succeeded" | "Failed";
     veerSteps?: number;
     encounterOutcome?: "None" | "WanderingEncounter" | "KeyedLocationDiscovery" | "ManualCustom";

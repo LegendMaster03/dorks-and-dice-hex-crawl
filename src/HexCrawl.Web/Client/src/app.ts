@@ -1,5 +1,6 @@
 import { HexCrawlApi } from "./api";
 import { renderExpedition } from "./expedition-view";
+import { enhanceExpeditionSetup } from "./expedition-setup";
 import { ensureStyles } from "./styles";
 import { deriveToolRoute, navigateTool, parseToolRoute } from "./tool-route";
 import { describeUiError } from "./ui-error";
@@ -36,9 +37,15 @@ async function boot(rootElement: HTMLElement): Promise<void> {
                         cleanup = await renderWorldList(rootElement, api, navigate);
                         break;
                     case "world":
-                    case "edit":
-                        cleanup = await renderWorldEditor(rootElement, api, route.worldId, navigate);
+                    case "edit": {
+                        const editorCleanup = await renderWorldEditor(rootElement, api, route.worldId, navigate);
+                        const setupCleanup = await enhanceExpeditionSetup(rootElement, api, route.worldId, navigate);
+                        cleanup = () => {
+                            setupCleanup();
+                            editorCleanup();
+                        };
                         break;
+                    }
                     case "expedition":
                         cleanup = await renderExpedition(rootElement, api, route.worldId, route.expeditionId, navigate);
                         break;

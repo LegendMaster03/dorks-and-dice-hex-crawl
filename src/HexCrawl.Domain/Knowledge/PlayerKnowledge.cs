@@ -1,3 +1,4 @@
+using HexCrawl.Domain.Presentation;
 using HexCrawl.Domain.Spatial;
 
 namespace HexCrawl.Domain.Knowledge;
@@ -30,6 +31,8 @@ public sealed record PlayerKnowledgeState
 {
     public required Guid ScopeId { get; init; }
     public required Guid OverworldId { get; init; }
+    public MapPresentationPolicy? PresentationPolicy { get; init; }
     public IReadOnlyDictionary<Guid, KnowledgeEntry> Entries { get; init; } = new Dictionary<Guid, KnowledgeEntry>();
+    public IReadOnlyList<HexCoordinate> KnownHexes { get; init; } = [];
     public IReadOnlyList<PlayerAnnotation> Annotations { get; init; } = [];
 }

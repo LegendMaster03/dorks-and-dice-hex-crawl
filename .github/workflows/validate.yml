@@ -59,7 +59,7 @@ jobs:
       - name: Build container
         run: docker build -t dorks-and-dice-hex-crawl:test -f src/HexCrawl.Web/Dockerfile .
 
-      - name: Smoke test standalone container and source-map restart persistence
+      - name: Smoke test standalone container and restart persistence
         run: |
           set -euo pipefail
           data_dir="$RUNNER_TEMP/hex-crawl-smoke-data"
@@ -129,6 +129,27 @@ jobs:
           test -d "$data_dir/assets/maps"
           test "$(find "$data_dir/assets/maps" -type f | wc -l)" -eq 1
 
+          curl -fsS -X POST "http://127.0.0.1:18092/api/overworlds/$world_id/expeditions" \
+            -H 'Content-Type: application/json' \
+            --data '{"name":"CI paused expedition","procedureKey":"simple-fixed-distance","presentationKey":"exploration-map","startHex":{"q":0,"r":0}}' \
+            -o "$response_dir/start-expedition.json"
+          expedition_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$response_dir/start-expedition.json")"
+          expedition_version="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$response_dir/start-expedition.json")"
+
+          curl -fsS -X POST "http://127.0.0.1:18092/api/expeditions/$expedition_id/advance" \
+            -H 'Content-Type: application/json' \
+            --data "{\"expectedVersion\":$expedition_version,\"intendedDirection\":0,\"effectiveDistance\":12,\"travelResolutionSource\":\"ManualRoll\",\"continueAcrossBoundaries\":false}" \
+            -o "$response_dir/pause-expedition.json"
+          python3 - "$response_dir/pause-expedition.json" <<'PY'
+          import json, sys
+          d = json.load(open(sys.argv[1]))
+          assert d["pauseReason"] == "ConditionsReviewRequired", d
+          assert d["remainingWatchHours"] == 2, d
+          assert d["expedition"]["activeWatchNumber"] == 1, d
+          assert d["presentation"]["key"] == "exploration-map", d
+          assert any(h["q"] == 0 and h["r"] == 0 for h in d["knownHexes"]), d
+          PY
+
           docker rm -f hex-crawl-smoke >/dev/null
           start_container
           wait_ready
@@ -140,3 +161,30 @@ jobs:
           grep -q '"mediaType":"image/png"' "$response_dir/maps-after-restart.json"
           curl -fsS "http://127.0.0.1:18092/api/overworlds/$world_id/source-maps/$source_map_id/asset" -o "$response_dir/map-after-restart.png"
           cmp "$response_dir/tiny.png" "$response_dir/map-after-restart.png"
+
+          curl -fsS "http://127.0.0.1:18092/api/expeditions/$expedition_id" -o "$response_dir/expedition-after-restart.json"
+          python3 - "$response_dir/expedition-after-restart.json" <<'PY'
+          import json, sys
+          d = json.load(open(sys.argv[1]))
+          assert d["pauseReason"] == "ConditionsReviewRequired", d
+          assert d["remainingWatchHours"] == 2, d
+          assert d["expedition"]["activeWatchNumber"] == 1, d
+          assert d["expedition"]["activeWatchElapsedHours"] == 2, d
+          assert d["profile"]["key"] == "simple-fixed-distance", d
+          assert d["presentation"]["key"] == "exploration-map", d
+          PY
+          resumed_version="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$response_dir/expedition-after-restart.json")"
+
+          curl -fsS -X POST "http://127.0.0.1:18092/api/expeditions/$expedition_id/advance" \
+            -H 'Content-Type: application/json' \
+            --data "{\"expectedVersion\":$resumed_version,\"intendedDirection\":0,\"effectiveDistance\":6,\"travelResolutionSource\":\"ManualRoll\",\"travelResolutionNote\":\"resume after restart\",\"continueAcrossBoundaries\":true}" \
+            -o "$response_dir/resume-expedition.json"
+          python3 - "$response_dir/resume-expedition.json" <<'PY'
+          import json, sys
+          d = json.load(open(sys.argv[1]))
+          assert d["pauseReason"] is None, d
+          assert d["remainingWatchHours"] == 0, d
+          assert d["expedition"]["activeWatchNumber"] is None, d
+          assert d["expedition"]["completedWatches"] == 1, d
+          assert d["expedition"]["elapsedTravelHours"] == 4, d
+          PY
