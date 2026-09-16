@@ -34,6 +34,8 @@ A profile controls watch length, travel resolution, actual-distance resolution, 
 
 Each expedition persists the **complete profile configuration snapshot** chosen when it starts. The profile key remains provenance, but it is not used to reconstruct an old expedition on reload. A DM can start from a built-in preset and customize the supported fields; `CrawlProcedureProfile.Validate()` remains the validity boundary for both presets and customized snapshots.
 
+New-expedition customization exposes `None`, `PerWatch`, and `PerDay` encounter cadence. The `Custom` enum member remains valid for backward compatibility with persisted profiles but is not presented as a new customization option because no typed custom-cadence parameters exist in this slice.
+
 ## Watch transition model
 
 A transition is conceptually:
@@ -60,17 +62,21 @@ Navigation remains edition-neutral. `ResolvedNavigation` carries a resolved outc
 
 ## Resolved-input boundary
 
-The engine does not perform consequential random rolls. `ResolutionProvenance` records `ProcedureDefault`, `AutomaticRoll`, `ManualRoll`, `ExternalSystem`, or `DmOverride`.
+The engine does not perform consequential random rolls. `ResolutionProvenance` supports `ProcedureDefault`, `AutomaticRoll`, `ManualRoll`, `ExternalSystem`, or `DmOverride`.
+
+`AutomaticRoll` is a domain/application provenance value for a trusted helper or integration that actually generated the corresponding resolved value. The current DM workbench has no automatic generator, so ordinary manual selectors do not expose `AutomaticRoll`. Manual DM entry can record `ProcedureDefault`, `ManualRoll`, `ExternalSystem`, or `DmOverride`. A future helper can set `AutomaticRoll` programmatically when it genuinely produces a value.
 
 The DM workbench carries independent provenance for travel, navigation, encounter, and boundary-decision inputs rather than applying one source label to an entire watch. It appends a compact `ResolutionProvenanceRecorded` history event after each application transition.
 
-The same runtime therefore accepts UI helper rolls, physical dice, results from another tool, or explicit DM overrides without making Rules Core or another integration authoritative over spatial/runtime state.
+The same runtime therefore remains able to accept future helper-generated results, physical dice, results from another tool, or explicit DM overrides without making Rules Core or another integration authoritative over spatial/runtime state.
 
 ## Encounters and discovery
 
 Encounter cadence is procedure configuration; encounter content remains external. Timed encounter results can interrupt a watch and leave it resumable.
 
-`PerWatch` and `Custom` cadence are passed directly to new-watch runtime transitions. `PerDay` is handled by `ExpeditionProcedureRequirements`: only the first watch in each derived 24-hour travel day is passed to the engine with encounter cadence enabled; later watches in that day use an ephemeral copy of the profile with encounter cadence `None`. The persisted procedure snapshot remains `PerDay`.
+`PerWatch` is passed directly to each new-watch runtime transition. `PerDay` is handled by `ExpeditionProcedureRequirements`: only the first watch in each derived 24-hour travel day is passed to the engine with encounter cadence enabled; later watches in that day use an ephemeral copy of the profile with encounter cadence `None`. The persisted procedure snapshot remains `PerDay`.
+
+Persisted legacy profiles whose cadence is `Custom` retain the historical deterministic behavior in `ExpeditionProcedureRequirements`: they request one resolved encounter result at each new watch, matching the prior per-watch handling. This compatibility behavior is intentionally separate from the new-expedition customization UI and does not imply that a custom scheduling model exists.
 
 Crossing a hex boundary never reveals all content in that hex. Discovery targets a stable location or feature ID and updates only that subject in `PlayerKnowledgeState`. One location can therefore be discovered while another location or feature in the same hex remains hidden.
 
@@ -92,7 +98,7 @@ An expedition record also persists pause reason and remaining watch time, becaus
 
 ## Persistent DM workflow
 
-`ExpeditionWorkbenchService` is the application orchestration layer over the engine. It starts expeditions from procedure/presentation presets, persists customized procedure snapshots, determines whether per-day encounter resolution is due, builds independent resolved-input provenance, calls `CrawlRuntimeEngine`, applies presentation knowledge projection, and saves with optimistic concurrency.
+`ExpeditionWorkbenchService` is the application orchestration layer over the engine. It starts expeditions from procedure/presentation presets, persists customized procedure snapshots, determines whether per-day encounter resolution is due, preserves legacy `Custom` cadence behavior, builds independent resolved-input provenance, calls `CrawlRuntimeEngine`, applies presentation knowledge projection, and saves with optimistic concurrency.
 
 The DM application starts or reopens expeditions against persisted overworlds. The runtime view exposes current day/watch, current hex, entry relationship, intended/actual course, lost/veer state, distance/progress, elapsed/remaining watch time, pause reason, encounter state, subject-specific discovery, presentation/knowledge preview, procedure snapshots, and recent event history.
 
@@ -112,4 +118,4 @@ The Alexandrian profile remains optional. Terrain movement tables, encounter con
 
 ## Deferred runtime work
 
-Still deferred are Rules Core/Characters integration, authoritative terrain/route mechanical interpretation, encounter-table content, arbitrary-bearing procedure travel, multi-hex route unwinding, a general campaign calendar/rest clock, real-time multiplayer synchronization, and battle-map behavior.
+Still deferred are Rules Core/Characters integration, authoritative terrain/route mechanical interpretation, encounter-table content, an automatic dice/resolution helper, typed custom encounter-cadence parameters or a scheduling DSL, arbitrary-bearing procedure travel, multi-hex route unwinding, a general campaign calendar/rest clock, real-time multiplayer synchronization, and battle-map behavior.
