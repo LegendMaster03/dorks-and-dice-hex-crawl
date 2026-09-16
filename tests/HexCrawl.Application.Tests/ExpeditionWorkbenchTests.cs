@@ -177,6 +177,121 @@ public sealed class ExpeditionWorkbenchTests
     }
 
     [Fact]
+    public async Task NoneAndPerWatchEncounterCadenceRemainUnchanged()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var (core, workbench) = await database.ServicesAsync();
+        var world = await core.CreateOverworldAsync("alice", WorldCommand());
+
+        var noneProfile = CrawlProcedureProfile.SimplifiedFixedDistance() with
+        {
+            Name = "No encounter checks",
+            EncounterCadence = EncounterCheckCadence.None
+        };
+        var none = await workbench.StartAsync(
+            world.World.Id,
+            "alice",
+            new StartExpeditionWorkbenchCommand(
+                "No encounters",
+                noneProfile.Key,
+                "exploration-map",
+                new HexCoordinate(0, 0),
+                noneProfile));
+        for (var watch = 0; watch < 2; watch++)
+        {
+            none = await workbench.AdvanceAsync(none.State.Id, "alice", new AdvanceExpeditionWorkbenchCommand
+            {
+                ExpectedVersion = none.Version,
+                IntendedDirection = 0,
+                EffectiveDistance = 1,
+                ContinueAcrossBoundaries = true,
+                TravelResolutionSource = ResolutionSource.ProcedureDefault
+            });
+        }
+        Assert.DoesNotContain(none.State.History, item => item.Kind == CrawlRuntimeEventKind.EncounterCheckPerformed);
+
+        var perWatchProfile = CrawlProcedureProfile.SimplifiedFixedDistance() with
+        {
+            Name = "Per-watch encounter checks",
+            EncounterCadence = EncounterCheckCadence.PerWatch
+        };
+        var perWatch = await workbench.StartAsync(
+            world.World.Id,
+            "alice",
+            new StartExpeditionWorkbenchCommand(
+                "Per-watch encounters",
+                perWatchProfile.Key,
+                "exploration-map",
+                new HexCoordinate(0, 0),
+                perWatchProfile));
+        for (var watch = 0; watch < 2; watch++)
+        {
+            perWatch = await workbench.AdvanceAsync(perWatch.State.Id, "alice", new AdvanceExpeditionWorkbenchCommand
+            {
+                ExpectedVersion = perWatch.Version,
+                IntendedDirection = 0,
+                EffectiveDistance = 1,
+                ContinueAcrossBoundaries = true,
+                TravelResolutionSource = ResolutionSource.ProcedureDefault,
+                EncounterResolutionSource = ResolutionSource.ManualRoll,
+                EncounterOutcome = EncounterOutcomeKind.None
+            });
+        }
+        Assert.Equal(2, perWatch.State.History.Count(item => item.Kind == CrawlRuntimeEventKind.EncounterCheckPerformed));
+    }
+
+    [Fact]
+    public async Task LegacyCustomEncounterCadenceSurvivesRestartAndRetainsPerWatchBehavior()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var (core, workbench) = await database.ServicesAsync();
+        var world = await core.CreateOverworldAsync("alice", WorldCommand());
+        var legacyProfile = CrawlProcedureProfile.SimplifiedFixedDistance() with
+        {
+            Name = "Legacy custom encounter cadence",
+            EncounterCadence = EncounterCheckCadence.Custom
+        };
+        var expedition = await workbench.StartAsync(
+            world.World.Id,
+            "alice",
+            new StartExpeditionWorkbenchCommand(
+                "Legacy custom cadence",
+                legacyProfile.Key,
+                "exploration-map",
+                new HexCoordinate(0, 0),
+                legacyProfile));
+
+        expedition = await workbench.AdvanceAsync(expedition.State.Id, "alice", new AdvanceExpeditionWorkbenchCommand
+        {
+            ExpectedVersion = expedition.Version,
+            IntendedDirection = 0,
+            EffectiveDistance = 1,
+            ContinueAcrossBoundaries = true,
+            TravelResolutionSource = ResolutionSource.ProcedureDefault,
+            EncounterResolutionSource = ResolutionSource.ManualRoll,
+            EncounterOutcome = EncounterOutcomeKind.None
+        });
+
+        var (restartedCore, restartedWorkbench) = await database.ServicesAsync();
+        var loaded = await restartedCore.GetExpeditionAsync(expedition.State.Id, "alice");
+        Assert.Equal(EncounterCheckCadence.Custom, loaded.Procedure.EncounterCadence);
+
+        var resumed = await restartedWorkbench.AdvanceAsync(loaded.State.Id, "alice", new AdvanceExpeditionWorkbenchCommand
+        {
+            ExpectedVersion = loaded.Version,
+            IntendedDirection = 0,
+            EffectiveDistance = 1,
+            ContinueAcrossBoundaries = true,
+            TravelResolutionSource = ResolutionSource.ProcedureDefault,
+            EncounterResolutionSource = ResolutionSource.ManualRoll,
+            EncounterOutcome = EncounterOutcomeKind.None
+        });
+
+        Assert.Equal(2, resumed.State.CompletedWatches);
+        Assert.Equal(2, resumed.State.History.Count(item => item.Kind == CrawlRuntimeEventKind.EncounterCheckPerformed));
+    }
+
+    [Fact]
     public async Task ResolutionTypesKeepIndependentProvenance()
     {
         await using var database = await TestDatabase.CreateAsync();
@@ -210,13 +325,13 @@ public sealed class ExpeditionWorkbenchTests
             NavigationResolutionSource = ResolutionSource.ExternalSystem,
             NavigationResolutionNote = "Rules Core result",
             EncounterResolutionSource = ResolutionSource.AutomaticRoll,
-            EncounterResolutionNote = "UI helper"
+            EncounterResolutionNote = "trusted future helper result"
         });
 
         var audit = Assert.Single(expedition.State.History, item => item.Kind == CrawlRuntimeEventKind.ResolutionProvenanceRecorded);
         Assert.Contains("travel=ManualRoll (physical dice)", audit.Message);
         Assert.Contains("navigation=ExternalSystem (Rules Core result)", audit.Message);
-        Assert.Contains("encounter=AutomaticRoll (UI helper)", audit.Message);
+        Assert.Contains("encounter=AutomaticRoll (trusted future helper result)", audit.Message);
     }
 
     [Fact]
