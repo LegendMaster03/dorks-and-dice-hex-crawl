@@ -1,4 +1,5 @@
 import type { HexCrawlApi } from "./api";
+import { manualEntryResolutionSources } from "./expedition-input-policy";
 import { encounterCheckDue, navigationResolutionDue, pauseInstruction, watchActionLabel, watchPhase } from "./expedition-workflow";
 import { worldToHex } from "./hex-math";
 import { MapSurface } from "./map-surface";
@@ -117,10 +118,9 @@ export async function renderExpedition(
     const advanceButton = required<HTMLButtonElement>(form, "[data-advance-button]");
     const map = new MapSurface(required(root, "[data-map]"), () => world);
     const locationSelect = select(form, "locationId");
-    const resolutionSources: ResolutionSource[] = ["ProcedureDefault", "AutomaticRoll", "ManualRoll", "ExternalSystem", "DmOverride"];
     for (const name of ["travelSource", "navigationSource", "encounterSource", "boundarySource"] as const) {
         const control = select(form, name);
-        for (const source of resolutionSources) control.append(option(source, sourceLabel(source)));
+        for (const source of manualEntryResolutionSources) control.append(option(source, sourceLabel(source)));
         control.value = "ManualRoll";
     }
     for (const location of world.locations) locationSelect.append(option(location.id, location.name));
