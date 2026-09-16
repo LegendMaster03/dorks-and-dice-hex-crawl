@@ -122,7 +122,13 @@ Fixed continuous-distance procedures accept one effective distance. Variable-dis
 
 ## Encounter cadence
 
-`PerWatch` and `Custom` cadence continue to ask for a resolved encounter result at each new watch. `None` does not.
+New-expedition procedure customization currently offers only the cadence modes with implemented configuration semantics:
+
+- `None` — no encounter check;
+- `PerWatch` — one encounter check at each new watch;
+- `PerDay` — one encounter check in each derived 24-hour travel-time day.
+
+`EncounterCheckCadence.Custom` remains a valid domain value for backward compatibility with already persisted expedition profiles. It is not offered for newly customized expeditions because this slice has no typed custom-cadence parameters. A persisted legacy `Custom` profile retains its historical deterministic behavior: it requests a resolved encounter result at each new watch, equivalent to the old per-watch handling, until a real custom-cadence model is introduced.
 
 `PerDay` is orchestrated without changing `CrawlRuntimeEngine`: only the first new watch in each 24-hour travel-time day is passed to the engine with encounter cadence enabled. Subsequent watches in that same derived day use an ephemeral runtime profile with encounter cadence `None`. The persisted procedure snapshot remains `PerDay`.
 
@@ -130,7 +136,7 @@ Encounter content, tables, monster selection, and edition-specific encounter mec
 
 ## Resolved-input provenance
 
-Travel, navigation, encounter, and boundary decisions have independent provenance. Each can be recorded as:
+The domain and application contracts support independent provenance for travel, navigation, encounter, and boundary decisions using:
 
 - `ProcedureDefault`;
 - `AutomaticRoll`;
@@ -138,7 +144,11 @@ Travel, navigation, encounter, and boundary decisions have independent provenanc
 - `ExternalSystem`;
 - `DmOverride`.
 
-Optional notes can describe the physical dice, helper UI, Rules Core result, or override context. The workbench appends a compact `ResolutionProvenanceRecorded` runtime-history entry for auditability.
+`AutomaticRoll` means that a trusted helper or integration actually generated the corresponding resolved value. The current workbench does not contain such a helper. Therefore ordinary manual DM entry offers only `ProcedureDefault`, `ManualRoll`, `ExternalSystem`, and `DmOverride`; it does not allow a manually typed value to be labeled `AutomaticRoll`.
+
+A future helper may set `AutomaticRoll` programmatically when it genuinely produces a travel, navigation, encounter, or boundary result. This preserves the domain value without fabricating provenance in the current UI.
+
+Optional notes can describe physical dice, an external system result, an override context, or a future trusted helper result. The workbench appends a compact `ResolutionProvenanceRecorded` runtime-history entry for auditability.
 
 This keeps future integrations subordinate to the Hex Crawl runtime state. Rules Core or Characters may provide resolved values later, but they do not become the owner of expedition movement or spatial state.
 
@@ -185,6 +195,8 @@ The workbench does not add:
 - edition-specific navigation skill/DC formulas;
 - encounter-table or monster content;
 - semantic terrain-to-mechanics interpretation;
+- an automatic dice/resolution helper;
+- typed custom encounter-cadence parameters or a scheduling DSL;
 - machine vision, OCR, or raster analysis;
 - arbitrary-bearing procedure travel;
 - full multi-hex automatic route unwinding/backtracking;
