@@ -1,219 +1,103 @@
 # Crawl runtime engine
 
-## Scope
+## Authority and state separation
 
-This slice turns the existing spatial/world foundation into an executable crawl procedure without collapsing world geometry, crawl procedure state, runtime mutation, player knowledge, and presentation into one model.
+`CrawlRuntimeEngine` remains the authoritative deterministic transition boundary. The Web client may collect choices, prefill resolved rolls, and render state, but it does not calculate authoritative movement, lost state, boundary crossings, encounters, or discoveries.
 
-The authoritative transition boundary is the domain `CrawlRuntimeEngine`. The Web client may collect choices, prefill resolved rolls, and render state, but it does not calculate authoritative movement, lost state, boundary crossings, encounters, or discoveries.
+The runtime preserves the independent state axes established by the world foundation:
 
-The runtime remains persistence-agnostic. The demonstrator stores a single process-local session only so the state machine can be exercised before campaign persistence is designed.
+- `OverworldDefinition` is authoritative spatial/world truth.
+- `ExpeditionState` is current crawl state.
+- `PlayerKnowledgeState` is subject-specific party knowledge.
+- `CrawlProcedureProfile` is procedure configuration.
+- presentation remains a separate concern.
 
-## State separation
+Persistence wraps those domain objects; it does not move persistence rules into the runtime engine.
 
-The runtime preserves the foundation's independent state axes:
+## Abstract traversal
 
-- `OverworldDefinition` remains static world/spatial truth.
-- `ExpeditionState` contains expedition runtime state.
-- `WorldRuntimeState` remains the overlay for mutable/generated world state.
-- `PlayerKnowledgeState` contains subject-specific knowledge and annotations.
-- `MapPresentationPolicy` remains presentation policy rather than world truth.
-- `CrawlProcedureProfile` configures procedure behavior independently of world geometry.
+`ExpeditionState.Position` remains available for world rendering and future exact positioning. `WorldPositionPrecision` distinguishes exact positions from a `HexAnchor` created by abstract procedure movement.
 
-`ExpeditionState.Position` is retained for map rendering and future exact positioning. Crawl traversal does not ray-cast that point through the drawn hex polygon.
+`HexTraversalState` tracks the current hex, entry direction, last travel direction, accumulated abstract progress, and current exit requirement. It deliberately does not ray-cast a literal line through the rendered regular hex. Continuous-distance procedures express near/far/back requirements as factors of the grid's physical center distance.
 
-`WorldPositionPrecision` records whether the position is exact or merely a `HexAnchor`. After an abstract procedure crossing, the demonstrator can anchor the marker at the new hex center without claiming that the center is the expedition's exact rules position.
-
-## Abstract traversal state
-
-`HexTraversalState` is the procedure-facing representation of sub-hex travel. It tracks:
-
-- current hex;
-- entry direction, when the expedition crossed a known face into the hex;
-- last travel direction;
-- accumulated abstract progress;
-- the current abstract exit requirement.
-
-This is deliberately different from literal regular-hex geometry. The Alexandrian procedure describes progress in abstract miles and uses different requirements for near, far, and back exits. A literal chord through the rendered hex would produce different distances depending on the exact geometric entry point and bearing, which is not the tabletop procedure being modeled.
-
-For continuous-distance profiles, exit requirements are configured as factors of the grid's physical neighbor-center distance. The current Alexandrian baseline uses:
-
-- start inside a hex: `0.5`;
-- near exit: `0.5`;
-- far exit: `1.0`;
-- deliberate return to the entry boundary: `0.5`;
-- direction-change progress cost: `1/6` when enabled.
-
-Those are procedure settings, not properties of `HexGridDefinition`. The same runtime therefore works on non-12-mile grids and with kilometers or other physical units.
+The Alexandrian advanced baseline currently uses start `0.5`, near `0.5`, far `1.0`, back `0.5`, and a configurable direction-change cost. Those are procedure settings, not grid properties.
 
 ## Procedure profiles
 
-`CrawlProcedureProfile` is intentionally a small configuration surface rather than a general rules scripting language. It currently controls:
+The built-in profiles remain:
 
-- watch length;
-- continuous physical distance versus coarse hex-step resolution;
-- fixed versus externally resolved variable travel distance;
-- encounter-check cadence;
-- whether navigation checks are used;
-- whether veer persists while lost;
-- whether intra-hex progress is tracked;
-- whether direction changes consume progress;
-- whether deliberate double-back handling is enabled;
-- scale-relative start/near/far/back progress requirements.
-
-The built-in profiles are:
-
-- `alexandrian-advanced` — the current Alexandrian-inspired baseline;
+- `alexandrian-advanced` — watch-based navigation, veer, encounters, and abstract intra-hex progress;
 - `simple-fixed-distance` — continuous fixed-distance travel without navigation or encounter checks;
-- `simple-hex-step` — coarse hex-step movement without intra-hex progress.
+- `simple-hex-step` — coarse hex-step movement.
 
-The Alexandrian profile is a preset over the general model. It is not treated as the definition of hexcrawling.
+A profile controls watch length, travel resolution, actual-distance resolution, encounter cadence, navigation, persistent veer, intra-hex tracking, direction-change cost, deliberate double-back support, and exit-progress factors.
+
+Each expedition now persists the **complete profile configuration snapshot** chosen when it starts. The profile key remains descriptive, but it is not used to reconstruct an old expedition on reload. This prevents a later preset edit from silently changing ongoing campaign behavior.
 
 ## Watch transition model
 
-A watch advance is a deterministic state transition over explicit state and explicit resolved inputs. Conceptually:
+A transition is conceptually:
 
 `world + profile + expedition + knowledge + travel plan + resolved inputs -> expedition + knowledge + events + optional pause`
 
-A new watch records the chosen intended direction, pace/mode metadata, navigation aid, and activities. If the profile requires navigation, the engine consumes an explicit navigation result. Actual travel direction is then derived from intended direction plus current lost/veer state.
+New watches record intended direction, pace/mode metadata, navigation aid, and activities. The engine consumes explicit resolved travel/navigation/encounter inputs, derives actual direction from intended direction plus lost/veer state, and applies travel against abstract progress.
 
-Movement is applied against traversal progress. A segment may remain inside the current hex, cross one boundary, or cross several boundaries when the supplied movement is sufficient and the caller allows continued traversal.
+A boundary can pause a watch with remaining time and an `ActiveWatchState`. The DM can review changed terrain, routes, navigation assumptions, or encounter context and continue the same watch. Partially completed watches are persisted exactly and survive application/container restart.
 
-A boundary can intentionally pause the watch with remaining time still recorded. This is important because terrain, route, navigation aid, movement rate, encounter context, or other assumptions may change after entering the next hex. The DM can review conditions and continue the same watch instead of the engine automatically carrying stale assumptions forward.
+## Direction changes and double-back
 
-A watch completes only after its remaining travel time is resolved. `CompletedWatches` and `ActiveWatchState` make partially resolved watches explicit instead of inferring them from wall-clock arithmetic.
+Direction changes are procedure actions, not literal geometric pivots. Profiles may charge abstract progress for them.
 
-## Direction changes and double-backs
-
-Direction changes are procedure actions, not geometric pivots of an exact world-space ray. Profiles may assign an abstract progress cost to changing direction.
-
-A deliberate double-back is distinct from an ordinary direction change. When enabled, the expedition may retrace toward the face through which it entered the current hex. Reaching that boundary pauses the procedure instead of silently continuing through arbitrary prior route history.
-
-The current model does not yet maintain a full multi-hex route stack. Therefore a deliberate double-back handles the current hex's known entry boundary, but automatic route unwinding across an arbitrary sequence of previously crossed hexes is deferred.
+The deliberate double-back operation handles the current hex's known entry boundary. A full multi-hex route stack and automatic route unwinding remain deferred; persistence does not preclude adding traversal history later.
 
 ## Navigation, lost state, and veer
 
-Navigation resolution is edition-agnostic. The domain engine does not know about a particular skill name, proficiency system, DC formula, or dice expression.
+Navigation remains edition-neutral. `ResolvedNavigation` carries a resolved outcome and optional 60-degree veer steps; the engine has no dependency on a D&D skill name, proficiency system, DC formula, or dice expression.
 
-`ResolvedNavigation` supplies an already resolved outcome and, on failure, a veer measured in 60-degree hex-direction steps. `NavigationRuntimeState` stores whether the expedition is lost and the persistent veer offset. A profile can disable navigation entirely or disable persistent veer.
+`NavigationRuntimeState` persists lost state and veer. Boundary decisions explicitly record recognition/reorientation, and reorientation produces a transition/event rather than silently mutating state. Lost and veer state round-trip through persistence and continue deterministically after reload.
 
-When a lost expedition reaches a decision point, the runtime can pause for recognition/reorientation. A `BoundaryNavigationDecision` records whether the lost state was recognized and whether the expedition reorients. Reorientation resets the veer through an explicit state transition and event.
+## Resolved-input boundary
 
-Navigation aids are also explicit inputs. The current demonstrator includes a route-style aid that can suppress the navigation check and reset veer at a boundary. More detailed terrain/route policies remain outside the core engine for now.
+The engine does not perform consequential random rolls. `ResolutionProvenance` records `ProcedureDefault`, `AutomaticRoll`, `ManualRoll`, `ExternalSystem`, or `DmOverride`.
 
-## Randomness and resolved-input boundary
-
-The domain runtime never calls a random-number generator for consequential resolution.
-
-Resolved values carry `ResolutionProvenance`:
-
-- `ProcedureDefault`;
-- `AutomaticRoll`;
-- `ManualRoll`;
-- `ExternalSystem`;
-- `DmOverride`.
-
-This allows the same transition to consume values generated by the local UI, entered from physical dice, supplied by another Dorks & Dice tool, or overridden by the DM.
-
-The Alexandrian variable-distance helper implements the procedure's `2d6 + 3` percentage result as a pure calculation over already resolved dice. It does not roll those dice itself. The DM-facing demonstrator can roll and prefill the resolved value, but the authoritative engine receives only the resolved distance and its provenance.
-
-The same separation applies to navigation and encounters. The current UI can roll a d20 navigation helper, but the engine consumes the resolved success/failure and veer rather than embedding a specific D&D edition's navigation check.
+The same runtime therefore accepts UI helper rolls, physical dice, results from another tool, or explicit DM overrides without making Rules Core or another integration authoritative over spatial/runtime state.
 
 ## Encounters and discovery
 
-Encounter cadence is configured by the procedure profile. Encounter content remains external to the engine.
+Encounter cadence is procedure configuration; encounter content remains external. Timed encounter results can interrupt a watch and leave it resumable.
 
-A resolved encounter can currently be:
+Crossing a hex boundary never reveals all content in that hex. Discovery targets a stable location or feature ID and updates only that subject in `PlayerKnowledgeState`. One location can therefore be discovered while another location or feature in the same hex remains hidden.
 
-- none;
-- wandering encounter;
-- keyed-location discovery;
-- manual/custom.
+Manual discovery through the persistent API uses the same domain action and is saved with the expedition knowledge snapshot.
 
-Timed encounter results can interrupt a watch before all movement is spent, leaving the watch resumable.
+## Runtime history and persistence
 
-Crossing into a hex does not automatically discover all contents of that hex. Keyed locations and semantic features remain separate subjects. Discovery updates `PlayerKnowledgeState` through `KnowledgeDiscovery` for the specific location or feature that was actually discovered.
+Important transitions append `CrawlRuntimeEvent` records covering watch lifecycle, navigation/lost/veer changes, direction changes, travel, hex exits/entries, encounters, discoveries, decision points, and DM overrides.
 
-This preserves the existing architecture rule that knowledge is not `Hex.IsRevealed` and prepares for later separate DM and player map projections.
+The storage design is intentionally **snapshot + retained history**, not full event sourcing:
 
-## Runtime events
+- the persisted expedition snapshot is authoritative current state;
+- player knowledge is part of the persisted expedition envelope;
+- runtime events are retained separately in `expedition_events` for auditability, session history, debugging, and future filtered projections;
+- `(expedition_id, sequence)` is unique, so saving/reloading does not duplicate history;
+- reloading reconstructs `ExpeditionState.History` in sequence order before the next deterministic transition.
 
-Important transitions append `CrawlRuntimeEvent` records. Current event kinds cover:
+An expedition record also persists pause reason and remaining watch time, because those are application resume state returned by the engine in addition to the core expedition snapshot.
 
-- watch start/completion;
-- navigation resolution;
-- becoming lost;
-- veer changes/resets and reorientation;
-- direction changes;
-- travel resolution and distance traveled;
-- hex exits/entries;
-- encounter checks and triggered encounters;
-- keyed-location encounters;
-- location/feature discovery;
-- navigation/condition decision points;
-- DM overrides.
+## Persistent DM workflow
 
-The history is intentionally event-like for auditability and future persistence, but the current runtime is not an event-sourced storage design. Persistence remains deferred.
+The DM application now starts or reopens expeditions against persisted overworlds. The runtime view exposes current hex, intended/actual course, lost/veer state, distance/progress, watch state, pause reason, subject-specific discovery, and event history.
 
-## DM-facing demonstrator
+Every runtime mutation carries an optimistic `ExpectedVersion`. Two stale browser tabs therefore receive a conflict instead of one silently overwriting the other's newer expedition snapshot.
 
-The Web demonstrator exposes the runtime through the same backend in standalone and hosted operation. It provides:
-
-- procedure-profile selection;
-- map orientation, scale, and unit controls;
-- intended direction, pace, independent watch activities, and navigation-aid inputs;
-- fixed/variable distance and hex-step inputs as appropriate to the profile;
-- automatic distance and navigation roll helpers that only prefill explicit resolved values;
-- manual/external/override provenance selection;
-- deliberate double-back and multi-boundary continuation controls;
-- encounter outcome and timing inputs;
-- lost-recognition/reorientation controls when the engine pauses for them;
-- current hex, intended/actual course, lost/veer state, progress, watch remainder, and pause reason;
-- an expedition marker on the canvas;
-- subject-specific manual discovery controls;
-- recent runtime event history.
-
-Changing the map's grid scale/orientation does not silently mutate an active expedition. The demonstrator requires an explicit runtime reset to start the expedition against the changed grid definition.
-
-The demonstrator POST endpoints mutate only process-local demonstration state. They are not campaign persistence and do not establish an authentication or authorization model.
+Grid geometry can not be changed after an expedition exists for the world. This prevents reload from reinterpreting persisted hex/spatial state against a different coordinate system.
 
 ## Alexandrian coverage
 
-The implementation was checked against the supplied Alexandrian references:
+The existing implementation continues to cover the tested Alexandrian-inspired behaviors established in the runtime slice: watch-based travel, resolved variable travel distance, intended versus actual course, getting lost, persistent veer, near/far/back abstract progress, direction changes, deliberate single-hex double-back, multi-hex forward travel, encounter timing, keyed discovery, and explicit pause/resume decisions.
 
-- https://thealexandrian.net/wordpress/17308/roleplaying-games/hexcrawl
-- https://thealexandrian.net/wordpress/46020/roleplaying-games/5e-hexcrawl
-- https://thealexandrian.net/wordpress/46198/roleplaying-games/5e-hexcrawl-part-5-encounters
-- https://thealexandrian.net/wordpress/46226/roleplaying-games/5e-hexcrawl-part-7-watch-actions
-- https://thealexandrian.net/wordpress/46262/roleplaying-games/5e-hexcrawl-part-8-example-of-play
-- https://thealexandrian.net/wordpress/50363/roleplaying-games/hexcrawl-addendum-near-far
+The Alexandrian profile remains optional. Terrain movement tables, encounter content, watch-action character rules, and edition-specific navigation checks remain outside the engine.
 
-Covered in the executable slice are watch-based travel, resolved variable travel distance, intended versus actual course, getting lost, persistent veer, near/far/back abstract progress, direction changes, deliberate double-back, multi-hex travel, encounter timing, keyed discovery, and explicit pause/resume decisions.
+## Deferred runtime work
 
-The references also contain richer terrain movement tables, encounter-table construction/content, detailed watch-action mechanics, navigation modifiers, and system-specific character rules. Those remain manual or external because this cycle is establishing a reusable runtime engine rather than hard-coding every Alexandrian table or one D&D edition's character mechanics.
-
-## Deferred work
-
-The following remain intentionally outside this development cycle:
-
-- database or campaign persistence;
-- account/campaign authorization and Tool Host ticket introspection;
-- Rules Core integration;
-- authoritative character statistics and watch-action resolution;
-- full terrain-speed policy and travel-rate tables;
-- encounter table storage/selection/content generation;
-- exact arbitrary-bearing sub-hex rules movement;
-- a multi-hex backtracking/route-history stack;
-- separate player-map visibility/fog presentation;
-- map/world editing;
-- source-map image recognition or calibration assistance;
-- battle-map behavior.
-
-## Questions for central planning
-
-The implementation exposes several decisions that should be made before later systems depend on them:
-
-1. Whether `HexDirection` should remain the authoritative six-direction procedure abstraction or be supplemented by an arbitrary-bearing procedure layer distinct from world-space geometry.
-2. Whether deliberate multi-hex backtracking should become a formal route/traversal history structure or remain a higher-level expedition/planning concern.
-3. Which layer should determine terrain/route travel rates and provide revised assumptions after a boundary pause once world editing and campaign persistence exist.
-4. Whether Rules Core should eventually provide resolved navigation/watch-action checks to Hex Crawl, or whether Hex Crawl should continue receiving edition-neutral resolved outcomes from a separate orchestration layer.
-5. How runtime events should be persisted later: as an audit/history stream alongside snapshot state, as true event sourcing, or only as transient UI history.
+Still deferred are Rules Core/Characters integration, authoritative terrain/route mechanical interpretation, encounter-table content, arbitrary-bearing procedure travel, multi-hex route unwinding, real-time multiplayer synchronization, and battle-map behavior.

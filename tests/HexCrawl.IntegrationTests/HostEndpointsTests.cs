@@ -1,36 +1,64 @@
 using System.Net;
-using System.Net.Http.Json;
-using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace HexCrawl.IntegrationTests;
 
-public sealed class HostEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
+public sealed class HostEndpointsTests
 {
-    private readonly HttpClient _client;
-
-    public HostEndpointsTests(WebApplicationFactory<Program> factory)
-    {
-        _client = factory.CreateClient();
-    }
-
     [Theory]
     [InlineData("/health")]
     [InlineData("/ready")]
     [InlineData("/api")]
     public async Task FoundationEndpointsAreAvailable(string path)
     {
-        using var response = await _client.GetAsync(path);
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var database = TestWebHost.NewDatabasePath();
+        try
+        {
+            using var factory = TestWebHost.Create(database);
+            using var client = factory.CreateClient();
+            using var response = await client.GetAsync(path);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+        finally
+        {
+            TestWebHost.DeleteDatabase(database);
+        }
+    }
+
+    [Theory]
+    [InlineData("/worlds")]
+    [InlineData("/worlds/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/edit")]
+    [InlineData("/worlds/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/expeditions/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")]
+    public async Task StandaloneDeepRoutesReturnApplicationShell(string path)
+    {
+        var database = TestWebHost.NewDatabasePath();
+        try
+        {
+            using var factory = TestWebHost.Create(database);
+            using var client = factory.CreateClient();
+            var html = await client.GetStringAsync(path);
+            Assert.Contains("id=\"tool-root\"", html, StringComparison.Ordinal);
+            Assert.Contains("/app.js", html, StringComparison.Ordinal);
+        }
+        finally
+        {
+            TestWebHost.DeleteDatabase(database);
+        }
     }
 
     [Fact]
-    public async Task DemoWorldExposesConfigurableGridWithoutPersistenceDependency()
+    public async Task UnknownApiPathDoesNotFallBackToHtmlShell()
     {
-        using var response = await _client.GetAsync("/api/demo/world?orientation=flat&scale=6");
-        response.EnsureSuccessStatusCode();
-        var document = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
-        Assert.Equal("FlatTop", document.GetProperty("grid").GetProperty("orientation").GetString());
-        Assert.Equal(6, document.GetProperty("grid").GetProperty("neighborCenterDistance").GetProperty("value").GetDouble());
-        Assert.True(document.GetProperty("features").GetArrayLength() >= 3);
+        var database = TestWebHost.NewDatabasePath();
+        try
+        {
+            using var factory = TestWebHost.Create(database);
+            using var client = factory.CreateClient();
+            using var response = await client.GetAsync("/api/not-a-route");
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        }
+        finally
+        {
+            TestWebHost.DeleteDatabase(database);
+        }
     }
 }

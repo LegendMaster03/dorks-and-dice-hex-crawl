@@ -1,63 +1,137 @@
-# Hex Crawl architecture foundation
+# Hex Crawl architecture
 
 ## Boundaries
 
-Hex Crawl starts with four independent state axes:
+Hex Crawl maintains independent state axes rather than turning a rendered hex into the unit of all data:
 
 1. **World/spatial truth** — `OverworldDefinition`, mathematical grid, semantic point/line/region features, locations, and source-map representations.
-2. **Crawl/runtime state** — `ExpeditionState` and `WorldRuntimeState`; movement stores physical distance, not a fraction-of-hex value. Generated features/locations and activation, depletion, or destruction state live here as runtime overlays rather than mutating base world definition.
-3. **Player knowledge** — `PlayerKnowledgeState` records feature/location knowledge and player annotations. There is deliberately no `Hex.IsRevealed` flag.
-4. **Presentation policy** — `MapPresentationPolicy` decides grid and terrain presentation independently of world truth and knowledge.
+2. **Crawl/runtime state** — `ExpeditionState` and `WorldRuntimeState`; movement records physical distance and abstract traversal progress without mutating base geography.
+3. **Player knowledge** — `PlayerKnowledgeState` records subject-specific knowledge. There is deliberately no `Hex.IsRevealed` flag.
+4. **Presentation policy** — `MapPresentationPolicy` and the Canvas renderer decide how authoritative data is presented.
+5. **Procedure configuration** — `CrawlProcedureProfile` defines crawl procedure behavior independently of world geometry. The Alexandrian advanced profile is one preset rather than a mandatory ruleset.
 
-`CrawlProcedureProfile` is a separate procedure configuration axis. The Alexandrian advanced procedure is represented as one baseline preset, not as the definition of hexcrawling.
+The persistence cycle preserves these boundaries. Database concerns do not enter the core spatial/runtime records.
 
-## Continuous overworld
+## Project structure
 
-An `OverworldDefinition` owns one continuous world coordinate space. Imported map images are modeled as `SourceMapRepresentation` records that cover geography within that space. An optional registration transform converts source-image pixels to world coordinates; the transform model supports both affine and projective/homography-style registration. Image boundaries never define world boundaries.
+The solution now has four production projects:
 
-Source-map storage and image registration are deferred. The representation model exists now so later GM/player variants and neighboring/overlapping regional maps do not force an atlas-document redesign.
+- `HexCrawl.Domain` owns spatial, world, knowledge, and deterministic runtime rules.
+- `HexCrawl.Application` owns authenticated use cases, cross-aggregate validation, persistence ports, optimistic-version requirements, and procedure selection.
+- `HexCrawl.Infrastructure` implements the application ports for SQLite persistence and Tool Host authentication redemption.
+- `HexCrawl.Web` owns HTTP contracts, authentication middleware, route hosting, and the TypeScript application.
 
-## Grid and scale
+The application layer was introduced because persistent CRUD, authorization, expedition load/save, and validation across world and expedition aggregates now have real responsibilities that do not belong in either HTTP endpoints or domain types.
 
-The grid is mathematical and independent of imagery. The first implementation supports:
+## Continuous overworld and semantic geometry
 
-- pointy-top and flat-top hexes;
-- axial `q,r` coordinates with stable `HexId` identity;
-- configurable origin and rotation;
-- configurable world-space hex radius;
-- configurable physical center-to-center distance and units;
-- coordinate/world conversion, neighbors, distance, polygon corners, and feature/hex intersection.
+An `OverworldDefinition` is one continuous world coordinate space. The hex grid remains mathematical; creating an overworld does not pre-populate stored hex rows. Only authored semantic data and runtime state are persisted.
 
-The physical scale does not alter grid identity. Runtime movement records `DistanceMeasure` values; any fraction-of-hex display is derived.
+The grid supports pointy-top and flat-top orientation, axial `q,r` coordinates, configurable origin and rotation, world-space radius, and configurable physical center-to-center scale and units. Locations may occupy any `WorldPoint`; they do not need to be at hex centers.
 
-## Semantic spatial features
+Point, line, and region features are stored as real world-space geometry. Categories are strings rather than an exhaustive enum. This allows conventional terrain such as forest, swamp, mountain, grassland, and desert while also allowing campaign-specific terrain. The same extensible category model allows roads, trails, rivers, borders, and other routes without prematurely assigning mechanical effects.
 
-Geography is not owned by individual hex records. Point, linear, and regional features live in world coordinates. `OverworldDefinition.FeaturesIntersecting()` derives feature membership for a hex through geometry queries. This supports roads, rivers, borders, forests, political regions, and other cross-hex structures without duplicating them into each hex.
+`OverworldDefinition.FeaturesIntersecting()` remains the deterministic spatial-query boundary for feature/hex intersection. Future terrain/route resolution should extend tested domain query logic rather than reimplementing geometry in the browser.
 
-Locations are separate semantic objects with discoverability metadata and a deliberately generic `LocationDetailMapReference` extension point. No battle-map behavior exists in this slice.
+## Persistence architecture
 
-## Persistence
+The initial persistent provider is **SQLite**, accessed through `Microsoft.Data.Sqlite` behind `IHexCrawlStore`.
 
-Persistence is intentionally deferred. The first slice proves domain invariants and rendering without choosing a database prematurely. Domain objects have stable IDs and do not depend on HTTP, EF Core, or storage-specific types, so persistence can be introduced behind application/infrastructure boundaries later.
+SQLite fits the current Hex Crawl deployment because the tool is one service with deployment-owned storage, does not require a separate database server for development or CI, supports transactions and optimistic concurrency, and can be mounted as a durable file in the container deployment. It is not exposed to the domain model, so a later operational need can replace the provider without changing spatial/runtime types.
 
-When persistence arrives it must remain deployment-owned and separate from the main site's Identity storage. Campaign/user identity must enter through the Tool Host contract.
+The default development connection string is `Data Source=hex-crawl.db`. Production Compose overrides this with `Data Source=/data/hex-crawl.db` and mounts the named `hex-crawl-data` volume at `/data`. The production deployment replaces the application container without deleting that named volume, so SQLite state survives ordinary redeployment. Credentials and machine-specific storage locations remain deployment configuration and are not committed as secrets.
 
-## Rendering decision
+The schema is versioned through the non-destructive `schema_migrations` table. Startup applies missing forward migrations and never drops or recreates existing production data. Tests create real empty SQLite files and apply the migration from zero.
 
-The first renderer uses Canvas 2D behind `CanvasMapRenderer`. SVG was rejected for the initial map surface because large visible hex counts, semantic overlays, and future large raster source maps would create an unnecessarily large retained DOM. WebGL was not selected yet because the first demonstrator does not need GPU-specific complexity and Canvas 2D can viewport-cull thousands of simple primitives efficiently enough to validate the spatial architecture.
+### World storage
 
-The renderer receives world-space geometry and a viewport transform. This keeps renderer technology out of domain types and preserves a clean path to a WebGL implementation if profiling later shows Canvas is insufficient. Future image-analysis work is also intentionally separate from the renderer and can use WebAssembly, Web Workers, WebGL/WebGPU, or browser CV libraries without changing `OverworldDefinition`.
+`overworlds` stores ownership, stable world ID, name/index metadata, aggregate version/timestamps, and a serialized world snapshot. The snapshot contains the domain grid, semantic geometry, locations, and source-map metadata. A private infrastructure projection handles the polymorphic point/line/region feature representation so database serialization requirements do not leak into `SpatialFeature`.
 
-The TypeScript client contains a small projection/picking mirror of the deterministic C# grid math because pointer interaction and high-frequency rendering can not reasonably round-trip to the server. The duplication is restricted to pure hex projection/rounding and is covered by matching round-trip/distance invariants in both frontend and domain tests. Domain identity, feature intersection, runtime state, knowledge, and procedure semantics remain backend/domain concerns.
+The snapshot approach is intentional for this first aggregate: a world edit is an aggregate-level operation protected by one version, and no stored hex table is needed. It does not prevent later normalization if query volume warrants it.
 
-## Import-analysis boundary
+### Expedition storage
 
-No image recognition is implemented. Future map calibration should produce mathematical grid/alignment data and semantic candidates, not authoritative truth inferred from pixels. Deterministic browser-side techniques such as lattice detection, feature matching, affine/homography registration, image differencing, template matching, and segmentation are preferred; a general AI model is optional and must not become a runtime requirement.
+`expeditions` stores an authoritative runtime snapshot containing traversal, intended/actual direction, lost/veer state, physical distance, elapsed time, completed/active watch state, player knowledge, pause/remainder state, and the full selected `CrawlProcedureProfile` configuration.
 
-## Procedure baseline
+The full procedure configuration is persisted, not merely its key. An existing expedition therefore does not silently change if a built-in profile is modified in a later release.
 
-The initial procedure shape was checked against Justin Alexander's broader Alexandrian hexcrawl material, including wilderness travel, the watch checklist, and the later 5E advanced procedure. The architecture therefore has explicit places for configurable watch length, physical distance traveled, intended versus actual course, lost/veer state, encounter cadence, terrain/route semantics, intra-hex progress, and feature-level discovery.
+Runtime history is stored separately in `expedition_events`, keyed by expedition ID and event sequence. The current expedition snapshot is authoritative; this is **not event sourcing**. Events are retained for auditability, session history, debugging, and future filtered player projections. Saving uses insert-if-absent semantics on `(expedition_id, sequence)` so reload/resume does not duplicate prior events.
 
-Reference: https://thealexandrian.net/wordpress/17308/roleplaying-games/hexcrawl
+Player knowledge remains a separate logical state object inside the expedition persistence envelope. One expedition currently owns one party-knowledge scope. Discovering a location does not reveal another location or feature in the same hex.
 
-Those concepts are capability requirements, not mandatory rules. `CrawlProcedureProfile.AlexandrianAdvancedBaseline()` is one preset over the general model. The grid itself does not assume a 12-mile scale, the encounter cadence can be per-watch/per-day/none/custom, navigation and veering can be disabled, and movement can use continuous physical distance or coarse hex steps. More detailed terrain-speed and encounter-table policy is intentionally deferred with the full crawl runtime.
+## Ownership and authentication
+
+Persistent APIs require a stable user identity. Hosted requests use the current Dorks & Dice Tool Host ticket/introspection contract; the browser does not provide an authoritative user ID. The backend redeems the one-time ticket and derives `ClaimTypes.NameIdentifier` from the returned Tool Host context.
+
+Every overworld has an `OwnerUserId`. Enumeration filters by that owner, direct loads require that owner, expedition creation requires access to the parent overworld, and expedition load/mutation is owner-scoped and rechecks the associated overworld. A guessed private ID therefore does not grant access.
+
+This is intentionally an ownership model rather than full campaign sharing. A later access policy can expand the authorization decision without changing stable world/expedition identity.
+
+Standalone development can enable `ToolHost:StandaloneIdentity:Enabled` with an explicit configured user ID. It is disabled by default and is not a production authentication substitute.
+
+See `docs/tool-hosting.md` for the exact hosted boundary.
+
+## Optimistic concurrency and mutation safety
+
+Worlds and expeditions have monotonically increasing aggregate versions. Mutations carry `ExpectedVersion`; stale writes return HTTP 409 instead of silently overwriting a newer tab's work.
+
+The first version takes conservative safety rules where persisted runtime references are possible:
+
+- grid geometry can be edited before expeditions exist;
+- consequential grid changes are blocked once an expedition exists so persisted spatial/runtime state is not silently reinterpreted;
+- locations and spatial features can be edited while retaining their stable IDs;
+- deleting a location or feature is blocked once an expedition exists because runtime history or knowledge may reference that ID.
+
+These rules can later be refined with explicit archival/reference analysis, but they avoid data corruption now.
+
+## API contracts
+
+The Web layer exposes resource-oriented contracts instead of persistence entities:
+
+- `GET/POST /api/overworlds`
+- `GET/PUT /api/overworlds/{worldId}`
+- location CRUD under `/api/overworlds/{worldId}/locations`
+- feature CRUD under `/api/overworlds/{worldId}/features`
+- source-map metadata CRUD under `/api/overworlds/{worldId}/source-maps`
+- `GET /api/runtime/profiles`
+- `GET/POST /api/overworlds/{worldId}/expeditions`
+- `GET /api/expeditions/{expeditionId}`
+- `POST /api/expeditions/{expeditionId}/advance`
+- `POST /api/expeditions/{expeditionId}/discover`
+
+HTTP contracts project domain values into stable DTOs; database rows are never exposed directly.
+
+## Frontend and routing
+
+The former single demonstrator has been split into world-list, world-editor, expedition, API, route, and map-surface modules. Application-owned DOM is driven by explicit route/state transitions. Canvas invalidation still goes through `RenderLifecycle`; `MutationObserver` is not used. `ResizeObserver` is limited to the external layout boundary needed for canvas sizing.
+
+Tool-relative routes are:
+
+- `/worlds`
+- `/worlds/{worldId}`
+- `/worlds/{worldId}/edit`
+- `/worlds/{worldId}/expeditions/{expeditionId}`
+
+Standalone mode serves the application shell for deep routes. Embedded mode derives these paths relative to the Tool Host base path, so the main Dorks & Dice site does not need knowledge of internal Hex Crawl routes. Hosted backend calls continue through the Tool Host upstream gateway.
+
+The current editor is intentionally basic. It supports world/grid creation and editing, direct map placement for locations and point features, polyline authoring, simple polygon authoring/editing, free-form semantic categories, expedition creation/reopening, and the existing runtime controls. It stores the existing domain primitives instead of a frontend-specific map format.
+
+## Source-map representations and future files
+
+A world can persist multiple `SourceMapRepresentation` records for the same geography, including GM/player and grid/gridless variants or overlapping regional sources. They remain representations of one overworld rather than separate atlas pages.
+
+Binary image upload remains deferred. Future map files should use deployment-owned blob/file storage while relational/application persistence stores metadata and a stable logical `AssetKey`. `AssetKey` is deliberately not an absolute machine path. A future asset service can resolve it to local durable storage, object storage, or another deployment-specific backend.
+
+This supports multiple versions of the same geography and later pixel-to-world registration transforms without making an image authoritative world truth or changing the overworld model.
+
+## Rendering and import-analysis boundary
+
+Canvas 2D remains the current renderer. World-space geometry and viewport transforms stay outside domain storage, leaving a clean path to WebGL if profiling later justifies it.
+
+Automatic image recognition is not part of this cycle. Future calibration/import should produce proposed grid/alignment data and semantic candidates. Image differencing, grid detection, icon recognition, road extraction, terrain segmentation, and optional local AI remain separate import concerns.
+
+## Deferred work
+
+The persistence/authoring slice intentionally does not add campaign sharing, real-time collaborative editing, Rules Core/Characters/Block Initiative integration, arbitrary-bearing runtime travel, multi-hex automatic backtracking, battle maps, binary map upload, image registration UI, or computer vision.
+
+The main architectural question for the next map-import cycle is the concrete deployment asset-storage service behind logical `AssetKey` references. The current world/persistence model does not otherwise require redesign for imported source maps.

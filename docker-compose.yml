@@ -1,12 +1,18 @@
 services:
-  hex-crawl:
+  dorks-and-dice-hex-crawl:
     image: dorks-and-dice-hex-crawl:latest
     container_name: dorks-and-dice-hex-crawl
     restart: unless-stopped
     environment:
+      ConnectionStrings__HexCrawl: "Data Source=/data/hex-crawl.db"
       ToolHost__BaseUrl: "http://dorks-and-dice-site:8080"
+    volumes:
+      - hex-crawl-data:/data
     networks:
       - dorks-and-dice-backend
+
+volumes:
+  hex-crawl-data:
 
 networks:
   dorks-and-dice-backend:

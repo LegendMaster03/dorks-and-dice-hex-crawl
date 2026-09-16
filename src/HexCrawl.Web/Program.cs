@@ -1,49 +1,88 @@
-using HexCrawl.Domain.Spatial;
-using HexCrawl.Web.Demo;
+using System.Text.Json.Serialization;
+using HexCrawl.Application;
+using HexCrawl.Application.Hosting;
+using HexCrawl.Application.Persistence;
+using HexCrawl.Infrastructure.Hosting;
+using HexCrawl.Infrastructure.Persistence;
+using HexCrawl.Web.Api;
+using HexCrawl.Web.Authentication;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+
+var connectionString = builder.Configuration.GetConnectionString("HexCrawl");
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+    connectionString = "Data Source=hex-crawl.db";
+}
+
+var toolHostBaseUrl = builder.Configuration["ToolHost:BaseUrl"];
+Uri? toolHostBaseUri = null;
+if (!string.IsNullOrWhiteSpace(toolHostBaseUrl))
+{
+    if (!Uri.TryCreate(toolHostBaseUrl, UriKind.Absolute, out toolHostBaseUri)
+        || (toolHostBaseUri.Scheme != Uri.UriSchemeHttp
+            && toolHostBaseUri.Scheme != Uri.UriSchemeHttps))
+    {
+        throw new InvalidOperationException("ToolHost:BaseUrl must be an absolute HTTP or HTTPS URL.");
+    }
+}
+
+builder.Services.AddSingleton<IHexCrawlStore>(_ => new SqliteHexCrawlStore(connectionString));
+builder.Services.AddScoped<HexCrawlService>();
+builder.Services
+    .AddHttpClient<IToolHostAuthenticationClient, DorksAndDiceToolHostAuthenticationClient>(client =>
+    {
+        client.Timeout = TimeSpan.FromSeconds(3);
+        client.BaseAddress = toolHostBaseUri;
+    })
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+    {
+        AllowAutoRedirect = false,
+        UseCookies = false
+    });
 builder.Services.AddHealthChecks();
-builder.Services.AddSingleton<DemoRuntimeSessionStore>();
 
 var app = builder.Build();
 
+await using (var scope = app.Services.CreateAsyncScope())
+{
+    await scope.ServiceProvider.GetRequiredService<IHexCrawlStore>().InitializeAsync();
+}
+
+app.UseMiddleware<HexCrawlExceptionMiddleware>();
+app.UseMiddleware<HostedToolAuthenticationMiddleware>();
 app.UseStaticFiles();
 
 app.MapHealthChecks("/health");
-app.MapGet("/ready", () => Results.Ok(new { status = "ready" }));
+app.MapGet("/ready", () => Results.Ok(new
+{
+    status = "ready",
+    database = "sqlite",
+    persistence = "initialized"
+}));
 
 app.MapGet("/api", () => Results.Ok(new
 {
     service = "Hex Crawl API",
-    version = "0.2-dev",
-    status = "crawl-runtime-demonstrator"
+    version = "0.3-dev",
+    status = "persistent-world-authoring",
+    endpointFamilies = new[] { "overworlds", "features", "locations", "source-maps", "expeditions", "runtime" }
 }));
 
-app.MapGet("/api/demo/world", (string? orientation, double? scale, string? unit) =>
-{
-    var parsedOrientation = string.Equals(orientation, "flat", StringComparison.OrdinalIgnoreCase)
-        ? HexOrientation.FlatTop
-        : HexOrientation.PointyTop;
+PersistentApiEndpoints.Map(app);
 
-    var distance = scale is > 0 and <= 10000 ? scale.Value : 12d;
-    var distanceUnit = string.Equals(unit, "km", StringComparison.OrdinalIgnoreCase)
-        ? DistanceUnit.Kilometers
-        : DistanceUnit.Miles;
-    return Results.Ok(DemoWorldResponse.From(DemoWorldFactory.Create(parsedOrientation, distance, distanceUnit)));
-});
+app.MapGet("/", () => Shell());
+app.MapFallback((HttpContext context) =>
+    context.Request.Path.StartsWithSegments("/api")
+        ? Results.NotFound()
+        : Shell());
 
-app.MapGet("/api/demo/runtime/profiles", () => Results.Ok(
-    DemoRuntimeProfiles.All.Select(DemoRuntimeProfileResponse.From).ToArray()));
-app.MapGet("/api/demo/runtime", (DemoRuntimeSessionStore sessions) => Results.Ok(sessions.Snapshot()));
-app.MapPost("/api/demo/runtime/reset", (DemoRuntimeStartRequest request, DemoRuntimeSessionStore sessions) =>
-    ResolveDemoRequest(() => sessions.Reset(request)));
-app.MapPost("/api/demo/runtime/advance", (DemoRuntimeAdvanceRequest request, DemoRuntimeSessionStore sessions) =>
-    ResolveDemoRequest(() => sessions.Advance(request)));
-app.MapPost("/api/demo/runtime/discover", (DemoDiscoveryRequest request, DemoRuntimeSessionStore sessions) =>
-    ResolveDemoRequest(() => sessions.Discover(request)));
+app.Run();
 
-app.MapGet("/", () => Results.Content(
+static IResult Shell() => Results.Content(
     """
     <!doctype html>
     <html lang="en">
@@ -58,24 +97,6 @@ app.MapGet("/", () => Results.Content(
     </body>
     </html>
     """,
-    "text/html; charset=utf-8"));
-
-app.Run();
-
-static IResult ResolveDemoRequest(Func<DemoRuntimeResponse> action)
-{
-    try
-    {
-        return Results.Ok(action());
-    }
-    catch (ArgumentException exception)
-    {
-        return Results.BadRequest(new { error = exception.Message });
-    }
-    catch (InvalidOperationException exception)
-    {
-        return Results.BadRequest(new { error = exception.Message });
-    }
-}
+    "text/html; charset=utf-8");
 
 public partial class Program;

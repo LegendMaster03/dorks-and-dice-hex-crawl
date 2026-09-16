@@ -2,36 +2,26 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { HexCrawlApi } from "../.embedded-smoke-dist/api.js";
 
-test("Embedded Module mode loads Tool Host context and routes reads and writes through upstream", async () => {
+test("Embedded Module mode routes persistent reads and writes through Tool Host upstream", async () => {
     const originalFetch = globalThis.fetch;
     const calls = [];
     const context = {
-        contractVersion: 2,
+        contractVersion: 1,
         toolSlug: "hex-crawl",
         siteMode: "dorks",
         apiBaseUrl: "/tool-host/hex-crawl/api/",
         toolBasePath: "/tools/hex-crawl",
-        toolRoute: "/"
+        toolRoute: "/worlds"
     };
 
     globalThis.fetch = async (input, init = {}) => {
         const url = String(input);
         calls.push({ url, method: init.method ?? "GET" });
-
-        if (url === "/tool-context") {
-            return Response.json(context);
+        if (url === "/tool-context") return Response.json(context);
+        if (url === "/tool-host/hex-crawl/api/upstream/api/overworlds") {
+            if ((init.method ?? "GET") === "POST") return Response.json({ id: "world-1" });
+            return Response.json([]);
         }
-
-        if (url === "/tool-host/hex-crawl/api/upstream/api/demo/runtime") {
-            return Response.json({ mode: "embedded-runtime" });
-        }
-
-        if (url === "/tool-host/hex-crawl/api/upstream/api/demo/runtime/advance") {
-            assert.equal(init.method, "POST");
-            assert.match(String(init.body), /"intendedDirection":0/);
-            return Response.json({ mode: "embedded-runtime-advanced" });
-        }
-
         throw new Error(`Unexpected smoke-test fetch: ${url}`);
     };
 
@@ -39,17 +29,21 @@ test("Embedded Module mode loads Tool Host context and routes reads and writes t
         const root = { dataset: { toolContextUrl: "/tool-context" } };
         const { api, context: loadedContext } = await HexCrawlApi.create(root);
         assert.equal(loadedContext.toolSlug, "hex-crawl");
-
-        const runtime = await api.getRuntime();
-        assert.equal(runtime.mode, "embedded-runtime");
-
-        const advanced = await api.advanceRuntime({ intendedDirection: 0 });
-        assert.equal(advanced.mode, "embedded-runtime-advanced");
-
+        assert.deepEqual(await api.listOverworlds(), []);
+        const created = await api.createOverworld({
+            name: "Smoke world",
+            orientation: "PointyTop",
+            origin: { x: 0, y: 0 },
+            rotationDegrees: 0,
+            hexRadiusWorldUnits: 1,
+            neighborCenterDistance: 12,
+            distanceUnit: { kind: "Mile", symbol: "mi", metersPerUnit: 1609.344 }
+        });
+        assert.equal(created.id, "world-1");
         assert.deepEqual(calls, [
             { url: "/tool-context", method: "GET" },
-            { url: "/tool-host/hex-crawl/api/upstream/api/demo/runtime", method: "GET" },
-            { url: "/tool-host/hex-crawl/api/upstream/api/demo/runtime/advance", method: "POST" }
+            { url: "/tool-host/hex-crawl/api/upstream/api/overworlds", method: "GET" },
+            { url: "/tool-host/hex-crawl/api/upstream/api/overworlds", method: "POST" }
         ]);
     } finally {
         globalThis.fetch = originalFetch;

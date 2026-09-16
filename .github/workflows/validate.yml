@@ -24,7 +24,7 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
-      - name: Build frontend
+      - name: Build and test frontend
         working-directory: src/HexCrawl.Web/Client
         run: |
           npm install --no-audit --no-fund
@@ -37,25 +37,72 @@ jobs:
       - name: Restore
         run: dotnet restore dorks-and-dice-hex-crawl.slnx
 
-      - name: Test
-        run: dotnet test dorks-and-dice-hex-crawl.slnx --configuration Release --no-restore -p:BuildClient=false
+      - name: Build .NET solution
+        run: dotnet build dorks-and-dice-hex-crawl.slnx --configuration Release --no-restore -p:BuildClient=false
+
+      - name: Test domain
+        run: timeout 120s dotnet test tests/HexCrawl.Domain.Tests/HexCrawl.Domain.Tests.csproj --configuration Release --no-restore --no-build -p:BuildClient=false --blame-hang --blame-hang-timeout 30s --logger "console;verbosity=normal"
+
+      - name: Test application and persistence
+        run: timeout 120s dotnet test tests/HexCrawl.Application.Tests/HexCrawl.Application.Tests.csproj --configuration Release --no-restore --no-build -p:BuildClient=false --blame-hang --blame-hang-timeout 30s --logger "console;verbosity=normal"
+
+      - name: Test HTTP integration
+        run: timeout 120s dotnet test tests/HexCrawl.IntegrationTests/HexCrawl.IntegrationTests.csproj --configuration Release --no-restore --no-build -p:BuildClient=false --blame-hang --blame-hang-timeout 30s --logger "console;verbosity=normal"
 
       - name: Build container
         run: docker build -t dorks-and-dice-hex-crawl:test -f src/HexCrawl.Web/Dockerfile .
 
-      - name: Smoke test standalone container
+      - name: Smoke test standalone container and restart persistence
         run: |
-          docker run -d --name hex-crawl-smoke -p 127.0.0.1:18092:8080 dorks-and-dice-hex-crawl:test
+          set -euo pipefail
+          data_dir="$RUNNER_TEMP/hex-crawl-smoke-data"
+          response_dir="$RUNNER_TEMP/hex-crawl-smoke-responses"
+          mkdir -p "$data_dir" "$response_dir"
+
+          start_container() {
+            docker run -d --name hex-crawl-smoke \
+              -p 127.0.0.1:18092:8080 \
+              -v "$data_dir:/data" \
+              -e 'ConnectionStrings__HexCrawl=Data Source=/data/hex-crawl.db' \
+              -e 'ToolHost__StandaloneIdentity__Enabled=true' \
+              -e 'ToolHost__StandaloneIdentity__UserId=ci-smoke-dm' \
+              -e 'ToolHost__StandaloneIdentity__DisplayName=CI Smoke DM' \
+              dorks-and-dice-hex-crawl:test >/dev/null
+          }
+
+          wait_ready() {
+            for i in {1..30}; do
+              if curl -fsS http://127.0.0.1:18092/health -o "$response_dir/health.txt" \
+                && grep -q 'Healthy' "$response_dir/health.txt" \
+                && curl -fsS http://127.0.0.1:18092/ready -o "$response_dir/ready.json" \
+                && grep -q '"status":"ready"' "$response_dir/ready.json"; then
+                return 0
+              fi
+              sleep 1
+            done
+            docker logs hex-crawl-smoke
+            return 1
+          }
+
           trap 'docker rm -f hex-crawl-smoke >/dev/null 2>&1 || true' EXIT
-          ready=false
-          for i in {1..20}; do
-            if curl -fsS http://127.0.0.1:18092/health | grep -q 'Healthy' \
-              && curl -fsS http://127.0.0.1:18092/ready | grep -q '"status":"ready"' \
-              && curl -fsS http://127.0.0.1:18092/ | grep -q 'tool-root' \
-              && curl -fsS http://127.0.0.1:18092/app.js | grep -q 'tool-root'; then
-              ready=true
-              break
-            fi
-            sleep 1
-          done
-          test "$ready" = true
+          start_container
+          wait_ready
+
+          curl -fsS http://127.0.0.1:18092/ -o "$response_dir/root.html"
+          grep -q 'tool-root' "$response_dir/root.html"
+          curl -fsS http://127.0.0.1:18092/worlds/00000000-0000-0000-0000-000000000001/edit -o "$response_dir/deep-route.html"
+          grep -q 'tool-root' "$response_dir/deep-route.html"
+          curl -fsS http://127.0.0.1:18092/app.js -o "$response_dir/app.js"
+          grep -q 'tool-root' "$response_dir/app.js"
+
+          curl -fsS -X POST http://127.0.0.1:18092/api/overworlds \
+            -H 'Content-Type: application/json' \
+            --data '{"name":"CI restart proof","orientation":"PointyTop","origin":{"x":0,"y":0},"rotationDegrees":0,"hexRadiusWorldUnits":1,"neighborCenterDistance":12,"distanceUnit":{"kind":"Mile","symbol":"mi","metersPerUnit":1609.344}}' \
+            -o "$response_dir/create-world.json"
+          grep -q 'CI restart proof' "$response_dir/create-world.json"
+
+          docker rm -f hex-crawl-smoke >/dev/null
+          start_container
+          wait_ready
+          curl -fsS http://127.0.0.1:18092/api/overworlds -o "$response_dir/worlds-after-restart.json"
+          grep -q 'CI restart proof' "$response_dir/worlds-after-restart.json"

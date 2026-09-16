@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using HexCrawl.Domain.Spatial;
 
 namespace HexCrawl.Domain.Runtime;
@@ -18,6 +19,7 @@ public readonly record struct HexDirection
 
     public HexDirection Rotate(int steps) => new(Mod(Value + steps, 6));
 
+    [JsonIgnore]
     public HexDirection Opposite => Rotate(3);
 
     public int SeparationFrom(HexDirection other)
