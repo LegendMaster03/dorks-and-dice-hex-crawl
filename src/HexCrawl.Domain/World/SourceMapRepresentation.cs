@@ -50,6 +50,8 @@ public sealed record MapRegistrationTransform(
     }
 }
 
+public sealed record MapRegistrationControlPoint(WorldPoint SourcePixel, WorldPoint WorldPoint);
+
 public sealed record SourceMapRepresentation(
     Guid Id,
     string GeographyKey,
@@ -58,4 +60,8 @@ public sealed record SourceMapRepresentation(
     string AssetKey,
     bool ContainsBakedGrid,
     MapRegistrationTransform? Alignment,
-    IReadOnlyList<WorldPoint> WorldCoverageBoundary);
+    IReadOnlyList<WorldPoint> WorldCoverageBoundary,
+    int PixelWidth = 0,
+    int PixelHeight = 0,
+    string MediaType = "application/octet-stream",
+    string? OriginalFileName = null);
