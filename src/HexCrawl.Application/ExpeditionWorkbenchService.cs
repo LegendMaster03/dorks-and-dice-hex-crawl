@@ -158,9 +158,12 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
             plan,
             new WatchAdvanceInputs(travel, navigation, encounter, boundaryDecision, command.DmOverrideNote));
 
+        var knowledgeAfterRuntime = presentation.AutomationMode == PresentationAutomationMode.DmControlled
+            ? knowledge
+            : result.Knowledge;
         var projectedKnowledge = PresentationKnowledgeProjection.ApplyEnteredHexes(
             presentation,
-            result.Knowledge,
+            knowledgeAfterRuntime,
             result.Events
                 .Where(runtimeEvent => runtimeEvent.Kind == CrawlRuntimeEventKind.HexEntered)
                 .Select(runtimeEvent => runtimeEvent.Hex));
