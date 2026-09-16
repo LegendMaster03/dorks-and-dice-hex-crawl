@@ -127,9 +127,16 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
         var encounterProvenance = Provenance(command.EncounterResolutionSource, command.ResolutionSource, command.EncounterResolutionNote, command.DmOverrideNote);
         var boundaryProvenance = Provenance(command.BoundaryResolutionSource, command.ResolutionSource, command.BoundaryResolutionNote, command.DmOverrideNote);
 
+        var encounterDue = ExpeditionProcedureRequirements.IsEncounterCheckDue(profile, expedition.State);
+        var runtimeProfile = profile.EncounterCadence == EncounterCheckCadence.PerDay
+            && expedition.State.ActiveWatch is null
+            && !encounterDue
+                ? profile with { EncounterCadence = EncounterCheckCadence.None }
+                : profile;
+
         var travel = BuildTravel(profile, world.World.Grid.NeighborCenterDistance.Unit, command, travelProvenance);
         var navigation = BuildNavigation(profile, expedition.State, command, navigationProvenance);
-        var encounter = BuildEncounter(profile, expedition.State, command, encounterProvenance);
+        var encounter = BuildEncounter(runtimeProfile, expedition.State, command, encounterProvenance);
         var boundaryDecision = command.RecognizedLost.HasValue || command.Reorient.HasValue
             ? new BoundaryNavigationDecision(command.RecognizedLost ?? false, command.Reorient ?? false, boundaryProvenance)
             : null;
@@ -145,7 +152,7 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
 
         var result = _runtime.Advance(
             world.World,
-            profile,
+            runtimeProfile,
             expedition.State,
             knowledge,
             plan,

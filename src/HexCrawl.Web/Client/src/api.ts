@@ -7,12 +7,14 @@ import type {
     Location,
     Overworld,
     OverworldSummary,
+    PresentationProfile,
     RegistrationControlPoint,
     RuntimeAdvanceRequest,
     RuntimeProfile,
     SourceMapList,
     SourceMapRole,
     SpatialFeature,
+    StartExpeditionInput,
     ToolHostContext,
     WorldPoint
 } from "./types";
@@ -163,12 +165,25 @@ export class HexCrawlApi {
         return this.getJson("/api/runtime/profiles", "Runtime profiles");
     }
 
+    public getPresentationProfiles(): Promise<PresentationProfile[]> {
+        return this.getJson("/api/presentation/presets", "Presentation presets");
+    }
+
     public listExpeditions(worldId: string): Promise<ExpeditionSummary[]> {
         return this.getJson(`/api/overworlds/${encodeURIComponent(worldId)}/expeditions`, "Expedition list");
     }
 
     public startExpedition(worldId: string, name: string, procedureKey: string, startHex: HexCoordinate): Promise<ExpeditionDetail> {
-        return this.sendJson("POST", `/api/overworlds/${encodeURIComponent(worldId)}/expeditions`, { name, procedureKey, startHex }, "Start expedition");
+        return this.startConfiguredExpedition(worldId, {
+            name,
+            procedureKey,
+            presentationKey: "exploration-map",
+            startHex
+        });
+    }
+
+    public startConfiguredExpedition(worldId: string, input: StartExpeditionInput): Promise<ExpeditionDetail> {
+        return this.sendJson("POST", `/api/overworlds/${encodeURIComponent(worldId)}/expeditions`, input, "Start expedition");
     }
 
     public getExpedition(expeditionId: string): Promise<ExpeditionDetail> {

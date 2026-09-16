@@ -34,8 +34,6 @@ public sealed record CrawlProcedureProfile
     public bool DirectionChangesCostProgress { get; init; }
     public bool SupportsDeliberateDoubleBack { get; init; } = true;
 
-    // These are ratios of the grid's physical neighbor-center distance. They preserve
-    // tabletop abstract hex progress without assuming a 12-mile grid.
     public double StartingExitProgressFactor { get; init; } = 0.5d;
     public double NearExitProgressFactor { get; init; } = 0.5d;
     public double FarExitProgressFactor { get; init; } = 1d;
@@ -71,10 +69,6 @@ public sealed record CrawlProcedureProfile
         if (TravelResolution == TravelResolutionMode.ContinuousDistance && !TracksIntraHexProgress)
         {
             throw new InvalidOperationException("Continuous-distance travel currently requires intra-hex progress tracking.");
-        }
-        if (UsesPersistentVeer && !UsesNavigationChecks)
-        {
-            throw new InvalidOperationException("Persistent veer requires navigation checks to be enabled.");
         }
         if (DirectionChangesCostProgress && !TracksIntraHexProgress)
         {
