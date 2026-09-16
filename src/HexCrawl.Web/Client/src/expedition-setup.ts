@@ -1,4 +1,5 @@
 import type { HexCrawlApi } from "./api";
+import { newExpeditionEncounterCadences } from "./expedition-input-policy";
 import type { PresentationProfile, RuntimeProfile } from "./types";
 import { clearUiError, showUiError } from "./ui-error";
 
@@ -30,7 +31,7 @@ export async function enhanceExpeditionSetup(
                 <label>Watch length (hours) <input name="watchHours" type="number" min="0.01" step="any"></label>
                 <label>Travel model <select name="travelResolution"><option>ContinuousDistance</option><option>HexSteps</option></select></label>
                 <label>Travel distance <select name="actualDistanceResolution"><option>Fixed</option><option>VariableResolved</option></select></label>
-                <label>Encounter cadence <select name="encounterCadence"><option>None</option><option>PerWatch</option><option>PerDay</option><option>Custom</option></select></label>
+                <label>Encounter cadence <select name="encounterCadence"></select></label>
                 <label><input name="usesNavigationChecks" type="checkbox"> Navigation checks</label>
                 <label><input name="usesPersistentVeer" type="checkbox"> Persistent veer</label>
                 <label><input name="tracksIntraHexProgress" type="checkbox"> Intra-hex progress</label>
@@ -53,6 +54,8 @@ export async function enhanceExpeditionSetup(
     for (const profile of profiles) procedure.append(option(profile.key, profile.name));
     const presentation = select(form, "presentation");
     for (const policy of presentations) presentation.append(option(policy.key, policy.name));
+    const encounterCadence = select(form, "encounterCadence");
+    for (const cadence of newExpeditionEncounterCadences) encounterCadence.append(option(cadence, cadence));
     if (presentations.some(policy => policy.key === "exploration-map")) presentation.value = "exploration-map";
 
     const customization = required<HTMLElement>(form, "[data-customization]");
