@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { manualEntryResolutionSources, newExpeditionEncounterCadences } from "../.test-dist/expedition-input-policy.js";
 import { encounterCheckDue, navigationResolutionDue, pauseInstruction, watchActionLabel, watchPhase } from "../.test-dist/expedition-workflow.js";
 
 function runtime(overrides = {}) {
@@ -12,6 +13,16 @@ function runtime(overrides = {}) {
     };
 }
 
+test("manual provenance choices can not claim an automatic helper roll", () => {
+    assert.deepEqual(manualEntryResolutionSources, ["ProcedureDefault", "ManualRoll", "ExternalSystem", "DmOverride"]);
+    assert.equal(manualEntryResolutionSources.includes("AutomaticRoll"), false);
+});
+
+test("new expedition customization exposes only implemented encounter cadences", () => {
+    assert.deepEqual(newExpeditionEncounterCadences, ["None", "PerWatch", "PerDay"]);
+    assert.equal(newExpeditionEncounterCadences.includes("Custom"), false);
+});
+
 test("conditional workflow hides resolutions that are not due", () => {
     const none = runtime({ profile: { encounterCadence: "None", usesNavigationChecks: false } });
     assert.equal(encounterCheckDue(none), false);
@@ -22,6 +33,14 @@ test("conditional workflow hides resolutions that are not due", () => {
     assert.equal(navigationResolutionDue(watch, false, false), true);
     assert.equal(navigationResolutionDue(watch, true, false), false);
     assert.equal(navigationResolutionDue(watch, false, true), false);
+});
+
+test("legacy custom cadence retains historical per-watch workflow behavior", () => {
+    const legacy = runtime({ profile: { encounterCadence: "Custom", usesNavigationChecks: false } });
+    assert.equal(encounterCheckDue(legacy), true);
+
+    const active = { ...legacy, expedition: { ...legacy.expedition, activeWatchNumber: 1 } };
+    assert.equal(encounterCheckDue(active), false);
 });
 
 test("per-day cadence only requests one encounter resolution per expedition day", () => {
