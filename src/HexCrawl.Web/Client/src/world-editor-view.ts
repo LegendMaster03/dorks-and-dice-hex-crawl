@@ -1,5 +1,6 @@
 import type { HexCrawlApi } from "./api";
 import { MapSurface } from "./map-surface";
+import { SourceMapWorkspace } from "./source-map-workspace";
 import type { Location, Overworld, SpatialFeature, WorldPoint } from "./types";
 import { clearUiError, showUiError } from "./ui-error";
 import { customUnitFieldsVisible, gridWithSelectedUnit } from "./world-form";
@@ -20,6 +21,7 @@ export async function renderWorldEditor(
     let placement: "location" | "point" | "line" | "region" | null = null;
     let draft: WorldPoint[] = [];
     let disposed = false;
+    let sourceMapWorkspace: SourceMapWorkspace | null = null;
 
     root.innerHTML = `
         <section class="hc-page hc-workspace">
@@ -131,7 +133,6 @@ export async function renderWorldEditor(
         fillGrid();
         renderLocations();
         renderFeatures();
-        required<HTMLElement>(root, "[data-source-maps]").textContent = `${next.sourceMaps.length} registered source-map representation(s).`;
         mapSurface.requestRender();
     };
 
@@ -386,10 +387,24 @@ export async function renderWorldEditor(
         });
     });
 
+    const sourceMapPlaceholder = required<HTMLElement>(root, "[data-source-maps]");
+    const sourceMapDetails = sourceMapPlaceholder.closest("details");
+    if (!(sourceMapDetails instanceof HTMLDetailsElement)) throw new Error("Source-map workspace requires a details container.");
+    sourceMapWorkspace = new SourceMapWorkspace(
+        sourceMapDetails,
+        api,
+        mapSurface,
+        () => world,
+        applyWorld,
+        mapHint,
+        error);
+    await sourceMapWorkspace.initialize();
+
     updatePointFieldVisibility();
     applyWorld(world);
     return () => {
         disposed = true;
+        sourceMapWorkspace?.dispose();
         mapSurface.dispose();
     };
 }

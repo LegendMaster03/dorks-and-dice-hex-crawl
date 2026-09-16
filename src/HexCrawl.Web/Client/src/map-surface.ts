@@ -10,6 +10,7 @@ export class MapSurface {
     private readonly lifecycle = new RenderLifecycle();
     private readonly resizeObserver: ResizeObserver;
     private disposed = false;
+    private clickInterceptor: ((point: WorldPoint) => boolean) | null = null;
 
     public constructor(
         host: HTMLElement,
@@ -19,17 +20,19 @@ export class MapSurface {
         this.canvas.className = "hc-map-canvas";
         this.canvas.tabIndex = 0;
         host.replaceChildren(this.canvas);
-        this.renderer = new CanvasMapRenderer(this.canvas, this.viewport, getWorld);
+        this.renderer = new CanvasMapRenderer(this.canvas, this.viewport, getWorld, () => this.requestRender());
         this.lifecycle.register("map", () => this.renderer.render());
 
         this.canvas.addEventListener("click", event => {
-            if (!onWorldClick || event.button !== 0) return;
+            if (event.button !== 0) return;
             const rect = this.canvas.getBoundingClientRect();
-            onWorldClick(this.viewport.screenToWorld(
+            const point = this.viewport.screenToWorld(
                 event.clientX - rect.left,
                 event.clientY - rect.top,
                 rect.width,
-                rect.height));
+                rect.height);
+            if (this.clickInterceptor?.(point)) return;
+            onWorldClick?.(point);
         });
         this.canvas.addEventListener("wheel", event => {
             event.preventDefault();
@@ -67,6 +70,10 @@ export class MapSurface {
         this.requestRender();
     }
 
+    public setClickInterceptor(interceptor: ((point: WorldPoint) => boolean) | null): void {
+        this.clickInterceptor = interceptor;
+    }
+
     public requestRender(): void {
         if (!this.disposed) this.lifecycle.requestRender();
     }
@@ -79,6 +86,8 @@ export class MapSurface {
 
     public dispose(): void {
         this.disposed = true;
+        this.clickInterceptor = null;
         this.resizeObserver.disconnect();
+        this.renderer.dispose();
     }
 }
