@@ -30,6 +30,17 @@ export type CreateOverworldInput = {
 
 export type LocationMutationInput = Omit<Location, "id"> & { expectedVersion: number };
 export type FeatureMutationInput = Omit<SpatialFeature, "id"> & { expectedVersion: number };
+export type ApiErrorKind = "validation" | "auth" | "not-found" | "conflict" | "server";
+
+export class HexCrawlApiError extends Error {
+    public constructor(
+        public readonly status: number,
+        public readonly kind: ApiErrorKind,
+        message: string) {
+        super(message);
+        this.name = "HexCrawlApiError";
+    }
+}
 
 export class HexCrawlApi {
     private constructor(private readonly backendBaseUrl: string) {}
@@ -39,7 +50,7 @@ export class HexCrawlApi {
         if (!contextUrl) return { api: new HexCrawlApi(""), context: null };
 
         const response = await fetch(contextUrl, { headers: { Accept: "application/json" } });
-        if (!response.ok) throw new Error(`Tool Host context request failed (${response.status}).`);
+        if (!response.ok) throw await apiError(response, "Tool Host context");
         const context = await response.json() as ToolHostContext;
         return { api: new HexCrawlApi(backendBaseFromContext(context.apiBaseUrl)), context };
     }
@@ -115,7 +126,7 @@ export class HexCrawlApi {
 
     private async getJson<T>(path: string, label: string): Promise<T> {
         const response = await fetch(`${this.backendBaseUrl}${path}`, { headers: { Accept: "application/json" } });
-        if (!response.ok) throw new Error(await errorMessage(response, label));
+        if (!response.ok) throw await apiError(response, label);
         return await response.json() as T;
     }
 
@@ -125,23 +136,45 @@ export class HexCrawlApi {
             headers: { Accept: "application/json", "Content-Type": "application/json" },
             body: JSON.stringify(body)
         });
-        if (!response.ok) throw new Error(await errorMessage(response, label));
+        if (!response.ok) throw await apiError(response, label);
         return await response.json() as T;
     }
 
     private async deleteJson<T>(path: string, label: string): Promise<T> {
         const response = await fetch(`${this.backendBaseUrl}${path}`, { method: "DELETE", headers: { Accept: "application/json" } });
-        if (!response.ok) throw new Error(await errorMessage(response, label));
+        if (!response.ok) throw await apiError(response, label);
         return await response.json() as T;
     }
 }
 
-async function errorMessage(response: Response, label: string): Promise<string> {
+export async function apiError(response: Response, label: string): Promise<HexCrawlApiError> {
+    const kind = errorKind(response.status);
+    const detail = kind === "validation" ? await validationDetail(response) : null;
+    const message = detail
+        ? `${label} failed: ${detail}`
+        : kind === "auth"
+            ? `${label} failed because the current session is not authorized.`
+            : kind === "not-found"
+                ? `${label} was not found.`
+                : kind === "conflict"
+                    ? `${label} could not be saved because the stored version changed.`
+                    : `${label} request failed (${response.status}).`;
+    return new HexCrawlApiError(response.status, kind, message);
+}
+
+function errorKind(status: number): ApiErrorKind {
+    if (status === 400 || status === 422) return "validation";
+    if (status === 401 || status === 403) return "auth";
+    if (status === 404) return "not-found";
+    if (status === 409 || status === 412) return "conflict";
+    return "server";
+}
+
+async function validationDetail(response: Response): Promise<string | null> {
     try {
-        const body = await response.json() as { error?: string };
-        if (body.error) return `${label} failed: ${body.error}`;
+        const body = await response.json() as { error?: unknown };
+        return typeof body.error === "string" && body.error.trim() ? body.error.trim() : null;
     } catch {
-        // Fall through to the status-only error.
+        return null;
     }
-    return `${label} request failed (${response.status}).`;
 }
