@@ -147,7 +147,7 @@ jobs:
           assert d["remainingWatchHours"] == 2, d
           assert d["expedition"]["activeWatchNumber"] == 1, d
           assert d["presentation"]["key"] == "exploration-map", d
-          assert {"q": 0, "r": 0} in d["knownHexes"], d
+          assert any(h["q"] == 0 and h["r"] == 0 for h in d["knownHexes"]), d
           PY
 
           docker rm -f hex-crawl-smoke >/dev/null
