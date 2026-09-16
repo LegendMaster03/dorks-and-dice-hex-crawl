@@ -6,16 +6,16 @@ Hex Crawl maintains independent state axes rather than turning a rendered hex in
 
 1. **World/spatial truth** — `OverworldDefinition`, mathematical grid, semantic point/line/region features, locations, and source-map representations.
 2. **Crawl/runtime state** — `ExpeditionState` and `WorldRuntimeState`; movement records physical distance and abstract traversal progress without mutating base geography.
-3. **Player knowledge** — `PlayerKnowledgeState` records subject-specific knowledge. There is deliberately no `Hex.IsRevealed` flag.
-4. **Presentation policy** — `MapPresentationPolicy` and the Canvas renderer decide how authoritative data is presented.
+3. **Player knowledge** — `PlayerKnowledgeState` records subject-specific knowledge, known/explored hexes, annotations, and the party-specific presentation-policy snapshot. There is deliberately no `Hex.IsRevealed` flag.
+4. **Presentation policy** — `MapPresentationPolicy` and presentation projections decide what knowledge changes may happen automatically and how authoritative data is presented.
 5. **Procedure configuration** — `CrawlProcedureProfile` defines crawl procedure behavior independently of world geometry.
 
 Database and binary-storage concerns do not enter the core spatial/runtime records.
 
 ## Project structure
 
-- `HexCrawl.Domain` owns spatial, world, knowledge, source-map registration math, and deterministic runtime rules.
-- `HexCrawl.Application` owns authenticated use cases, cross-aggregate validation, persistence/blob ports, optimistic concurrency, and procedure selection.
+- `HexCrawl.Domain` owns spatial, world, knowledge, presentation policy/projection, source-map registration math, and deterministic runtime rules.
+- `HexCrawl.Application` owns authenticated use cases, cross-aggregate validation, persistence/blob ports, optimistic concurrency, procedure/presentation selection, and the expedition workbench orchestration layer.
 - `HexCrawl.Infrastructure` implements SQLite persistence, filesystem map assets, and Tool Host authentication redemption.
 - `HexCrawl.Web` owns HTTP contracts, authentication middleware, route hosting, and the TypeScript application.
 
@@ -48,7 +48,11 @@ See `docs/source-map-import.md` for upload compensation, limits, format validati
 
 ### Expedition storage
 
-`expeditions` stores authoritative runtime snapshots including traversal, navigation/lost state, distance/time, active watches, player knowledge, pause state, and the full selected procedure profile. Runtime history is stored separately in `expedition_events`; this is not event sourcing.
+`expeditions` stores authoritative runtime snapshots including traversal, navigation/lost state, distance/time, active watches, player knowledge, pause state, and the full selected procedure profile. The player-knowledge snapshot also persists known hexes and the complete party-specific `MapPresentationPolicy`. Runtime history is stored separately in `expedition_events`; this is not event sourcing.
+
+Procedure and presentation catalogs are creation-time presets. Ongoing expeditions reload their persisted snapshots rather than reconstructing behavior from the current catalog definitions.
+
+See `docs/dm-expedition-workbench.md` for the detailed bookkeeping ownership model, guided watch workflow, presentation presets, provenance, and restart behavior.
 
 ## Ownership and authentication
 
@@ -77,7 +81,10 @@ The Web layer exposes resource DTOs rather than persistence rows:
 - `PUT /api/overworlds/{worldId}/source-maps/{sourceMapId}/registration`
 - `GET /api/overworlds/{worldId}/source-maps/{sourceMapId}/asset`
 - `GET /api/runtime/profiles`
+- `GET /api/presentation/presets`
 - expedition list/start/load/advance/discovery routes.
+
+Expedition creation accepts a procedure preset key, a presentation preset key, and an optional complete procedure snapshot. The snapshot must retain the selected preset key as provenance and passes the same domain validation as built-in profiles.
 
 Only multipart source-map upload creates new asset keys. Clients can not bind an arbitrary provider key through an HTTP metadata contract.
 
@@ -87,11 +94,15 @@ Application-owned DOM is driven by explicit route/state transitions. Canvas inva
 
 Tool-relative routes remain `/worlds`, `/worlds/{worldId}`, `/worlds/{worldId}/edit`, and `/worlds/{worldId}/expeditions/{expeditionId}`. Standalone deep routes receive the application shell; Embedded Module routes remain relative to the Tool Host base path.
 
-The world editor supports semantic authoring plus raster source import. Source maps may be grouped by geography, classified GM/Player/Neutral/Other, marked as baked-grid/gridless, shown or hidden ephemerally, and registered/re-registered with three source/world control-point pairs.
+The world editor supports semantic authoring plus raster source import and expedition creation. Expedition setup uses progressive disclosure: choose procedure and presentation presets first, then optionally customize the procedure snapshot, with progress factors under advanced controls.
+
+The expedition route is a DM workbench rather than a raw runtime DTO editor. It derives day/watch status, current hex, entry/course, lost/veer state, elapsed/remaining time, procedure-specific progress, pending decisions, discovery controls, presentation preview, and recent history from the persisted runtime/knowledge snapshots. Resolution controls appear only when required by the persisted procedure and current watch state.
+
+Source maps may be grouped by geography, classified GM/Player/Neutral/Other, marked as baked-grid/gridless, shown or hidden ephemerally, and registered/re-registered with three source/world control-point pairs.
 
 `AffineRegistrationSolver` maps source pixels into world coordinates. The server derives the world coverage polygon from the four image corners. Existing projective-transform domain support remains for a later four-point/perspective UI.
 
-Registered source images render beneath semantic regions and the mathematical grid. `RasterImageCache` loads ownership-scoped images asynchronously, reuses decoded images, requests explicit rerenders on readiness, and releases `ImageBitmap`/fallback URL resources during pruning or route cleanup. The same renderer is used by expedition runtime.
+Registered source images render beneath semantic regions and the mathematical grid. `RasterImageCache` loads ownership-scoped images asynchronously, reuses decoded images, requests explicit rerenders on readiness, and releases `ImageBitmap`/fallback URL resources during pruning or route cleanup. The same renderer is used by expedition runtime. GM source-map rasters remain DM evidence and are not treated as player knowledge merely because a presentation policy is open.
 
 ## Source-map import boundary
 
@@ -103,6 +114,8 @@ Automatic grid detection, image feature matching, overlapping-map registration, 
 
 ## Deferred work
 
-Still deferred are campaign sharing, real-time collaborative editing, final player-facing source-map selection/presentation policy, automatic map analysis, four-point projective registration UI, arbitrary-bearing runtime travel, multi-hex automatic backtracking, and battle maps.
+Still deferred are campaign sharing, real-time collaborative editing, a dedicated player delivery/session surface for the persisted presentation state, automatic map analysis, four-point projective registration UI, arbitrary-bearing runtime travel, multi-hex automatic backtracking, a general campaign calendar/rest clock, and battle maps.
 
-The filesystem map provider is intentionally replaceable infrastructure. The source-map domain and continuous-overworld model do not require redesign when storage or later image-analysis implementations change.
+Rules Core/Characters integration remains optional future resolved-input plumbing; those systems do not become owners of Hex Crawl spatial/runtime state.
+
+The filesystem map provider is intentionally replaceable infrastructure. The source-map domain, continuous-overworld model, procedure snapshots, and presentation snapshots do not require redesign when storage or later analysis/integration implementations change.
