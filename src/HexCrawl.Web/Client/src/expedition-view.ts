@@ -8,7 +8,7 @@ import { canonicalExpeditionRoute } from "./tool-route";
 import type { ExpeditionDetail, Overworld, ResolutionSource, RuntimeAdvanceRequest } from "./types";
 import { clearUiError, showUiError } from "./ui-error";
 
-export type ExpeditionViewMode = "map" | "tracker" | "travel" | "navigation" | "encounters";
+export type ExpeditionViewMode = "map" | "tracker";
 
 export async function renderExpedition(
     root: HTMLElement,
@@ -27,26 +27,11 @@ export async function renderExpedition(
         }
     }
 
-    let world: Overworld = await api.getOverworld(runtime.overworldId);
+    const world: Overworld | null = showMap ? await api.getOverworld(runtime.overworldId) : null;
     let disposed = false;
     let advancePending = false;
 
-    const modeLabel = mode === "map"
-        ? "Full crawl workbench"
-        : mode === "tracker"
-            ? "Mapless expedition tracker"
-            : mode === "travel"
-                ? "Travel / watch assistant"
-                : mode === "navigation"
-                    ? "Navigation assistant"
-                    : "Encounter cadence assistant";
-    const focusHint = mode === "travel"
-        ? "Travel and watch inputs are emphasized. Other inputs remain available when the persisted procedure requires them for the same runtime transition."
-        : mode === "navigation"
-            ? "Navigation and lost/veer inputs are emphasized. Travel inputs remain available because an expedition transition advances the current watch atomically."
-            : mode === "encounters"
-                ? "Encounter cadence inputs are emphasized. Travel and navigation inputs remain available when they are required to advance the same persisted watch."
-                : "";
+    const modeLabel = showMap ? "Full crawl workbench" : "Mapless expedition tracker";
     const mapMarkup = showMap ? '<div class="hc-map-host" data-map></div>' : "";
     const mapOnlyTools = showMap
         ? `
@@ -67,7 +52,6 @@ export async function renderExpedition(
                 <button type="button" data-view-navigation>Navigation</button>
                 <button type="button" data-view-encounters>Encounters</button>
             </div>
-            ${focusHint ? `<p class="hc-hint hc-focus-hint">${focusHint}</p>` : ""}
             <div class="hc-error" data-error hidden role="alert"></div>
             <div class="${showMap ? "hc-workspace-grid" : "hc-tracker-grid"}">
                 <section class="${showMap ? "hc-map-panel" : "hc-panel hc-runtime-panel"}" aria-label="Expedition state${showMap ? " and map" : ""}">
@@ -153,20 +137,24 @@ export async function renderExpedition(
     const form = required<HTMLFormElement>(root, "[data-advance]");
     const advanceButton = required<HTMLButtonElement>(form, "[data-advance-button]");
     const mapHost = root.querySelector<HTMLElement>("[data-map]");
-    const map = mapHost ? new MapSurface(mapHost, () => world) : null;
+    const map = mapHost && world ? new MapSurface(mapHost, () => world) : null;
     const locationSelect = select(form, "locationId");
     for (const name of ["travelSource", "navigationSource", "encounterSource", "boundarySource"] as const) {
         const control = select(form, name);
         for (const source of manualEntryResolutionSources) control.append(option(source, sourceLabel(source)));
         control.value = "ManualRoll";
     }
-    for (const location of world.locations) locationSelect.append(option(location.id, location.name));
+    if (world) {
+        for (const location of world.locations) locationSelect.append(option(location.id, location.name));
+    } else {
+        select(form, "encounterOutcome").querySelector('option[value="KeyedLocationDiscovery"]')?.remove();
+    }
 
     const apply = (next: ExpeditionDetail): void => {
         runtime = next;
-        required<HTMLElement>(root, "[data-title]").textContent = showMap ? `${world.name}: ${next.name}` : next.name;
+        required<HTMLElement>(root, "[data-title]").textContent = showMap && world ? `${world.name}: ${next.name}` : next.name;
         required<HTMLElement>(root, "[data-mode-label]").textContent = modeLabel;
-        required<HTMLElement>(root, "[data-context]").textContent = `Crawl context: ${world.name}`;
+        required<HTMLElement>(root, "[data-context]").textContent = `Crawl context: ${next.context.name}`;
         if (map) {
             map.renderer.expeditionHex = next.expedition.currentHex;
             map.renderer.discoveredSubjectIds = discoveredSubjectIds(next);
@@ -181,7 +169,6 @@ export async function renderExpedition(
         }
         renderSnapshots();
         syncWatchForm();
-        syncFocus();
     };
 
     const renderStatus = (): void => {
@@ -248,6 +235,7 @@ export async function renderExpedition(
     };
 
     const renderDiscovery = (): void => {
+        if (!world) return;
         const host = required<HTMLElement>(root, "[data-discovery]");
         host.replaceChildren();
         const discovered = discoveredSubjectIds(runtime);
@@ -284,6 +272,7 @@ export async function renderExpedition(
     };
 
     const renderPlayerPreview = (): void => {
+        if (!world) return;
         const host = required<HTMLElement>(root, "[data-player-preview]");
         host.replaceChildren();
         const summary = document.createElement("p");
@@ -370,7 +359,7 @@ export async function renderExpedition(
             checkbox(form, "continueAcross").checked = state.activeContinueAcrossBoundaries;
         }
 
-        const scale = world.grid.neighborCenterDistance.value;
+        const scale = runtime.context.hexCenterDistance.value;
         if (!input(form, "effectiveDistance").value) input(form, "effectiveDistance").value = String(scale);
         if (!input(form, "expectedDistance").value) input(form, "expectedDistance").value = String(scale);
         if (!input(form, "actualDistance").value) input(form, "actualDistance").value = String(scale);
@@ -380,15 +369,6 @@ export async function renderExpedition(
         required<HTMLElement>(form, "[data-direction-hint]").textContent = runtime.profile.directionChangesCostProgress
             ? "Changing course can consume intra-hex progress under this procedure. The runtime applies the configured cost."
             : "Direction changes do not consume additional progress under this procedure.";
-    };
-
-    const syncFocus = (): void => {
-        const focus = mode === "travel" || mode === "navigation" || mode === "encounters" ? mode : null;
-        for (const section of root.querySelectorAll<HTMLElement>("[data-focus-group]")) {
-            const groups = section.dataset.focusGroup?.split(" ") ?? [];
-            section.classList.toggle("hc-focus-primary", focus !== null && groups.includes(focus));
-            section.classList.toggle("hc-focus-secondary", focus !== null && !groups.includes(focus));
-        }
     };
 
     const syncNavigationVisibility = (): void => {
@@ -426,10 +406,10 @@ export async function renderExpedition(
     select(form, "navigationOutcome").addEventListener("change", syncNavigationVisibility);
     select(form, "encounterOutcome").addEventListener("change", syncEncounterFields);
     required<HTMLButtonElement>(root, "[data-home]").addEventListener("click", () => navigate("/"));
-    required<HTMLButtonElement>(root, "[data-edit]").addEventListener("click", () => navigate(`/worlds/${world.id}/edit`));
+    required<HTMLButtonElement>(root, "[data-edit]").addEventListener("click", () => navigate(`/worlds/${runtime.context.id}/edit`));
     required<HTMLButtonElement>(root, "[data-worlds]").addEventListener("click", () => navigate("/worlds"));
     required<HTMLButtonElement>(root, "[data-view-tracker]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}`));
-    required<HTMLButtonElement>(root, "[data-view-map]").addEventListener("click", () => navigate(`/worlds/${world.id}/expeditions/${runtime.id}`));
+    required<HTMLButtonElement>(root, "[data-view-map]").addEventListener("click", () => navigate(`/worlds/${runtime.context.id}/expeditions/${runtime.id}`));
     required<HTMLButtonElement>(root, "[data-view-travel]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}/travel`));
     required<HTMLButtonElement>(root, "[data-view-navigation]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}/navigation`));
     required<HTMLButtonElement>(root, "[data-view-encounters]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}/encounters`));
@@ -511,6 +491,7 @@ export async function renderExpedition(
     };
 
     function subjectLabel(id: string): string {
+        if (!world) return id;
         return world.locations.find(item => item.id === id)?.name
             ?? world.features.find(item => item.id === id)?.name
             ?? id;
