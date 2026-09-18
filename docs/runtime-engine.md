@@ -4,13 +4,15 @@
 
 `CrawlRuntimeEngine` remains the authoritative deterministic full-watch transition boundary. It consumes `CrawlRuntimeContext` (the physical hex-center distance), `CrawlProcedureProfile`, `ExpeditionState`, a travel plan, and resolved inputs. It does not depend on `OverworldDefinition`, source maps, semantic locations/features, player knowledge, or rendered map types. The Web client may collect choices, prefill resolved rolls, and render state, but it does not calculate authoritative full-watch movement, lost state, boundary crossings, or encounter timing.
 
-The runtime preserves the independent state axes established by the world foundation:
+The persisted session model preserves these independent axes:
 
-- `CrawlRuntimeContext` supplies only crawl-scale physical distance.
-- `ExpeditionState` is current crawl state.
+- `CrawlSessionContext` says whether the session is `WorldBound`, `AbstractHex`, or `NonSpatial`.
+- `CrawlRuntimeContext` supplies only crawl-scale physical distance for spatial sessions.
+- `ExpeditionState` is spatial crawl state for world-bound and abstract-hex sessions.
+- `NonSpatialSessionState` is non-spatial procedure/time/history state and contains no fake map state.
 - `CrawlProcedureProfile` is procedure configuration.
-- `OverworldDefinition` remains authoritative spatial/world truth outside the runtime engine.
-- `PlayerKnowledgeState` remains party knowledge outside the runtime engine.
+- `OverworldDefinition` remains authoritative spatial/world truth outside the runtime engine and is optional at the session level.
+- `PlayerKnowledgeState` remains world-specific party knowledge outside the runtime engine and is absent for standalone contexts.
 - presentation policy remains separate from crawl mechanics and world truth.
 
 `ExpeditionWorldComposition` is the application boundary that projects a runtime hex back into world coordinates, validates keyed-location encounters against authored world truth, and applies subject-specific knowledge when presentation policy permits it.
@@ -101,11 +103,13 @@ An expedition record also persists pause reason and remaining watch time, becaus
 
 ## Persistent DM workflow
 
-`ExpeditionWorkbenchService` is the full-watch application orchestration layer over the engine. It starts expeditions from procedure/presentation presets, persists customized procedure snapshots, determines whether per-day encounter resolution is due, preserves legacy `Custom` cadence behavior, builds independent resolved-input provenance, calls `CrawlRuntimeEngine`, composes world/knowledge projection, applies presentation projection, and saves with optimistic concurrency.
+`CrawlSessionService` creates true standalone `AbstractHex` and `NonSpatial` sessions without creating an Overworld. `CrawlSessionContextResolver` resolves world-bound scale from the actual Overworld, abstract-hex scale from the persisted context, and no spatial context for non-spatial sessions.
+
+`ExpeditionWorkbenchService` is the full-watch application orchestration layer over the spatial engine. It starts expeditions from procedure/presentation presets, persists customized procedure snapshots, determines whether per-day encounter resolution is due, preserves legacy `Custom` cadence behavior, builds independent resolved-input provenance, calls `CrawlRuntimeEngine`, composes world/knowledge projection, applies presentation projection, and saves with optimistic concurrency.
 
 `ExpeditionAssistantService` exposes independent manual bookkeeping mutations over the same persisted expedition. Travel/watch, navigation, and encounter-cadence assistants each mutate only their owned state/history and do not silently resolve the other subsystems. Focused mutations are blocked while a full-workbench `ActiveWatchState` exists so a partial full-watch transition can not be corrupted by an independent helper.
 
-The DM application starts or reopens expeditions against persisted overworlds. The runtime view exposes current day/watch, current hex, entry relationship, intended/actual course, lost/veer state, distance/progress, elapsed/remaining watch time, pause reason, encounter state, subject-specific discovery, presentation/knowledge preview, procedure snapshots, and recent event history.
+The DM application can start or reopen sessions without any Overworld. Abstract-hex sessions expose the spatial runtime view without map composition. Non-spatial sessions expose only applicable procedure/time/history state. World-bound sessions add subject-specific discovery and presentation/knowledge preview.
 
 Every runtime mutation carries an optimistic `ExpectedVersion`. Two stale browser tabs therefore receive a conflict instead of one silently overwriting the other's newer expedition snapshot.
 
