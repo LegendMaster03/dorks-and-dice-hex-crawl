@@ -376,6 +376,7 @@ export type ResolutionProvenanceValue = {
 
 export type ProcedureResolutionHelperResult = {
     expeditionVersion: number;
+    auditSequence: number | null;
     travel: {
         expectedDistance: number;
         actualDistance: number;

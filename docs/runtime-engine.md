@@ -69,7 +69,7 @@ Navigation remains edition-neutral. `ResolvedNavigation` carries a resolved outc
 
 The engine does not perform consequential random rolls. `ResolutionProvenance` supports `ProcedureDefault`, `AutomaticRoll`, `ManualRoll`, `ExternalSystem`, or `DmOverride`.
 
-`AutomaticRoll` is emitted only when the server-side procedure-resolution helper actually generates the corresponding resolved value. Ordinary manual selectors still do not expose `AutomaticRoll`; manual DM entry can record `ProcedureDefault`, `ManualRoll`, `ExternalSystem`, or `DmOverride`. The non-mutating `POST /api/expeditions/{id}/resolution-helper` operation reads the persisted procedure snapshot and current session state, combines them with explicit DM-confirmed situational inputs, and returns resolved travel/navigation/encounter drafts with roll traces and provenance. The existing `/advance` operation remains the only full-watch application boundary.
+`AutomaticRoll` is emitted only when the server-side procedure-resolution helper actually generates the corresponding resolved value. Ordinary manual selectors still do not expose `AutomaticRoll`; manual DM entry can record `ProcedureDefault`, `ManualRoll`, `ExternalSystem`, or `DmOverride`. `POST /api/expeditions/{id}/resolution-helper` reads the persisted procedure snapshot and current session state, combines them with explicit DM-confirmed situational inputs, and returns resolved travel/navigation/encounter drafts with roll traces and provenance. Consequential generation is an **audit-only session mutation**: every generated attempt is immediately appended as `ProcedureResolutionHelperGenerated` history and increments the aggregate version before another generation or application can occur. It does not advance time, movement, navigation, encounter state, knowledge, or any other mechanical runtime state. The existing `/advance` operation remains the only full-watch application boundary.
 
 The built-in Alexandrian Advanced snapshot configures its variable-distance helper as `2d6+3` with a 10% factor per roll point, its navigation check helper as `1d20`, and its encounter helper as `1d8` with wandering/keyed-location edge results plus eight timing slots. Navigation DC/modifier and the current runtime's required non-zero failure veer are not inferred by the helper. A world-bound keyed-location result also remains subject to explicit location selection and the existing world-composition validation.
 
@@ -91,7 +91,7 @@ Presentation policy is applied after the runtime transition. `Exploration Map` c
 
 ## Runtime history and persistence
 
-Important transitions append `CrawlRuntimeEvent` records covering watch lifecycle, navigation/lost/veer changes, direction changes, travel, hex exits/entries, encounters, discoveries, decision points, provenance, and DM overrides.
+Important transitions append `CrawlRuntimeEvent` records covering watch lifecycle, navigation/lost/veer changes, direction changes, travel, hex exits/entries, encounters, discoveries, decision points, automatic helper-generation attempts, provenance, and DM overrides. Because each automatic attempt is retained before the value can be accepted or rerolled, discarded helper results remain visible in history rather than becoming hidden rerolls.
 
 The storage design is intentionally **snapshot + retained history**, not full event sourcing:
 

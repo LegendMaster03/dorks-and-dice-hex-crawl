@@ -26,6 +26,7 @@ public sealed class ProcedureResolutionHelperTests
             });
 
         Assert.Equal(7, result.ExpeditionVersion);
+        Assert.Null(result.AuditSequence);
         var travel = Assert.IsType<ProcedureResolvedTravel>(result.Travel);
         Assert.Equal(10d, travel.ExpectedDistance);
         Assert.Equal(12d, travel.ActualDistance, 8);

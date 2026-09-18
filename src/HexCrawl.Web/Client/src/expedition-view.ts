@@ -438,8 +438,13 @@ export async function renderExpedition(
         noteName: string,
         provenance: { source: ResolutionSource; note: string | null }): void => {
         const source = select(form, sourceName);
-        if (![...source.options].some(item => item.value === provenance.source)) {
-            source.append(option(provenance.source, sourceLabel(provenance.source)));
+        let generatedOption = [...source.options].find(item => item.value === provenance.source);
+        if (!generatedOption) {
+            generatedOption = option(provenance.source, sourceLabel(provenance.source));
+            source.append(generatedOption);
+        }
+        if (provenance.source === "AutomaticRoll") {
+            generatedOption.disabled = true;
         }
         source.value = provenance.source;
         input(form, noteName).value = provenance.note ?? "";
@@ -489,7 +494,9 @@ export async function renderExpedition(
         if (source.value !== "AutomaticRoll") return;
         source.value = "DmOverride";
         const note = input(form, noteName);
-        if (!note.value.trim()) note.value = "edited after automatic helper result";
+        const existing = note.value.trim();
+        const overrideText = "DM override: edited after the generated automatic result.";
+        note.value = existing ? `${existing} ${overrideText}` : overrideText;
     };
 
     const mutate = async (control: HTMLButtonElement | null, action: () => Promise<void>): Promise<void> => {
@@ -579,7 +586,13 @@ export async function renderExpedition(
             }
             if (locationSelect.value) request.keyedLocationId = locationSelect.value;
 
-            applyHelperResult(await api.resolveProcedureInputs(runtime.id, request));
+            const generated = await api.resolveProcedureInputs(runtime.id, request);
+            const refreshed = await api.getExpedition(runtime.id);
+            if (refreshed.version !== generated.expeditionVersion) {
+                throw new Error("The crawl session changed after helper generation. Reload before applying the generated result.");
+            }
+            apply(refreshed);
+            applyHelperResult(generated);
         });
     });
 
