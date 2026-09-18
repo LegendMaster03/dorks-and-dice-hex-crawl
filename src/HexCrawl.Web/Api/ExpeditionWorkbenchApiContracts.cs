@@ -166,6 +166,25 @@ public sealed record CrawlContextContract(
     };
 }
 
+public sealed record ExpeditionSummaryContract(
+    Guid Id,
+    CrawlContextContract Context,
+    string Name,
+    string ProcedureName,
+    long Version,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt)
+{
+    public static ExpeditionSummaryContract From(ExpeditionSummary summary) => new(
+        summary.Id,
+        CrawlContextContract.From(summary.Context),
+        summary.Name,
+        summary.ProcedureName,
+        summary.Version,
+        summary.CreatedAt,
+        summary.UpdatedAt);
+}
+
 public sealed record ExpeditionWorkbenchContract(
     Guid Id,
     Guid? OverworldId,

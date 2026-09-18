@@ -132,15 +132,21 @@ public static class PersistentApiEndpoints
     private static async Task<IResult> ListAllExpeditionsAsync(
         HttpContext context,
         HexCrawlService service,
-        CancellationToken cancellationToken) =>
-        Results.Ok(await service.ListExpeditionsAsync(UserId(context), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        var expeditions = await service.ListExpeditionsAsync(UserId(context), cancellationToken);
+        return Results.Ok(expeditions.Select(ExpeditionSummaryContract.From).ToArray());
+    }
 
     private static async Task<IResult> ListExpeditionsAsync(
         Guid overworldId,
         HttpContext context,
         HexCrawlService service,
-        CancellationToken cancellationToken) =>
-        Results.Ok(await service.ListExpeditionsAsync(overworldId, UserId(context), cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        var expeditions = await service.ListExpeditionsAsync(overworldId, UserId(context), cancellationToken);
+        return Results.Ok(expeditions.Select(ExpeditionSummaryContract.From).ToArray());
+    }
 
     private static async Task<IResult> StartStandaloneSessionAsync(
         StartStandaloneCrawlSessionRequest request,
