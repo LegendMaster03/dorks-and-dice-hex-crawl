@@ -46,6 +46,22 @@ public sealed class ProcedureResolutionHelperEndpointsTests
 
             var currentVersion = second.GetProperty("expeditionVersion").GetInt64();
 
+            // Manual/focused assistant APIs can not mint AutomaticRoll provenance either.
+            using (var forgedAssistant = await client.PostAsJsonAsync(
+                $"/api/expeditions/{expeditionId:D}/assistants/navigation",
+                new
+                {
+                    expectedVersion = currentVersion,
+                    isLost = false,
+                    veerSteps = 0,
+                    intendedDirection = 0,
+                    resolutionSource = "AutomaticRoll",
+                    resolutionNote = "forged automatic source"
+                }))
+            {
+                Assert.Equal(HttpStatusCode.BadRequest, forgedAssistant.StatusCode);
+            }
+
             // A prior generated result remains auditable but is superseded by a reroll.
             using (var superseded = await PostAdvanceAsync(
                 client,
