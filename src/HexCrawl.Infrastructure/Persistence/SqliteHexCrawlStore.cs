@@ -169,10 +169,11 @@ public sealed class SqliteHexCrawlStore(string connectionString) : IHexCrawlStor
         command.CommandText = """
             INSERT INTO expeditions(
                 id, overworld_id, context_json, owner_user_id, name, state_json, knowledge_json,
-                procedure_json, pause_reason, remaining_watch_ticks, version, created_at, updated_at)
+                procedure_json, pause_reason, remaining_watch_ticks, version, created_at, updated_at,
+                generated_resolutions_json)
             VALUES(
                 $id, $world, $context, $owner, $name, $state, $knowledge,
-                $procedure, $pause, $remaining, $version, $created, $updated);
+                $procedure, $pause, $remaining, $version, $created, $updated, $generatedResolutions);
             """;
         BindExpedition(command, expedition);
         await command.ExecuteNonQueryAsync(cancellationToken);
@@ -253,7 +254,7 @@ public sealed class SqliteHexCrawlStore(string connectionString) : IHexCrawlStor
         await using var command = connection.CreateCommand();
         command.CommandText = """
             SELECT name, context_json, state_json, knowledge_json, procedure_json, pause_reason,
-                   remaining_watch_ticks, version, created_at, updated_at
+                   remaining_watch_ticks, version, created_at, updated_at, generated_resolutions_json
             FROM expeditions
             WHERE id = $id AND owner_user_id = $owner;
             """;
@@ -277,6 +278,7 @@ public sealed class SqliteHexCrawlStore(string connectionString) : IHexCrawlStor
         var version = reader.GetInt64(7);
         var created = ParseDate(reader.GetString(8));
         var updated = ParseDate(reader.GetString(9));
+        var generatedResolutions = Deserialize<IReadOnlyList<GeneratedProcedureResolution>>(reader.GetString(10));
         await reader.CloseAsync();
         var events = await ReadEventsAsync(connection, expeditionId, cancellationToken);
         runtime = runtime switch
@@ -296,7 +298,8 @@ public sealed class SqliteHexCrawlStore(string connectionString) : IHexCrawlStor
             ownerUserId,
             version,
             created,
-            updated);
+            updated,
+            generatedResolutions);
     }
 
     public async Task<SaveResult<StoredExpedition>> SaveExpeditionAsync(
@@ -341,6 +344,7 @@ public sealed class SqliteHexCrawlStore(string connectionString) : IHexCrawlStor
                 procedure_json = $procedure,
                 pause_reason = $pause,
                 remaining_watch_ticks = $remaining,
+                generated_resolutions_json = $generatedResolutions,
                 version = $version,
                 updated_at = $updated
             WHERE id = $id AND owner_user_id = $owner AND version = $expectedVersion;
@@ -355,6 +359,7 @@ public sealed class SqliteHexCrawlStore(string connectionString) : IHexCrawlStor
         command.Parameters.AddWithValue("$procedure", Serialize(updated.Procedure));
         command.Parameters.AddWithValue("$pause", updated.PauseReason?.ToString() is { } pause ? pause : DBNull.Value);
         command.Parameters.AddWithValue("$remaining", updated.RemainingWatchTime.Ticks);
+        command.Parameters.AddWithValue("$generatedResolutions", Serialize(updated.GeneratedProcedureResolutions ?? []));
         command.Parameters.AddWithValue("$version", updated.Version);
         command.Parameters.AddWithValue("$updated", updated.UpdatedAt.ToString("O"));
         command.Parameters.AddWithValue("$expectedVersion", expectedVersion);
@@ -469,6 +474,7 @@ public sealed class SqliteHexCrawlStore(string connectionString) : IHexCrawlStor
         command.Parameters.AddWithValue("$procedure", Serialize(expedition.Procedure));
         command.Parameters.AddWithValue("$pause", expedition.PauseReason?.ToString() is { } pause ? pause : DBNull.Value);
         command.Parameters.AddWithValue("$remaining", expedition.RemainingWatchTime.Ticks);
+        command.Parameters.AddWithValue("$generatedResolutions", Serialize(expedition.GeneratedProcedureResolutions ?? []));
         command.Parameters.AddWithValue("$version", expedition.Version);
         command.Parameters.AddWithValue("$created", expedition.CreatedAt.ToString("O"));
         command.Parameters.AddWithValue("$updated", expedition.UpdatedAt.ToString("O"));

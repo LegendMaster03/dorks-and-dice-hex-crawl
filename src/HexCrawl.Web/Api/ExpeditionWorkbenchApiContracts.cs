@@ -363,6 +363,7 @@ public sealed record AdvanceExpeditionWorkbenchRequest
     public bool? RecognizedLost { get; init; }
     public bool? Reorient { get; init; }
     public string? DmOverrideNote { get; init; }
+    public Guid? GeneratedProcedureResolutionId { get; init; }
 
     public AdvanceExpeditionWorkbenchCommand ToCommand() => new()
     {
@@ -396,7 +397,8 @@ public sealed record AdvanceExpeditionWorkbenchRequest
         ContinueAcrossBoundaries = ContinueAcrossBoundaries,
         RecognizedLost = RecognizedLost,
         Reorient = Reorient,
-        DmOverrideNote = DmOverrideNote
+        DmOverrideNote = DmOverrideNote,
+        GeneratedProcedureResolutionId = GeneratedProcedureResolutionId
     };
 }
 

@@ -38,6 +38,7 @@ export async function renderExpedition(
     const world: Overworld | null = showMap ? await api.getOverworld(runtime.overworldId!) : null;
     let disposed = false;
     let advancePending = false;
+    let generatedResolutionId: string | null = null;
 
     const modeLabel = showMap ? "Full crawl workbench" : "Mapless expedition tracker";
     const mapMarkup = showMap ? '<div class="hc-map-host" data-map></div>' : "";
@@ -93,7 +94,7 @@ export async function renderExpedition(
 
                             <fieldset data-resolution-helper>
                                 <legend>Optional procedure resolution helper</legend>
-                                <p class="hc-hint">Generate the procedure-defined random inputs for this watch. The helper only fills the explicit resolved fields below; nothing changes in the crawl session until you run the watch.</p>
+                                <p class="hc-hint">Generate the procedure-defined random inputs for this watch. Each generated attempt is recorded immediately for auditability and increments the session version, but it does not apply travel, navigation, encounters, or time until you run the watch.</p>
                                 <div data-helper-travel><p class="hc-hint">Travel uses the expected distance entered below as the DM-confirmed situational input.</p></div>
                                 <div data-helper-navigation class="hc-form">
                                     <label>Navigation DC <input name="helperNavigationDc" type="number" step="1" placeholder="DM-confirmed DC"></label>
@@ -177,6 +178,7 @@ export async function renderExpedition(
 
     const apply = (next: ExpeditionDetail): void => {
         runtime = next;
+        generatedResolutionId = null;
         required<HTMLElement>(root, "[data-title]").textContent = showMap && world ? `${world.name}: ${next.name}` : next.name;
         required<HTMLElement>(root, "[data-mode-label]").textContent = modeLabel;
         required<HTMLElement>(root, "[data-context]").textContent = `Crawl context: ${next.context.name}`;
@@ -454,6 +456,10 @@ export async function renderExpedition(
         if (result.expeditionVersion !== runtime.version) {
             throw new Error("The helper result was generated for a different crawl-session version.");
         }
+        if (!result.generatedResolutionId) {
+            throw new Error("The server did not return an identity for the generated procedure result.");
+        }
+        generatedResolutionId = result.generatedResolutionId;
 
         if (result.travel) {
             input(form, "expectedDistance").value = String(result.travel.expectedDistance);
@@ -655,6 +661,19 @@ export async function renderExpedition(
                 }
 
                 request.dmOverrideNote = optionalText(input(form, "dmOverrideNote"));
+
+                const usesAutomatic = [
+                    request.travelResolutionSource,
+                    request.navigationResolutionSource,
+                    request.encounterResolutionSource
+                ].some(source => source === "AutomaticRoll");
+                if (usesAutomatic) {
+                    if (!generatedResolutionId) {
+                        throw new Error("Automatic helper results require the server-generated resolution identity.");
+                    }
+                    request.generatedProcedureResolutionId = generatedResolutionId;
+                }
+
                 apply(await api.advanceExpedition(runtime.id, request));
             } finally {
                 advancePending = false;

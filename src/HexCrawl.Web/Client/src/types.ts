@@ -356,6 +356,7 @@ export type RuntimeAdvanceRequest = {
     recognizedLost?: boolean;
     reorient?: boolean;
     dmOverrideNote?: string;
+    generatedProcedureResolutionId?: string;
 };
 
 export type ProcedureResolutionHelperRequest = {
@@ -376,6 +377,7 @@ export type ResolutionProvenanceValue = {
 
 export type ProcedureResolutionHelperResult = {
     expeditionVersion: number;
+    generatedResolutionId: string | null;
     auditSequence: number | null;
     travel: {
         expectedDistance: number;

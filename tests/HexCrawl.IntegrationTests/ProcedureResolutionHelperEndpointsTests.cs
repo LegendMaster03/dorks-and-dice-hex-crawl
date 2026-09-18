@@ -7,7 +7,7 @@ namespace HexCrawl.IntegrationTests;
 public sealed class ProcedureResolutionHelperEndpointsTests
 {
     [Fact]
-    public async Task HelperPersistsEveryAutomaticAttemptBeforeExistingAdvanceConsumesOne()
+    public async Task HelperPersistsAttemptsAndOnlyCurrentVerifiedGenerationCanAuthorizeAutomaticRoll()
     {
         var database = TestWebHost.NewDatabasePath();
         try
@@ -15,27 +15,7 @@ public sealed class ProcedureResolutionHelperEndpointsTests
             using var factory = TestWebHost.Create(database);
             using var client = factory.CreateClient();
 
-            using var startResponse = await client.PostAsJsonAsync("/api/expeditions", new
-            {
-                name = "Helper integration",
-                procedureKey = "alexandrian-advanced",
-                context = new
-                {
-                    kind = "AbstractHex",
-                    name = "Mapless helper",
-                    orientation = "PointyTop",
-                    hexCenterDistance = 12,
-                    distanceUnit = new
-                    {
-                        kind = "Mile",
-                        symbol = "mi",
-                        metersPerUnit = 1609.344
-                    }
-                },
-                startHex = new { q = 0, r = 0 }
-            });
-            startResponse.EnsureSuccessStatusCode();
-            var started = await startResponse.Content.ReadFromJsonAsync<JsonElement>();
+            var started = await StartAsync(client, "Helper integration");
             var expeditionId = started.GetProperty("id").GetGuid();
             var initialVersion = started.GetProperty("version").GetInt64();
             Assert.NotEqual(JsonValueKind.Null, started.GetProperty("profile").GetProperty("resolutionHelpers").ValueKind);
@@ -43,6 +23,8 @@ public sealed class ProcedureResolutionHelperEndpointsTests
             var first = await GenerateAsync(client, expeditionId, initialVersion);
             Assert.Equal(initialVersion + 1, first.GetProperty("expeditionVersion").GetInt64());
             Assert.Equal(1, first.GetProperty("auditSequence").GetInt64());
+            var firstId = first.GetProperty("generatedResolutionId").GetGuid();
+            Assert.NotEqual(Guid.Empty, firstId);
             AssertAutomaticResult(first);
 
             var afterFirst = await client.GetFromJsonAsync<JsonElement>($"/api/expeditions/{expeditionId:D}");
@@ -50,81 +32,107 @@ public sealed class ProcedureResolutionHelperEndpointsTests
             Assert.Equal(0d, afterFirst.GetProperty("expedition").GetProperty("distanceTraveled").GetProperty("value").GetDouble());
             var firstAudit = Assert.Single(afterFirst.GetProperty("history").EnumerateArray());
             Assert.Equal("ProcedureResolutionHelperGenerated", firstAudit.GetProperty("kind").GetString());
-            Assert.Contains("attempt #1", firstAudit.GetProperty("message").GetString()!, StringComparison.Ordinal);
+            Assert.Contains(firstId.ToString("D"), firstAudit.GetProperty("message").GetString()!, StringComparison.Ordinal);
 
-            // The old version can not be used to obtain an unrecorded reroll.
             using var staleResponse = await PostGenerateAsync(client, expeditionId, initialVersion);
             Assert.Equal(HttpStatusCode.Conflict, staleResponse.StatusCode);
 
-            var firstVersion = first.GetProperty("expeditionVersion").GetInt64();
-            var second = await GenerateAsync(client, expeditionId, firstVersion);
+            var second = await GenerateAsync(client, expeditionId, first.GetProperty("expeditionVersion").GetInt64());
+            var secondId = second.GetProperty("generatedResolutionId").GetGuid();
+            Assert.NotEqual(firstId, secondId);
             Assert.Equal(initialVersion + 2, second.GetProperty("expeditionVersion").GetInt64());
             Assert.Equal(2, second.GetProperty("auditSequence").GetInt64());
             AssertAutomaticResult(second);
 
-            var afterSecond = await client.GetFromJsonAsync<JsonElement>($"/api/expeditions/{expeditionId:D}");
-            Assert.Equal(initialVersion + 2, afterSecond.GetProperty("version").GetInt64());
-            Assert.Equal(0d, afterSecond.GetProperty("expedition").GetProperty("distanceTraveled").GetProperty("value").GetDouble());
-            var helperAudits = afterSecond.GetProperty("history").EnumerateArray()
-                .Where(item => item.GetProperty("kind").GetString() == "ProcedureResolutionHelperGenerated")
-                .ToArray();
-            Assert.Equal(2, helperAudits.Length);
-            Assert.Contains("attempt #1", helperAudits[0].GetProperty("message").GetString()!, StringComparison.Ordinal);
-            Assert.Contains("attempt #2", helperAudits[1].GetProperty("message").GetString()!, StringComparison.Ordinal);
+            var currentVersion = second.GetProperty("expeditionVersion").GetInt64();
 
-            var travel = second.GetProperty("travel");
-            var navigation = second.GetProperty("navigation");
-            var encounter = second.GetProperty("encounter");
-            var encounterKind = encounter.GetProperty("kind").GetString()!;
-            var applyVersion = second.GetProperty("expeditionVersion").GetInt64();
-
-            var advance = new Dictionary<string, object?>
+            // A prior generated result remains auditable but is superseded by a reroll.
+            using (var superseded = await PostAdvanceAsync(
+                client,
+                expeditionId,
+                BuildAdvance(first, currentVersion, firstId)))
             {
-                ["expectedVersion"] = applyVersion,
-                ["intendedDirection"] = 0,
-                ["paceKey"] = "normal",
-                ["activities"] = Array.Empty<string>(),
-                ["navigationAidKey"] = "none",
-                ["suppressesNavigationCheck"] = false,
-                ["resetsVeerAtBoundary"] = false,
-                ["expectedDistance"] = travel.GetProperty("expectedDistance").GetDouble(),
-                ["actualDistance"] = travel.GetProperty("actualDistance").GetDouble(),
-                ["resolutionSource"] = "ManualRoll",
-                ["travelResolutionSource"] = "AutomaticRoll",
-                ["travelResolutionNote"] = travel.GetProperty("provenance").GetProperty("note").GetString(),
-                ["navigationOutcome"] = navigation.GetProperty("outcome").GetString(),
-                ["navigationResolutionSource"] = "AutomaticRoll",
-                ["navigationResolutionNote"] = navigation.GetProperty("provenance").GetProperty("note").GetString(),
-                ["encounterOutcome"] = encounterKind,
-                ["encounterResolutionSource"] = "AutomaticRoll",
-                ["encounterResolutionNote"] = encounter.GetProperty("provenance").GetProperty("note").GetString(),
-                ["deliberateDoubleBack"] = false,
-                ["continueAcrossBoundaries"] = true
-            };
-
-            if (encounterKind != "None")
-            {
-                advance["encounterHour"] = encounter.GetProperty("occursAtHours").GetDouble();
-                var note = encounter.GetProperty("note");
-                if (note.ValueKind == JsonValueKind.String) advance["encounterNote"] = note.GetString();
+                Assert.Equal(HttpStatusCode.BadRequest, superseded.StatusCode);
             }
 
-            using var advanceResponse = await client.PostAsJsonAsync(
-                $"/api/expeditions/{expeditionId:D}/advance",
-                advance);
+            // AutomaticRoll can not be asserted merely by forging the old provenance note.
+            var forgedWithoutId = BuildAdvance(second, currentVersion, null);
+            forgedWithoutId["travelResolutionNote"] = "Generated by procedure-resolution audit event #2.";
+            using (var forged = await PostAdvanceAsync(client, expeditionId, forgedWithoutId))
+            {
+                Assert.Equal(HttpStatusCode.BadRequest, forged.StatusCode);
+            }
+
+            // An id from another session can not authorize this session.
+            var other = await StartAsync(client, "Other session");
+            var otherId = other.GetProperty("id").GetGuid();
+            using (var crossSession = await PostAdvanceAsync(
+                client,
+                otherId,
+                BuildAdvance(second, other.GetProperty("version").GetInt64(), secondId)))
+            {
+                Assert.Equal(HttpStatusCode.BadRequest, crossSession.StatusCode);
+            }
+
+            // The id is not a bearer token for arbitrary values: generated values must match.
+            var tampered = BuildAdvance(second, currentVersion, secondId);
+            tampered["actualDistance"] = Convert.ToDouble(tampered["actualDistance"]) + 0.25d;
+            using (var tamperedResponse = await PostAdvanceAsync(client, expeditionId, tampered))
+            {
+                Assert.Equal(HttpStatusCode.BadRequest, tamperedResponse.StatusCode);
+            }
+
+            var valid = BuildAdvance(second, currentVersion, secondId);
+            using var advanceResponse = await PostAdvanceAsync(client, expeditionId, valid);
             advanceResponse.EnsureSuccessStatusCode();
             var applied = await advanceResponse.Content.ReadFromJsonAsync<JsonElement>();
-            Assert.Equal(applyVersion + 1, applied.GetProperty("version").GetInt64());
+            Assert.Equal(currentVersion + 1, applied.GetProperty("version").GetInt64());
             Assert.Contains(
                 applied.GetProperty("history").EnumerateArray(),
                 item => item.GetProperty("kind").GetString() == "ResolutionProvenanceRecorded"
                     && item.GetProperty("message").GetString()!.Contains("AutomaticRoll", StringComparison.Ordinal)
-                    && item.GetProperty("message").GetString()!.Contains("audit event #2", StringComparison.Ordinal));
+                    && item.GetProperty("message").GetString()!.Contains(secondId.ToString("D"), StringComparison.Ordinal));
+            Assert.Contains(
+                applied.GetProperty("history").EnumerateArray(),
+                item => item.GetProperty("kind").GetString() == "ProcedureResolutionHelperConsumed"
+                    && item.GetProperty("message").GetString()!.Contains(secondId.ToString("D"), StringComparison.Ordinal));
+
+            // A consumed generation can not authorize a later application.
+            using var reused = await PostAdvanceAsync(
+                client,
+                expeditionId,
+                BuildAdvance(second, applied.GetProperty("version").GetInt64(), secondId));
+            Assert.Equal(HttpStatusCode.BadRequest, reused.StatusCode);
         }
         finally
         {
             TestWebHost.DeleteDatabase(database);
         }
+    }
+
+    private static async Task<JsonElement> StartAsync(HttpClient client, string name)
+    {
+        using var response = await client.PostAsJsonAsync("/api/expeditions", new
+        {
+            name,
+            procedureKey = "alexandrian-advanced",
+            context = new
+            {
+                kind = "AbstractHex",
+                name,
+                orientation = "PointyTop",
+                hexCenterDistance = 12,
+                distanceUnit = new
+                {
+                    kind = "Mile",
+                    symbol = "mi",
+                    metersPerUnit = 1609.344
+                }
+            },
+            startHex = new { q = 0, r = 0 }
+        });
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<JsonElement>();
     }
 
     private static async Task<JsonElement> GenerateAsync(HttpClient client, Guid expeditionId, long expectedVersion)
@@ -148,22 +156,80 @@ public sealed class ProcedureResolutionHelperEndpointsTests
                 failureVeerSteps = 1
             });
 
+    private static Task<HttpResponseMessage> PostAdvanceAsync(
+        HttpClient client,
+        Guid expeditionId,
+        Dictionary<string, object?> request) =>
+        client.PostAsJsonAsync($"/api/expeditions/{expeditionId:D}/advance", request);
+
+    private static Dictionary<string, object?> BuildAdvance(
+        JsonElement generated,
+        long expectedVersion,
+        Guid? generatedResolutionId)
+    {
+        var travel = generated.GetProperty("travel");
+        var navigation = generated.GetProperty("navigation");
+        var encounter = generated.GetProperty("encounter");
+        var encounterKind = encounter.GetProperty("kind").GetString()!;
+
+        var request = new Dictionary<string, object?>
+        {
+            ["expectedVersion"] = expectedVersion,
+            ["intendedDirection"] = 0,
+            ["paceKey"] = "normal",
+            ["activities"] = Array.Empty<string>(),
+            ["navigationAidKey"] = "none",
+            ["suppressesNavigationCheck"] = false,
+            ["resetsVeerAtBoundary"] = false,
+            ["expectedDistance"] = travel.GetProperty("expectedDistance").GetDouble(),
+            ["actualDistance"] = travel.GetProperty("actualDistance").GetDouble(),
+            ["resolutionSource"] = "ManualRoll",
+            ["travelResolutionSource"] = "AutomaticRoll",
+            ["travelResolutionNote"] = travel.GetProperty("provenance").GetProperty("note").GetString(),
+            ["navigationOutcome"] = navigation.GetProperty("outcome").GetString(),
+            ["navigationResolutionSource"] = "AutomaticRoll",
+            ["navigationResolutionNote"] = navigation.GetProperty("provenance").GetProperty("note").GetString(),
+            ["encounterOutcome"] = encounterKind,
+            ["encounterResolutionSource"] = "AutomaticRoll",
+            ["encounterResolutionNote"] = encounter.GetProperty("provenance").GetProperty("note").GetString(),
+            ["deliberateDoubleBack"] = false,
+            ["continueAcrossBoundaries"] = true
+        };
+
+        if (generatedResolutionId.HasValue)
+        {
+            request["generatedProcedureResolutionId"] = generatedResolutionId.Value;
+        }
+
+        if (encounterKind != "None")
+        {
+            request["encounterHour"] = encounter.GetProperty("occursAtHours").GetDouble();
+            var note = encounter.GetProperty("note");
+            if (note.ValueKind == JsonValueKind.String) request["encounterNote"] = note.GetString();
+        }
+
+        return request;
+    }
+
     private static void AssertAutomaticResult(JsonElement helper)
     {
+        var id = helper.GetProperty("generatedResolutionId").GetGuid();
+        Assert.NotEqual(Guid.Empty, id);
+
         var travel = helper.GetProperty("travel");
         Assert.Equal("AutomaticRoll", travel.GetProperty("provenance").GetProperty("source").GetString());
-        Assert.Contains("audit event #", travel.GetProperty("provenance").GetProperty("note").GetString()!, StringComparison.Ordinal);
+        Assert.Contains(id.ToString("D"), travel.GetProperty("provenance").GetProperty("note").GetString()!, StringComparison.Ordinal);
         Assert.Equal(12d, travel.GetProperty("expectedDistance").GetDouble());
         Assert.InRange(travel.GetProperty("actualDistance").GetDouble(), 6d, 18d);
 
         var navigation = helper.GetProperty("navigation");
         Assert.Equal("Succeeded", navigation.GetProperty("outcome").GetString());
         Assert.Equal("AutomaticRoll", navigation.GetProperty("provenance").GetProperty("source").GetString());
-        Assert.Contains("audit event #", navigation.GetProperty("provenance").GetProperty("note").GetString()!, StringComparison.Ordinal);
+        Assert.Contains(id.ToString("D"), navigation.GetProperty("provenance").GetProperty("note").GetString()!, StringComparison.Ordinal);
 
         var encounter = helper.GetProperty("encounter");
         Assert.Equal("AutomaticRoll", encounter.GetProperty("provenance").GetProperty("source").GetString());
-        Assert.Contains("audit event #", encounter.GetProperty("provenance").GetProperty("note").GetString()!, StringComparison.Ordinal);
+        Assert.Contains(id.ToString("D"), encounter.GetProperty("provenance").GetProperty("note").GetString()!, StringComparison.Ordinal);
         Assert.Contains(
             encounter.GetProperty("kind").GetString()!,
             new[] { "None", "WanderingEncounter", "ManualCustom" });

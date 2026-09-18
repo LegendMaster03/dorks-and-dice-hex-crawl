@@ -1,3 +1,4 @@
+using HexCrawl.Application;
 using HexCrawl.Domain.Knowledge;
 using HexCrawl.Domain.Procedure;
 using HexCrawl.Domain.Runtime;
@@ -30,7 +31,8 @@ public sealed record StoredExpedition(
     string OwnerUserId,
     long Version,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt)
+    DateTimeOffset UpdatedAt,
+    IReadOnlyList<GeneratedProcedureResolution>? GeneratedProcedureResolutions = null)
 {
     public Guid Id => Runtime.Id;
 
