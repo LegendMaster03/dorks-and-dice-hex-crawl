@@ -23,6 +23,31 @@ export async function renderToolHome(
                 <nav><button type="button" data-worlds>Overworlds & maps</button></nav>
             </header>
             <div class="hc-error" data-error hidden role="alert"></div>
+            <section class="hc-mode-section" aria-labelledby="hc-assistants-title">
+                <div class="hc-panel-heading">
+                    <div>
+                        <h2 id="hc-assistants-title">Focused DM assistants</h2>
+                        <p class="hc-muted">Open a focused workflow directly. Create only the minimum saved context needed by that assistant, or continue a compatible session.</p>
+                    </div>
+                </div>
+                <div class="hc-mode-grid">
+                    <article class="hc-mode-card">
+                        <h3>Travel / Watch Assistant</h3>
+                        <p>Generic watch/time bookkeeping needs no grid. Spatial travel can opt into an abstract hex context.</p>
+                        <button type="button" class="hc-primary-action" data-assistant-travel>Open Travel / Watch</button>
+                    </article>
+                    <article class="hc-mode-card">
+                        <h3>Navigation Assistant</h3>
+                        <p>Use an existing spatial session or create the minimum abstract hex context required for direction.</p>
+                        <button type="button" class="hc-primary-action" data-assistant-navigation>Open Navigation</button>
+                    </article>
+                    <article class="hc-mode-card">
+                        <h3>Encounter Cadence Assistant</h3>
+                        <p>Track encounter checks and outcomes with a non-spatial procedure session. No Overworld is required.</p>
+                        <button type="button" class="hc-primary-action" data-assistant-encounters>Open Encounter Cadence</button>
+                    </article>
+                </div>
+            </section>
             <div class="hc-columns">
                 <section class="hc-panel">
                     <div class="hc-panel-heading">
@@ -73,6 +98,9 @@ export async function renderToolHome(
         </section>`;
 
     required<HTMLButtonElement>(root, "[data-worlds]").addEventListener("click", () => navigate("/worlds"));
+    required<HTMLButtonElement>(root, "[data-assistant-travel]").addEventListener("click", () => navigate("/assistants/travel"));
+    required<HTMLButtonElement>(root, "[data-assistant-navigation]").addEventListener("click", () => navigate("/assistants/navigation"));
+    required<HTMLButtonElement>(root, "[data-assistant-encounters]").addEventListener("click", () => navigate("/assistants/encounters"));
     const error = required<HTMLElement>(root, "[data-error]");
     const list = required<HTMLElement>(root, "[data-expedition-list]");
     const count = required<HTMLElement>(root, "[data-expedition-count]");

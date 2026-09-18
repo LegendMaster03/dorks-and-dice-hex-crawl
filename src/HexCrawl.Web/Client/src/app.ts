@@ -1,6 +1,7 @@
 import { HexCrawlApi } from "./api";
 import { renderExpedition } from "./expedition-view";
 import { renderExpeditionAssistant } from "./expedition-assistant-view";
+import { renderAssistantEntry } from "./assistant-entry-view";
 import { enhanceExpeditionSetup } from "./expedition-setup";
 import { ensureStyles } from "./styles";
 import { renderToolHome } from "./tool-home-view";
@@ -59,6 +60,9 @@ async function boot(rootElement: HTMLElement): Promise<void> {
                         break;
                     case "assistant":
                         cleanup = await renderExpeditionAssistant(rootElement, api, route.expeditionId, route.assistant, navigate);
+                        break;
+                    case "assistant-entry":
+                        cleanup = await renderAssistantEntry(rootElement, api, route.assistant, navigate);
                         break;
                     default:
                         navigate("/", true);
@@ -126,7 +130,8 @@ function loadingMessage(kind: ReturnType<typeof parseToolRoute>["kind"]): string
         case "edit": return "Loading overworld…";
         case "expedition": return "Loading full crawl workbench…";
         case "tracker": return "Loading expedition tracker…";
-        case "assistant": return "Loading focused assistant…";
+        case "assistant":
+        case "assistant-entry": return "Loading focused assistant…";
         default: return "Loading Hex Crawl…";
     }
 }
