@@ -233,12 +233,16 @@ public sealed record EncounterResolutionHelperProfileContract(
     public static EncounterResolutionHelperProfileContract From(EncounterResolutionHelperProfile profile) =>
         new(
             DiceRollFormulaContract.From(profile.CheckRoll),
-            profile.WanderingResults,
-            profile.KeyedLocationResults,
+            profile.WanderingResults.Values,
+            profile.KeyedLocationResults.Values,
             profile.TimingSlots);
 
     public EncounterResolutionHelperProfile ToDomain() =>
-        new(CheckRoll.ToDomain(), WanderingResults, KeyedLocationResults, TimingSlots);
+        new(
+            CheckRoll.ToDomain(),
+            DiceRollResultSet.From(WanderingResults),
+            DiceRollResultSet.From(KeyedLocationResults),
+            TimingSlots);
 }
 
 public sealed record ProcedureResolutionHelperProfileContract(

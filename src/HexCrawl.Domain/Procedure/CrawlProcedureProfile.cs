@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace HexCrawl.Domain.Procedure;
 
 public enum EncounterCheckCadence
@@ -51,6 +53,46 @@ public sealed record DiceRollFormula(int DiceCount, int DieSides, int Modifier =
     }
 }
 
+public sealed record DiceRollResultSet(string Canonical)
+{
+    public IReadOnlyList<int> Values
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(Canonical))
+            {
+                return Array.Empty<int>();
+            }
+
+            try
+            {
+                return Canonical
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Select(value => int.Parse(value, NumberStyles.Integer, CultureInfo.InvariantCulture))
+                    .ToArray();
+            }
+            catch (Exception exception) when (exception is FormatException or OverflowException)
+            {
+                throw new InvalidOperationException("Dice-roll result set contains an invalid integer value.", exception);
+            }
+        }
+    }
+
+    public bool Contains(int value) => Values.Contains(value);
+
+    public static DiceRollResultSet From(IEnumerable<int> values)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+        var canonical = string.Join(
+            ",",
+            values
+                .Distinct()
+                .Order()
+                .Select(value => value.ToString(CultureInfo.InvariantCulture)));
+        return new DiceRollResultSet(canonical);
+    }
+}
+
 public sealed record TravelResolutionHelperProfile(
     DiceRollFormula Roll,
     double DistanceFactorPerRollPoint)
@@ -76,8 +118,8 @@ public sealed record NavigationResolutionHelperProfile(DiceRollFormula CheckRoll
 
 public sealed record EncounterResolutionHelperProfile(
     DiceRollFormula CheckRoll,
-    IReadOnlyList<int> WanderingResults,
-    IReadOnlyList<int> KeyedLocationResults,
+    DiceRollResultSet WanderingResults,
+    DiceRollResultSet KeyedLocationResults,
     int TimingSlots)
 {
     public void Validate()
@@ -90,8 +132,8 @@ public sealed record EncounterResolutionHelperProfile(
 
         var minimum = CheckRoll.MinimumTotal;
         var maximum = CheckRoll.MaximumTotal;
-        var wandering = WanderingResults.Distinct().ToHashSet();
-        var keyed = KeyedLocationResults.Distinct().ToHashSet();
+        var wandering = WanderingResults.Values.Distinct().ToHashSet();
+        var keyed = KeyedLocationResults.Values.Distinct().ToHashSet();
         if (wandering.Any(result => result < minimum || result > maximum)
             || keyed.Any(result => result < minimum || result > maximum))
         {
@@ -198,8 +240,8 @@ public sealed record CrawlProcedureProfile
             Navigation: new NavigationResolutionHelperProfile(new DiceRollFormula(1, 20)),
             Encounter: new EncounterResolutionHelperProfile(
                 new DiceRollFormula(1, 8),
-                [1],
-                [8],
+                DiceRollResultSet.From(new[] { 1 }),
+                DiceRollResultSet.From(new[] { 8 }),
                 8))
     };
 
