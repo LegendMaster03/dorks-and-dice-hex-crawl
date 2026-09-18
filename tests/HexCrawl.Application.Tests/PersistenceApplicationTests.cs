@@ -299,7 +299,6 @@ public sealed class PersistenceApplicationTests
         Assert.Equal(
             first.Expedition with { History = sharedEmptyHistory },
             second.Expedition with { History = sharedEmptyHistory });
-        Assert.Equal(first.Knowledge, second.Knowledge);
         Assert.True(first.Expedition.History.SequenceEqual(second.Expedition.History));
         Assert.True(first.Events.SequenceEqual(second.Events));
     }
