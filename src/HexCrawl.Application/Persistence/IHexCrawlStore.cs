@@ -21,19 +21,32 @@ public sealed record OverworldSummary(
 
 public sealed record StoredExpedition(
     string Name,
-    ExpeditionState State,
-    PlayerKnowledgeState Knowledge,
+    CrawlSessionRuntimeState Runtime,
+    CrawlSessionContext Context,
+    PlayerKnowledgeState? Knowledge,
     CrawlProcedureProfile Procedure,
     RuntimePauseReason? PauseReason,
     TimeSpan RemainingWatchTime,
     string OwnerUserId,
     long Version,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt)
+{
+    public Guid Id => Runtime.Id;
+
+    public ExpeditionState State => Runtime as ExpeditionState
+        ?? throw new InvalidOperationException("This crawl session does not have spatial expedition state.");
+
+    public NonSpatialSessionState NonSpatialState => Runtime as NonSpatialSessionState
+        ?? throw new InvalidOperationException("This crawl session is spatial.");
+
+    public PlayerKnowledgeState RequireKnowledge() => Knowledge
+        ?? throw new InvalidOperationException("This crawl session does not have world-bound player knowledge.");
+}
 
 public sealed record ExpeditionSummary(
     Guid Id,
-    Guid OverworldId,
+    CrawlSessionContext Context,
     string Name,
     string ProcedureName,
     long Version,
