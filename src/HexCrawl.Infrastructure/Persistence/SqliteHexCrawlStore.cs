@@ -520,6 +520,7 @@ public sealed class SqliteHexCrawlStore(string connectionString) : IHexCrawlStor
         public long ElapsedTravelTicks { get; init; }
         public int CompletedWatches { get; init; }
         public ActiveWatchSnapshot? ActiveWatch { get; init; }
+        public NonSpatialActiveWatchSnapshot? NonSpatialActiveWatch { get; init; }
 
         public static RuntimeStateSnapshot FromDomain(CrawlSessionRuntimeState runtime) => runtime switch
         {
@@ -548,7 +549,10 @@ public sealed class SqliteHexCrawlStore(string connectionString) : IHexCrawlStor
                 Kind = RuntimeStateKind.NonSpatial,
                 Id = state.Id,
                 ElapsedTravelTicks = state.ElapsedTime.Ticks,
-                CompletedWatches = state.CompletedWatches
+                CompletedWatches = state.CompletedWatches,
+                NonSpatialActiveWatch = state.ActiveWatch is null
+                    ? null
+                    : NonSpatialActiveWatchSnapshot.FromDomain(state.ActiveWatch)
             },
             _ => throw new ArgumentOutOfRangeException(nameof(runtime))
         };
@@ -561,6 +565,7 @@ public sealed class SqliteHexCrawlStore(string connectionString) : IHexCrawlStor
                 Id = Id,
                 ElapsedTime = TimeSpan.FromTicks(ElapsedTravelTicks),
                 CompletedWatches = CompletedWatches,
+                ActiveWatch = NonSpatialActiveWatch?.ToDomain(),
                 History = []
             },
             _ => throw new InvalidDataException("Persisted crawl session runtime kind is not supported.")
@@ -596,6 +601,27 @@ public sealed class SqliteHexCrawlStore(string connectionString) : IHexCrawlStor
                 ActiveWatch = ActiveWatch?.ToDomain(),
                 History = []
             };
+        }
+    }
+
+    private sealed record NonSpatialActiveWatchSnapshot(
+        int WatchNumber,
+        long TotalDurationTicks,
+        long ElapsedTicks)
+    {
+        public static NonSpatialActiveWatchSnapshot FromDomain(NonSpatialActiveWatchState active) => new(
+            active.WatchNumber,
+            active.TotalDuration.Ticks,
+            active.Elapsed.Ticks);
+
+        public NonSpatialActiveWatchState ToDomain()
+        {
+            var state = new NonSpatialActiveWatchState(
+                WatchNumber,
+                TimeSpan.FromTicks(TotalDurationTicks),
+                TimeSpan.FromTicks(ElapsedTicks));
+            state.Validate();
+            return state;
         }
     }
 
