@@ -82,7 +82,8 @@ The Web layer exposes resource DTOs rather than persistence rows:
 - `GET /api/overworlds/{worldId}/source-maps/{sourceMapId}/asset`
 - `GET /api/runtime/profiles`
 - `GET /api/presentation/presets`
-- expedition list/start/load/advance/discovery routes.
+- `GET /api/expeditions` for the authenticated user's expedition collection, independent of world navigation;
+- world-scoped expedition start/list plus expedition load/advance/discovery routes.
 
 Expedition creation accepts a procedure preset key, a presentation preset key, and an optional complete procedure snapshot. The snapshot must retain the selected preset key as provenance and passes the same domain validation as built-in profiles.
 
@@ -92,11 +93,11 @@ Only multipart source-map upload creates new asset keys. Clients can not bind an
 
 Application-owned DOM is driven by explicit route/state transitions. Canvas invalidation goes through `RenderLifecycle`; `MutationObserver` is not used. `ResizeObserver` remains limited to the external layout boundary required for Canvas sizing.
 
-Tool-relative routes remain `/worlds`, `/worlds/{worldId}`, `/worlds/{worldId}/edit`, and `/worlds/{worldId}/expeditions/{expeditionId}`. Standalone deep routes receive the application shell; Embedded Module routes remain relative to the Tool Host base path.
+`/` is the DM-tools home rather than a world route. Tool-relative routes separate product composition: `/worlds`, `/worlds/{worldId}`, and `/worlds/{worldId}/edit` own world/map authoring; `/worlds/{worldId}/expeditions/{expeditionId}` is the full crawl workbench that composes expedition state with a rendered map; `/expeditions/{expeditionId}` is the mapless tracker; and `/expeditions/{expeditionId}/travel`, `/navigation`, and `/encounters` are focused assistants over the same persisted expedition. Standalone deep routes receive the application shell; Embedded Module routes remain relative to the Tool Host base path.
 
 The world editor supports semantic authoring plus raster source import and expedition creation. Expedition setup uses progressive disclosure: choose procedure and presentation presets first, then optionally customize the procedure snapshot, with progress factors under advanced controls.
 
-The expedition route is a DM workbench rather than a raw runtime DTO editor. It derives day/watch status, current hex, entry/course, lost/veer state, elapsed/remaining time, procedure-specific progress, pending decisions, discovery controls, presentation preview, and recent history from the persisted runtime/knowledge snapshots. Resolution controls appear only when required by the persisted procedure and current watch state.
+Expedition UI is composed around one authoritative crawl state rather than around the map. The mapless tracker derives day/watch status, current hex, entry/course, lost/veer state, elapsed/remaining time, procedure-specific progress, pending decisions, provenance, and recent history without constructing `MapSurface`. The full crawl workbench adds map rendering, current-area discovery, and player-knowledge presentation. Focused assistants emphasize travel/watch, navigation, or encounter inputs while retaining any cross-cutting input that the current atomic watch transition still requires. Resolution controls appear only when required by the persisted procedure and current watch state.
 
 Source maps may be grouped by geography, classified GM/Player/Neutral/Other, marked as baked-grid/gridless, shown or hidden ephemerally, and registered/re-registered with three source/world control-point pairs.
 

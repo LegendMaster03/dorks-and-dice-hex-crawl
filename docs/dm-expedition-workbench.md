@@ -4,9 +4,20 @@
 
 The expedition workbench is the persistent DM-facing layer over the existing deterministic crawl runtime. It does not replace `CrawlRuntimeEngine`, reinterpret semantic world truth, or make the browser authoritative for movement. Its job is to collect the resolved choices and inputs required by the configured procedure, call the runtime, persist the resulting snapshot/history, and present the state needed to continue play.
 
-The main state flow is:
+The authoritative transition remains one persisted expedition operation, but the user-facing product no longer treats the rendered map as the workbench owner:
 
-`overworld + persisted procedure snapshot + persisted presentation snapshot + expedition state + player knowledge + resolved inputs -> runtime transition -> presentation projection -> persisted expedition`
+`persisted procedure snapshot + expedition state + resolved inputs + crawl context -> runtime transition -> persisted expedition`
+
+The full map workbench additionally composes the expedition with the authored overworld, player knowledge, and presentation snapshot. The mapless tracker does not construct a map renderer, and the focused assistants are lenses over the same expedition transition rather than independent duplicate state machines.
+
+The current persistence/runtime model still records the expedition's `OverworldId` because grid scale, coordinate traversal, and keyed-location validation are part of the existing crawl context. That backing relationship is distinct from requiring the DM to use the rendered map UI; extracting a standalone non-world crawl-context aggregate is a later domain migration rather than something hidden behind a synthetic map.
+
+## Product composition
+
+- **DM tools home** lists expeditions across worlds and makes expedition bookkeeping a first-class entry point.
+- **Mapless expedition tracker** runs watch/travel/navigation/encounter bookkeeping and history without constructing `MapSurface`.
+- **Full crawl workbench** composes that tracker state with the authored world, map rendering, discovery controls, and player-knowledge preview.
+- **Travel / watch, Navigation, and Encounter cadence assistants** emphasize one procedure concern without forking runtime state. Inputs required by the same atomic watch transition remain available when necessary.
 
 ## State ownership
 
