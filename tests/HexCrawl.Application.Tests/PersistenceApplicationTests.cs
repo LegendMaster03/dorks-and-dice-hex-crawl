@@ -292,8 +292,9 @@ public sealed class PersistenceApplicationTests
         var plan = new WatchTravelPlan(new HexDirection(0), TravelModeSelection.Normal, NavigationAidSelection.None, false, true);
         var inputs = new WatchAdvanceInputs(TravelDistanceResolver.Fixed(new DistanceMeasure(3, DistanceUnit.Miles)));
 
-        var first = engine.Advance(loadedWorld.World, loaded.Procedure, loaded.State, loaded.Knowledge, plan, inputs);
-        var second = engine.Advance(loadedWorld.World, loaded.Procedure, loaded.State, loaded.Knowledge, plan, inputs);
+        var context = ExpeditionWorldComposition.RuntimeContext(loadedWorld.World);
+        var first = engine.Advance(context, loaded.Procedure, loaded.State, plan, inputs);
+        var second = engine.Advance(context, loaded.Procedure, loaded.State, plan, inputs);
         var sharedEmptyHistory = Array.Empty<CrawlRuntimeEvent>();
         Assert.Equal(
             first.Expedition with { History = sharedEmptyHistory },
