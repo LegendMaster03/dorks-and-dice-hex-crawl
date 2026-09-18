@@ -20,11 +20,21 @@ The deterministic `CrawlRuntimeEngine` receives only `CrawlRuntimeContext` physi
 
 ## Product composition
 
-- **DM tools home** lists crawl sessions across all context kinds. It can start a `WorldBound` session from an existing Overworld, an `AbstractHex` session directly, or a `NonSpatial` session directly.
+- **DM tools home** lists crawl sessions across all context kinds and prominently links directly to Travel / Watch, Navigation, and Encounter Cadence assistant entry routes. It can still start a `WorldBound` session from an existing Overworld, an `AbstractHex` session directly, or a `NonSpatial` session directly.
 - **Abstract-hex tracker** runs watch/travel/navigation/encounter bookkeeping and history from persisted hex scale without creating or loading an Overworld and without constructing `MapSurface`.
 - **Non-spatial tracker** presents procedure/time/history state without fabricating coordinates or distance state. Its Watch / time assistant can start a configured watch, record a partial segment, persist remaining time, resume after reload, and complete the same watch.
 - **Full crawl workbench** is available only for `WorldBound` and composes the same spatial crawl state with authored world data, map rendering, discovery controls, and player-knowledge preview.
-- **Travel / watch, Navigation, and Encounter cadence assistants** are independent manual bookkeeping surfaces over the same persisted expedition. Each has its own API mutation and updates only its owned state/history; it does not submit hidden inputs for the other assistants. They are disabled while a partial full-workbench watch is active, because that watch must resume atomically in the tracker.
+- **Travel / watch, Navigation, and Encounter cadence assistants** are independent manual bookkeeping surfaces over the same persisted expedition. Their top-level entry routes are `/assistants/travel`, `/assistants/navigation`, and `/assistants/encounters`; the existing `/expeditions/{id}/...` routes remain the canonical attached forms. Each has its own API mutation and updates only its owned state/history; it does not submit hidden inputs for the other assistants. They are disabled while a partial full-workbench watch is active, because that watch must resume atomically in the tracker.
+
+## Direct focused-assistant entry
+
+Top-level assistant routes are setup-and-entry surfaces over the same persisted session/application capabilities. They do not implement runtime calculations in the browser and they do not require world authoring.
+
+- **Travel / Watch** lists every compatible saved session. New inline setup defaults to `NonSpatial`, requiring only a session name and procedure profile for generic watch/time bookkeeping. The DM can explicitly switch to spatial travel, which creates an `AbstractHex` session with only orientation, physical hex-center scale/unit, and starting axial coordinate.
+- **Navigation** lists only spatial saved sessions (`WorldBound` or `AbstractHex`). Inline creation always creates `AbstractHex`, because navigation needs direction/spatial context but does not need an Overworld.
+- **Encounter Cadence** lists compatible saved sessions and creates `NonSpatial` inline by default because encounter cadence itself requires no map, grid, coordinate, or distance scale.
+
+After selection or inline creation, each entry route navigates to the existing session-attached assistant route. Persistence is preferred here because it reuses optimistic concurrency, restart behavior, procedure snapshots, and runtime history instead of introducing a second unsaved assistant state model.
 
 ## State ownership
 
@@ -200,7 +210,9 @@ The existing SQLite `expeditions` table remains the compatibility envelope, but 
 
 Schema-v1 rows migrate to `WorldBound` using their existing real Overworld ID. New `AbstractHex` and `NonSpatial` rows store `NULL` in `overworld_id`; no placeholder world is created. Non-spatial active-watch state is serialized inside the existing runtime snapshot, so adding partial/resume bookkeeping requires no schema-v3 migration. No separate expedition-clock table or presentation table was introduced.
 
-Validation includes an end-to-end container smoke that:
+Validation includes two isolated end-to-end container restart smokes.
+
+The mapped smoke:
 
 1. creates a world and expedition;
 2. advances far enough to cross a boundary and pause with two hours remaining in watch 1;
@@ -208,6 +220,8 @@ Validation includes an end-to-end container smoke that:
 4. reloads the same active watch, procedure, presentation, and known-hex state;
 5. resumes the watch;
 6. verifies watch 1 completes at four elapsed travel hours.
+
+The mapless smoke uses a fresh data directory and starts with `GET /api/overworlds == []`. It creates a true `NonSpatial` session through `POST /api/expeditions`, records half of a four-hour watch, records encounter history during that active watch, verifies zero Overworlds, restarts the container against the same data, verifies the procedure snapshot/elapsed time/active-watch state/history survived without spatial state, resumes and completes the same watch, and verifies `GET /api/overworlds` is still empty. It also requests all three standalone `/assistants/*` deep links from the container shell.
 
 ## Explicitly deferred work
 
