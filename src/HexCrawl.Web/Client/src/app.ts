@@ -1,7 +1,10 @@
 import { HexCrawlApi } from "./api";
 import { renderExpedition } from "./expedition-view";
+import { renderExpeditionAssistant } from "./expedition-assistant-view";
+import { renderAssistantEntry } from "./assistant-entry-view";
 import { enhanceExpeditionSetup } from "./expedition-setup";
 import { ensureStyles } from "./styles";
+import { renderToolHome } from "./tool-home-view";
 import { deriveToolRoute, navigateTool, parseToolRoute } from "./tool-route";
 import { describeUiError } from "./ui-error";
 import { renderWorldEditor } from "./world-editor-view";
@@ -33,6 +36,9 @@ async function boot(rootElement: HTMLElement): Promise<void> {
 
             try {
                 switch (route.kind) {
+                    case "home":
+                        cleanup = await renderToolHome(rootElement, api, navigate);
+                        break;
                     case "worlds":
                         cleanup = await renderWorldList(rootElement, api, navigate);
                         break;
@@ -47,10 +53,19 @@ async function boot(rootElement: HTMLElement): Promise<void> {
                         break;
                     }
                     case "expedition":
-                        cleanup = await renderExpedition(rootElement, api, route.worldId, route.expeditionId, navigate);
+                        cleanup = await renderExpedition(rootElement, api, route.expeditionId, "map", navigate, route.worldId);
+                        break;
+                    case "tracker":
+                        cleanup = await renderExpedition(rootElement, api, route.expeditionId, "tracker", navigate);
+                        break;
+                    case "assistant":
+                        cleanup = await renderExpeditionAssistant(rootElement, api, route.expeditionId, route.assistant, navigate);
+                        break;
+                    case "assistant-entry":
+                        cleanup = await renderAssistantEntry(rootElement, api, route.assistant, navigate);
                         break;
                     default:
-                        navigate("/worlds", true);
+                        navigate("/", true);
                         break;
                 }
             } catch (value) {
@@ -63,8 +78,8 @@ async function boot(rootElement: HTMLElement): Promise<void> {
                 detail.textContent = error.message;
                 const back = document.createElement("button");
                 back.type = "button";
-                back.textContent = "Return to overworlds";
-                back.addEventListener("click", () => navigate("/worlds"));
+                back.textContent = "Return to DM tools";
+                back.addEventListener("click", () => navigate("/"));
                 panel.append(heading, detail, back);
                 rootElement.replaceChildren(panel);
             }
@@ -79,7 +94,7 @@ async function boot(rootElement: HTMLElement): Promise<void> {
         }, { once: true });
 
         if (parseToolRoute(deriveToolRoute(basePath, window.location.pathname, initialRoute)).kind === "unknown") {
-            navigateTool(basePath, "/worlds", true);
+            navigateTool(basePath, "/", true);
             return;
         }
         await renderCurrentRoute();
@@ -109,10 +124,14 @@ function renderLoading(rootElement: HTMLElement, message: string): void {
 
 function loadingMessage(kind: ReturnType<typeof parseToolRoute>["kind"]): string {
     switch (kind) {
+        case "home": return "Loading DM tools…";
         case "worlds": return "Loading overworlds…";
         case "world":
         case "edit": return "Loading overworld…";
-        case "expedition": return "Loading expedition…";
+        case "expedition": return "Loading full crawl workbench…";
+        case "tracker": return "Loading expedition tracker…";
+        case "assistant":
+        case "assistant-entry": return "Loading focused assistant…";
         default: return "Loading Hex Crawl…";
     }
 }

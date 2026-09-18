@@ -6,6 +6,7 @@ namespace HexCrawl.Domain.Runtime;
 public enum CrawlRuntimeEventKind
 {
     WatchStarted,
+    WatchTimeAdvanced,
     WatchCompleted,
     NavigationCheckResolved,
     ExpeditionBecameLost,
@@ -33,7 +34,7 @@ public sealed record CrawlRuntimeEvent(
     int WatchNumber,
     CrawlRuntimeEventKind Kind,
     TimeSpan ExpeditionElapsedTime,
-    HexCoordinate Hex,
+    HexCoordinate? Hex,
     string Message,
     double? DistanceValue = null,
     string? DistanceUnit = null,
@@ -42,7 +43,6 @@ public sealed record CrawlRuntimeEvent(
 
 public sealed record WatchAdvanceResult(
     ExpeditionState Expedition,
-    PlayerKnowledgeState Knowledge,
     RuntimePauseReason? PauseReason,
     TimeSpan RemainingWatchTime,
     IReadOnlyList<CrawlRuntimeEvent> Events);

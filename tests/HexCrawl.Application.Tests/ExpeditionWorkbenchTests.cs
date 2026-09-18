@@ -60,8 +60,8 @@ public sealed class ExpeditionWorkbenchTests
         Assert.Equal(customized, loaded.Procedure);
         Assert.Equal(TimeSpan.FromHours(6), loaded.Procedure.WatchLength);
         Assert.Equal(EncounterCheckCadence.PerDay, loaded.Procedure.EncounterCadence);
-        Assert.Equal("exploration-map", loaded.Knowledge.PresentationPolicy?.Key);
-        Assert.Contains(startHex, loaded.Knowledge.KnownHexes);
+        Assert.Equal("exploration-map", loaded.RequireKnowledge().PresentationPolicy?.Key);
+        Assert.Contains(startHex, loaded.RequireKnowledge().KnownHexes);
     }
 
     [Fact]
@@ -373,8 +373,8 @@ public sealed class ExpeditionWorkbenchTests
             EncounterResolutionSource = ResolutionSource.ManualRoll
         });
 
-        Assert.False(expedition.Knowledge.Entries.ContainsKey(location.Id));
-        Assert.Empty(expedition.Knowledge.KnownHexes);
+        Assert.False(expedition.RequireKnowledge().Entries.ContainsKey(location.Id));
+        Assert.Empty(expedition.RequireKnowledge().KnownHexes);
         Assert.Equal(RuntimePauseReason.EncounterTriggered, expedition.PauseReason);
         Assert.Contains(expedition.State.History, item => item.Kind == CrawlRuntimeEventKind.KeyedLocationEncountered && item.SubjectId == location.Id);
         Assert.Contains(expedition.State.History, item => item.Kind == CrawlRuntimeEventKind.LocationDiscovered && item.SubjectId == location.Id);
@@ -390,7 +390,7 @@ public sealed class ExpeditionWorkbenchTests
             "Legacy",
             "simple-fixed-distance",
             new HexCoordinate(0, 0)));
-        Assert.Null(legacy.Knowledge.PresentationPolicy);
+        Assert.Null(legacy.RequireKnowledge().PresentationPolicy);
 
         var advanced = await workbench.AdvanceAsync(legacy.State.Id, "alice", new AdvanceExpeditionWorkbenchCommand
         {
@@ -400,8 +400,8 @@ public sealed class ExpeditionWorkbenchTests
             TravelResolutionSource = ResolutionSource.ManualRoll
         });
 
-        Assert.Equal("dm-controlled", advanced.Knowledge.PresentationPolicy?.Key);
-        Assert.Empty(advanced.Knowledge.KnownHexes);
+        Assert.Equal("dm-controlled", advanced.RequireKnowledge().PresentationPolicy?.Key);
+        Assert.Empty(advanced.RequireKnowledge().KnownHexes);
     }
 
     private static CreateOverworldCommand WorldCommand() => new(
@@ -437,7 +437,8 @@ public sealed class ExpeditionWorkbenchTests
             var store = new SqliteHexCrawlStore(ConnectionString);
             await store.InitializeAsync();
             var core = new HexCrawlService(store);
-            return (core, new ExpeditionWorkbenchService(store, core));
+            var resolver = new CrawlSessionContextResolver(core);
+            return (core, new ExpeditionWorkbenchService(store, core, resolver));
         }
 
         public ValueTask DisposeAsync()

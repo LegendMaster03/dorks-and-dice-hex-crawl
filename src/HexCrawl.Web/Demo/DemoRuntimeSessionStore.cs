@@ -1,3 +1,4 @@
+using HexCrawl.Application;
 using HexCrawl.Domain.Knowledge;
 using HexCrawl.Domain.Procedure;
 using HexCrawl.Domain.Runtime;
@@ -63,10 +64,9 @@ public sealed class DemoRuntimeSessionStore
                 request.DeliberateDoubleBack,
                 request.ContinueAcrossBoundaries);
             var result = _engine.Advance(
-                world,
+                new CrawlRuntimeContext(world.Grid.NeighborCenterDistance),
                 profile,
                 _session.Expedition,
-                _session.Knowledge,
                 plan,
                 new WatchAdvanceInputs(
                     travel,
@@ -74,11 +74,16 @@ public sealed class DemoRuntimeSessionStore
                     encounter,
                     boundaryDecision,
                     request.DmOverrideNote));
+            var projection = ExpeditionWorldComposition.Apply(
+                world,
+                result,
+                _session.Knowledge,
+                applyAutomaticKnowledge: true);
 
             _session = _session with
             {
-                Expedition = result.Expedition,
-                Knowledge = result.Knowledge,
+                Expedition = projection.State,
+                Knowledge = projection.Knowledge,
                 PauseReason = result.PauseReason,
                 RemainingWatchTime = result.RemainingWatchTime
             };
@@ -123,7 +128,6 @@ public sealed class DemoRuntimeSessionStore
         var expedition = new ExpeditionState
         {
             Id = Guid.NewGuid(),
-            OverworldId = world.Id,
             Position = HexGeometry.HexToWorld(world.Grid, startHex),
             PositionPrecision = WorldPositionPrecision.HexAnchor,
             Traversal = HexTraversalState.StartingIn(startHex, world.Grid.NeighborCenterDistance.Unit),

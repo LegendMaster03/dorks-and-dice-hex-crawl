@@ -5,36 +5,65 @@ import { worldToHex } from "./hex-math";
 import { MapSurface } from "./map-surface";
 import { discoveredSubjectIds, directionLabel, formatDistance, formatHours } from "./runtime-view";
 import { canonicalExpeditionRoute } from "./tool-route";
-import type { ExpeditionDetail, Overworld, ResolutionSource, RuntimeAdvanceRequest } from "./types";
+import type { ExpeditionDetail, Overworld, ResolutionSource, RuntimeAdvanceRequest, SpatialRuntimeExpedition } from "./types";
 import { clearUiError, showUiError } from "./ui-error";
+
+export type ExpeditionViewMode = "map" | "tracker";
 
 export async function renderExpedition(
     root: HTMLElement,
     api: HexCrawlApi,
-    worldId: string,
     expeditionId: string,
-    navigate: (route: string, replace?: boolean) => void): Promise<() => void> {
+    mode: ExpeditionViewMode,
+    navigate: (route: string, replace?: boolean) => void,
+    routeWorldId?: string): Promise<() => void> {
     let runtime: ExpeditionDetail = await api.getExpedition(expeditionId);
-    const canonicalRoute = canonicalExpeditionRoute(worldId, runtime);
-    if (canonicalRoute) {
-        navigate(canonicalRoute, true);
+    const showMap = mode === "map";
+    if (showMap && routeWorldId) {
+        const canonicalRoute = canonicalExpeditionRoute(routeWorldId, runtime);
+        if (canonicalRoute) {
+            navigate(canonicalRoute, true);
+            return () => {};
+        }
+    }
+
+    if (!runtime.expedition.isSpatial) {
+        return renderNonSpatialTracker(root, runtime, navigate);
+    }
+    if (showMap && runtime.overworldId === null) {
+        navigate(`/expeditions/${runtime.id}`, true);
         return () => {};
     }
 
-    let world: Overworld = await api.getOverworld(runtime.overworldId);
+    const world: Overworld | null = showMap ? await api.getOverworld(runtime.overworldId!) : null;
     let disposed = false;
     let advancePending = false;
+
+    const modeLabel = showMap ? "Full crawl workbench" : "Mapless expedition tracker";
+    const mapMarkup = showMap ? '<div class="hc-map-host" data-map></div>' : "";
+    const mapOnlyTools = showMap
+        ? `
+                    <details open><summary>Current-area discovery</summary><div data-discovery></div></details>
+                    <details><summary>Player knowledge preview</summary><div data-player-preview></div></details>`
+        : "";
 
     root.innerHTML = `
         <section class="hc-page hc-workspace">
             <header class="hc-page-header">
-                <div><h1 data-title></h1><p>DM expedition workbench</p></div>
-                <nav><button type="button" data-edit>World authoring</button><button type="button" data-worlds>Overworlds</button></nav>
+                <div><h1 data-title></h1><p><span data-mode-label></span> · <span data-context></span></p></div>
+                <nav><button type="button" data-home>DM tools</button><button type="button" data-edit>World authoring</button><button type="button" data-worlds>Overworlds</button></nav>
             </header>
+            <div class="hc-view-switcher" aria-label="Expedition views">
+                <button type="button" data-view-tracker>Tracker</button>
+                <button type="button" data-view-map>Full map</button>
+                <button type="button" data-view-travel>Travel / watch</button>
+                <button type="button" data-view-navigation>Navigation</button>
+                <button type="button" data-view-encounters>Encounters</button>
+            </div>
             <div class="hc-error" data-error hidden role="alert"></div>
-            <div class="hc-workspace-grid">
-                <section class="hc-map-panel" aria-label="Expedition map and state">
-                    <div class="hc-map-host" data-map></div>
+            <div class="${showMap ? "hc-workspace-grid" : "hc-tracker-grid"}">
+                <section class="${showMap ? "hc-map-panel" : "hc-panel hc-runtime-panel"}" aria-label="Expedition state${showMap ? " and map" : ""}">
+                    ${mapMarkup}
                     <section class="hc-status-section" aria-labelledby="hc-expedition-state-title">
                         <h2 id="hc-expedition-state-title">Expedition state</h2>
                         <div class="hc-status-grid" data-status></div>
@@ -46,7 +75,7 @@ export async function renderExpedition(
                     <details open><summary data-watch-summary>Run watch</summary>
                         <div class="hc-form" data-requirements></div>
                         <form class="hc-form" data-advance>
-                            <fieldset data-plan-fields>
+                            <fieldset data-plan-fields data-focus-group="travel navigation">
                                 <legend>Travel plan</legend>
                                 <label>Intended direction <select name="direction">
                                     <option value="0">0</option><option value="1">1</option><option value="2">2</option>
@@ -62,7 +91,7 @@ export async function renderExpedition(
                                 <p class="hc-hint" data-direction-hint></p>
                             </fieldset>
 
-                            <fieldset data-travel-resolution>
+                            <fieldset data-travel-resolution data-focus-group="travel">
                                 <legend>Resolved travel context</legend>
                                 <p class="hc-hint">Supply the effective movement result for this watch segment. Terrain and route category names are descriptive; the runtime does not infer a multiplier from them.</p>
                                 <div data-fixed-distance><label>Effective distance <input name="effectiveDistance" type="number" min="0" step="any"></label></div>
@@ -72,7 +101,7 @@ export async function renderExpedition(
                                 <label>Travel source note <input name="travelNote" placeholder="optional"></label>
                             </fieldset>
 
-                            <fieldset data-navigation-resolution>
+                            <fieldset data-navigation-resolution data-focus-group="navigation">
                                 <legend>Navigation resolution</legend>
                                 <label>Result <select name="navigationOutcome"><option value="Succeeded">Succeeded</option><option value="Failed">Failed / lost</option></select></label>
                                 <label data-veer-row>Resolved veer steps <input name="veerSteps" type="number" step="1" value="1"></label>
@@ -80,7 +109,7 @@ export async function renderExpedition(
                                 <label>Navigation source note <input name="navigationNote" placeholder="optional"></label>
                             </fieldset>
 
-                            <fieldset data-encounter-resolution>
+                            <fieldset data-encounter-resolution data-focus-group="encounters">
                                 <legend>Encounter check</legend>
                                 <label>Resolved outcome <select name="encounterOutcome"><option value="None">No encounter</option><option value="WanderingEncounter">Wandering encounter</option><option value="KeyedLocationDiscovery">Keyed location discovery</option><option value="ManualCustom">Manual / custom interruption</option></select></label>
                                 <label data-encounter-hour>Occurs at hour within watch <input name="encounterHour" type="number" min="0" step="any"></label>
@@ -90,7 +119,7 @@ export async function renderExpedition(
                                 <label>Encounter source note <input name="encounterSourceNote" placeholder="optional"></label>
                             </fieldset>
 
-                            <fieldset data-boundary-resolution>
+                            <fieldset data-boundary-resolution data-focus-group="navigation">
                                 <legend>Lost boundary decision</legend>
                                 <label><input name="recognizedLost" type="checkbox"> The party recognizes that it is lost</label>
                                 <label><input name="reorient" type="checkbox"> The party reorients</label>
@@ -106,9 +135,8 @@ export async function renderExpedition(
                         </form>
                     </details>
 
-                    <details open><summary>Current-area discovery</summary><div data-discovery></div></details>
-                    <details><summary>Player knowledge preview</summary><div data-player-preview></div></details>
-                    <details><summary>Procedure and presentation snapshots</summary><div data-snapshots></div></details>
+                    ${mapOnlyTools}
+                    <details><summary>${showMap ? "Procedure and presentation snapshots" : "Procedure snapshot"}</summary><div data-snapshots></div></details>
                 </aside>
             </div>
         </section>`;
@@ -116,32 +144,44 @@ export async function renderExpedition(
     const error = required<HTMLElement>(root, "[data-error]");
     const form = required<HTMLFormElement>(root, "[data-advance]");
     const advanceButton = required<HTMLButtonElement>(form, "[data-advance-button]");
-    const map = new MapSurface(required(root, "[data-map]"), () => world);
+    const mapHost = root.querySelector<HTMLElement>("[data-map]");
+    const map = mapHost && world ? new MapSurface(mapHost, () => world) : null;
     const locationSelect = select(form, "locationId");
     for (const name of ["travelSource", "navigationSource", "encounterSource", "boundarySource"] as const) {
         const control = select(form, name);
         for (const source of manualEntryResolutionSources) control.append(option(source, sourceLabel(source)));
         control.value = "ManualRoll";
     }
-    for (const location of world.locations) locationSelect.append(option(location.id, location.name));
+    if (world) {
+        for (const location of world.locations) locationSelect.append(option(location.id, location.name));
+    } else {
+        select(form, "encounterOutcome").querySelector('option[value="KeyedLocationDiscovery"]')?.remove();
+    }
 
     const apply = (next: ExpeditionDetail): void => {
         runtime = next;
-        required<HTMLElement>(root, "[data-title]").textContent = `${world.name}: ${next.name}`;
-        map.renderer.expeditionHex = next.expedition.currentHex;
-        map.renderer.discoveredSubjectIds = discoveredSubjectIds(next);
-        map.requestRender();
+        required<HTMLElement>(root, "[data-title]").textContent = showMap && world ? `${world.name}: ${next.name}` : next.name;
+        required<HTMLElement>(root, "[data-mode-label]").textContent = modeLabel;
+        required<HTMLElement>(root, "[data-context]").textContent = `Crawl context: ${next.context.name}`;
+        const nextState = spatialState(next);
+        if (map) {
+            map.renderer.expeditionHex = nextState.currentHex;
+            map.renderer.discoveredSubjectIds = discoveredSubjectIds(next);
+            map.requestRender();
+        }
         renderStatus();
         renderPause();
         renderHistory();
-        renderDiscovery();
-        renderPlayerPreview();
+        if (showMap) {
+            renderDiscovery();
+            renderPlayerPreview();
+        }
         renderSnapshots();
         syncWatchForm();
     };
 
     const renderStatus = (): void => {
-        const state = runtime.expedition;
+        const state = spatialState(runtime);
         const status = required<HTMLElement>(root, "[data-status]");
         const watch = state.activeWatchNumber === null
             ? `Ready for watch ${state.completedWatches + 1}`
@@ -198,16 +238,18 @@ export async function renderExpedition(
         }
         for (const event of recent) {
             const item = document.createElement("li");
-            item.textContent = `#${event.sequence} · watch ${event.watchNumber} · ${formatHours(event.expeditionElapsedHours)} · hex ${event.hex.q},${event.hex.r} · ${event.message}`;
+            const hex = event.hex ? ` · hex ${event.hex.q},${event.hex.r}` : "";
+            item.textContent = `#${event.sequence} · watch ${event.watchNumber} · ${formatHours(event.expeditionElapsedHours)}${hex} · ${event.message}`;
             host.append(item);
         }
     };
 
     const renderDiscovery = (): void => {
+        if (!world) return;
         const host = required<HTMLElement>(root, "[data-discovery]");
         host.replaceChildren();
         const discovered = discoveredSubjectIds(runtime);
-        const current = runtime.expedition.currentHex;
+        const current = spatialState(runtime).currentHex;
         const subjects = [
             ...world.locations
                 .filter(item => sameHex(worldToHex(world.grid, item.position), current))
@@ -240,10 +282,13 @@ export async function renderExpedition(
     };
 
     const renderPlayerPreview = (): void => {
+        if (!world) return;
         const host = required<HTMLElement>(root, "[data-player-preview]");
         host.replaceChildren();
+        const presentationPolicy = runtime.presentation;
+        if (!presentationPolicy) return;
         const summary = document.createElement("p");
-        summary.textContent = `${runtime.presentation.name}: player grid ${runtime.presentation.playerGrid.toLowerCase()}, terrain ${prettyEnum(runtime.presentation.terrainMode)}, ${runtime.knownHexes.length} explored/known hex(es), ${runtime.knowledge.length} known subject(s).`;
+        summary.textContent = `${presentationPolicy.name}: player grid ${presentationPolicy.playerGrid.toLowerCase()}, terrain ${prettyEnum(presentationPolicy.terrainMode)}, ${runtime.knownHexes.length} explored/known hex(es), ${runtime.knowledge.length} known subject(s).`;
         host.append(summary);
         if (runtime.knownHexes.length > 0) {
             const knownHexes = document.createElement("p");
@@ -275,16 +320,21 @@ export async function renderExpedition(
         host.replaceChildren();
         const procedure = document.createElement("p");
         procedure.textContent = `${runtime.profile.name} (${runtime.profile.key}) · ${runtime.profile.watchHours}h watch · ${prettyEnum(runtime.profile.travelResolution)} · ${prettyEnum(runtime.profile.actualDistanceResolution)} · encounters ${prettyEnum(runtime.profile.encounterCadence)} · navigation ${runtime.profile.usesNavigationChecks ? "enabled" : "disabled"} · veer ${runtime.profile.usesPersistentVeer ? "persistent" : "non-persistent"}.`;
-        const presentation = document.createElement("p");
-        presentation.textContent = `${runtime.presentation.name} (${runtime.presentation.key}) · grid ${runtime.presentation.playerGrid.toLowerCase()} · terrain ${prettyEnum(runtime.presentation.terrainMode)} · automation ${prettyEnum(runtime.presentation.automationMode)}.`;
         const note = document.createElement("p");
         note.className = "hc-hint";
-        note.textContent = "Both are stored snapshots for this expedition. Catalog changes do not reconstruct active expedition behavior.";
-        host.append(procedure, presentation, note);
+        if (showMap && runtime.presentation) {
+            const presentation = document.createElement("p");
+            presentation.textContent = `${runtime.presentation.name} (${runtime.presentation.key}) · grid ${runtime.presentation.playerGrid.toLowerCase()} · terrain ${prettyEnum(runtime.presentation.terrainMode)} · automation ${prettyEnum(runtime.presentation.automationMode)}.`;
+            note.textContent = "Both are stored snapshots for this expedition. Catalog changes do not reconstruct active expedition behavior.";
+            host.append(procedure, presentation, note);
+        } else {
+            note.textContent = "The tracker uses the persisted crawl procedure snapshot. Map presentation remains owned by the full map workbench.";
+            host.append(procedure, note);
+        }
     };
 
     const syncWatchForm = (): void => {
-        const state = runtime.expedition;
+        const state = spatialState(runtime);
         const newWatch = state.activeWatchNumber === null;
         required<HTMLElement>(root, "[data-watch-summary]").textContent = watchActionLabel(runtime);
         advanceButton.textContent = watchActionLabel(runtime);
@@ -321,7 +371,8 @@ export async function renderExpedition(
             checkbox(form, "continueAcross").checked = state.activeContinueAcrossBoundaries;
         }
 
-        const scale = world.grid.neighborCenterDistance.value;
+        const scale = runtime.context.hexCenterDistance?.value
+            ?? throwContextError("Spatial crawl session is missing hex-center distance.");
         if (!input(form, "effectiveDistance").value) input(form, "effectiveDistance").value = String(scale);
         if (!input(form, "expectedDistance").value) input(form, "expectedDistance").value = String(scale);
         if (!input(form, "actualDistance").value) input(form, "actualDistance").value = String(scale);
@@ -367,8 +418,22 @@ export async function renderExpedition(
     checkbox(form, "doubleBack").addEventListener("change", syncNavigationVisibility);
     select(form, "navigationOutcome").addEventListener("change", syncNavigationVisibility);
     select(form, "encounterOutcome").addEventListener("change", syncEncounterFields);
-    required<HTMLButtonElement>(root, "[data-edit]").addEventListener("click", () => navigate(`/worlds/${world.id}/edit`));
+    required<HTMLButtonElement>(root, "[data-home]").addEventListener("click", () => navigate("/"));
+    const editButton = required<HTMLButtonElement>(root, "[data-edit]");
+    editButton.hidden = runtime.overworldId === null;
+    editButton.addEventListener("click", () => {
+        if (runtime.overworldId) navigate(`/worlds/${runtime.overworldId}/edit`);
+    });
     required<HTMLButtonElement>(root, "[data-worlds]").addEventListener("click", () => navigate("/worlds"));
+    required<HTMLButtonElement>(root, "[data-view-tracker]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}`));
+    const mapButton = required<HTMLButtonElement>(root, "[data-view-map]");
+    mapButton.hidden = runtime.overworldId === null;
+    mapButton.addEventListener("click", () => {
+        if (runtime.overworldId) navigate(`/worlds/${runtime.overworldId}/expeditions/${runtime.id}`);
+    });
+    required<HTMLButtonElement>(root, "[data-view-travel]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}/travel`));
+    required<HTMLButtonElement>(root, "[data-view-navigation]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}/navigation`));
+    required<HTMLButtonElement>(root, "[data-view-encounters]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}/encounters`));
 
     form.addEventListener("submit", event => {
         event.preventDefault();
@@ -443,14 +508,98 @@ export async function renderExpedition(
     apply(runtime);
     return () => {
         disposed = true;
-        map.dispose();
+        map?.dispose();
     };
 
     function subjectLabel(id: string): string {
+        if (!world) return id;
         return world.locations.find(item => item.id === id)?.name
             ?? world.features.find(item => item.id === id)?.name
             ?? id;
     }
+}
+
+function spatialState(runtime: ExpeditionDetail): SpatialRuntimeExpedition {
+    if (!runtime.expedition.isSpatial) {
+        throw new Error("This operation requires a spatial crawl session.");
+    }
+    return runtime.expedition;
+}
+
+function throwContextError(message: string): never {
+    throw new Error(message);
+}
+
+function renderNonSpatialTracker(
+    root: HTMLElement,
+    runtime: ExpeditionDetail,
+    navigate: (route: string, replace?: boolean) => void): () => void {
+    const state = runtime.expedition;
+    if (state.isSpatial) throw new Error("Expected non-spatial crawl session.");
+
+    root.innerHTML = `
+        <section class="hc-page">
+            <header class="hc-page-header">
+                <div>
+                    <h1>${escapeHtml(runtime.name)}</h1>
+                    <p>Non-spatial crawl session · ${escapeHtml(runtime.context.name)}</p>
+                </div>
+                <nav>
+                    <button type="button" data-home>DM tools</button>
+                    <button type="button" data-watch>Watch / time</button>
+                    <button type="button" data-encounters>Encounter cadence</button>
+                </nav>
+            </header>
+            <div class="hc-columns">
+                <section class="hc-panel">
+                    <h2>Procedure state</h2>
+                    <div class="hc-status-grid">
+                        <div><strong>Day</strong><span>${state.currentDay}</span></div>
+                        <div><strong>Watch</strong><span>${state.activeWatchNumber === null ? `Ready for watch ${state.completedWatches + 1}` : `Watch ${state.activeWatchNumber}`}</span></div>
+                        <div><strong>Watch length</strong><span>${formatHours(state.activeWatchTotalHours ?? runtime.profile.watchHours)}</span></div>
+                        <div><strong>Watch elapsed</strong><span>${formatHours(state.activeWatchElapsedHours ?? 0)}</span></div>
+                        <div><strong>Watch remaining</strong><span>${formatHours(state.activeWatchRemainingHours ?? runtime.profile.watchHours)}</span></div>
+                        <div><strong>Completed watches</strong><span>${state.completedWatches}</span></div>
+                        <div><strong>Total elapsed</strong><span>${formatHours(state.elapsedTravelHours)}</span></div>
+                        <div><strong>Context</strong><span>Non-spatial</span></div>
+                    </div>
+                    <p class="hc-hint">This session intentionally has no hex coordinates, distance scale, world position, or Overworld. Spatial travel and navigation tools do not apply.</p>
+                </section>
+                <section class="hc-panel">
+                    <h2>Recent procedure history</h2>
+                    <ol class="hc-history" data-history></ol>
+                    <p class="hc-hint">${escapeHtml(runtime.profile.name)} · encounters ${escapeHtml(prettyEnum(runtime.profile.encounterCadence))}</p>
+                </section>
+            </div>
+        </section>`;
+
+    const history = required<HTMLOListElement>(root, "[data-history]");
+    const recent = [...runtime.history].reverse().slice(0, 30);
+    if (recent.length === 0) {
+        const item = document.createElement("li");
+        item.textContent = "No procedure events yet.";
+        history.append(item);
+    } else {
+        for (const event of recent) {
+            const item = document.createElement("li");
+            item.textContent = `#${event.sequence} · ${formatHours(event.expeditionElapsedHours)} · ${event.message}`;
+            history.append(item);
+        }
+    }
+
+    required<HTMLButtonElement>(root, "[data-home]").addEventListener("click", () => navigate("/"));
+    required<HTMLButtonElement>(root, "[data-watch]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}/travel`));
+    required<HTMLButtonElement>(root, "[data-encounters]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}/encounters`));
+    return () => {};
+}
+
+function escapeHtml(value: string): string {
+    return value
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
 }
 
 function statusCell(label: string, value: string): HTMLElement {

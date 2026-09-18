@@ -11,10 +11,15 @@ import type {
     RegistrationControlPoint,
     RuntimeAdvanceRequest,
     RuntimeProfile,
+    TravelWatchAssistantRequest,
+    NonSpatialWatchAssistantRequest,
+    NavigationAssistantRequest,
+    EncounterCadenceAssistantRequest,
     SourceMapList,
     SourceMapRole,
     SpatialFeature,
     StartExpeditionInput,
+    StartStandaloneCrawlSessionInput,
     ToolHostContext,
     WorldPoint
 } from "./types";
@@ -169,8 +174,10 @@ export class HexCrawlApi {
         return this.getJson("/api/presentation/presets", "Presentation presets");
     }
 
-    public listExpeditions(worldId: string): Promise<ExpeditionSummary[]> {
-        return this.getJson(`/api/overworlds/${encodeURIComponent(worldId)}/expeditions`, "Expedition list");
+    public listExpeditions(worldId?: string): Promise<ExpeditionSummary[]> {
+        return worldId
+            ? this.getJson(`/api/overworlds/${encodeURIComponent(worldId)}/expeditions`, "Expedition list")
+            : this.getJson("/api/expeditions", "Expedition list");
     }
 
     public startExpedition(worldId: string, name: string, procedureKey: string, startHex: HexCoordinate): Promise<ExpeditionDetail> {
@@ -184,6 +191,10 @@ export class HexCrawlApi {
 
     public startConfiguredExpedition(worldId: string, input: StartExpeditionInput): Promise<ExpeditionDetail> {
         return this.sendJson("POST", `/api/overworlds/${encodeURIComponent(worldId)}/expeditions`, input, "Start expedition");
+    }
+
+    public startStandaloneSession(input: StartStandaloneCrawlSessionInput): Promise<ExpeditionDetail> {
+        return this.sendJson("POST", "/api/expeditions", input, "Start crawl session");
     }
 
     public getExpedition(expeditionId: string): Promise<ExpeditionDetail> {
@@ -201,6 +212,22 @@ export class HexCrawlApi {
             subjectType,
             source: "dm:manual-discovery"
         }, "Runtime discovery");
+    }
+
+    public recordTravelAssistant(expeditionId: string, input: TravelWatchAssistantRequest): Promise<ExpeditionDetail> {
+        return this.sendJson("POST", `/api/expeditions/${encodeURIComponent(expeditionId)}/assistants/travel`, input, "Travel/watch assistant");
+    }
+
+    public recordWatchAssistant(expeditionId: string, input: NonSpatialWatchAssistantRequest): Promise<ExpeditionDetail> {
+        return this.sendJson("POST", `/api/expeditions/${encodeURIComponent(expeditionId)}/assistants/watch`, input, "Watch/time assistant");
+    }
+
+    public recordNavigationAssistant(expeditionId: string, input: NavigationAssistantRequest): Promise<ExpeditionDetail> {
+        return this.sendJson("POST", `/api/expeditions/${encodeURIComponent(expeditionId)}/assistants/navigation`, input, "Navigation assistant");
+    }
+
+    public recordEncounterAssistant(expeditionId: string, input: EncounterCadenceAssistantRequest): Promise<ExpeditionDetail> {
+        return this.sendJson("POST", `/api/expeditions/${encodeURIComponent(expeditionId)}/assistants/encounters`, input, "Encounter cadence assistant");
     }
 
     private async getJson<T>(path: string, label: string): Promise<T> {

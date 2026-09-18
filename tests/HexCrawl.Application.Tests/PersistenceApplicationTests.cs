@@ -272,9 +272,9 @@ public sealed class PersistenceApplicationTests
 
         var restarted = await database.ServiceAsync();
         var loaded = await restarted.GetExpeditionAsync(expedition.State.Id, "alice");
-        Assert.Equal(KnowledgeState.Discovered, loaded.Knowledge.Entries[location.Id].State);
-        Assert.False(loaded.Knowledge.Entries.ContainsKey(feature.Id));
-        Assert.Single(loaded.Knowledge.Entries);
+        Assert.Equal(KnowledgeState.Discovered, loaded.RequireKnowledge().Entries[location.Id].State);
+        Assert.False(loaded.RequireKnowledge().Entries.ContainsKey(feature.Id));
+        Assert.Single(loaded.RequireKnowledge().Entries);
     }
 
     [Fact]
@@ -292,13 +292,13 @@ public sealed class PersistenceApplicationTests
         var plan = new WatchTravelPlan(new HexDirection(0), TravelModeSelection.Normal, NavigationAidSelection.None, false, true);
         var inputs = new WatchAdvanceInputs(TravelDistanceResolver.Fixed(new DistanceMeasure(3, DistanceUnit.Miles)));
 
-        var first = engine.Advance(loadedWorld.World, loaded.Procedure, loaded.State, loaded.Knowledge, plan, inputs);
-        var second = engine.Advance(loadedWorld.World, loaded.Procedure, loaded.State, loaded.Knowledge, plan, inputs);
+        var context = ExpeditionWorldComposition.RuntimeContext(loadedWorld.World);
+        var first = engine.Advance(context, loaded.Procedure, loaded.State, plan, inputs);
+        var second = engine.Advance(context, loaded.Procedure, loaded.State, plan, inputs);
         var sharedEmptyHistory = Array.Empty<CrawlRuntimeEvent>();
         Assert.Equal(
             first.Expedition with { History = sharedEmptyHistory },
             second.Expedition with { History = sharedEmptyHistory });
-        Assert.Equal(first.Knowledge, second.Knowledge);
         Assert.True(first.Expedition.History.SequenceEqual(second.Expedition.History));
         Assert.True(first.Events.SequenceEqual(second.Events));
     }

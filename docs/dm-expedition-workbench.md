@@ -4,9 +4,37 @@
 
 The expedition workbench is the persistent DM-facing layer over the existing deterministic crawl runtime. It does not replace `CrawlRuntimeEngine`, reinterpret semantic world truth, or make the browser authoritative for movement. Its job is to collect the resolved choices and inputs required by the configured procedure, call the runtime, persist the resulting snapshot/history, and present the state needed to continue play.
 
-The main state flow is:
+The persisted aggregate is a crawl session whose context is explicit rather than inferred from an Overworld:
 
-`overworld + persisted procedure snapshot + persisted presentation snapshot + expedition state + player knowledge + resolved inputs -> runtime transition -> presentation projection -> persisted expedition`
+`persisted procedure snapshot + session runtime/history + session context + resolved inputs -> transition -> persisted session`
+
+`CrawlSessionContext` has three concrete forms:
+
+- `WorldBound(overworldId)` — spatial runtime plus real authored world/map/knowledge composition.
+- `AbstractHex(name, orientation, CrawlRuntimeContext)` — spatial runtime with its own persisted hex scale, but no Overworld record.
+- `NonSpatial(name)` — procedure/session runtime with no hex coordinates, distance scale, world position, or Overworld.
+
+The full map workbench exists only for `WorldBound`. The abstract-hex tracker runs the same deterministic spatial crawl engine without constructing or loading an Overworld. Non-spatial sessions use `NonSpatialSessionState` and only expose procedure tools that do not require invented spatial state.
+
+The deterministic `CrawlRuntimeEngine` receives only `CrawlRuntimeContext` physical scale plus spatial procedure/runtime inputs. World-coordinate projection, keyed-location validation, and player-knowledge effects are application-level composition performed only for a real `WorldBound` session.
+
+## Product composition
+
+- **DM tools home** lists crawl sessions across all context kinds and prominently links directly to Travel / Watch, Navigation, and Encounter Cadence assistant entry routes. It can still start a `WorldBound` session from an existing Overworld, an `AbstractHex` session directly, or a `NonSpatial` session directly.
+- **Abstract-hex tracker** runs watch/travel/navigation/encounter bookkeeping and history from persisted hex scale without creating or loading an Overworld and without constructing `MapSurface`.
+- **Non-spatial tracker** presents procedure/time/history state without fabricating coordinates or distance state. Its Watch / time assistant can start a configured watch, record a partial segment, persist remaining time, resume after reload, and complete the same watch.
+- **Full crawl workbench** is available only for `WorldBound` and composes the same spatial crawl state with authored world data, map rendering, discovery controls, and player-knowledge preview.
+- **Travel / watch, Navigation, and Encounter cadence assistants** are independent manual bookkeeping surfaces over the same persisted expedition. Their top-level entry routes are `/assistants/travel`, `/assistants/navigation`, and `/assistants/encounters`; the existing `/expeditions/{id}/...` routes remain the canonical attached forms. Each has its own API mutation and updates only its owned state/history; it does not submit hidden inputs for the other assistants. They are disabled while a partial full-workbench watch is active, because that watch must resume atomically in the tracker.
+
+## Direct focused-assistant entry
+
+Top-level assistant routes are setup-and-entry surfaces over the same persisted session/application capabilities. They do not implement runtime calculations in the browser and they do not require world authoring.
+
+- **Travel / Watch** lists every compatible saved session. New inline setup defaults to `NonSpatial`, requiring only a session name and procedure profile for generic watch/time bookkeeping. The DM can explicitly switch to spatial travel, which creates an `AbstractHex` session with only orientation, physical hex-center scale/unit, and starting axial coordinate.
+- **Navigation** lists only spatial saved sessions (`WorldBound` or `AbstractHex`). Inline creation always creates `AbstractHex`, because navigation needs direction/spatial context but does not need an Overworld.
+- **Encounter Cadence** lists compatible saved sessions and creates `NonSpatial` inline by default because encounter cadence itself requires no map, grid, coordinate, or distance scale.
+
+After selection or inline creation, each entry route navigates to the existing session-attached assistant route. Persistence is preferred here because it reuses optimistic concurrency, restart behavior, procedure snapshots, and runtime history instead of introducing a second unsaved assistant state model.
 
 ## State ownership
 
@@ -34,9 +62,9 @@ Built-in procedure keys are presets, not reload-time authorities. A customized e
 
 Domain `CrawlProcedureProfile.Validate()` is the validity boundary. The setup UI intentionally does not maintain an independent matrix of valid combinations.
 
-### Runtime state
+### Session context and runtime state
 
-`ExpeditionState` and `ActiveWatchState` own current travel state, including:
+Spatial contexts (`WorldBound` and `AbstractHex`) use `ExpeditionState` and `ActiveWatchState` for current travel state, including:
 
 - current hex and world position;
 - entry and last-travel directions;
@@ -51,11 +79,15 @@ Domain `CrawlProcedureProfile.Validate()` is the validity boundary. The setup UI
 
 Boundary interruptions remain the same watch. A reload therefore restores the active watch rather than approximating a new one.
 
-The DM-facing `CurrentDay` value is currently derived from `ExpeditionState.ElapsedTravelTime` in 24-hour bands. This is intentionally travel-time semantics, not yet a general campaign calendar. A future rest/calendar system should introduce explicit world-time state rather than silently changing the meaning of `ElapsedTravelTime`.
+`NonSpatial` instead uses `NonSpatialSessionState`, which owns total elapsed procedure time, completed watches, retained history, and an optional `NonSpatialActiveWatchState`. That lightweight active watch stores only watch number, configured total duration, elapsed duration, and derived remaining duration. It deliberately has no dummy `HexCoordinate`, `DistanceMeasure`, `WorldPoint`, direction, navigation state, or Overworld ID.
+
+The DM-facing `CurrentDay` value is currently derived from elapsed session/travel time in 24-hour bands. This is intentionally travel-time semantics, not yet a general campaign calendar. A future rest/calendar system should introduce explicit world-time state rather than silently changing the meaning of `ElapsedTravelTime`.
 
 ### Player knowledge and presentation policy
 
-`PlayerKnowledgeState` owns party-specific disclosure state. It now includes:
+`PlayerKnowledgeState` exists only for `WorldBound` sessions, because disclosure refers to actual authored world subjects. `AbstractHex` and `NonSpatial` sessions persist no synthetic knowledge snapshot.
+
+For a world-bound session, `PlayerKnowledgeState` owns party-specific disclosure state. It now includes:
 
 - subject-specific knowledge entries;
 - known/explored hex coordinates;
@@ -105,7 +137,7 @@ Four built-in policies are exposed by `/api/presentation/presets` and are select
 
 ## Guided watch workflow
 
-The browser asks only for inputs relevant to the persisted procedure and current runtime state.
+The full expedition tracker asks only for inputs relevant to the persisted procedure and current runtime state. Focused assistants are separate from this atomic workflow. Spatial travel/navigation assistants remain blocked while a spatial full-workbench `ActiveWatchState` is in progress. A non-spatial active watch is different: it is itself the authoritative lightweight procedure watch and is resumed through the Watch / time assistant.
 
 At a new watch it can request:
 
@@ -148,7 +180,7 @@ The domain and application contracts support independent provenance for travel, 
 
 A future helper may set `AutomaticRoll` programmatically when it genuinely produces a travel, navigation, encounter, or boundary result. This preserves the domain value without fabricating provenance in the current UI.
 
-Optional notes can describe physical dice, an external system result, an override context, or a future trusted helper result. The workbench appends a compact `ResolutionProvenanceRecorded` runtime-history entry for auditability.
+Optional notes can describe physical dice, an external system result, an override context, a table clock, or a future trusted helper result. Non-spatial watch bookkeeping records the provenance of each elapsed-time segment; `DmOverride` additionally produces `DmOverrideApplied` history. The workbench appends compact `ResolutionProvenanceRecorded` entries for auditability.
 
 This keeps future integrations subordinate to the Hex Crawl runtime state. Rules Core or Characters may provide resolved values later, but they do not become the owner of expedition movement or spatial state.
 
@@ -174,11 +206,13 @@ GM source-map rasters remain DM evidence. The knowledge preview does not reinter
 
 ## Persistence and restart behavior
 
-The existing SQLite expedition envelope persists procedure state, runtime state, knowledge/presentation state, pause reason, and remaining watch time. Runtime history remains in `expedition_events`.
+The existing SQLite `expeditions` table remains the compatibility envelope, but schema v2 persists required `context_json`, nullable `overworld_id`, nullable world-only `knowledge_json`, procedure state, discriminated runtime state, pause reason, and remaining watch time. Runtime history remains in `expedition_events`.
 
-No separate expedition-clock table or presentation table was introduced. Presentation belongs to the knowledge snapshot, and watch timing already belongs to runtime state.
+Schema-v1 rows migrate to `WorldBound` using their existing real Overworld ID. New `AbstractHex` and `NonSpatial` rows store `NULL` in `overworld_id`; no placeholder world is created. Non-spatial active-watch state is serialized inside the existing runtime snapshot, so adding partial/resume bookkeeping requires no schema-v3 migration. No separate expedition-clock table or presentation table was introduced.
 
-Validation includes an end-to-end container smoke that:
+Validation includes two isolated end-to-end container restart smokes.
+
+The mapped smoke:
 
 1. creates a world and expedition;
 2. advances far enough to cross a boundary and pause with two hours remaining in watch 1;
@@ -186,6 +220,8 @@ Validation includes an end-to-end container smoke that:
 4. reloads the same active watch, procedure, presentation, and known-hex state;
 5. resumes the watch;
 6. verifies watch 1 completes at four elapsed travel hours.
+
+The mapless smoke uses a fresh data directory and starts with `GET /api/overworlds == []`. It creates a true `NonSpatial` session through `POST /api/expeditions`, records half of a four-hour watch, records encounter history during that active watch, verifies zero Overworlds, restarts the container against the same data, verifies the procedure snapshot/elapsed time/active-watch state/history survived without spatial state, resumes and completes the same watch, and verifies `GET /api/overworlds` is still empty. It also requests all three standalone `/assistants/*` deep links from the container shell.
 
 ## Explicitly deferred work
 

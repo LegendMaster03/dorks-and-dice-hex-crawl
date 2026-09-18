@@ -49,7 +49,7 @@ public sealed record AdvanceExpeditionWorkbenchCommand
     public string? DmOverrideNote { get; init; }
 }
 
-public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlService coreService)
+public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlService coreService, CrawlSessionContextResolver contextResolver)
 {
     private readonly CrawlRuntimeEngine _runtime = new();
 
@@ -75,7 +75,6 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
         var state = new ExpeditionState
         {
             Id = expeditionId,
-            OverworldId = world.World.Id,
             Position = HexGeometry.HexToWorld(world.World.Grid, command.StartHex),
             PositionPrecision = WorldPositionPrecision.HexAnchor,
             Traversal = HexTraversalState.StartingIn(command.StartHex, world.World.Grid.NeighborCenterDistance.Unit),
@@ -94,6 +93,7 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
         return await store.CreateExpeditionAsync(new StoredExpedition(
             RequiredText(command.Name, "Expedition name"),
             state,
+            new WorldBoundCrawlSessionContext(world.World.Id),
             knowledge,
             profile,
             null,
@@ -112,31 +112,50 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
     {
         var expedition = await coreService.GetExpeditionAsync(expeditionId, ownerUserId, cancellationToken);
         RequireVersion(command.ExpectedVersion, expedition.Version);
-        var world = await coreService.GetOverworldAsync(expedition.State.OverworldId, ownerUserId, cancellationToken);
+        var state = expedition.Runtime as ExpeditionState
+            ?? throw new InvalidOperationException("The full crawl workbench requires a spatial crawl session.");
+        var resolvedContext = await contextResolver.ResolveAsync(expedition, ownerUserId, cancellationToken);
+        var runtimeContext = resolvedContext.RuntimeContext
+            ?? throw new InvalidOperationException("The full crawl workbench requires a spatial crawl session.");
+        var world = resolvedContext.World;
         var profile = expedition.Procedure;
         profile.Validate();
 
-        var presentation = expedition.Knowledge.PresentationPolicy ?? MapPresentationPolicy.DmControlled();
-        presentation.Validate();
-        var knowledge = expedition.Knowledge.PresentationPolicy is null
-            ? expedition.Knowledge with { PresentationPolicy = presentation }
-            : expedition.Knowledge;
+        MapPresentationPolicy? presentation = null;
+        var knowledge = expedition.Knowledge;
+        if (world is not null)
+        {
+            if (knowledge is null)
+            {
+                throw new InvalidOperationException("A world-bound crawl session requires player-knowledge state.");
+            }
+            presentation = knowledge.PresentationPolicy ?? MapPresentationPolicy.DmControlled();
+            presentation.Validate();
+            if (knowledge.PresentationPolicy is null)
+            {
+                knowledge = knowledge with { PresentationPolicy = presentation };
+            }
+        }
 
         var travelProvenance = Provenance(command.TravelResolutionSource, command.ResolutionSource, command.TravelResolutionNote, command.DmOverrideNote);
         var navigationProvenance = Provenance(command.NavigationResolutionSource, command.ResolutionSource, command.NavigationResolutionNote, command.DmOverrideNote);
         var encounterProvenance = Provenance(command.EncounterResolutionSource, command.ResolutionSource, command.EncounterResolutionNote, command.DmOverrideNote);
         var boundaryProvenance = Provenance(command.BoundaryResolutionSource, command.ResolutionSource, command.BoundaryResolutionNote, command.DmOverrideNote);
 
-        var encounterDue = ExpeditionProcedureRequirements.IsEncounterCheckDue(profile, expedition.State);
+        var encounterDue = ExpeditionProcedureRequirements.IsEncounterCheckDue(profile, state);
         var runtimeProfile = profile.EncounterCadence == EncounterCheckCadence.PerDay
-            && expedition.State.ActiveWatch is null
+            && state.ActiveWatch is null
             && !encounterDue
                 ? profile with { EncounterCadence = EncounterCheckCadence.None }
                 : profile;
 
-        var travel = BuildTravel(profile, world.World.Grid.NeighborCenterDistance.Unit, command, travelProvenance);
-        var navigation = BuildNavigation(profile, expedition.State, command, navigationProvenance);
-        var encounter = BuildEncounter(runtimeProfile, expedition.State, command, encounterProvenance);
+        var travel = BuildTravel(profile, runtimeContext.HexCenterDistance.Unit, command, travelProvenance);
+        var navigation = BuildNavigation(profile, state, command, navigationProvenance);
+        var encounter = BuildEncounter(runtimeProfile, state, command, encounterProvenance);
+        if (world is null && encounter?.Kind == EncounterOutcomeKind.KeyedLocationDiscovery)
+        {
+            throw new InvalidOperationException("Keyed-location discovery requires a world-bound crawl session.");
+        }
         var boundaryDecision = command.RecognizedLost.HasValue || command.Reorient.HasValue
             ? new BoundaryNavigationDecision(command.RecognizedLost ?? false, command.Reorient ?? false, boundaryProvenance)
             : null;
@@ -151,24 +170,32 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
             command.ContinueAcrossBoundaries);
 
         var result = _runtime.Advance(
-            world.World,
+            runtimeContext,
             runtimeProfile,
-            expedition.State,
-            knowledge,
+            state,
             plan,
             new WatchAdvanceInputs(travel, navigation, encounter, boundaryDecision, command.DmOverrideNote));
 
-        var knowledgeAfterRuntime = presentation.AutomationMode == PresentationAutomationMode.DmControlled
-            ? knowledge
-            : result.Knowledge;
-        var projectedKnowledge = PresentationKnowledgeProjection.ApplyEnteredHexes(
-            presentation,
-            knowledgeAfterRuntime,
-            result.Events
-                .Where(runtimeEvent => runtimeEvent.Kind == CrawlRuntimeEventKind.HexEntered)
-                .Select(runtimeEvent => runtimeEvent.Hex));
+        var projectedState = result.Expedition;
+        var projectedKnowledge = knowledge;
+        if (world is not null)
+        {
+            var worldProjection = ExpeditionWorldComposition.Apply(
+                world.World,
+                result,
+                knowledge!,
+                presentation!.AutomationMode != PresentationAutomationMode.DmControlled);
+            projectedState = worldProjection.State;
+            projectedKnowledge = PresentationKnowledgeProjection.ApplyEnteredHexes(
+                presentation,
+                worldProjection.Knowledge,
+                result.Events
+                    .Where(runtimeEvent => runtimeEvent.Kind == CrawlRuntimeEventKind.HexEntered && runtimeEvent.Hex.HasValue)
+                    .Select(runtimeEvent => runtimeEvent.Hex!.Value));
+        }
+
         var stateWithProvenance = AppendProvenanceEvent(
-            result.Expedition,
+            projectedState,
             result.Events,
             travelProvenance,
             navigation?.Provenance,
@@ -177,7 +204,7 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
 
         var updated = expedition with
         {
-            State = stateWithProvenance,
+            Runtime = stateWithProvenance,
             Knowledge = projectedKnowledge,
             PauseReason = result.PauseReason,
             RemainingWatchTime = result.RemainingWatchTime

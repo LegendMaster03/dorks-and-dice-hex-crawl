@@ -141,11 +141,12 @@ export type PresentationProfile = {
 
 export type RuntimePauseReason = "ConditionsReviewRequired" | "LostRecognitionRequired" | "EncounterTriggered" | "BacktrackBoundaryReached";
 
-export type RuntimeExpedition = {
+export type SpatialRuntimeExpedition = {
     id: string;
+    isSpatial: true;
     currentHex: HexCoordinate;
-    position: WorldPoint;
-    positionPrecision: "Exact" | "HexAnchor";
+    position: WorldPoint | null;
+    positionPrecision: "Exact" | "HexAnchor" | null;
     entryDirection: number | null;
     lastTravelDirection: number | null;
     intendedDirection: number | null;
@@ -174,6 +175,42 @@ export type RuntimeExpedition = {
     activeEncounterHandled: boolean | null;
 };
 
+export type NonSpatialRuntimeExpedition = {
+    id: string;
+    isSpatial: false;
+    currentHex: null;
+    position: null;
+    positionPrecision: null;
+    entryDirection: null;
+    lastTravelDirection: null;
+    intendedDirection: null;
+    actualDirection: null;
+    isLost: null;
+    veerSteps: null;
+    veerDegrees: null;
+    distanceTraveled: null;
+    hexProgress: null;
+    exitRequirement: null;
+    elapsedTravelHours: number;
+    currentDay: number;
+    completedWatches: number;
+    activeWatchNumber: number | null;
+    activeWatchTotalHours: number | null;
+    activeWatchElapsedHours: number | null;
+    activeWatchRemainingHours: number | null;
+    activeWatchPendingDecision: null;
+    activePaceKey: null;
+    activeActivities: [];
+    activeNavigationAidKey: null;
+    activeDeliberateDoubleBack: false;
+    activeContinueAcrossBoundaries: false;
+    activeEncounterKind: null;
+    activeEncounterHour: null;
+    activeEncounterHandled: null;
+};
+
+export type RuntimeExpedition = SpatialRuntimeExpedition | NonSpatialRuntimeExpedition;
+
 export type RuntimeKnowledgeEntry = {
     subjectId: string;
     subjectType: "Location" | "Feature" | "Terrain" | "Route";
@@ -187,7 +224,7 @@ export type RuntimeEvent = {
     watchNumber: number;
     kind: string;
     expeditionElapsedHours: number;
-    hex: HexCoordinate;
+    hex: HexCoordinate | null;
     message: string;
     distanceValue: number | null;
     distanceUnit: string | null;
@@ -195,9 +232,19 @@ export type RuntimeEvent = {
     subjectType: string | null;
 };
 
+export type CrawlSessionContextKind = "WorldBound" | "AbstractHex" | "NonSpatial";
+
+export type CrawlContext = {
+    kind: CrawlSessionContextKind;
+    name: string;
+    overworldId: string | null;
+    orientation: HexOrientation | null;
+    hexCenterDistance: DistanceValue | null;
+};
+
 export type ExpeditionSummary = {
     id: string;
-    overworldId: string;
+    context: CrawlContext;
     name: string;
     procedureName: string;
     version: number;
@@ -207,13 +254,14 @@ export type ExpeditionSummary = {
 
 export type ExpeditionDetail = {
     id: string;
-    overworldId: string;
+    overworldId: string | null;
+    context: CrawlContext;
     name: string;
     version: number;
     createdAt: string;
     updatedAt: string;
     profile: RuntimeProfile;
-    presentation: PresentationProfile;
+    presentation: PresentationProfile | null;
     pauseReason: RuntimePauseReason | null;
     remainingWatchHours: number;
     expedition: RuntimeExpedition;
@@ -229,6 +277,27 @@ export type StartExpeditionInput = {
     procedureKey: string;
     presentationKey: string;
     startHex: HexCoordinate;
+    procedureSnapshot?: RuntimeProfile;
+};
+
+export type StandaloneCrawlContextInput =
+    | {
+        kind: "AbstractHex";
+        name: string;
+        orientation: HexOrientation;
+        hexCenterDistance: number;
+        distanceUnit: DistanceUnit;
+    }
+    | {
+        kind: "NonSpatial";
+        name: string;
+    };
+
+export type StartStandaloneCrawlSessionInput = {
+    name: string;
+    procedureKey: string;
+    context: StandaloneCrawlContextInput;
+    startHex?: HexCoordinate;
     procedureSnapshot?: RuntimeProfile;
 };
 
@@ -264,6 +333,47 @@ export type RuntimeAdvanceRequest = {
     recognizedLost?: boolean;
     reorient?: boolean;
     dmOverrideNote?: string;
+};
+
+export type TravelWatchAssistantRequest = {
+    expectedVersion: number;
+    elapsedHours: number;
+    distance?: number;
+    hexSteps?: number;
+    resultingHex: HexCoordinate;
+    hexProgress?: number;
+    intendedDirection?: number;
+    actualDirection?: number;
+    completeWatch: boolean;
+    resolutionSource: ResolutionSource;
+    resolutionNote?: string;
+    note?: string;
+};
+
+export type NonSpatialWatchAssistantRequest = {
+    expectedVersion: number;
+    elapsedHours: number;
+    resolutionSource: ResolutionSource;
+    resolutionNote?: string;
+    note?: string;
+};
+
+export type NavigationAssistantRequest = {
+    expectedVersion: number;
+    isLost: boolean;
+    veerSteps: number;
+    intendedDirection?: number;
+    resolutionSource: ResolutionSource;
+    resolutionNote?: string;
+    note?: string;
+};
+
+export type EncounterCadenceAssistantRequest = {
+    expectedVersion: number;
+    outcome: "None" | "WanderingEncounter" | "ManualCustom";
+    resolutionSource: ResolutionSource;
+    resolutionNote?: string;
+    note?: string;
 };
 
 export type ToolHostContext = {

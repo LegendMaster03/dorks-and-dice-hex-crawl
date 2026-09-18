@@ -1,8 +1,6 @@
-using HexCrawl.Domain.Knowledge;
 using HexCrawl.Domain.Procedure;
 using HexCrawl.Domain.Runtime;
 using HexCrawl.Domain.Spatial;
-using HexCrawl.Domain.World;
 
 namespace HexCrawl.Domain.Tests;
 
@@ -103,10 +101,9 @@ public sealed class RuntimeEngineTests
 
         Assert.Equal(RuntimePauseReason.LostRecognitionRequired, first.PauseReason);
         var resumed = _engine.Advance(
-            setup.World,
+            setup.Context,
             CrawlProcedureProfile.AlexandrianAdvancedBaseline(),
             first.Expedition,
-            first.Knowledge,
             Plan(0, true),
             new WatchAdvanceInputs(
                 TravelDistanceResolver.Fixed(Miles(0)),
@@ -186,10 +183,9 @@ public sealed class RuntimeEngineTests
         var plan = Plan(3, true) with { DeliberateDoubleBack = true };
 
         var result = _engine.Advance(
-            setup.World,
+            setup.Context,
             profile,
             setup.Expedition,
-            setup.Knowledge,
             plan,
             new WatchAdvanceInputs(TravelDistanceResolver.Fixed(Miles(4))));
 
@@ -272,25 +268,14 @@ public sealed class RuntimeEngineTests
     }
 
     [Fact]
-    public void KeyedLocationDiscoveryDoesNotRevealOtherHexContents()
+    public void KeyedEncounterRemainsMechanicalUntilAWorldConsumerProjectsDiscovery()
     {
-        var location = new Location(
-            Guid.Parse("11111111-1111-1111-1111-111111111111"),
-            "Hidden ruin",
-            "ruin",
-            new WorldPoint(0, 0),
-            LocationDiscoverability.Hidden,
-            []);
-        var feature = new PointFeature(
-            Guid.Parse("22222222-2222-2222-2222-222222222222"),
-            "Unknown spring",
-            "spring",
-            new WorldPoint(0.2, 0.1));
-        var setup = CreateSetup(world: CreateWorld(locations: [location], features: [feature]));
+        var subjectId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var setup = CreateSetup();
         var encounter = new ResolvedEncounter(
             EncounterOutcomeKind.KeyedLocationDiscovery,
             TimeSpan.Zero,
-            location.Id,
+            subjectId,
             null,
             new ResolutionProvenance(ResolutionSource.ManualRoll));
 
@@ -301,30 +286,22 @@ public sealed class RuntimeEngineTests
             navigation: NavigationCheckOutcome.Succeeded,
             encounter: encounter);
 
-        Assert.Equal(KnowledgeState.Discovered, result.Knowledge.Entries[location.Id].State);
-        Assert.False(result.Knowledge.Entries.ContainsKey(feature.Id));
-        Assert.Single(result.Knowledge.Entries);
+        Assert.Equal(RuntimePauseReason.EncounterTriggered, result.PauseReason);
+        Assert.Contains(result.Events, item =>
+            item.Kind == CrawlRuntimeEventKind.EncounterTriggered
+            && item.SubjectId == subjectId);
+        Assert.DoesNotContain(result.Events, item => item.Kind == CrawlRuntimeEventKind.LocationDiscovered);
     }
 
     [Fact]
-    public void EnteringHexDoesNotAutomaticallyDiscoverItsKeyedLocation()
+    public void HexTraversalDoesNotRequireWorldGeometry()
     {
-        var world = CreateWorld();
-        var neighborCenter = HexGeometry.HexToWorld(world.Grid, new HexCoordinate(1, 0));
-        var location = new Location(
-            Guid.Parse("33333333-3333-3333-3333-333333333333"),
-            "Keyed cave",
-            "cave",
-            neighborCenter,
-            LocationDiscoverability.Obvious,
-            []);
-        world = world with { Locations = [location] };
-        var setup = CreateSetup(world: world);
+        var setup = CreateSetup();
 
         var result = Advance(setup, CrawlProcedureProfile.SimplifiedFixedDistance(), 8, continueAcrossBoundaries: true);
 
         Assert.Equal(new HexCoordinate(1, 0), result.Expedition.CurrentHex);
-        Assert.Empty(result.Knowledge.Entries);
+        Assert.Equal(new WorldPoint(0, 0), result.Expedition.Position);
     }
 
     [Fact]
@@ -343,10 +320,9 @@ public sealed class RuntimeEngineTests
         var setup = CreateSetup();
         var profile = CrawlProcedureProfile.SimplifiedHexStep();
         var result = _engine.Advance(
-            setup.World,
+            setup.Context,
             profile,
             setup.Expedition,
-            setup.Knowledge,
             Plan(0, true),
             new WatchAdvanceInputs(ResolvedTravelAmount.Steps(2, ResolutionProvenance.ProcedureDefault)));
 
@@ -361,10 +337,9 @@ public sealed class RuntimeEngineTests
         var setup = CreateSetup();
         var travel = TravelDistanceResolver.Override(Miles(12), Miles(3), "DM set travel to 3 miles");
         var result = _engine.Advance(
-            setup.World,
+            setup.Context,
             CrawlProcedureProfile.SimplifiedFixedDistance(),
             setup.Expedition,
-            setup.Knowledge,
             Plan(0, true),
             new WatchAdvanceInputs(travel, DmOverrideNote: "mudslide ruling"));
 
@@ -429,10 +404,9 @@ public sealed class RuntimeEngineTests
                 new ResolutionProvenance(ResolutionSource.ManualRoll));
 
         return _engine.Advance(
-            setup.World,
+            setup.Context,
             profile,
             setup.Expedition,
-            setup.Knowledge,
             Plan(direction, continueAcrossBoundaries),
             new WatchAdvanceInputs(
                 TravelDistanceResolver.Fixed(Miles(miles)),
@@ -448,47 +422,23 @@ public sealed class RuntimeEngineTests
         continueAcrossBoundaries);
 
     private static Setup CreateSetup(
-        OverworldDefinition? world = null,
-        ExpeditionState? expedition = null,
-        PlayerKnowledgeState? knowledge = null)
+        CrawlRuntimeContext? context = null,
+        ExpeditionState? expedition = null)
     {
-        world ??= CreateWorld();
-        expedition ??= CreateExpedition(world: world);
-        knowledge ??= new PlayerKnowledgeState
-        {
-            ScopeId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
-            OverworldId = world.Id
-        };
-        return new Setup(world, expedition, knowledge);
+        context ??= new CrawlRuntimeContext(Miles(12));
+        expedition ??= CreateExpedition();
+        return new Setup(context, expedition);
     }
 
-    private static OverworldDefinition CreateWorld(
-        IReadOnlyList<Location>? locations = null,
-        IReadOnlyList<SpatialFeature>? features = null) => new()
-    {
-        Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
-        Name = "Runtime fixture",
-        Grid = new HexGridDefinition
-        {
-            Id = Guid.Parse("99999999-9999-9999-9999-999999999999"),
-            NeighborCenterDistance = Miles(12)
-        },
-        Locations = locations ?? [],
-        Features = features ?? []
-    };
-
     private static ExpeditionState CreateExpedition(
-        OverworldDefinition? world = null,
         HexTraversalState? traversal = null,
         NavigationRuntimeState? navigation = null)
     {
-        world ??= CreateWorld();
         traversal ??= HexTraversalState.StartingIn(new HexCoordinate(0, 0), DistanceUnit.Miles);
         return new ExpeditionState
         {
             Id = Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc"),
-            OverworldId = world.Id,
-            Position = HexGeometry.HexToWorld(world.Grid, traversal.CurrentHex),
+            Position = new WorldPoint(0, 0),
             PositionPrecision = WorldPositionPrecision.HexAnchor,
             Traversal = traversal,
             Navigation = navigation ?? new NavigationRuntimeState(false, 0),
@@ -499,7 +449,6 @@ public sealed class RuntimeEngineTests
     private static DistanceMeasure Miles(double value) => new(value, DistanceUnit.Miles);
 
     private sealed record Setup(
-        OverworldDefinition World,
-        ExpeditionState Expedition,
-        PlayerKnowledgeState Knowledge);
+        CrawlRuntimeContext Context,
+        ExpeditionState Expedition);
 }

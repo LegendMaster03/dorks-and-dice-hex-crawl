@@ -298,6 +298,11 @@ public sealed class HexCrawlService(IHexCrawlStore store)
         return await SaveWorldAsync(updated, expectedVersion, cancellationToken);
     }
 
+    public Task<IReadOnlyList<ExpeditionSummary>> ListExpeditionsAsync(
+        string ownerUserId,
+        CancellationToken cancellationToken = default) =>
+        store.ListExpeditionsAsync(RequireUser(ownerUserId), cancellationToken);
+
     public async Task<IReadOnlyList<ExpeditionSummary>> ListExpeditionsAsync(
         Guid overworldId,
         string ownerUserId,
@@ -313,10 +318,8 @@ public sealed class HexCrawlService(IHexCrawlStore store)
         CancellationToken cancellationToken = default)
     {
         var owner = RequireUser(ownerUserId);
-        var expedition = await store.GetExpeditionAsync(expeditionId, owner, cancellationToken)
-            ?? throw new HexCrawlNotFoundException("Expedition was not found.");
-        _ = await GetOverworldAsync(expedition.State.OverworldId, owner, cancellationToken);
-        return expedition;
+        return await store.GetExpeditionAsync(expeditionId, owner, cancellationToken)
+            ?? throw new HexCrawlNotFoundException("Crawl session was not found.");
     }
 
     public async Task<StoredExpedition> StartExpeditionAsync(
@@ -331,7 +334,6 @@ public sealed class HexCrawlService(IHexCrawlStore store)
         var state = new ExpeditionState
         {
             Id = expeditionId,
-            OverworldId = world.World.Id,
             Position = HexGeometry.HexToWorld(world.World.Grid, command.StartHex),
             PositionPrecision = WorldPositionPrecision.HexAnchor,
             Traversal = HexTraversalState.StartingIn(command.StartHex, world.World.Grid.NeighborCenterDistance.Unit),
@@ -347,6 +349,7 @@ public sealed class HexCrawlService(IHexCrawlStore store)
         return await store.CreateExpeditionAsync(new StoredExpedition(
             RequiredText(command.Name, "Expedition name"),
             state,
+            new WorldBoundCrawlSessionContext(world.World.Id),
             knowledge,
             profile,
             null,
@@ -365,12 +368,18 @@ public sealed class HexCrawlService(IHexCrawlStore store)
     {
         var expedition = await GetExpeditionAsync(expeditionId, ownerUserId, cancellationToken);
         RequireVersion(command.ExpectedVersion, expedition.Version);
-        var world = await GetOverworldAsync(expedition.State.OverworldId, ownerUserId, cancellationToken);
+        var state = expedition.Runtime as ExpeditionState
+            ?? throw new InvalidOperationException("Spatial expedition advancement requires a spatial crawl session.");
+        var (runtimeContext, world) = await ResolveSpatialContextAsync(expedition, ownerUserId, cancellationToken);
         var provenance = new ResolutionProvenance(command.ResolutionSource, command.DmOverrideNote);
         var profile = expedition.Procedure;
-        var travel = BuildTravel(profile, world.World.Grid.NeighborCenterDistance.Unit, command, provenance);
-        var navigation = BuildNavigation(profile, expedition.State, command, provenance);
-        var encounter = BuildEncounter(profile, expedition.State, command, provenance);
+        var travel = BuildTravel(profile, runtimeContext.HexCenterDistance.Unit, command, provenance);
+        var navigation = BuildNavigation(profile, state, command, provenance);
+        var encounter = BuildEncounter(profile, state, command, provenance);
+        if (world is null && encounter?.Kind == EncounterOutcomeKind.KeyedLocationDiscovery)
+        {
+            throw new InvalidOperationException("Keyed-location discovery requires a world-bound crawl session.");
+        }
         var boundaryDecision = command.RecognizedLost.HasValue || command.Reorient.HasValue
             ? new BoundaryNavigationDecision(command.RecognizedLost ?? false, command.Reorient ?? false, provenance)
             : null;
@@ -384,16 +393,27 @@ public sealed class HexCrawlService(IHexCrawlStore store)
             command.DeliberateDoubleBack,
             command.ContinueAcrossBoundaries);
         var result = _runtime.Advance(
-            world.World,
+            runtimeContext,
             profile,
-            expedition.State,
-            expedition.Knowledge,
+            state,
             plan,
             new WatchAdvanceInputs(travel, navigation, encounter, boundaryDecision, command.DmOverrideNote));
+        var projectedState = result.Expedition;
+        var projectedKnowledge = expedition.Knowledge;
+        if (world is not null)
+        {
+            var projection = ExpeditionWorldComposition.Apply(
+                world.World,
+                result,
+                expedition.RequireKnowledge(),
+                applyAutomaticKnowledge: true);
+            projectedState = projection.State;
+            projectedKnowledge = projection.Knowledge;
+        }
         var updated = expedition with
         {
-            State = result.Expedition,
-            Knowledge = result.Knowledge,
+            Runtime = projectedState,
+            Knowledge = projectedKnowledge,
             PauseReason = result.PauseReason,
             RemainingWatchTime = result.RemainingWatchTime
         };
@@ -408,16 +428,44 @@ public sealed class HexCrawlService(IHexCrawlStore store)
     {
         var expedition = await GetExpeditionAsync(expeditionId, ownerUserId, cancellationToken);
         RequireVersion(command.ExpectedVersion, expedition.Version);
-        var world = await GetOverworldAsync(expedition.State.OverworldId, ownerUserId, cancellationToken);
+        if (expedition.Context is not WorldBoundCrawlSessionContext worldContext)
+        {
+            throw new InvalidOperationException("Semantic discovery requires a world-bound crawl session.");
+        }
+        var world = await GetOverworldAsync(worldContext.WorldId, ownerUserId, cancellationToken);
+        var state = expedition.Runtime as ExpeditionState
+            ?? throw new InvalidOperationException("World-bound discovery requires spatial expedition state.");
         var result = CrawlRuntimeActions.Discover(
             world.World,
-            expedition.State,
-            expedition.Knowledge,
+            state,
+            expedition.RequireKnowledge(),
             command.SubjectId,
             command.SubjectType,
             string.IsNullOrWhiteSpace(command.Source) ? "dm:manual-discovery" : command.Source.Trim());
-        var updated = expedition with { State = result.Expedition, Knowledge = result.Knowledge };
+        var updated = expedition with { Runtime = result.Expedition, Knowledge = result.Knowledge };
         return await SaveExpeditionAsync(updated, command.ExpectedVersion, cancellationToken);
+    }
+
+    private async Task<(CrawlRuntimeContext RuntimeContext, StoredOverworld? World)> ResolveSpatialContextAsync(
+        StoredExpedition expedition,
+        string ownerUserId,
+        CancellationToken cancellationToken)
+    {
+        switch (expedition.Context)
+        {
+            case WorldBoundCrawlSessionContext worldContext:
+            {
+                var world = await GetOverworldAsync(worldContext.WorldId, ownerUserId, cancellationToken);
+                return (ExpeditionWorldComposition.RuntimeContext(world.World), world);
+            }
+            case AbstractHexCrawlSessionContext abstractContext:
+                abstractContext.Validate();
+                return (abstractContext.HexContext, null);
+            case NonSpatialCrawlSessionContext:
+                throw new InvalidOperationException("This crawl session is non-spatial.");
+            default:
+                throw new InvalidOperationException("Unsupported crawl session context.");
+        }
     }
 
     private async Task EnsureSemanticDeletionIsSafeAsync(StoredOverworld world, CancellationToken cancellationToken)

@@ -13,15 +13,13 @@ public enum WorldPositionPrecision
     HexAnchor
 }
 
-public sealed record ExpeditionState
+public sealed record ExpeditionState : CrawlSessionRuntimeState
 {
-    public required Guid Id { get; init; }
-    public required Guid OverworldId { get; init; }
 
-    // World position is retained for maps and future exact positioning, but crawl
-    // procedure resolution uses Traversal rather than ray-casting this point.
-    public required WorldPoint Position { get; init; }
-    public WorldPositionPrecision PositionPrecision { get; init; } = WorldPositionPrecision.Exact;
+    // World position is a projection retained for map composition and persistence
+    // compatibility. CrawlRuntimeEngine uses Traversal only and never reads or writes it.
+    public WorldPoint? Position { get; init; }
+    public WorldPositionPrecision? PositionPrecision { get; init; }
 
     public required HexTraversalState Traversal { get; init; }
     public HexCoordinate CurrentHex => Traversal.CurrentHex;
@@ -37,5 +35,4 @@ public sealed record ExpeditionState
     public TimeSpan ElapsedTravelTime { get; init; }
     public int CompletedWatches { get; init; }
     public ActiveWatchState? ActiveWatch { get; init; }
-    public IReadOnlyList<CrawlRuntimeEvent> History { get; init; } = [];
 }

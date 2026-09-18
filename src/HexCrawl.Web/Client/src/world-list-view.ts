@@ -11,6 +11,7 @@ export async function renderWorldList(
         <section class="hc-page">
             <header class="hc-page-header">
                 <div><h1>Overworlds</h1><p>Create and manage persistent hex-crawl worlds.</p></div>
+                <nav><button type="button" data-home>DM tools</button></nav>
             </header>
             <div class="hc-error" data-error hidden role="alert"></div>
             <div class="hc-columns">
@@ -42,6 +43,7 @@ export async function renderWorldList(
             </div>
         </section>`;
 
+    required<HTMLButtonElement>(root, "[data-home]").addEventListener("click", () => navigate("/"));
     const error = required<HTMLElement>(root, "[data-error]");
     const list = required<HTMLElement>(root, "[data-world-list]");
     const count = required<HTMLElement>(root, "[data-world-count]");

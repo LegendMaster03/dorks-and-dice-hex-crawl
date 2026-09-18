@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { manualEntryResolutionSources, newExpeditionEncounterCadences } from "../.test-dist/expedition-input-policy.js";
-import { encounterCheckDue, navigationResolutionDue, pauseInstruction, watchActionLabel, watchPhase } from "../.test-dist/expedition-workflow.js";
+import { assistantEncounterCheckDue, encounterCheckDue, navigationResolutionDue, pauseInstruction, watchActionLabel, watchPhase } from "../.test-dist/expedition-workflow.js";
 
 function runtime(overrides = {}) {
     return {
         profile: { encounterCadence: "PerWatch", usesNavigationChecks: true },
         pauseReason: null,
-        expedition: { activeWatchNumber: null, completedWatches: 0, currentDay: 1 },
+        expedition: { isSpatial: true, activeWatchNumber: null, completedWatches: 0, currentDay: 1 },
         history: [],
         ...overrides
     };
@@ -57,7 +57,7 @@ test("per-day cadence only requests one encounter resolution per expedition day"
 test("partial watch stays a resume workflow and exposes pending decisions", () => {
     const paused = runtime({
         pauseReason: "ConditionsReviewRequired",
-        expedition: { activeWatchNumber: 3, completedWatches: 2, currentDay: 1 }
+        expedition: { isSpatial: true, activeWatchNumber: 3, completedWatches: 2, currentDay: 1 }
     });
     assert.equal(watchPhase(paused), "paused");
     assert.equal(watchActionLabel(paused), "Resume watch 3");
@@ -68,4 +68,51 @@ test("partial watch stays a resume workflow and exposes pending decisions", () =
 
     const lost = { ...paused, pauseReason: "LostRecognitionRequired" };
     assert.match(pauseInstruction(lost), /reorients/i);
+});
+
+test("focused encounter assistant does not duplicate a per-watch check", () => {
+    const upcoming = runtime({
+        expedition: { isSpatial: true, activeWatchNumber: null, completedWatches: 2, currentDay: 1 }
+    });
+    assert.equal(assistantEncounterCheckDue(upcoming), true);
+
+    const recorded = {
+        ...upcoming,
+        history: [{ kind: "EncounterCheckPerformed", watchNumber: 3, expeditionElapsedHours: 8 }]
+    };
+    assert.equal(assistantEncounterCheckDue(recorded), false);
+
+    const nextWatch = {
+        ...recorded,
+        expedition: { ...recorded.expedition, completedWatches: 3 }
+    };
+    assert.equal(assistantEncounterCheckDue(nextWatch), true);
+});
+
+test("focused encounter assistant respects per-day history", () => {
+    const currentDay = runtime({
+        profile: { encounterCadence: "PerDay", usesNavigationChecks: false },
+        expedition: { isSpatial: true, activeWatchNumber: null, completedWatches: 3, currentDay: 2 },
+        history: [{ kind: "EncounterCheckPerformed", watchNumber: 3, expeditionElapsedHours: 25 }]
+    });
+    assert.equal(assistantEncounterCheckDue(currentDay), false);
+});
+
+
+test("non-spatial active watch still permits its encounter-cadence check", () => {
+    const active = runtime({
+        expedition: {
+            isSpatial: false,
+            activeWatchNumber: 2,
+            completedWatches: 1,
+            currentDay: 1
+        }
+    });
+    assert.equal(assistantEncounterCheckDue(active), true);
+
+    const recorded = {
+        ...active,
+        history: [{ kind: "EncounterCheckPerformed", watchNumber: 2, expeditionElapsedHours: 5 }]
+    };
+    assert.equal(assistantEncounterCheckDue(recorded), false);
 });
