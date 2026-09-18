@@ -368,7 +368,7 @@ public static class CrawlAssistantActions
         }
 
         var events = new List<CrawlRuntimeEvent>();
-        var watchNumber = Math.Max(1, state.CompletedWatches + 1);
+        var watchNumber = state.ActiveWatch?.WatchNumber ?? Math.Max(1, state.CompletedWatches + 1);
         events.Add(Event(
             state,
             events,

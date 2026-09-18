@@ -21,6 +21,15 @@ public sealed record TravelWatchAssistantCommand
     public string? Note { get; init; }
 }
 
+public sealed record NonSpatialWatchAssistantCommand
+{
+    public long ExpectedVersion { get; init; }
+    public double ElapsedHours { get; init; }
+    public ResolutionSource ResolutionSource { get; init; } = ResolutionSource.ProcedureDefault;
+    public string? ResolutionNote { get; init; }
+    public string? Note { get; init; }
+}
+
 public sealed record NavigationAssistantCommand
 {
     public long ExpectedVersion { get; init; }
@@ -107,6 +116,41 @@ public sealed class ExpeditionAssistantService(
 
         return await SaveAsync(
             expedition with { Runtime = state },
+            command.ExpectedVersion,
+            cancellationToken);
+    }
+
+    public async Task<StoredExpedition> RecordNonSpatialWatchAsync(
+        Guid expeditionId,
+        string ownerUserId,
+        NonSpatialWatchAssistantCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        var expedition = await coreService.GetExpeditionAsync(expeditionId, ownerUserId, cancellationToken);
+        RequireVersion(command.ExpectedVersion, expedition.Version);
+
+        if (expedition.Context is not NonSpatialCrawlSessionContext)
+        {
+            throw new InvalidOperationException("Non-spatial watch bookkeeping requires a non-spatial crawl session.");
+        }
+
+        var stateBefore = expedition.Runtime as NonSpatialSessionState
+            ?? throw new InvalidOperationException("Non-spatial watch bookkeeping requires non-spatial session state.");
+
+        var state = CrawlAssistantActions.RecordWatch(
+            expedition.Procedure,
+            stateBefore,
+            new NonSpatialWatchAssistantInput(
+                TimeSpan.FromHours(command.ElapsedHours),
+                new ResolutionProvenance(command.ResolutionSource, command.ResolutionNote),
+                command.Note));
+
+        return await SaveAsync(
+            expedition with
+            {
+                Runtime = state,
+                RemainingWatchTime = state.ActiveWatch?.Remaining ?? TimeSpan.Zero
+            },
             command.ExpectedVersion,
             cancellationToken);
     }
