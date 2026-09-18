@@ -14,7 +14,6 @@ public sealed class WatchStateTests
         var expedition = new ExpeditionState
         {
             Id = Guid.NewGuid(),
-            OverworldId = Guid.NewGuid(),
             Position = new WorldPoint(0, 0),
             Traversal = HexTraversalState.StartingIn(start, DistanceUnit.Miles),
             DistanceTraveled = new DistanceMeasure(0, DistanceUnit.Miles)

@@ -438,7 +438,6 @@ public sealed class RuntimeEngineTests
         return new ExpeditionState
         {
             Id = Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc"),
-            OverworldId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
             Position = new WorldPoint(0, 0),
             PositionPrecision = WorldPositionPrecision.HexAnchor,
             Traversal = traversal,

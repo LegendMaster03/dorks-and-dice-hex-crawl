@@ -130,7 +130,6 @@ public sealed class CrawlAssistantActionsTests
     private static ExpeditionState State() => new()
     {
         Id = Guid.NewGuid(),
-        OverworldId = Guid.NewGuid(),
         Position = new WorldPoint(0, 0),
         PositionPrecision = WorldPositionPrecision.HexAnchor,
         Traversal = HexTraversalState.StartingIn(new HexCoordinate(0, 0), DistanceUnit.Miles),

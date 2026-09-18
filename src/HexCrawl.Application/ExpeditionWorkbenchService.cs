@@ -125,7 +125,10 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
         var knowledge = expedition.Knowledge;
         if (world is not null)
         {
-            knowledge ??= throw new InvalidOperationException("A world-bound crawl session requires player-knowledge state.");
+            if (knowledge is null)
+            {
+                throw new InvalidOperationException("A world-bound crawl session requires player-knowledge state.");
+            }
             presentation = knowledge.PresentationPolicy ?? MapPresentationPolicy.DmControlled();
             presentation.Validate();
             if (knowledge.PresentationPolicy is null)
