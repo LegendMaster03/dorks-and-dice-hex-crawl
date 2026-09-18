@@ -118,10 +118,10 @@ public sealed record WorkbenchExpeditionStateContract(
             nonSpatial.ElapsedTime.TotalHours,
             (int)Math.Floor(nonSpatial.ElapsedTime.TotalDays) + 1,
             nonSpatial.CompletedWatches,
-            null,
-            null,
-            null,
-            null,
+            nonSpatial.ActiveWatch?.WatchNumber,
+            nonSpatial.ActiveWatch?.TotalDuration.TotalHours,
+            nonSpatial.ActiveWatch?.Elapsed.TotalHours,
+            nonSpatial.ActiveWatch?.Remaining.TotalHours,
             null,
             null,
             [],
@@ -424,6 +424,23 @@ public sealed record TravelWatchAssistantRequest(
         IntendedDirection = IntendedDirection,
         ActualDirection = ActualDirection,
         CompleteWatch = CompleteWatch,
+        ResolutionSource = ResolutionSource,
+        ResolutionNote = ResolutionNote,
+        Note = Note
+    };
+}
+
+public sealed record NonSpatialWatchAssistantRequest(
+    long ExpectedVersion,
+    double ElapsedHours,
+    ResolutionSource ResolutionSource = ResolutionSource.ProcedureDefault,
+    string? ResolutionNote = null,
+    string? Note = null)
+{
+    public NonSpatialWatchAssistantCommand ToCommand() => new()
+    {
+        ExpectedVersion = ExpectedVersion,
+        ElapsedHours = ElapsedHours,
         ResolutionSource = ResolutionSource,
         ResolutionNote = ResolutionNote,
         Note = Note

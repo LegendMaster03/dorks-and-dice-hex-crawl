@@ -37,6 +37,7 @@ public static class PersistentApiEndpoints
         api.MapPost("/expeditions/{expeditionId:guid}/advance", AdvanceExpeditionAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/discover", DiscoverAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/assistants/travel", RecordTravelAssistantAsync);
+        api.MapPost("/expeditions/{expeditionId:guid}/assistants/watch", RecordNonSpatialWatchAssistantAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/assistants/navigation", RecordNavigationAssistantAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/assistants/encounters", RecordEncounterAssistantAsync);
     }
@@ -227,6 +228,20 @@ public static class PersistentApiEndpoints
     {
         var owner = UserId(context);
         var expedition = await assistants.RecordTravelWatchAsync(
+            expeditionId, owner, request.ToCommand(), cancellationToken);
+        return Results.Ok(await ContractAsync(expedition, owner, service, cancellationToken));
+    }
+
+    private static async Task<IResult> RecordNonSpatialWatchAssistantAsync(
+        Guid expeditionId,
+        NonSpatialWatchAssistantRequest request,
+        HttpContext context,
+        ExpeditionAssistantService assistants,
+        HexCrawlService service,
+        CancellationToken cancellationToken)
+    {
+        var owner = UserId(context);
+        var expedition = await assistants.RecordNonSpatialWatchAsync(
             expeditionId, owner, request.ToCommand(), cancellationToken);
         return Results.Ok(await ContractAsync(expedition, owner, service, cancellationToken));
     }
