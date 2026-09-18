@@ -6,6 +6,7 @@ import type {
     EncounterCadenceAssistantRequest,
     ExpeditionDetail,
     NavigationAssistantRequest,
+    NonSpatialWatchAssistantRequest,
     ResolutionSource,
     TravelWatchAssistantRequest,
     SpatialRuntimeExpedition
@@ -77,8 +78,10 @@ export async function renderExpeditionAssistant(
         runtime = next;
         required<HTMLElement>(root, "[data-title]").textContent = next.name;
         required<HTMLElement>(root, "[data-context]").textContent = `Crawl context: ${next.context.name}`;
-        required<HTMLElement>(root, "[data-mode]").textContent = modeLabel(mode);
-        required<HTMLButtonElement>(root, "[data-travel]").hidden = !next.expedition.isSpatial;
+        required<HTMLElement>(root, "[data-mode]").textContent = modeLabel(mode, next.expedition.isSpatial);
+        const travelButton = required<HTMLButtonElement>(root, "[data-travel]");
+        travelButton.hidden = false;
+        travelButton.textContent = next.expedition.isSpatial ? "Travel / watch" : "Watch / time";
         required<HTMLButtonElement>(root, "[data-navigation]").hidden = !next.expedition.isSpatial;
         mapButton.hidden = next.overworldId === null;
         renderStatus();
@@ -89,7 +92,9 @@ export async function renderExpeditionAssistant(
     const renderStatus = (): void => {
         const state = runtime.expedition;
         const cells = mode === "travel"
-            ? travelStatus(spatialState(runtime))
+            ? state.isSpatial
+                ? travelStatus(state)
+                : nonSpatialWatchStatus(runtime)
             : mode === "navigation"
                 ? navigationStatus(spatialState(runtime))
                 : [
@@ -121,20 +126,22 @@ export async function renderExpeditionAssistant(
 
     const renderForm = (): void => {
         const state = runtime.expedition;
-        const activeFullWatch = state.activeWatchNumber !== null;
+        const activeFullWatch = state.isSpatial && state.activeWatchNumber !== null;
         warning.hidden = !activeFullWatch;
         warning.textContent = activeFullWatch
             ? `A full-workbench watch is active. Finish or resume watch ${state.activeWatchNumber} in the expedition tracker before using independent assistant bookkeeping.`
             : "";
 
-        required<HTMLElement>(root, "[data-assistant-heading]").textContent = heading(mode);
-        required<HTMLElement>(root, "[data-assistant-description]").textContent = description(mode);
-        if (!state.isSpatial && mode !== "encounters") {
-            form.innerHTML = '<p class="hc-hint">This assistant requires a spatial crawl context. This session is intentionally non-spatial.</p>';
+        required<HTMLElement>(root, "[data-assistant-heading]").textContent = heading(mode, state.isSpatial);
+        required<HTMLElement>(root, "[data-assistant-description]").textContent = description(mode, state.isSpatial);
+        if (!state.isSpatial && mode === "navigation") {
+            form.innerHTML = '<p class="hc-hint">Navigation requires a spatial crawl context. This session intentionally has no direction, position, or grid state.</p>';
             warning.hidden = true;
             return;
         }
-        form.innerHTML = mode === "travel" ? travelForm(runtime) : mode === "navigation" ? navigationForm(runtime) : encounterForm(runtime);
+        form.innerHTML = mode === "travel"
+            ? state.isSpatial ? travelForm(runtime) : nonSpatialWatchForm(runtime)
+            : mode === "navigation" ? navigationForm(runtime) : encounterForm(runtime);
         populateSources(form);
         const submit = required<HTMLButtonElement>(form, 'button[type="submit"]');
         submit.disabled = activeFullWatch;
@@ -153,7 +160,7 @@ export async function renderExpeditionAssistant(
 
     form.addEventListener("submit", event => {
         event.preventDefault();
-        if (pending || runtime.expedition.activeWatchNumber !== null) return;
+        if (pending || (runtime.expedition.isSpatial && runtime.expedition.activeWatchNumber !== null)) return;
         void (async () => {
             clearUiError(error);
             pending = true;
@@ -163,7 +170,9 @@ export async function renderExpeditionAssistant(
             submit.textContent = "Saving…";
             try {
                 const next = mode === "travel"
-                    ? await api.recordTravelAssistant(runtime.id, travelRequest(form, runtime))
+                    ? runtime.expedition.isSpatial
+                        ? await api.recordTravelAssistant(runtime.id, travelRequest(form, runtime))
+                        : await api.recordWatchAssistant(runtime.id, nonSpatialWatchRequest(form, runtime))
                     : mode === "navigation"
                         ? await api.recordNavigationAssistant(runtime.id, navigationRequest(form, runtime))
                         : await api.recordEncounterAssistant(runtime.id, encounterRequest(form, runtime));
@@ -208,6 +217,20 @@ function travelForm(runtime: ExpeditionDetail): string {
         <label><input name="completeWatch" type="checkbox" checked> Mark one watch complete</label>
         ${provenanceFields("travel")}
         <button type="submit" class="hc-primary-action">Record travel / watch</button>`;
+}
+
+function nonSpatialWatchForm(runtime: ExpeditionDetail): string {
+    const state = runtime.expedition;
+    if (state.isSpatial) throw new Error("Expected a non-spatial crawl session.");
+    const watchNumber = state.activeWatchNumber ?? state.completedWatches + 1;
+    const total = state.activeWatchTotalHours ?? runtime.profile.watchHours;
+    const elapsed = state.activeWatchElapsedHours ?? 0;
+    const remaining = state.activeWatchRemainingHours ?? total;
+    return `
+        <p class="hc-hint">Watch ${watchNumber} · configured length ${formatHours(total)} · elapsed ${formatHours(elapsed)} · remaining ${formatHours(remaining)}.</p>
+        <label>Elapsed time to record <input name="elapsedHours" type="number" min="0.001" max="${remaining}" step="any" value="${remaining}"></label>
+        ${provenanceFields("watch")}
+        <button type="submit" class="hc-primary-action">${state.activeWatchNumber === null ? "Start / record watch" : "Resume watch"}</button>`;
 }
 
 function navigationForm(runtime: ExpeditionDetail): string {
@@ -265,6 +288,16 @@ function travelRequest(form: HTMLFormElement, runtime: ExpeditionDetail): Travel
     return request;
 }
 
+function nonSpatialWatchRequest(form: HTMLFormElement, runtime: ExpeditionDetail): NonSpatialWatchAssistantRequest {
+    return {
+        expectedVersion: runtime.version,
+        elapsedHours: numeric(input(form, "elapsedHours")),
+        resolutionSource: select(form, "source").value as ResolutionSource,
+        resolutionNote: optionalText(input(form, "resolutionNote")),
+        note: optionalText(input(form, "note"))
+    };
+}
+
 function navigationRequest(form: HTMLFormElement, runtime: ExpeditionDetail): NavigationAssistantRequest {
     return {
         expectedVersion: runtime.version,
@@ -288,22 +321,31 @@ function encounterRequest(form: HTMLFormElement, runtime: ExpeditionDetail): Enc
 }
 
 function relevantEvent(mode: ExpeditionAssistantMode, kind: string, message: string): boolean {
-    if (kind === "ResolutionProvenanceRecorded") return message.includes(`${mode === "travel" ? "travel" : mode === "navigation" ? "navigation" : "encounter"}-assistant=`);
-    if (mode === "travel") return ["TravelResolved", "DistanceTraveled", "HexExited", "HexEntered", "WatchCompleted"].includes(kind);
+    if (kind === "ResolutionProvenanceRecorded") {
+        if (mode === "travel") return message.includes("travel-assistant=") || message.includes("watch-assistant=");
+        return message.includes(`${mode === "navigation" ? "navigation" : "encounter"}-assistant=`);
+    }
+    if (mode === "travel") return ["WatchStarted", "WatchTimeAdvanced", "TravelResolved", "DistanceTraveled", "HexExited", "HexEntered", "WatchCompleted", "DmOverrideApplied"].includes(kind);
     if (mode === "navigation") return ["NavigationCheckResolved", "ExpeditionBecameLost", "ExpeditionReoriented", "VeerChanged", "VeerReset"].includes(kind);
     return ["EncounterCheckPerformed", "EncounterTriggered"].includes(kind);
 }
 
-function modeLabel(mode: ExpeditionAssistantMode): string {
-    return mode === "travel" ? "Travel / watch assistant" : mode === "navigation" ? "Navigation assistant" : "Encounter cadence assistant";
+function modeLabel(mode: ExpeditionAssistantMode, spatial: boolean): string {
+    if (mode === "travel") return spatial ? "Travel / watch assistant" : "Watch / time assistant";
+    return mode === "navigation" ? "Navigation assistant" : "Encounter cadence assistant";
 }
 
-function heading(mode: ExpeditionAssistantMode): string {
-    return mode === "travel" ? "Travel / watch bookkeeping" : mode === "navigation" ? "Navigation / lost / veer" : "Encounter cadence";
+function heading(mode: ExpeditionAssistantMode, spatial: boolean): string {
+    if (mode === "travel") return spatial ? "Travel / watch bookkeeping" : "Watch / time bookkeeping";
+    return mode === "navigation" ? "Navigation / lost / veer" : "Encounter cadence";
 }
 
-function description(mode: ExpeditionAssistantMode): string {
-    if (mode === "travel") return "Record elapsed travel, resolved distance or hex steps, resulting hex/progress, and watch completion without running navigation or encounter automation.";
+function description(mode: ExpeditionAssistantMode, spatial: boolean): string {
+    if (mode === "travel") {
+        return spatial
+            ? "Record elapsed travel, resolved distance or hex steps, resulting hex/progress, and watch completion without running navigation or encounter automation."
+            : "Record configured watch time, partial progress, resume state, completion, provenance, and notes without inventing spatial travel state.";
+    }
     if (mode === "navigation") return "Record authoritative oriented/lost state and veer without advancing travel or resolving encounters.";
     return "Record encounter-cadence checks and non-geographic outcomes without advancing travel. Keyed-location discovery remains part of world/map composition.";
 }
@@ -321,6 +363,22 @@ function travelStatus(state: SpatialRuntimeExpedition): HTMLElement[] {
         statusCell("Distance", formatDistance(state.distanceTraveled)),
         statusCell("Current hex", `${state.currentHex.q}, ${state.currentHex.r}`),
         statusCell("Completed watches", String(state.completedWatches))
+    ];
+}
+
+function nonSpatialWatchStatus(runtime: ExpeditionDetail): HTMLElement[] {
+    const state = runtime.expedition;
+    if (state.isSpatial) throw new Error("Expected a non-spatial crawl session.");
+    const watch = state.activeWatchNumber === null
+        ? `Ready for watch ${state.completedWatches + 1}`
+        : `Watch ${state.activeWatchNumber}`;
+    return [
+        statusCell("Watch", watch),
+        statusCell("Configured length", formatHours(state.activeWatchTotalHours ?? runtime.profile.watchHours)),
+        statusCell("Watch elapsed", formatHours(state.activeWatchElapsedHours ?? 0)),
+        statusCell("Watch remaining", formatHours(state.activeWatchRemainingHours ?? runtime.profile.watchHours)),
+        statusCell("Completed watches", String(state.completedWatches)),
+        statusCell("Total elapsed", formatHours(state.elapsedTravelHours))
     ];
 }
 
