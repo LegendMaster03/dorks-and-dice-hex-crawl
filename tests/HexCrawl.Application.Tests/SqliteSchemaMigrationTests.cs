@@ -97,15 +97,18 @@ public sealed class SqliteSchemaMigrationTests
                 await using var reader = await command.ExecuteReaderAsync();
                 var overworldNullable = false;
                 var contextRequired = false;
+                var generatedResolutionsRequired = false;
                 while (await reader.ReadAsync())
                 {
                     var name = reader.GetString(1);
                     var notNull = reader.GetInt32(3) == 1;
                     if (name == "overworld_id") overworldNullable = !notNull;
                     if (name == "context_json") contextRequired = notNull;
+                    if (name == "generated_resolutions_json") generatedResolutionsRequired = notNull;
                 }
                 Assert.True(overworldNullable);
                 Assert.True(contextRequired);
+                Assert.True(generatedResolutionsRequired);
             }
 
             await using (var command = migrated.CreateCommand())

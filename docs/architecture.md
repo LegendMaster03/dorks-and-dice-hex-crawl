@@ -94,7 +94,7 @@ The Web layer exposes resource DTOs rather than persistence rows:
 - `POST /api/expeditions` for true standalone `AbstractHex` or `NonSpatial` sessions;
 - world-scoped expedition start/list for `WorldBound` sessions plus session load/advance/discovery routes;
 - independent focused mutations at `/api/expeditions/{expeditionId}/assistants/travel`, `/watch`, `/navigation`, and `/encounters`;
-- auditable procedure input generation at `/api/expeditions/{expeditionId}/resolution-helper`, which returns explicit resolved-value drafts and provenance while persisting each consequential generation attempt as history/version only; it does not apply the generated result or mutate mechanical crawl state.
+- auditable procedure input generation at `/api/expeditions/{expeditionId}/resolution-helper`, which returns explicit resolved-value drafts and a server-generated resolution ID while atomically persisting the attempt, roll trace, values, status, history event, and new aggregate version; it does not apply the generated result or mutate mechanical crawl state. `/advance` accepts `AutomaticRoll` only when that ID resolves to an available generated attempt for the same session/current version/watch and the submitted component values match the persisted generated values.
 
 World-bound creation accepts a procedure preset key, a presentation preset key, and an optional complete procedure snapshot. Standalone creation accepts either an `AbstractHex` context (name, orientation, physical center distance/unit, starting hex) or a `NonSpatial` context (name only). The procedure snapshot must retain the selected preset key as provenance and passes the same domain validation as built-in profiles.
 
