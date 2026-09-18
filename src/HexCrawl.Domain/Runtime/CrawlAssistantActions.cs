@@ -13,6 +13,11 @@ public sealed record TravelWatchAssistantInput(
     bool CompleteWatch,
     string? Note = null);
 
+public sealed record NonSpatialWatchAssistantInput(
+    TimeSpan ElapsedTime,
+    ResolutionProvenance Provenance,
+    string? Note = null);
+
 public sealed record NavigationAssistantInput(
     bool IsLost,
     int VeerSteps,
@@ -134,6 +139,107 @@ public static class CrawlAssistantActions
             DistanceTraveled = Add(state.DistanceTraveled, physicalDistance),
             ElapsedTravelTime = elapsedAfter,
             CompletedWatches = input.CompleteWatch ? state.CompletedWatches + 1 : state.CompletedWatches,
+            History = [.. state.History, .. events]
+        };
+    }
+
+    public static NonSpatialSessionState RecordWatch(
+        CrawlProcedureProfile profile,
+        NonSpatialSessionState state,
+        NonSpatialWatchAssistantInput input)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        ArgumentNullException.ThrowIfNull(state);
+        ArgumentNullException.ThrowIfNull(input);
+        profile.Validate();
+
+        if (input.ElapsedTime <= TimeSpan.Zero)
+        {
+            throw new InvalidOperationException("Elapsed watch time must be positive.");
+        }
+
+        var active = state.ActiveWatch;
+        var events = new List<CrawlRuntimeEvent>();
+        if (active is null)
+        {
+            active = new NonSpatialActiveWatchState(
+                state.CompletedWatches + 1,
+                profile.WatchLength,
+                TimeSpan.Zero);
+            events.Add(Event(
+                state,
+                events,
+                active.WatchNumber,
+                CrawlRuntimeEventKind.WatchStarted,
+                state.ElapsedTime,
+                null,
+                $"Non-spatial watch {active.WatchNumber} started with configured duration {FormatHours(active.TotalDuration)}."));
+        }
+        else
+        {
+            active.Validate();
+        }
+
+        if (input.ElapsedTime > active.Remaining)
+        {
+            throw new InvalidOperationException(
+                $"Elapsed watch time ({FormatHours(input.ElapsedTime)}) exceeds the remaining {FormatHours(active.Remaining)} in watch {active.WatchNumber}.");
+        }
+
+        var elapsedAfter = state.ElapsedTime + input.ElapsedTime;
+        var activeElapsed = active.Elapsed + input.ElapsedTime;
+        var completed = activeElapsed == active.TotalDuration;
+
+        events.Add(Event(
+            state,
+            events,
+            active.WatchNumber,
+            CrawlRuntimeEventKind.WatchTimeAdvanced,
+            elapsedAfter,
+            null,
+            $"Recorded {FormatHours(input.ElapsedTime)} of non-spatial watch time; {Describe(input.Provenance)}{NoteSuffix(input.Note)}."));
+
+        if (completed)
+        {
+            events.Add(Event(
+                state,
+                events,
+                active.WatchNumber,
+                CrawlRuntimeEventKind.WatchCompleted,
+                elapsedAfter,
+                null,
+                $"Non-spatial watch {active.WatchNumber} completed after {FormatHours(active.TotalDuration)}."));
+        }
+
+        if (input.Provenance.Source == ResolutionSource.DmOverride)
+        {
+            events.Add(Event(
+                state,
+                events,
+                active.WatchNumber,
+                CrawlRuntimeEventKind.DmOverrideApplied,
+                elapsedAfter,
+                null,
+                string.IsNullOrWhiteSpace(input.Note)
+                    ? "DM override applied to non-spatial watch bookkeeping."
+                    : $"DM override applied to non-spatial watch bookkeeping: {input.Note.Trim()}"));
+        }
+
+        events.Add(ProvenanceEvent(
+            state,
+            events,
+            active.WatchNumber,
+            elapsedAfter,
+            null,
+            $"watch-assistant={Describe(input.Provenance)}"));
+
+        return state with
+        {
+            ElapsedTime = elapsedAfter,
+            CompletedWatches = completed ? state.CompletedWatches + 1 : state.CompletedWatches,
+            ActiveWatch = completed
+                ? null
+                : active with { Elapsed = activeElapsed },
             History = [.. state.History, .. events]
         };
     }
@@ -380,4 +486,7 @@ public static class CrawlAssistantActions
 
     private static string Format(double value) =>
         value.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
+
+    private static string FormatHours(TimeSpan value) =>
+        $"{value.TotalHours.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)}h";
 }

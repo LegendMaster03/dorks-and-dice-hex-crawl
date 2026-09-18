@@ -6,6 +6,7 @@ namespace HexCrawl.Domain.Runtime;
 public enum CrawlRuntimeEventKind
 {
     WatchStarted,
+    WatchTimeAdvanced,
     WatchCompleted,
     NavigationCheckResolved,
     ExpeditionBecameLost,

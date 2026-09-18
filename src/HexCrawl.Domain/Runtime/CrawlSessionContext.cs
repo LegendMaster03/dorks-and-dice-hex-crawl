@@ -63,8 +63,33 @@ public abstract record CrawlSessionRuntimeState
     public IReadOnlyList<CrawlRuntimeEvent> History { get; init; } = [];
 }
 
+public sealed record NonSpatialActiveWatchState(
+    int WatchNumber,
+    TimeSpan TotalDuration,
+    TimeSpan Elapsed)
+{
+    public TimeSpan Remaining => TotalDuration - Elapsed;
+
+    public void Validate()
+    {
+        if (WatchNumber <= 0)
+        {
+            throw new InvalidOperationException("Watch number must be positive.");
+        }
+        if (TotalDuration <= TimeSpan.Zero)
+        {
+            throw new InvalidOperationException("Watch duration must be positive.");
+        }
+        if (Elapsed < TimeSpan.Zero || Elapsed >= TotalDuration)
+        {
+            throw new InvalidOperationException("An active non-spatial watch must have elapsed time between zero and its total duration.");
+        }
+    }
+}
+
 public sealed record NonSpatialSessionState : CrawlSessionRuntimeState
 {
     public TimeSpan ElapsedTime { get; init; }
     public int CompletedWatches { get; init; }
+    public NonSpatialActiveWatchState? ActiveWatch { get; init; }
 }
