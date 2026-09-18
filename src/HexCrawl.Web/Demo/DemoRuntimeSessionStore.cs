@@ -128,7 +128,6 @@ public sealed class DemoRuntimeSessionStore
         var expedition = new ExpeditionState
         {
             Id = Guid.NewGuid(),
-            OverworldId = world.Id,
             Position = HexGeometry.HexToWorld(world.Grid, startHex),
             PositionPrecision = WorldPositionPrecision.HexAnchor,
             Traversal = HexTraversalState.StartingIn(startHex, world.Grid.NeighborCenterDistance.Unit),

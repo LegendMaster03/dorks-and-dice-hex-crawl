@@ -272,9 +272,9 @@ public sealed class PersistenceApplicationTests
 
         var restarted = await database.ServiceAsync();
         var loaded = await restarted.GetExpeditionAsync(expedition.State.Id, "alice");
-        Assert.Equal(KnowledgeState.Discovered, loaded.Knowledge.Entries[location.Id].State);
-        Assert.False(loaded.Knowledge.Entries.ContainsKey(feature.Id));
-        Assert.Single(loaded.Knowledge.Entries);
+        Assert.Equal(KnowledgeState.Discovered, loaded.RequireKnowledge().Entries[location.Id].State);
+        Assert.False(loaded.RequireKnowledge().Entries.ContainsKey(feature.Id));
+        Assert.Single(loaded.RequireKnowledge().Entries);
     }
 
     [Fact]
