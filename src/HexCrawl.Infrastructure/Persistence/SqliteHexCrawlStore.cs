@@ -168,15 +168,15 @@ public sealed class SqliteHexCrawlStore(string connectionString) : IHexCrawlStor
         command.Transaction = transaction;
         command.CommandText = """
             INSERT INTO expeditions(
-                id, overworld_id, owner_user_id, name, state_json, knowledge_json,
+                id, overworld_id, context_json, owner_user_id, name, state_json, knowledge_json,
                 procedure_json, pause_reason, remaining_watch_ticks, version, created_at, updated_at)
             VALUES(
-                $id, $world, $owner, $name, $state, $knowledge,
+                $id, $world, $context, $owner, $name, $state, $knowledge,
                 $procedure, $pause, $remaining, $version, $created, $updated);
             """;
         BindExpedition(command, expedition);
         await command.ExecuteNonQueryAsync(cancellationToken);
-        await InsertEventsAsync(connection, transaction, expedition.State, cancellationToken);
+        await InsertEventsAsync(connection, transaction, expedition.Runtime, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return expedition;
     }
@@ -188,7 +188,7 @@ public sealed class SqliteHexCrawlStore(string connectionString) : IHexCrawlStor
         await using var connection = await OpenAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT id, overworld_id, name, procedure_json, version, created_at, updated_at
+            SELECT id, context_json, name, procedure_json, version, created_at, updated_at
             FROM expeditions
             WHERE owner_user_id = $owner
             ORDER BY updated_at DESC, name;
@@ -198,10 +198,11 @@ public sealed class SqliteHexCrawlStore(string connectionString) : IHexCrawlStor
         var result = new List<ExpeditionSummary>();
         while (await reader.ReadAsync(cancellationToken))
         {
+            var context = Deserialize<CrawlSessionContextSnapshot>(reader.GetString(1)).ToDomain();
             var procedure = Deserialize<CrawlProcedureProfile>(reader.GetString(3));
             result.Add(new ExpeditionSummary(
                 Guid.Parse(reader.GetString(0)),
-                Guid.Parse(reader.GetString(1)),
+                context,
                 reader.GetString(2),
                 procedure.Name,
                 reader.GetInt64(4),
@@ -233,7 +234,7 @@ public sealed class SqliteHexCrawlStore(string connectionString) : IHexCrawlStor
             var procedure = Deserialize<CrawlProcedureProfile>(reader.GetString(2));
             result.Add(new ExpeditionSummary(
                 Guid.Parse(reader.GetString(0)),
-                overworldId,
+                new WorldBoundCrawlSessionContext(overworldId),
                 reader.GetString(1),
                 procedure.Name,
                 reader.GetInt64(3),
@@ -251,7 +252,7 @@ public sealed class SqliteHexCrawlStore(string connectionString) : IHexCrawlStor
         await using var connection = await OpenAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT name, state_json, knowledge_json, procedure_json, pause_reason,
+            SELECT name, context_json, state_json, knowledge_json, procedure_json, pause_reason,
                    remaining_watch_ticks, version, created_at, updated_at
             FROM expeditions
             WHERE id = $id AND owner_user_id = $owner;
@@ -265,22 +266,29 @@ public sealed class SqliteHexCrawlStore(string connectionString) : IHexCrawlStor
         }
 
         var name = reader.GetString(0);
-        var state = Deserialize<ExpeditionStateSnapshot>(reader.GetString(1)).ToDomain();
-        var knowledge = Deserialize<PlayerKnowledgeState>(reader.GetString(2));
-        var procedure = Deserialize<CrawlProcedureProfile>(reader.GetString(3));
-        RuntimePauseReason? pauseReason = reader.IsDBNull(4)
+        var context = Deserialize<CrawlSessionContextSnapshot>(reader.GetString(1)).ToDomain();
+        var runtime = Deserialize<RuntimeStateSnapshot>(reader.GetString(2)).ToDomain();
+        var knowledge = reader.IsDBNull(3) ? null : Deserialize<PlayerKnowledgeState>(reader.GetString(3));
+        var procedure = Deserialize<CrawlProcedureProfile>(reader.GetString(4));
+        RuntimePauseReason? pauseReason = reader.IsDBNull(5)
             ? null
-            : Enum.Parse<RuntimePauseReason>(reader.GetString(4), true);
-        var remaining = TimeSpan.FromTicks(reader.GetInt64(5));
-        var version = reader.GetInt64(6);
-        var created = ParseDate(reader.GetString(7));
-        var updated = ParseDate(reader.GetString(8));
+            : Enum.Parse<RuntimePauseReason>(reader.GetString(5), true);
+        var remaining = TimeSpan.FromTicks(reader.GetInt64(6));
+        var version = reader.GetInt64(7);
+        var created = ParseDate(reader.GetString(8));
+        var updated = ParseDate(reader.GetString(9));
         await reader.CloseAsync();
         var events = await ReadEventsAsync(connection, expeditionId, cancellationToken);
-        state = state with { History = events };
+        runtime = runtime switch
+        {
+            ExpeditionState spatial => spatial with { History = events },
+            NonSpatialSessionState nonSpatial => nonSpatial with { History = events },
+            _ => throw new InvalidDataException("Persisted crawl session runtime kind is not supported.")
+        };
         return new StoredExpedition(
             name,
-            state,
+            runtime,
+            context,
             knowledge,
             procedure,
             pauseReason,
@@ -302,7 +310,7 @@ public sealed class SqliteHexCrawlStore(string connectionString) : IHexCrawlStor
             connection,
             transaction,
             "expeditions",
-            expedition.State.Id,
+            expedition.Id,
             expedition.OwnerUserId,
             cancellationToken);
         if (!currentVersion.HasValue)
@@ -325,7 +333,9 @@ public sealed class SqliteHexCrawlStore(string connectionString) : IHexCrawlStor
         command.Transaction = transaction;
         command.CommandText = """
             UPDATE expeditions
-            SET name = $name,
+            SET overworld_id = $world,
+                context_json = $context,
+                name = $name,
                 state_json = $state,
                 knowledge_json = $knowledge,
                 procedure_json = $procedure,
@@ -335,11 +345,13 @@ public sealed class SqliteHexCrawlStore(string connectionString) : IHexCrawlStor
                 updated_at = $updated
             WHERE id = $id AND owner_user_id = $owner AND version = $expectedVersion;
             """;
-        command.Parameters.AddWithValue("$id", updated.State.Id.ToString("D"));
+        command.Parameters.AddWithValue("$id", updated.Id.ToString("D"));
+        command.Parameters.AddWithValue("$world", updated.Context.OverworldId?.ToString("D") is { } worldId ? worldId : DBNull.Value);
+        command.Parameters.AddWithValue("$context", Serialize(CrawlSessionContextSnapshot.FromDomain(updated.Context)));
         command.Parameters.AddWithValue("$owner", updated.OwnerUserId);
         command.Parameters.AddWithValue("$name", updated.Name);
-        command.Parameters.AddWithValue("$state", Serialize(ExpeditionStateSnapshot.FromDomain(updated.State)));
-        command.Parameters.AddWithValue("$knowledge", Serialize(updated.Knowledge));
+        command.Parameters.AddWithValue("$state", Serialize(RuntimeStateSnapshot.FromDomain(updated.Runtime)));
+        command.Parameters.AddWithValue("$knowledge", updated.Knowledge is null ? DBNull.Value : Serialize(updated.Knowledge));
         command.Parameters.AddWithValue("$procedure", Serialize(updated.Procedure));
         command.Parameters.AddWithValue("$pause", updated.PauseReason?.ToString() is { } pause ? pause : DBNull.Value);
         command.Parameters.AddWithValue("$remaining", updated.RemainingWatchTime.Ticks);
@@ -351,7 +363,7 @@ public sealed class SqliteHexCrawlStore(string connectionString) : IHexCrawlStor
             await transaction.RollbackAsync(cancellationToken);
             return new SaveResult<StoredExpedition>(SaveOutcome.Conflict, null);
         }
-        await InsertEventsAsync(connection, transaction, updated.State, cancellationToken);
+        await InsertEventsAsync(connection, transaction, updated.Runtime, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return new SaveResult<StoredExpedition>(SaveOutcome.Saved, updated);
     }
@@ -412,7 +424,7 @@ public sealed class SqliteHexCrawlStore(string connectionString) : IHexCrawlStor
     private static async Task InsertEventsAsync(
         SqliteConnection connection,
         SqliteTransaction transaction,
-        ExpeditionState state,
+        CrawlSessionRuntimeState state,
         CancellationToken cancellationToken)
     {
         foreach (var runtimeEvent in state.History)
@@ -447,12 +459,13 @@ public sealed class SqliteHexCrawlStore(string connectionString) : IHexCrawlStor
 
     private static void BindExpedition(SqliteCommand command, StoredExpedition expedition)
     {
-        command.Parameters.AddWithValue("$id", expedition.State.Id.ToString("D"));
-        command.Parameters.AddWithValue("$world", expedition.State.OverworldId.ToString("D"));
+        command.Parameters.AddWithValue("$id", expedition.Id.ToString("D"));
+        command.Parameters.AddWithValue("$world", expedition.Context.OverworldId?.ToString("D") is { } worldId ? worldId : DBNull.Value);
+        command.Parameters.AddWithValue("$context", Serialize(CrawlSessionContextSnapshot.FromDomain(expedition.Context)));
         command.Parameters.AddWithValue("$owner", expedition.OwnerUserId);
         command.Parameters.AddWithValue("$name", expedition.Name);
-        command.Parameters.AddWithValue("$state", Serialize(ExpeditionStateSnapshot.FromDomain(expedition.State)));
-        command.Parameters.AddWithValue("$knowledge", Serialize(expedition.Knowledge));
+        command.Parameters.AddWithValue("$state", Serialize(RuntimeStateSnapshot.FromDomain(expedition.Runtime)));
+        command.Parameters.AddWithValue("$knowledge", expedition.Knowledge is null ? DBNull.Value : Serialize(expedition.Knowledge));
         command.Parameters.AddWithValue("$procedure", Serialize(expedition.Procedure));
         command.Parameters.AddWithValue("$pause", expedition.PauseReason?.ToString() is { } pause ? pause : DBNull.Value);
         command.Parameters.AddWithValue("$remaining", expedition.RemainingWatchTime.Ticks);
@@ -477,66 +490,147 @@ public sealed class SqliteHexCrawlStore(string connectionString) : IHexCrawlStor
         return options;
     }
 
-    private sealed record ExpeditionStateSnapshot(
-        Guid Id,
-        Guid OverworldId,
-        WorldPoint Position,
-        WorldPositionPrecision PositionPrecision,
-        HexCoordinate CurrentHex,
-        int? EntryDirection,
-        int? LastTravelDirection,
-        DistanceMeasure Progress,
-        DistanceMeasure? CurrentExitRequirement,
-        int? IntendedDirection,
-        int? ActualDirection,
-        bool IsLost,
-        int VeerSteps,
-        DistanceMeasure DistanceTraveled,
-        long ElapsedTravelTicks,
-        int CompletedWatches,
-        ActiveWatchSnapshot? ActiveWatch)
+    private enum RuntimeStateKind
     {
-        public static ExpeditionStateSnapshot FromDomain(ExpeditionState state) => new(
-            state.Id,
-            state.OverworldId,
-            state.Position,
-            state.PositionPrecision,
-            state.Traversal.CurrentHex,
-            state.Traversal.EntryDirection?.Value,
-            state.Traversal.LastTravelDirection?.Value,
-            state.Traversal.Progress,
-            state.Traversal.CurrentExitRequirement,
-            state.IntendedDirection?.Value,
-            state.ActualDirection?.Value,
-            state.Navigation.IsLost,
-            state.Navigation.VeerSteps,
-            state.DistanceTraveled,
-            state.ElapsedTravelTime.Ticks,
-            state.CompletedWatches,
-            state.ActiveWatch is null ? null : ActiveWatchSnapshot.FromDomain(state.ActiveWatch));
+        Spatial,
+        NonSpatial
+    }
 
-        public ExpeditionState ToDomain() => new()
+    private sealed record RuntimeStateSnapshot
+    {
+        public RuntimeStateKind Kind { get; init; } = RuntimeStateKind.Spatial;
+        public Guid Id { get; init; }
+
+        // Legacy v1 snapshots included OverworldId here. It is ignored after
+        // migration because CrawlSessionContext is now authoritative.
+        public Guid? OverworldId { get; init; }
+
+        public WorldPoint? Position { get; init; }
+        public WorldPositionPrecision? PositionPrecision { get; init; }
+        public HexCoordinate? CurrentHex { get; init; }
+        public int? EntryDirection { get; init; }
+        public int? LastTravelDirection { get; init; }
+        public DistanceMeasure? Progress { get; init; }
+        public DistanceMeasure? CurrentExitRequirement { get; init; }
+        public int? IntendedDirection { get; init; }
+        public int? ActualDirection { get; init; }
+        public bool IsLost { get; init; }
+        public int VeerSteps { get; init; }
+        public DistanceMeasure? DistanceTraveled { get; init; }
+        public long ElapsedTravelTicks { get; init; }
+        public int CompletedWatches { get; init; }
+        public ActiveWatchSnapshot? ActiveWatch { get; init; }
+
+        public static RuntimeStateSnapshot FromDomain(CrawlSessionRuntimeState runtime) => runtime switch
         {
-            Id = Id,
-            OverworldId = OverworldId,
-            Position = Position,
-            PositionPrecision = PositionPrecision,
-            Traversal = new HexTraversalState
+            ExpeditionState state => new RuntimeStateSnapshot
             {
-                CurrentHex = CurrentHex,
-                EntryDirection = EntryDirection.HasValue ? new HexDirection(EntryDirection.Value) : null,
-                LastTravelDirection = LastTravelDirection.HasValue ? new HexDirection(LastTravelDirection.Value) : null,
-                Progress = Progress,
-                CurrentExitRequirement = CurrentExitRequirement
+                Kind = RuntimeStateKind.Spatial,
+                Id = state.Id,
+                Position = state.Position,
+                PositionPrecision = state.PositionPrecision,
+                CurrentHex = state.Traversal.CurrentHex,
+                EntryDirection = state.Traversal.EntryDirection?.Value,
+                LastTravelDirection = state.Traversal.LastTravelDirection?.Value,
+                Progress = state.Traversal.Progress,
+                CurrentExitRequirement = state.Traversal.CurrentExitRequirement,
+                IntendedDirection = state.IntendedDirection?.Value,
+                ActualDirection = state.ActualDirection?.Value,
+                IsLost = state.Navigation.IsLost,
+                VeerSteps = state.Navigation.VeerSteps,
+                DistanceTraveled = state.DistanceTraveled,
+                ElapsedTravelTicks = state.ElapsedTravelTime.Ticks,
+                CompletedWatches = state.CompletedWatches,
+                ActiveWatch = state.ActiveWatch is null ? null : ActiveWatchSnapshot.FromDomain(state.ActiveWatch)
             },
-            IntendedDirection = IntendedDirection.HasValue ? new HexDirection(IntendedDirection.Value) : null,
-            ActualDirection = ActualDirection.HasValue ? new HexDirection(ActualDirection.Value) : null,
-            Navigation = new NavigationRuntimeState(IsLost, VeerSteps),
-            DistanceTraveled = DistanceTraveled,
-            ElapsedTravelTime = TimeSpan.FromTicks(ElapsedTravelTicks),
-            CompletedWatches = CompletedWatches,
-            ActiveWatch = ActiveWatch?.ToDomain(),
-            History = []
+            NonSpatialSessionState state => new RuntimeStateSnapshot
+            {
+                Kind = RuntimeStateKind.NonSpatial,
+                Id = state.Id,
+                ElapsedTravelTicks = state.ElapsedTime.Ticks,
+                CompletedWatches = state.CompletedWatches
+            },
+            _ => throw new ArgumentOutOfRangeException(nameof(runtime))
+        };
+
+        public CrawlSessionRuntimeState ToDomain() => Kind switch
+        {
+            RuntimeStateKind.Spatial => ToSpatial(),
+            RuntimeStateKind.NonSpatial => new NonSpatialSessionState
+            {
+                Id = Id,
+                ElapsedTime = TimeSpan.FromTicks(ElapsedTravelTicks),
+                CompletedWatches = CompletedWatches,
+                History = []
+            },
+            _ => throw new InvalidDataException("Persisted crawl session runtime kind is not supported.")
+        };
+
+        private ExpeditionState ToSpatial()
+        {
+            var currentHex = CurrentHex
+                ?? throw new InvalidDataException("Persisted spatial crawl state has no current hex.");
+            var progress = Progress
+                ?? throw new InvalidDataException("Persisted spatial crawl state has no traversal progress.");
+            var distance = DistanceTraveled
+                ?? throw new InvalidDataException("Persisted spatial crawl state has no total distance.");
+            return new ExpeditionState
+            {
+                Id = Id,
+                Position = Position,
+                PositionPrecision = PositionPrecision,
+                Traversal = new HexTraversalState
+                {
+                    CurrentHex = currentHex,
+                    EntryDirection = EntryDirection.HasValue ? new HexDirection(EntryDirection.Value) : null,
+                    LastTravelDirection = LastTravelDirection.HasValue ? new HexDirection(LastTravelDirection.Value) : null,
+                    Progress = progress,
+                    CurrentExitRequirement = CurrentExitRequirement
+                },
+                IntendedDirection = IntendedDirection.HasValue ? new HexDirection(IntendedDirection.Value) : null,
+                ActualDirection = ActualDirection.HasValue ? new HexDirection(ActualDirection.Value) : null,
+                Navigation = new NavigationRuntimeState(IsLost, VeerSteps),
+                DistanceTraveled = distance,
+                ElapsedTravelTime = TimeSpan.FromTicks(ElapsedTravelTicks),
+                CompletedWatches = CompletedWatches,
+                ActiveWatch = ActiveWatch?.ToDomain(),
+                History = []
+            };
+        }
+    }
+
+    private sealed record CrawlSessionContextSnapshot(
+        CrawlSessionContextKind Kind,
+        Guid? OverworldId = null,
+        string? Name = null,
+        HexOrientation? Orientation = null,
+        DistanceMeasure? HexCenterDistance = null)
+    {
+        public static CrawlSessionContextSnapshot FromDomain(CrawlSessionContext context) => context switch
+        {
+            WorldBoundCrawlSessionContext world => new(context.Kind, world.WorldId),
+            AbstractHexCrawlSessionContext hex => new(
+                context.Kind,
+                Name: hex.DisplayName,
+                Orientation: hex.Orientation,
+                HexCenterDistance: hex.HexContext.HexCenterDistance),
+            NonSpatialCrawlSessionContext nonSpatial => new(
+                context.Kind,
+                Name: nonSpatial.DisplayName),
+            _ => throw new ArgumentOutOfRangeException(nameof(context))
+        };
+
+        public CrawlSessionContext ToDomain() => Kind switch
+        {
+            CrawlSessionContextKind.WorldBound => new WorldBoundCrawlSessionContext(
+                OverworldId ?? throw new InvalidDataException("Persisted world-bound context has no overworld id.")),
+            CrawlSessionContextKind.AbstractHex => new AbstractHexCrawlSessionContext(
+                Name ?? "Abstract hex crawl",
+                Orientation ?? HexOrientation.PointyTop,
+                new CrawlRuntimeContext(
+                    HexCenterDistance ?? throw new InvalidDataException("Persisted abstract-hex context has no hex-center distance."))),
+            CrawlSessionContextKind.NonSpatial => new NonSpatialCrawlSessionContext(Name ?? "Non-spatial session"),
+            _ => throw new InvalidDataException("Persisted crawl session context kind is not supported.")
         };
     }
 
