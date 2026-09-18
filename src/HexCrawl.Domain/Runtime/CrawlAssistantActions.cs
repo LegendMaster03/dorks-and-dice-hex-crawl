@@ -28,7 +28,8 @@ public sealed record NavigationAssistantInput(
 public sealed record EncounterCadenceAssistantInput(
     EncounterOutcomeKind Outcome,
     ResolutionProvenance Provenance,
-    string? Note = null);
+    string? Note = null,
+    double? OccursAtHours = null);
 
 public static class CrawlAssistantActions
 {
@@ -252,10 +253,6 @@ public static class CrawlAssistantActions
         ArgumentNullException.ThrowIfNull(input);
         RequireStandaloneState(state);
 
-        if (input.IsLost && input.VeerSteps == 0)
-        {
-            throw new InvalidOperationException("A lost navigation state requires a non-zero veer.");
-        }
         if (!input.IsLost && input.VeerSteps != 0)
         {
             throw new InvalidOperationException("An oriented navigation state must use zero veer.");
@@ -331,7 +328,9 @@ public static class CrawlAssistantActions
             CrawlRuntimeEventKind.EncounterCheckPerformed,
             state.ElapsedTravelTime,
             state.CurrentHex,
-            $"Encounter cadence assistant recorded {input.Outcome}; {Describe(input.Provenance)}{NoteSuffix(input.Note)}."));
+            $"Encounter cadence assistant recorded {input.Outcome}"
+                + (input.OccursAtHours.HasValue ? $" at {Format(input.OccursAtHours.Value)}h into the watch" : "")
+                + $"; {Describe(input.Provenance)}{NoteSuffix(input.Note)}."));
         if (input.Outcome != EncounterOutcomeKind.None)
         {
             events.Add(Event(
@@ -376,7 +375,9 @@ public static class CrawlAssistantActions
             CrawlRuntimeEventKind.EncounterCheckPerformed,
             state.ElapsedTime,
             null,
-            $"Encounter cadence assistant recorded {input.Outcome}; {Describe(input.Provenance)}{NoteSuffix(input.Note)}."));
+            $"Encounter cadence assistant recorded {input.Outcome}"
+                + (input.OccursAtHours.HasValue ? $" at {Format(input.OccursAtHours.Value)}h into the watch" : "")
+                + $"; {Describe(input.Provenance)}{NoteSuffix(input.Note)}."));
         if (input.Outcome != EncounterOutcomeKind.None)
         {
             events.Add(Event(

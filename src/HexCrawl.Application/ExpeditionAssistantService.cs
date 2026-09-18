@@ -19,6 +19,7 @@ public sealed record TravelWatchAssistantCommand
     public ResolutionSource ResolutionSource { get; init; } = ResolutionSource.ManualRoll;
     public string? ResolutionNote { get; init; }
     public string? Note { get; init; }
+    public Guid? GeneratedProcedureResolutionId { get; init; }
 }
 
 public sealed record NonSpatialWatchAssistantCommand
@@ -39,21 +40,25 @@ public sealed record NavigationAssistantCommand
     public ResolutionSource ResolutionSource { get; init; } = ResolutionSource.ManualRoll;
     public string? ResolutionNote { get; init; }
     public string? Note { get; init; }
+    public Guid? GeneratedProcedureResolutionId { get; init; }
 }
 
 public sealed record EncounterCadenceAssistantCommand
 {
     public long ExpectedVersion { get; init; }
     public EncounterOutcomeKind Outcome { get; init; }
+    public double? EncounterHour { get; init; }
     public ResolutionSource ResolutionSource { get; init; } = ResolutionSource.ManualRoll;
     public string? ResolutionNote { get; init; }
     public string? Note { get; init; }
+    public Guid? GeneratedProcedureResolutionId { get; init; }
 }
 
 public sealed class ExpeditionAssistantService(
     IHexCrawlStore store,
     HexCrawlService coreService,
-    CrawlSessionContextResolver contextResolver)
+    CrawlSessionContextResolver contextResolver,
+    GeneratedProcedureResolutionVerifier generatedResolutionVerifier)
 {
     public async Task<StoredExpedition> RecordTravelWatchAsync(
         Guid expeditionId,
@@ -70,7 +75,12 @@ public sealed class ExpeditionAssistantService(
         var context = resolvedContext.RuntimeContext
             ?? throw new InvalidOperationException("Travel/watch bookkeeping requires a spatial crawl session.");
         var unit = context.HexCenterDistance.Unit;
-        var provenance = ClientSuppliedProvenance(command.ResolutionSource, command.ResolutionNote);
+        var generated = generatedResolutionVerifier.VerifyTravelAssistant(expedition, command);
+        var provenance = generatedResolutionVerifier.Provenance(
+            command.ResolutionSource,
+            command.ResolutionNote,
+            generated,
+            item => item.Travel?.Provenance);
 
         ResolvedTravelAmount travel;
         if (expedition.Procedure.TravelResolution == TravelResolutionMode.HexSteps)
@@ -114,8 +124,17 @@ public sealed class ExpeditionAssistantService(
             };
         }
 
+        var finalized = generatedResolutionVerifier.FinalizeUse(
+            expedition,
+            state,
+            generated,
+            command.ExpectedVersion);
         return await SaveAsync(
-            expedition with { Runtime = state },
+            expedition with
+            {
+                Runtime = finalized.Runtime,
+                GeneratedProcedureResolutions = finalized.Resolutions
+            },
             command.ExpectedVersion,
             cancellationToken);
     }
@@ -145,11 +164,18 @@ public sealed class ExpeditionAssistantService(
                 ClientSuppliedProvenance(command.ResolutionSource, command.ResolutionNote),
                 command.Note));
 
+        var finalized = generatedResolutionVerifier.FinalizeUse(
+            expedition,
+            state,
+            null,
+            command.ExpectedVersion);
+        var finalizedState = (NonSpatialSessionState)finalized.Runtime;
         return await SaveAsync(
             expedition with
             {
-                Runtime = state,
-                RemainingWatchTime = state.ActiveWatch?.Remaining ?? TimeSpan.Zero
+                Runtime = finalizedState,
+                RemainingWatchTime = finalizedState.ActiveWatch?.Remaining ?? TimeSpan.Zero,
+                GeneratedProcedureResolutions = finalized.Resolutions
             },
             command.ExpectedVersion,
             cancellationToken);
@@ -171,17 +197,32 @@ public sealed class ExpeditionAssistantService(
 
         var stateBefore = expedition.Runtime as ExpeditionState
             ?? throw new InvalidOperationException("Navigation bookkeeping requires spatial expedition state.");
+        var generated = generatedResolutionVerifier.VerifyNavigationAssistant(expedition, command);
+        var provenance = generatedResolutionVerifier.Provenance(
+            command.ResolutionSource,
+            command.ResolutionNote,
+            generated,
+            item => item.Navigation?.Provenance);
         var state = CrawlAssistantActions.RecordNavigation(
             stateBefore,
             new NavigationAssistantInput(
                 command.IsLost,
                 command.VeerSteps,
                 command.IntendedDirection.HasValue ? new HexDirection(command.IntendedDirection.Value) : null,
-                ClientSuppliedProvenance(command.ResolutionSource, command.ResolutionNote),
+                provenance,
                 command.Note));
 
+        var finalized = generatedResolutionVerifier.FinalizeUse(
+            expedition,
+            state,
+            generated,
+            command.ExpectedVersion);
         return await SaveAsync(
-            expedition with { Runtime = state },
+            expedition with
+            {
+                Runtime = finalized.Runtime,
+                GeneratedProcedureResolutions = finalized.Resolutions
+            },
             command.ExpectedVersion,
             cancellationToken);
     }
@@ -195,10 +236,17 @@ public sealed class ExpeditionAssistantService(
         var expedition = await coreService.GetExpeditionAsync(expeditionId, ownerUserId, cancellationToken);
         RequireVersion(command.ExpectedVersion, expedition.Version);
 
+        var generated = generatedResolutionVerifier.VerifyEncounterAssistant(expedition, command);
+        var provenance = generatedResolutionVerifier.Provenance(
+            command.ResolutionSource,
+            command.ResolutionNote,
+            generated,
+            item => item.Encounter?.Provenance);
         var input = new EncounterCadenceAssistantInput(
             command.Outcome,
-            ClientSuppliedProvenance(command.ResolutionSource, command.ResolutionNote),
-            command.Note);
+            provenance,
+            command.Note,
+            OccursAtHours: command.EncounterHour);
 
         CrawlSessionRuntimeState runtime = expedition.Runtime switch
         {
@@ -207,8 +255,17 @@ public sealed class ExpeditionAssistantService(
             _ => throw new InvalidOperationException("Unsupported crawl session runtime state.")
         };
 
+        var finalized = generatedResolutionVerifier.FinalizeUse(
+            expedition,
+            runtime,
+            generated,
+            command.ExpectedVersion);
         return await SaveAsync(
-            expedition with { Runtime = runtime },
+            expedition with
+            {
+                Runtime = finalized.Runtime,
+                GeneratedProcedureResolutions = finalized.Resolutions
+            },
             command.ExpectedVersion,
             cancellationToken);
     }

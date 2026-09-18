@@ -403,9 +403,42 @@ public sealed record AdvanceExpeditionWorkbenchRequest
 }
 
 
+public sealed record TravelModifierRequest(
+    string Key,
+    string Label,
+    double Multiplier,
+    string Source,
+    string? Note = null)
+{
+    public TravelModifier ToDomain() => new(Key, Label, Multiplier, Source, Note);
+}
+
+public sealed record TravelResolutionContextRequest(
+    double BaseRate,
+    DistanceUnitContract BaseRateUnit,
+    double RateDurationHours,
+    string TravelModeKey,
+    string? TravelModeLabel,
+    string PaceKey,
+    double? PaceMultiplier = null,
+    IReadOnlyList<TravelModifierRequest>? Modifiers = null)
+{
+    public TravelResolutionContext ToDomain() => new(
+        BaseRate,
+        BaseRateUnit.ToDomain(),
+        RateDurationHours,
+        TravelModeKey,
+        TravelModeLabel,
+        PaceKey,
+        PaceMultiplier,
+        Modifiers?.Select(item => item.ToDomain()).ToArray());
+}
+
 public sealed record ResolveProcedureInputsRequest
 {
     public long ExpectedVersion { get; init; }
+    public ProcedureResolutionComponent Component { get; init; } = ProcedureResolutionComponent.All;
+    public TravelResolutionContextRequest? TravelContext { get; init; }
     public double? ExpectedDistance { get; init; }
     public bool SuppressesNavigationCheck { get; init; }
     public bool DeliberateDoubleBack { get; init; }
@@ -417,6 +450,8 @@ public sealed record ResolveProcedureInputsRequest
     public ProcedureResolutionHelperCommand ToCommand() => new()
     {
         ExpectedVersion = ExpectedVersion,
+        Component = Component,
+        TravelContext = TravelContext?.ToDomain(),
         ExpectedDistance = ExpectedDistance,
         SuppressesNavigationCheck = SuppressesNavigationCheck,
         DeliberateDoubleBack = DeliberateDoubleBack,
@@ -439,7 +474,8 @@ public sealed record TravelWatchAssistantRequest(
     bool CompleteWatch,
     ResolutionSource ResolutionSource = ResolutionSource.ManualRoll,
     string? ResolutionNote = null,
-    string? Note = null)
+    string? Note = null,
+    Guid? GeneratedProcedureResolutionId = null)
 {
     public TravelWatchAssistantCommand ToCommand() => new()
     {
@@ -454,7 +490,8 @@ public sealed record TravelWatchAssistantRequest(
         CompleteWatch = CompleteWatch,
         ResolutionSource = ResolutionSource,
         ResolutionNote = ResolutionNote,
-        Note = Note
+        Note = Note,
+        GeneratedProcedureResolutionId = GeneratedProcedureResolutionId
     };
 }
 
@@ -482,7 +519,8 @@ public sealed record NavigationAssistantRequest(
     int? IntendedDirection,
     ResolutionSource ResolutionSource = ResolutionSource.ManualRoll,
     string? ResolutionNote = null,
-    string? Note = null)
+    string? Note = null,
+    Guid? GeneratedProcedureResolutionId = null)
 {
     public NavigationAssistantCommand ToCommand() => new()
     {
@@ -492,23 +530,28 @@ public sealed record NavigationAssistantRequest(
         IntendedDirection = IntendedDirection,
         ResolutionSource = ResolutionSource,
         ResolutionNote = ResolutionNote,
-        Note = Note
+        Note = Note,
+        GeneratedProcedureResolutionId = GeneratedProcedureResolutionId
     };
 }
 
 public sealed record EncounterCadenceAssistantRequest(
     long ExpectedVersion,
     EncounterOutcomeKind Outcome,
+    double? EncounterHour = null,
     ResolutionSource ResolutionSource = ResolutionSource.ManualRoll,
     string? ResolutionNote = null,
-    string? Note = null)
+    string? Note = null,
+    Guid? GeneratedProcedureResolutionId = null)
 {
     public EncounterCadenceAssistantCommand ToCommand() => new()
     {
         ExpectedVersion = ExpectedVersion,
         Outcome = Outcome,
+        EncounterHour = EncounterHour,
         ResolutionSource = ResolutionSource,
         ResolutionNote = ResolutionNote,
-        Note = Note
+        Note = Note,
+        GeneratedProcedureResolutionId = GeneratedProcedureResolutionId
     };
 }

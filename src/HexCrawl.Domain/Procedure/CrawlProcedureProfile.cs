@@ -93,16 +93,63 @@ public sealed record DiceRollResultSet(string Canonical)
     }
 }
 
-public sealed record TravelResolutionHelperProfile(
-    DiceRollFormula Roll,
-    double DistanceFactorPerRollPoint)
+public sealed record TravelPaceDefaults(
+    double? Normal = null,
+    double? Slow = null,
+    double? Fast = null,
+    double? Exploration = null)
 {
+    public double? Resolve(string? key) => key?.Trim().ToLowerInvariant() switch
+    {
+        "normal" => Normal,
+        "slow" => Slow,
+        "fast" => Fast,
+        "exploration" => Exploration,
+        _ => null
+    };
+
     public void Validate()
     {
-        Roll.Validate("Travel helper roll");
-        if (!double.IsFinite(DistanceFactorPerRollPoint) || DistanceFactorPerRollPoint <= 0)
+        ValidatePace(Normal, "normal");
+        ValidatePace(Slow, "slow");
+        ValidatePace(Fast, "fast");
+        ValidatePace(Exploration, "exploration");
+    }
+
+    private static void ValidatePace(double? value, string key)
+    {
+        if (value.HasValue && (!double.IsFinite(value.Value) || value.Value <= 0))
         {
-            throw new InvalidOperationException("Travel helper distance factor must be finite and positive.");
+            throw new InvalidOperationException($"Travel pace '{key}' must be finite and positive.");
+        }
+    }
+}
+
+public sealed record TravelResolutionHelperProfile
+{
+    public bool SupportsRateArithmetic { get; init; }
+    public TravelPaceDefaults? PaceDefaults { get; init; }
+    public DiceRollFormula? Roll { get; init; }
+    public double? DistanceFactorPerRollPoint { get; init; }
+
+    public void Validate()
+    {
+        PaceDefaults?.Validate();
+        if (Roll is null)
+        {
+            if (DistanceFactorPerRollPoint.HasValue)
+            {
+                throw new InvalidOperationException("Travel helper variance factor requires a variance roll.");
+            }
+            return;
+        }
+
+        Roll.Validate("Travel helper roll");
+        if (!DistanceFactorPerRollPoint.HasValue
+            || !double.IsFinite(DistanceFactorPerRollPoint.Value)
+            || DistanceFactorPerRollPoint.Value <= 0)
+        {
+            throw new InvalidOperationException("Travel helper distance factor must be finite and positive when a variance roll is configured.");
         }
         if (Roll.MinimumTotal <= 0)
         {
@@ -111,9 +158,35 @@ public sealed record TravelResolutionHelperProfile(
     }
 }
 
-public sealed record NavigationResolutionHelperProfile(DiceRollFormula CheckRoll)
+public enum FailureVeerRuleKind
 {
-    public void Validate() => CheckRoll.Validate("Navigation helper check roll");
+    AlexandrianHexD10
+}
+
+public sealed record FailureVeerRule(
+    FailureVeerRuleKind Kind,
+    DiceRollFormula Roll)
+{
+    public void Validate()
+    {
+        Roll.Validate("Navigation failure veer roll");
+        if (Kind == FailureVeerRuleKind.AlexandrianHexD10
+            && (Roll.DiceCount != 1 || Roll.DieSides != 10 || Roll.Modifier != 0))
+        {
+            throw new InvalidOperationException("Alexandrian hex veer requires an unmodified 1d10 roll.");
+        }
+    }
+}
+
+public sealed record NavigationResolutionHelperProfile(
+    DiceRollFormula CheckRoll,
+    FailureVeerRule? FailureVeer = null)
+{
+    public void Validate()
+    {
+        CheckRoll.Validate("Navigation helper check roll");
+        FailureVeer?.Validate();
+    }
 }
 
 public sealed record EncounterResolutionHelperProfile(
@@ -236,8 +309,22 @@ public sealed record CrawlProcedureProfile
         BackExitProgressFactor = 0.5d,
         DirectionChangeProgressCostFactor = 1d / 6d,
         ResolutionHelpers = new ProcedureResolutionHelperProfile(
-            Travel: new TravelResolutionHelperProfile(new DiceRollFormula(2, 6, 3), 0.1d),
-            Navigation: new NavigationResolutionHelperProfile(new DiceRollFormula(1, 20)),
+            Travel: new TravelResolutionHelperProfile
+            {
+                SupportsRateArithmetic = true,
+                PaceDefaults = new TravelPaceDefaults(
+                    Normal: 1d,
+                    Slow: 2d / 3d,
+                    Fast: 1.5d,
+                    Exploration: 0.5d),
+                Roll = new DiceRollFormula(2, 6, 3),
+                DistanceFactorPerRollPoint = 0.1d
+            },
+            Navigation: new NavigationResolutionHelperProfile(
+                new DiceRollFormula(1, 20),
+                new FailureVeerRule(
+                    FailureVeerRuleKind.AlexandrianHexD10,
+                    new DiceRollFormula(1, 10))),
             Encounter: new EncounterResolutionHelperProfile(
                 new DiceRollFormula(1, 8),
                 DiceRollResultSet.From(new[] { 1 }),
@@ -261,7 +348,12 @@ public sealed record CrawlProcedureProfile
         StartingExitProgressFactor = 0.5d,
         NearExitProgressFactor = 0.5d,
         FarExitProgressFactor = 1d,
-        BackExitProgressFactor = 0.5d
+        BackExitProgressFactor = 0.5d,
+        ResolutionHelpers = new ProcedureResolutionHelperProfile(
+            Travel: new TravelResolutionHelperProfile
+            {
+                SupportsRateArithmetic = true
+            })
     };
 
     public static CrawlProcedureProfile SimplifiedHexStep() => new()

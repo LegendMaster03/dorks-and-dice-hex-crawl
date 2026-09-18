@@ -114,13 +114,26 @@ export type DiceRollFormula = {
     modifier: number;
 };
 
+export type TravelPaceDefaults = {
+    normal: number | null;
+    slow: number | null;
+    fast: number | null;
+    exploration: number | null;
+};
+
 export type ProcedureResolutionHelperProfile = {
     travel: {
-        roll: DiceRollFormula;
-        distanceFactorPerRollPoint: number;
+        supportsRateArithmetic: boolean;
+        paceDefaults: TravelPaceDefaults | null;
+        roll: DiceRollFormula | null;
+        distanceFactorPerRollPoint: number | null;
     } | null;
     navigation: {
         checkRoll: DiceRollFormula;
+        failureVeer: {
+            kind: "AlexandrianHexD10";
+            roll: DiceRollFormula;
+        } | null;
     } | null;
     encounter: {
         checkRoll: DiceRollFormula;
@@ -359,8 +372,31 @@ export type RuntimeAdvanceRequest = {
     generatedProcedureResolutionId?: string;
 };
 
+export type ProcedureResolutionComponent = "All" | "Travel" | "Navigation" | "Encounter";
+
+export type TravelModifierInput = {
+    key: string;
+    label: string;
+    multiplier: number;
+    source: string;
+    note?: string;
+};
+
+export type TravelResolutionContextInput = {
+    baseRate: number;
+    baseRateUnit: DistanceUnit;
+    rateDurationHours: number;
+    travelModeKey: string;
+    travelModeLabel?: string;
+    paceKey: string;
+    paceMultiplier?: number;
+    modifiers?: TravelModifierInput[];
+};
+
 export type ProcedureResolutionHelperRequest = {
     expectedVersion: number;
+    component?: ProcedureResolutionComponent;
+    travelContext?: TravelResolutionContextInput;
     expectedDistance?: number;
     suppressesNavigationCheck: boolean;
     deliberateDoubleBack: boolean;
@@ -382,11 +418,25 @@ export type ProcedureResolutionHelperResult = {
     travel: {
         expectedDistance: number;
         actualDistance: number;
+        unit: DistanceUnit;
+        segmentHours: number;
+        calculation: Array<{
+            key: string;
+            label: string;
+            inputValue: number;
+            multiplier: number;
+            outputValue: number;
+            unitSymbol: string;
+            source: string | null;
+            note: string | null;
+        }>;
         provenance: ResolutionProvenanceValue;
     } | null;
     navigation: {
         outcome: "NotRequired" | "Succeeded" | "Failed";
         veerSteps: number | null;
+        resultingIsLost: boolean;
+        resultingVeerSteps: number;
         provenance: ResolutionProvenanceValue;
     } | null;
     encounter: {
@@ -419,6 +469,7 @@ export type TravelWatchAssistantRequest = {
     resolutionSource: ResolutionSource;
     resolutionNote?: string;
     note?: string;
+    generatedProcedureResolutionId?: string;
 };
 
 export type NonSpatialWatchAssistantRequest = {
@@ -437,14 +488,17 @@ export type NavigationAssistantRequest = {
     resolutionSource: ResolutionSource;
     resolutionNote?: string;
     note?: string;
+    generatedProcedureResolutionId?: string;
 };
 
 export type EncounterCadenceAssistantRequest = {
     expectedVersion: number;
-    outcome: "None" | "WanderingEncounter" | "ManualCustom";
+    outcome: "None" | "WanderingEncounter" | "ManualCustom" | "KeyedLocationDiscovery";
+    encounterHour?: number;
     resolutionSource: ResolutionSource;
     resolutionNote?: string;
     note?: string;
+    generatedProcedureResolutionId?: string;
 };
 
 export type ToolHostContext = {

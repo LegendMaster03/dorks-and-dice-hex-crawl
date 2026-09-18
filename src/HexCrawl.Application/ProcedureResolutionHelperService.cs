@@ -2,6 +2,7 @@ using System.Globalization;
 using HexCrawl.Application.Persistence;
 using HexCrawl.Domain.Procedure;
 using HexCrawl.Domain.Runtime;
+using HexCrawl.Domain.Spatial;
 
 namespace HexCrawl.Application;
 
@@ -10,9 +11,46 @@ public interface IProcedureResolutionRandomSource
     int NextInt32(int minInclusive, int maxExclusive);
 }
 
+public enum ProcedureResolutionComponent
+{
+    All,
+    Travel,
+    Navigation,
+    Encounter
+}
+
+public sealed record TravelModifier(
+    string Key,
+    string Label,
+    double Multiplier,
+    string Source,
+    string? Note = null);
+
+public sealed record TravelResolutionContext(
+    double BaseRate,
+    DistanceUnit BaseRateUnit,
+    double RateDurationHours,
+    string TravelModeKey,
+    string? TravelModeLabel,
+    string PaceKey,
+    double? PaceMultiplier = null,
+    IReadOnlyList<TravelModifier>? Modifiers = null);
+
+public sealed record TravelCalculationStep(
+    string Key,
+    string Label,
+    double InputValue,
+    double Multiplier,
+    double OutputValue,
+    string UnitSymbol,
+    string? Source = null,
+    string? Note = null);
+
 public sealed record ProcedureResolutionHelperCommand
 {
     public long ExpectedVersion { get; init; }
+    public ProcedureResolutionComponent Component { get; init; } = ProcedureResolutionComponent.All;
+    public TravelResolutionContext? TravelContext { get; init; }
     public double? ExpectedDistance { get; init; }
     public bool SuppressesNavigationCheck { get; init; }
     public bool DeliberateDoubleBack { get; init; }
@@ -32,11 +70,16 @@ public sealed record ProcedureResolutionRoll(
 public sealed record ProcedureResolvedTravel(
     double ExpectedDistance,
     double ActualDistance,
+    DistanceUnit Unit,
+    double SegmentHours,
+    IReadOnlyList<TravelCalculationStep> Calculation,
     ResolutionProvenance Provenance);
 
 public sealed record ProcedureResolvedNavigation(
     NavigationCheckOutcome Outcome,
     int? VeerSteps,
+    bool ResultingIsLost,
+    int ResultingVeerSteps,
     ResolutionProvenance Provenance);
 
 public sealed record ProcedureResolvedEncounter(
@@ -106,24 +149,37 @@ public sealed class ProcedureResolutionResolver(IProcedureResolutionRandomSource
             return new ProcedureResolutionHelperResult(expeditionVersion, null, null, null, null, null, rolls, notes);
         }
 
+        var wantsTravel = command.Component is ProcedureResolutionComponent.All or ProcedureResolutionComponent.Travel;
+        var wantsNavigation = command.Component is ProcedureResolutionComponent.All or ProcedureResolutionComponent.Navigation;
+        var wantsEncounter = command.Component is ProcedureResolutionComponent.All or ProcedureResolutionComponent.Encounter;
+
         if (runtime is ExpeditionState spatial)
         {
-            travel = ResolveTravel(profile, configured.Travel, command, rolls, notes);
-            navigation = ResolveNavigation(profile, spatial, configured.Navigation, command, rolls, notes);
+            if (wantsTravel)
+            {
+                travel = ResolveTravel(profile, spatial, configured.Travel, command, rolls, notes);
+            }
+            if (wantsNavigation)
+            {
+                navigation = ResolveNavigation(profile, spatial, configured.Navigation, command, rolls, notes);
+            }
         }
         else
         {
-            if (configured.Travel is not null)
+            if (wantsTravel && configured.Travel is not null)
             {
                 notes.Add("Travel resolution was not generated because this session is non-spatial.");
             }
-            if (configured.Navigation is not null)
+            if (wantsNavigation && configured.Navigation is not null)
             {
                 notes.Add("Navigation resolution was not generated because this session is non-spatial.");
             }
         }
 
-        encounter = ResolveEncounter(profile, context, runtime, configured.Encounter, command, rolls, notes);
+        if (wantsEncounter)
+        {
+            encounter = ResolveEncounter(profile, context, runtime, configured.Encounter, command, rolls, notes);
+        }
 
         return new ProcedureResolutionHelperResult(
             expeditionVersion,
@@ -138,6 +194,7 @@ public sealed class ProcedureResolutionResolver(IProcedureResolutionRandomSource
 
     private ProcedureResolvedTravel? ResolveTravel(
         CrawlProcedureProfile profile,
+        ExpeditionState state,
         TravelResolutionHelperProfile? helper,
         ProcedureResolutionHelperCommand command,
         List<ProcedureResolutionRoll> rolls,
@@ -147,34 +204,182 @@ public sealed class ProcedureResolutionResolver(IProcedureResolutionRandomSource
         {
             return null;
         }
-        if (profile.TravelResolution != TravelResolutionMode.ContinuousDistance
-            || profile.ActualDistanceResolution != ActualDistanceResolutionMode.VariableResolved)
+        if (profile.TravelResolution != TravelResolutionMode.ContinuousDistance)
         {
-            notes.Add("The configured travel helper is not applicable to the active travel-resolution mode.");
+            notes.Add("Automatic physical-distance arithmetic is unavailable for a hex-step travel procedure.");
             return null;
         }
 
-        var expected = command.ExpectedDistance
-            ?? throw new InvalidOperationException("The travel helper requires the DM-confirmed expected distance for this watch segment.");
-        if (!double.IsFinite(expected) || expected < 0)
+        var unit = state.DistanceTraveled.Unit;
+        var segment = state.ActiveWatch?.Remaining ?? profile.WatchLength;
+        var calculation = new List<TravelCalculationStep>();
+
+        double expected;
+        if (helper.SupportsRateArithmetic)
         {
-            throw new InvalidOperationException("Expected travel distance must be finite and non-negative.");
+            var travelContext = command.TravelContext
+                ?? throw new InvalidOperationException("The travel helper requires a DM-confirmed base travel rate and rate-duration basis.");
+            if (!double.IsFinite(travelContext.BaseRate) || travelContext.BaseRate <= 0)
+            {
+                throw new InvalidOperationException("Base travel rate must be finite and positive.");
+            }
+            if (!double.IsFinite(travelContext.RateDurationHours) || travelContext.RateDurationHours <= 0)
+            {
+                throw new InvalidOperationException("Travel rate duration basis must be finite and positive.");
+            }
+
+            var baseRate = new DistanceMeasure(travelContext.BaseRate, travelContext.BaseRateUnit).ConvertTo(unit);
+            var running = baseRate.Value;
+            calculation.Add(new TravelCalculationStep(
+                "base-rate",
+                $"Base capability per {travelContext.RateDurationHours:0.###}h",
+                running,
+                1d,
+                running,
+                unit.Symbol,
+                "dm-confirmed",
+                string.IsNullOrWhiteSpace(travelContext.TravelModeLabel)
+                    ? travelContext.TravelModeKey
+                    : travelContext.TravelModeLabel.Trim()));
+
+            var fraction = segment.TotalHours / travelContext.RateDurationHours;
+            var afterSegment = running * fraction;
+            calculation.Add(new TravelCalculationStep(
+                "watch-fraction",
+                $"Current segment {segment.TotalHours:0.###}h",
+                running,
+                fraction,
+                afterSegment,
+                unit.Symbol,
+                "persisted-session"));
+            running = afterSegment;
+
+            var configuredPace = helper.PaceDefaults?.Resolve(travelContext.PaceKey);
+            var pace = travelContext.PaceMultiplier ?? configuredPace
+                ?? throw new InvalidOperationException(
+                    $"Pace '{travelContext.PaceKey}' has no procedure-defined multiplier; provide an explicit DM-confirmed pace multiplier.");
+            ValidateMultiplier(pace, "Travel pace multiplier");
+            var afterPace = running * pace;
+            calculation.Add(new TravelCalculationStep(
+                "pace",
+                $"Pace: {travelContext.PaceKey}",
+                running,
+                pace,
+                afterPace,
+                unit.Symbol,
+                travelContext.PaceMultiplier.HasValue ? "dm-confirmed" : "procedure"));
+            running = afterPace;
+
+            foreach (var modifier in travelContext.Modifiers ?? [])
+            {
+                if (string.IsNullOrWhiteSpace(modifier.Key) || string.IsNullOrWhiteSpace(modifier.Label))
+                {
+                    throw new InvalidOperationException("Travel modifiers require a key and label.");
+                }
+                ValidateMultiplier(modifier.Multiplier, $"Travel modifier '{modifier.Label}'");
+                var output = running * modifier.Multiplier;
+                calculation.Add(new TravelCalculationStep(
+                    $"modifier:{modifier.Key.Trim()}",
+                    modifier.Label.Trim(),
+                    running,
+                    modifier.Multiplier,
+                    output,
+                    unit.Symbol,
+                    string.IsNullOrWhiteSpace(modifier.Source) ? "dm-confirmed" : modifier.Source.Trim(),
+                    string.IsNullOrWhiteSpace(modifier.Note) ? null : modifier.Note.Trim()));
+                running = output;
+            }
+
+            expected = running;
+        }
+        else
+        {
+            expected = command.ExpectedDistance
+                ?? throw new InvalidOperationException(
+                    "This older travel-helper snapshot requires a DM-confirmed expected distance because it does not contain typed rate arithmetic.");
+            if (!double.IsFinite(expected) || expected < 0)
+            {
+                throw new InvalidOperationException("Expected travel distance must be finite and non-negative.");
+            }
+            calculation.Add(new TravelCalculationStep(
+                "legacy-expected",
+                "DM-confirmed expected distance",
+                expected,
+                1d,
+                expected,
+                unit.Symbol,
+                "dm-confirmed"));
         }
 
-        var roll = Roll("travel-distance", helper.Roll, rolls);
-        var actual = expected * roll.Total * helper.DistanceFactorPerRollPoint;
+        if (!double.IsFinite(expected) || expected < 0)
+        {
+            throw new InvalidOperationException("The configured travel arithmetic produced an invalid expected distance.");
+        }
+
+        calculation.Add(new TravelCalculationStep(
+            "expected",
+            "Expected distance",
+            expected,
+            1d,
+            expected,
+            unit.Symbol,
+            "calculated"));
+
+        var actual = expected;
+        ProcedureResolutionRoll? variance = null;
+        if (helper.Roll is not null)
+        {
+            var factor = helper.DistanceFactorPerRollPoint
+                ?? throw new InvalidOperationException("Travel variance roll is missing its configured factor.");
+            variance = Roll("travel-distance", helper.Roll, rolls);
+            var multiplier = variance.Total * factor;
+            actual = expected * multiplier;
+            calculation.Add(new TravelCalculationStep(
+                "variance",
+                $"Variance: {Describe(variance)}",
+                expected,
+                multiplier,
+                actual,
+                unit.Symbol,
+                "procedure"));
+        }
+        else if (profile.ActualDistanceResolution == ActualDistanceResolutionMode.VariableResolved)
+        {
+            throw new InvalidOperationException("The active variable-distance procedure snapshot does not configure a variance roll.");
+        }
+
         if (!double.IsFinite(actual) || actual < 0)
         {
-            throw new InvalidOperationException("The configured travel helper produced an invalid distance.");
+            throw new InvalidOperationException("The configured travel helper produced an invalid actual distance.");
         }
+
+        calculation.Add(new TravelCalculationStep(
+            "actual",
+            "Actual distance",
+            actual,
+            1d,
+            actual,
+            unit.Symbol,
+            variance is null ? "calculated" : "procedure"));
 
         var note = string.Create(
             CultureInfo.InvariantCulture,
-            $"Automatic travel helper: {Describe(roll)}; expected={expected:0.###}; factor={helper.DistanceFactorPerRollPoint:0.###}; actual={actual:0.###}.");
+            $"Automatic travel helper: expected={expected:0.###} {unit.Symbol}; actual={actual:0.###} {unit.Symbol}; segment={segment.TotalHours:0.###}h.");
         return new ProcedureResolvedTravel(
             expected,
             actual,
+            unit,
+            segment.TotalHours,
+            calculation,
             new ResolutionProvenance(ResolutionSource.AutomaticRoll, note));
+    }
+
+    private static void ValidateMultiplier(double value, string label)
+    {
+        if (!double.IsFinite(value) || value <= 0)
+        {
+            throw new InvalidOperationException($"{label} must be finite and positive.");
+        }
     }
 
     private ProcedureResolvedNavigation? ResolveNavigation(
@@ -201,25 +406,82 @@ public sealed class ProcedureResolutionResolver(IProcedureResolutionRandomSource
             ? NavigationCheckOutcome.Succeeded
             : NavigationCheckOutcome.Failed;
         int? veer = null;
+        ProcedureResolutionRoll? veerRoll = null;
         if (outcome == NavigationCheckOutcome.Failed)
         {
-            veer = command.FailureVeerSteps
-                ?? throw new InvalidOperationException("A failed navigation helper result requires a DM-confirmed non-zero failure veer.");
-            if (veer == 0)
+            if (helper.FailureVeer is { } rule)
             {
-                throw new InvalidOperationException("A failed navigation helper result requires a non-zero failure veer.");
+                veerRoll = Roll("navigation-veer", rule.Roll, rolls);
+                veer = ResolveFailureVeer(rule, state.Navigation, veerRoll.Total);
+            }
+            else
+            {
+                veer = command.FailureVeerSteps
+                    ?? throw new InvalidOperationException(
+                        "This older navigation-helper snapshot has no typed failure-veer rule; supply a DM-confirmed failure veer or use manual resolution.");
             }
         }
 
+        var preliminary = new ResolvedNavigation(
+            outcome,
+            veer,
+            new ResolutionProvenance(ResolutionSource.AutomaticRoll, null));
+        var resulting = NavigationResolutionTransition.Apply(profile, state.Navigation, preliminary);
+
         var note = $"Automatic navigation helper: {Describe(roll)}; situational modifier={command.NavigationModifier}; total={resolvedTotal}; DC={difficultyClass}.";
-        if (veer.HasValue)
+        if (veerRoll is not null)
         {
-            note += $" DM-confirmed failure veer={veer.Value}.";
+            note += $" Veer {Describe(veerRoll)} => candidate {veer}.";
         }
+        else if (veer.HasValue)
+        {
+            note += $" DM-confirmed legacy failure veer={veer.Value}.";
+        }
+        note += $" Resulting navigation: {(resulting.IsLost ? $"lost, veer={resulting.VeerSteps}" : "oriented")}.";
+
         return new ProcedureResolvedNavigation(
             outcome,
             veer,
+            resulting.IsLost,
+            resulting.VeerSteps,
             new ResolutionProvenance(ResolutionSource.AutomaticRoll, note));
+    }
+
+    private static int ResolveFailureVeer(
+        FailureVeerRule rule,
+        NavigationRuntimeState previous,
+        int rollTotal)
+    {
+        return rule.Kind switch
+        {
+            FailureVeerRuleKind.AlexandrianHexD10 => ResolveAlexandrianHexVeer(previous, rollTotal),
+            _ => throw new ArgumentOutOfRangeException(nameof(rule.Kind))
+        };
+    }
+
+    private static int ResolveAlexandrianHexVeer(NavigationRuntimeState previous, int rollTotal)
+    {
+        var direction = rollTotal switch
+        {
+            >= 1 and <= 4 => -1,
+            5 or 6 => 0,
+            >= 7 and <= 10 => 1,
+            _ => throw new InvalidOperationException("Alexandrian hex veer roll must total between 1 and 10.")
+        };
+
+        if (!previous.IsLost || previous.VeerSteps == 0)
+        {
+            return direction;
+        }
+        if (previous.VeerSteps < 0 && direction < 0)
+        {
+            return previous.VeerSteps - 1;
+        }
+        if (previous.VeerSteps > 0 && direction > 0)
+        {
+            return previous.VeerSteps + 1;
+        }
+        return previous.VeerSteps;
     }
 
     private ProcedureResolvedEncounter? ResolveEncounter(

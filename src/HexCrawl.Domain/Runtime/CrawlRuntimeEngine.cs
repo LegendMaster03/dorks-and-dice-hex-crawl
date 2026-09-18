@@ -285,32 +285,7 @@ public sealed class CrawlRuntimeEngine
         }
 
         var previous = state.Navigation;
-        var next = previous;
-        if (navigation.Outcome == NavigationCheckOutcome.Succeeded)
-        {
-            if (!previous.IsLost)
-            {
-                next = new NavigationRuntimeState(false, 0);
-            }
-        }
-        else
-        {
-            var candidate = navigation.VeerStepsOnFailure
-                ?? throw new InvalidOperationException("A failed navigation check requires a resolved veer.");
-            if (candidate == 0)
-            {
-                throw new InvalidOperationException("A failed navigation check must produce a non-zero veer.");
-            }
-
-            if (!previous.IsLost)
-            {
-                next = new NavigationRuntimeState(true, candidate);
-            }
-            else if (!profile.UsesPersistentVeer || Math.Abs(candidate) > Math.Abs(previous.VeerSteps))
-            {
-                next = new NavigationRuntimeState(true, candidate);
-            }
-        }
+        var next = NavigationResolutionTransition.Apply(profile, previous, navigation);
 
         events.Add(
             watchNumber,

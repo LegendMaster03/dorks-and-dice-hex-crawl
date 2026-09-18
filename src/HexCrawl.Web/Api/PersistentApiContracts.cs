@@ -205,23 +205,62 @@ public sealed record DiceRollFormulaContract(int DiceCount, int DieSides, int Mo
     public DiceRollFormula ToDomain() => new(DiceCount, DieSides, Modifier);
 }
 
-public sealed record TravelResolutionHelperProfileContract(
-    DiceRollFormulaContract Roll,
-    double DistanceFactorPerRollPoint)
+public sealed record TravelPaceDefaultsContract(
+    double? Normal = null,
+    double? Slow = null,
+    double? Fast = null,
+    double? Exploration = null)
 {
-    public static TravelResolutionHelperProfileContract From(TravelResolutionHelperProfile profile) =>
-        new(DiceRollFormulaContract.From(profile.Roll), profile.DistanceFactorPerRollPoint);
+    public static TravelPaceDefaultsContract From(TravelPaceDefaults profile) =>
+        new(profile.Normal, profile.Slow, profile.Fast, profile.Exploration);
 
-    public TravelResolutionHelperProfile ToDomain() =>
-        new(Roll.ToDomain(), DistanceFactorPerRollPoint);
+    public TravelPaceDefaults ToDomain() => new(Normal, Slow, Fast, Exploration);
 }
 
-public sealed record NavigationResolutionHelperProfileContract(DiceRollFormulaContract CheckRoll)
+public sealed record TravelResolutionHelperProfileContract(
+    DiceRollFormulaContract? Roll = null,
+    double? DistanceFactorPerRollPoint = null,
+    bool SupportsRateArithmetic = false,
+    TravelPaceDefaultsContract? PaceDefaults = null)
+{
+    public static TravelResolutionHelperProfileContract From(TravelResolutionHelperProfile profile) =>
+        new(
+            profile.Roll is null ? null : DiceRollFormulaContract.From(profile.Roll),
+            profile.DistanceFactorPerRollPoint,
+            profile.SupportsRateArithmetic,
+            profile.PaceDefaults is null ? null : TravelPaceDefaultsContract.From(profile.PaceDefaults));
+
+    public TravelResolutionHelperProfile ToDomain() =>
+        new()
+        {
+            Roll = Roll?.ToDomain(),
+            DistanceFactorPerRollPoint = DistanceFactorPerRollPoint,
+            SupportsRateArithmetic = SupportsRateArithmetic,
+            PaceDefaults = PaceDefaults?.ToDomain()
+        };
+}
+
+public sealed record FailureVeerRuleContract(
+    FailureVeerRuleKind Kind,
+    DiceRollFormulaContract Roll)
+{
+    public static FailureVeerRuleContract From(FailureVeerRule rule) =>
+        new(rule.Kind, DiceRollFormulaContract.From(rule.Roll));
+
+    public FailureVeerRule ToDomain() => new(Kind, Roll.ToDomain());
+}
+
+public sealed record NavigationResolutionHelperProfileContract(
+    DiceRollFormulaContract CheckRoll,
+    FailureVeerRuleContract? FailureVeer = null)
 {
     public static NavigationResolutionHelperProfileContract From(NavigationResolutionHelperProfile profile) =>
-        new(DiceRollFormulaContract.From(profile.CheckRoll));
+        new(
+            DiceRollFormulaContract.From(profile.CheckRoll),
+            profile.FailureVeer is null ? null : FailureVeerRuleContract.From(profile.FailureVeer));
 
-    public NavigationResolutionHelperProfile ToDomain() => new(CheckRoll.ToDomain());
+    public NavigationResolutionHelperProfile ToDomain() =>
+        new(CheckRoll.ToDomain(), FailureVeer?.ToDomain());
 }
 
 public sealed record EncounterResolutionHelperProfileContract(
