@@ -35,6 +35,7 @@ public static class PersistentApiEndpoints
         api.MapPost("/overworlds/{overworldId:guid}/expeditions", StartExpeditionAsync);
         api.MapGet("/expeditions/{expeditionId:guid}", GetExpeditionAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/advance", AdvanceExpeditionAsync);
+        api.MapPost("/expeditions/{expeditionId:guid}/resolution-helper", ResolveProcedureInputsAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/discover", DiscoverAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/assistants/travel", RecordTravelAssistantAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/assistants/watch", RecordNonSpatialWatchAssistantAsync);
@@ -203,6 +204,18 @@ public static class PersistentApiEndpoints
         var expedition = await workbench.AdvanceAsync(
             expeditionId, owner, request.ToCommand(), cancellationToken);
         return Results.Ok(await ContractAsync(expedition, owner, service, cancellationToken));
+    }
+
+    private static async Task<IResult> ResolveProcedureInputsAsync(
+        Guid expeditionId,
+        ResolveProcedureInputsRequest request,
+        HttpContext context,
+        ProcedureResolutionHelperService helper,
+        CancellationToken cancellationToken)
+    {
+        var result = await helper.ResolveAsync(
+            expeditionId, UserId(context), request.ToCommand(), cancellationToken);
+        return Results.Ok(result);
     }
 
     private static async Task<IResult> DiscoverAsync(

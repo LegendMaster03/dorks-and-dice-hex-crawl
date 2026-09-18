@@ -108,6 +108,28 @@ export type TravelResolutionMode = "ContinuousDistance" | "HexSteps";
 export type ActualDistanceResolutionMode = "Fixed" | "VariableResolved";
 export type ResolutionSource = "ProcedureDefault" | "AutomaticRoll" | "ManualRoll" | "ExternalSystem" | "DmOverride";
 
+export type DiceRollFormula = {
+    diceCount: number;
+    dieSides: number;
+    modifier: number;
+};
+
+export type ProcedureResolutionHelperProfile = {
+    travel: {
+        roll: DiceRollFormula;
+        distanceFactorPerRollPoint: number;
+    } | null;
+    navigation: {
+        checkRoll: DiceRollFormula;
+    } | null;
+    encounter: {
+        checkRoll: DiceRollFormula;
+        wanderingResults: number[];
+        keyedLocationResults: number[];
+        timingSlots: number;
+    } | null;
+};
+
 export type RuntimeProfile = {
     key: string;
     name: string;
@@ -125,6 +147,7 @@ export type RuntimeProfile = {
     farExitProgressFactor: number;
     backExitProgressFactor: number;
     directionChangeProgressCostFactor: number;
+    resolutionHelpers: ProcedureResolutionHelperProfile | null;
 };
 
 export type PresentationProfile = {
@@ -333,6 +356,51 @@ export type RuntimeAdvanceRequest = {
     recognizedLost?: boolean;
     reorient?: boolean;
     dmOverrideNote?: string;
+};
+
+export type ProcedureResolutionHelperRequest = {
+    expectedVersion: number;
+    expectedDistance?: number;
+    suppressesNavigationCheck: boolean;
+    deliberateDoubleBack: boolean;
+    navigationDifficultyClass?: number;
+    navigationModifier: number;
+    failureVeerSteps?: number;
+    keyedLocationId?: string;
+};
+
+export type ResolutionProvenanceValue = {
+    source: ResolutionSource;
+    note: string | null;
+};
+
+export type ProcedureResolutionHelperResult = {
+    expeditionVersion: number;
+    travel: {
+        expectedDistance: number;
+        actualDistance: number;
+        provenance: ResolutionProvenanceValue;
+    } | null;
+    navigation: {
+        outcome: "NotRequired" | "Succeeded" | "Failed";
+        veerSteps: number | null;
+        provenance: ResolutionProvenanceValue;
+    } | null;
+    encounter: {
+        kind: "None" | "WanderingEncounter" | "KeyedLocationDiscovery" | "ManualCustom";
+        occursAtHours: number | null;
+        locationId: string | null;
+        note: string | null;
+        provenance: ResolutionProvenanceValue;
+    } | null;
+    rolls: Array<{
+        purpose: string;
+        formula: string;
+        dice: number[];
+        modifier: number;
+        total: number;
+    }>;
+    notes: string[];
 };
 
 export type TravelWatchAssistantRequest = {

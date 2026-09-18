@@ -289,7 +289,8 @@ public sealed record StartStandaloneCrawlSessionRequest(
         NearExitProgressFactor = profile.NearExitProgressFactor,
         FarExitProgressFactor = profile.FarExitProgressFactor,
         BackExitProgressFactor = profile.BackExitProgressFactor,
-        DirectionChangeProgressCostFactor = profile.DirectionChangeProgressCostFactor
+        DirectionChangeProgressCostFactor = profile.DirectionChangeProgressCostFactor,
+        ResolutionHelpers = profile.ResolutionHelpers?.ToDomain()
     };
 }
 
@@ -324,7 +325,8 @@ public sealed record StartExpeditionWorkbenchRequest(
         NearExitProgressFactor = profile.NearExitProgressFactor,
         FarExitProgressFactor = profile.FarExitProgressFactor,
         BackExitProgressFactor = profile.BackExitProgressFactor,
-        DirectionChangeProgressCostFactor = profile.DirectionChangeProgressCostFactor
+        DirectionChangeProgressCostFactor = profile.DirectionChangeProgressCostFactor,
+        ResolutionHelpers = profile.ResolutionHelpers?.ToDomain()
     };
 }
 
@@ -398,6 +400,30 @@ public sealed record AdvanceExpeditionWorkbenchRequest
     };
 }
 
+
+public sealed record ResolveProcedureInputsRequest
+{
+    public long ExpectedVersion { get; init; }
+    public double? ExpectedDistance { get; init; }
+    public bool SuppressesNavigationCheck { get; init; }
+    public bool DeliberateDoubleBack { get; init; }
+    public int? NavigationDifficultyClass { get; init; }
+    public int NavigationModifier { get; init; }
+    public int? FailureVeerSteps { get; init; }
+    public Guid? KeyedLocationId { get; init; }
+
+    public ProcedureResolutionHelperCommand ToCommand() => new()
+    {
+        ExpectedVersion = ExpectedVersion,
+        ExpectedDistance = ExpectedDistance,
+        SuppressesNavigationCheck = SuppressesNavigationCheck,
+        DeliberateDoubleBack = DeliberateDoubleBack,
+        NavigationDifficultyClass = NavigationDifficultyClass,
+        NavigationModifier = NavigationModifier,
+        FailureVeerSteps = FailureVeerSteps,
+        KeyedLocationId = KeyedLocationId
+    };
+}
 
 public sealed record TravelWatchAssistantRequest(
     long ExpectedVersion,

@@ -5,7 +5,7 @@ import { worldToHex } from "./hex-math";
 import { MapSurface } from "./map-surface";
 import { discoveredSubjectIds, directionLabel, formatDistance, formatHours } from "./runtime-view";
 import { canonicalExpeditionRoute } from "./tool-route";
-import type { ExpeditionDetail, Overworld, ResolutionSource, RuntimeAdvanceRequest, SpatialRuntimeExpedition } from "./types";
+import type { ExpeditionDetail, Overworld, ProcedureResolutionHelperRequest, ProcedureResolutionHelperResult, ResolutionSource, RuntimeAdvanceRequest, SpatialRuntimeExpedition } from "./types";
 import { clearUiError, showUiError } from "./ui-error";
 
 export type ExpeditionViewMode = "map" | "tracker";
@@ -91,6 +91,21 @@ export async function renderExpedition(
                                 <p class="hc-hint" data-direction-hint></p>
                             </fieldset>
 
+                            <fieldset data-resolution-helper>
+                                <legend>Optional procedure resolution helper</legend>
+                                <p class="hc-hint">Generate the procedure-defined random inputs for this watch. The helper only fills the explicit resolved fields below; nothing changes in the crawl session until you run the watch.</p>
+                                <div data-helper-travel><p class="hc-hint">Travel uses the expected distance entered below as the DM-confirmed situational input.</p></div>
+                                <div data-helper-navigation class="hc-form">
+                                    <label>Navigation DC <input name="helperNavigationDc" type="number" step="1" placeholder="DM-confirmed DC"></label>
+                                    <label>Navigation modifier <input name="helperNavigationModifier" type="number" step="1" value="0"></label>
+                                    <label>Failure veer <input name="helperFailureVeer" type="number" step="1" placeholder="+1 or -1"></label>
+                                    <p class="hc-hint">Failure veer remains DM-confirmed because the deterministic runtime requires an explicit non-zero veer on a failed navigation check.</p>
+                                </div>
+                                <div data-helper-encounter><p class="hc-hint">The configured encounter check and encounter timing are generated automatically when a check is due.</p></div>
+                                <button type="button" data-resolution-helper-button>Resolve configured inputs</button>
+                                <p class="hc-hint" data-resolution-helper-result></p>
+                            </fieldset>
+
                             <fieldset data-travel-resolution data-focus-group="travel">
                                 <legend>Resolved travel context</legend>
                                 <p class="hc-hint">Supply the effective movement result for this watch segment. Terrain and route category names are descriptive; the runtime does not infer a multiplier from them.</p>
@@ -144,6 +159,8 @@ export async function renderExpedition(
     const error = required<HTMLElement>(root, "[data-error]");
     const form = required<HTMLFormElement>(root, "[data-advance]");
     const advanceButton = required<HTMLButtonElement>(form, "[data-advance-button]");
+    const resolutionHelperButton = required<HTMLButtonElement>(form, "[data-resolution-helper-button]");
+    const resolutionHelperResult = required<HTMLElement>(form, "[data-resolution-helper-result]");
     const mapHost = root.querySelector<HTMLElement>("[data-map]");
     const map = mapHost && world ? new MapSurface(mapHost, () => world) : null;
     const locationSelect = select(form, "locationId");
@@ -379,9 +396,28 @@ export async function renderExpedition(
 
         syncNavigationVisibility();
         syncEncounterFields();
+        syncHelperVisibility();
         required<HTMLElement>(form, "[data-direction-hint]").textContent = runtime.profile.directionChangesCostProgress
             ? "Changing course can consume intra-hex progress under this procedure. The runtime applies the configured cost."
             : "Direction changes do not consume additional progress under this procedure.";
+    };
+
+    const syncHelperVisibility = (): void => {
+        const helpers = runtime.profile.resolutionHelpers;
+        const continuous = runtime.profile.travelResolution === "ContinuousDistance";
+        const travelActive = Boolean(
+            helpers?.travel
+            && continuous
+            && runtime.profile.actualDistanceResolution === "VariableResolved");
+        const navigationActive = Boolean(
+            helpers?.navigation
+            && navigationResolutionDue(runtime, checkbox(form, "suppressNav").checked, checkbox(form, "doubleBack").checked));
+        const encounterActive = Boolean(helpers?.encounter && encounterCheckDue(runtime));
+
+        required<HTMLElement>(form, "[data-resolution-helper]").hidden = !(travelActive || navigationActive || encounterActive);
+        required<HTMLElement>(form, "[data-helper-travel]").hidden = !travelActive;
+        required<HTMLElement>(form, "[data-helper-navigation]").hidden = !navigationActive;
+        required<HTMLElement>(form, "[data-helper-encounter]").hidden = !encounterActive;
     };
 
     const syncNavigationVisibility = (): void => {
@@ -395,6 +431,65 @@ export async function renderExpedition(
         const outcome = select(form, "encounterOutcome").value;
         required<HTMLElement>(form, "[data-encounter-hour]").hidden = outcome === "None";
         required<HTMLElement>(form, "[data-encounter-location]").hidden = outcome !== "KeyedLocationDiscovery";
+    };
+
+    const applyGeneratedProvenance = (
+        sourceName: string,
+        noteName: string,
+        provenance: { source: ResolutionSource; note: string | null }): void => {
+        const source = select(form, sourceName);
+        if (![...source.options].some(item => item.value === provenance.source)) {
+            source.append(option(provenance.source, sourceLabel(provenance.source)));
+        }
+        source.value = provenance.source;
+        input(form, noteName).value = provenance.note ?? "";
+    };
+
+    const applyHelperResult = (result: ProcedureResolutionHelperResult): void => {
+        if (result.expeditionVersion !== runtime.version) {
+            throw new Error("The helper result was generated for a different crawl-session version.");
+        }
+
+        if (result.travel) {
+            input(form, "expectedDistance").value = String(result.travel.expectedDistance);
+            input(form, "actualDistance").value = String(result.travel.actualDistance);
+            applyGeneratedProvenance("travelSource", "travelNote", result.travel.provenance);
+        }
+        if (result.navigation) {
+            select(form, "navigationOutcome").value = result.navigation.outcome;
+            if (result.navigation.veerSteps !== null) {
+                input(form, "veerSteps").value = String(result.navigation.veerSteps);
+            }
+            applyGeneratedProvenance("navigationSource", "navigationNote", result.navigation.provenance);
+        }
+        if (result.encounter) {
+            select(form, "encounterOutcome").value = result.encounter.kind;
+            if (result.encounter.occursAtHours !== null) {
+                input(form, "encounterHour").value = String(result.encounter.occursAtHours);
+            }
+            if (result.encounter.locationId) {
+                locationSelect.value = result.encounter.locationId;
+            }
+            if (result.encounter.note) {
+                input(form, "encounterNote").value = result.encounter.note;
+            }
+            applyGeneratedProvenance("encounterSource", "encounterSourceNote", result.encounter.provenance);
+        }
+
+        syncNavigationVisibility();
+        syncEncounterFields();
+        const rollText = result.rolls
+            .map(roll => roll.purpose + " " + roll.formula + " [" + roll.dice.join(", ") + "] = " + roll.total)
+            .join("; ");
+        resolutionHelperResult.textContent = [rollText, ...result.notes].filter(Boolean).join(" ");
+    };
+
+    const markAutomaticResultEdited = (sourceName: string, noteName: string): void => {
+        const source = select(form, sourceName);
+        if (source.value !== "AutomaticRoll") return;
+        source.value = "DmOverride";
+        const note = input(form, noteName);
+        if (!note.value.trim()) note.value = "edited after automatic helper result";
     };
 
     const mutate = async (control: HTMLButtonElement | null, action: () => Promise<void>): Promise<void> => {
@@ -414,10 +509,27 @@ export async function renderExpedition(
         }
     };
 
-    checkbox(form, "suppressNav").addEventListener("change", syncNavigationVisibility);
-    checkbox(form, "doubleBack").addEventListener("change", syncNavigationVisibility);
-    select(form, "navigationOutcome").addEventListener("change", syncNavigationVisibility);
-    select(form, "encounterOutcome").addEventListener("change", syncEncounterFields);
+    checkbox(form, "suppressNav").addEventListener("change", () => {
+        syncNavigationVisibility();
+        syncHelperVisibility();
+    });
+    checkbox(form, "doubleBack").addEventListener("change", () => {
+        syncNavigationVisibility();
+        syncHelperVisibility();
+    });
+    select(form, "navigationOutcome").addEventListener("change", () => {
+        markAutomaticResultEdited("navigationSource", "navigationNote");
+        syncNavigationVisibility();
+    });
+    input(form, "veerSteps").addEventListener("input", () => markAutomaticResultEdited("navigationSource", "navigationNote"));
+    select(form, "encounterOutcome").addEventListener("change", () => {
+        markAutomaticResultEdited("encounterSource", "encounterSourceNote");
+        syncEncounterFields();
+    });
+    input(form, "encounterHour").addEventListener("input", () => markAutomaticResultEdited("encounterSource", "encounterSourceNote"));
+    for (const name of ["effectiveDistance", "expectedDistance", "actualDistance", "hexSteps"]) {
+        input(form, name).addEventListener("input", () => markAutomaticResultEdited("travelSource", "travelNote"));
+    }
     required<HTMLButtonElement>(root, "[data-home]").addEventListener("click", () => navigate("/"));
     const editButton = required<HTMLButtonElement>(root, "[data-edit]");
     editButton.hidden = runtime.overworldId === null;
@@ -434,6 +546,42 @@ export async function renderExpedition(
     required<HTMLButtonElement>(root, "[data-view-travel]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}/travel`));
     required<HTMLButtonElement>(root, "[data-view-navigation]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}/navigation`));
     required<HTMLButtonElement>(root, "[data-view-encounters]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}/encounters`));
+
+    resolutionHelperButton.addEventListener("click", () => {
+        void mutate(resolutionHelperButton, async () => {
+            resolutionHelperResult.textContent = "";
+            const helpers = runtime.profile.resolutionHelpers;
+            const navigationActive = Boolean(
+                helpers?.navigation
+                && navigationResolutionDue(runtime, checkbox(form, "suppressNav").checked, checkbox(form, "doubleBack").checked));
+            const travelActive = Boolean(
+                helpers?.travel
+                && runtime.profile.travelResolution === "ContinuousDistance"
+                && runtime.profile.actualDistanceResolution === "VariableResolved");
+
+            const request: ProcedureResolutionHelperRequest = {
+                expectedVersion: runtime.version,
+                suppressesNavigationCheck: checkbox(form, "suppressNav").checked,
+                deliberateDoubleBack: runtime.profile.supportsDeliberateDoubleBack && checkbox(form, "doubleBack").checked,
+                navigationModifier: 0
+            };
+            if (travelActive) {
+                request.expectedDistance = numeric(input(form, "expectedDistance"));
+            }
+            if (navigationActive) {
+                const dc = input(form, "helperNavigationDc");
+                const failureVeer = input(form, "helperFailureVeer");
+                if (!dc.value.trim()) throw new Error("A DM-confirmed navigation DC is required to use the navigation helper.");
+                if (!failureVeer.value.trim()) throw new Error("A DM-confirmed non-zero failure veer is required to use the navigation helper.");
+                request.navigationDifficultyClass = integer(dc);
+                request.navigationModifier = integer(input(form, "helperNavigationModifier"));
+                request.failureVeerSteps = nonZeroInteger(failureVeer);
+            }
+            if (locationSelect.value) request.keyedLocationId = locationSelect.value;
+
+            applyHelperResult(await api.resolveProcedureInputs(runtime.id, request));
+        });
+    });
 
     form.addEventListener("submit", event => {
         event.preventDefault();

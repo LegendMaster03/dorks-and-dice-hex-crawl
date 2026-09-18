@@ -5,9 +5,15 @@ namespace HexCrawl.Application;
 
 public static class ExpeditionProcedureRequirements
 {
-    public static bool IsEncounterCheckDue(CrawlProcedureProfile profile, ExpeditionState state)
+    public static bool IsEncounterCheckDue(CrawlProcedureProfile profile, CrawlSessionRuntimeState state)
     {
-        if (state.ActiveWatch is not null || profile.EncounterCadence == EncounterCheckCadence.None)
+        var activeWatch = state switch
+        {
+            ExpeditionState spatial => spatial.ActiveWatch is not null,
+            NonSpatialSessionState nonSpatial => nonSpatial.ActiveWatch is not null,
+            _ => throw new ArgumentOutOfRangeException(nameof(state))
+        };
+        if (activeWatch || profile.EncounterCadence == EncounterCheckCadence.None)
         {
             return false;
         }
@@ -16,7 +22,13 @@ public static class ExpeditionProcedureRequirements
             return true;
         }
 
-        var day = DayIndex(state.ElapsedTravelTime);
+        var elapsed = state switch
+        {
+            ExpeditionState spatial => spatial.ElapsedTravelTime,
+            NonSpatialSessionState nonSpatial => nonSpatial.ElapsedTime,
+            _ => throw new ArgumentOutOfRangeException(nameof(state))
+        };
+        var day = DayIndex(elapsed);
         return !state.History.Any(runtimeEvent =>
             runtimeEvent.Kind == CrawlRuntimeEventKind.EncounterCheckPerformed
             && DayIndex(runtimeEvent.ExpeditionElapsedTime) == day);

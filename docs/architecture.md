@@ -93,7 +93,8 @@ The Web layer exposes resource DTOs rather than persistence rows:
 - `GET /api/expeditions` for the authenticated user's crawl-session collection, independent of world navigation;
 - `POST /api/expeditions` for true standalone `AbstractHex` or `NonSpatial` sessions;
 - world-scoped expedition start/list for `WorldBound` sessions plus session load/advance/discovery routes;
-- independent focused mutations at `/api/expeditions/{expeditionId}/assistants/travel`, `/watch`, `/navigation`, and `/encounters`.
+- independent focused mutations at `/api/expeditions/{expeditionId}/assistants/travel`, `/watch`, `/navigation`, and `/encounters`;
+- non-mutating procedure input generation at `/api/expeditions/{expeditionId}/resolution-helper`, which returns explicit resolved-value drafts and provenance but does not advance or otherwise save the session.
 
 World-bound creation accepts a procedure preset key, a presentation preset key, and an optional complete procedure snapshot. Standalone creation accepts either an `AbstractHex` context (name, orientation, physical center distance/unit, starting hex) or a `NonSpatial` context (name only). The procedure snapshot must retain the selected preset key as provenance and passes the same domain validation as built-in profiles.
 
@@ -129,6 +130,6 @@ Automatic grid detection, image feature matching, overlapping-map registration, 
 
 Still deferred are campaign sharing, real-time collaborative editing, a dedicated player delivery/session surface for the persisted presentation state, automatic map analysis, four-point projective registration UI, arbitrary-bearing runtime travel, multi-hex automatic backtracking, a general campaign calendar/rest clock, and battle maps.
 
-Rules Core/Characters integration remains optional future resolved-input plumbing; those systems do not become owners of Hex Crawl spatial/runtime state.
+Optional procedure-resolution helpers now occupy the same resolved-input side of the boundary: they can use procedure-snapshot definitions and DM-confirmed situational values to generate explicit inputs, but they do not own or mutate crawl state. The deterministic runtime/application operation still applies those values. Rules Core/Characters integration remains optional future resolved-input plumbing; those systems do not become owners of Hex Crawl spatial/runtime state.
 
 The filesystem map provider is intentionally replaceable infrastructure. The source-map domain, continuous-overworld model, procedure snapshots, and presentation snapshots do not require redesign when storage or later analysis/integration implementations change.

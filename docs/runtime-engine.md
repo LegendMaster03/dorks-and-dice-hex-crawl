@@ -37,7 +37,7 @@ The built-in profiles remain:
 
 A profile controls watch length, travel resolution, actual-distance resolution, encounter cadence, navigation, persistent veer, intra-hex tracking, direction-change cost, deliberate double-back support, and exit-progress factors.
 
-Each expedition persists the **complete profile configuration snapshot** chosen when it starts. The profile key remains provenance, but it is not used to reconstruct an old expedition on reload. A DM can start from a built-in preset and customize the supported fields; `CrawlProcedureProfile.Validate()` remains the validity boundary for both presets and customized snapshots.
+Each expedition persists the **complete profile configuration snapshot** chosen when it starts. The profile key remains provenance, but it is not used to reconstruct an old expedition on reload. A DM can start from a built-in preset and customize the supported fields; `CrawlProcedureProfile.Validate()` remains the validity boundary for both presets and customized snapshots. A profile may also carry optional resolution-helper definitions (dice formulas, result bands, timing slots, and travel multipliers). Those definitions describe procedure behavior and persist with the snapshot; situational values such as expected distance, navigation DC/modifier, and failure veer are supplied by the DM when the helper is invoked.
 
 New-expedition customization exposes `None`, `PerWatch`, and `PerDay` encounter cadence. The `Custom` enum member remains valid for backward compatibility with persisted profiles but is not presented as a new customization option because no typed custom-cadence parameters exist in this slice.
 
@@ -69,7 +69,9 @@ Navigation remains edition-neutral. `ResolvedNavigation` carries a resolved outc
 
 The engine does not perform consequential random rolls. `ResolutionProvenance` supports `ProcedureDefault`, `AutomaticRoll`, `ManualRoll`, `ExternalSystem`, or `DmOverride`.
 
-`AutomaticRoll` is a domain/application provenance value for a trusted helper or integration that actually generated the corresponding resolved value. The current DM workbench has no automatic generator, so ordinary manual selectors do not expose `AutomaticRoll`. Manual DM entry can record `ProcedureDefault`, `ManualRoll`, `ExternalSystem`, or `DmOverride`. A future helper can set `AutomaticRoll` programmatically when it genuinely produces a value.
+`AutomaticRoll` is emitted only when the server-side procedure-resolution helper actually generates the corresponding resolved value. Ordinary manual selectors still do not expose `AutomaticRoll`; manual DM entry can record `ProcedureDefault`, `ManualRoll`, `ExternalSystem`, or `DmOverride`. The non-mutating `POST /api/expeditions/{id}/resolution-helper` operation reads the persisted procedure snapshot and current session state, combines them with explicit DM-confirmed situational inputs, and returns resolved travel/navigation/encounter drafts with roll traces and provenance. The existing `/advance` operation remains the only full-watch application boundary.
+
+The built-in Alexandrian Advanced snapshot configures its variable-distance helper as `2d6+3` with a 10% factor per roll point, its navigation check helper as `1d20`, and its encounter helper as `1d8` with wandering/keyed-location edge results plus eight timing slots. Navigation DC/modifier and the current runtime's required non-zero failure veer are not inferred by the helper. A world-bound keyed-location result also remains subject to explicit location selection and the existing world-composition validation.
 
 The DM workbench carries independent provenance for travel, navigation, encounter, and boundary-decision inputs rather than applying one source label to an entire watch. It appends a compact `ResolutionProvenanceRecorded` history event after each application transition.
 
@@ -127,4 +129,4 @@ The Alexandrian profile remains optional. Terrain movement tables, encounter con
 
 ## Deferred runtime work
 
-Still deferred are Rules Core/Characters integration, authoritative terrain/route mechanical interpretation, encounter-table content, an automatic dice/resolution helper, typed custom encounter-cadence parameters or a scheduling DSL, arbitrary-bearing procedure travel, multi-hex route unwinding, a general campaign calendar/rest clock, real-time multiplayer synchronization, and battle-map behavior.
+Still deferred are Rules Core/Characters integration, authoritative terrain/route mechanical interpretation, encounter-table content, typed custom encounter-cadence parameters or a scheduling DSL, arbitrary-bearing procedure travel, multi-hex route unwinding, a general campaign calendar/rest clock, real-time multiplayer synchronization, and battle-map behavior.

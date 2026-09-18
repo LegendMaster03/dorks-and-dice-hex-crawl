@@ -6,6 +6,7 @@ using HexCrawl.Application.Persistence;
 using HexCrawl.Infrastructure.Assets;
 using HexCrawl.Infrastructure.Hosting;
 using HexCrawl.Infrastructure.Persistence;
+using HexCrawl.Infrastructure.Runtime;
 using HexCrawl.Web.Api;
 using HexCrawl.Web.Authentication;
 using Microsoft.AspNetCore.Http.Features;
@@ -53,6 +54,9 @@ builder.Services.AddScoped<CrawlSessionContextResolver>();
 builder.Services.AddScoped<CrawlSessionService>();
 builder.Services.AddScoped<ExpeditionWorkbenchService>();
 builder.Services.AddScoped<ExpeditionAssistantService>();
+builder.Services.AddSingleton<IProcedureResolutionRandomSource, CryptographicProcedureResolutionRandomSource>();
+builder.Services.AddScoped<ProcedureResolutionResolver>();
+builder.Services.AddScoped<ProcedureResolutionHelperService>();
 builder.Services.AddScoped<SourceMapApplicationService>();
 builder.Services
     .AddHttpClient<IToolHostAuthenticationClient, DorksAndDiceToolHostAuthenticationClient>(client =>
