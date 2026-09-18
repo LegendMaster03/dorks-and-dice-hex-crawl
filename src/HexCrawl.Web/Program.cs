@@ -50,6 +50,7 @@ builder.Services.AddSingleton<IHexCrawlStore>(_ => new SqliteHexCrawlStore(conne
 builder.Services.AddSingleton<IMapAssetStore>(_ => new FilesystemMapAssetStore(assetRoot));
 builder.Services.AddScoped<HexCrawlService>();
 builder.Services.AddScoped<ExpeditionWorkbenchService>();
+builder.Services.AddScoped<ExpeditionAssistantService>();
 builder.Services.AddScoped<SourceMapApplicationService>();
 builder.Services
     .AddHttpClient<IToolHostAuthenticationClient, DorksAndDiceToolHostAuthenticationClient>(client =>
