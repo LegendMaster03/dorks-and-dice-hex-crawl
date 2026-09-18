@@ -1,4 +1,5 @@
 using HexCrawl.Application.Persistence;
+using HexCrawl.Domain.Procedure;
 using HexCrawl.Domain.Runtime;
 using HexCrawl.Domain.Spatial;
 
@@ -55,7 +56,7 @@ public sealed class ExpeditionAssistantService(IHexCrawlStore store, HexCrawlSer
         var unit = context.HexCenterDistance.Unit;
         var provenance = new ResolutionProvenance(command.ResolutionSource, command.ResolutionNote);
         ResolvedTravelAmount travel;
-        if (expedition.Procedure.TravelResolution == Domain.Procedure.TravelResolutionMode.HexSteps)
+        if (expedition.Procedure.TravelResolution == TravelResolutionMode.HexSteps)
         {
             travel = command.HexSteps.HasValue
                 ? ResolvedTravelAmount.Steps(command.HexSteps.Value, provenance)

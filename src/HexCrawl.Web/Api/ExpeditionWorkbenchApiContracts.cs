@@ -5,6 +5,7 @@ using HexCrawl.Domain.Presentation;
 using HexCrawl.Domain.Procedure;
 using HexCrawl.Domain.Runtime;
 using HexCrawl.Domain.Spatial;
+using HexCrawl.Domain.World;
 
 namespace HexCrawl.Web.Api;
 
@@ -96,9 +97,21 @@ public sealed record WorkbenchExpeditionStateContract(
         expedition.ActiveWatch?.EncounterHandled);
 }
 
+public sealed record CrawlContextContract(
+    Guid Id,
+    string Name,
+    DistanceContract HexCenterDistance)
+{
+    public static CrawlContextContract From(OverworldDefinition world) => new(
+        world.Id,
+        world.Name,
+        DistanceContract.From(world.Grid.NeighborCenterDistance));
+}
+
 public sealed record ExpeditionWorkbenchContract(
     Guid Id,
     Guid OverworldId,
+    CrawlContextContract Context,
     string Name,
     long Version,
     DateTimeOffset CreatedAt,
@@ -112,12 +125,13 @@ public sealed record ExpeditionWorkbenchContract(
     IReadOnlyList<KnowledgeEntryContract> Knowledge,
     IReadOnlyList<RuntimeEventContract> History)
 {
-    public static ExpeditionWorkbenchContract From(StoredExpedition expedition)
+    public static ExpeditionWorkbenchContract From(StoredExpedition expedition, OverworldDefinition world)
     {
         var presentation = expedition.Knowledge.PresentationPolicy ?? MapPresentationPolicy.DmControlled();
         return new ExpeditionWorkbenchContract(
             expedition.State.Id,
             expedition.State.OverworldId,
+            CrawlContextContract.From(world),
             expedition.Name,
             expedition.Version,
             expedition.CreatedAt,
@@ -239,5 +253,75 @@ public sealed record AdvanceExpeditionWorkbenchRequest
         RecognizedLost = RecognizedLost,
         Reorient = Reorient,
         DmOverrideNote = DmOverrideNote
+    };
+}
+
+
+public sealed record TravelWatchAssistantRequest(
+    long ExpectedVersion,
+    double ElapsedHours,
+    double? Distance,
+    int? HexSteps,
+    HexCoordinate ResultingHex,
+    double? HexProgress,
+    int? IntendedDirection,
+    int? ActualDirection,
+    bool CompleteWatch,
+    ResolutionSource ResolutionSource = ResolutionSource.ManualRoll,
+    string? ResolutionNote = null,
+    string? Note = null)
+{
+    public TravelWatchAssistantCommand ToCommand() => new()
+    {
+        ExpectedVersion = ExpectedVersion,
+        ElapsedHours = ElapsedHours,
+        Distance = Distance,
+        HexSteps = HexSteps,
+        ResultingHex = ResultingHex,
+        HexProgress = HexProgress,
+        IntendedDirection = IntendedDirection,
+        ActualDirection = ActualDirection,
+        CompleteWatch = CompleteWatch,
+        ResolutionSource = ResolutionSource,
+        ResolutionNote = ResolutionNote,
+        Note = Note
+    };
+}
+
+public sealed record NavigationAssistantRequest(
+    long ExpectedVersion,
+    bool IsLost,
+    int VeerSteps,
+    int? IntendedDirection,
+    ResolutionSource ResolutionSource = ResolutionSource.ManualRoll,
+    string? ResolutionNote = null,
+    string? Note = null)
+{
+    public NavigationAssistantCommand ToCommand() => new()
+    {
+        ExpectedVersion = ExpectedVersion,
+        IsLost = IsLost,
+        VeerSteps = VeerSteps,
+        IntendedDirection = IntendedDirection,
+        ResolutionSource = ResolutionSource,
+        ResolutionNote = ResolutionNote,
+        Note = Note
+    };
+}
+
+public sealed record EncounterCadenceAssistantRequest(
+    long ExpectedVersion,
+    EncounterOutcomeKind Outcome,
+    ResolutionSource ResolutionSource = ResolutionSource.ManualRoll,
+    string? ResolutionNote = null,
+    string? Note = null)
+{
+    public EncounterCadenceAssistantCommand ToCommand() => new()
+    {
+        ExpectedVersion = ExpectedVersion,
+        Outcome = Outcome,
+        ResolutionSource = ResolutionSource,
+        ResolutionNote = ResolutionNote,
+        Note = Note
     };
 }
