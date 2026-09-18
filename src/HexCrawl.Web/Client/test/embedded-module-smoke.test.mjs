@@ -81,7 +81,8 @@ test("Embedded Module mode routes persistent reads, writes, map upload, and map 
             { url: "/tool-host/hex-crawl/api/upstream/api/overworlds/world-1/source-maps", method: "POST" },
             { url: "/tool-host/hex-crawl/api/upstream/api/expeditions", method: "POST" }
         ]);
-        assert.equal(calls.at(-1).form, true);
+        const uploadCall = calls.find(call => call.url.endsWith("/source-maps") && call.method === "POST");
+        assert.equal(uploadCall?.form, true);
     } finally {
         globalThis.fetch = originalFetch;
     }
