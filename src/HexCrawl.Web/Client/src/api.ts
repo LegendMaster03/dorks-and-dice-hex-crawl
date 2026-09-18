@@ -169,8 +169,10 @@ export class HexCrawlApi {
         return this.getJson("/api/presentation/presets", "Presentation presets");
     }
 
-    public listExpeditions(worldId: string): Promise<ExpeditionSummary[]> {
-        return this.getJson(`/api/overworlds/${encodeURIComponent(worldId)}/expeditions`, "Expedition list");
+    public listExpeditions(worldId?: string): Promise<ExpeditionSummary[]> {
+        return worldId
+            ? this.getJson(`/api/overworlds/${encodeURIComponent(worldId)}/expeditions`, "Expedition list")
+            : this.getJson("/api/expeditions", "Expedition list");
     }
 
     public startExpedition(worldId: string, name: string, procedureKey: string, startHex: HexCoordinate): Promise<ExpeditionDetail> {

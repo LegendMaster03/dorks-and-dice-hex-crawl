@@ -82,6 +82,43 @@ public sealed class ExpeditionWorkbenchEndpointsTests
         }
     }
 
+    [Fact]
+    public async Task ExpeditionCollectionListsOwnerExpeditionsAcrossWorlds()
+    {
+        var database = TestWebHost.NewDatabasePath();
+        try
+        {
+            using var factory = TestWebHost.Create(database);
+            using var client = factory.CreateClient();
+            var firstWorld = await CreateWorld(client);
+            var secondWorld = await CreateWorld(client);
+            var firstWorldId = firstWorld.GetProperty("id").GetGuid();
+            var secondWorldId = secondWorld.GetProperty("id").GetGuid();
+
+            foreach (var (worldId, name) in new[] { (firstWorldId, "First crawl"), (secondWorldId, "Second crawl") })
+            {
+                using var startResponse = await client.PostAsJsonAsync($"/api/overworlds/{worldId:D}/expeditions", new
+                {
+                    name,
+                    procedureKey = "simple-fixed-distance",
+                    presentationKey = "dm-controlled",
+                    startHex = new { q = 0, r = 0 }
+                });
+                startResponse.EnsureSuccessStatusCode();
+            }
+
+            var expeditions = await client.GetFromJsonAsync<JsonElement>("/api/expeditions");
+            Assert.Equal(2, expeditions.GetArrayLength());
+            var worldIds = expeditions.EnumerateArray().Select(item => item.GetProperty("overworldId").GetGuid()).ToArray();
+            Assert.Contains(firstWorldId, worldIds);
+            Assert.Contains(secondWorldId, worldIds);
+        }
+        finally
+        {
+            TestWebHost.DeleteDatabase(database);
+        }
+    }
+
     private static async Task<JsonElement> CreateWorld(HttpClient client)
     {
         using var response = await client.PostAsJsonAsync("/api/overworlds", new

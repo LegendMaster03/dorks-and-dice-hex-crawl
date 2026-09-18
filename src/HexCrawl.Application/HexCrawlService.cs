@@ -298,6 +298,11 @@ public sealed class HexCrawlService(IHexCrawlStore store)
         return await SaveWorldAsync(updated, expectedVersion, cancellationToken);
     }
 
+    public Task<IReadOnlyList<ExpeditionSummary>> ListExpeditionsAsync(
+        string ownerUserId,
+        CancellationToken cancellationToken = default) =>
+        store.ListExpeditionsAsync(RequireUser(ownerUserId), cancellationToken);
+
     public async Task<IReadOnlyList<ExpeditionSummary>> ListExpeditionsAsync(
         Guid overworldId,
         string ownerUserId,

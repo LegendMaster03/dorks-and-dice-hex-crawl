@@ -182,6 +182,36 @@ public sealed class SqliteHexCrawlStore(string connectionString) : IHexCrawlStor
     }
 
     public async Task<IReadOnlyList<ExpeditionSummary>> ListExpeditionsAsync(
+        string ownerUserId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT id, overworld_id, name, procedure_json, version, created_at, updated_at
+            FROM expeditions
+            WHERE owner_user_id = $owner
+            ORDER BY updated_at DESC, name;
+            """;
+        command.Parameters.AddWithValue("$owner", ownerUserId);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var result = new List<ExpeditionSummary>();
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var procedure = Deserialize<CrawlProcedureProfile>(reader.GetString(3));
+            result.Add(new ExpeditionSummary(
+                Guid.Parse(reader.GetString(0)),
+                Guid.Parse(reader.GetString(1)),
+                reader.GetString(2),
+                procedure.Name,
+                reader.GetInt64(4),
+                ParseDate(reader.GetString(5)),
+                ParseDate(reader.GetString(6))));
+        }
+        return result;
+    }
+
+    public async Task<IReadOnlyList<ExpeditionSummary>> ListExpeditionsAsync(
         Guid overworldId,
         string ownerUserId,
         CancellationToken cancellationToken = default)

@@ -81,6 +81,10 @@ public interface IHexCrawlStore
         CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<ExpeditionSummary>> ListExpeditionsAsync(
+        string ownerUserId,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<ExpeditionSummary>> ListExpeditionsAsync(
         Guid overworldId,
         string ownerUserId,
         CancellationToken cancellationToken = default);

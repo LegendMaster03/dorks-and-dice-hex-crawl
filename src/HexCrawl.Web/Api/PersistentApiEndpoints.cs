@@ -28,6 +28,7 @@ public static class PersistentApiEndpoints
         api.MapPut("/overworlds/{overworldId:guid}/features/{featureId:guid}", UpdateFeatureAsync);
         api.MapDelete("/overworlds/{overworldId:guid}/features/{featureId:guid}", DeleteFeatureAsync);
 
+        api.MapGet("/expeditions", ListAllExpeditionsAsync);
         api.MapGet("/overworlds/{overworldId:guid}/expeditions", ListExpeditionsAsync);
         api.MapPost("/overworlds/{overworldId:guid}/expeditions", StartExpeditionAsync);
         api.MapGet("/expeditions/{expeditionId:guid}", GetExpeditionAsync);
@@ -123,6 +124,12 @@ public static class PersistentApiEndpoints
         CancellationToken cancellationToken) =>
         Results.Ok(OverworldContract.From(await service.DeleteFeatureAsync(
             overworldId, featureId, UserId(context), expectedVersion, cancellationToken)));
+
+    private static async Task<IResult> ListAllExpeditionsAsync(
+        HttpContext context,
+        HexCrawlService service,
+        CancellationToken cancellationToken) =>
+        Results.Ok(await service.ListExpeditionsAsync(UserId(context), cancellationToken));
 
     private static async Task<IResult> ListExpeditionsAsync(
         Guid overworldId,
