@@ -12,9 +12,10 @@ test("application-owned DOM does not use MutationObserver", () => {
 });
 
 
-test("mapless tracker only loads an Overworld in full-map mode", () => {
+test("mapless tracker only loads an Overworld after the full-map world guard", () => {
     const source = fs.readFileSync(path.join(sourceDir, "expedition-view.ts"), "utf8");
-    assert.match(source, /showMap \? await api\.getOverworld\(runtime\.overworldId\) : null/);
+    assert.match(source, /showMap && runtime\.overworldId === null/);
+    assert.match(source, /showMap \? await api\.getOverworld\(runtime\.overworldId!\) : null/);
 });
 
 test("focused assistants never load an Overworld or construct a map surface", () => {
@@ -24,4 +25,19 @@ test("focused assistants never load an Overworld or construct a map surface", ()
     assert.match(source, /recordTravelAssistant/);
     assert.match(source, /recordNavigationAssistant/);
     assert.match(source, /recordEncounterAssistant/);
+});
+
+
+test("mapless session creation never creates a placeholder Overworld", () => {
+    const source = fs.readFileSync(path.join(sourceDir, "tool-home-view.ts"), "utf8");
+    assert.equal(source.includes("api.createOverworld("), false);
+    assert.match(source, /api\.startStandaloneSession\(request\)/);
+    assert.match(source, /kind: "AbstractHex"/);
+    assert.match(source, /kind: "NonSpatial"/);
+});
+
+test("standalone crawl sessions post directly to the expedition collection", () => {
+    const source = fs.readFileSync(path.join(sourceDir, "api.ts"), "utf8");
+    assert.match(source, /startStandaloneSession/);
+    assert.match(source, /sendJson\("POST", "\/api\/expeditions"/);
 });
