@@ -12,6 +12,7 @@ import type {
     RuntimeAdvanceRequest,
     RuntimeProfile,
     TravelWatchAssistantRequest,
+    NonSpatialWatchAssistantRequest,
     NavigationAssistantRequest,
     EncounterCadenceAssistantRequest,
     SourceMapList,
@@ -215,6 +216,10 @@ export class HexCrawlApi {
 
     public recordTravelAssistant(expeditionId: string, input: TravelWatchAssistantRequest): Promise<ExpeditionDetail> {
         return this.sendJson("POST", `/api/expeditions/${encodeURIComponent(expeditionId)}/assistants/travel`, input, "Travel/watch assistant");
+    }
+
+    public recordWatchAssistant(expeditionId: string, input: NonSpatialWatchAssistantRequest): Promise<ExpeditionDetail> {
+        return this.sendJson("POST", `/api/expeditions/${encodeURIComponent(expeditionId)}/assistants/watch`, input, "Watch/time assistant");
     }
 
     public recordNavigationAssistant(expeditionId: string, input: NavigationAssistantRequest): Promise<ExpeditionDetail> {

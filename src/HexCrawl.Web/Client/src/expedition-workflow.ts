@@ -48,11 +48,11 @@ export function pauseInstruction(runtime: ExpeditionDetail): string | null {
 
 
 export function assistantEncounterCheckDue(runtime: ExpeditionDetail): boolean {
-    if (runtime.expedition.activeWatchNumber !== null) return false;
+    if (runtime.expedition.isSpatial && runtime.expedition.activeWatchNumber !== null) return false;
     const cadence = runtime.profile.encounterCadence;
     if (cadence === "None") return false;
     if (cadence === "PerWatch" || cadence === "Custom") {
-        const watchNumber = runtime.expedition.completedWatches + 1;
+        const watchNumber = runtime.expedition.activeWatchNumber ?? runtime.expedition.completedWatches + 1;
         return !runtime.history.some(event =>
             event.kind === "EncounterCheckPerformed"
             && event.watchNumber === watchNumber);

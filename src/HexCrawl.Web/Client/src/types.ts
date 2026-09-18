@@ -194,10 +194,10 @@ export type NonSpatialRuntimeExpedition = {
     elapsedTravelHours: number;
     currentDay: number;
     completedWatches: number;
-    activeWatchNumber: null;
-    activeWatchTotalHours: null;
-    activeWatchElapsedHours: null;
-    activeWatchRemainingHours: null;
+    activeWatchNumber: number | null;
+    activeWatchTotalHours: number | null;
+    activeWatchElapsedHours: number | null;
+    activeWatchRemainingHours: number | null;
     activeWatchPendingDecision: null;
     activePaceKey: null;
     activeActivities: [];
@@ -345,6 +345,14 @@ export type TravelWatchAssistantRequest = {
     intendedDirection?: number;
     actualDirection?: number;
     completeWatch: boolean;
+    resolutionSource: ResolutionSource;
+    resolutionNote?: string;
+    note?: string;
+};
+
+export type NonSpatialWatchAssistantRequest = {
+    expectedVersion: number;
+    elapsedHours: number;
     resolutionSource: ResolutionSource;
     resolutionNote?: string;
     note?: string;
