@@ -119,6 +119,102 @@ public sealed class ExpeditionWorkbenchEndpointsTests
         }
     }
 
+    [Fact]
+    public async Task FocusedAssistantsMutateOneExpeditionWithoutFullWorkbenchInputs()
+    {
+        var database = TestWebHost.NewDatabasePath();
+        try
+        {
+            using var factory = TestWebHost.Create(database);
+            using var client = factory.CreateClient();
+            var world = await CreateWorld(client);
+            var worldId = world.GetProperty("id").GetGuid();
+
+            using var startResponse = await client.PostAsJsonAsync($"/api/overworlds/{worldId:D}/expeditions", new
+            {
+                name = "Assistant expedition",
+                procedureKey = "simple-fixed-distance",
+                presentationKey = "dm-controlled",
+                startHex = new { q = 0, r = 0 }
+            });
+            startResponse.EnsureSuccessStatusCode();
+            var expedition = await startResponse.Content.ReadFromJsonAsync<JsonElement>();
+            var expeditionId = expedition.GetProperty("id").GetGuid();
+
+            var context = expedition.GetProperty("context");
+            Assert.Equal(worldId, context.GetProperty("id").GetGuid());
+            Assert.Equal("Workbench API", context.GetProperty("name").GetString());
+            Assert.Equal(12, context.GetProperty("hexCenterDistance").GetProperty("value").GetDouble());
+
+            using var travelResponse = await client.PostAsJsonAsync(
+                $"/api/expeditions/{expeditionId:D}/assistants/travel",
+                new
+                {
+                    expectedVersion = expedition.GetProperty("version").GetInt64(),
+                    elapsedHours = 2,
+                    distance = 6,
+                    resultingHex = new { q = 1, r = 0 },
+                    hexProgress = 2,
+                    intendedDirection = 0,
+                    completeWatch = true,
+                    resolutionSource = "ManualRoll",
+                    resolutionNote = "physical map"
+                });
+            travelResponse.EnsureSuccessStatusCode();
+            expedition = await travelResponse.Content.ReadFromJsonAsync<JsonElement>();
+            var travelState = expedition.GetProperty("expedition");
+            Assert.Equal(6, travelState.GetProperty("distanceTraveled").GetProperty("value").GetDouble());
+            Assert.Equal(2, travelState.GetProperty("elapsedTravelHours").GetDouble());
+            Assert.Equal(1, travelState.GetProperty("completedWatches").GetInt32());
+            Assert.Equal(1, travelState.GetProperty("currentHex").GetProperty("q").GetInt32());
+
+            using var navigationResponse = await client.PostAsJsonAsync(
+                $"/api/expeditions/{expeditionId:D}/assistants/navigation",
+                new
+                {
+                    expectedVersion = expedition.GetProperty("version").GetInt64(),
+                    isLost = true,
+                    veerSteps = 1,
+                    intendedDirection = 0,
+                    resolutionSource = "ExternalSystem",
+                    resolutionNote = "other VTT"
+                });
+            navigationResponse.EnsureSuccessStatusCode();
+            expedition = await navigationResponse.Content.ReadFromJsonAsync<JsonElement>();
+            var navigationState = expedition.GetProperty("expedition");
+            Assert.True(navigationState.GetProperty("isLost").GetBoolean());
+            Assert.Equal(1, navigationState.GetProperty("veerSteps").GetInt32());
+            Assert.Equal(6, navigationState.GetProperty("distanceTraveled").GetProperty("value").GetDouble());
+            Assert.Equal(2, navigationState.GetProperty("elapsedTravelHours").GetDouble());
+
+            using var encounterResponse = await client.PostAsJsonAsync(
+                $"/api/expeditions/{expeditionId:D}/assistants/encounters",
+                new
+                {
+                    expectedVersion = expedition.GetProperty("version").GetInt64(),
+                    outcome = "WanderingEncounter",
+                    resolutionSource = "ManualRoll",
+                    note = "table result"
+                });
+            encounterResponse.EnsureSuccessStatusCode();
+            expedition = await encounterResponse.Content.ReadFromJsonAsync<JsonElement>();
+            var encounterState = expedition.GetProperty("expedition");
+            Assert.Equal(6, encounterState.GetProperty("distanceTraveled").GetProperty("value").GetDouble());
+            Assert.Equal(2, encounterState.GetProperty("elapsedTravelHours").GetDouble());
+            Assert.Contains(
+                expedition.GetProperty("history").EnumerateArray(),
+                item => item.GetProperty("kind").GetString() == "EncounterCheckPerformed");
+            Assert.Contains(
+                expedition.GetProperty("history").EnumerateArray(),
+                item => item.GetProperty("kind").GetString() == "ResolutionProvenanceRecorded"
+                    && item.GetProperty("message").GetString()!.Contains("encounter-assistant=ManualRoll", StringComparison.Ordinal));
+        }
+        finally
+        {
+            TestWebHost.DeleteDatabase(database);
+        }
+    }
+
     private static async Task<JsonElement> CreateWorld(HttpClient client)
     {
         using var response = await client.PostAsJsonAsync("/api/overworlds", new

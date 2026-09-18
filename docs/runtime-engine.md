@@ -2,15 +2,18 @@
 
 ## Authority and state separation
 
-`CrawlRuntimeEngine` remains the authoritative deterministic transition boundary. The Web client may collect choices, prefill resolved rolls, and render state, but it does not calculate authoritative movement, lost state, boundary crossings, encounters, or discoveries.
+`CrawlRuntimeEngine` remains the authoritative deterministic full-watch transition boundary. It consumes `CrawlRuntimeContext` (the physical hex-center distance), `CrawlProcedureProfile`, `ExpeditionState`, a travel plan, and resolved inputs. It does not depend on `OverworldDefinition`, source maps, semantic locations/features, player knowledge, or rendered map types. The Web client may collect choices, prefill resolved rolls, and render state, but it does not calculate authoritative full-watch movement, lost state, boundary crossings, or encounter timing.
 
 The runtime preserves the independent state axes established by the world foundation:
 
-- `OverworldDefinition` is authoritative spatial/world truth.
+- `CrawlRuntimeContext` supplies only crawl-scale physical distance.
 - `ExpeditionState` is current crawl state.
-- `PlayerKnowledgeState` is subject-specific party knowledge and now also carries known hexes plus the persisted presentation-policy snapshot.
 - `CrawlProcedureProfile` is procedure configuration.
+- `OverworldDefinition` remains authoritative spatial/world truth outside the runtime engine.
+- `PlayerKnowledgeState` remains party knowledge outside the runtime engine.
 - presentation policy remains separate from crawl mechanics and world truth.
+
+`ExpeditionWorldComposition` is the application boundary that projects a runtime hex back into world coordinates, validates keyed-location encounters against authored world truth, and applies subject-specific knowledge when presentation policy permits it.
 
 Persistence wraps those domain objects; it does not move persistence rules into the runtime engine.
 
@@ -40,7 +43,7 @@ New-expedition customization exposes `None`, `PerWatch`, and `PerDay` encounter 
 
 A transition is conceptually:
 
-`world + profile + expedition + knowledge + travel plan + resolved inputs -> expedition + knowledge + events + optional pause`
+`crawl context + profile + expedition + travel plan + resolved inputs -> expedition + events + optional pause`
 
 New watches record intended direction, pace/mode metadata, navigation aid, and activities. The engine consumes explicit resolved travel/navigation/encounter inputs, derives actual direction from intended direction plus lost/veer state, and applies travel against abstract progress.
 
@@ -78,9 +81,9 @@ Encounter cadence is procedure configuration; encounter content remains external
 
 Persisted legacy profiles whose cadence is `Custom` retain the historical deterministic behavior in `ExpeditionProcedureRequirements`: they request one resolved encounter result at each new watch, matching the prior per-watch handling. This compatibility behavior is intentionally separate from the new-expedition customization UI and does not imply that a custom scheduling model exists.
 
-Crossing a hex boundary never reveals all content in that hex. Discovery targets a stable location or feature ID and updates only that subject in `PlayerKnowledgeState`. One location can therefore be discovered while another location or feature in the same hex remains hidden.
+Crossing a hex boundary never reveals all content in that hex. The core runtime records a keyed-location encounter mechanically by stable subject ID but does not load or mutate world/knowledge state. `ExpeditionWorldComposition` validates that subject against the current authored world and can project only that subject into `PlayerKnowledgeState`; unrelated locations/features remain hidden.
 
-Presentation policy is applied after the runtime transition. `Exploration Map` can mark entered hexes known. `DM-Controlled` strips automatic runtime discovery mutations before the knowledge snapshot is persisted while retaining the corresponding mechanical runtime events. Manual discovery through the persistent API remains an explicit DM action.
+Presentation policy is applied after the runtime transition. `Exploration Map` can mark entered hexes known. `DM-Controlled` retains mechanical runtime history without automatically applying subject discovery to persisted player knowledge. Manual discovery through the persistent API remains an explicit DM action.
 
 ## Runtime history and persistence
 
@@ -98,7 +101,9 @@ An expedition record also persists pause reason and remaining watch time, becaus
 
 ## Persistent DM workflow
 
-`ExpeditionWorkbenchService` is the application orchestration layer over the engine. It starts expeditions from procedure/presentation presets, persists customized procedure snapshots, determines whether per-day encounter resolution is due, preserves legacy `Custom` cadence behavior, builds independent resolved-input provenance, calls `CrawlRuntimeEngine`, applies presentation knowledge projection, and saves with optimistic concurrency.
+`ExpeditionWorkbenchService` is the full-watch application orchestration layer over the engine. It starts expeditions from procedure/presentation presets, persists customized procedure snapshots, determines whether per-day encounter resolution is due, preserves legacy `Custom` cadence behavior, builds independent resolved-input provenance, calls `CrawlRuntimeEngine`, composes world/knowledge projection, applies presentation projection, and saves with optimistic concurrency.
+
+`ExpeditionAssistantService` exposes independent manual bookkeeping mutations over the same persisted expedition. Travel/watch, navigation, and encounter-cadence assistants each mutate only their owned state/history and do not silently resolve the other subsystems. Focused mutations are blocked while a full-workbench `ActiveWatchState` exists so a partial full-watch transition can not be corrupted by an independent helper.
 
 The DM application starts or reopens expeditions against persisted overworlds. The runtime view exposes current day/watch, current hex, entry relationship, intended/actual course, lost/veer state, distance/progress, elapsed/remaining watch time, pause reason, encounter state, subject-specific discovery, presentation/knowledge preview, procedure snapshots, and recent event history.
 

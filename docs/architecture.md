@@ -5,7 +5,7 @@
 Hex Crawl maintains independent state axes rather than turning a rendered hex into the unit of all data:
 
 1. **World/spatial truth** — `OverworldDefinition`, mathematical grid, semantic point/line/region features, locations, and source-map representations.
-2. **Crawl/runtime state** — `ExpeditionState` and `WorldRuntimeState`; movement records physical distance and abstract traversal progress without mutating base geography.
+2. **Crawl/runtime state** — `CrawlRuntimeContext`, `ExpeditionState`, and `WorldRuntimeState`; the deterministic crawl engine needs physical hex scale and procedure/runtime state but no `OverworldDefinition` or renderer. Movement records physical distance and abstract traversal progress without mutating base geography.
 3. **Player knowledge** — `PlayerKnowledgeState` records subject-specific knowledge, known/explored hexes, annotations, and the party-specific presentation-policy snapshot. There is deliberately no `Hex.IsRevealed` flag.
 4. **Presentation policy** — `MapPresentationPolicy` and presentation projections decide what knowledge changes may happen automatically and how authoritative data is presented.
 5. **Procedure configuration** — `CrawlProcedureProfile` defines crawl procedure behavior independently of world geometry.
@@ -15,7 +15,7 @@ Database and binary-storage concerns do not enter the core spatial/runtime recor
 ## Project structure
 
 - `HexCrawl.Domain` owns spatial, world, knowledge, presentation policy/projection, source-map registration math, and deterministic runtime rules.
-- `HexCrawl.Application` owns authenticated use cases, cross-aggregate validation, persistence/blob ports, optimistic concurrency, procedure/presentation selection, and the expedition workbench orchestration layer.
+- `HexCrawl.Application` owns authenticated use cases, cross-aggregate validation, persistence/blob ports, optimistic concurrency, procedure/presentation selection, world/knowledge composition around the map-independent runtime, the full expedition workbench, and focused assistant orchestration.
 - `HexCrawl.Infrastructure` implements SQLite persistence, filesystem map assets, and Tool Host authentication redemption.
 - `HexCrawl.Web` owns HTTP contracts, authentication middleware, route hosting, and the TypeScript application.
 
@@ -83,7 +83,8 @@ The Web layer exposes resource DTOs rather than persistence rows:
 - `GET /api/runtime/profiles`
 - `GET /api/presentation/presets`
 - `GET /api/expeditions` for the authenticated user's expedition collection, independent of world navigation;
-- world-scoped expedition start/list plus expedition load/advance/discovery routes.
+- world-scoped expedition start/list plus expedition load/advance/discovery routes;
+- independent focused mutations at `/api/expeditions/{expeditionId}/assistants/travel`, `/navigation`, and `/encounters`.
 
 Expedition creation accepts a procedure preset key, a presentation preset key, and an optional complete procedure snapshot. The snapshot must retain the selected preset key as provenance and passes the same domain validation as built-in profiles.
 
@@ -97,7 +98,7 @@ Application-owned DOM is driven by explicit route/state transitions. Canvas inva
 
 The world editor supports semantic authoring plus raster source import and expedition creation. Expedition setup uses progressive disclosure: choose procedure and presentation presets first, then optionally customize the procedure snapshot, with progress factors under advanced controls.
 
-Expedition UI is composed around one authoritative crawl state rather than around the map. The mapless tracker derives day/watch status, current hex, entry/course, lost/veer state, elapsed/remaining time, procedure-specific progress, pending decisions, provenance, and recent history without constructing `MapSurface`. The full crawl workbench adds map rendering, current-area discovery, and player-knowledge presentation. Focused assistants emphasize travel/watch, navigation, or encounter inputs while retaining any cross-cutting input that the current atomic watch transition still requires. Resolution controls appear only when required by the persisted procedure and current watch state.
+Expedition UI is composed around one authoritative crawl state rather than around the map. The mapless tracker derives day/watch status, current hex, entry/course, lost/veer state, elapsed/remaining time, procedure-specific progress, pending decisions, provenance, and recent history without loading the Overworld resource or constructing `MapSurface`. The full crawl workbench alone loads the Overworld and adds map rendering, current-area discovery, and player-knowledge presentation. Focused assistant routes render dedicated travel/watch, navigation, or encounter-cadence forms and call independent assistant mutations; they are not alternate styling of the full watch form.
 
 Source maps may be grouped by geography, classified GM/Player/Neutral/Other, marked as baked-grid/gridless, shown or hidden ephemerally, and registered/re-registered with three source/world control-point pairs.
 

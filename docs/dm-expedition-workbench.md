@@ -10,14 +10,14 @@ The authoritative transition remains one persisted expedition operation, but the
 
 The full map workbench additionally composes the expedition with the authored overworld, player knowledge, and presentation snapshot. The mapless tracker does not construct a map renderer, and the focused assistants are lenses over the same expedition transition rather than independent duplicate state machines.
 
-The current persistence/runtime model still records the expedition's `OverworldId` because grid scale, coordinate traversal, and keyed-location validation are part of the existing crawl context. That backing relationship is distinct from requiring the DM to use the rendered map UI; extracting a standalone non-world crawl-context aggregate is a later domain migration rather than something hidden behind a synthetic map.
+Persistence still records an expedition's `OverworldId` as the stable link to optional world/map composition, and a mapless-created expedition may use a grid-only context. The deterministic `CrawlRuntimeEngine` itself no longer accepts an `OverworldDefinition`: it receives only `CrawlRuntimeContext` physical scale plus procedure/runtime inputs. World-coordinate projection, keyed-location validation, and player-knowledge effects are application-level composition.
 
 ## Product composition
 
 - **DM tools home** lists expeditions across worlds and can start a mapless expedition either from an existing world context or from an explicitly created basic grid-only context. The basic context persists the grid scale required by the current runtime but creates no source maps, locations, features, or rendered map session.
 - **Mapless expedition tracker** runs watch/travel/navigation/encounter bookkeeping and history without constructing `MapSurface`.
 - **Full crawl workbench** composes that tracker state with the authored world, map rendering, discovery controls, and player-knowledge preview.
-- **Travel / watch, Navigation, and Encounter cadence assistants** emphasize one procedure concern without forking runtime state. Inputs required by the same atomic watch transition remain available when necessary.
+- **Travel / watch, Navigation, and Encounter cadence assistants** are independent manual bookkeeping surfaces over the same persisted expedition. Each has its own API mutation and updates only its owned state/history; it does not submit hidden inputs for the other assistants. They are disabled while a partial full-workbench watch is active, because that watch must resume atomically in the tracker.
 
 ## State ownership
 
@@ -116,7 +116,7 @@ Four built-in policies are exposed by `/api/presentation/presets` and are select
 
 ## Guided watch workflow
 
-The browser asks only for inputs relevant to the persisted procedure and current runtime state.
+The full expedition tracker asks only for inputs relevant to the persisted procedure and current runtime state. Focused assistants are separate from this atomic workflow: they record travel/watch, navigation, or encounter-cadence bookkeeping independently when no full-workbench watch is active.
 
 At a new watch it can request:
 
