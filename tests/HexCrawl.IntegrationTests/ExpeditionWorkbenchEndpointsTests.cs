@@ -295,66 +295,151 @@ public sealed class ExpeditionWorkbenchEndpointsTests
     }
 
     [Fact]
-    public async Task NonSpatialSessionHasNoFakeSpatialOrWorldState()
+    public async Task NonSpatialSessionTracksPartialWatchAcrossRestartWithoutFakeSpatialState()
     {
         var database = TestWebHost.NewDatabasePath();
+        Guid sessionId;
+        double watchHours;
+
         try
         {
-            using var factory = TestWebHost.Create(database);
-            using var client = factory.CreateClient();
-
-            using var startResponse = await client.PostAsJsonAsync("/api/expeditions", new
+            using (var factory = TestWebHost.Create(database))
+            using (var client = factory.CreateClient())
             {
-                name = "Encounter clock",
-                procedureKey = "alexandrian-advanced",
-                context = new
+                using var startResponse = await client.PostAsJsonAsync("/api/expeditions", new
                 {
-                    kind = "NonSpatial",
-                    name = "Procedure only"
-                }
-            });
-            startResponse.EnsureSuccessStatusCode();
-            var session = await startResponse.Content.ReadFromJsonAsync<JsonElement>();
-            var sessionId = session.GetProperty("id").GetGuid();
-
-            Assert.Equal(JsonValueKind.Null, session.GetProperty("overworldId").ValueKind);
-            Assert.Equal("NonSpatial", session.GetProperty("context").GetProperty("kind").GetString());
-            var runtime = session.GetProperty("expedition");
-            Assert.False(runtime.GetProperty("isSpatial").GetBoolean());
-            Assert.Equal(JsonValueKind.Null, runtime.GetProperty("currentHex").ValueKind);
-            Assert.Equal(JsonValueKind.Null, runtime.GetProperty("distanceTraveled").ValueKind);
-
-            using var encounterResponse = await client.PostAsJsonAsync(
-                $"/api/expeditions/{sessionId:D}/assistants/encounters",
-                new
-                {
-                    expectedVersion = session.GetProperty("version").GetInt64(),
-                    outcome = "WanderingEncounter",
-                    resolutionSource = "ManualRoll",
-                    note = "procedure-only check"
+                    name = "Procedure clock",
+                    procedureKey = "alexandrian-advanced",
+                    context = new
+                    {
+                        kind = "NonSpatial",
+                        name = "Procedure only"
+                    }
                 });
-            encounterResponse.EnsureSuccessStatusCode();
-            session = await encounterResponse.Content.ReadFromJsonAsync<JsonElement>();
-            Assert.Contains(
-                session.GetProperty("history").EnumerateArray(),
-                item => item.GetProperty("kind").GetString() == "EncounterCheckPerformed"
-                    && item.GetProperty("hex").ValueKind == JsonValueKind.Null);
+                startResponse.EnsureSuccessStatusCode();
+                var session = await startResponse.Content.ReadFromJsonAsync<JsonElement>();
+                sessionId = session.GetProperty("id").GetGuid();
+                watchHours = session.GetProperty("profile").GetProperty("watchHours").GetDouble();
 
-            using var travelResponse = await client.PostAsJsonAsync(
-                $"/api/expeditions/{sessionId:D}/assistants/travel",
-                new
-                {
-                    expectedVersion = session.GetProperty("version").GetInt64(),
-                    elapsedHours = 1,
-                    distance = 1,
-                    resultingHex = new { q = 0, r = 0 },
-                    completeWatch = false,
-                    resolutionSource = "ManualRoll"
-                });
-            Assert.Equal(System.Net.HttpStatusCode.BadRequest, travelResponse.StatusCode);
+                Assert.Equal(JsonValueKind.Null, session.GetProperty("overworldId").ValueKind);
+                Assert.Equal("NonSpatial", session.GetProperty("context").GetProperty("kind").GetString());
+                var runtime = session.GetProperty("expedition");
+                Assert.False(runtime.GetProperty("isSpatial").GetBoolean());
+                Assert.Equal(JsonValueKind.Null, runtime.GetProperty("currentHex").ValueKind);
+                Assert.Equal(JsonValueKind.Null, runtime.GetProperty("distanceTraveled").ValueKind);
+                Assert.Equal(JsonValueKind.Null, runtime.GetProperty("activeWatchNumber").ValueKind);
 
-            var worlds = await client.GetFromJsonAsync<JsonElement>("/api/overworlds");
-            Assert.Equal(0, worlds.GetArrayLength());
+                using var watchResponse = await client.PostAsJsonAsync(
+                    $"/api/expeditions/{sessionId:D}/assistants/watch",
+                    new
+                    {
+                        expectedVersion = session.GetProperty("version").GetInt64(),
+                        elapsedHours = 1,
+                        resolutionSource = "ProcedureDefault",
+                        resolutionNote = "table clock",
+                        note = "first segment"
+                    });
+                watchResponse.EnsureSuccessStatusCode();
+                session = await watchResponse.Content.ReadFromJsonAsync<JsonElement>();
+                runtime = session.GetProperty("expedition");
+
+                Assert.Equal(1, runtime.GetProperty("activeWatchNumber").GetInt32());
+                Assert.Equal(watchHours, runtime.GetProperty("activeWatchTotalHours").GetDouble());
+                Assert.Equal(1, runtime.GetProperty("activeWatchElapsedHours").GetDouble());
+                Assert.Equal(watchHours - 1, runtime.GetProperty("activeWatchRemainingHours").GetDouble(), 6);
+                Assert.Equal(watchHours - 1, session.GetProperty("remainingWatchHours").GetDouble(), 6);
+                Assert.Equal(0, runtime.GetProperty("completedWatches").GetInt32());
+                Assert.Equal(1, runtime.GetProperty("elapsedTravelHours").GetDouble());
+                Assert.Contains(
+                    session.GetProperty("history").EnumerateArray(),
+                    item => item.GetProperty("kind").GetString() == "WatchStarted"
+                        && item.GetProperty("hex").ValueKind == JsonValueKind.Null);
+                Assert.Contains(
+                    session.GetProperty("history").EnumerateArray(),
+                    item => item.GetProperty("kind").GetString() == "WatchTimeAdvanced"
+                        && item.GetProperty("watchNumber").GetInt32() == 1);
+
+                using var encounterResponse = await client.PostAsJsonAsync(
+                    $"/api/expeditions/{sessionId:D}/assistants/encounters",
+                    new
+                    {
+                        expectedVersion = session.GetProperty("version").GetInt64(),
+                        outcome = "WanderingEncounter",
+                        resolutionSource = "ManualRoll",
+                        note = "procedure-only check"
+                    });
+                encounterResponse.EnsureSuccessStatusCode();
+                session = await encounterResponse.Content.ReadFromJsonAsync<JsonElement>();
+                Assert.Contains(
+                    session.GetProperty("history").EnumerateArray(),
+                    item => item.GetProperty("kind").GetString() == "EncounterCheckPerformed"
+                        && item.GetProperty("watchNumber").GetInt32() == 1
+                        && item.GetProperty("hex").ValueKind == JsonValueKind.Null);
+
+                var worlds = await client.GetFromJsonAsync<JsonElement>("/api/overworlds");
+                Assert.Equal(0, worlds.GetArrayLength());
+            }
+
+            using (var restartedFactory = TestWebHost.Create(database))
+            using (var restartedClient = restartedFactory.CreateClient())
+            {
+                var session = await restartedClient.GetFromJsonAsync<JsonElement>($"/api/expeditions/{sessionId:D}");
+                var runtime = session.GetProperty("expedition");
+                Assert.Equal(1, runtime.GetProperty("activeWatchNumber").GetInt32());
+                Assert.Equal(1, runtime.GetProperty("activeWatchElapsedHours").GetDouble());
+                Assert.Equal(watchHours - 1, runtime.GetProperty("activeWatchRemainingHours").GetDouble(), 6);
+
+                using var resumeResponse = await restartedClient.PostAsJsonAsync(
+                    $"/api/expeditions/{sessionId:D}/assistants/watch",
+                    new
+                    {
+                        expectedVersion = session.GetProperty("version").GetInt64(),
+                        elapsedHours = watchHours - 1,
+                        resolutionSource = "DmOverride",
+                        resolutionNote = "session ruling",
+                        note = "finish the watch"
+                    });
+                resumeResponse.EnsureSuccessStatusCode();
+                session = await resumeResponse.Content.ReadFromJsonAsync<JsonElement>();
+                runtime = session.GetProperty("expedition");
+
+                Assert.Equal(JsonValueKind.Null, runtime.GetProperty("activeWatchNumber").ValueKind);
+                Assert.Equal(JsonValueKind.Null, runtime.GetProperty("activeWatchElapsedHours").ValueKind);
+                Assert.Equal(JsonValueKind.Null, runtime.GetProperty("activeWatchRemainingHours").ValueKind);
+                Assert.Equal(1, runtime.GetProperty("completedWatches").GetInt32());
+                Assert.Equal(watchHours, runtime.GetProperty("elapsedTravelHours").GetDouble(), 6);
+                Assert.Equal(0, session.GetProperty("remainingWatchHours").GetDouble());
+
+                Assert.Contains(
+                    session.GetProperty("history").EnumerateArray(),
+                    item => item.GetProperty("kind").GetString() == "WatchCompleted"
+                        && item.GetProperty("watchNumber").GetInt32() == 1);
+                Assert.Contains(
+                    session.GetProperty("history").EnumerateArray(),
+                    item => item.GetProperty("kind").GetString() == "DmOverrideApplied"
+                        && item.GetProperty("message").GetString()!.Contains("finish the watch", StringComparison.Ordinal));
+                Assert.Contains(
+                    session.GetProperty("history").EnumerateArray(),
+                    item => item.GetProperty("kind").GetString() == "ResolutionProvenanceRecorded"
+                        && item.GetProperty("message").GetString()!.Contains("watch-assistant=DmOverride", StringComparison.Ordinal));
+
+                using var overrunResponse = await restartedClient.PostAsJsonAsync(
+                    $"/api/expeditions/{sessionId:D}/assistants/watch",
+                    new
+                    {
+                        expectedVersion = session.GetProperty("version").GetInt64(),
+                        elapsedHours = watchHours + 1,
+                        resolutionSource = "ProcedureDefault"
+                    });
+                Assert.Equal(System.Net.HttpStatusCode.BadRequest, overrunResponse.StatusCode);
+
+                var afterRejected = await restartedClient.GetFromJsonAsync<JsonElement>($"/api/expeditions/{sessionId:D}");
+                Assert.Equal(1, afterRejected.GetProperty("expedition").GetProperty("completedWatches").GetInt32());
+                Assert.Equal(watchHours, afterRejected.GetProperty("expedition").GetProperty("elapsedTravelHours").GetDouble(), 6);
+
+                var worlds = await restartedClient.GetFromJsonAsync<JsonElement>("/api/overworlds");
+                Assert.Equal(0, worlds.GetArrayLength());
+            }
         }
         finally
         {
