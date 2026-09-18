@@ -14,7 +14,7 @@ The current persistence/runtime model still records the expedition's `OverworldI
 
 ## Product composition
 
-- **DM tools home** lists expeditions across worlds and makes expedition bookkeeping a first-class entry point.
+- **DM tools home** lists expeditions across worlds and can start a mapless expedition either from an existing world context or from an explicitly created basic grid-only context. The basic context persists the grid scale required by the current runtime but creates no source maps, locations, features, or rendered map session.
 - **Mapless expedition tracker** runs watch/travel/navigation/encounter bookkeeping and history without constructing `MapSurface`.
 - **Full crawl workbench** composes that tracker state with the authored world, map rendering, discovery controls, and player-knowledge preview.
 - **Travel / watch, Navigation, and Encounter cadence assistants** emphasize one procedure concern without forking runtime state. Inputs required by the same atomic watch transition remain available when necessary.
