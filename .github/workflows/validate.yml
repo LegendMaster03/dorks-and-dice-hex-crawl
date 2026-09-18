@@ -188,3 +188,189 @@ jobs:
           assert d["expedition"]["completedWatches"] == 1, d
           assert d["expedition"]["elapsedTravelHours"] == 4, d
           PY
+
+      - name: Smoke test mapless container and restart persistence
+        run: |
+          set -euo pipefail
+          data_dir="$RUNNER_TEMP/hex-crawl-mapless-smoke-data"
+          response_dir="$RUNNER_TEMP/hex-crawl-mapless-smoke-responses"
+          rm -rf "$data_dir" "$response_dir"
+          mkdir -p "$data_dir" "$response_dir"
+
+          start_container() {
+            docker run -d --name hex-crawl-mapless-smoke \
+              -p 127.0.0.1:18093:8080 \
+              -v "$data_dir:/data" \
+              -e 'ConnectionStrings__HexCrawl=Data Source=/data/hex-crawl.db' \
+              -e 'MapAssets__RootPath=/data/assets' \
+              -e 'MapImport__MaxFileBytes=104857600' \
+              -e 'ToolHost__StandaloneIdentity__Enabled=true' \
+              -e 'ToolHost__StandaloneIdentity__UserId=ci-mapless-smoke-dm' \
+              -e 'ToolHost__StandaloneIdentity__DisplayName=CI Mapless Smoke DM' \
+              dorks-and-dice-hex-crawl:test >/dev/null
+          }
+
+          wait_ready() {
+            for i in {1..30}; do
+              if curl -fsS http://127.0.0.1:18093/health -o "$response_dir/health.txt" \
+                && grep -q 'Healthy' "$response_dir/health.txt" \
+                && curl -fsS http://127.0.0.1:18093/ready -o "$response_dir/ready.json" \
+                && grep -q '"status":"ready"' "$response_dir/ready.json"; then
+                return 0
+              fi
+              sleep 1
+            done
+            docker logs hex-crawl-mapless-smoke
+            return 1
+          }
+
+          assert_no_worlds() {
+            curl -fsS http://127.0.0.1:18093/api/overworlds -o "$1"
+            python3 - "$1" <<'PY'
+          import json, sys
+          d = json.load(open(sys.argv[1]))
+          assert d == [], d
+          PY
+          }
+
+          trap 'docker rm -f hex-crawl-mapless-smoke >/dev/null 2>&1 || true' EXIT
+          start_container
+          wait_ready
+
+          # Standalone deep links must be served directly and survive refresh.
+          for route in assistants/travel assistants/navigation assistants/encounters; do
+            curl -fsS "http://127.0.0.1:18093/$route" -o "$response_dir/deep-${route//\//-}.html"
+            grep -q 'tool-root' "$response_dir/deep-${route//\//-}.html"
+          done
+
+          assert_no_worlds "$response_dir/worlds-before.json"
+
+          curl -fsS -X POST http://127.0.0.1:18093/api/expeditions \
+            -H 'Content-Type: application/json' \
+            --data '{"name":"CI mapless watch","procedureKey":"simple-fixed-distance","context":{"kind":"NonSpatial","name":"CI procedure clock"}}' \
+            -o "$response_dir/start-session.json"
+          python3 - "$response_dir/start-session.json" <<'PY'
+          import json, sys
+          d = json.load(open(sys.argv[1]))
+          assert d["context"]["kind"] == "NonSpatial", d
+          assert d["overworldId"] is None, d
+          assert d["context"]["overworldId"] is None, d
+          assert d["profile"]["key"] == "simple-fixed-distance", d
+          assert d["profile"]["watchHours"] == 4, d
+          state = d["expedition"]
+          assert state["isSpatial"] is False, d
+          assert state["currentHex"] is None, d
+          assert state["position"] is None, d
+          assert state["distanceTraveled"] is None, d
+          assert state["activeWatchNumber"] is None, d
+          assert state["completedWatches"] == 0, d
+          assert state["elapsedTravelHours"] == 0, d
+          PY
+          session_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$response_dir/start-session.json")"
+          session_version="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$response_dir/start-session.json")"
+
+          assert_no_worlds "$response_dir/worlds-after-create.json"
+
+          curl -fsS -X POST "http://127.0.0.1:18093/api/expeditions/$session_id/assistants/watch" \
+            -H 'Content-Type: application/json' \
+            --data "{"expectedVersion":$session_version,"elapsedHours":2,"resolutionSource":"ProcedureDefault","resolutionNote":"container clock","note":"first half"}" \
+            -o "$response_dir/partial-watch.json"
+          python3 - "$response_dir/partial-watch.json" <<'PY'
+          import json, sys
+          d = json.load(open(sys.argv[1]))
+          state = d["expedition"]
+          assert d["context"]["kind"] == "NonSpatial", d
+          assert d["overworldId"] is None, d
+          assert d["remainingWatchHours"] == 2, d
+          assert state["isSpatial"] is False, d
+          assert state["currentHex"] is None, d
+          assert state["distanceTraveled"] is None, d
+          assert state["activeWatchNumber"] == 1, d
+          assert state["activeWatchTotalHours"] == 4, d
+          assert state["activeWatchElapsedHours"] == 2, d
+          assert state["activeWatchRemainingHours"] == 2, d
+          assert state["completedWatches"] == 0, d
+          assert state["elapsedTravelHours"] == 2, d
+          assert any(e["kind"] == "WatchStarted" and e["watchNumber"] == 1 and e["hex"] is None for e in d["history"]), d
+          assert any(e["kind"] == "WatchTimeAdvanced" and e["watchNumber"] == 1 and e["hex"] is None for e in d["history"]), d
+          assert any(e["kind"] == "ResolutionProvenanceRecorded" and "watch-assistant=ProcedureDefault" in e["message"] for e in d["history"]), d
+          PY
+          partial_version="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$response_dir/partial-watch.json")"
+
+          curl -fsS -X POST "http://127.0.0.1:18093/api/expeditions/$session_id/assistants/encounters" \
+            -H 'Content-Type: application/json' \
+            --data "{"expectedVersion":$partial_version,"outcome":"WanderingEncounter","resolutionSource":"ManualRoll","resolutionNote":"container encounter","note":"during watch one"}" \
+            -o "$response_dir/encounter.json"
+          python3 - "$response_dir/encounter.json" <<'PY'
+          import json, sys
+          d = json.load(open(sys.argv[1]))
+          state = d["expedition"]
+          assert state["activeWatchNumber"] == 1, d
+          assert state["activeWatchElapsedHours"] == 2, d
+          assert state["activeWatchRemainingHours"] == 2, d
+          assert state["completedWatches"] == 0, d
+          assert any(e["kind"] == "EncounterCheckPerformed" and e["watchNumber"] == 1 and e["hex"] is None for e in d["history"]), d
+          assert any(e["kind"] == "EncounterTriggered" and e["watchNumber"] == 1 and e["hex"] is None for e in d["history"]), d
+          PY
+
+          assert_no_worlds "$response_dir/worlds-before-restart.json"
+
+          docker rm -f hex-crawl-mapless-smoke >/dev/null
+          start_container
+          wait_ready
+
+          curl -fsS "http://127.0.0.1:18093/api/expeditions/$session_id" -o "$response_dir/session-after-restart.json"
+          python3 - "$response_dir/session-after-restart.json" <<'PY'
+          import json, sys
+          d = json.load(open(sys.argv[1]))
+          assert d["context"]["kind"] == "NonSpatial", d
+          assert d["overworldId"] is None, d
+          assert d["profile"]["key"] == "simple-fixed-distance", d
+          assert d["profile"]["watchHours"] == 4, d
+          state = d["expedition"]
+          assert state["isSpatial"] is False, d
+          assert state["currentHex"] is None, d
+          assert state["position"] is None, d
+          assert state["distanceTraveled"] is None, d
+          assert state["activeWatchNumber"] == 1, d
+          assert state["activeWatchTotalHours"] == 4, d
+          assert state["activeWatchElapsedHours"] == 2, d
+          assert state["activeWatchRemainingHours"] == 2, d
+          assert state["completedWatches"] == 0, d
+          assert state["elapsedTravelHours"] == 2, d
+          assert d["remainingWatchHours"] == 2, d
+          assert any(e["kind"] == "ResolutionProvenanceRecorded" and "watch-assistant=ProcedureDefault" in e["message"] for e in d["history"]), d
+          assert any(e["kind"] == "EncounterCheckPerformed" and e["watchNumber"] == 1 for e in d["history"]), d
+          PY
+          resumed_version="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$response_dir/session-after-restart.json")"
+
+          assert_no_worlds "$response_dir/worlds-after-restart.json"
+
+          curl -fsS -X POST "http://127.0.0.1:18093/api/expeditions/$session_id/assistants/watch" \
+            -H 'Content-Type: application/json' \
+            --data "{"expectedVersion":$resumed_version,"elapsedHours":2,"resolutionSource":"DmOverride","resolutionNote":"restart smoke","note":"finish after restart"}" \
+            -o "$response_dir/completed-watch.json"
+          python3 - "$response_dir/completed-watch.json" <<'PY'
+          import json, sys
+          d = json.load(open(sys.argv[1]))
+          state = d["expedition"]
+          assert d["context"]["kind"] == "NonSpatial", d
+          assert d["overworldId"] is None, d
+          assert d["remainingWatchHours"] == 0, d
+          assert state["isSpatial"] is False, d
+          assert state["currentHex"] is None, d
+          assert state["position"] is None, d
+          assert state["distanceTraveled"] is None, d
+          assert state["activeWatchNumber"] is None, d
+          assert state["activeWatchElapsedHours"] is None, d
+          assert state["activeWatchRemainingHours"] is None, d
+          assert state["completedWatches"] == 1, d
+          assert state["elapsedTravelHours"] == 4, d
+          completions = [e for e in d["history"] if e["kind"] == "WatchCompleted" and e["watchNumber"] == 1]
+          assert len(completions) == 1, d
+          assert any(e["kind"] == "DmOverrideApplied" and "finish after restart" in e["message"] for e in d["history"]), d
+          assert any(e["kind"] == "ResolutionProvenanceRecorded" and "watch-assistant=DmOverride" in e["message"] for e in d["history"]), d
+          PY
+
+          assert_no_worlds "$response_dir/worlds-after-completion.json"
+
