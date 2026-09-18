@@ -70,7 +70,7 @@ public sealed class ExpeditionAssistantService(IHexCrawlStore store, HexCrawlSer
             travel = ResolvedTravelAmount.Distance(resolved, resolved, provenance);
         }
 
-        var progress = command.HexProgress.HasValue
+        DistanceMeasure? progress = command.HexProgress.HasValue
             ? new DistanceMeasure(command.HexProgress.Value, unit)
             : null;
         var state = CrawlAssistantActions.RecordTravelWatch(
