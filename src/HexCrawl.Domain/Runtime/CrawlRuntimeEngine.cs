@@ -2,7 +2,6 @@ using System.Globalization;
 using HexCrawl.Domain.Knowledge;
 using HexCrawl.Domain.Procedure;
 using HexCrawl.Domain.Spatial;
-using HexCrawl.Domain.World;
 
 namespace HexCrawl.Domain.Runtime;
 
@@ -11,27 +10,23 @@ public sealed class CrawlRuntimeEngine
     private const double Epsilon = 0.0000001d;
 
     public WatchAdvanceResult Advance(
-        OverworldDefinition world,
+        CrawlRuntimeContext context,
         CrawlProcedureProfile profile,
         ExpeditionState expedition,
-        PlayerKnowledgeState knowledge,
         WatchTravelPlan plan,
         WatchAdvanceInputs inputs)
     {
-        ArgumentNullException.ThrowIfNull(world);
+        ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(expedition);
-        ArgumentNullException.ThrowIfNull(knowledge);
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(inputs);
 
         profile.Validate();
-        world.Grid.Validate();
-        ValidateOwnership(world, expedition, knowledge);
+        context.Validate();
 
         var events = new EventCollector(expedition.History);
         var state = expedition;
-        var currentKnowledge = knowledge;
         var active = state.ActiveWatch;
 
         if (active is not null && active.PendingDecision is not null)
@@ -66,14 +61,14 @@ public sealed class CrawlRuntimeEngine
 
         if (active.Remaining <= TimeSpan.Zero)
         {
-            return CompleteWatch(state, currentKnowledge, active, events);
+            return CompleteWatch(state, active, events);
         }
 
         var actualDirection = state.ActualDirection
             ?? throw new InvalidOperationException("Travel requires an actual hex direction.");
         state = ApplyDirectionContext(
             profile,
-            world.Grid,
+            context.HexCenterDistance,
             state,
             actualDirection,
             plan.DeliberateDoubleBack,
@@ -89,7 +84,7 @@ public sealed class CrawlRuntimeEngine
                 ?? throw new InvalidOperationException("A triggered encounter requires a time within the watch.");
             if (due <= active.Elapsed)
             {
-                return TriggerEncounter(world, state, currentKnowledge, active, events);
+                return TriggerEncounter(state, active, events);
             }
         }
 
@@ -113,7 +108,7 @@ public sealed class CrawlRuntimeEngine
         var movement = profile.TravelResolution switch
         {
             TravelResolutionMode.ContinuousDistance => MoveContinuous(
-                world,
+                context,
                 profile,
                 state,
                 active,
@@ -123,7 +118,7 @@ public sealed class CrawlRuntimeEngine
                 segmentDuration,
                 events),
             TravelResolutionMode.HexSteps => MoveHexSteps(
-                world,
+                context,
                 state,
                 active,
                 plan,
@@ -138,7 +133,7 @@ public sealed class CrawlRuntimeEngine
         active = movement.Active;
         if (movement.PauseReason is not null)
         {
-            return Finish(state, currentKnowledge, movement.PauseReason, active.Remaining, events);
+            return Finish(state, movement.PauseReason, active.Remaining, events);
         }
 
         if (encounterDueAtSegmentEnd && !active.EncounterHandled && active.Encounter.Kind != EncounterOutcomeKind.None)
@@ -151,18 +146,7 @@ public sealed class CrawlRuntimeEngine
             return CompleteWatch(state, currentKnowledge, active, events);
         }
 
-        return Finish(state, currentKnowledge, null, active.Remaining, events);
-    }
-
-    private static void ValidateOwnership(
-        OverworldDefinition world,
-        ExpeditionState expedition,
-        PlayerKnowledgeState knowledge)
-    {
-        if (expedition.OverworldId != world.Id || knowledge.OverworldId != world.Id)
-        {
-            throw new InvalidOperationException("Runtime state and player knowledge must belong to the supplied overworld.");
-        }
+        return Finish(state, null, active.Remaining, events);
     }
 
     private static (ExpeditionState State, ActiveWatchState Active) StartWatch(
@@ -381,7 +365,7 @@ public sealed class CrawlRuntimeEngine
 
     private static ExpeditionState ApplyDirectionContext(
         CrawlProcedureProfile profile,
-        HexGridDefinition grid,
+        DistanceMeasure hexCenterDistance,
         ExpeditionState state,
         HexDirection actualDirection,
         bool deliberateDoubleBack,
@@ -390,11 +374,11 @@ public sealed class CrawlRuntimeEngine
     {
         var traversal = state.Traversal;
         var changed = traversal.LastTravelDirection is { } previous && previous != actualDirection;
-        var progress = Convert(traversal.Progress, grid.NeighborCenterDistance.Unit);
+        var progress = Convert(traversal.Progress, hexCenterDistance.Unit);
 
         if (changed && profile.DirectionChangesCostProgress && !deliberateDoubleBack && profile.TracksIntraHexProgress)
         {
-            var cost = grid.NeighborCenterDistance.Value * profile.DirectionChangeProgressCostFactor;
+            var cost = hexCenterDistance.Value * profile.DirectionChangeProgressCostFactor;
             progress = new DistanceMeasure(Math.Max(0d, progress.Value - cost), progress.Unit);
         }
 
@@ -406,7 +390,7 @@ public sealed class CrawlRuntimeEngine
         updated = updated with
         {
             CurrentExitRequirement = profile.TracksIntraHexProgress
-                ? DetermineExitRequirement(profile, grid, updated, actualDirection, deliberateDoubleBack)
+                ? DetermineExitRequirement(profile, hexCenterDistance, updated, actualDirection, deliberateDoubleBack)
                 : null
         };
 
@@ -425,12 +409,12 @@ public sealed class CrawlRuntimeEngine
 
     private static DistanceMeasure DetermineExitRequirement(
         CrawlProcedureProfile profile,
-        HexGridDefinition grid,
+        DistanceMeasure hexCenterDistance,
         HexTraversalState traversal,
         HexDirection direction,
         bool deliberateDoubleBack)
     {
-        var unit = grid.NeighborCenterDistance.Unit;
+        var unit = hexCenterDistance.Unit;
         var progress = Convert(traversal.Progress, unit);
         if (deliberateDoubleBack)
         {
@@ -449,7 +433,7 @@ public sealed class CrawlRuntimeEngine
             };
         }
 
-        return new DistanceMeasure(grid.NeighborCenterDistance.Value * factor, unit);
+        return new DistanceMeasure(hexCenterDistance.Value * factor, unit);
     }
 
     private static void ValidateTravelAmount(
@@ -491,7 +475,7 @@ public sealed class CrawlRuntimeEngine
     }
 
     private static MovementOutcome MoveContinuous(
-        OverworldDefinition world,
+        CrawlRuntimeContext context,
         CrawlProcedureProfile profile,
         ExpeditionState state,
         ActiveWatchState active,
@@ -506,7 +490,7 @@ public sealed class CrawlRuntimeEngine
             throw new InvalidOperationException("Continuous-distance travel requires intra-hex progress tracking in this runtime engine.");
         }
 
-        var unit = world.Grid.NeighborCenterDistance.Unit;
+        var unit = context.HexCenterDistance.Unit;
         var suppliedDistance = Convert(travel.ActualDistance!.Value, unit);
         var segmentFraction = callRemaining <= TimeSpan.Zero
             ? 0d
@@ -520,7 +504,7 @@ public sealed class CrawlRuntimeEngine
 
         while (remainingDistance > Epsilon)
         {
-            var requirement = DetermineExitRequirement(profile, world.Grid, traversal, direction, plan.DeliberateDoubleBack);
+            var requirement = DetermineExitRequirement(profile, context.HexCenterDistance, traversal, direction, plan.DeliberateDoubleBack);
             var progress = Convert(traversal.Progress, unit);
             var needed = plan.DeliberateDoubleBack
                 ? progress.Value
@@ -578,15 +562,10 @@ public sealed class CrawlRuntimeEngine
                 LastTravelDirection = direction,
                 Progress = new DistanceMeasure(0, unit),
                 CurrentExitRequirement = new DistanceMeasure(
-                    world.Grid.NeighborCenterDistance.Value * profile.FarExitProgressFactor,
+                    context.HexCenterDistance.Value * profile.FarExitProgressFactor,
                     unit)
             };
-            state = state with
-            {
-                Traversal = traversal,
-                Position = HexGeometry.HexToWorld(world.Grid, entered),
-                PositionPrecision = WorldPositionPrecision.HexAnchor
-            };
+            state = state with { Traversal = traversal };
 
             if (plan.DeliberateDoubleBack)
             {
@@ -670,7 +649,7 @@ public sealed class CrawlRuntimeEngine
     }
 
     private static MovementOutcome MoveHexSteps(
-        OverworldDefinition world,
+        CrawlRuntimeContext context,
         ExpeditionState state,
         ActiveWatchState active,
         WatchTravelPlan plan,
@@ -710,10 +689,8 @@ public sealed class CrawlRuntimeEngine
                     CurrentHex = entered,
                     EntryDirection = direction,
                     LastTravelDirection = direction,
-                    Progress = new DistanceMeasure(0, world.Grid.NeighborCenterDistance.Unit)
-                },
-                Position = HexGeometry.HexToWorld(world.Grid, entered),
-                PositionPrecision = WorldPositionPrecision.HexAnchor
+                    Progress = new DistanceMeasure(0, context.HexCenterDistance.Unit)
+                }
             };
 
             if (state.Navigation.IsLost)
@@ -743,8 +720,8 @@ public sealed class CrawlRuntimeEngine
                 : ScaleTime(callRemaining, (double)completed / suppliedSteps);
         consumedTime = ClampTime(consumedTime, TimeSpan.Zero, segmentDuration);
         var physicalDistance = new DistanceMeasure(
-            world.Grid.NeighborCenterDistance.Value * completed,
-            world.Grid.NeighborCenterDistance.Unit);
+            context.HexCenterDistance.Value * completed,
+            context.HexCenterDistance.Unit);
         state = state with
         {
             DistanceTraveled = Add(state.DistanceTraveled, physicalDistance),
@@ -773,9 +750,7 @@ public sealed class CrawlRuntimeEngine
     }
 
     private static WatchAdvanceResult TriggerEncounter(
-        OverworldDefinition world,
         ExpeditionState state,
-        PlayerKnowledgeState knowledge,
         ActiveWatchState active,
         EventCollector events)
     {
@@ -790,51 +765,17 @@ public sealed class CrawlRuntimeEngine
                 : $"{encounter.Kind}: {encounter.Note}",
             subjectId: encounter.LocationId);
 
-        if (encounter.Kind == EncounterOutcomeKind.KeyedLocationDiscovery)
-        {
-            var locationId = encounter.LocationId!.Value;
-            var location = world.Locations.SingleOrDefault(candidate => candidate.Id == locationId)
-                ?? throw new InvalidOperationException("The resolved keyed location does not exist in this overworld.");
-            if (HexGeometry.WorldToHex(world.Grid, location.Position) != state.CurrentHex)
-            {
-                throw new InvalidOperationException("A keyed-location encounter can only discover a location in the expedition's current hex.");
-            }
-
-            events.Add(
-                active.WatchNumber,
-                CrawlRuntimeEventKind.KeyedLocationEncountered,
-                state.ElapsedTravelTime,
-                state.CurrentHex,
-                $"Encountered keyed location {location.Name}.",
-                subjectId: location.Id,
-                subjectType: KnowledgeSubjectType.Location);
-            knowledge = KnowledgeDiscovery.Discover(
-                knowledge,
-                location.Id,
-                KnowledgeSubjectType.Location,
-                "runtime:keyed-location");
-            events.Add(
-                active.WatchNumber,
-                CrawlRuntimeEventKind.LocationDiscovered,
-                state.ElapsedTravelTime,
-                state.CurrentHex,
-                $"Discovered location {location.Name}; no other contents of the hex were revealed.",
-                subjectId: location.Id,
-                subjectType: KnowledgeSubjectType.Location);
-        }
-
         active = active with
         {
             EncounterHandled = true,
             PendingDecision = RuntimePauseReason.EncounterTriggered
         };
         state = state with { ActiveWatch = active };
-        return Finish(state, knowledge, RuntimePauseReason.EncounterTriggered, active.Remaining, events);
+        return Finish(state, RuntimePauseReason.EncounterTriggered, active.Remaining, events);
     }
 
     private static WatchAdvanceResult CompleteWatch(
         ExpeditionState state,
-        PlayerKnowledgeState knowledge,
         ActiveWatchState active,
         EventCollector events)
     {
@@ -849,7 +790,7 @@ public sealed class CrawlRuntimeEngine
             state.ElapsedTravelTime,
             state.CurrentHex,
             $"Watch {active.WatchNumber} completed.");
-        return Finish(state, knowledge, null, TimeSpan.Zero, events);
+        return Finish(state, null, TimeSpan.Zero, events);
     }
 
     private static void EmitDmOverrideIfNeeded(
@@ -884,7 +825,6 @@ public sealed class CrawlRuntimeEngine
 
     private static WatchAdvanceResult Finish(
         ExpeditionState state,
-        PlayerKnowledgeState knowledge,
         RuntimePauseReason? pause,
         TimeSpan remaining,
         EventCollector events)
@@ -894,7 +834,7 @@ public sealed class CrawlRuntimeEngine
         {
             state = state with { History = state.History.Concat(newEvents).ToArray() };
         }
-        return new WatchAdvanceResult(state, knowledge, pause, remaining, newEvents);
+        return new WatchAdvanceResult(state, pause, remaining, newEvents);
     }
 
     private static DistanceMeasure Add(DistanceMeasure left, DistanceMeasure right)

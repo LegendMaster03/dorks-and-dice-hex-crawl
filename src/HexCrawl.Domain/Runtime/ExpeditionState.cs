@@ -18,8 +18,8 @@ public sealed record ExpeditionState
     public required Guid Id { get; init; }
     public required Guid OverworldId { get; init; }
 
-    // World position is retained for maps and future exact positioning, but crawl
-    // procedure resolution uses Traversal rather than ray-casting this point.
+    // World position is a projection retained for map composition and persistence
+    // compatibility. CrawlRuntimeEngine uses Traversal only and never reads or writes it.
     public required WorldPoint Position { get; init; }
     public WorldPositionPrecision PositionPrecision { get; init; } = WorldPositionPrecision.Exact;
 

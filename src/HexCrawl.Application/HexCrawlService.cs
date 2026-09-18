@@ -389,16 +389,20 @@ public sealed class HexCrawlService(IHexCrawlStore store)
             command.DeliberateDoubleBack,
             command.ContinueAcrossBoundaries);
         var result = _runtime.Advance(
-            world.World,
+            ExpeditionWorldComposition.RuntimeContext(world.World),
             profile,
             expedition.State,
-            expedition.Knowledge,
             plan,
             new WatchAdvanceInputs(travel, navigation, encounter, boundaryDecision, command.DmOverrideNote));
+        var projection = ExpeditionWorldComposition.Apply(
+            world.World,
+            result,
+            expedition.Knowledge,
+            applyAutomaticKnowledge: true);
         var updated = expedition with
         {
-            State = result.Expedition,
-            Knowledge = result.Knowledge,
+            State = projection.State,
+            Knowledge = projection.Knowledge,
             PauseReason = result.PauseReason,
             RemainingWatchTime = result.RemainingWatchTime
         };

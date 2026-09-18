@@ -42,7 +42,6 @@ public sealed record CrawlRuntimeEvent(
 
 public sealed record WatchAdvanceResult(
     ExpeditionState Expedition,
-    PlayerKnowledgeState Knowledge,
     RuntimePauseReason? PauseReason,
     TimeSpan RemainingWatchTime,
     IReadOnlyList<CrawlRuntimeEvent> Events);

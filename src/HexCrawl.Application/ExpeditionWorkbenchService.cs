@@ -151,24 +151,25 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
             command.ContinueAcrossBoundaries);
 
         var result = _runtime.Advance(
-            world.World,
+            ExpeditionWorldComposition.RuntimeContext(world.World),
             runtimeProfile,
             expedition.State,
-            knowledge,
             plan,
             new WatchAdvanceInputs(travel, navigation, encounter, boundaryDecision, command.DmOverrideNote));
 
-        var knowledgeAfterRuntime = presentation.AutomationMode == PresentationAutomationMode.DmControlled
-            ? knowledge
-            : result.Knowledge;
+        var worldProjection = ExpeditionWorldComposition.Apply(
+            world.World,
+            result,
+            knowledge,
+            presentation.AutomationMode != PresentationAutomationMode.DmControlled);
         var projectedKnowledge = PresentationKnowledgeProjection.ApplyEnteredHexes(
             presentation,
-            knowledgeAfterRuntime,
+            worldProjection.Knowledge,
             result.Events
                 .Where(runtimeEvent => runtimeEvent.Kind == CrawlRuntimeEventKind.HexEntered)
                 .Select(runtimeEvent => runtimeEvent.Hex));
         var stateWithProvenance = AppendProvenanceEvent(
-            result.Expedition,
+            worldProjection.State,
             result.Events,
             travelProvenance,
             navigation?.Provenance,
