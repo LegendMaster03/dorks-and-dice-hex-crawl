@@ -546,6 +546,7 @@ function renderNonSpatialTracker(
                 </div>
                 <nav>
                     <button type="button" data-home>DM tools</button>
+                    <button type="button" data-watch>Watch / time</button>
                     <button type="button" data-encounters>Encounter cadence</button>
                 </nav>
             </header>
@@ -554,8 +555,12 @@ function renderNonSpatialTracker(
                     <h2>Procedure state</h2>
                     <div class="hc-status-grid">
                         <div><strong>Day</strong><span>${state.currentDay}</span></div>
+                        <div><strong>Watch</strong><span>${state.activeWatchNumber === null ? `Ready for watch ${state.completedWatches + 1}` : `Watch ${state.activeWatchNumber}`}</span></div>
+                        <div><strong>Watch length</strong><span>${formatHours(state.activeWatchTotalHours ?? runtime.profile.watchHours)}</span></div>
+                        <div><strong>Watch elapsed</strong><span>${formatHours(state.activeWatchElapsedHours ?? 0)}</span></div>
+                        <div><strong>Watch remaining</strong><span>${formatHours(state.activeWatchRemainingHours ?? runtime.profile.watchHours)}</span></div>
                         <div><strong>Completed watches</strong><span>${state.completedWatches}</span></div>
-                        <div><strong>Elapsed time</strong><span>${formatHours(state.elapsedTravelHours)}</span></div>
+                        <div><strong>Total elapsed</strong><span>${formatHours(state.elapsedTravelHours)}</span></div>
                         <div><strong>Context</strong><span>Non-spatial</span></div>
                     </div>
                     <p class="hc-hint">This session intentionally has no hex coordinates, distance scale, world position, or Overworld. Spatial travel and navigation tools do not apply.</p>
@@ -583,6 +588,7 @@ function renderNonSpatialTracker(
     }
 
     required<HTMLButtonElement>(root, "[data-home]").addEventListener("click", () => navigate("/"));
+    required<HTMLButtonElement>(root, "[data-watch]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}/travel`));
     required<HTMLButtonElement>(root, "[data-encounters]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}/encounters`));
     return () => {};
 }
