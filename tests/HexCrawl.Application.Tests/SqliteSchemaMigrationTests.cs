@@ -87,7 +87,7 @@ public sealed class SqliteSchemaMigrationTests
                 Assert.True(await reader.ReadAsync());
                 Assert.Equal(worldId.ToString("D"), reader.GetString(0));
                 var contextJson = reader.GetString(1);
-                Assert.Contains(""kind":"WorldBound"", contextJson, StringComparison.Ordinal);
+                Assert.Contains("\"kind\":\"WorldBound\"", contextJson, StringComparison.Ordinal);
                 Assert.Contains(worldId.ToString("D"), contextJson, StringComparison.OrdinalIgnoreCase);
             }
 
