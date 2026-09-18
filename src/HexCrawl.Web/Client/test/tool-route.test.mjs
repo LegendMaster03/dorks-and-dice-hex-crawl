@@ -5,12 +5,14 @@ import { canonicalExpeditionRoute, deriveToolRoute, parseToolRoute, toolRelative
 test("derives nested hosted tool routes from the Tool Host base path", () => {
     assert.equal(deriveToolRoute("/tools/hex-crawl", "/tools/hex-crawl/worlds/abc/edit", "/"), "/worlds/abc/edit");
     assert.equal(deriveToolRoute("/tools/hex-crawl", "/tools/hex-crawl/expeditions/def/navigation", "/"), "/expeditions/def/navigation");
+    assert.equal(deriveToolRoute("/tools/hex-crawl", "/tools/hex-crawl/assistants/navigation", "/"), "/assistants/navigation");
     assert.equal(deriveToolRoute("/tools/hex-crawl", "/tools/hex-crawl", "/worlds"), "/");
 });
 
 test("standalone routing retains the entire nested path", () => {
     assert.equal(deriveToolRoute("/", "/worlds/abc/expeditions/def", "/"), "/worlds/abc/expeditions/def");
     assert.equal(deriveToolRoute("/", "/expeditions/def/travel", "/"), "/expeditions/def/travel");
+    assert.equal(deriveToolRoute("/", "/assistants/encounters", "/"), "/assistants/encounters");
 });
 
 test("parses home, world, full workbench, tracker, and focused assistant routes", () => {
@@ -22,11 +24,15 @@ test("parses home, world, full workbench, tracker, and focused assistant routes"
     assert.deepEqual(parseToolRoute("/expeditions/def/travel"), { kind: "assistant", expeditionId: "def", assistant: "travel" });
     assert.deepEqual(parseToolRoute("/expeditions/def/navigation"), { kind: "assistant", expeditionId: "def", assistant: "navigation" });
     assert.deepEqual(parseToolRoute("/expeditions/def/encounters"), { kind: "assistant", expeditionId: "def", assistant: "encounters" });
+    assert.deepEqual(parseToolRoute("/assistants/travel"), { kind: "assistant-entry", assistant: "travel" });
+    assert.deepEqual(parseToolRoute("/assistants/navigation"), { kind: "assistant-entry", assistant: "navigation" });
+    assert.deepEqual(parseToolRoute("/assistants/encounters"), { kind: "assistant-entry", assistant: "encounters" });
 });
 
 test("builds hosted and standalone hrefs without teaching the site internal routes", () => {
     assert.equal(toolRelativeHref("/tools/hex-crawl", "/expeditions/def"), "/tools/hex-crawl/expeditions/def");
     assert.equal(toolRelativeHref("/", "/worlds/abc/edit"), "/worlds/abc/edit");
+    assert.equal(toolRelativeHref("/tools/hex-crawl", "/assistants/travel"), "/tools/hex-crawl/assistants/travel");
 });
 
 test("canonical expedition route rejects a world/expedition mismatch", () => {

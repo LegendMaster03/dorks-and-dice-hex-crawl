@@ -8,6 +8,7 @@ export type ToolRoute =
     | { kind: "expedition"; worldId: string; expeditionId: string }
     | { kind: "tracker"; expeditionId: string }
     | { kind: "assistant"; expeditionId: string; assistant: ExpeditionAssistant }
+    | { kind: "assistant-entry"; assistant: ExpeditionAssistant }
     | { kind: "unknown"; path: string };
 
 export function deriveToolRoute(basePath: string, pathname: string, initialRoute?: string | null): string {
@@ -32,6 +33,11 @@ export function parseToolRoute(path: string): ToolRoute {
         kind: "expedition",
         worldId: decodeURIComponent(match[1]),
         expeditionId: decodeURIComponent(match[2])
+    };
+    match = normalized.match(/^\/assistants\/(travel|navigation|encounters)$/);
+    if (match) return {
+        kind: "assistant-entry",
+        assistant: match[1] as ExpeditionAssistant
     };
     match = normalized.match(/^\/expeditions\/([^/]+)\/(travel|navigation|encounters)$/);
     if (match) return {
