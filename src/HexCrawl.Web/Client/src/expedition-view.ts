@@ -8,33 +8,70 @@ import { canonicalExpeditionRoute } from "./tool-route";
 import type { ExpeditionDetail, Overworld, ResolutionSource, RuntimeAdvanceRequest } from "./types";
 import { clearUiError, showUiError } from "./ui-error";
 
+export type ExpeditionViewMode = "map" | "tracker" | "travel" | "navigation" | "encounters";
+
 export async function renderExpedition(
     root: HTMLElement,
     api: HexCrawlApi,
-    worldId: string,
     expeditionId: string,
-    navigate: (route: string, replace?: boolean) => void): Promise<() => void> {
+    mode: ExpeditionViewMode,
+    navigate: (route: string, replace?: boolean) => void,
+    routeWorldId?: string): Promise<() => void> {
     let runtime: ExpeditionDetail = await api.getExpedition(expeditionId);
-    const canonicalRoute = canonicalExpeditionRoute(worldId, runtime);
-    if (canonicalRoute) {
-        navigate(canonicalRoute, true);
-        return () => {};
+    const showMap = mode === "map";
+    if (showMap && routeWorldId) {
+        const canonicalRoute = canonicalExpeditionRoute(routeWorldId, runtime);
+        if (canonicalRoute) {
+            navigate(canonicalRoute, true);
+            return () => {};
+        }
     }
 
     let world: Overworld = await api.getOverworld(runtime.overworldId);
     let disposed = false;
     let advancePending = false;
 
+    const modeLabel = mode === "map"
+        ? "Full crawl workbench"
+        : mode === "tracker"
+            ? "Mapless expedition tracker"
+            : mode === "travel"
+                ? "Travel / watch assistant"
+                : mode === "navigation"
+                    ? "Navigation assistant"
+                    : "Encounter cadence assistant";
+    const focusHint = mode === "travel"
+        ? "Travel and watch inputs are emphasized. Other inputs remain available when the persisted procedure requires them for the same runtime transition."
+        : mode === "navigation"
+            ? "Navigation and lost/veer inputs are emphasized. Travel inputs remain available because an expedition transition advances the current watch atomically."
+            : mode === "encounters"
+                ? "Encounter cadence inputs are emphasized. Travel and navigation inputs remain available when they are required to advance the same persisted watch."
+                : "";
+    const mapMarkup = showMap ? '<div class="hc-map-host" data-map></div>' : "";
+    const mapOnlyTools = showMap
+        ? `
+                    <details open><summary>Current-area discovery</summary><div data-discovery></div></details>
+                    <details><summary>Player knowledge preview</summary><div data-player-preview></div></details>`
+        : "";
+
     root.innerHTML = `
         <section class="hc-page hc-workspace">
             <header class="hc-page-header">
-                <div><h1 data-title></h1><p>DM expedition workbench</p></div>
-                <nav><button type="button" data-edit>World authoring</button><button type="button" data-worlds>Overworlds</button></nav>
+                <div><h1 data-title></h1><p><span data-mode-label></span> · <span data-context></span></p></div>
+                <nav><button type="button" data-home>DM tools</button><button type="button" data-edit>World authoring</button><button type="button" data-worlds>Overworlds</button></nav>
             </header>
+            <div class="hc-view-switcher" aria-label="Expedition views">
+                <button type="button" data-view-tracker>Tracker</button>
+                <button type="button" data-view-map>Full map</button>
+                <button type="button" data-view-travel>Travel / watch</button>
+                <button type="button" data-view-navigation>Navigation</button>
+                <button type="button" data-view-encounters>Encounters</button>
+            </div>
+            ${focusHint ? `<p class="hc-hint hc-focus-hint">${focusHint}</p>` : ""}
             <div class="hc-error" data-error hidden role="alert"></div>
-            <div class="hc-workspace-grid">
-                <section class="hc-map-panel" aria-label="Expedition map and state">
-                    <div class="hc-map-host" data-map></div>
+            <div class="${showMap ? "hc-workspace-grid" : "hc-tracker-grid"}">
+                <section class="${showMap ? "hc-map-panel" : "hc-panel hc-runtime-panel"}" aria-label="Expedition state${showMap ? " and map" : ""}">
+                    ${mapMarkup}
                     <section class="hc-status-section" aria-labelledby="hc-expedition-state-title">
                         <h2 id="hc-expedition-state-title">Expedition state</h2>
                         <div class="hc-status-grid" data-status></div>
@@ -46,7 +83,7 @@ export async function renderExpedition(
                     <details open><summary data-watch-summary>Run watch</summary>
                         <div class="hc-form" data-requirements></div>
                         <form class="hc-form" data-advance>
-                            <fieldset data-plan-fields>
+                            <fieldset data-plan-fields data-focus-group="travel navigation">
                                 <legend>Travel plan</legend>
                                 <label>Intended direction <select name="direction">
                                     <option value="0">0</option><option value="1">1</option><option value="2">2</option>
@@ -62,7 +99,7 @@ export async function renderExpedition(
                                 <p class="hc-hint" data-direction-hint></p>
                             </fieldset>
 
-                            <fieldset data-travel-resolution>
+                            <fieldset data-travel-resolution data-focus-group="travel">
                                 <legend>Resolved travel context</legend>
                                 <p class="hc-hint">Supply the effective movement result for this watch segment. Terrain and route category names are descriptive; the runtime does not infer a multiplier from them.</p>
                                 <div data-fixed-distance><label>Effective distance <input name="effectiveDistance" type="number" min="0" step="any"></label></div>
@@ -72,7 +109,7 @@ export async function renderExpedition(
                                 <label>Travel source note <input name="travelNote" placeholder="optional"></label>
                             </fieldset>
 
-                            <fieldset data-navigation-resolution>
+                            <fieldset data-navigation-resolution data-focus-group="navigation">
                                 <legend>Navigation resolution</legend>
                                 <label>Result <select name="navigationOutcome"><option value="Succeeded">Succeeded</option><option value="Failed">Failed / lost</option></select></label>
                                 <label data-veer-row>Resolved veer steps <input name="veerSteps" type="number" step="1" value="1"></label>
@@ -80,7 +117,7 @@ export async function renderExpedition(
                                 <label>Navigation source note <input name="navigationNote" placeholder="optional"></label>
                             </fieldset>
 
-                            <fieldset data-encounter-resolution>
+                            <fieldset data-encounter-resolution data-focus-group="encounters">
                                 <legend>Encounter check</legend>
                                 <label>Resolved outcome <select name="encounterOutcome"><option value="None">No encounter</option><option value="WanderingEncounter">Wandering encounter</option><option value="KeyedLocationDiscovery">Keyed location discovery</option><option value="ManualCustom">Manual / custom interruption</option></select></label>
                                 <label data-encounter-hour>Occurs at hour within watch <input name="encounterHour" type="number" min="0" step="any"></label>
@@ -90,7 +127,7 @@ export async function renderExpedition(
                                 <label>Encounter source note <input name="encounterSourceNote" placeholder="optional"></label>
                             </fieldset>
 
-                            <fieldset data-boundary-resolution>
+                            <fieldset data-boundary-resolution data-focus-group="navigation">
                                 <legend>Lost boundary decision</legend>
                                 <label><input name="recognizedLost" type="checkbox"> The party recognizes that it is lost</label>
                                 <label><input name="reorient" type="checkbox"> The party reorients</label>
@@ -106,9 +143,8 @@ export async function renderExpedition(
                         </form>
                     </details>
 
-                    <details open><summary>Current-area discovery</summary><div data-discovery></div></details>
-                    <details><summary>Player knowledge preview</summary><div data-player-preview></div></details>
-                    <details><summary>Procedure and presentation snapshots</summary><div data-snapshots></div></details>
+                    ${mapOnlyTools}
+                    <details><summary>${showMap ? "Procedure and presentation snapshots" : "Procedure snapshot"}</summary><div data-snapshots></div></details>
                 </aside>
             </div>
         </section>`;
@@ -116,7 +152,8 @@ export async function renderExpedition(
     const error = required<HTMLElement>(root, "[data-error]");
     const form = required<HTMLFormElement>(root, "[data-advance]");
     const advanceButton = required<HTMLButtonElement>(form, "[data-advance-button]");
-    const map = new MapSurface(required(root, "[data-map]"), () => world);
+    const mapHost = root.querySelector<HTMLElement>("[data-map]");
+    const map = mapHost ? new MapSurface(mapHost, () => world) : null;
     const locationSelect = select(form, "locationId");
     for (const name of ["travelSource", "navigationSource", "encounterSource", "boundarySource"] as const) {
         const control = select(form, name);
@@ -127,17 +164,24 @@ export async function renderExpedition(
 
     const apply = (next: ExpeditionDetail): void => {
         runtime = next;
-        required<HTMLElement>(root, "[data-title]").textContent = `${world.name}: ${next.name}`;
-        map.renderer.expeditionHex = next.expedition.currentHex;
-        map.renderer.discoveredSubjectIds = discoveredSubjectIds(next);
-        map.requestRender();
+        required<HTMLElement>(root, "[data-title]").textContent = showMap ? `${world.name}: ${next.name}` : next.name;
+        required<HTMLElement>(root, "[data-mode-label]").textContent = modeLabel;
+        required<HTMLElement>(root, "[data-context]").textContent = `Crawl context: ${world.name}`;
+        if (map) {
+            map.renderer.expeditionHex = next.expedition.currentHex;
+            map.renderer.discoveredSubjectIds = discoveredSubjectIds(next);
+            map.requestRender();
+        }
         renderStatus();
         renderPause();
         renderHistory();
-        renderDiscovery();
-        renderPlayerPreview();
+        if (showMap) {
+            renderDiscovery();
+            renderPlayerPreview();
+        }
         renderSnapshots();
         syncWatchForm();
+        syncFocus();
     };
 
     const renderStatus = (): void => {
@@ -275,12 +319,17 @@ export async function renderExpedition(
         host.replaceChildren();
         const procedure = document.createElement("p");
         procedure.textContent = `${runtime.profile.name} (${runtime.profile.key}) · ${runtime.profile.watchHours}h watch · ${prettyEnum(runtime.profile.travelResolution)} · ${prettyEnum(runtime.profile.actualDistanceResolution)} · encounters ${prettyEnum(runtime.profile.encounterCadence)} · navigation ${runtime.profile.usesNavigationChecks ? "enabled" : "disabled"} · veer ${runtime.profile.usesPersistentVeer ? "persistent" : "non-persistent"}.`;
-        const presentation = document.createElement("p");
-        presentation.textContent = `${runtime.presentation.name} (${runtime.presentation.key}) · grid ${runtime.presentation.playerGrid.toLowerCase()} · terrain ${prettyEnum(runtime.presentation.terrainMode)} · automation ${prettyEnum(runtime.presentation.automationMode)}.`;
         const note = document.createElement("p");
         note.className = "hc-hint";
-        note.textContent = "Both are stored snapshots for this expedition. Catalog changes do not reconstruct active expedition behavior.";
-        host.append(procedure, presentation, note);
+        if (showMap) {
+            const presentation = document.createElement("p");
+            presentation.textContent = `${runtime.presentation.name} (${runtime.presentation.key}) · grid ${runtime.presentation.playerGrid.toLowerCase()} · terrain ${prettyEnum(runtime.presentation.terrainMode)} · automation ${prettyEnum(runtime.presentation.automationMode)}.`;
+            note.textContent = "Both are stored snapshots for this expedition. Catalog changes do not reconstruct active expedition behavior.";
+            host.append(procedure, presentation, note);
+        } else {
+            note.textContent = "The tracker uses the persisted crawl procedure snapshot. Map presentation remains owned by the full map workbench.";
+            host.append(procedure, note);
+        }
     };
 
     const syncWatchForm = (): void => {
@@ -333,6 +382,15 @@ export async function renderExpedition(
             : "Direction changes do not consume additional progress under this procedure.";
     };
 
+    const syncFocus = (): void => {
+        const focus = mode === "travel" || mode === "navigation" || mode === "encounters" ? mode : null;
+        for (const section of root.querySelectorAll<HTMLElement>("[data-focus-group]")) {
+            const groups = section.dataset.focusGroup?.split(" ") ?? [];
+            section.classList.toggle("hc-focus-primary", focus !== null && groups.includes(focus));
+            section.classList.toggle("hc-focus-secondary", focus !== null && !groups.includes(focus));
+        }
+    };
+
     const syncNavigationVisibility = (): void => {
         const due = navigationResolutionDue(runtime, checkbox(form, "suppressNav").checked, checkbox(form, "doubleBack").checked);
         required<HTMLElement>(form, "[data-navigation-resolution]").hidden = !due;
@@ -367,8 +425,14 @@ export async function renderExpedition(
     checkbox(form, "doubleBack").addEventListener("change", syncNavigationVisibility);
     select(form, "navigationOutcome").addEventListener("change", syncNavigationVisibility);
     select(form, "encounterOutcome").addEventListener("change", syncEncounterFields);
+    required<HTMLButtonElement>(root, "[data-home]").addEventListener("click", () => navigate("/"));
     required<HTMLButtonElement>(root, "[data-edit]").addEventListener("click", () => navigate(`/worlds/${world.id}/edit`));
     required<HTMLButtonElement>(root, "[data-worlds]").addEventListener("click", () => navigate("/worlds"));
+    required<HTMLButtonElement>(root, "[data-view-tracker]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}`));
+    required<HTMLButtonElement>(root, "[data-view-map]").addEventListener("click", () => navigate(`/worlds/${world.id}/expeditions/${runtime.id}`));
+    required<HTMLButtonElement>(root, "[data-view-travel]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}/travel`));
+    required<HTMLButtonElement>(root, "[data-view-navigation]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}/navigation`));
+    required<HTMLButtonElement>(root, "[data-view-encounters]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}/encounters`));
 
     form.addEventListener("submit", event => {
         event.preventDefault();
@@ -443,7 +507,7 @@ export async function renderExpedition(
     apply(runtime);
     return () => {
         disposed = true;
-        map.dispose();
+        map?.dispose();
     };
 
     function subjectLabel(id: string): string {

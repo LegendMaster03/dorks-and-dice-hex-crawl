@@ -1,8 +1,13 @@
+export type ExpeditionAssistant = "travel" | "navigation" | "encounters";
+
 export type ToolRoute =
+    | { kind: "home" }
     | { kind: "worlds" }
     | { kind: "world"; worldId: string }
     | { kind: "edit"; worldId: string }
     | { kind: "expedition"; worldId: string; expeditionId: string }
+    | { kind: "tracker"; expeditionId: string }
+    | { kind: "assistant"; expeditionId: string; assistant: ExpeditionAssistant }
     | { kind: "unknown"; path: string };
 
 export function deriveToolRoute(basePath: string, pathname: string, initialRoute?: string | null): string {
@@ -15,7 +20,8 @@ export function deriveToolRoute(basePath: string, pathname: string, initialRoute
 
 export function parseToolRoute(path: string): ToolRoute {
     const normalized = normalizeRoute(path);
-    if (normalized === "/" || normalized === "/worlds") return { kind: "worlds" };
+    if (normalized === "/") return { kind: "home" };
+    if (normalized === "/worlds") return { kind: "worlds" };
 
     let match = normalized.match(/^\/worlds\/([^/]+)$/);
     if (match) return { kind: "world", worldId: decodeURIComponent(match[1]) };
@@ -27,6 +33,14 @@ export function parseToolRoute(path: string): ToolRoute {
         worldId: decodeURIComponent(match[1]),
         expeditionId: decodeURIComponent(match[2])
     };
+    match = normalized.match(/^\/expeditions\/([^/]+)\/(travel|navigation|encounters)$/);
+    if (match) return {
+        kind: "assistant",
+        expeditionId: decodeURIComponent(match[1]),
+        assistant: match[2] as ExpeditionAssistant
+    };
+    match = normalized.match(/^\/expeditions\/([^/]+)$/);
+    if (match) return { kind: "tracker", expeditionId: decodeURIComponent(match[1]) };
     return { kind: "unknown", path: normalized };
 }
 
