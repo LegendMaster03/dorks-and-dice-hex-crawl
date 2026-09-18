@@ -52,3 +52,20 @@ test("non-spatial watch bookkeeping uses a dedicated non-spatial API", () => {
     assert.match(view, /Watch \/ time bookkeeping/);
     assert.equal(/recordWatchAssistant\([^)]*resultingHex/.test(view), false);
 });
+
+
+test("direct assistant entry does not create or fetch an Overworld", () => {
+    const source = fs.readFileSync(path.join(sourceDir, "assistant-entry-view.ts"), "utf8");
+    assert.equal(source.includes("getOverworld"), false);
+    assert.equal(source.includes("createOverworld"), false);
+    assert.match(source, /startStandaloneSession/);
+    assert.match(source, /kind: "NonSpatial"/);
+    assert.match(source, /kind: "AbstractHex"/);
+});
+
+test("dashboard prominently exposes all top-level assistant entry routes", () => {
+    const source = fs.readFileSync(path.join(sourceDir, "tool-home-view.ts"), "utf8");
+    assert.match(source, /\/assistants\/travel/);
+    assert.match(source, /\/assistants\/navigation/);
+    assert.match(source, /\/assistants\/encounters/);
+});

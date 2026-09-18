@@ -26,6 +26,14 @@ test("Embedded Module mode routes persistent reads, writes, map upload, and map 
         if (url === "/tool-host/hex-crawl/api/upstream/api/overworlds/world-1/source-maps" && method === "POST") {
             return Response.json({ id: "world-1", version: 2, sourceMaps: [] });
         }
+        if (url === "/tool-host/hex-crawl/api/upstream/api/expeditions" && method === "POST") {
+            return Response.json({
+                id: "session-1",
+                version: 1,
+                overworldId: null,
+                context: { kind: "NonSpatial", name: "Hosted watch", overworldId: null }
+            });
+        }
         throw new Error(`Unexpected smoke-test fetch: ${url}`);
     };
 
@@ -58,11 +66,20 @@ test("Embedded Module mode routes persistent reads, writes, map upload, and map 
             api.sourceMapAssetUrl("world-1", "map-1"),
             "/tool-host/hex-crawl/api/upstream/api/overworlds/world-1/source-maps/map-1/asset");
 
+        const standalone = await api.startStandaloneSession({
+            name: "Hosted watch",
+            procedureKey: "simple-fixed-distance",
+            context: { kind: "NonSpatial", name: "Hosted watch" }
+        });
+        assert.equal(standalone.overworldId, null);
+        assert.equal(standalone.context.kind, "NonSpatial");
+
         assert.deepEqual(calls.map(call => ({ url: call.url, method: call.method })), [
             { url: "/tool-context", method: "GET" },
             { url: "/tool-host/hex-crawl/api/upstream/api/overworlds", method: "GET" },
             { url: "/tool-host/hex-crawl/api/upstream/api/overworlds", method: "POST" },
-            { url: "/tool-host/hex-crawl/api/upstream/api/overworlds/world-1/source-maps", method: "POST" }
+            { url: "/tool-host/hex-crawl/api/upstream/api/overworlds/world-1/source-maps", method: "POST" },
+            { url: "/tool-host/hex-crawl/api/upstream/api/expeditions", method: "POST" }
         ]);
         assert.equal(calls.at(-1).form, true);
     } finally {
