@@ -41,7 +41,10 @@ public sealed record EncounterCadenceAssistantCommand
     public string? Note { get; init; }
 }
 
-public sealed class ExpeditionAssistantService(IHexCrawlStore store, HexCrawlService coreService)
+public sealed class ExpeditionAssistantService(
+    IHexCrawlStore store,
+    HexCrawlService coreService,
+    CrawlSessionContextResolver contextResolver)
 {
     public async Task<StoredExpedition> RecordTravelWatchAsync(
         Guid expeditionId,
@@ -51,10 +54,15 @@ public sealed class ExpeditionAssistantService(IHexCrawlStore store, HexCrawlSer
     {
         var expedition = await coreService.GetExpeditionAsync(expeditionId, ownerUserId, cancellationToken);
         RequireVersion(command.ExpectedVersion, expedition.Version);
-        var world = await coreService.GetOverworldAsync(expedition.State.OverworldId, ownerUserId, cancellationToken);
-        var context = ExpeditionWorldComposition.RuntimeContext(world.World);
+
+        var stateBefore = expedition.Runtime as ExpeditionState
+            ?? throw new InvalidOperationException("Travel/watch bookkeeping requires a spatial crawl session.");
+        var resolvedContext = await contextResolver.ResolveAsync(expedition, ownerUserId, cancellationToken);
+        var context = resolvedContext.RuntimeContext
+            ?? throw new InvalidOperationException("Travel/watch bookkeeping requires a spatial crawl session.");
         var unit = context.HexCenterDistance.Unit;
         var provenance = new ResolutionProvenance(command.ResolutionSource, command.ResolutionNote);
+
         ResolvedTravelAmount travel;
         if (expedition.Procedure.TravelResolution == TravelResolutionMode.HexSteps)
         {
@@ -73,10 +81,11 @@ public sealed class ExpeditionAssistantService(IHexCrawlStore store, HexCrawlSer
         DistanceMeasure? progress = command.HexProgress.HasValue
             ? new DistanceMeasure(command.HexProgress.Value, unit)
             : null;
+
         var state = CrawlAssistantActions.RecordTravelWatch(
             context,
             expedition.Procedure,
-            expedition.State,
+            stateBefore,
             new TravelWatchAssistantInput(
                 TimeSpan.FromHours(command.ElapsedHours),
                 travel,
@@ -86,12 +95,20 @@ public sealed class ExpeditionAssistantService(IHexCrawlStore store, HexCrawlSer
                 command.ActualDirection.HasValue ? new HexDirection(command.ActualDirection.Value) : null,
                 command.CompleteWatch,
                 command.Note));
-        state = state with
+
+        if (resolvedContext.World is { } world)
         {
-            Position = HexGeometry.HexToWorld(world.World.Grid, state.CurrentHex),
-            PositionPrecision = WorldPositionPrecision.HexAnchor
-        };
-        return await SaveAsync(expedition with { State = state }, command.ExpectedVersion, cancellationToken);
+            state = state with
+            {
+                Position = HexGeometry.HexToWorld(world.World.Grid, state.CurrentHex),
+                PositionPrecision = WorldPositionPrecision.HexAnchor
+            };
+        }
+
+        return await SaveAsync(
+            expedition with { Runtime = state },
+            command.ExpectedVersion,
+            cancellationToken);
     }
 
     public async Task<StoredExpedition> RecordNavigationAsync(
@@ -102,15 +119,27 @@ public sealed class ExpeditionAssistantService(IHexCrawlStore store, HexCrawlSer
     {
         var expedition = await coreService.GetExpeditionAsync(expeditionId, ownerUserId, cancellationToken);
         RequireVersion(command.ExpectedVersion, expedition.Version);
+
+        if (expedition.Context is NonSpatialCrawlSessionContext)
+        {
+            throw new InvalidOperationException("Navigation bookkeeping requires a spatial crawl session.");
+        }
+
+        var stateBefore = expedition.Runtime as ExpeditionState
+            ?? throw new InvalidOperationException("Navigation bookkeeping requires spatial expedition state.");
         var state = CrawlAssistantActions.RecordNavigation(
-            expedition.State,
+            stateBefore,
             new NavigationAssistantInput(
                 command.IsLost,
                 command.VeerSteps,
                 command.IntendedDirection.HasValue ? new HexDirection(command.IntendedDirection.Value) : null,
                 new ResolutionProvenance(command.ResolutionSource, command.ResolutionNote),
                 command.Note));
-        return await SaveAsync(expedition with { State = state }, command.ExpectedVersion, cancellationToken);
+
+        return await SaveAsync(
+            expedition with { Runtime = state },
+            command.ExpectedVersion,
+            cancellationToken);
     }
 
     public async Task<StoredExpedition> RecordEncounterCadenceAsync(
@@ -121,13 +150,23 @@ public sealed class ExpeditionAssistantService(IHexCrawlStore store, HexCrawlSer
     {
         var expedition = await coreService.GetExpeditionAsync(expeditionId, ownerUserId, cancellationToken);
         RequireVersion(command.ExpectedVersion, expedition.Version);
-        var state = CrawlAssistantActions.RecordEncounterCadence(
-            expedition.State,
-            new EncounterCadenceAssistantInput(
-                command.Outcome,
-                new ResolutionProvenance(command.ResolutionSource, command.ResolutionNote),
-                command.Note));
-        return await SaveAsync(expedition with { State = state }, command.ExpectedVersion, cancellationToken);
+
+        var input = new EncounterCadenceAssistantInput(
+            command.Outcome,
+            new ResolutionProvenance(command.ResolutionSource, command.ResolutionNote),
+            command.Note);
+
+        CrawlSessionRuntimeState runtime = expedition.Runtime switch
+        {
+            ExpeditionState spatial => CrawlAssistantActions.RecordEncounterCadence(spatial, input),
+            NonSpatialSessionState nonSpatial => CrawlAssistantActions.RecordEncounterCadence(nonSpatial, input),
+            _ => throw new InvalidOperationException("Unsupported crawl session runtime state.")
+        };
+
+        return await SaveAsync(
+            expedition with { Runtime = runtime },
+            command.ExpectedVersion,
+            cancellationToken);
     }
 
     private async Task<StoredExpedition> SaveAsync(
@@ -139,7 +178,8 @@ public sealed class ExpeditionAssistantService(IHexCrawlStore store, HexCrawlSer
         return result.Outcome switch
         {
             SaveOutcome.Saved => result.Value!,
-            SaveOutcome.Conflict => throw new HexCrawlConcurrencyException("The expedition was changed by another request. Reload it before saving focused-assistant bookkeeping."),
+            SaveOutcome.Conflict => throw new HexCrawlConcurrencyException(
+                "The expedition was changed by another request. Reload it before saving focused-assistant bookkeeping."),
             _ => throw new HexCrawlNotFoundException("Expedition was not found.")
         };
     }
