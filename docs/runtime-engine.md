@@ -9,7 +9,7 @@ The persisted session model preserves these independent axes:
 - `CrawlSessionContext` says whether the session is `WorldBound`, `AbstractHex`, or `NonSpatial`.
 - `CrawlRuntimeContext` supplies only crawl-scale physical distance for spatial sessions.
 - `ExpeditionState` is spatial crawl state for world-bound and abstract-hex sessions.
-- `NonSpatialSessionState` is non-spatial procedure/time/history state and contains no fake map state.
+- `NonSpatialSessionState` is non-spatial procedure/time/history state. Its optional `NonSpatialActiveWatchState` contains only watch number, configured duration, elapsed time, and remaining time; it contains no fake map state.
 - `CrawlProcedureProfile` is procedure configuration.
 - `OverworldDefinition` remains authoritative spatial/world truth outside the runtime engine and is optional at the session level.
 - `PlayerKnowledgeState` remains world-specific party knowledge outside the runtime engine and is absent for standalone contexts.
@@ -107,9 +107,9 @@ An expedition record also persists pause reason and remaining watch time, becaus
 
 `ExpeditionWorkbenchService` is the full-watch application orchestration layer over the spatial engine. It starts expeditions from procedure/presentation presets, persists customized procedure snapshots, determines whether per-day encounter resolution is due, preserves legacy `Custom` cadence behavior, builds independent resolved-input provenance, calls `CrawlRuntimeEngine`, composes world/knowledge projection, applies presentation projection, and saves with optimistic concurrency.
 
-`ExpeditionAssistantService` exposes independent manual bookkeeping mutations over the same persisted expedition. Travel/watch, navigation, and encounter-cadence assistants each mutate only their owned state/history and do not silently resolve the other subsystems. Focused mutations are blocked while a full-workbench `ActiveWatchState` exists so a partial full-watch transition can not be corrupted by an independent helper.
+`ExpeditionAssistantService` exposes independent manual bookkeeping mutations over the same persisted session. Spatial travel/watch, navigation, and encounter-cadence assistants each mutate only their owned state/history and do not silently resolve the other subsystems. Spatial focused mutations are blocked while a full-workbench `ActiveWatchState` exists so a partial full-watch transition can not be corrupted by an independent helper. Non-spatial sessions instead use the dedicated watch mutation, which advances only procedure time, persists a lightweight active watch for partial/resume behavior, records provenance/DM overrides, and automatically completes the watch when its configured duration is fully consumed.
 
-The DM application can start or reopen sessions without any Overworld. Abstract-hex sessions expose the spatial runtime view without map composition. Non-spatial sessions expose only applicable procedure/time/history state. World-bound sessions add subject-specific discovery and presentation/knowledge preview.
+The DM application can start or reopen sessions without any Overworld. Abstract-hex sessions expose the spatial runtime view without map composition. Non-spatial sessions expose applicable procedure/time/history state, including configured watch length, current watch, elapsed/remaining watch time, partial/resume state, completed watches, and total elapsed session time. World-bound sessions add subject-specific discovery and presentation/knowledge preview.
 
 Every runtime mutation carries an optimistic `ExpectedVersion`. Two stale browser tabs therefore receive a conflict instead of one silently overwriting the other's newer expedition snapshot.
 
