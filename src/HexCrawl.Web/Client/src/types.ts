@@ -205,9 +205,16 @@ export type ExpeditionSummary = {
     updatedAt: string;
 };
 
+export type CrawlContext = {
+    id: string;
+    name: string;
+    hexCenterDistance: DistanceValue;
+};
+
 export type ExpeditionDetail = {
     id: string;
     overworldId: string;
+    context: CrawlContext;
     name: string;
     version: number;
     createdAt: string;
@@ -264,6 +271,39 @@ export type RuntimeAdvanceRequest = {
     recognizedLost?: boolean;
     reorient?: boolean;
     dmOverrideNote?: string;
+};
+
+export type TravelWatchAssistantRequest = {
+    expectedVersion: number;
+    elapsedHours: number;
+    distance?: number;
+    hexSteps?: number;
+    resultingHex: HexCoordinate;
+    hexProgress?: number;
+    intendedDirection?: number;
+    actualDirection?: number;
+    completeWatch: boolean;
+    resolutionSource: ResolutionSource;
+    resolutionNote?: string;
+    note?: string;
+};
+
+export type NavigationAssistantRequest = {
+    expectedVersion: number;
+    isLost: boolean;
+    veerSteps: number;
+    intendedDirection?: number;
+    resolutionSource: ResolutionSource;
+    resolutionNote?: string;
+    note?: string;
+};
+
+export type EncounterCadenceAssistantRequest = {
+    expectedVersion: number;
+    outcome: "None" | "WanderingEncounter" | "ManualCustom";
+    resolutionSource: ResolutionSource;
+    resolutionNote?: string;
+    note?: string;
 };
 
 export type ToolHostContext = {

@@ -1,5 +1,6 @@
 import { HexCrawlApi } from "./api";
 import { renderExpedition } from "./expedition-view";
+import { renderExpeditionAssistant } from "./expedition-assistant-view";
 import { enhanceExpeditionSetup } from "./expedition-setup";
 import { ensureStyles } from "./styles";
 import { renderToolHome } from "./tool-home-view";
@@ -57,7 +58,7 @@ async function boot(rootElement: HTMLElement): Promise<void> {
                         cleanup = await renderExpedition(rootElement, api, route.expeditionId, "tracker", navigate);
                         break;
                     case "assistant":
-                        cleanup = await renderExpedition(rootElement, api, route.expeditionId, route.assistant, navigate);
+                        cleanup = await renderExpeditionAssistant(rootElement, api, route.expeditionId, route.assistant, navigate);
                         break;
                     default:
                         navigate("/", true);

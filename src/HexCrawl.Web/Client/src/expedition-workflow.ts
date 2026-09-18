@@ -45,3 +45,21 @@ export function pauseInstruction(runtime: ExpeditionDetail): string | null {
             return null;
     }
 }
+
+
+export function assistantEncounterCheckDue(runtime: ExpeditionDetail): boolean {
+    if (runtime.expedition.activeWatchNumber !== null) return false;
+    const cadence = runtime.profile.encounterCadence;
+    if (cadence === "None") return false;
+    if (cadence === "PerWatch" || cadence === "Custom") {
+        const watchNumber = runtime.expedition.completedWatches + 1;
+        return !runtime.history.some(event =>
+            event.kind === "EncounterCheckPerformed"
+            && event.watchNumber === watchNumber);
+    }
+
+    const dayIndex = runtime.expedition.currentDay - 1;
+    return !runtime.history.some(event =>
+        event.kind === "EncounterCheckPerformed"
+        && Math.floor(event.expeditionElapsedHours / 24) === dayIndex);
+}

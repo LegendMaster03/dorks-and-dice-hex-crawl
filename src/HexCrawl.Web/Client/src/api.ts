@@ -11,6 +11,9 @@ import type {
     RegistrationControlPoint,
     RuntimeAdvanceRequest,
     RuntimeProfile,
+    TravelWatchAssistantRequest,
+    NavigationAssistantRequest,
+    EncounterCadenceAssistantRequest,
     SourceMapList,
     SourceMapRole,
     SpatialFeature,
@@ -203,6 +206,18 @@ export class HexCrawlApi {
             subjectType,
             source: "dm:manual-discovery"
         }, "Runtime discovery");
+    }
+
+    public recordTravelAssistant(expeditionId: string, input: TravelWatchAssistantRequest): Promise<ExpeditionDetail> {
+        return this.sendJson("POST", `/api/expeditions/${encodeURIComponent(expeditionId)}/assistants/travel`, input, "Travel/watch assistant");
+    }
+
+    public recordNavigationAssistant(expeditionId: string, input: NavigationAssistantRequest): Promise<ExpeditionDetail> {
+        return this.sendJson("POST", `/api/expeditions/${encodeURIComponent(expeditionId)}/assistants/navigation`, input, "Navigation assistant");
+    }
+
+    public recordEncounterAssistant(expeditionId: string, input: EncounterCadenceAssistantRequest): Promise<ExpeditionDetail> {
+        return this.sendJson("POST", `/api/expeditions/${encodeURIComponent(expeditionId)}/assistants/encounters`, input, "Encounter cadence assistant");
     }
 
     private async getJson<T>(path: string, label: string): Promise<T> {
