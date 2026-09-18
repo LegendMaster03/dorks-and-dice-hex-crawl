@@ -308,6 +308,12 @@ function createHeading(assistant: ExpeditionAssistant): string {
     return "Create watch / travel session";
 }
 
+function createButton(assistant: ExpeditionAssistant): string {
+    if (assistant === "navigation") return "Create and open navigation";
+    if (assistant === "encounters") return "Create and open encounter cadence";
+    return "Create and open assistant";
+}
+
 function createHint(assistant: ExpeditionAssistant): string {
     if (assistant === "navigation") return "Creates an AbstractHex session only. No Overworld or map authoring is involved.";
     if (assistant === "encounters") return "Creates a NonSpatial session with procedure/history state only.";
