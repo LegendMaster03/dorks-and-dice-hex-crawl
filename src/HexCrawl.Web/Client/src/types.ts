@@ -141,21 +141,21 @@ export type PresentationProfile = {
 
 export type RuntimePauseReason = "ConditionsReviewRequired" | "LostRecognitionRequired" | "EncounterTriggered" | "BacktrackBoundaryReached";
 
-export type RuntimeExpedition = {
+export type SpatialRuntimeExpedition = {
     id: string;
-    isSpatial: boolean;
-    currentHex: HexCoordinate | null;
+    isSpatial: true;
+    currentHex: HexCoordinate;
     position: WorldPoint | null;
     positionPrecision: "Exact" | "HexAnchor" | null;
     entryDirection: number | null;
     lastTravelDirection: number | null;
     intendedDirection: number | null;
     actualDirection: number | null;
-    isLost: boolean | null;
-    veerSteps: number | null;
-    veerDegrees: number | null;
-    distanceTraveled: DistanceValue | null;
-    hexProgress: DistanceValue | null;
+    isLost: boolean;
+    veerSteps: number;
+    veerDegrees: number;
+    distanceTraveled: DistanceValue;
+    hexProgress: DistanceValue;
     exitRequirement: DistanceValue | null;
     elapsedTravelHours: number;
     currentDay: number;
@@ -174,6 +174,42 @@ export type RuntimeExpedition = {
     activeEncounterHour: number | null;
     activeEncounterHandled: boolean | null;
 };
+
+export type NonSpatialRuntimeExpedition = {
+    id: string;
+    isSpatial: false;
+    currentHex: null;
+    position: null;
+    positionPrecision: null;
+    entryDirection: null;
+    lastTravelDirection: null;
+    intendedDirection: null;
+    actualDirection: null;
+    isLost: null;
+    veerSteps: null;
+    veerDegrees: null;
+    distanceTraveled: null;
+    hexProgress: null;
+    exitRequirement: null;
+    elapsedTravelHours: number;
+    currentDay: number;
+    completedWatches: number;
+    activeWatchNumber: null;
+    activeWatchTotalHours: null;
+    activeWatchElapsedHours: null;
+    activeWatchRemainingHours: null;
+    activeWatchPendingDecision: null;
+    activePaceKey: null;
+    activeActivities: [];
+    activeNavigationAidKey: null;
+    activeDeliberateDoubleBack: false;
+    activeContinueAcrossBoundaries: false;
+    activeEncounterKind: null;
+    activeEncounterHour: null;
+    activeEncounterHandled: null;
+};
+
+export type RuntimeExpedition = SpatialRuntimeExpedition | NonSpatialRuntimeExpedition;
 
 export type RuntimeKnowledgeEntry = {
     subjectId: string;
