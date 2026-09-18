@@ -29,6 +29,7 @@ public static class PersistentApiEndpoints
         api.MapDelete("/overworlds/{overworldId:guid}/features/{featureId:guid}", DeleteFeatureAsync);
 
         api.MapGet("/expeditions", ListAllExpeditionsAsync);
+        api.MapPost("/expeditions", StartStandaloneSessionAsync);
         api.MapGet("/overworlds/{overworldId:guid}/expeditions", ListExpeditionsAsync);
         api.MapPost("/overworlds/{overworldId:guid}/expeditions", StartExpeditionAsync);
         api.MapGet("/expeditions/{expeditionId:guid}", GetExpeditionAsync);
@@ -141,6 +142,20 @@ public static class PersistentApiEndpoints
         CancellationToken cancellationToken) =>
         Results.Ok(await service.ListExpeditionsAsync(overworldId, UserId(context), cancellationToken));
 
+    private static async Task<IResult> StartStandaloneSessionAsync(
+        StartStandaloneCrawlSessionRequest request,
+        HttpContext context,
+        CrawlSessionService sessions,
+        HexCrawlService service,
+        CancellationToken cancellationToken)
+    {
+        var owner = UserId(context);
+        var expedition = await sessions.StartAsync(owner, request.ToCommand(), cancellationToken);
+        return Results.Created(
+            $"/api/expeditions/{expedition.Id:D}",
+            await ContractAsync(expedition, owner, service, cancellationToken));
+    }
+
     private static async Task<IResult> StartExpeditionAsync(
         Guid overworldId,
         StartExpeditionWorkbenchRequest request,
@@ -153,7 +168,7 @@ public static class PersistentApiEndpoints
         var expedition = await workbench.StartAsync(
             overworldId, owner, request.ToCommand(), cancellationToken);
         return Results.Created(
-            $"/api/expeditions/{expedition.State.Id:D}",
+            $"/api/expeditions/{expedition.Id:D}",
             await ContractAsync(expedition, owner, service, cancellationToken));
     }
 
@@ -243,8 +258,13 @@ public static class PersistentApiEndpoints
         HexCrawlService service,
         CancellationToken cancellationToken)
     {
-        var world = await service.GetOverworldAsync(expedition.State.OverworldId, ownerUserId, cancellationToken);
-        return ExpeditionWorkbenchContract.From(expedition, world.World);
+        if (expedition.Context is WorldBoundCrawlSessionContext worldContext)
+        {
+            var world = await service.GetOverworldAsync(worldContext.WorldId, ownerUserId, cancellationToken);
+            return ExpeditionWorkbenchContract.From(expedition, world.World);
+        }
+
+        return ExpeditionWorkbenchContract.From(expedition);
     }
 
     private static string UserId(HttpContext context) =>
