@@ -49,6 +49,8 @@ if (!string.IsNullOrWhiteSpace(toolHostBaseUrl))
 builder.Services.AddSingleton<IHexCrawlStore>(_ => new SqliteHexCrawlStore(connectionString));
 builder.Services.AddSingleton<IMapAssetStore>(_ => new FilesystemMapAssetStore(assetRoot));
 builder.Services.AddScoped<HexCrawlService>();
+builder.Services.AddScoped<CrawlSessionContextResolver>();
+builder.Services.AddScoped<CrawlSessionService>();
 builder.Services.AddScoped<ExpeditionWorkbenchService>();
 builder.Services.AddScoped<ExpeditionAssistantService>();
 builder.Services.AddScoped<SourceMapApplicationService>();
