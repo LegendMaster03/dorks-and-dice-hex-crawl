@@ -250,6 +250,51 @@ public static class CrawlAssistantActions
         return state with { History = [.. state.History, .. events] };
     }
 
+    public static NonSpatialSessionState RecordEncounterCadence(
+        NonSpatialSessionState state,
+        EncounterCadenceAssistantInput input)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        ArgumentNullException.ThrowIfNull(input);
+        if (input.Outcome == EncounterOutcomeKind.KeyedLocationDiscovery)
+        {
+            throw new InvalidOperationException("Keyed-location discovery requires a world-bound crawl session.");
+        }
+
+        var events = new List<CrawlRuntimeEvent>();
+        var watchNumber = Math.Max(1, state.CompletedWatches + 1);
+        events.Add(Event(
+            state,
+            events,
+            watchNumber,
+            CrawlRuntimeEventKind.EncounterCheckPerformed,
+            state.ElapsedTime,
+            null,
+            $"Encounter cadence assistant recorded {input.Outcome}; {Describe(input.Provenance)}{NoteSuffix(input.Note)}."));
+        if (input.Outcome != EncounterOutcomeKind.None)
+        {
+            events.Add(Event(
+                state,
+                events,
+                watchNumber,
+                CrawlRuntimeEventKind.EncounterTriggered,
+                state.ElapsedTime,
+                null,
+                string.IsNullOrWhiteSpace(input.Note)
+                    ? $"{input.Outcome} triggered."
+                    : $"{input.Outcome}: {input.Note.Trim()}"));
+        }
+        events.Add(ProvenanceEvent(
+            state,
+            events,
+            watchNumber,
+            state.ElapsedTime,
+            null,
+            $"encounter-assistant={Describe(input.Provenance)}"));
+
+        return state with { History = [.. state.History, .. events] };
+    }
+
     private static void RequireStandaloneState(ExpeditionState state)
     {
         if (state.ActiveWatch is not null)
@@ -280,12 +325,12 @@ public static class CrawlAssistantActions
     }
 
     private static CrawlRuntimeEvent Event(
-        ExpeditionState state,
+        CrawlSessionRuntimeState state,
         IReadOnlyCollection<CrawlRuntimeEvent> pending,
         int watchNumber,
         CrawlRuntimeEventKind kind,
         TimeSpan elapsed,
-        HexCoordinate hex,
+        HexCoordinate? hex,
         string message,
         double? distanceValue = null,
         string? distanceUnit = null) =>
@@ -300,15 +345,15 @@ public static class CrawlAssistantActions
             distanceUnit);
 
     private static CrawlRuntimeEvent ProvenanceEvent(
-        ExpeditionState state,
+        CrawlSessionRuntimeState state,
         IReadOnlyCollection<CrawlRuntimeEvent> pending,
         int watchNumber,
         TimeSpan elapsed,
-        HexCoordinate hex,
+        HexCoordinate? hex,
         string message) =>
         Event(state, pending, watchNumber, CrawlRuntimeEventKind.ResolutionProvenanceRecorded, elapsed, hex, $"Resolved input provenance: {message}.");
 
-    private static long NextSequence(ExpeditionState state, IReadOnlyCollection<CrawlRuntimeEvent> pending) =>
+    private static long NextSequence(CrawlSessionRuntimeState state, IReadOnlyCollection<CrawlRuntimeEvent> pending) =>
         (state.History.Count == 0 ? 0 : state.History[^1].Sequence) + pending.Count + 1;
 
     private static DistanceMeasure Add(DistanceMeasure left, DistanceMeasure right)
