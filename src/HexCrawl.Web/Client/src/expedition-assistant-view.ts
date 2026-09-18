@@ -7,7 +7,8 @@ import type {
     ExpeditionDetail,
     NavigationAssistantRequest,
     ResolutionSource,
-    TravelWatchAssistantRequest
+    TravelWatchAssistantRequest,
+    SpatialRuntimeExpedition
 } from "./types";
 import { clearUiError, showUiError } from "./ui-error";
 
@@ -63,7 +64,11 @@ export async function renderExpeditionAssistant(
 
     required<HTMLButtonElement>(root, "[data-home]").addEventListener("click", () => navigate("/"));
     required<HTMLButtonElement>(root, "[data-tracker]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}`));
-    required<HTMLButtonElement>(root, "[data-map]").addEventListener("click", () => navigate(`/worlds/${runtime.overworldId}/expeditions/${runtime.id}`));
+    const mapButton = required<HTMLButtonElement>(root, "[data-map]");
+    mapButton.hidden = runtime.overworldId === null;
+    mapButton.addEventListener("click", () => {
+        if (runtime.overworldId) navigate(`/worlds/${runtime.overworldId}/expeditions/${runtime.id}`);
+    });
     required<HTMLButtonElement>(root, "[data-travel]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}/travel`));
     required<HTMLButtonElement>(root, "[data-navigation]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}/navigation`));
     required<HTMLButtonElement>(root, "[data-encounters]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}/encounters`));
@@ -73,6 +78,9 @@ export async function renderExpeditionAssistant(
         required<HTMLElement>(root, "[data-title]").textContent = next.name;
         required<HTMLElement>(root, "[data-context]").textContent = `Crawl context: ${next.context.name}`;
         required<HTMLElement>(root, "[data-mode]").textContent = modeLabel(mode);
+        required<HTMLButtonElement>(root, "[data-travel]").hidden = !next.expedition.isSpatial;
+        required<HTMLButtonElement>(root, "[data-navigation]").hidden = !next.expedition.isSpatial;
+        mapButton.hidden = next.overworldId === null;
         renderStatus();
         renderHistory();
         renderForm();
@@ -81,24 +89,15 @@ export async function renderExpeditionAssistant(
     const renderStatus = (): void => {
         const state = runtime.expedition;
         const cells = mode === "travel"
-            ? [
-                statusCell("Elapsed travel", formatHours(state.elapsedTravelHours)),
-                statusCell("Distance", formatDistance(state.distanceTraveled)),
-                statusCell("Current hex", `${state.currentHex.q}, ${state.currentHex.r}`),
-                statusCell("Completed watches", String(state.completedWatches))
-            ]
+            ? travelStatus(spatialState(runtime))
             : mode === "navigation"
-                ? [
-                    statusCell("Navigation", state.isLost ? "Lost" : "Oriented"),
-                    statusCell("Veer", `${state.veerSteps} (${state.veerDegrees}°)`),
-                    statusCell("Intended course", directionLabel(state.intendedDirection)),
-                    statusCell("Actual course", directionLabel(state.actualDirection))
-                ]
+                ? navigationStatus(spatialState(runtime))
                 : [
                     statusCell("Cadence", prettyEnum(runtime.profile.encounterCadence)),
                     statusCell("Current day", String(state.currentDay)),
                     statusCell("Upcoming watch", String(state.completedWatches + 1)),
-                    statusCell("Check due", assistantEncounterCheckDue(runtime) ? "Yes" : "No")
+                    statusCell("Check due", assistantEncounterCheckDue(runtime) ? "Yes" : "No"),
+                    statusCell("Context", runtime.context.kind === "NonSpatial" ? "Non-spatial" : runtime.context.kind === "AbstractHex" ? "Abstract hex" : "World-bound")
                 ];
         required<HTMLElement>(root, "[data-status]").replaceChildren(...cells);
     };
@@ -130,6 +129,11 @@ export async function renderExpeditionAssistant(
 
         required<HTMLElement>(root, "[data-assistant-heading]").textContent = heading(mode);
         required<HTMLElement>(root, "[data-assistant-description]").textContent = description(mode);
+        if (!state.isSpatial && mode !== "encounters") {
+            form.innerHTML = '<p class="hc-hint">This assistant requires a spatial crawl context. This session is intentionally non-spatial.</p>';
+            warning.hidden = true;
+            return;
+        }
         form.innerHTML = mode === "travel" ? travelForm(runtime) : mode === "navigation" ? navigationForm(runtime) : encounterForm(runtime);
         populateSources(form);
         const submit = required<HTMLButtonElement>(form, 'button[type="submit"]');
@@ -181,13 +185,15 @@ export async function renderExpeditionAssistant(
 }
 
 function travelForm(runtime: ExpeditionDetail): string {
-    const state = runtime.expedition;
-    const scale = runtime.context.hexCenterDistance.value;
+    const state = spatialState(runtime);
+    const contextDistance = runtime.context.hexCenterDistance;
+    if (!contextDistance) throw new Error("Spatial crawl context is missing its hex-center distance.");
+    const scale = contextDistance.value;
     const travelInput = runtime.profile.travelResolution === "HexSteps"
         ? `<label>Resolved hex steps <input name="hexSteps" type="number" min="0" step="1" value="1"></label>`
-        : `<label>Distance traveled (${runtime.context.hexCenterDistance.unit.symbol}) <input name="distance" type="number" min="0" step="any" value="${scale}"></label>`;
+        : `<label>Distance traveled (${contextDistance.unit.symbol}) <input name="distance" type="number" min="0" step="any" value="${scale}"></label>`;
     const progress = runtime.profile.tracksIntraHexProgress
-        ? `<label>Resulting intra-hex progress (${runtime.context.hexCenterDistance.unit.symbol}) <input name="hexProgress" type="number" min="0" step="any" value="${state.hexProgress.value}"></label>`
+        ? `<label>Resulting intra-hex progress (${contextDistance.unit.symbol}) <input name="hexProgress" type="number" min="0" step="any" value="${state.hexProgress.value}"></label>`
         : "";
     return `
         <label>Elapsed travel hours <input name="elapsedHours" type="number" min="0" step="any" value="${runtime.profile.watchHours}"></label>
@@ -205,7 +211,7 @@ function travelForm(runtime: ExpeditionDetail): string {
 }
 
 function navigationForm(runtime: ExpeditionDetail): string {
-    const state = runtime.expedition;
+    const state = spatialState(runtime);
     return `
         <label>Intended direction <select name="intendedDirection">${directionOptions(state.intendedDirection ?? 0)}</select></label>
         <label><input name="isLost" type="checkbox" ${state.isLost ? "checked" : ""}> Expedition is lost</label>
@@ -300,6 +306,31 @@ function description(mode: ExpeditionAssistantMode): string {
     if (mode === "travel") return "Record elapsed travel, resolved distance or hex steps, resulting hex/progress, and watch completion without running navigation or encounter automation.";
     if (mode === "navigation") return "Record authoritative oriented/lost state and veer without advancing travel or resolving encounters.";
     return "Record encounter-cadence checks and non-geographic outcomes without advancing travel. Keyed-location discovery remains part of world/map composition.";
+}
+
+function spatialState(runtime: ExpeditionDetail): SpatialRuntimeExpedition {
+    if (!runtime.expedition.isSpatial) {
+        throw new Error("This assistant requires a spatial crawl session.");
+    }
+    return runtime.expedition;
+}
+
+function travelStatus(state: SpatialRuntimeExpedition): HTMLElement[] {
+    return [
+        statusCell("Elapsed travel", formatHours(state.elapsedTravelHours)),
+        statusCell("Distance", formatDistance(state.distanceTraveled)),
+        statusCell("Current hex", `${state.currentHex.q}, ${state.currentHex.r}`),
+        statusCell("Completed watches", String(state.completedWatches))
+    ];
+}
+
+function navigationStatus(state: SpatialRuntimeExpedition): HTMLElement[] {
+    return [
+        statusCell("Navigation", state.isLost ? "Lost" : "Oriented"),
+        statusCell("Veer", `${state.veerSteps} (${state.veerDegrees}°)`),
+        statusCell("Intended course", directionLabel(state.intendedDirection)),
+        statusCell("Actual course", directionLabel(state.actualDirection))
+    ];
 }
 
 function directionOptions(selected: number | null): string {
