@@ -405,12 +405,13 @@ public sealed class ProcedureResolutionHelperService(
             NonSpatialSessionState nonSpatial => nonSpatial.ElapsedTime,
             _ => throw new InvalidOperationException("Unsupported crawl session runtime state.")
         };
-        var hex = runtime is ExpeditionState spatialState ? spatialState.CurrentHex : null;
+        HexCrawl.Domain.Spatial.HexCoordinate? hex =
+            runtime is ExpeditionState spatialState ? spatialState.CurrentHex : null;
 
         var parts = new List<string>();
         if (result.Rolls.Count > 0)
         {
-            parts.Add("rolls=" + string.Join(", ", result.Rolls.Select(Describe)));
+            parts.Add("rolls=" + string.Join(", ", result.Rolls.Select(DescribeRoll)));
         }
         if (result.Travel is { } travel)
         {
@@ -451,6 +452,9 @@ public sealed class ProcedureResolutionHelperService(
             hex,
             $"Procedure resolution helper attempt #{sequence}: {string.Join("; ", parts)}.");
     }
+
+    private static string DescribeRoll(ProcedureResolutionRoll roll) =>
+        $"{roll.Formula} [{string.Join(", ", roll.Dice)}] = {roll.Total}";
 
     private static CrawlSessionRuntimeState AppendAuditEvent(
         CrawlSessionRuntimeState runtime,
