@@ -143,6 +143,9 @@ export async function renderExpeditionAssistant(
             ? state.isSpatial ? travelForm(runtime) : nonSpatialWatchForm(runtime)
             : mode === "navigation" ? navigationForm(runtime) : encounterForm(runtime);
         populateSources(form);
+        if (!state.isSpatial && mode === "travel") {
+            select(form, "source").value = "ProcedureDefault";
+        }
         const submit = required<HTMLButtonElement>(form, 'button[type="submit"]');
         submit.disabled = activeFullWatch;
         form.querySelectorAll<HTMLInputElement | HTMLSelectElement>("input, select").forEach(control => control.disabled = activeFullWatch);

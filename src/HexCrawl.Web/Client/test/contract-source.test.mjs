@@ -23,6 +23,7 @@ test("focused assistants never load an Overworld or construct a map surface", ()
     assert.equal(source.includes("getOverworld"), false);
     assert.equal(source.includes("MapSurface"), false);
     assert.match(source, /recordTravelAssistant/);
+    assert.match(source, /recordWatchAssistant/);
     assert.match(source, /recordNavigationAssistant/);
     assert.match(source, /recordEncounterAssistant/);
 });
@@ -40,4 +41,14 @@ test("standalone crawl sessions post directly to the expedition collection", () 
     const source = fs.readFileSync(path.join(sourceDir, "api.ts"), "utf8");
     assert.match(source, /startStandaloneSession/);
     assert.match(source, /sendJson\("POST", "\/api\/expeditions"/);
+});
+
+
+test("non-spatial watch bookkeeping uses a dedicated non-spatial API", () => {
+    const api = fs.readFileSync(path.join(sourceDir, "api.ts"), "utf8");
+    const view = fs.readFileSync(path.join(sourceDir, "expedition-assistant-view.ts"), "utf8");
+    assert.match(api, /assistants\/watch/);
+    assert.match(view, /recordWatchAssistant/);
+    assert.match(view, /Watch \/ time bookkeeping/);
+    assert.equal(/recordWatchAssistant\([^)]*resultingHex/.test(view), false);
 });
