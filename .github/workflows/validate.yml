@@ -271,9 +271,20 @@ jobs:
 
           assert_no_worlds "$response_dir/worlds-after-create.json"
 
+          python3 - "$session_version" "$response_dir/partial-watch-request.json" <<'PY'
+          import json, sys
+          with open(sys.argv[2], "w") as target:
+              json.dump({
+                  "expectedVersion": int(sys.argv[1]),
+                  "elapsedHours": 2,
+                  "resolutionSource": "ProcedureDefault",
+                  "resolutionNote": "container clock",
+                  "note": "first half"
+              }, target)
+          PY
           curl -fsS -X POST "http://127.0.0.1:18093/api/expeditions/$session_id/assistants/watch" \
             -H 'Content-Type: application/json' \
-            --data "{"expectedVersion":$session_version,"elapsedHours":2,"resolutionSource":"ProcedureDefault","resolutionNote":"container clock","note":"first half"}" \
+            --data-binary "@$response_dir/partial-watch-request.json" \
             -o "$response_dir/partial-watch.json"
           python3 - "$response_dir/partial-watch.json" <<'PY'
           import json, sys
@@ -297,9 +308,20 @@ jobs:
           PY
           partial_version="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$response_dir/partial-watch.json")"
 
+          python3 - "$partial_version" "$response_dir/encounter-request.json" <<'PY'
+          import json, sys
+          with open(sys.argv[2], "w") as target:
+              json.dump({
+                  "expectedVersion": int(sys.argv[1]),
+                  "outcome": "WanderingEncounter",
+                  "resolutionSource": "ManualRoll",
+                  "resolutionNote": "container encounter",
+                  "note": "during watch one"
+              }, target)
+          PY
           curl -fsS -X POST "http://127.0.0.1:18093/api/expeditions/$session_id/assistants/encounters" \
             -H 'Content-Type: application/json' \
-            --data "{"expectedVersion":$partial_version,"outcome":"WanderingEncounter","resolutionSource":"ManualRoll","resolutionNote":"container encounter","note":"during watch one"}" \
+            --data-binary "@$response_dir/encounter-request.json" \
             -o "$response_dir/encounter.json"
           python3 - "$response_dir/encounter.json" <<'PY'
           import json, sys
@@ -346,9 +368,20 @@ jobs:
 
           assert_no_worlds "$response_dir/worlds-after-restart.json"
 
+          python3 - "$resumed_version" "$response_dir/resume-watch-request.json" <<'PY'
+          import json, sys
+          with open(sys.argv[2], "w") as target:
+              json.dump({
+                  "expectedVersion": int(sys.argv[1]),
+                  "elapsedHours": 2,
+                  "resolutionSource": "DmOverride",
+                  "resolutionNote": "restart smoke",
+                  "note": "finish after restart"
+              }, target)
+          PY
           curl -fsS -X POST "http://127.0.0.1:18093/api/expeditions/$session_id/assistants/watch" \
             -H 'Content-Type: application/json' \
-            --data "{"expectedVersion":$resumed_version,"elapsedHours":2,"resolutionSource":"DmOverride","resolutionNote":"restart smoke","note":"finish after restart"}" \
+            --data-binary "@$response_dir/resume-watch-request.json" \
             -o "$response_dir/completed-watch.json"
           python3 - "$response_dir/completed-watch.json" <<'PY'
           import json, sys
