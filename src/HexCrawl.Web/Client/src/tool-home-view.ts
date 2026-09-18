@@ -1,10 +1,11 @@
 import type { HexCrawlApi } from "./api";
-import { createOverworldInput, customUnitFieldsVisible } from "./world-form";
+import { customUnitFieldsVisible } from "./world-form";
 import type { DistanceUnitKind } from "./world-form";
-import type { ExpeditionSummary, OverworldSummary, RuntimeProfile } from "./types";
+import type { ExpeditionSummary, OverworldSummary, RuntimeProfile, StartStandaloneCrawlSessionInput } from "./types";
 import { clearUiError, showUiError } from "./ui-error";
 
-const NEW_CONTEXT = "__new__";
+const ABSTRACT_CONTEXT = "__abstract__";
+const NON_SPATIAL_CONTEXT = "__nonspatial__";
 
 export async function renderToolHome(
     root: HTMLElement,
@@ -17,7 +18,7 @@ export async function renderToolHome(
             <header class="hc-page-header">
                 <div>
                     <h1>Hex Crawl DM tools</h1>
-                    <p>Use crawl bookkeeping with the rendered Hex Crawl map, another map, a physical map, or no rendered map.</p>
+                    <p>Use crawl bookkeeping with an authored world, an abstract hex map, a physical map, another VTT, or no spatial map at all.</p>
                 </div>
                 <nav><button type="button" data-worlds>Overworlds & maps</button></nav>
             </header>
@@ -25,21 +26,21 @@ export async function renderToolHome(
             <div class="hc-columns">
                 <section class="hc-panel">
                     <div class="hc-panel-heading">
-                        <div><h2>Expeditions</h2><p class="hc-muted">Persistent crawl procedure state is available independently of the map view.</p></div>
+                        <div><h2>Crawl sessions</h2><p class="hc-muted">Persistent procedure state is independent of whether a session has an Overworld.</p></div>
                         <span class="hc-muted" data-expedition-count></span>
                     </div>
                     <div class="hc-expedition-list" data-expedition-list></div>
                 </section>
                 <section class="hc-panel">
-                    <h2>Start mapless expedition</h2>
-                    <p class="hc-muted">Use an existing world as crawl context, or create a basic grid-only context without entering map authoring.</p>
+                    <h2>Start crawl session</h2>
+                    <p class="hc-muted">Choose a real Overworld, an abstract hex context, or a non-spatial procedure session.</p>
                     <form class="hc-form" data-start-mapless>
-                        <label>Expedition name <input name="name" required value="Expedition" autocomplete="off"></label>
+                        <label>Session name <input name="name" required value="Expedition" autocomplete="off"></label>
                         <label>Procedure preset <select name="procedure"></select></label>
                         <p class="hc-hint" data-procedure-summary></p>
                         <label>Crawl context <select name="context"></select></label>
-                        <div class="hc-form" data-new-context hidden>
-                            <label>Context name <input name="contextName" value="Mapless crawl context" autocomplete="off"></label>
+                        <div class="hc-form" data-abstract-context hidden>
+                            <label>Context name <input name="contextName" value="Mapless hex crawl" autocomplete="off"></label>
                             <label>Hex orientation <select name="orientation"><option value="PointyTop">Pointy top</option><option value="FlatTop">Flat top</option></select></label>
                             <label>Hex center distance <input name="scale" type="number" min="0.001" step="any" value="12"></label>
                             <label>Distance unit <select name="unit"><option value="Mile">Miles</option><option value="Kilometer">Kilometers</option><option value="Custom">Custom</option></select></label>
@@ -47,31 +48,26 @@ export async function renderToolHome(
                                 <label>Custom symbol <input name="symbol" value="u" autocomplete="off"></label>
                                 <label>Custom meters per unit <input name="meters" type="number" min="0.001" step="any" value="1"></label>
                             </div>
+                            <div class="hc-inline">
+                                <label>Start q <input name="q" type="number" step="1" value="0"></label>
+                                <label>Start r <input name="r" type="number" step="1" value="0"></label>
+                            </div>
+                            <p class="hc-hint">Abstract hex stores only crawl-scale context. It creates no Overworld, source map, location, feature, or world row.</p>
                         </div>
-                        <div class="hc-inline">
-                            <label>Start q <input name="q" type="number" step="1" value="0"></label>
-                            <label>Start r <input name="r" type="number" step="1" value="0"></label>
+                        <div data-nonspatial-context hidden>
+                            <label>Context name <input name="nonSpatialName" value="Procedure session" autocomplete="off"></label>
+                            <p class="hc-hint">Non-spatial sessions persist procedure/history state without hex coordinates, distance scale, world position, or Overworld.</p>
                         </div>
-                        <p class="hc-hint">A basic context persists only the grid geometry needed by the current crawl runtime. It does not create a source map, locations, features, or a rendered map session.</p>
-                        <button type="submit" class="hc-primary-action" data-start-button>Start tracker</button>
+                        <button type="submit" class="hc-primary-action" data-start-button>Start session</button>
                     </form>
                 </section>
             </div>
             <section class="hc-mode-section" aria-labelledby="hc-mode-title">
-                <h2 id="hc-mode-title">Ways to use the crawl engine</h2>
+                <h2 id="hc-mode-title">Session contexts</h2>
                 <div class="hc-mode-grid">
-                    <article class="hc-mode-card">
-                        <h3>Mapless expedition tracker</h3>
-                        <p>Run watches, travel, navigation, encounter cadence, overrides, and history without constructing a rendered map surface.</p>
-                    </article>
-                    <article class="hc-mode-card">
-                        <h3>Full crawl workbench</h3>
-                        <p>Compose the same expedition engine with an authored overworld, map rendering, discovery controls, and player-knowledge presentation.</p>
-                    </article>
-                    <article class="hc-mode-card">
-                        <h3>Focused assistants</h3>
-                        <p>Open travel/watch, navigation, or encounter-focused views over the same authoritative expedition state.</p>
-                    </article>
+                    <article class="hc-mode-card"><h3>World-bound</h3><p>Uses an authored Overworld and can add map rendering, discovery, and player knowledge.</p></article>
+                    <article class="hc-mode-card"><h3>Abstract hex</h3><p>Uses persisted hex scale and coordinates without creating or loading an Overworld.</p></article>
+                    <article class="hc-mode-card"><h3>Non-spatial</h3><p>Uses procedure/session bookkeeping without inventing map state.</p></article>
                 </div>
             </section>
         </section>`;
@@ -84,20 +80,26 @@ export async function renderToolHome(
     const context = select(form, "context");
     const procedure = select(form, "procedure");
     const unit = select(form, "unit");
-    const newContext = required<HTMLElement>(form, "[data-new-context]");
+    const abstractContext = required<HTMLElement>(form, "[data-abstract-context]");
+    const nonSpatialContext = required<HTMLElement>(form, "[data-nonspatial-context]");
     const customUnit = required<HTMLElement>(form, "[data-custom-unit]");
     const startButton = required<HTMLButtonElement>(form, "[data-start-button]");
     let profiles: RuntimeProfile[] = [];
 
     const syncContext = (): void => {
-        const creating = context.value === NEW_CONTEXT;
-        newContext.hidden = !creating;
-        input(form, "contextName").required = creating;
-        input(form, "scale").required = creating;
+        const abstract = context.value === ABSTRACT_CONTEXT;
+        const nonSpatial = context.value === NON_SPATIAL_CONTEXT;
+        abstractContext.hidden = !abstract;
+        nonSpatialContext.hidden = !nonSpatial;
+        input(form, "contextName").required = abstract;
+        input(form, "scale").required = abstract;
+        input(form, "q").required = abstract;
+        input(form, "r").required = abstract;
+        input(form, "nonSpatialName").required = nonSpatial;
         syncUnit();
     };
     const syncUnit = (): void => {
-        const custom = context.value === NEW_CONTEXT && customUnitFieldsVisible(unit.value as DistanceUnitKind);
+        const custom = context.value === ABSTRACT_CONTEXT && customUnitFieldsVisible(unit.value as DistanceUnitKind);
         customUnit.hidden = !custom;
         input(form, "symbol").required = custom;
         input(form, "meters").required = custom;
@@ -119,11 +121,14 @@ export async function renderToolHome(
 
         profiles = runtimeProfiles;
         for (const profile of profiles) procedure.append(option(profile.key, profile.name));
-        for (const world of worlds) context.append(option(world.id, world.name));
-        context.append(option(NEW_CONTEXT, "New basic context (no rendered map)"));
-        if (worlds.length === 0) context.value = NEW_CONTEXT;
+        for (const world of worlds) context.append(option(world.id, `World: ${world.name}`));
+        context.append(
+            option(ABSTRACT_CONTEXT, "Abstract hex (no Overworld)"),
+            option(NON_SPATIAL_CONTEXT, "Non-spatial procedure session")
+        );
+        if (worlds.length === 0) context.value = ABSTRACT_CONTEXT;
 
-        count.textContent = expeditions.length === 1 ? "1 expedition" : `${expeditions.length} expeditions`;
+        count.textContent = expeditions.length === 1 ? "1 session" : `${expeditions.length} sessions`;
         renderExpeditions(list, expeditions, worlds, navigate);
         syncContext();
         syncProcedure();
@@ -145,33 +150,47 @@ export async function renderToolHome(
             startButton.textContent = "Starting…";
             try {
                 if (!procedure.value) throw new Error("A procedure preset is required.");
-                let worldId = context.value;
-                if (worldId === NEW_CONTEXT) {
+                const name = input(form, "name").value.trim();
+                let expedition;
+                if (context.value === ABSTRACT_CONTEXT) {
                     const unitKind = unit.value as DistanceUnitKind;
-                    const world = await api.createOverworld(createOverworldInput({
-                        name: input(form, "contextName").value,
-                        orientation: select(form, "orientation").value === "FlatTop" ? "FlatTop" : "PointyTop",
-                        centerDistance: numeric(input(form, "scale")),
-                        unitKind,
-                        customSymbol: input(form, "symbol").value,
-                        customMetersPerUnit: unitKind === "Custom" ? numeric(input(form, "meters")) : null,
-                        origin: { x: 0, y: 0 },
-                        rotationDegrees: 0,
-                        hexRadiusWorldUnits: 1
-                    }));
-                    worldId = world.id;
+                    const request: StartStandaloneCrawlSessionInput = {
+                        name,
+                        procedureKey: procedure.value,
+                        context: {
+                            kind: "AbstractHex",
+                            name: input(form, "contextName").value.trim(),
+                            orientation: select(form, "orientation").value === "FlatTop" ? "FlatTop" : "PointyTop",
+                            hexCenterDistance: numeric(input(form, "scale")),
+                            distanceUnit: distanceUnit(unitKind, form)
+                        },
+                        startHex: {
+                            q: integer(input(form, "q")),
+                            r: integer(input(form, "r"))
+                        }
+                    };
+                    expedition = await api.startStandaloneSession(request);
+                } else if (context.value === NON_SPATIAL_CONTEXT) {
+                    expedition = await api.startStandaloneSession({
+                        name,
+                        procedureKey: procedure.value,
+                        context: {
+                            kind: "NonSpatial",
+                            name: input(form, "nonSpatialName").value.trim()
+                        }
+                    });
+                } else {
+                    if (!context.value) throw new Error("A crawl context is required.");
+                    expedition = await api.startConfiguredExpedition(context.value, {
+                        name,
+                        procedureKey: procedure.value,
+                        presentationKey: "dm-controlled",
+                        startHex: {
+                            q: integer(input(form, "q")),
+                            r: integer(input(form, "r"))
+                        }
+                    });
                 }
-                if (!worldId) throw new Error("A crawl context is required.");
-
-                const expedition = await api.startConfiguredExpedition(worldId, {
-                    name: input(form, "name").value.trim(),
-                    procedureKey: procedure.value,
-                    presentationKey: "dm-controlled",
-                    startHex: {
-                        q: integer(input(form, "q")),
-                        r: integer(input(form, "r"))
-                    }
-                });
                 if (!disposed) navigate(`/expeditions/${expedition.id}`);
             } catch (value) {
                 if (!disposed) showUiError(error, value);
@@ -179,7 +198,7 @@ export async function renderToolHome(
                 startPending = false;
                 if (!disposed) {
                     startButton.disabled = false;
-                    startButton.textContent = "Start tracker";
+                    startButton.textContent = "Start session";
                 }
             }
         })();
@@ -198,7 +217,7 @@ function renderExpeditions(
     if (expeditions.length === 0) {
         const empty = document.createElement("div");
         empty.className = "hc-empty-state";
-        empty.innerHTML = "<strong>No expeditions yet.</strong><span>Start a mapless tracker beside this list, or create one from an authored overworld.</span>";
+        empty.innerHTML = "<strong>No crawl sessions yet.</strong><span>Start one without creating a world, or bind one to an authored Overworld.</span>";
         host.append(empty);
         return;
     }
@@ -212,22 +231,47 @@ function renderExpeditions(
         title.textContent = expedition.name;
         const meta = document.createElement("p");
         meta.className = "hc-muted";
-        meta.textContent = `${expedition.procedureName} · crawl context ${worldNames.get(expedition.overworldId) ?? expedition.overworldId} · updated ${formatTimestamp(expedition.updatedAt)}`;
+        const contextName = expedition.context.kind === "WorldBound" && expedition.context.overworldId
+            ? worldNames.get(expedition.context.overworldId) ?? expedition.context.name
+            : expedition.context.name;
+        meta.textContent = `${expedition.procedureName} · ${contextLabel(expedition.context.kind)}: ${contextName} · updated ${formatTimestamp(expedition.updatedAt)}`;
         copy.append(title, meta);
 
         const actions = document.createElement("div");
         actions.className = "hc-button-row";
-        actions.append(
-            action("Open tracker", () => navigate(`/expeditions/${expedition.id}`), true),
-            action("Full map", () => navigate(`/worlds/${expedition.overworldId}/expeditions/${expedition.id}`)),
-            action("Travel / watch", () => navigate(`/expeditions/${expedition.id}/travel`)),
-            action("Navigation", () => navigate(`/expeditions/${expedition.id}/navigation`)),
-            action("Encounters", () => navigate(`/expeditions/${expedition.id}/encounters`))
-        );
+        actions.append(action("Open tracker", () => navigate(`/expeditions/${expedition.id}`), true));
+
+        const spatial = expedition.context.kind !== "NonSpatial";
+        if (expedition.context.kind === "WorldBound" && expedition.context.overworldId) {
+            actions.append(action("Full map", () => navigate(`/worlds/${expedition.context.overworldId}/expeditions/${expedition.id}`)));
+        }
+        if (spatial) {
+            actions.append(
+                action("Travel / watch", () => navigate(`/expeditions/${expedition.id}/travel`)),
+                action("Navigation", () => navigate(`/expeditions/${expedition.id}/navigation`))
+            );
+        }
+        actions.append(action("Encounters", () => navigate(`/expeditions/${expedition.id}/encounters`)));
 
         card.append(copy, actions);
         host.append(card);
     }
+}
+
+function distanceUnit(kind: DistanceUnitKind, form: HTMLFormElement) {
+    if (kind === "Mile") return { kind, symbol: "mi", metersPerUnit: 1609.344 };
+    if (kind === "Kilometer") return { kind, symbol: "km", metersPerUnit: 1000 };
+    return {
+        kind,
+        symbol: input(form, "symbol").value.trim(),
+        metersPerUnit: numeric(input(form, "meters"))
+    };
+}
+
+function contextLabel(kind: ExpeditionSummary["context"]["kind"]): string {
+    if (kind === "WorldBound") return "World";
+    if (kind === "AbstractHex") return "Abstract hex";
+    return "Non-spatial";
 }
 
 function action(label: string, onClick: () => void, primary = false): HTMLButtonElement {

@@ -46,7 +46,10 @@ export function parseToolRoute(path: string): ToolRoute {
 
 export function canonicalExpeditionRoute(
     routeWorldId: string,
-    expedition: { id: string; overworldId: string }): string | null {
+    expedition: { id: string; overworldId: string | null }): string | null {
+    if (expedition.overworldId === null) {
+        return `/expeditions/${encodeURIComponent(expedition.id)}`;
+    }
     if (routeWorldId === expedition.overworldId) return null;
     return `/worlds/${encodeURIComponent(expedition.overworldId)}/expeditions/${encodeURIComponent(expedition.id)}`;
 }

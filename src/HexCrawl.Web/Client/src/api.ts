@@ -18,6 +18,7 @@ import type {
     SourceMapRole,
     SpatialFeature,
     StartExpeditionInput,
+    StartStandaloneCrawlSessionInput,
     ToolHostContext,
     WorldPoint
 } from "./types";
@@ -189,6 +190,10 @@ export class HexCrawlApi {
 
     public startConfiguredExpedition(worldId: string, input: StartExpeditionInput): Promise<ExpeditionDetail> {
         return this.sendJson("POST", `/api/overworlds/${encodeURIComponent(worldId)}/expeditions`, input, "Start expedition");
+    }
+
+    public startStandaloneSession(input: StartStandaloneCrawlSessionInput): Promise<ExpeditionDetail> {
+        return this.sendJson("POST", "/api/expeditions", input, "Start crawl session");
     }
 
     public getExpedition(expeditionId: string): Promise<ExpeditionDetail> {

@@ -143,18 +143,19 @@ export type RuntimePauseReason = "ConditionsReviewRequired" | "LostRecognitionRe
 
 export type RuntimeExpedition = {
     id: string;
-    currentHex: HexCoordinate;
-    position: WorldPoint;
-    positionPrecision: "Exact" | "HexAnchor";
+    isSpatial: boolean;
+    currentHex: HexCoordinate | null;
+    position: WorldPoint | null;
+    positionPrecision: "Exact" | "HexAnchor" | null;
     entryDirection: number | null;
     lastTravelDirection: number | null;
     intendedDirection: number | null;
     actualDirection: number | null;
-    isLost: boolean;
-    veerSteps: number;
-    veerDegrees: number;
-    distanceTraveled: DistanceValue;
-    hexProgress: DistanceValue;
+    isLost: boolean | null;
+    veerSteps: number | null;
+    veerDegrees: number | null;
+    distanceTraveled: DistanceValue | null;
+    hexProgress: DistanceValue | null;
     exitRequirement: DistanceValue | null;
     elapsedTravelHours: number;
     currentDay: number;
@@ -187,7 +188,7 @@ export type RuntimeEvent = {
     watchNumber: number;
     kind: string;
     expeditionElapsedHours: number;
-    hex: HexCoordinate;
+    hex: HexCoordinate | null;
     message: string;
     distanceValue: number | null;
     distanceUnit: string | null;
@@ -195,9 +196,19 @@ export type RuntimeEvent = {
     subjectType: string | null;
 };
 
+export type CrawlSessionContextKind = "WorldBound" | "AbstractHex" | "NonSpatial";
+
+export type CrawlContext = {
+    kind: CrawlSessionContextKind;
+    name: string;
+    overworldId: string | null;
+    orientation: HexOrientation | null;
+    hexCenterDistance: DistanceValue | null;
+};
+
 export type ExpeditionSummary = {
     id: string;
-    overworldId: string;
+    context: CrawlContext;
     name: string;
     procedureName: string;
     version: number;
@@ -205,22 +216,16 @@ export type ExpeditionSummary = {
     updatedAt: string;
 };
 
-export type CrawlContext = {
-    id: string;
-    name: string;
-    hexCenterDistance: DistanceValue;
-};
-
 export type ExpeditionDetail = {
     id: string;
-    overworldId: string;
+    overworldId: string | null;
     context: CrawlContext;
     name: string;
     version: number;
     createdAt: string;
     updatedAt: string;
     profile: RuntimeProfile;
-    presentation: PresentationProfile;
+    presentation: PresentationProfile | null;
     pauseReason: RuntimePauseReason | null;
     remainingWatchHours: number;
     expedition: RuntimeExpedition;
@@ -236,6 +241,27 @@ export type StartExpeditionInput = {
     procedureKey: string;
     presentationKey: string;
     startHex: HexCoordinate;
+    procedureSnapshot?: RuntimeProfile;
+};
+
+export type StandaloneCrawlContextInput =
+    | {
+        kind: "AbstractHex";
+        name: string;
+        orientation: HexOrientation;
+        hexCenterDistance: number;
+        distanceUnit: DistanceUnit;
+    }
+    | {
+        kind: "NonSpatial";
+        name: string;
+    };
+
+export type StartStandaloneCrawlSessionInput = {
+    name: string;
+    procedureKey: string;
+    context: StandaloneCrawlContextInput;
+    startHex?: HexCoordinate;
     procedureSnapshot?: RuntimeProfile;
 };
 

@@ -38,3 +38,10 @@ test("canonical expedition route rejects a world/expedition mismatch", () => {
 test("canonical expedition route leaves a matching route unchanged", () => {
     assert.equal(canonicalExpeditionRoute("actual-world", { id: "exp-1", overworldId: "actual-world" }), null);
 });
+
+
+test("canonical expedition route sends non-world sessions to the tracker", () => {
+    assert.equal(
+        canonicalExpeditionRoute("some-world", { id: "session-1", overworldId: null }),
+        "/expeditions/session-1");
+});
