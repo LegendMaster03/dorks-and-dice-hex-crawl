@@ -138,12 +138,12 @@ public sealed class CrawlRuntimeEngine
 
         if (encounterDueAtSegmentEnd && !active.EncounterHandled && active.Encounter.Kind != EncounterOutcomeKind.None)
         {
-            return TriggerEncounter(world, state, currentKnowledge, active, events);
+            return TriggerEncounter(state, active, events);
         }
 
         if (active.Remaining <= TimeSpan.Zero)
         {
-            return CompleteWatch(state, currentKnowledge, active, events);
+            return CompleteWatch(state, active, events);
         }
 
         return Finish(state, null, active.Remaining, events);
