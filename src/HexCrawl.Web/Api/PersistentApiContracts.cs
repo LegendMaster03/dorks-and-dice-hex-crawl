@@ -237,8 +237,8 @@ public sealed record RuntimeProfileContract(
 public sealed record ExpeditionStateContract(
     Guid Id,
     HexCoordinate CurrentHex,
-    WorldPoint Position,
-    WorldPositionPrecision PositionPrecision,
+    WorldPoint? Position,
+    WorldPositionPrecision? PositionPrecision,
     int? IntendedDirection,
     int? ActualDirection,
     bool IsLost,
@@ -291,7 +291,7 @@ public sealed record RuntimeEventContract(
     int WatchNumber,
     CrawlRuntimeEventKind Kind,
     double ExpeditionElapsedHours,
-    HexCoordinate Hex,
+    HexCoordinate? Hex,
     string Message,
     double? DistanceValue,
     string? DistanceUnit,
@@ -313,7 +313,8 @@ public sealed record RuntimeEventContract(
 
 public sealed record ExpeditionContract(
     Guid Id,
-    Guid OverworldId,
+    CrawlSessionContextKind ContextKind,
+    Guid? OverworldId,
     string Name,
     long Version,
     DateTimeOffset CreatedAt,
@@ -321,13 +322,14 @@ public sealed record ExpeditionContract(
     RuntimeProfileContract Profile,
     RuntimePauseReason? PauseReason,
     double RemainingWatchHours,
-    ExpeditionStateContract Expedition,
+    ExpeditionStateContract? Expedition,
     IReadOnlyList<KnowledgeEntryContract> Knowledge,
     IReadOnlyList<RuntimeEventContract> History)
 {
     public static ExpeditionContract From(StoredExpedition expedition) => new(
-        expedition.State.Id,
-        expedition.State.OverworldId,
+        expedition.Id,
+        expedition.Context.Kind,
+        expedition.Context.OverworldId,
         expedition.Name,
         expedition.Version,
         expedition.CreatedAt,
@@ -335,13 +337,13 @@ public sealed record ExpeditionContract(
         RuntimeProfileContract.From(expedition.Procedure),
         expedition.PauseReason,
         expedition.RemainingWatchTime.TotalHours,
-        ExpeditionStateContract.From(expedition.State),
-        expedition.Knowledge.Entries.Values
+        expedition.Runtime is ExpeditionState spatial ? ExpeditionStateContract.From(spatial) : null,
+        expedition.Knowledge?.Entries.Values
             .OrderBy(item => item.SubjectType)
             .ThenBy(item => item.SubjectId)
             .Select(KnowledgeEntryContract.From)
-            .ToArray(),
-        expedition.State.History.Select(RuntimeEventContract.From).ToArray());
+            .ToArray() ?? [],
+        expedition.Runtime.History.Select(RuntimeEventContract.From).ToArray());
 }
 
 public sealed record StartExpeditionRequest(string Name, string ProcedureKey, HexCoordinate StartHex)
