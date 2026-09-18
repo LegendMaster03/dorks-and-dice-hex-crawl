@@ -250,6 +250,8 @@ function renderExpeditions(
                 action("Travel / watch", () => navigate(`/expeditions/${expedition.id}/travel`)),
                 action("Navigation", () => navigate(`/expeditions/${expedition.id}/navigation`))
             );
+        } else {
+            actions.append(action("Watch / time", () => navigate(`/expeditions/${expedition.id}/travel`)));
         }
         actions.append(action("Encounters", () => navigate(`/expeditions/${expedition.id}/encounters`)));
 
