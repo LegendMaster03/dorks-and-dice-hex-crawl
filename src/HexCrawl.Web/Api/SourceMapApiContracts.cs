@@ -35,6 +35,44 @@ public sealed record SourceMapDetailContract(
 
 public sealed record SourceMapListContract(long OverworldVersion, IReadOnlyList<SourceMapDetailContract> SourceMaps);
 
+public sealed record WonderdraftInspectionContract(
+    int? FormatVersion,
+    int PixelWidth,
+    int PixelHeight,
+    int SymbolCount,
+    int LabelCount,
+    int PathCount,
+    int TerritoryCount,
+    bool HasGrid,
+    IReadOnlyList<string> IncludedPacks,
+    IReadOnlyList<string> IncludedDefaultPacks);
+
+public sealed record WonderdraftCandidateContract(
+    string Key,
+    string SourceKind,
+    string GeometryKind,
+    string DisplayName,
+    string? Descriptor,
+    string? Problem,
+    WorldPoint? SourcePosition,
+    IReadOnlyList<WorldPoint> SourcePoints,
+    WorldPoint? WorldPosition,
+    IReadOnlyList<WorldPoint> WorldPoints);
+
+public sealed record WonderdraftCandidatePreviewContract(
+    Guid SourceMapId,
+    double SourceScaleX,
+    double SourceScaleY,
+    WonderdraftInspectionContract Summary,
+    IReadOnlyList<WonderdraftCandidateContract> Candidates);
+
+public sealed record WonderdraftImportSelectionContract(
+    string CandidateKey,
+    string Target,
+    string Name,
+    string Category,
+    string? Discoverability);
+
 public sealed record SourceMapMetadataRequest(
     string GeographyKey,
     string Name,

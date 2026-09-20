@@ -175,6 +175,53 @@ public sealed class HexCrawlService(IHexCrawlStore store)
         return await SaveWorldAsync(updated, command.ExpectedVersion, cancellationToken);
     }
 
+    public async Task<StoredOverworld> ImportWorldObjectsAsync(
+        Guid overworldId,
+        string ownerUserId,
+        ImportWorldObjectsCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        var current = await GetOverworldAsync(overworldId, ownerUserId, cancellationToken);
+        RequireVersion(command.ExpectedVersion, current.Version);
+        if (command.Locations.Count == 0 && command.Features.Count == 0)
+        {
+            throw new ArgumentException("At least one semantic world object is required for import.", nameof(command));
+        }
+
+        var locations = command.Locations.Select(definition =>
+        {
+            ValidatePoint(definition.Position, "Imported location position");
+            return new Location(
+                Guid.NewGuid(),
+                RequiredText(definition.Name, "Imported location name"),
+                RequiredText(definition.Category, "Imported location category"),
+                definition.Position,
+                definition.Discoverability,
+                []);
+        }).ToArray();
+
+        var features = command.Features.Select(definition =>
+            BuildFeature(
+                Guid.NewGuid(),
+                definition.Name,
+                definition.Category,
+                definition.Kind,
+                definition.Position,
+                definition.Path,
+                definition.Boundary)).ToArray();
+
+        var updated = current with
+        {
+            World = current.World with
+            {
+                Locations = [.. current.World.Locations, .. locations],
+                Features = [.. current.World.Features, .. features]
+            }
+        };
+        return await SaveWorldAsync(updated, command.ExpectedVersion, cancellationToken);
+    }
+
     public async Task<StoredOverworld> UpdateFeatureAsync(
         Guid overworldId,
         Guid featureId,

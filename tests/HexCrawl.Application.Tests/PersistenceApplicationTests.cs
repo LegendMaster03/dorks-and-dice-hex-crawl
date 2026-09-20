@@ -136,6 +136,61 @@ public sealed class PersistenceApplicationTests
     }
 
     [Fact]
+    public async Task BatchImportPersistsSemanticObjectsAtomicallyWithOneVersionIncrement()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var service = await database.ServiceAsync();
+        var world = await service.CreateOverworldAsync("alice", WorldCommand());
+        var originalVersion = world.Version;
+
+        world = await service.ImportWorldObjectsAsync(
+            world.World.Id,
+            "alice",
+            new ImportWorldObjectsCommand(
+                [new ImportedLocationDefinition(
+                    "Old Harbor",
+                    "settlement",
+                    new WorldPoint(12, 23),
+                    LocationDiscoverability.Obvious)],
+                [new ImportedFeatureDefinition(
+                    "Trade Road",
+                    "road",
+                    SpatialFeatureKind.Line,
+                    null,
+                    [new WorldPoint(10, 20), new WorldPoint(14, 26)],
+                    null)],
+                originalVersion));
+
+        Assert.Equal(originalVersion + 1, world.Version);
+        Assert.Equal("Old Harbor", Assert.Single(world.World.Locations).Name);
+        Assert.Equal("Trade Road", Assert.IsType<LinearFeature>(Assert.Single(world.World.Features)).Name);
+
+        var beforeInvalid = world;
+        await Assert.ThrowsAsync<ArgumentException>(() => service.ImportWorldObjectsAsync(
+            world.World.Id,
+            "alice",
+            new ImportWorldObjectsCommand(
+                [new ImportedLocationDefinition(
+                    "Should not persist",
+                    "site",
+                    new WorldPoint(1, 1),
+                    LocationDiscoverability.Hidden)],
+                [new ImportedFeatureDefinition(
+                    "Invalid region",
+                    "region",
+                    SpatialFeatureKind.Region,
+                    null,
+                    null,
+                    [new WorldPoint(0, 0), new WorldPoint(1, 1), new WorldPoint(2, 2)])],
+                world.Version)));
+
+        var reopened = await service.GetOverworldAsync(world.World.Id, "alice");
+        Assert.Equal(beforeInvalid.Version, reopened.Version);
+        Assert.Single(reopened.World.Locations);
+        Assert.Single(reopened.World.Features);
+    }
+
+    [Fact]
     public async Task SourceMapMetadataPersistsLogicalAssetReference()
     {
         await using var database = await TestDatabase.CreateAsync();
