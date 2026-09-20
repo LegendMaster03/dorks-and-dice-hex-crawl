@@ -55,6 +55,44 @@ export type SourceMapUploadInput = {
     expectedVersion: number;
 };
 export type SourceMapMetadataInput = Omit<SourceMapUploadInput, "file">;
+export type WonderdraftInspection = {
+    formatVersion: number | null;
+    pixelWidth: number;
+    pixelHeight: number;
+    symbolCount: number;
+    labelCount: number;
+    pathCount: number;
+    territoryCount: number;
+    hasGrid: boolean;
+    includedPacks: string[];
+    includedDefaultPacks: string[];
+};
+export type WonderdraftCandidate = {
+    key: string;
+    sourceKind: "Label" | "Symbol" | "Path" | "Territory";
+    geometryKind: "Point" | "Line" | "Region";
+    displayName: string;
+    descriptor: string | null;
+    problem: string | null;
+    sourcePosition: WorldPoint | null;
+    sourcePoints: WorldPoint[];
+    worldPosition: WorldPoint | null;
+    worldPoints: WorldPoint[];
+};
+export type WonderdraftCandidatePreview = {
+    sourceMapId: string;
+    sourceScaleX: number;
+    sourceScaleY: number;
+    summary: WonderdraftInspection;
+    candidates: WonderdraftCandidate[];
+};
+export type WonderdraftImportSelection = {
+    candidateKey: string;
+    target: "Location" | "PointFeature" | "LineFeature" | "RegionFeature";
+    name: string;
+    category: string;
+    discoverability: "Obvious" | "Hidden" | "Conditional" | null;
+};
 export type ApiErrorKind = "validation" | "auth" | "not-found" | "conflict" | "server";
 
 export class HexCrawlApiError extends Error {
@@ -135,6 +173,46 @@ export class HexCrawlApi {
         form.append("containsBakedGrid", String(input.containsBakedGrid));
         form.append("expectedVersion", String(input.expectedVersion));
         return this.sendForm("POST", `/api/overworlds/${encodeURIComponent(worldId)}/source-maps`, form, "Upload source map");
+    }
+
+    public inspectWonderdraftProject(worldId: string, file: File): Promise<WonderdraftInspection> {
+        const form = new FormData();
+        form.append("file", file, file.name);
+        return this.sendForm(
+            "POST",
+            `/api/overworlds/${encodeURIComponent(worldId)}/source-maps/wonderdraft/inspect`,
+            form,
+            "Inspect Wonderdraft project");
+    }
+
+    public previewWonderdraftCandidates(
+        worldId: string,
+        sourceMapId: string,
+        file: File): Promise<WonderdraftCandidatePreview> {
+        const form = new FormData();
+        form.append("file", file, file.name);
+        return this.sendForm(
+            "POST",
+            `/api/overworlds/${encodeURIComponent(worldId)}/source-maps/${encodeURIComponent(sourceMapId)}/wonderdraft/candidates`,
+            form,
+            "Review Wonderdraft candidates");
+    }
+
+    public importWonderdraftCandidates(
+        worldId: string,
+        sourceMapId: string,
+        file: File,
+        selections: WonderdraftImportSelection[],
+        expectedVersion: number): Promise<Overworld> {
+        const form = new FormData();
+        form.append("file", file, file.name);
+        form.append("selections", JSON.stringify(selections));
+        form.append("expectedVersion", String(expectedVersion));
+        return this.sendForm(
+            "POST",
+            `/api/overworlds/${encodeURIComponent(worldId)}/source-maps/${encodeURIComponent(sourceMapId)}/wonderdraft/import`,
+            form,
+            "Import Wonderdraft candidates");
     }
 
     public updateSourceMap(worldId: string, sourceMapId: string, input: SourceMapMetadataInput): Promise<Overworld> {

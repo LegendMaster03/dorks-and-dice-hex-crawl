@@ -117,6 +117,36 @@ Semantic objects remain separate and interactive above the raster.
 
 The world editor keeps show/hide state only in the renderer. Visibility toggles do not mutate or version world truth. The expedition runtime uses the same Canvas renderer, so registered source maps are available as base geography there as well.
 
+## Wonderdraft project review and selective semantic import
+
+Native `.wonderdraft_map` projects are import sources, not runtime dependencies or world truth. The server reads the Godot `GCPF` container, bounded FastLZ blocks, and binary Variant structure directly. Decoded size, collection size, nesting depth, and candidate geometry have explicit limits; embedded image byte arrays are skipped for semantic review rather than promoted as map truth.
+
+Inspection is owner-scoped and non-mutating:
+
+```text
+POST /api/overworlds/{worldId}/source-maps/wonderdraft/inspect
+```
+
+Candidate review is also non-mutating and requires a registered source raster:
+
+```text
+POST /api/overworlds/{worldId}/source-maps/{sourceMapId}/wonderdraft/candidates
+```
+
+Wonderdraft canvas coordinates are first scaled into the selected raster's pixel dimensions, then transformed through that raster's saved registration. The server, not the browser, derives overworld geometry. Labels and symbols expose point candidates; paths expose line candidates; territories expose region candidates. Source type, texture/path descriptor, and unsupported-record problems are retained for review. No terrain, settlement, road, river, or other semantic category is inferred automatically.
+
+Selective promotion is a separate mutation:
+
+```text
+POST /api/overworlds/{worldId}/source-maps/{sourceMapId}/wonderdraft/import
+```
+
+The multipart request resubmits the Wonderdraft project, the expected overworld version, and an explicit JSON selection list. Every selected record requires a semantic target, name, and category. Point records may become a Location or Point feature; paths may become Line features; territories may become Region features. Location discoverability is explicit. The server re-parses the project and recomputes registered world coordinates instead of trusting preview geometry from the client.
+
+All selected objects are validated before one optimistic-concurrency save. A failed candidate, stale version, invalid region, incompatible target, duplicate candidate key, or malformed project leaves the overworld unchanged. Successful promotion increments the world version once and creates ordinary semantic objects with stable IDs. The Wonderdraft project itself is not persisted, and later deletion of the source raster does not delete promoted semantic objects.
+
+Re-import deduplication/provenance is intentionally not implicit in this first slice. Re-running an import can create additional semantic objects, so the review UI defaults every candidate to Skip and requires deliberate selection.
+
 ## Intentionally deferred analysis
 
 This slice does not perform or pretend to perform automatic map interpretation. The following remain future import-analysis work:
@@ -131,6 +161,8 @@ This slice does not perform or pretend to perform automatic map interpretation. 
 - terrain segmentation;
 - OCR;
 - AI/ML map interpretation;
+- Wonderdraft re-import provenance/deduplication;
+- paged review for projects with more than 200 browser-visible candidates;
 - final player-facing source-map presentation policy.
 
 Those systems can now build on persisted, authorized source rasters with known dimensions, geography grouping, and real pixel-to-world registration rather than on placeholders.

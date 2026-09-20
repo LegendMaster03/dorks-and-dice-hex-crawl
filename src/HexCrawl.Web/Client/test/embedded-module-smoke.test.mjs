@@ -26,6 +26,43 @@ test("Embedded Module mode routes persistent reads, writes, map upload, and map 
         if (url === "/tool-host/hex-crawl/api/upstream/api/overworlds/world-1/source-maps" && method === "POST") {
             return Response.json({ id: "world-1", version: 2, sourceMaps: [] });
         }
+        if (url === "/tool-host/hex-crawl/api/upstream/api/overworlds/world-1/source-maps/wonderdraft/inspect" && method === "POST") {
+            return Response.json({
+                formatVersion: 15,
+                pixelWidth: 1024,
+                pixelHeight: 768,
+                symbolCount: 2,
+                labelCount: 1,
+                pathCount: 3,
+                territoryCount: 2,
+                hasGrid: true,
+                includedPacks: ["Custom Pack"],
+                includedDefaultPacks: []
+            });
+        }
+        if (url === "/tool-host/hex-crawl/api/upstream/api/overworlds/world-1/source-maps/map-1/wonderdraft/candidates" && method === "POST") {
+            return Response.json({
+                sourceMapId: "map-1",
+                sourceScaleX: 1,
+                sourceScaleY: 1,
+                summary: {
+                    formatVersion: 15,
+                    pixelWidth: 1024,
+                    pixelHeight: 768,
+                    symbolCount: 2,
+                    labelCount: 1,
+                    pathCount: 3,
+                    territoryCount: 2,
+                    hasGrid: true,
+                    includedPacks: ["Custom Pack"],
+                    includedDefaultPacks: []
+                },
+                candidates: []
+            });
+        }
+        if (url === "/tool-host/hex-crawl/api/upstream/api/overworlds/world-1/source-maps/map-1/wonderdraft/import" && method === "POST") {
+            return Response.json({ id: "world-1", version: 3, sourceMaps: [], locations: [], features: [] });
+        }
         if (url === "/tool-host/hex-crawl/api/upstream/api/expeditions" && method === "POST") {
             return Response.json({
                 id: "session-1",
@@ -66,6 +103,21 @@ test("Embedded Module mode routes persistent reads, writes, map upload, and map 
             api.sourceMapAssetUrl("world-1", "map-1"),
             "/tool-host/hex-crawl/api/upstream/api/overworlds/world-1/source-maps/map-1/asset");
 
+        const project = new File([new Uint8Array([71, 67, 80, 70])], "world.wonderdraft_map");
+        const inspection = await api.inspectWonderdraftProject("world-1", project);
+        assert.equal(inspection.formatVersion, 15);
+        assert.equal(inspection.symbolCount, 2);
+        const candidatePreview = await api.previewWonderdraftCandidates("world-1", "map-1", project);
+        assert.equal(candidatePreview.sourceMapId, "map-1");
+        const importedWorld = await api.importWonderdraftCandidates("world-1", "map-1", project, [{
+            candidateKey: "label:0",
+            target: "Location",
+            name: "Old Harbor",
+            category: "settlement",
+            discoverability: "Obvious"
+        }], 2);
+        assert.equal(importedWorld.version, 3);
+
         const standalone = await api.startStandaloneSession({
             name: "Hosted watch",
             procedureKey: "simple-fixed-distance",
@@ -79,10 +131,15 @@ test("Embedded Module mode routes persistent reads, writes, map upload, and map 
             { url: "/tool-host/hex-crawl/api/upstream/api/overworlds", method: "GET" },
             { url: "/tool-host/hex-crawl/api/upstream/api/overworlds", method: "POST" },
             { url: "/tool-host/hex-crawl/api/upstream/api/overworlds/world-1/source-maps", method: "POST" },
+            { url: "/tool-host/hex-crawl/api/upstream/api/overworlds/world-1/source-maps/wonderdraft/inspect", method: "POST" },
+            { url: "/tool-host/hex-crawl/api/upstream/api/overworlds/world-1/source-maps/map-1/wonderdraft/candidates", method: "POST" },
+            { url: "/tool-host/hex-crawl/api/upstream/api/overworlds/world-1/source-maps/map-1/wonderdraft/import", method: "POST" },
             { url: "/tool-host/hex-crawl/api/upstream/api/expeditions", method: "POST" }
         ]);
         const uploadCall = calls.find(call => call.url.endsWith("/source-maps") && call.method === "POST");
         assert.equal(uploadCall?.form, true);
+        const inspectCall = calls.find(call => call.url.endsWith("/wonderdraft/inspect") && call.method === "POST");
+        assert.equal(inspectCall?.form, true);
     } finally {
         globalThis.fetch = originalFetch;
     }

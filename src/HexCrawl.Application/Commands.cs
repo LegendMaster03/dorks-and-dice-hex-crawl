@@ -51,6 +51,25 @@ public sealed record UpdateFeatureCommand(
     IReadOnlyList<WorldPoint>? Boundary,
     long ExpectedVersion);
 
+public sealed record ImportedLocationDefinition(
+    string Name,
+    string Category,
+    WorldPoint Position,
+    LocationDiscoverability Discoverability);
+
+public sealed record ImportedFeatureDefinition(
+    string Name,
+    string Category,
+    SpatialFeatureKind Kind,
+    WorldPoint? Position,
+    IReadOnlyList<WorldPoint>? Path,
+    IReadOnlyList<WorldPoint>? Boundary);
+
+public sealed record ImportWorldObjectsCommand(
+    IReadOnlyList<ImportedLocationDefinition> Locations,
+    IReadOnlyList<ImportedFeatureDefinition> Features,
+    long ExpectedVersion);
+
 public sealed record CreateSourceMapCommand(
     string GeographyKey,
     string Name,
