@@ -30,7 +30,7 @@ export async function renderToolHome(
                         <p class="hc-muted">Open a focused workflow directly. Create only the minimum saved context needed by that assistant, or continue a compatible session.</p>
                     </div>
                 </div>
-                <div class="hc-mode-grid">
+                <div class="hc-mode-grid hc-home-three-column-grid">
                     <article class="hc-mode-card">
                         <h3>Travel / Watch Assistant</h3>
                         <p>Generic watch/time bookkeeping needs no grid. Spatial travel can opt into an abstract hex context.</p>
@@ -48,7 +48,7 @@ export async function renderToolHome(
                     </article>
                 </div>
             </section>
-            <div class="hc-columns">
+            <div class="hc-columns hc-home-three-column-grid hc-home-main-grid">
                 <section class="hc-panel">
                     <div class="hc-panel-heading">
                         <div><h2>Crawl sessions</h2><p class="hc-muted">Persistent procedure state is independent of whether a session has an Overworld.</p></div>
@@ -89,7 +89,7 @@ export async function renderToolHome(
             </div>
             <section class="hc-mode-section" aria-labelledby="hc-mode-title">
                 <h2 id="hc-mode-title">Session contexts</h2>
-                <div class="hc-mode-grid">
+                <div class="hc-mode-grid hc-home-three-column-grid">
                     <article class="hc-mode-card"><h3>World-bound</h3><p>Uses an authored Overworld and can add map rendering, discovery, and player knowledge.</p></article>
                     <article class="hc-mode-card"><h3>Abstract hex</h3><p>Uses persisted hex scale and coordinates without creating or loading an Overworld.</p></article>
                     <article class="hc-mode-card"><h3>Non-spatial</h3><p>Uses procedure/session bookkeeping without inventing map state.</p></article>

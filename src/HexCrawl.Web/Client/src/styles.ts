@@ -159,6 +159,8 @@ export function ensureStyles(): void {
         .hc-mode-section { margin-top: 1rem; }
         .hc-mode-section > h2 { margin: 0 0 .65rem; color: var(--hc-text-strong); font-size: 1.05rem; }
         .hc-mode-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: .65rem; }
+        .hc-home-three-column-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .65rem; }
+        .hc-home-main-grid > :first-child { grid-column: span 2; }
         .hc-mode-card { padding: .8rem; border: 1px solid var(--hc-border); border-radius: .65rem; background: var(--hc-surface); }
         .hc-mode-card h3 { margin: 0 0 .35rem; color: var(--hc-text-strong); font-size: .95rem; }
         .hc-mode-card p { margin: 0; color: var(--hc-muted); font-size: .86rem; }
@@ -247,7 +249,8 @@ export function ensureStyles(): void {
             .hc-map-host, .hc-map-canvas { min-height: 470px; height: 60vh; }
         }
         @media (max-width: 820px) {
-            .hc-columns, .hc-workspace-grid, .hc-tracker-grid, .hc-assistant-grid { grid-template-columns: 1fr; }
+            .hc-columns, .hc-workspace-grid, .hc-tracker-grid, .hc-assistant-grid, .hc-home-three-column-grid { grid-template-columns: 1fr; }
+            .hc-home-main-grid > :first-child { grid-column: auto; }
             .hc-sidebar { max-height: none; overflow: visible; }
             .hc-map-host, .hc-map-canvas { min-height: 400px; height: 55vh; }
         }

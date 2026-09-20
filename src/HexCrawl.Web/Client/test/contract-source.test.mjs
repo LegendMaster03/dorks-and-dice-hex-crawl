@@ -86,3 +86,14 @@ test("Hex Crawl follows the Dorks & Dice theme and standalone system preference"
     assert.match(source, /html:not\(\[data-bs-theme\]\) #tool-root\.hex-crawl-app/);
     assert.equal(source.includes("MutationObserver"), false);
 });
+
+
+test("home dashboard sections share the same three-column grid", () => {
+    const view = fs.readFileSync(path.join(sourceDir, "tool-home-view.ts"), "utf8");
+    const styles = fs.readFileSync(path.join(sourceDir, "styles.ts"), "utf8");
+    assert.equal((view.match(/hc-home-three-column-grid/g) ?? []).length, 3);
+    assert.match(view, /hc-columns hc-home-three-column-grid hc-home-main-grid/);
+    assert.match(styles, /\.hc-home-three-column-grid \{ grid-template-columns: repeat\(3, minmax\(0, 1fr\)\); gap: \.65rem; \}/);
+    assert.match(styles, /\.hc-home-main-grid > :first-child \{ grid-column: span 2; \}/);
+    assert.match(styles, /\.hc-home-main-grid > :first-child \{ grid-column: auto; \}/);
+});
