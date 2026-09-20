@@ -23,6 +23,7 @@ async function boot(rootElement: HTMLElement): Promise<void> {
         const { api, context } = await HexCrawlApi.create(rootElement);
         const basePath = context?.toolBasePath ?? rootElement.dataset.toolBasePath ?? "/";
         const initialRoute = context?.toolRoute ?? rootElement.dataset.toolRoute ?? "/";
+        const hostedAnonymous = context !== null && context.user == null;
         let cleanup: (() => void) | null = null;
 
         const navigate = (route: string, replace = false): void => navigateTool(basePath, route, replace);
@@ -35,6 +36,11 @@ async function boot(rootElement: HTMLElement): Promise<void> {
             renderLoading(rootElement, loadingMessage(route.kind));
 
             try {
+                if (hostedAnonymous) {
+                    renderAnonymousAccess(rootElement, route.kind !== "home");
+                    return;
+                }
+
                 switch (route.kind) {
                     case "home":
                         cleanup = await renderToolHome(rootElement, api, navigate);
@@ -134,4 +140,22 @@ function loadingMessage(kind: ReturnType<typeof parseToolRoute>["kind"]): string
         case "assistant-entry": return "Loading focused assistant…";
         default: return "Loading Hex Crawl…";
     }
+}
+
+
+function renderAnonymousAccess(rootElement: HTMLElement, routeRequiresSignIn: boolean): void {
+    rootElement.innerHTML = `
+        <section class="hc-page">
+            <header class="hc-page-header">
+                <div>
+                    <h1>Hex Crawl DM tools</h1>
+                    <p>Hex Crawl is available through Dorks & Dice, but saved worlds and crawl sessions are account-owned.</p>
+                </div>
+            </header>
+            <section class="hc-panel hc-public-access">
+                <h2>${routeRequiresSignIn ? "Sign in to open this Hex Crawl route" : "Sign in to use persistent Hex Crawl tools"}</h2>
+                <p>Use the Dorks & Dice account controls to sign in. Once signed in, Hex Crawl can load your Overworlds, saved crawl sessions, and focused DM assistants.</p>
+                <p class="hc-muted">Anonymous access does not create a shared or placeholder owner. Temporary anonymous crawl sessions are not enabled.</p>
+            </section>
+        </section>`;
 }
