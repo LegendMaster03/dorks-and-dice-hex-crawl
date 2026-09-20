@@ -69,3 +69,20 @@ test("dashboard prominently exposes all top-level assistant entry routes", () =>
     assert.match(source, /\/assistants\/navigation/);
     assert.match(source, /\/assistants\/encounters/);
 });
+
+
+test("hosted anonymous access renders a public shell before owner-scoped routes run", () => {
+    const source = fs.readFileSync(path.join(sourceDir, "app.ts"), "utf8");
+    assert.match(source, /context !== null && context\.user == null/);
+    assert.match(source, /if \(hostedAnonymous\) \{\s*renderAnonymousAccess\(rootElement, route\.kind !== "home"\);\s*return;/s);
+    assert.match(source, /Anonymous access does not create a shared or placeholder owner/);
+});
+
+test("Hex Crawl follows the Dorks & Dice theme and standalone system preference", () => {
+    const source = fs.readFileSync(path.join(sourceDir, "styles.ts"), "utf8");
+    assert.match(source, /color-scheme: light/);
+    assert.match(source, /html\[data-bs-theme="dark"\] #tool-root\.hex-crawl-app/);
+    assert.match(source, /@media \(prefers-color-scheme: dark\)/);
+    assert.match(source, /html:not\(\[data-bs-theme\]\) #tool-root\.hex-crawl-app/);
+    assert.equal(source.includes("MutationObserver"), false);
+});
