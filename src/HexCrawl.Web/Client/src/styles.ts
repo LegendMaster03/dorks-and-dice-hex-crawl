@@ -198,7 +198,7 @@ export function ensureStyles(): void {
         .hc-resource-button { display: block; width: 100%; text-align: left; margin: .25rem 0; }
         .hc-error { margin-bottom: .8rem; padding: .7rem .8rem; border: 1px solid var(--hc-error-border); border-left: .28rem solid var(--hc-danger); border-radius: .45rem; background: var(--hc-error-bg); color: var(--hc-error-text); white-space: pre-wrap; }
         .hc-error[data-kind="validation"] { border-color: var(--hc-warning-border); border-left-color: var(--hc-warning); background: var(--hc-warning-bg); color: var(--hc-warning-text); }
-        .hc-error[data-kind="conflict"] { border-color: #886b35; border-left-color: var(--hc-warning); background: #2a2417; color: #f3dfb6; }
+        .hc-error[data-kind="conflict"] { border-color: var(--hc-warning-border); border-left-color: var(--hc-warning); background: var(--hc-warning-bg); color: var(--hc-warning-text); }
         .hc-error[data-kind="auth"] { border-left-color: var(--hc-auth-accent); }
         .hc-loading-panel { display: flex; align-items: center; gap: .65rem; color: var(--hc-muted); }
         .hc-loading-dot { width: .7rem; height: .7rem; flex: 0 0 auto; border-radius: 50%; background: var(--hc-primary); box-shadow: 0 0 0 .25rem color-mix(in srgb, var(--hc-primary) 18%, transparent); }
