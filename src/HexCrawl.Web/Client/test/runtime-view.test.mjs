@@ -28,7 +28,8 @@ test("discovery projection remains subject-specific", () => {
 });
 
 test("runtime presentation formatters expose resolved state compactly", () => {
-    assert.equal(directionLabel(3), "Direction 3");
+    assert.equal(directionLabel(0), "Toward +q");
+    assert.equal(directionLabel(3), "Toward -q");
     assert.equal(directionLabel(null), "—");
     assert.equal(formatHours(1.5), "1.5 h");
     assert.equal(formatDistance({ value: 6, unit: { symbol: "mi" } }), "6 mi");

@@ -24,7 +24,16 @@ export function formatHours(hours: number): string {
 }
 
 export function directionLabel(direction: number | null): string {
-    return direction === null ? "—" : `Direction ${direction}`;
+    if (direction === null) return "—";
+    const labels = [
+        "Toward +q",
+        "Toward +q / -r",
+        "Toward -r",
+        "Toward -q",
+        "Toward -q / +r",
+        "Toward +r"
+    ];
+    return labels[direction] ?? `Direction ${direction}`;
 }
 
 function validateD6(value: number): void {

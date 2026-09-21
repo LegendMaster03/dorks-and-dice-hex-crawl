@@ -97,3 +97,50 @@ test("home dashboard sections share the same three-column grid", () => {
     assert.match(styles, /\.hc-home-main-grid > :first-child \{ grid-column: span 2; \}/);
     assert.match(styles, /\.hc-home-main-grid > :first-child \{ grid-column: auto; \}/);
 });
+
+
+test("world editor removes nested control scrolling without changing narrow-layout flow", () => {
+    const view = fs.readFileSync(path.join(sourceDir, "world-editor-view.ts"), "utf8");
+    const styles = fs.readFileSync(path.join(sourceDir, "styles.ts"), "utf8");
+    assert.match(view, /hc-world-editor/);
+    assert.match(styles, /\.hc-world-editor \.hc-sidebar \{ max-height: none; overflow: visible;/);
+    assert.match(styles, /\.hc-world-editor \.hc-map-panel \{ position: sticky; top: \.75rem; \}/);
+    assert.match(styles, /@media \(max-width: 820px\)[\s\S]*\.hc-world-editor \.hc-map-panel \{ position: static; \}/);
+});
+
+test("interactive canvas exposes a named keyboard interaction surface and selected hex state", () => {
+    const surface = fs.readFileSync(path.join(sourceDir, "map-surface.ts"), "utf8");
+    assert.match(surface, /setAttribute\("role", "region"\)/);
+    assert.match(surface, /aria-describedby/);
+    assert.match(surface, /aria-keyshortcuts/);
+    assert.match(surface, /ArrowUp/);
+    assert.match(surface, /event\.key === "Enter" \|\| event\.key === " "/);
+    assert.match(surface, /worldToHex/);
+    assert.match(surface, /renderer\.selectedHex = selected/);
+    assert.match(surface, /Current expedition hex q/);
+    assert.match(surface, /Selected hex q/);
+});
+
+test("DM-facing world authoring copy explains empty states and keeps deeper map terminology secondary", () => {
+    const world = fs.readFileSync(path.join(sourceDir, "world-editor-view.ts"), "utf8");
+    const maps = fs.readFileSync(path.join(sourceDir, "source-map-workspace.ts"), "utf8");
+    assert.match(world, /World map editor/);
+    assert.match(world, /No locations yet/);
+    assert.match(world, /No map features yet/);
+    assert.match(world, /No expeditions yet/);
+    assert.match(maps, /<summary>Reference maps<\/summary>/);
+    assert.match(maps, /No reference maps yet/);
+    assert.match(maps, /Internally, these are stored as source-map representations/);
+    assert.doesNotMatch(maps, /Semantic locations and features remain independent world truth/);
+});
+
+test("direction controls retain numeric values but present axial step labels", () => {
+    const runtime = fs.readFileSync(path.join(sourceDir, "runtime-view.ts"), "utf8");
+    const expedition = fs.readFileSync(path.join(sourceDir, "expedition-view.ts"), "utf8");
+    const assistant = fs.readFileSync(path.join(sourceDir, "expedition-assistant-view.ts"), "utf8");
+    assert.match(runtime, /"Toward \+q"/);
+    assert.match(runtime, /"Toward -q"/);
+    assert.match(expedition, /<option value="\$\{value\}">\$\{directionLabel\(value\)\}<\/option>/);
+    assert.match(assistant, /\$\{directionLabel\(value\)\}<\/option>/);
+    assert.match(expedition, /persisted runtime values remain 0–5/);
+});

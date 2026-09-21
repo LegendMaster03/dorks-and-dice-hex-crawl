@@ -52,43 +52,43 @@ export class SourceMapWorkspace {
         private readonly errorHost: HTMLElement) {
         this.host.open = true;
         this.host.innerHTML = `
-            <summary>Source maps</summary>
-            <p class="hc-hint">Raster maps are presentation/evidence layers. Semantic locations and features remain independent world truth.</p>
+            <summary>Reference maps</summary>
+            <p class="hc-hint">Uploaded raster maps are reference layers only. Locations and map features are authored separately. Internally, these are stored as source-map representations.</p>
             <div data-source-map-list></div>
             <form class="hc-form" data-source-map-upload>
-                <p class="hc-subsection-title">Import raster representation</p>
+                <p class="hc-subsection-title">Import raster map</p>
                 <label>Raster file <input name="file" type="file" accept="image/png,image/jpeg,image/webp" required></label>
-                <label>Representation name <input name="name" required></label>
+                <label>Map name <input name="name" required></label>
                 <label>Role <select name="role"><option value="Gm">GM</option><option value="Player">Player</option><option value="Neutral">Neutral</option><option value="Other">Other</option></select></label>
-                <label>Geography group <select name="geography"></select></label>
-                <label data-new-geography>New geography group <input name="newGeography" placeholder="Bellowing Wilds"></label>
+                <label>Map group <select name="geography"></select></label>
+                <label data-new-geography>New map group <input name="newGeography" placeholder="Bellowing Wilds"></label>
                 <label><input name="bakedGrid" type="checkbox"> Image contains a baked-in hex grid</label>
-                <button type="submit" class="hc-primary-action">Upload source map</button>
+                <button type="submit" class="hc-primary-action">Upload raster map</button>
             </form>
             <form class="hc-form" data-wonderdraft-inspect>
                 <p class="hc-subsection-title">Review Wonderdraft project</p>
-                <p class="hc-hint">Read native Wonderdraft structure without persisting the project. Choose a registered raster representation to map import candidates into overworld coordinates.</p>
+                <p class="hc-hint">Read native Wonderdraft structure without persisting the project. Choose a registered raster map to place import candidates into the world map coordinate space.</p>
                 <label>Wonderdraft project <input name="file" type="file" accept=".wonderdraft_map" required></label>
-                <label>Registered source map <select name="sourceMap"></select></label>
+                <label>Registered raster map <select name="sourceMap"></select></label>
                 <button type="submit">Inspect / review project</button>
                 <div class="hc-status-section" data-wonderdraft-result hidden></div>
             </form>
             <form class="hc-form" data-source-map-edit hidden>
-                <p class="hc-subsection-title">Selected representation</p>
+                <p class="hc-subsection-title">Selected raster map</p>
                 <p class="hc-hint" data-source-map-selected-meta></p>
                 <label>Name <input name="name" required></label>
-                <label>Geography group <input name="geographyKey" required></label>
+                <label>Map group <input name="geographyKey" required></label>
                 <label>Role <select name="role"><option value="Gm">GM</option><option value="Player">Player</option><option value="Neutral">Neutral</option><option value="Other">Other</option></select></label>
                 <label><input name="bakedGrid" type="checkbox"> Image contains a baked-in hex grid</label>
                 <div class="hc-button-row">
                     <button type="submit" class="hc-primary-action">Save metadata</button>
                     <button type="button" data-register>Register / re-register</button>
-                    <button type="button" class="hc-danger-action" data-delete>Delete representation</button>
+                    <button type="button" class="hc-danger-action" data-delete>Delete raster map</button>
                 </div>
             </form>
             <section data-registration-panel hidden>
-                <p class="hc-subsection-title">Affine registration</p>
-                <p class="hc-hint">Choose a point in the source image, then click the same place on the overworld. Repeat for three non-collinear pairs.</p>
+                <p class="hc-subsection-title">Map alignment</p>
+                <p class="hc-hint">Advanced: alignment uses three non-collinear point pairs. Choose a landmark in the raster image, then choose the same place on the world map, and repeat three times.</p>
                 <img data-registration-image alt="Source map registration preview" style="display:block;max-width:100%;max-height:280px;object-fit:contain;cursor:crosshair;border:1px solid rgba(0,0,0,.2)">
                 <p class="hc-hint" data-registration-status></p>
                 <div class="hc-button-row">
@@ -160,7 +160,7 @@ export class SourceMapWorkspace {
         this.geographySelect.replaceChildren();
         const create = document.createElement("option");
         create.value = newGeographyValue;
-        create.textContent = "Create new geography group";
+        create.textContent = "Create new map group";
         this.geographySelect.append(create);
         for (const group of groups) {
             const option = document.createElement("option");
@@ -181,7 +181,7 @@ export class SourceMapWorkspace {
         inspectionOnly.value = "";
         inspectionOnly.textContent = registered.length > 0
             ? "Inspection only — do not map candidates"
-            : "No registered source maps available";
+            : "No registered raster maps available";
         this.wonderdraftSourceMapSelect.append(inspectionOnly);
 
         for (const map of registered) {
@@ -206,9 +206,13 @@ export class SourceMapWorkspace {
     private renderList(): void {
         this.list.replaceChildren();
         if (this.details.length === 0) {
-            const empty = document.createElement("p");
-            empty.className = "hc-hint";
-            empty.textContent = "No raster source maps have been imported.";
+            const empty = document.createElement("div");
+            empty.className = "hc-empty-state";
+            const heading = document.createElement("strong");
+            heading.textContent = "No reference maps yet.";
+            const detail = document.createElement("span");
+            detail.textContent = "Upload a PNG, JPEG, or WebP below. You can also inspect a Wonderdraft project without importing data.";
+            empty.append(heading, detail);
             this.list.append(empty);
             return;
         }
@@ -271,7 +275,7 @@ export class SourceMapWorkspace {
         const geographyKey = this.geographySelect.value === newGeographyValue
             ? this.newGeographyInput.value.trim()
             : this.geographySelect.value;
-        if (!geographyKey) throw new Error("A geography group is required.");
+        if (!geographyKey) throw new Error("A map group is required.");
         const world = this.getWorld();
         const updated = await this.api.uploadSourceMap(world.id, {
             file,
@@ -356,7 +360,7 @@ export class SourceMapWorkspace {
         const summary = document.createElement("p");
         summary.className = "hc-hint";
         summary.textContent =
-            `${supported} of ${candidates.length} records have supported geometry. Every candidate defaults to Skip; choose an explicit semantic target and category to import it.`;
+            `${supported} of ${candidates.length} records have supported geometry. Every candidate defaults to Skip; choose the kind of world object to create and assign a category before importing it.`;
         this.wonderdraftResult.append(summary);
 
         const maximumRendered = 200;
@@ -505,13 +509,13 @@ export class SourceMapWorkspace {
         const success = document.createElement("p");
         success.className = "hc-hint";
         success.textContent =
-            `Imported ${selections.length} reviewed Wonderdraft candidate${selections.length === 1 ? "" : "s"} as semantic world objects.`;
+            `Imported ${selections.length} reviewed Wonderdraft candidate${selections.length === 1 ? "" : "s"} as world locations or map features.`;
         this.wonderdraftResult.append(success);
         await this.refresh();
     }
 
     private async updateMetadata(): Promise<void> {
-        if (!this.selected) throw new Error("Select a source-map representation first.");
+        if (!this.selected) throw new Error("Select a raster map first.");
         const world = this.getWorld();
         const updated = await this.api.updateSourceMap(world.id, this.selected.id, {
             name: input(this.editForm, "name").value.trim(),
@@ -525,7 +529,7 @@ export class SourceMapWorkspace {
     }
 
     private async deleteSelected(): Promise<void> {
-        if (!this.selected) throw new Error("Select a source-map representation first.");
+        if (!this.selected) throw new Error("Select a raster map first.");
         const world = this.getWorld();
         const id = this.selected.id;
         const updated = await this.api.deleteSourceMap(world.id, id, world.version);
@@ -537,7 +541,7 @@ export class SourceMapWorkspace {
     }
 
     private beginRegistration(): void {
-        if (!this.selected) throw new Error("Select a source-map representation first.");
+        if (!this.selected) throw new Error("Select a raster map first.");
         if (this.selected.pixelWidth <= 0 || this.selected.pixelHeight <= 0) {
             throw new Error("This source map has no raster dimensions and must be re-imported before registration.");
         }

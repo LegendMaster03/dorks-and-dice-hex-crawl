@@ -77,10 +77,7 @@ export async function renderExpedition(
                         <form class="hc-form" data-advance>
                             <fieldset data-plan-fields data-focus-group="travel navigation">
                                 <legend>Travel plan</legend>
-                                <label>Intended direction <select name="direction">
-                                    <option value="0">0</option><option value="1">1</option><option value="2">2</option>
-                                    <option value="3">3</option><option value="4">4</option><option value="5">5</option>
-                                </select></label>
+                                <label>Intended direction <select name="direction">${directionOptions()}</select></label>
                                 <label>Pace / travel mode <input name="pace" value="normal"></label>
                                 <label>Party activities <input name="activities" placeholder="scout, forage, map"></label>
                                 <label>Navigation aid/context <input name="navigationAid" value="none"></label>
@@ -232,7 +229,7 @@ export async function renderExpedition(
         const recent = [...runtime.history].reverse().slice(0, 30);
         if (recent.length === 0) {
             const item = document.createElement("li");
-            item.textContent = "No procedure events yet.";
+            item.textContent = "No procedure history yet. Run the first watch or record a procedure result to create history.";
             host.append(item);
             return;
         }
@@ -261,7 +258,7 @@ export async function renderExpedition(
         if (subjects.length === 0) {
             const hint = document.createElement("p");
             hint.className = "hc-hint";
-            hint.textContent = "No authored point locations or features are indexed in the current hex.";
+            hint.textContent = "No authored locations or point features are in the current hex. Add them in the World map editor if this area should contain something.";
             host.append(hint);
             return;
         }
@@ -305,7 +302,7 @@ export async function renderExpedition(
         }
         if (list.childElementCount === 0) {
             const item = document.createElement("li");
-            item.textContent = "No semantic subjects are currently known to the players.";
+            item.textContent = "No authored locations or map features are currently known to the players.";
             list.append(item);
         }
         host.append(list);
@@ -379,9 +376,11 @@ export async function renderExpedition(
 
         syncNavigationVisibility();
         syncEncounterFields();
-        required<HTMLElement>(form, "[data-direction-hint]").textContent = runtime.profile.directionChangesCostProgress
+        const directionHelp = runtime.profile.directionChangesCostProgress
             ? "Changing course can consume intra-hex progress under this procedure. The runtime applies the configured cost."
             : "Direction changes do not consume additional progress under this procedure.";
+        required<HTMLElement>(form, "[data-direction-hint]").textContent =
+            `${directionHelp} Direction labels show the axial grid step; persisted runtime values remain 0–5.`;
     };
 
     const syncNavigationVisibility = (): void => {
@@ -624,6 +623,12 @@ function option(value: string, label: string): HTMLOptionElement {
     result.value = value;
     result.textContent = label;
     return result;
+}
+
+function directionOptions(): string {
+    return [0, 1, 2, 3, 4, 5]
+        .map(value => `<option value="${value}">${directionLabel(value)}</option>`)
+        .join("");
 }
 
 function sourceLabel(source: ResolutionSource): string {

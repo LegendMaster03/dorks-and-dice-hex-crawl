@@ -24,16 +24,16 @@ export async function renderWorldEditor(
     let sourceMapWorkspace: SourceMapWorkspace | null = null;
 
     root.innerHTML = `
-        <section class="hc-page hc-workspace">
+        <section class="hc-page hc-workspace hc-world-editor">
             <header class="hc-page-header">
-                <div><h1 data-title></h1><p>Overworld authoring</p></div>
+                <div><h1 data-title></h1><p>World map editor</p></div>
                 <nav><button type="button" data-worlds>Overworlds</button><button type="button" data-reset-view>Reset map view</button></nav>
             </header>
             <div class="hc-error" data-error hidden role="alert"></div>
             <div class="hc-workspace-grid">
                 <section class="hc-map-panel" aria-label="Overworld map">
                     <div class="hc-map-host" data-map></div>
-                    <p class="hc-hint" data-map-hint>Use the authoring controls to place geometry. Shift-drag or middle-drag pans; wheel zooms.</p>
+                    <p class="hc-hint" data-map-hint>Use the controls to add locations and map features. Shift-drag or middle-drag pans; wheel zooms; the focused map also supports keyboard pan, zoom, and center-point selection.</p>
                 </section>
                 <aside class="hc-sidebar" aria-label="Overworld authoring controls">
                     <details open><summary>World and grid</summary><form class="hc-form" data-grid-form>
@@ -45,7 +45,7 @@ export async function renderWorldEditor(
                             <label>Custom symbol <input name="unitSymbol" value="u"></label>
                             <label>Custom meters per unit <input name="metersPerUnit" type="number" min="0.001" step="any" value="1"></label>
                         </div>
-                        <details><summary>Advanced grid alignment</summary><div class="hc-form">
+                        <details><summary>Advanced grid alignment</summary><div class="hc-form"><p class="hc-hint">These values define the internal world-coordinate frame. Most maps can keep the existing values.</p>
                             <div class="hc-inline"><label>Origin X <input name="originX" type="number" step="any"></label><label>Origin Y <input name="originY" type="number" step="any"></label></div>
                             <label>Rotation degrees <input name="rotation" type="number" step="any"></label>
                             <label>Hex radius (world units) <input name="radius" type="number" min="0.001" step="any"></label>
@@ -60,8 +60,9 @@ export async function renderWorldEditor(
                             <label>Name <input name="name" required></label>
                             <label>Category <input name="category" required></label>
                             <label>Discoverability <select name="discoverability"><option>Obvious</option><option>Hidden</option><option>Conditional</option></select></label>
-                            <div class="hc-inline"><label>X <input name="x" type="number" step="any" required></label><label>Y <input name="y" type="number" step="any" required></label></div>
-                            <div class="hc-button-row"><button type="button" data-place-location>Place on map</button><button type="submit" class="hc-primary-action">Save location</button><button type="button" data-new-location>New</button><button type="button" class="hc-danger-action" data-delete-location>Delete</button></div>
+                            <div class="hc-inline"><label>Map X <input name="x" type="number" step="any" required></label><label>Map Y <input name="y" type="number" step="any" required></label></div>
+                            <p class="hc-hint">For normal authoring, choose the position on the map. Map X/Y remain available for precise or imported coordinates.</p>
+                            <div class="hc-button-row"><button type="button" data-place-location>Choose position on map</button><button type="submit" class="hc-primary-action">Save location</button><button type="button" data-new-location>New</button><button type="button" class="hc-danger-action" data-delete-location>Delete</button></div>
                         </form>
                     </details>
 
@@ -83,7 +84,8 @@ export async function renderWorldEditor(
                         <form class="hc-form" data-expedition-form>
                             <label>Name <input name="name" required value="Expedition"></label>
                             <label>Procedure <select name="procedure"></select></label>
-                            <div class="hc-inline"><label>Start q <input name="q" type="number" step="1" value="0"></label><label>Start r <input name="r" type="number" step="1" value="0"></label></div>
+                            <div class="hc-inline"><label>Start hex q <input name="q" type="number" step="1" value="0"></label><label>Start hex r <input name="r" type="number" step="1" value="0"></label></div>
+                            <p class="hc-hint">Advanced: q/r are axial hex coordinates and remain the persisted coordinate format.</p>
                             <button type="submit" class="hc-primary-action">Start expedition</button>
                         </form>
                     </details>
@@ -156,10 +158,9 @@ export async function renderWorldEditor(
         const host = required<HTMLElement>(root, "[data-location-list]");
         host.replaceChildren();
         if (world.locations.length === 0) {
-            const hint = document.createElement("p");
-            hint.className = "hc-hint";
-            hint.textContent = "No locations yet.";
-            host.append(hint);
+            host.append(emptyState(
+                "No locations yet.",
+                "Enter a location below or choose its position on the map, then save it."));
             return;
         }
         for (const location of world.locations) host.append(resourceButton(`${location.name} · ${location.category}`, () => loadLocation(location)));
@@ -169,10 +170,9 @@ export async function renderWorldEditor(
         const host = required<HTMLElement>(root, "[data-feature-list]");
         host.replaceChildren();
         if (world.features.length === 0) {
-            const hint = document.createElement("p");
-            hint.className = "hc-hint";
-            hint.textContent = "No spatial features yet.";
-            host.append(hint);
+            host.append(emptyState(
+                "No map features yet.",
+                "Add a point, route, river, border, or region below, then author its geometry on the map."));
             return;
         }
         for (const feature of world.features) host.append(resourceButton(`${feature.name} · ${feature.kind} · ${feature.category}`, () => loadFeature(feature)));
@@ -362,10 +362,9 @@ export async function renderWorldEditor(
     const renderExpeditions = (expeditions = initialExpeditions): void => {
         expeditionHost.replaceChildren();
         if (expeditions.length === 0) {
-            const hint = document.createElement("p");
-            hint.className = "hc-hint";
-            hint.textContent = "No expeditions yet.";
-            expeditionHost.append(hint);
+            expeditionHost.append(emptyState(
+                "No expeditions yet.",
+                "Choose a procedure and starting hex below to begin the first expedition in this world."));
             return;
         }
         for (const expedition of expeditions) {
@@ -407,6 +406,17 @@ export async function renderWorldEditor(
         sourceMapWorkspace?.dispose();
         mapSurface.dispose();
     };
+}
+
+function emptyState(title: string, nextStep: string): HTMLElement {
+    const empty = document.createElement("div");
+    empty.className = "hc-empty-state";
+    const heading = document.createElement("strong");
+    heading.textContent = title;
+    const detail = document.createElement("span");
+    detail.textContent = nextStep;
+    empty.append(heading, detail);
+    return empty;
 }
 
 function resourceButton(text: string, action: () => void): HTMLButtonElement {
