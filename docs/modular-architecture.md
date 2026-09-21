@@ -126,8 +126,12 @@ This first slice deliberately preserves behavior and public routes. The next str
 2. Evaluate whether the now physically separated `CrawlRuntimeEngine` responsibilities should remain one deterministic partial-class boundary or graduate into collaborators. Do not introduce collaborator interfaces until they provide a concrete testing, substitution, or dependency benefit.
 3. Move Web API contracts next to their owning modules when shared-contract analysis shows that doing so does not create duplication.
 4. Give the browser client the same feature locality. Route handlers should be registered by client modules rather than accumulated in `app.ts`, and large views such as expedition and source-map workspaces should be decomposed into focused components.
-5. Split SQLite persistence by aggregate/concern behind the existing `IHexCrawlStore` contract before changing storage semantics.
+5. Evaluate whether the physically separated SQLite aggregate operations should eventually become independent stores. Keep `IHexCrawlStore` as the compatibility boundary until a narrower contract provides a concrete benefit; do not change storage semantics merely for type count.
 6. Keep import formats such as Wonderdraft as adapters. They should produce reviewed semantic inputs rather than become core world types.
+
+## Persistence locality
+
+`SqliteHexCrawlStore` still implements the existing `IHexCrawlStore` contract and uses the same schema and serialized shapes. Its implementation is now separated into world persistence, expedition/event persistence, shared connection/serialization mechanics, runtime snapshots, and world snapshots. Snapshot types remain private implementation details, which keeps persisted compatibility concerns close to the SQLite adapter rather than leaking them into Domain.
 
 ## Guardrails
 
