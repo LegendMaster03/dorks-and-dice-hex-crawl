@@ -87,8 +87,11 @@ A feature module owns:
 
 - the services specific to that capability;
 - its endpoint registration;
+- feature-local HTTP contracts and options;
 - feature-local adapters and presentation pieces as they are migrated;
 - explicit dependency declarations on other modules.
+
+Web contracts used by more than one module live under `Web/Contracts/`; they are not copied into each feature.
 
 The composition root should not contain a growing list of feature services or endpoints.
 
@@ -124,7 +127,7 @@ This first slice deliberately preserves behavior and public routes. The next str
 
 1. Reduce the remaining `HexCrawlService` compatibility surface when focused services already provide the same operation and consumers can migrate without churn. Do not create replacement services merely to eliminate a partial class.
 2. Evaluate whether the now physically separated `CrawlRuntimeEngine` responsibilities should remain one deterministic partial-class boundary or graduate into collaborators. Do not introduce collaborator interfaces until they provide a concrete testing, substitution, or dependency benefit.
-3. Move Web API contracts next to their owning modules when shared-contract analysis shows that doing so does not create duplication.
+3. Continue retiring compatibility-only Web contracts when no active route or test requires them. Keep genuinely shared spatial contracts under `Web/Contracts/` rather than duplicating them across modules.
 4. Continue decomposing large browser views such as expedition and source-map workspaces into focused components now that route ownership is module-driven. Keep view components local to the feature that owns them.
 5. Evaluate whether the physically separated SQLite aggregate operations should eventually become independent stores. Keep `IHexCrawlStore` as the compatibility boundary until a narrower contract provides a concrete benefit; do not change storage semantics merely for type count.
 6. Keep import formats such as Wonderdraft as adapters. They should produce reviewed semantic inputs rather than become core world types.
