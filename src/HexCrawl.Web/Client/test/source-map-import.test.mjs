@@ -52,9 +52,11 @@ test("renderer source puts rasters before semantic regions and grid", () => {
 test("registration consumes map clicks through an explicit interaction interceptor", () => {
     const surface = fs.readFileSync(path.join(sourceRoot, "map-surface.ts"), "utf8");
     const workspace = fs.readFileSync(path.join(sourceRoot, "source-map-workspace.ts"), "utf8");
+    const registration = fs.readFileSync(path.join(sourceRoot, "source-map-registration-controller.ts"), "utf8");
     assert.match(surface, /clickInterceptor\?\.\(point\)/);
-    assert.match(workspace, /if \(!this\.registration\) return false/);
-    assert.match(workspace, /Registration mode is active/);
+    assert.match(workspace, /SourceMapRegistrationController/);
+    assert.match(registration, /if \(!this\.registration\) return false/);
+    assert.match(registration, /Registration mode is active/);
 });
 
 test("route cleanup disposes raster resources and application-owned DOM does not use MutationObserver", () => {
@@ -63,8 +65,22 @@ test("route cleanup disposes raster resources and application-owned DOM does not
     assert.match(surface, /this\.renderer\.dispose\(\)/);
     assert.match(cache, /URL\.revokeObjectURL/);
 
-    for (const file of fs.readdirSync(sourceRoot).filter(name => name.endsWith(".ts"))) {
-        const content = fs.readFileSync(path.join(sourceRoot, file), "utf8");
-        assert.doesNotMatch(content, /MutationObserver/, `${file} must not use MutationObserver for application-owned DOM`);
+    const pending = [sourceRoot];
+    while (pending.length > 0) {
+        const directory = pending.pop();
+        for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+            const location = path.join(directory, entry.name);
+            if (entry.isDirectory()) {
+                pending.push(location);
+                continue;
+            }
+            if (!entry.name.endsWith(".ts")) continue;
+            const content = fs.readFileSync(location, "utf8");
+            const relative = path.relative(sourceRoot, location);
+            assert.doesNotMatch(
+                content,
+                /MutationObserver/,
+                `${relative} must not use MutationObserver for application-owned DOM`);
+        }
     }
 });
