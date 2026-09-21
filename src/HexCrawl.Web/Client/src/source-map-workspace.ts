@@ -1,10 +1,4 @@
-import type {
-    HexCrawlApi,
-    WonderdraftCandidate,
-    WonderdraftCandidatePreview,
-    WonderdraftImportSelection,
-    WonderdraftInspection
-} from "./api";
+import type { HexCrawlApi } from "./api";
 import type { MapSurface } from "./map-surface";
 import type {
     Overworld,
@@ -14,6 +8,7 @@ import type {
 import { clearUiError, showUiError } from "./ui-error";
 import { input, required, select } from "./ui/dom";
 import { SourceMapRegistrationController } from "./source-map-registration-controller";
+import { WonderdraftImportController } from "./wonderdraft-import-controller";
 
 const newGeographyValue = "__new_geography__";
 
@@ -21,12 +16,9 @@ export class SourceMapWorkspace {
     private details: SourceMapDetail[] = [];
     private selected: SourceMapDetail | null = null;
     private readonly registrationController: SourceMapRegistrationController;
-    private wonderdraftPreview: WonderdraftCandidatePreview | null = null;
+    private readonly wonderdraftController: WonderdraftImportController;
     private readonly list: HTMLElement;
     private readonly uploadForm: HTMLFormElement;
-    private readonly wonderdraftForm: HTMLFormElement;
-    private readonly wonderdraftResult: HTMLElement;
-    private readonly wonderdraftSourceMapSelect: HTMLSelectElement;
     private readonly editForm: HTMLFormElement;
     private readonly geographySelect: HTMLSelectElement;
     private readonly newGeographyInput: HTMLInputElement;
@@ -90,9 +82,6 @@ export class SourceMapWorkspace {
 
         this.list = required(this.host, "[data-source-map-list]");
         this.uploadForm = required(this.host, "[data-source-map-upload]");
-        this.wonderdraftForm = required(this.host, "[data-wonderdraft-inspect]");
-        this.wonderdraftResult = required(this.host, "[data-wonderdraft-result]");
-        this.wonderdraftSourceMapSelect = select(this.wonderdraftForm, "sourceMap");
         this.editForm = required(this.host, "[data-source-map-edit]");
         this.geographySelect = select(this.uploadForm, "geography");
         this.newGeographyInput = input(this.uploadForm, "newGeography");
@@ -101,10 +90,6 @@ export class SourceMapWorkspace {
         this.uploadForm.addEventListener("submit", event => {
             event.preventDefault();
             void this.run(this.uploadForm, () => this.upload());
-        });
-        this.wonderdraftForm.addEventListener("submit", event => {
-            event.preventDefault();
-            void this.run(this.wonderdraftForm, () => this.inspectWonderdraft());
         });
         this.editForm.addEventListener("submit", event => {
             event.preventDefault();
@@ -119,6 +104,13 @@ export class SourceMapWorkspace {
             this.mapHint,
             this.errorHost,
             action => { void this.run(null, action); },
+            async () => { await this.refresh(); });
+        this.wonderdraftController = new WonderdraftImportController(
+            this.host,
+            this.api,
+            this.getWorld,
+            this.applyWorld,
+            (form, action) => { void this.run(form, action); },
             async () => { await this.refresh(); });
         required<HTMLButtonElement>(this.host, "[data-register]").addEventListener("click", () =>
             this.registrationController.begin(this.selected));
@@ -136,7 +128,7 @@ export class SourceMapWorkspace {
         this.details = result.sourceMaps;
         if (this.selected) this.selected = this.details.find(item => item.id === this.selected!.id) ?? null;
         this.renderGeographies();
-        this.renderWonderdraftSourceMaps();
+        this.wonderdraftController.setSourceMaps(this.details);
         this.renderList();
         this.renderSelected();
     }
@@ -144,6 +136,7 @@ export class SourceMapWorkspace {
     public dispose(): void {
         this.disposed = true;
         this.registrationController.dispose();
+        this.wonderdraftController.dispose();
     }
 
     private renderGeographies(): void {
@@ -162,30 +155,6 @@ export class SourceMapWorkspace {
         }
         this.geographySelect.value = groups.includes(previous) ? previous : newGeographyValue;
         this.syncNewGeographyVisibility();
-    }
-
-    private renderWonderdraftSourceMaps(): void {
-        const previous = this.wonderdraftSourceMapSelect.value;
-        const registered = this.details.filter(map => map.alignment);
-        this.wonderdraftSourceMapSelect.replaceChildren();
-
-        const inspectionOnly = document.createElement("option");
-        inspectionOnly.value = "";
-        inspectionOnly.textContent = registered.length > 0
-            ? "Inspection only — do not map candidates"
-            : "No registered source maps available";
-        this.wonderdraftSourceMapSelect.append(inspectionOnly);
-
-        for (const map of registered) {
-            const option = document.createElement("option");
-            option.value = map.id;
-            option.textContent = `${map.name} — ${map.geographyKey}`;
-            this.wonderdraftSourceMapSelect.append(option);
-        }
-
-        if (registered.some(map => map.id === previous)) {
-            this.wonderdraftSourceMapSelect.value = previous;
-        }
     }
 
     private syncNewGeographyVisibility(): void {
@@ -278,230 +247,6 @@ export class SourceMapWorkspace {
         await this.refresh();
     }
 
-    private async inspectWonderdraft(): Promise<void> {
-        const file = input(this.wonderdraftForm, "file").files?.[0];
-        if (!file) throw new Error("Choose a .wonderdraft_map project file.");
-        const world = this.getWorld();
-        const sourceMapId = this.wonderdraftSourceMapSelect.value;
-        if (!sourceMapId) {
-            this.wonderdraftPreview = null;
-            const result = await this.api.inspectWonderdraftProject(world.id, file);
-            this.renderWonderdraftInspection(result, file.name, null);
-            return;
-        }
-
-        const preview = await this.api.previewWonderdraftCandidates(world.id, sourceMapId, file);
-        this.wonderdraftPreview = preview;
-        this.renderWonderdraftInspection(preview.summary, file.name, preview);
-    }
-
-    private renderWonderdraftInspection(
-        result: WonderdraftInspection,
-        fileName: string,
-        preview: WonderdraftCandidatePreview | null): void {
-        this.wonderdraftResult.replaceChildren();
-
-        const heading = document.createElement("strong");
-        heading.textContent = fileName;
-        const dimensions = document.createElement("p");
-        dimensions.className = "hc-hint";
-        dimensions.textContent =
-            `${result.pixelWidth}×${result.pixelHeight} · Wonderdraft format ${result.formatVersion ?? "unknown"} · ${result.hasGrid ? "grid configured" : "no grid configuration"}`;
-        const content = document.createElement("p");
-        content.className = "hc-hint";
-        content.textContent =
-            `${result.labelCount} labels · ${result.symbolCount} symbols · ${result.pathCount} paths · ${result.territoryCount} territories`;
-
-        this.wonderdraftResult.append(heading, dimensions, content);
-        const packs = [...result.includedDefaultPacks, ...result.includedPacks];
-        if (packs.length > 0) {
-            const packText = document.createElement("p");
-            packText.className = "hc-hint";
-            packText.textContent = `Referenced asset packs: ${packs.join(", ")}`;
-            this.wonderdraftResult.append(packText);
-        }
-
-        if (preview) {
-            const scale = document.createElement("p");
-            scale.className = "hc-hint";
-            scale.textContent =
-                `Project pixels mapped through the selected raster at ×${preview.sourceScaleX.toFixed(4)} X and ×${preview.sourceScaleY.toFixed(4)} Y before applying its saved registration.`;
-            this.wonderdraftResult.append(scale);
-            this.renderWonderdraftCandidates(preview.candidates);
-        } else {
-            const note = document.createElement("p");
-            note.className = "hc-hint";
-            note.textContent =
-                "Inspection only. Register a source-map representation and select it above to review candidate geometry in overworld coordinates.";
-            this.wonderdraftResult.append(note);
-        }
-
-        const persistence = document.createElement("p");
-        persistence.className = "hc-hint";
-        persistence.textContent = "No world data was changed and the Wonderdraft project was not persisted.";
-        this.wonderdraftResult.append(persistence);
-        this.wonderdraftResult.hidden = false;
-    }
-
-    private renderWonderdraftCandidates(candidates: WonderdraftCandidate[]): void {
-        const supported = candidates.filter(candidate => !candidate.problem).length;
-        const summary = document.createElement("p");
-        summary.className = "hc-hint";
-        summary.textContent =
-            `${supported} of ${candidates.length} records have supported geometry. Every candidate defaults to Skip; choose an explicit semantic target and category to import it.`;
-        this.wonderdraftResult.append(summary);
-
-        const maximumRendered = 200;
-        for (const candidate of candidates.slice(0, maximumRendered)) {
-            const row = document.createElement("div");
-            row.className = "hc-status-section";
-            row.dataset.wonderdraftCandidate = candidate.key;
-
-            const heading = document.createElement("strong");
-            heading.textContent = `${candidate.sourceKind}: ${candidate.displayName}`;
-            const geometry = document.createElement("p");
-            geometry.className = "hc-hint";
-            geometry.textContent = candidate.problem
-                ? `Not importable yet: ${candidate.problem}`
-                : describeWonderdraftGeometry(candidate);
-            row.append(heading, geometry);
-
-            if (candidate.descriptor) {
-                const descriptor = document.createElement("p");
-                descriptor.className = "hc-hint";
-                descriptor.textContent = candidate.descriptor;
-                row.append(descriptor);
-            }
-
-            if (!candidate.problem) {
-                const targetLabel = document.createElement("label");
-                targetLabel.append(document.createTextNode("Import as "));
-                const target = document.createElement("select");
-                target.dataset.importTarget = "true";
-                target.append(option("Skip", "Skip"));
-                if (candidate.geometryKind === "Point") {
-                    target.append(option("Location", "Location"), option("Point feature", "PointFeature"));
-                } else if (candidate.geometryKind === "Line") {
-                    target.append(option("Line feature", "LineFeature"));
-                } else {
-                    target.append(option("Region feature", "RegionFeature"));
-                }
-                targetLabel.append(target);
-
-                const fields = document.createElement("div");
-                fields.hidden = true;
-                fields.dataset.importFields = "true";
-
-                const nameLabel = document.createElement("label");
-                nameLabel.append(document.createTextNode("Name "));
-                const name = document.createElement("input");
-                name.dataset.importName = "true";
-                name.value = candidate.displayName;
-                nameLabel.append(name);
-
-                const categoryLabel = document.createElement("label");
-                categoryLabel.append(document.createTextNode("Category "));
-                const category = document.createElement("input");
-                category.dataset.importCategory = "true";
-                category.placeholder = candidate.geometryKind === "Line"
-                    ? "road"
-                    : candidate.geometryKind === "Region"
-                        ? "region"
-                        : "settlement";
-                categoryLabel.append(category);
-
-                const discoverabilityLabel = document.createElement("label");
-                discoverabilityLabel.hidden = true;
-                discoverabilityLabel.dataset.importDiscoverabilityRow = "true";
-                discoverabilityLabel.append(document.createTextNode("Discoverability "));
-                const discoverability = document.createElement("select");
-                discoverability.dataset.importDiscoverability = "true";
-                discoverability.append(
-                    option("Obvious", "Obvious"),
-                    option("Hidden", "Hidden"),
-                    option("Conditional", "Conditional"));
-                discoverabilityLabel.append(discoverability);
-
-                fields.append(nameLabel, categoryLabel, discoverabilityLabel);
-                target.addEventListener("change", () => {
-                    fields.hidden = target.value === "Skip";
-                    discoverabilityLabel.hidden = target.value !== "Location";
-                });
-                row.append(targetLabel, fields);
-            }
-
-            this.wonderdraftResult.append(row);
-        }
-
-        if (candidates.length > maximumRendered) {
-            const truncated = document.createElement("p");
-            truncated.className = "hc-hint";
-            truncated.textContent =
-                `Showing the first ${maximumRendered} candidates. Additional candidates remain skipped unless reviewed in a smaller project or later paging UI.`;
-            this.wonderdraftResult.append(truncated);
-        }
-
-        const importButton = document.createElement("button");
-        importButton.type = "button";
-        importButton.className = "hc-primary-action";
-        importButton.textContent = "Import selected candidates";
-        importButton.addEventListener("click", () =>
-            void this.run(this.wonderdraftForm, () => this.importWonderdraftCandidates()));
-        this.wonderdraftResult.append(importButton);
-    }
-
-    private async importWonderdraftCandidates(): Promise<void> {
-        const preview = this.wonderdraftPreview;
-        if (!preview) throw new Error("Review the Wonderdraft project against a registered source map first.");
-        if (this.wonderdraftSourceMapSelect.value !== preview.sourceMapId) {
-            throw new Error("The selected source map changed. Review the Wonderdraft project again before importing.");
-        }
-
-        const file = input(this.wonderdraftForm, "file").files?.[0];
-        if (!file) throw new Error("Choose the .wonderdraft_map project file again before importing.");
-
-        const selections: WonderdraftImportSelection[] = [];
-        for (const row of this.wonderdraftResult.querySelectorAll<HTMLElement>("[data-wonderdraft-candidate]")) {
-            const target = row.querySelector<HTMLSelectElement>("[data-import-target]");
-            if (!target || target.value === "Skip") continue;
-
-            const name = row.querySelector<HTMLInputElement>("[data-import-name]")?.value.trim() ?? "";
-            const category = row.querySelector<HTMLInputElement>("[data-import-category]")?.value.trim() ?? "";
-            if (!name || !category) {
-                throw new Error("Every selected Wonderdraft candidate requires a name and category.");
-            }
-
-            const discoverability = row.querySelector<HTMLSelectElement>("[data-import-discoverability]");
-            selections.push({
-                candidateKey: row.dataset.wonderdraftCandidate!,
-                target: target.value as WonderdraftImportSelection["target"],
-                name,
-                category,
-                discoverability: target.value === "Location"
-                    ? (discoverability?.value as WonderdraftImportSelection["discoverability"] ?? "Obvious")
-                    : null
-            });
-        }
-        if (selections.length === 0) throw new Error("Choose at least one Wonderdraft candidate to import.");
-
-        const world = this.getWorld();
-        const updated = await this.api.importWonderdraftCandidates(
-            world.id,
-            preview.sourceMapId,
-            file,
-            selections,
-            world.version);
-        this.applyWorld(updated);
-        this.wonderdraftPreview = null;
-        this.wonderdraftResult.replaceChildren();
-        const success = document.createElement("p");
-        success.className = "hc-hint";
-        success.textContent =
-            `Imported ${selections.length} reviewed Wonderdraft candidate${selections.length === 1 ? "" : "s"} as semantic world objects.`;
-        this.wonderdraftResult.append(success);
-        await this.refresh();
-    }
-
     private async updateMetadata(): Promise<void> {
         if (!this.selected) throw new Error("Select a source-map representation first.");
         const world = this.getWorld();
@@ -540,20 +285,6 @@ export class SourceMapWorkspace {
             if (form && !this.disposed) setPending(form, false);
         }
     }
-}
-
-function option(label: string, value: string): HTMLOptionElement {
-    const element = document.createElement("option");
-    element.value = value;
-    element.textContent = label;
-    return element;
-}
-
-function describeWonderdraftGeometry(candidate: WonderdraftCandidate): string {
-    if (candidate.worldPosition) {
-        return `${candidate.geometryKind} at world ${candidate.worldPosition.x.toFixed(3)}, ${candidate.worldPosition.y.toFixed(3)}`;
-    }
-    return `${candidate.geometryKind} with ${candidate.worldPoints.length} transformed points`;
 }
 
 function roleLabel(role: SourceMapRole): string {
