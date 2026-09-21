@@ -142,8 +142,10 @@ export class ExpeditionWatchController {
             checkbox(this.form, "continueAcross").checked = state.activeContinueAcrossBoundaries;
         }
 
-        const scale = runtime.context.hexCenterDistance?.value
-            ?? throw new Error("Spatial crawl session is missing hex-center distance.");
+        const scale = runtime.context.hexCenterDistance?.value;
+        if (scale === undefined) {
+            throw new Error("Spatial crawl session is missing hex-center distance.");
+        }
         if (!input(this.form, "effectiveDistance").value) {
             input(this.form, "effectiveDistance").value = String(scale);
         }
@@ -246,9 +248,9 @@ export class ExpeditionWatchController {
                 }
 
                 if (encounterRequired) {
-                    request.encounterOutcome =
+                    request.encounterOutcome = (
                         select(this.form, "encounterOutcome").value
-                        as RuntimeAdvanceRequest["encounterOutcome"];
+                    ) as RuntimeAdvanceRequest["encounterOutcome"];
                     request.encounterResolutionSource =
                         select(this.form, "encounterSource").value as ResolutionSource;
                     request.encounterResolutionNote =
