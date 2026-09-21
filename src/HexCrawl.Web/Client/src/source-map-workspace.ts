@@ -5,30 +5,22 @@ import type {
     WonderdraftImportSelection,
     WonderdraftInspection
 } from "./api";
-import { solveAffine } from "./affine-registration";
 import type { MapSurface } from "./map-surface";
 import type {
     Overworld,
-    RegistrationControlPoint,
     SourceMapDetail,
-    SourceMapRole,
-    WorldPoint
+    SourceMapRole
 } from "./types";
 import { clearUiError, showUiError } from "./ui-error";
 import { input, required, select } from "./ui/dom";
+import { SourceMapRegistrationController } from "./source-map-registration-controller";
 
 const newGeographyValue = "__new_geography__";
-
-type RegistrationState = {
-    map: SourceMapDetail;
-    pairs: RegistrationControlPoint[];
-    pendingSource: WorldPoint | null;
-};
 
 export class SourceMapWorkspace {
     private details: SourceMapDetail[] = [];
     private selected: SourceMapDetail | null = null;
-    private registration: RegistrationState | null = null;
+    private readonly registrationController: SourceMapRegistrationController;
     private wonderdraftPreview: WonderdraftCandidatePreview | null = null;
     private readonly list: HTMLElement;
     private readonly uploadForm: HTMLFormElement;
@@ -36,9 +28,6 @@ export class SourceMapWorkspace {
     private readonly wonderdraftResult: HTMLElement;
     private readonly wonderdraftSourceMapSelect: HTMLSelectElement;
     private readonly editForm: HTMLFormElement;
-    private readonly registrationPanel: HTMLElement;
-    private readonly registrationImage: HTMLImageElement;
-    private readonly registrationStatus: HTMLElement;
     private readonly geographySelect: HTMLSelectElement;
     private readonly newGeographyInput: HTMLInputElement;
     private disposed = false;
@@ -105,9 +94,6 @@ export class SourceMapWorkspace {
         this.wonderdraftResult = required(this.host, "[data-wonderdraft-result]");
         this.wonderdraftSourceMapSelect = select(this.wonderdraftForm, "sourceMap");
         this.editForm = required(this.host, "[data-source-map-edit]");
-        this.registrationPanel = required(this.host, "[data-registration-panel]");
-        this.registrationImage = required(this.host, "[data-registration-image]");
-        this.registrationStatus = required(this.host, "[data-registration-status]");
         this.geographySelect = select(this.uploadForm, "geography");
         this.newGeographyInput = input(this.uploadForm, "newGeography");
 
@@ -124,13 +110,20 @@ export class SourceMapWorkspace {
             event.preventDefault();
             void this.run(this.editForm, () => this.updateMetadata());
         });
-        required<HTMLButtonElement>(this.host, "[data-register]").addEventListener("click", () => this.beginRegistration());
-        required<HTMLButtonElement>(this.host, "[data-delete]").addEventListener("click", () => void this.run(null, () => this.deleteSelected()));
-        required<HTMLButtonElement>(this.host, "[data-clear-registration]").addEventListener("click", () => this.clearRegistration());
-        required<HTMLButtonElement>(this.host, "[data-save-registration]").addEventListener("click", () => void this.run(null, () => this.saveRegistration()));
-        required<HTMLButtonElement>(this.host, "[data-cancel-registration]").addEventListener("click", () => this.cancelRegistration());
-        this.registrationImage.addEventListener("click", event => this.captureSourcePoint(event));
-        this.map.setClickInterceptor(point => this.consumeWorldClick(point));
+        this.registrationController = new SourceMapRegistrationController(
+            this.host,
+            this.api,
+            this.map,
+            this.getWorld,
+            this.applyWorld,
+            this.mapHint,
+            this.errorHost,
+            action => { void this.run(null, action); },
+            async () => { await this.refresh(); });
+        required<HTMLButtonElement>(this.host, "[data-register]").addEventListener("click", () =>
+            this.registrationController.begin(this.selected));
+        required<HTMLButtonElement>(this.host, "[data-delete]").addEventListener("click", () =>
+            void this.run(null, () => this.deleteSelected()));
     }
 
     public async initialize(): Promise<void> {
@@ -150,9 +143,7 @@ export class SourceMapWorkspace {
 
     public dispose(): void {
         this.disposed = true;
-        this.cancelRegistration();
-        this.map.setClickInterceptor(null);
-        this.registrationImage.removeAttribute("src");
+        this.registrationController.dispose();
     }
 
     private renderGeographies(): void {
@@ -246,7 +237,7 @@ export class SourceMapWorkspace {
             registerButton.addEventListener("click", () => {
                 this.selected = map;
                 this.renderSelected();
-                this.beginRegistration();
+                this.registrationController.begin(this.selected);
             });
             controls.append(visibleLabel, selectButton, registerButton);
             row.append(heading, metadata, controls);
@@ -531,111 +522,10 @@ export class SourceMapWorkspace {
         const id = this.selected.id;
         const updated = await this.api.deleteSourceMap(world.id, id, world.version);
         this.map.renderer.hiddenSourceMapIds.delete(id);
-        if (this.registration?.map.id === id) this.cancelRegistration();
+        this.registrationController.cancelIfMap(id);
         this.selected = null;
         this.applyWorld(updated);
         await this.refresh();
-    }
-
-    private beginRegistration(): void {
-        if (!this.selected) throw new Error("Select a source-map representation first.");
-        if (this.selected.pixelWidth <= 0 || this.selected.pixelHeight <= 0) {
-            throw new Error("This source map has no raster dimensions and must be re-imported before registration.");
-        }
-        this.registration = { map: this.selected, pairs: [], pendingSource: null };
-        this.registrationPanel.hidden = false;
-        this.registrationImage.src = this.api.sourceMapAssetUrl(this.getWorld().id, this.selected.id);
-        this.map.renderer.hiddenSourceMapIds.delete(this.selected.id);
-        this.map.renderer.registrationPreview = null;
-        this.mapHint.textContent = "Registration mode: click a landmark in the source image first, then click the same landmark on the overworld.";
-        this.renderRegistrationStatus();
-        this.map.requestRender();
-    }
-
-    private captureSourcePoint(event: MouseEvent): void {
-        if (!this.registration) return;
-        if (this.registration.pairs.length >= 3) return;
-        const rect = this.registrationImage.getBoundingClientRect();
-        if (rect.width <= 0 || rect.height <= 0 || this.registrationImage.naturalWidth <= 0 || this.registrationImage.naturalHeight <= 0) return;
-        const sourcePixel = {
-            x: (event.clientX - rect.left) * this.registrationImage.naturalWidth / rect.width,
-            y: (event.clientY - rect.top) * this.registrationImage.naturalHeight / rect.height
-        };
-        this.registration.pendingSource = sourcePixel;
-        this.mapHint.textContent = `Registration mode: source point ${this.registration.pairs.length + 1} selected at ${sourcePixel.x.toFixed(1)}, ${sourcePixel.y.toFixed(1)}. Click the corresponding overworld point.`;
-        this.renderRegistrationStatus();
-    }
-
-    private consumeWorldClick(point: WorldPoint): boolean {
-        if (!this.registration) return false;
-        if (!this.registration.pendingSource) {
-            this.mapHint.textContent = "Registration mode is active. Choose a source-image point before clicking the overworld.";
-            return true;
-        }
-        this.registration.pairs.push({ sourcePixel: this.registration.pendingSource, worldPoint: point });
-        this.registration.pendingSource = null;
-        if (this.registration.pairs.length === 3) {
-            try {
-                const transform = solveAffine(this.registration.pairs);
-                this.map.renderer.registrationPreview = { sourceMapId: this.registration.map.id, transform };
-                this.mapHint.textContent = "Registration preview is active. Inspect the raster overlay, then save or clear the control points.";
-                this.map.requestRender();
-            } catch (value) {
-                this.map.renderer.registrationPreview = null;
-                showUiError(this.errorHost, value);
-            }
-        } else {
-            this.mapHint.textContent = `Registration mode: ${this.registration.pairs.length} of 3 pairs captured. Choose the next source-image point.`;
-        }
-        this.renderRegistrationStatus();
-        return true;
-    }
-
-    private clearRegistration(): void {
-        if (!this.registration) return;
-        this.registration.pairs = [];
-        this.registration.pendingSource = null;
-        this.map.renderer.registrationPreview = null;
-        this.mapHint.textContent = "Registration points cleared. Choose a source-image point to begin again.";
-        this.renderRegistrationStatus();
-        this.map.requestRender();
-    }
-
-    private cancelRegistration(): void {
-        this.registration = null;
-        this.registrationPanel.hidden = true;
-        this.registrationImage.removeAttribute("src");
-        this.map.renderer.registrationPreview = null;
-        this.mapHint.textContent = "Use the authoring controls to place geometry. Shift-drag or middle-drag pans; wheel zooms.";
-        this.map.requestRender();
-    }
-
-    private async saveRegistration(): Promise<void> {
-        if (!this.registration || this.registration.pairs.length !== 3 || !this.map.renderer.registrationPreview) {
-            throw new Error("Three valid source/world control-point pairs are required before registration can be saved.");
-        }
-        const world = this.getWorld();
-        const updated = await this.api.registerSourceMap(
-            world.id,
-            this.registration.map.id,
-            this.registration.pairs,
-            world.version);
-        this.applyWorld(updated);
-        const selectedId = this.registration.map.id;
-        this.cancelRegistration();
-        await this.refresh();
-        this.selected = this.details.find(item => item.id === selectedId) ?? null;
-        this.renderSelected();
-    }
-
-    private renderRegistrationStatus(): void {
-        if (!this.registration) return;
-        const pending = this.registration.pendingSource
-            ? ` Pending source: ${this.registration.pendingSource.x.toFixed(1)}, ${this.registration.pendingSource.y.toFixed(1)}.`
-            : "";
-        this.registrationStatus.textContent = `${this.registration.pairs.length}/3 pairs captured.${pending}`;
-        required<HTMLButtonElement>(this.host, "[data-save-registration]").disabled =
-            this.registration.pairs.length !== 3 || !this.map.renderer.registrationPreview;
     }
 
     private async run(form: HTMLFormElement | null, action: () => Promise<void>): Promise<void> {
