@@ -5,6 +5,7 @@ import type { Location, Overworld, SpatialFeature, WorldPoint } from "./types";
 import { clearUiError, showUiError } from "./ui-error";
 import { customUnitFieldsVisible, gridWithSelectedUnit } from "./world-form";
 import type { DistanceUnitKind } from "./world-form";
+import { input, integer, numeric, required, select } from "./ui/dom";
 
 export async function renderWorldEditor(
     root: HTMLElement,
@@ -432,32 +433,3 @@ function setFormPending(form: HTMLFormElement, pending: boolean): void {
     }
 }
 
-function required<T extends Element>(root: ParentNode, selector: string): T {
-    const value = root.querySelector<T>(selector);
-    if (!value) throw new Error(`Missing ${selector}`);
-    return value;
-}
-
-function input(root: ParentNode, name: string): HTMLInputElement {
-    const value = root.querySelector<HTMLInputElement>(`input[name="${name}"]`);
-    if (!value) throw new Error(`Missing input ${name}`);
-    return value;
-}
-
-function select(root: ParentNode, name: string): HTMLSelectElement {
-    const value = root.querySelector<HTMLSelectElement>(`select[name="${name}"]`);
-    if (!value) throw new Error(`Missing select ${name}`);
-    return value;
-}
-
-function numeric(element: HTMLInputElement): number {
-    const value = Number(element.value);
-    if (!Number.isFinite(value)) throw new Error(`${element.name} must be a finite number.`);
-    return value;
-}
-
-function integer(element: HTMLInputElement): number {
-    const value = numeric(element);
-    if (!Number.isInteger(value)) throw new Error(`${element.name} must be an integer.`);
-    return value;
-}

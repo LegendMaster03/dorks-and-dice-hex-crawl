@@ -15,6 +15,7 @@ import type {
     WorldPoint
 } from "./types";
 import { clearUiError, showUiError } from "./ui-error";
+import { input, required, select } from "./ui/dom";
 
 const newGeographyValue = "__new_geography__";
 
@@ -674,20 +675,3 @@ function setPending(form: HTMLFormElement, pending: boolean): void {
     for (const button of form.querySelectorAll<HTMLButtonElement>("button")) button.disabled = pending;
 }
 
-function required<T extends Element>(root: ParentNode, selector: string): T {
-    const value = root.querySelector<T>(selector);
-    if (!value) throw new Error(`Missing ${selector}`);
-    return value;
-}
-
-function input(root: ParentNode, name: string): HTMLInputElement {
-    const value = root.querySelector<HTMLInputElement>(`input[name="${name}"]`);
-    if (!value) throw new Error(`Missing input ${name}`);
-    return value;
-}
-
-function select(root: ParentNode, name: string): HTMLSelectElement {
-    const value = root.querySelector<HTMLSelectElement>(`select[name="${name}"]`);
-    if (!value) throw new Error(`Missing select ${name}`);
-    return value;
-}

@@ -8,6 +8,7 @@ import type {
     StartStandaloneCrawlSessionInput
 } from "./types";
 import { clearUiError, showUiError } from "./ui-error";
+import { input, integer, numeric, option, required, select } from "./ui/dom";
 
 export async function renderAssistantEntry(
     root: HTMLElement,
@@ -344,45 +345,9 @@ function openLabel(assistant: ExpeditionAssistant, session: ExpeditionSummary): 
     return "Open encounter cadence";
 }
 
-function option(value: string, label: string): HTMLOptionElement {
-    const result = document.createElement("option");
-    result.value = value;
-    result.textContent = label;
-    return result;
-}
-
-function required<T extends Element>(root: ParentNode, selector: string): T {
-    const value = root.querySelector<T>(selector);
-    if (!value) throw new Error(`Missing ${selector}`);
-    return value;
-}
-
-function input(root: ParentNode, name: string): HTMLInputElement {
-    const value = root.querySelector<HTMLInputElement>(`input[name="${name}"]`);
-    if (!value) throw new Error(`Missing input ${name}`);
-    return value;
-}
-
-function select(root: ParentNode, name: string): HTMLSelectElement {
-    const value = root.querySelector<HTMLSelectElement>(`select[name="${name}"]`);
-    if (!value) throw new Error(`Missing select ${name}`);
-    return value;
-}
-
-function numeric(element: HTMLInputElement): number {
-    const value = Number(element.value);
-    if (!Number.isFinite(value)) throw new Error(`${element.name} must be a finite number.`);
-    return value;
-}
-
 function positive(element: HTMLInputElement): number {
     const value = numeric(element);
     if (value <= 0) throw new Error(`${element.name} must be positive.`);
     return value;
 }
 
-function integer(element: HTMLInputElement): number {
-    const value = numeric(element);
-    if (!Number.isInteger(value)) throw new Error(`${element.name} must be an integer.`);
-    return value;
-}

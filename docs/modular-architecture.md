@@ -131,7 +131,7 @@ This first slice deliberately preserves behavior and public routes. The next str
 
 ## Browser-client locality
 
-The browser bootstrap now dispatches through a validated client-module catalog rather than importing and switching over every feature view directly. Home, Worlds, Expeditions, and Assistants own their route kinds and rendering composition. The catalog rejects duplicate or missing route ownership, which gives new client capabilities the same explicit composition model as server modules.
+The browser bootstrap now dispatches through a validated client-module catalog rather than importing and switching over every feature view directly. Home, Worlds, Expeditions, and Assistants own their route kinds and rendering composition. The catalog rejects duplicate or missing route ownership, which gives new client capabilities the same explicit composition model as server modules. Generic DOM/form helpers that were duplicated across several feature views now live under `Client/src/ui/`; feature-specific helpers remain with their owning view.
 
 ## Persistence locality
 

@@ -3,6 +3,7 @@ import { customUnitFieldsVisible } from "./world-form";
 import type { DistanceUnitKind } from "./world-form";
 import type { ExpeditionSummary, OverworldSummary, RuntimeProfile, StartStandaloneCrawlSessionInput } from "./types";
 import { clearUiError, showUiError } from "./ui-error";
+import { input, integer, numeric, option, required, select } from "./ui/dom";
 
 const ABSTRACT_CONTEXT = "__abstract__";
 const NON_SPATIAL_CONTEXT = "__nonspatial__";
@@ -313,45 +314,9 @@ function action(label: string, onClick: () => void, primary = false): HTMLButton
     return button;
 }
 
-function option(value: string, label: string): HTMLOptionElement {
-    const result = document.createElement("option");
-    result.value = value;
-    result.textContent = label;
-    return result;
-}
-
 function formatTimestamp(value: string): string {
     const date = new Date(value);
     if (Number.isNaN(date.valueOf())) return value;
     return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(date);
 }
 
-function required<T extends Element>(root: ParentNode, selector: string): T {
-    const value = root.querySelector<T>(selector);
-    if (!value) throw new Error(`Missing ${selector}`);
-    return value;
-}
-
-function input(root: ParentNode, name: string): HTMLInputElement {
-    const value = root.querySelector<HTMLInputElement>(`input[name="${name}"]`);
-    if (!value) throw new Error(`Missing input ${name}`);
-    return value;
-}
-
-function select(root: ParentNode, name: string): HTMLSelectElement {
-    const value = root.querySelector<HTMLSelectElement>(`select[name="${name}"]`);
-    if (!value) throw new Error(`Missing select ${name}`);
-    return value;
-}
-
-function numeric(element: HTMLInputElement): number {
-    const value = Number(element.value);
-    if (!Number.isFinite(value)) throw new Error(`${element.name} must be a finite number.`);
-    return value;
-}
-
-function integer(element: HTMLInputElement): number {
-    const value = numeric(element);
-    if (!Number.isInteger(value)) throw new Error(`${element.name} must be an integer.`);
-    return value;
-}
