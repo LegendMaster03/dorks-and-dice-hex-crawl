@@ -2,33 +2,32 @@ using System.Security.Claims;
 using HexCrawl.Application;
 using HexCrawl.Application.Persistence;
 using HexCrawl.Domain.Runtime;
+using HexCrawl.Web.Api;
+using HexCrawl.Web.Framework;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 
-namespace HexCrawl.Web.Api;
+namespace HexCrawl.Web.Modules.Expeditions;
 
-public static class PersistentApiEndpoints
+public sealed class ExpeditionModule : IHexCrawlModule
 {
-    public static void Map(WebApplication app)
+    public HexCrawlModuleManifest Manifest { get; } = new(
+        Id: "expeditions",
+        DisplayName: "Expedition runtime and assistants")
     {
-        var api = app.MapGroup("/api");
+        Dependencies = ["worlds"]
+    };
 
-        api.MapGet("/runtime/profiles", () => Results.Ok(
-            CrawlProcedureCatalog.All.Select(RuntimeProfileContract.From).ToArray()));
-        api.MapGet("/presentation/presets", () => Results.Ok(
-            MapPresentationPolicyCatalog.All.Select(PresentationProfileContract.From).ToArray()));
+    public void RegisterServices(IServiceCollection services)
+    {
+        services.AddScoped<CrawlSessionContextResolver>();
+        services.AddScoped<CrawlSessionService>();
+        services.AddScoped<ExpeditionWorkbenchService>();
+        services.AddScoped<ExpeditionAssistantService>();
+    }
 
-        api.MapGet("/overworlds", ListOverworldsAsync);
-        api.MapPost("/overworlds", CreateOverworldAsync);
-        api.MapGet("/overworlds/{overworldId:guid}", GetOverworldAsync);
-        api.MapPut("/overworlds/{overworldId:guid}", UpdateOverworldAsync);
-
-        api.MapPost("/overworlds/{overworldId:guid}/locations", CreateLocationAsync);
-        api.MapPut("/overworlds/{overworldId:guid}/locations/{locationId:guid}", UpdateLocationAsync);
-        api.MapDelete("/overworlds/{overworldId:guid}/locations/{locationId:guid}", DeleteLocationAsync);
-
-        api.MapPost("/overworlds/{overworldId:guid}/features", CreateFeatureAsync);
-        api.MapPut("/overworlds/{overworldId:guid}/features/{featureId:guid}", UpdateFeatureAsync);
-        api.MapDelete("/overworlds/{overworldId:guid}/features/{featureId:guid}", DeleteFeatureAsync);
-
+    public void MapEndpoints(RouteGroupBuilder api)
+    {
         api.MapGet("/expeditions", ListAllExpeditionsAsync);
         api.MapPost("/expeditions", StartStandaloneSessionAsync);
         api.MapGet("/overworlds/{overworldId:guid}/expeditions", ListExpeditionsAsync);
@@ -41,95 +40,6 @@ public static class PersistentApiEndpoints
         api.MapPost("/expeditions/{expeditionId:guid}/assistants/navigation", RecordNavigationAssistantAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/assistants/encounters", RecordEncounterAssistantAsync);
     }
-
-    private static async Task<IResult> ListOverworldsAsync(
-        HttpContext context,
-        HexCrawlService service,
-        CancellationToken cancellationToken) =>
-        Results.Ok(await service.ListOverworldsAsync(UserId(context), cancellationToken));
-
-    private static async Task<IResult> CreateOverworldAsync(
-        CreateOverworldRequest request,
-        HttpContext context,
-        HexCrawlService service,
-        CancellationToken cancellationToken) =>
-        Results.Created(
-            "/api/overworlds",
-            OverworldContract.From(await service.CreateOverworldAsync(UserId(context), request.ToCommand(), cancellationToken)));
-
-    private static async Task<IResult> GetOverworldAsync(
-        Guid overworldId,
-        HttpContext context,
-        HexCrawlService service,
-        CancellationToken cancellationToken) =>
-        Results.Ok(OverworldContract.From(await service.GetOverworldAsync(overworldId, UserId(context), cancellationToken)));
-
-    private static async Task<IResult> UpdateOverworldAsync(
-        Guid overworldId,
-        UpdateOverworldRequest request,
-        HttpContext context,
-        HexCrawlService service,
-        CancellationToken cancellationToken) =>
-        Results.Ok(OverworldContract.From(await service.UpdateOverworldAsync(
-            overworldId, UserId(context), request.ToCommand(), cancellationToken)));
-
-    private static async Task<IResult> CreateLocationAsync(
-        Guid overworldId,
-        LocationMutationRequest request,
-        HttpContext context,
-        HexCrawlService service,
-        CancellationToken cancellationToken) =>
-        Results.Ok(OverworldContract.From(await service.CreateLocationAsync(
-            overworldId, UserId(context), request.ToCreateCommand(), cancellationToken)));
-
-    private static async Task<IResult> UpdateLocationAsync(
-        Guid overworldId,
-        Guid locationId,
-        LocationMutationRequest request,
-        HttpContext context,
-        HexCrawlService service,
-        CancellationToken cancellationToken) =>
-        Results.Ok(OverworldContract.From(await service.UpdateLocationAsync(
-            overworldId, locationId, UserId(context), request.ToUpdateCommand(), cancellationToken)));
-
-    private static async Task<IResult> DeleteLocationAsync(
-        Guid overworldId,
-        Guid locationId,
-        long expectedVersion,
-        HttpContext context,
-        HexCrawlService service,
-        CancellationToken cancellationToken) =>
-        Results.Ok(OverworldContract.From(await service.DeleteLocationAsync(
-            overworldId, locationId, UserId(context), expectedVersion, cancellationToken)));
-
-    private static async Task<IResult> CreateFeatureAsync(
-        Guid overworldId,
-        FeatureMutationRequest request,
-        HttpContext context,
-        HexCrawlService service,
-        CancellationToken cancellationToken) =>
-        Results.Ok(OverworldContract.From(await service.CreateFeatureAsync(
-            overworldId, UserId(context), request.ToCreateCommand(), cancellationToken)));
-
-    private static async Task<IResult> UpdateFeatureAsync(
-        Guid overworldId,
-        Guid featureId,
-        FeatureMutationRequest request,
-        HttpContext context,
-        HexCrawlService service,
-        CancellationToken cancellationToken) =>
-        Results.Ok(OverworldContract.From(await service.UpdateFeatureAsync(
-            overworldId, featureId, UserId(context), request.ToUpdateCommand(), cancellationToken)));
-
-    private static async Task<IResult> DeleteFeatureAsync(
-        Guid overworldId,
-        Guid featureId,
-        long expectedVersion,
-        HttpContext context,
-        HexCrawlService service,
-        CancellationToken cancellationToken) =>
-        Results.Ok(OverworldContract.From(await service.DeleteFeatureAsync(
-            overworldId, featureId, UserId(context), expectedVersion, cancellationToken)));
 
     private static async Task<IResult> ListAllExpeditionsAsync(
         HttpContext context,
@@ -174,7 +84,10 @@ public static class PersistentApiEndpoints
     {
         var owner = UserId(context);
         var expedition = await workbench.StartAsync(
-            overworldId, owner, request.ToCommand(), cancellationToken);
+            overworldId,
+            owner,
+            request.ToCommand(),
+            cancellationToken);
         return Results.Created(
             $"/api/expeditions/{expedition.Id:D}",
             await ContractAsync(expedition, owner, service, cancellationToken));
@@ -201,7 +114,10 @@ public static class PersistentApiEndpoints
     {
         var owner = UserId(context);
         var expedition = await workbench.AdvanceAsync(
-            expeditionId, owner, request.ToCommand(), cancellationToken);
+            expeditionId,
+            owner,
+            request.ToCommand(),
+            cancellationToken);
         return Results.Ok(await ContractAsync(expedition, owner, service, cancellationToken));
     }
 
@@ -214,7 +130,10 @@ public static class PersistentApiEndpoints
     {
         var owner = UserId(context);
         var expedition = await service.DiscoverAsync(
-            expeditionId, owner, request.ToCommand(), cancellationToken);
+            expeditionId,
+            owner,
+            request.ToCommand(),
+            cancellationToken);
         return Results.Ok(await ContractAsync(expedition, owner, service, cancellationToken));
     }
 
@@ -228,7 +147,10 @@ public static class PersistentApiEndpoints
     {
         var owner = UserId(context);
         var expedition = await assistants.RecordTravelWatchAsync(
-            expeditionId, owner, request.ToCommand(), cancellationToken);
+            expeditionId,
+            owner,
+            request.ToCommand(),
+            cancellationToken);
         return Results.Ok(await ContractAsync(expedition, owner, service, cancellationToken));
     }
 
@@ -242,7 +164,10 @@ public static class PersistentApiEndpoints
     {
         var owner = UserId(context);
         var expedition = await assistants.RecordNonSpatialWatchAsync(
-            expeditionId, owner, request.ToCommand(), cancellationToken);
+            expeditionId,
+            owner,
+            request.ToCommand(),
+            cancellationToken);
         return Results.Ok(await ContractAsync(expedition, owner, service, cancellationToken));
     }
 
@@ -256,7 +181,10 @@ public static class PersistentApiEndpoints
     {
         var owner = UserId(context);
         var expedition = await assistants.RecordNavigationAsync(
-            expeditionId, owner, request.ToCommand(), cancellationToken);
+            expeditionId,
+            owner,
+            request.ToCommand(),
+            cancellationToken);
         return Results.Ok(await ContractAsync(expedition, owner, service, cancellationToken));
     }
 
@@ -270,7 +198,10 @@ public static class PersistentApiEndpoints
     {
         var owner = UserId(context);
         var expedition = await assistants.RecordEncounterCadenceAsync(
-            expeditionId, owner, request.ToCommand(), cancellationToken);
+            expeditionId,
+            owner,
+            request.ToCommand(),
+            cancellationToken);
         return Results.Ok(await ContractAsync(expedition, owner, service, cancellationToken));
     }
 
@@ -282,7 +213,10 @@ public static class PersistentApiEndpoints
     {
         if (expedition.Context is WorldBoundCrawlSessionContext worldContext)
         {
-            var world = await service.GetOverworldAsync(worldContext.WorldId, ownerUserId, cancellationToken);
+            var world = await service.GetOverworldAsync(
+                worldContext.WorldId,
+                ownerUserId,
+                cancellationToken);
             return ExpeditionWorkbenchContract.From(expedition, world.World);
         }
 
@@ -292,5 +226,6 @@ public static class PersistentApiEndpoints
     private static string UserId(HttpContext context) =>
         context.User.FindFirstValue(ClaimTypes.NameIdentifier) is { Length: > 0 } value
             ? value
-            : throw new UnauthorizedAccessException("An authenticated Tool Host or explicitly configured standalone development identity is required.");
+            : throw new UnauthorizedAccessException(
+                "An authenticated Tool Host or explicitly configured standalone development identity is required.");
 }

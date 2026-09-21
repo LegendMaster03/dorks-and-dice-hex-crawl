@@ -12,9 +12,8 @@ namespace HexCrawl.Web.Api;
 
 public static class SourceMapApiEndpoints
 {
-    public static void Map(WebApplication app)
+    public static void Map(RouteGroupBuilder api)
     {
-        var api = app.MapGroup("/api/overworlds/{overworldId:guid}/source-maps");
         api.MapGet("", ListAsync);
         api.MapPost("", UploadAsync);
         api.MapPost("/wonderdraft/inspect", InspectWonderdraftAsync);

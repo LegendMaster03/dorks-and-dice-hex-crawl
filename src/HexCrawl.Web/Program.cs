@@ -8,6 +8,7 @@ using HexCrawl.Infrastructure.Hosting;
 using HexCrawl.Infrastructure.Persistence;
 using HexCrawl.Web.Api;
 using HexCrawl.Web.Authentication;
+using HexCrawl.Web.Framework;
 using Microsoft.AspNetCore.Http.Features;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -48,12 +49,7 @@ if (!string.IsNullOrWhiteSpace(toolHostBaseUrl))
 
 builder.Services.AddSingleton<IHexCrawlStore>(_ => new SqliteHexCrawlStore(connectionString));
 builder.Services.AddSingleton<IMapAssetStore>(_ => new FilesystemMapAssetStore(assetRoot));
-builder.Services.AddScoped<HexCrawlService>();
-builder.Services.AddScoped<CrawlSessionContextResolver>();
-builder.Services.AddScoped<CrawlSessionService>();
-builder.Services.AddScoped<ExpeditionWorkbenchService>();
-builder.Services.AddScoped<ExpeditionAssistantService>();
-builder.Services.AddScoped<SourceMapApplicationService>();
+HexCrawlModuleCatalog.RegisterServices(builder.Services);
 builder.Services
     .AddHttpClient<IToolHostAuthenticationClient, DorksAndDiceToolHostAuthenticationClient>(client =>
     {
@@ -95,8 +91,7 @@ app.MapGet("/api", () => Results.Ok(new
     endpointFamilies = new[] { "overworlds", "features", "locations", "source-maps", "expeditions", "runtime", "presentation" }
 }));
 
-PersistentApiEndpoints.Map(app);
-SourceMapApiEndpoints.Map(app);
+HexCrawlModuleCatalog.MapEndpoints(app);
 
 app.MapGet("/", () => Shell());
 app.MapFallback((HttpContext context) =>
