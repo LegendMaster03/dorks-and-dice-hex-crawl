@@ -141,12 +141,13 @@ test("DM-facing world authoring copy explains empty states and keeps deeper map 
 test("direction controls retain numeric values but present axial step labels", () => {
     const runtime = fs.readFileSync(path.join(sourceDir, "runtime-view.ts"), "utf8");
     const expedition = fs.readFileSync(path.join(sourceDir, "expedition-view.ts"), "utf8");
+    const watch = fs.readFileSync(path.join(sourceDir, "expedition-watch-controller.ts"), "utf8");
     const assistant = fs.readFileSync(path.join(sourceDir, "expedition-assistant-view.ts"), "utf8");
     assert.match(runtime, /"Toward \+q"/);
     assert.match(runtime, /"Toward -q"/);
     assert.match(expedition, /<option value="\$\{value\}">\$\{directionLabel\(value\)\}<\/option>/);
     assert.match(assistant, /\$\{directionLabel\(value\)\}<\/option>/);
-    assert.match(expedition, /persisted runtime values remain 0–5/);
+    assert.match(watch, /persisted runtime values remain 0–5/);
 });
 
 
