@@ -107,7 +107,7 @@ Owns persisted crawl sessions, the expedition workbench, runtime advancement, di
 
 ### Source Maps
 
-Owns source-map registration, raster assets, and import workflows such as Wonderdraft. It explicitly depends on Worlds because imported material is promoted into ordinary semantic world objects.
+Owns source-map registration, raster assets, and import workflows such as Wonderdraft. It explicitly depends on Worlds because imported material is promoted into ordinary semantic world objects. Its HTTP surface keeps one route-composition entry point while raster/source-map handlers and Wonderdraft handlers live in separate partial files, so importer work does not require editing ordinary asset CRUD.
 
 ### Reference Data
 
