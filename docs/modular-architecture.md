@@ -117,6 +117,10 @@ Owns read-only procedure and presentation catalogs. It has no module dependency.
 
 Authentication against the Dorks & Dice Tool Host, persistence implementation selection, filesystem asset-root configuration, health checks, and deployment-specific configuration remain host/framework composition concerns. A feature module should not acquire knowledge of TrueNAS, hostnames, reverse proxies, or deployment secrets.
 
+## Assistant domain locality
+
+The focused Travel/Watch, Navigation, and Encounter Cadence tools share the stable `CrawlAssistantActions` API, but their domain implementations live in separate partial files under `Domain/Runtime/Assistants/`. Shared event/provenance and distance helpers remain in one support partial. This mirrors the user-visible sub-tools without introducing separate runtime abstractions or changing deterministic state transitions.
+
 ## Deterministic runtime locality
 
 `CrawlRuntimeEngine` remains one sealed deterministic engine with one public `Advance` entry point. Its implementation is physically divided under `Domain/Runtime/Engine/` into watch lifecycle, navigation/direction handling, movement, and support/event collection. This is intentionally a partial-class split rather than an object graph: it improves human navigation and limits routine edits without changing execution order, state ownership, or introducing replaceable runtime stages that the domain does not currently need.
