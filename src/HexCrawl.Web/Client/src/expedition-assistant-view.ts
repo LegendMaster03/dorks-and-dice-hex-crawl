@@ -114,7 +114,7 @@ export async function renderExpeditionAssistant(
         host.replaceChildren();
         if (relevant.length === 0) {
             const item = document.createElement("li");
-            item.textContent = "No focused-assistant history yet.";
+            item.textContent = "No relevant history yet. Record the first result in this assistant to create history.";
             host.append(item);
             return;
         }
@@ -397,7 +397,7 @@ function navigationStatus(state: SpatialRuntimeExpedition): HTMLElement[] {
 
 function directionOptions(selected: number | null): string {
     return [0, 1, 2, 3, 4, 5]
-        .map(value => `<option value="${value}" ${selected === value ? "selected" : ""}>${value}</option>`)
+        .map(value => `<option value="${value}" ${selected === value ? "selected" : ""}>${directionLabel(value)}</option>`)
         .join("");
 }
 

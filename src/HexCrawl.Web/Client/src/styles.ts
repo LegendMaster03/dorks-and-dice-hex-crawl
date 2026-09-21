@@ -135,6 +135,7 @@ export function ensureStyles(): void {
         }
         #tool-root.hex-crawl-app *, #tool-root.hex-crawl-app *::before, #tool-root.hex-crawl-app *::after { box-sizing: border-box; }
         #tool-root.hex-crawl-app [hidden] { display: none !important; }
+        .hc-sr-only { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0, 0, 0, 0) !important; white-space: nowrap !important; border: 0 !important; }
         .hc-page { width: 100%; max-width: 1600px; margin: 0 auto; padding: 1rem; }
         .hc-page-header { display: flex; justify-content: space-between; gap: 1rem; align-items: flex-start; margin-bottom: 1rem; }
         .hc-page-header h1 { margin: 0; color: var(--hc-text-strong); font-size: clamp(1.45rem, 2vw, 1.8rem); line-height: 1.2; }
@@ -182,7 +183,7 @@ export function ensureStyles(): void {
         .hc-form input[type="checkbox"] { width: 1rem; height: 1rem; margin: 0; accent-color: var(--hc-primary); }
         .hc-form label:has(> input[type="checkbox"]) { display: flex; grid-template-columns: none; flex-direction: row; align-items: center; gap: .5rem; font-weight: 500; }
         .hc-form input:not([type="checkbox"]):focus-visible, .hc-form select:focus-visible, .hc-form textarea:focus-visible,
-        #tool-root.hex-crawl-app button:focus-visible, .hc-sidebar summary:focus-visible {
+        #tool-root.hex-crawl-app button:focus-visible, .hc-sidebar summary:focus-visible, .hc-map-canvas:focus-visible {
             border-color: var(--hc-focus); outline: .18rem solid color-mix(in srgb, var(--hc-focus) 35%, transparent); outline-offset: .08rem;
         }
         #tool-root.hex-crawl-app button {
@@ -220,6 +221,8 @@ export function ensureStyles(): void {
         .hc-map-host { min-height: 560px; height: 68vh; overflow: hidden; border: 1px solid var(--hc-map-border); border-radius: .55rem; background: var(--hc-map-bg); }
         .hc-map-canvas { display: block; width: 100%; height: 100%; min-height: 560px; touch-action: none; }
         .hc-sidebar { display: grid; gap: .6rem; max-height: 82vh; overflow: auto; padding-right: .12rem; }
+        .hc-world-editor .hc-sidebar { max-height: none; overflow: visible; padding-right: 0; }
+        .hc-world-editor .hc-map-panel { position: sticky; top: .75rem; }
         .hc-sidebar details { box-shadow: none; }
         .hc-sidebar details summary { cursor: pointer; font-weight: 700; }
         .hc-inline { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: .5rem; }
@@ -252,6 +255,7 @@ export function ensureStyles(): void {
             .hc-columns, .hc-workspace-grid, .hc-tracker-grid, .hc-assistant-grid, .hc-home-three-column-grid { grid-template-columns: 1fr; }
             .hc-home-main-grid > :first-child { grid-column: auto; }
             .hc-sidebar { max-height: none; overflow: visible; }
+            .hc-world-editor .hc-map-panel { position: static; }
             .hc-map-host, .hc-map-canvas { min-height: 400px; height: 55vh; }
         }
         @media (max-width: 560px) {

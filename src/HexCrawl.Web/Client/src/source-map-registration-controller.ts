@@ -47,7 +47,7 @@ export class SourceMapRegistrationController {
     }
 
     public begin(sourceMap: SourceMapDetail | null): void {
-        if (!sourceMap) throw new Error("Select a source-map representation first.");
+        if (!sourceMap) throw new Error("Select a raster map first.");
         if (sourceMap.pixelWidth <= 0 || sourceMap.pixelHeight <= 0) {
             throw new Error("This source map has no raster dimensions and must be re-imported before registration.");
         }

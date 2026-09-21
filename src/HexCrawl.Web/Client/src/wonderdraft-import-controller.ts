@@ -42,7 +42,7 @@ export class WonderdraftImportController {
         inspectionOnly.value = "";
         inspectionOnly.textContent = registered.length > 0
             ? "Inspection only — do not map candidates"
-            : "No registered source maps available";
+            : "No registered raster maps available";
         this.sourceMapSelect.append(inspectionOnly);
 
         for (const map of registered) {
@@ -133,7 +133,7 @@ export class WonderdraftImportController {
         const summary = document.createElement("p");
         summary.className = "hc-hint";
         summary.textContent =
-            `${supported} of ${candidates.length} records have supported geometry. Every candidate defaults to Skip; choose an explicit semantic target and category to import it.`;
+            `${supported} of ${candidates.length} records have supported geometry. Every candidate defaults to Skip; choose the kind of world object to create and assign a category before importing it.`;
         this.result.append(summary);
 
         const maximumRendered = 200;
@@ -295,7 +295,7 @@ export class WonderdraftImportController {
         const success = document.createElement("p");
         success.className = "hc-hint";
         success.textContent =
-            `Imported ${selections.length} reviewed Wonderdraft candidate${selections.length === 1 ? "" : "s"} as semantic world objects.`;
+            `Imported ${selections.length} reviewed Wonderdraft candidate${selections.length === 1 ? "" : "s"} as world locations or map features.`;
         this.result.append(success);
         await this.onImported();
     }
