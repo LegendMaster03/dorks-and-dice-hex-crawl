@@ -52,6 +52,29 @@ Modules/
     ReferenceData/
 ```
 
+Application follows the same feature ownership without changing its public namespace:
+
+```text
+HexCrawl.Application/
+    HexCrawlService.cs
+    Worlds/
+        WorldCommands.cs
+        HexCrawlService.Worlds.cs
+        HexCrawlService.WorldObjects.cs
+    Expeditions/
+        ExpeditionCommands.cs
+        ExpeditionWorkbenchService.cs
+        ExpeditionAssistantService.cs
+        ...
+        HexCrawlService.Expeditions.cs
+    SourceMaps/
+        SourceMapCommands.cs
+        SourceMapApplicationService.cs
+        HexCrawlService.SourceMaps.cs
+```
+
+`HexCrawlService` remains a compatibility facade, but its implementation is now physically separated by capability. This minimizes call-site churn while making feature ownership visible. New focused application services should live with their owning feature rather than enlarging the facade.
+
 The framework owns:
 
 - the module contract;
@@ -95,7 +118,7 @@ Authentication against the Dorks & Dice Tool Host, persistence implementation se
 
 This first slice deliberately preserves behavior and public routes. The next structural work should follow the same ownership boundaries instead of performing a broad rewrite:
 
-1. Split the oversized `HexCrawlService` by feature while retaining one public application facade where compatibility is useful. Partial-class files are acceptable as an intermediate step; longer term, services should be separated where their dependency sets and responsibilities differ.
+1. Reduce the remaining `HexCrawlService` compatibility surface when focused services already provide the same operation and consumers can migrate without churn. Do not create replacement services merely to eliminate a partial class.
 2. Split `CrawlRuntimeEngine` into explicit travel, navigation, encounter, and watch-transition collaborators only where doing so preserves the deterministic runtime boundary.
 3. Move Web API contracts next to their owning modules when shared-contract analysis shows that doing so does not create duplication.
 4. Give the browser client the same feature locality. Route handlers should be registered by client modules rather than accumulated in `app.ts`, and large views such as expedition and source-map workspaces should be decomposed into focused components.
