@@ -142,7 +142,7 @@ The browser bootstrap now dispatches through a validated client-module catalog r
 
 ## Format-adapter locality
 
-Binary and image import code remains implementation-oriented infrastructure rather than becoming domain abstractions. `RasterImageInspector` keeps one public inspection API, while PNG, JPEG, and WebP structural validation live in separate partial files. Shared bounded stream-reading mechanics remain in the core inspector. This makes format-specific maintenance local without changing accepted formats, validation behavior, or the upload contract.
+Binary and image import code remains implementation-oriented infrastructure rather than becoming domain abstractions. `RasterImageInspector` keeps one public inspection API, while PNG, JPEG, and WebP structural validation live in separate partial files. Shared bounded stream-reading mechanics remain in the core inspector. `WonderdraftProjectInspector` likewise keeps its public inspection/candidate API together while the Godot Variant parser and GCPF payload reader live in separate partial files. This makes format-specific maintenance local without changing accepted formats, validation behavior, decompression limits, or the upload contract.
 
 ## Persistence locality
 
