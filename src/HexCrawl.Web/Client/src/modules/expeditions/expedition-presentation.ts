@@ -1,7 +1,7 @@
 import { pauseInstruction, watchPhase } from "./expedition-workflow";
-import { directionLabel, formatDistance, formatHours } from "./runtime-view";
-import type { ExpeditionDetail, Overworld, SpatialRuntimeExpedition } from "./types";
-import { prettyEnum, required, statusCell } from "./ui/dom";
+import { directionLabel, formatDistance, formatHours } from "../../runtime-view";
+import type { ExpeditionDetail, Overworld, SpatialRuntimeExpedition } from "../../types";
+import { prettyEnum, required, statusCell } from "../../ui/dom";
 
 export function renderExpeditionStatus(root: HTMLElement, runtime: ExpeditionDetail): void {
     const state = spatialState(runtime);

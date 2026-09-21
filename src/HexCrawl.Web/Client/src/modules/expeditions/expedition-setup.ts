@@ -1,7 +1,7 @@
-import type { HexCrawlApi } from "./api";
+import type { HexCrawlApi } from "../../api";
 import { newExpeditionEncounterCadences } from "./expedition-input-policy";
-import type { PresentationProfile, RuntimeProfile } from "./types";
-import { clearUiError, showUiError } from "./ui-error";
+import type { PresentationProfile, RuntimeProfile } from "../../types";
+import { clearUiError, showUiError } from "../../ui-error";
 
 export async function enhanceExpeditionSetup(
     root: HTMLElement,

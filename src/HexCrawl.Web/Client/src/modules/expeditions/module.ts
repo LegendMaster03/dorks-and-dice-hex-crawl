@@ -1,5 +1,5 @@
-import { renderExpedition } from "../expedition-view";
-import type { HexCrawlClientModule } from "../client-module";
+import { renderExpedition } from "./expedition-view";
+import type { HexCrawlClientModule } from "../../client-module";
 
 export const expeditionsModule: HexCrawlClientModule = {
     id: "expeditions",

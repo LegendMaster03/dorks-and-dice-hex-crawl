@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { canonicalDistanceUnit, createOverworldInput, customUnitFieldsVisible, gridWithSelectedUnit } from "../.test-dist/world-form.js";
+import { canonicalDistanceUnit, createOverworldInput, customUnitFieldsVisible, gridWithSelectedUnit } from "../.test-dist/modules/worlds/world-form.js";
 
 const draft = {
     name: "Test world",

@@ -1,5 +1,5 @@
-import type { HexCrawlApi } from "./api";
-import { clearUiError, showUiError } from "./ui-error";
+import type { HexCrawlApi } from "../../api";
+import { clearUiError, showUiError } from "../../ui-error";
 import { createOverworldInput, customUnitFieldsVisible } from "./world-form";
 import type { DistanceUnitKind } from "./world-form";
 

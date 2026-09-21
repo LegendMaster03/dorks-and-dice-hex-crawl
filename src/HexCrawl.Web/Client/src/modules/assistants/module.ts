@@ -1,6 +1,6 @@
-import { renderAssistantEntry } from "../assistant-entry-view";
-import { renderExpeditionAssistant } from "../expedition-assistant-view";
-import type { HexCrawlClientModule } from "../client-module";
+import { renderAssistantEntry } from "./assistant-entry-view";
+import { renderExpeditionAssistant } from "./expedition-assistant-view";
+import type { HexCrawlClientModule } from "../../client-module";
 
 export const assistantsModule: HexCrawlClientModule = {
     id: "assistants",

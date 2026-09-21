@@ -1,14 +1,14 @@
-import type { HexCrawlApi } from "./api";
-import { customUnitFieldsVisible } from "./world-form";
-import type { DistanceUnitKind } from "./world-form";
-import type { ExpeditionAssistant } from "./tool-route";
+import type { HexCrawlApi } from "../../api";
+import { customUnitFieldsVisible } from "../worlds/world-form";
+import type { DistanceUnitKind } from "../worlds/world-form";
+import type { ExpeditionAssistant } from "../../tool-route";
 import type {
     ExpeditionSummary,
     RuntimeProfile,
     StartStandaloneCrawlSessionInput
-} from "./types";
-import { clearUiError, showUiError } from "./ui-error";
-import { input, integer, numeric, option, required, select } from "./ui/dom";
+} from "../../types";
+import { clearUiError, showUiError } from "../../ui-error";
+import { input, integer, numeric, option, required, select } from "../../ui/dom";
 
 export async function renderAssistantEntry(
     root: HTMLElement,

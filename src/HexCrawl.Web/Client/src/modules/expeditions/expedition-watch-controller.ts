@@ -1,14 +1,14 @@
-import type { HexCrawlApi } from "./api";
+import type { HexCrawlApi } from "../../api";
 import { manualEntryResolutionSources } from "./expedition-input-policy";
 import { encounterCheckDue, navigationResolutionDue, watchActionLabel } from "./expedition-workflow";
-import { formatHours } from "./runtime-view";
+import { formatHours } from "../../runtime-view";
 import type {
     ExpeditionDetail,
     Overworld,
     ResolutionSource,
     RuntimeAdvanceRequest,
     SpatialRuntimeExpedition
-} from "./types";
+} from "../../types";
 import {
     checkbox,
     input,
@@ -21,7 +21,7 @@ import {
     required,
     select,
     sourceLabel
-} from "./ui/dom";
+} from "../../ui/dom";
 
 export class ExpeditionWatchController {
     private readonly form: HTMLFormElement;

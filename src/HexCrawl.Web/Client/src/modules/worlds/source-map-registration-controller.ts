@@ -1,14 +1,14 @@
-import type { HexCrawlApi } from "./api";
-import { solveAffine } from "./affine-registration";
-import type { MapSurface } from "./map-surface";
+import type { HexCrawlApi } from "../../api";
+import { solveAffine } from "../../affine-registration";
+import type { MapSurface } from "../../map-surface";
 import type {
     Overworld,
     RegistrationControlPoint,
     SourceMapDetail,
     WorldPoint
-} from "./types";
-import { showUiError } from "./ui-error";
-import { required } from "./ui/dom";
+} from "../../types";
+import { showUiError } from "../../ui-error";
+import { required } from "../../ui/dom";
 
 type RegistrationState = {
     map: SourceMapDetail;

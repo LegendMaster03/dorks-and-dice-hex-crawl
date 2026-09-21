@@ -1,7 +1,7 @@
-import { enhanceExpeditionSetup } from "../expedition-setup";
-import { renderWorldEditor } from "../world-editor-view";
-import { renderWorldList } from "../world-list-view";
-import type { HexCrawlClientModule } from "../client-module";
+import { enhanceExpeditionSetup } from "../expeditions/expedition-setup";
+import { renderWorldEditor } from "./world-editor-view";
+import { renderWorldList } from "./world-list-view";
+import type { HexCrawlClientModule } from "../../client-module";
 
 export const worldsModule: HexCrawlClientModule = {
     id: "worlds",

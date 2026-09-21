@@ -1,11 +1,11 @@
-import type { HexCrawlApi } from "./api";
-import { MapSurface } from "./map-surface";
+import type { HexCrawlApi } from "../../api";
+import { MapSurface } from "../../map-surface";
 import { SourceMapWorkspace } from "./source-map-workspace";
-import type { Location, Overworld, SpatialFeature, WorldPoint } from "./types";
-import { clearUiError, showUiError } from "./ui-error";
+import type { Location, Overworld, SpatialFeature, WorldPoint } from "../../types";
+import { clearUiError, showUiError } from "../../ui-error";
 import { customUnitFieldsVisible, gridWithSelectedUnit } from "./world-form";
 import type { DistanceUnitKind } from "./world-form";
-import { input, integer, numeric, required, select } from "./ui/dom";
+import { input, integer, numeric, required, select } from "../../ui/dom";
 
 export async function renderWorldEditor(
     root: HTMLElement,

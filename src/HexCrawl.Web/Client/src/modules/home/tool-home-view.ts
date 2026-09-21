@@ -1,9 +1,9 @@
-import type { HexCrawlApi } from "./api";
-import { customUnitFieldsVisible } from "./world-form";
-import type { DistanceUnitKind } from "./world-form";
-import type { ExpeditionSummary, OverworldSummary, RuntimeProfile, StartStandaloneCrawlSessionInput } from "./types";
-import { clearUiError, showUiError } from "./ui-error";
-import { input, integer, numeric, option, required, select } from "./ui/dom";
+import type { HexCrawlApi } from "../../api";
+import { customUnitFieldsVisible } from "../worlds/world-form";
+import type { DistanceUnitKind } from "../worlds/world-form";
+import type { ExpeditionSummary, OverworldSummary, RuntimeProfile, StartStandaloneCrawlSessionInput } from "../../types";
+import { clearUiError, showUiError } from "../../ui-error";
+import { input, integer, numeric, option, required, select } from "../../ui/dom";
 
 const ABSTRACT_CONTEXT = "__abstract__";
 const NON_SPATIAL_CONTEXT = "__nonspatial__";

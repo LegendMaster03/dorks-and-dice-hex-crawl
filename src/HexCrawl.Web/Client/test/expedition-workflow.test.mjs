@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { manualEntryResolutionSources, newExpeditionEncounterCadences } from "../.test-dist/expedition-input-policy.js";
-import { assistantEncounterCheckDue, encounterCheckDue, navigationResolutionDue, pauseInstruction, watchActionLabel, watchPhase } from "../.test-dist/expedition-workflow.js";
+import { manualEntryResolutionSources, newExpeditionEncounterCadences } from "../.test-dist/modules/expeditions/expedition-input-policy.js";
+import { assistantEncounterCheckDue, encounterCheckDue, navigationResolutionDue, pauseInstruction, watchActionLabel, watchPhase } from "../.test-dist/modules/expeditions/expedition-workflow.js";
 
 function runtime(overrides = {}) {
     return {

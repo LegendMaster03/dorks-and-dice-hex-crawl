@@ -1,5 +1,5 @@
-import { renderToolHome } from "../tool-home-view";
-import type { HexCrawlClientModule } from "../client-module";
+import { renderToolHome } from "./tool-home-view";
+import type { HexCrawlClientModule } from "../../client-module";
 
 export const homeModule: HexCrawlClientModule = {
     id: "home",

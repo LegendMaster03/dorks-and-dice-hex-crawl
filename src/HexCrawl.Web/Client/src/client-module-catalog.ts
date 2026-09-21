@@ -1,8 +1,8 @@
 import type { ClientRouteKind, HexCrawlClientModule, KnownToolRoute } from "./client-module";
-import { assistantsModule } from "./modules/assistants-module";
-import { expeditionsModule } from "./modules/expeditions-module";
-import { homeModule } from "./modules/home-module";
-import { worldsModule } from "./modules/worlds-module";
+import { assistantsModule } from "./modules/assistants/module";
+import { expeditionsModule } from "./modules/expeditions/module";
+import { homeModule } from "./modules/home/module";
+import { worldsModule } from "./modules/worlds/module";
 
 const requiredRouteKinds: readonly ClientRouteKind[] = [
     "home",

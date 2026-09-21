@@ -1,4 +1,4 @@
-import type { ExpeditionDetail } from "./types";
+import type { ExpeditionDetail } from "../../types";
 
 export type WatchPhase = "ready" | "active" | "paused";
 

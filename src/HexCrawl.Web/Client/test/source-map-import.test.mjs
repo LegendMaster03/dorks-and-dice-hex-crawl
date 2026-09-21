@@ -51,8 +51,8 @@ test("renderer source puts rasters before semantic regions and grid", () => {
 
 test("registration consumes map clicks through an explicit interaction interceptor", () => {
     const surface = fs.readFileSync(path.join(sourceRoot, "map-surface.ts"), "utf8");
-    const workspace = fs.readFileSync(path.join(sourceRoot, "source-map-workspace.ts"), "utf8");
-    const registration = fs.readFileSync(path.join(sourceRoot, "source-map-registration-controller.ts"), "utf8");
+    const workspace = fs.readFileSync(path.join(sourceRoot, "modules/worlds/source-map-workspace.ts"), "utf8");
+    const registration = fs.readFileSync(path.join(sourceRoot, "modules/worlds/source-map-registration-controller.ts"), "utf8");
     assert.match(surface, /clickInterceptor\?\.\(point\)/);
     assert.match(workspace, /SourceMapRegistrationController/);
     assert.match(registration, /if \(!this\.registration\) return false/);

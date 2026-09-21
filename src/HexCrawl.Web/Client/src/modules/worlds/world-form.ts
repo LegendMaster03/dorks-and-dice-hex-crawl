@@ -1,5 +1,5 @@
-import type { CreateOverworldInput } from "./api";
-import type { DistanceUnit, GridDefinition, HexOrientation, WorldPoint } from "./types";
+import type { CreateOverworldInput } from "../../api";
+import type { DistanceUnit, GridDefinition, HexOrientation, WorldPoint } from "../../types";
 
 export type DistanceUnitKind = DistanceUnit["kind"];
 

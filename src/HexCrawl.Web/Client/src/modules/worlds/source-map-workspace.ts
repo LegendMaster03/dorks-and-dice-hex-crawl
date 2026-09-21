@@ -1,12 +1,12 @@
-import type { HexCrawlApi } from "./api";
-import type { MapSurface } from "./map-surface";
+import type { HexCrawlApi } from "../../api";
+import type { MapSurface } from "../../map-surface";
 import type {
     Overworld,
     SourceMapDetail,
     SourceMapRole
-} from "./types";
-import { clearUiError, showUiError } from "./ui-error";
-import { input, required, select } from "./ui/dom";
+} from "../../types";
+import { clearUiError, showUiError } from "../../ui-error";
+import { input, required, select } from "../../ui/dom";
 import { SourceMapRegistrationController } from "./source-map-registration-controller";
 import { WonderdraftImportController } from "./wonderdraft-import-controller";
 

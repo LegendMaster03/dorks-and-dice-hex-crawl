@@ -132,13 +132,43 @@ This first slice deliberately preserves behavior and public routes. The next str
 1. Reduce the remaining `HexCrawlService` compatibility surface when focused services already provide the same operation and consumers can migrate without churn. Do not create replacement services merely to eliminate a partial class.
 2. Evaluate whether the now physically separated `CrawlRuntimeEngine` responsibilities should remain one deterministic partial-class boundary or graduate into collaborators. Do not introduce collaborator interfaces until they provide a concrete testing, substitution, or dependency benefit.
 3. Continue retiring compatibility-only Web contracts when no active route or test requires them. Keep genuinely shared spatial contracts under `Web/Contracts/` rather than duplicating them across modules.
-4. Continue decomposing only where a concrete lifecycle boundary remains. Expedition read-only presentation lives in `expedition-presentation.ts`, and watch-form policy/submission lives in `expedition-watch-controller.ts`; the route view now owns map/discovery orchestration and navigation.
+4. Keep browser feature code under its owning client module and decompose further only when a concrete lifecycle boundary appears. Expedition read-only presentation and watch submission already have focused files; avoid fragmenting the route view merely to reduce file size.
 5. Evaluate whether the physically separated SQLite aggregate operations should eventually become independent stores. Keep `IHexCrawlStore` as the compatibility boundary until a narrower contract provides a concrete benefit; do not change storage semantics merely for type count.
 6. Keep import formats such as Wonderdraft as adapters. They should produce reviewed semantic inputs rather than become core world types.
 
 ## Browser-client locality
 
-The browser bootstrap now dispatches through a validated client-module catalog rather than importing and switching over every feature view directly. Home, Worlds, Expeditions, and Assistants own their route kinds and rendering composition. The catalog rejects duplicate or missing route ownership, which gives new client capabilities the same explicit composition model as server modules. Generic DOM/form helpers that were duplicated across several feature views now live under `Client/src/ui/`; feature-specific helpers remain with their owning view. Read-only expedition presentation is separated from watch mutation and discovery orchestration in `expedition-presentation.ts`. Stateful sub-workflows are also isolated when they have a real lifecycle boundary: source-map affine registration owns its control-point state, preview lifecycle, map-click interception, and save flow in `source-map-registration-controller.ts`; Wonderdraft inspection, candidate review, and semantic import selection live in `wonderdraft-import-controller.ts`.
+The browser bootstrap now dispatches through a validated client-module catalog rather than importing and switching over every feature view directly. Home, Worlds, Expeditions, and Assistants own their route kinds and rendering composition. The catalog rejects duplicate or missing route ownership, which gives new client capabilities the same explicit composition model as server modules.
+
+Client implementations are physically grouped with that ownership:
+
+```text
+Client/src/modules/
+    home/
+        module.ts
+        tool-home-view.ts
+    worlds/
+        module.ts
+        world-editor-view.ts
+        world-list-view.ts
+        world-form.ts
+        source-map-*.ts
+        wonderdraft-import-controller.ts
+    expeditions/
+        module.ts
+        expedition-view.ts
+        expedition-presentation.ts
+        expedition-watch-controller.ts
+        expedition-setup.ts
+        expedition-input-policy.ts
+        expedition-workflow.ts
+    assistants/
+        module.ts
+        assistant-entry-view.ts
+        expedition-assistant-view.ts
+```
+
+Shared client infrastructure such as API transport, routing, map rendering, viewport math, render lifecycle, runtime formatting, and generic DOM/form helpers remains at the client root or under `Client/src/ui/`. Cross-feature dependencies are visible as module-to-module imports rather than being obscured by a flat directory. Read-only expedition presentation is separated from watch mutation and discovery orchestration in `expedition-presentation.ts`. Stateful sub-workflows are isolated when they have a real lifecycle boundary: source-map affine registration owns its control-point state, preview lifecycle, map-click interception, and save flow in `source-map-registration-controller.ts`; Wonderdraft inspection, candidate review, and semantic import selection live in `wonderdraft-import-controller.ts`.
 
 ## Format-adapter locality
 

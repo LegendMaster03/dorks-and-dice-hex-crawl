@@ -1,7 +1,7 @@
-import type { HexCrawlApi } from "./api";
-import { manualEntryResolutionSources } from "./expedition-input-policy";
-import { assistantEncounterCheckDue } from "./expedition-workflow";
-import { directionLabel, formatDistance, formatHours } from "./runtime-view";
+import type { HexCrawlApi } from "../../api";
+import { manualEntryResolutionSources } from "../expeditions/expedition-input-policy";
+import { assistantEncounterCheckDue } from "../expeditions/expedition-workflow";
+import { directionLabel, formatDistance, formatHours } from "../../runtime-view";
 import type {
     EncounterCadenceAssistantRequest,
     ExpeditionDetail,
@@ -10,9 +10,9 @@ import type {
     ResolutionSource,
     TravelWatchAssistantRequest,
     SpatialRuntimeExpedition
-} from "./types";
-import { clearUiError, showUiError } from "./ui-error";
-import { checkbox, input, integer, numeric, option, optionalText, prettyEnum, required, select, sourceLabel, statusCell } from "./ui/dom";
+} from "../../types";
+import { clearUiError, showUiError } from "../../ui-error";
+import { checkbox, input, integer, numeric, option, optionalText, prettyEnum, required, select, sourceLabel, statusCell } from "../../ui/dom";
 
 export type ExpeditionAssistantMode = "travel" | "navigation" | "encounters";
 

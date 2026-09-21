@@ -11,10 +11,10 @@ async function source(path) {
 test("client modules have stable, complete route ownership", async () => {
     const [catalog, home, worlds, expeditions, assistants] = await Promise.all([
         source("client-module-catalog.ts"),
-        source("modules/home-module.ts"),
-        source("modules/worlds-module.ts"),
-        source("modules/expeditions-module.ts"),
-        source("modules/assistants-module.ts")
+        source("modules/home/module.ts"),
+        source("modules/worlds/module.ts"),
+        source("modules/expeditions/module.ts"),
+        source("modules/assistants/module.ts")
     ]);
 
     assert.match(catalog, /homeModule[\s\S]*worldsModule[\s\S]*expeditionsModule[\s\S]*assistantsModule/);

@@ -4,9 +4,9 @@ import type {
     WonderdraftCandidatePreview,
     WonderdraftImportSelection,
     WonderdraftInspection
-} from "./api";
-import type { Overworld, SourceMapDetail } from "./types";
-import { input, required, select } from "./ui/dom";
+} from "../../api";
+import type { Overworld, SourceMapDetail } from "../../types";
+import { input, required, select } from "../../ui/dom";
 
 export class WonderdraftImportController {
     private preview: WonderdraftCandidatePreview | null = null;

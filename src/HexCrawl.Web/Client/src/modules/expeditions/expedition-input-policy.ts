@@ -1,4 +1,4 @@
-import type { EncounterCadence, ResolutionSource } from "./types";
+import type { EncounterCadence, ResolutionSource } from "../../types";
 
 // AutomaticRoll is intentionally absent until a trusted helper actually generates
 // the corresponding resolved value. The domain/API still support it for future
