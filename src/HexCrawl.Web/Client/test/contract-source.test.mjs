@@ -148,3 +148,15 @@ test("direction controls retain numeric values but present axial step labels", (
     assert.match(assistant, /\$\{directionLabel\(value\)\}<\/option>/);
     assert.match(expedition, /persisted runtime values remain 0–5/);
 });
+
+
+test("expedition workbench keeps presentation separate from mutation orchestration", () => {
+    const view = fs.readFileSync(path.join(sourceDir, "expedition-view.ts"), "utf8");
+    const presentation = fs.readFileSync(path.join(sourceDir, "expedition-presentation.ts"), "utf8");
+    assert.match(view, /renderExpeditionStatus/);
+    assert.match(view, /renderExpeditionSnapshots/);
+    assert.match(presentation, /renderExpeditionHistory/);
+    assert.match(presentation, /renderPlayerKnowledgePreview/);
+    assert.doesNotMatch(presentation, /advanceExpedition/);
+    assert.doesNotMatch(presentation, /api\.discover/);
+});
