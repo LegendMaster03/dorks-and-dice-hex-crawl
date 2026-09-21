@@ -160,3 +160,15 @@ test("expedition workbench keeps presentation separate from mutation orchestrati
     assert.doesNotMatch(presentation, /advanceExpedition/);
     assert.doesNotMatch(presentation, /api\.discover/);
 });
+
+
+test("expedition watch controller owns watch form policy and mutation submission", () => {
+    const view = fs.readFileSync(path.join(sourceDir, "expedition-view.ts"), "utf8");
+    const controller = fs.readFileSync(path.join(sourceDir, "expedition-watch-controller.ts"), "utf8");
+    assert.match(view, /ExpeditionWatchController/);
+    assert.doesNotMatch(view, /api\.advanceExpedition/);
+    assert.match(controller, /api\.advanceExpedition/);
+    assert.match(controller, /navigationResolutionDue/);
+    assert.match(controller, /encounterCheckDue/);
+    assert.match(controller, /persisted runtime values remain 0–5/);
+});

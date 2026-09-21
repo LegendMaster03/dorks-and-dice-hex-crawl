@@ -1,14 +1,13 @@
 import type { HexCrawlApi } from "./api";
-import { manualEntryResolutionSources } from "./expedition-input-policy";
-import { encounterCheckDue, navigationResolutionDue, watchActionLabel } from "./expedition-workflow";
 import { worldToHex } from "./hex-math";
 import { MapSurface } from "./map-surface";
-import { discoveredSubjectIds, directionLabel, formatHours } from "./runtime-view";
+import { discoveredSubjectIds, directionLabel } from "./runtime-view";
 import { canonicalExpeditionRoute } from "./tool-route";
-import type { ExpeditionDetail, Overworld, ResolutionSource, RuntimeAdvanceRequest, SpatialRuntimeExpedition } from "./types";
+import type { ExpeditionDetail, Overworld, SpatialRuntimeExpedition } from "./types";
 import { clearUiError, showUiError } from "./ui-error";
 import { renderExpeditionHistory, renderExpeditionPause, renderExpeditionSnapshots, renderExpeditionStatus, renderNonSpatialTracker, renderPlayerKnowledgePreview } from "./expedition-presentation";
-import { checkbox, input, integer, nonZeroInteger, numeric, option, optionalText, prettyEnum, required, select, sourceLabel } from "./ui/dom";
+import { ExpeditionWatchController } from "./expedition-watch-controller";
+import { required } from "./ui/dom";
 
 export type ExpeditionViewMode = "map" | "tracker";
 
@@ -39,7 +38,6 @@ export async function renderExpedition(
 
     const world: Overworld | null = showMap ? await api.getOverworld(runtime.overworldId!) : null;
     let disposed = false;
-    let advancePending = false;
 
     const modeLabel = showMap ? "Full crawl workbench" : "Mapless expedition tracker";
     const mapMarkup = showMap ? '<div class="hc-map-host" data-map></div>' : "";
@@ -141,21 +139,35 @@ export async function renderExpedition(
         </section>`;
 
     const error = required<HTMLElement>(root, "[data-error]");
-    const form = required<HTMLFormElement>(root, "[data-advance]");
-    const advanceButton = required<HTMLButtonElement>(form, "[data-advance-button]");
     const mapHost = root.querySelector<HTMLElement>("[data-map]");
     const map = mapHost && world ? new MapSurface(mapHost, () => world) : null;
-    const locationSelect = select(form, "locationId");
-    for (const name of ["travelSource", "navigationSource", "encounterSource", "boundarySource"] as const) {
-        const control = select(form, name);
-        for (const source of manualEntryResolutionSources) control.append(option(source, sourceLabel(source)));
-        control.value = "ManualRoll";
-    }
-    if (world) {
-        for (const location of world.locations) locationSelect.append(option(location.id, location.name));
-    } else {
-        select(form, "encounterOutcome").querySelector('option[value="KeyedLocationDiscovery"]')?.remove();
-    }
+
+    const mutate = async (
+        control: HTMLButtonElement | null,
+        action: () => Promise<void>): Promise<void> => {
+        clearUiError(error);
+        if (control?.disabled) return;
+        const idleText = control?.textContent ?? "";
+        if (control) control.disabled = true;
+        try {
+            await action();
+        } catch (value) {
+            if (!disposed) showUiError(error, value);
+        } finally {
+            if (control && !disposed) {
+                control.disabled = false;
+                control.textContent = idleText;
+            }
+        }
+    };
+
+    const watchController = new ExpeditionWatchController(
+        root,
+        api,
+        world,
+        () => runtime,
+        next => apply(next),
+        action => mutate(null, action));
 
     const apply = (next: ExpeditionDetail): void => {
         runtime = next;
@@ -176,7 +188,7 @@ export async function renderExpedition(
             if (world) renderPlayerKnowledgePreview(root, runtime, world);
         }
         renderExpeditionSnapshots(root, runtime, showMap);
-        syncWatchForm();
+        watchController.sync(next);
     };
 
     const renderDiscovery = (): void => {
@@ -216,93 +228,6 @@ export async function renderExpedition(
         }
     };
 
-    const syncWatchForm = (): void => {
-        const state = spatialState(runtime);
-        const newWatch = state.activeWatchNumber === null;
-        required<HTMLElement>(root, "[data-watch-summary]").textContent = watchActionLabel(runtime);
-        advanceButton.textContent = watchActionLabel(runtime);
-
-        const requirements = required<HTMLElement>(root, "[data-requirements]");
-        const requirementLines: string[] = [];
-        if (runtime.pauseReason) requirementLines.push(`Resolve pending ${prettyEnum(runtime.pauseReason)} before the watch can continue.`);
-        else if (newWatch) requirementLines.push(`Plan watch ${state.completedWatches + 1} (${formatHours(runtime.profile.watchHours)}).`);
-        else requirementLines.push(`Continue watch ${state.activeWatchNumber} with ${formatHours(state.activeWatchRemainingHours ?? runtime.remainingWatchHours)} remaining.`);
-        if (runtime.profile.actualDistanceResolution === "VariableResolved" && runtime.profile.travelResolution === "ContinuousDistance") requirementLines.push("A resolved expected and actual distance are required for this segment.");
-        else if (runtime.profile.travelResolution === "ContinuousDistance") requirementLines.push("An effective travel distance is required for this segment.");
-        else requirementLines.push("A resolved hex-step count is required for this segment.");
-        if (newWatch && runtime.profile.usesNavigationChecks) requirementLines.push("Navigation resolution is required unless the selected aid suppresses it or this is a deliberate double-back.");
-        if (encounterCheckDue(runtime)) requirementLines.push(`An encounter check is due (${prettyEnum(runtime.profile.encounterCadence)} cadence).`);
-        requirements.replaceChildren(...requirementLines.map(text => paragraph(text)));
-
-        const continuous = runtime.profile.travelResolution === "ContinuousDistance";
-        required<HTMLElement>(form, "[data-fixed-distance]").hidden = !(continuous && runtime.profile.actualDistanceResolution === "Fixed");
-        required<HTMLElement>(form, "[data-variable-distance]").hidden = !(continuous && runtime.profile.actualDistanceResolution === "VariableResolved");
-        required<HTMLElement>(form, "[data-step-distance]").hidden = continuous;
-
-        required<HTMLElement>(form, "[data-encounter-resolution]").hidden = !encounterCheckDue(runtime);
-        required<HTMLElement>(form, "[data-boundary-resolution]").hidden = runtime.pauseReason !== "LostRecognitionRequired";
-        required<HTMLElement>(form, "[data-double-back-row]").hidden = !runtime.profile.supportsDeliberateDoubleBack;
-        required<HTMLElement>(form, "[data-suppress-nav-row]").hidden = !runtime.profile.usesNavigationChecks;
-        required<HTMLElement>(form, "[data-reset-veer-row]").hidden = !runtime.profile.usesPersistentVeer;
-
-        if (state.activeWatchNumber !== null) {
-            select(form, "direction").value = String(state.intendedDirection ?? 0);
-            input(form, "pace").value = state.activePaceKey ?? "normal";
-            input(form, "activities").value = state.activeActivities.join(", ");
-            input(form, "navigationAid").value = state.activeNavigationAidKey ?? "none";
-            checkbox(form, "doubleBack").checked = state.activeDeliberateDoubleBack;
-            checkbox(form, "continueAcross").checked = state.activeContinueAcrossBoundaries;
-        }
-
-        const scale = runtime.context.hexCenterDistance?.value
-            ?? throwContextError("Spatial crawl session is missing hex-center distance.");
-        if (!input(form, "effectiveDistance").value) input(form, "effectiveDistance").value = String(scale);
-        if (!input(form, "expectedDistance").value) input(form, "expectedDistance").value = String(scale);
-        if (!input(form, "actualDistance").value) input(form, "actualDistance").value = String(scale);
-
-        syncNavigationVisibility();
-        syncEncounterFields();
-        const directionHelp = runtime.profile.directionChangesCostProgress
-            ? "Changing course can consume intra-hex progress under this procedure. The runtime applies the configured cost."
-            : "Direction changes do not consume additional progress under this procedure.";
-        required<HTMLElement>(form, "[data-direction-hint]").textContent =
-            `${directionHelp} Direction labels show the axial grid step; persisted runtime values remain 0–5.`;
-    };
-
-    const syncNavigationVisibility = (): void => {
-        const due = navigationResolutionDue(runtime, checkbox(form, "suppressNav").checked, checkbox(form, "doubleBack").checked);
-        required<HTMLElement>(form, "[data-navigation-resolution]").hidden = !due;
-        const failed = select(form, "navigationOutcome").value === "Failed";
-        required<HTMLElement>(form, "[data-veer-row]").hidden = !failed;
-    };
-
-    const syncEncounterFields = (): void => {
-        const outcome = select(form, "encounterOutcome").value;
-        required<HTMLElement>(form, "[data-encounter-hour]").hidden = outcome === "None";
-        required<HTMLElement>(form, "[data-encounter-location]").hidden = outcome !== "KeyedLocationDiscovery";
-    };
-
-    const mutate = async (control: HTMLButtonElement | null, action: () => Promise<void>): Promise<void> => {
-        clearUiError(error);
-        if (control?.disabled) return;
-        const idleText = control?.textContent ?? "";
-        if (control) control.disabled = true;
-        try {
-            await action();
-        } catch (value) {
-            if (!disposed) showUiError(error, value);
-        } finally {
-            if (control && !disposed) {
-                control.disabled = false;
-                control.textContent = idleText;
-            }
-        }
-    };
-
-    checkbox(form, "suppressNav").addEventListener("change", syncNavigationVisibility);
-    checkbox(form, "doubleBack").addEventListener("change", syncNavigationVisibility);
-    select(form, "navigationOutcome").addEventListener("change", syncNavigationVisibility);
-    select(form, "encounterOutcome").addEventListener("change", syncEncounterFields);
     required<HTMLButtonElement>(root, "[data-home]").addEventListener("click", () => navigate("/"));
     const editButton = required<HTMLButtonElement>(root, "[data-edit]");
     editButton.hidden = runtime.overworldId === null;
@@ -320,88 +245,14 @@ export async function renderExpedition(
     required<HTMLButtonElement>(root, "[data-view-navigation]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}/navigation`));
     required<HTMLButtonElement>(root, "[data-view-encounters]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}/encounters`));
 
-    form.addEventListener("submit", event => {
-        event.preventDefault();
-        if (advancePending) return;
-        advancePending = true;
-        advanceButton.disabled = true;
-        advanceButton.textContent = "Applying…";
-        void mutate(null, async () => {
-            try {
-                const continuous = runtime.profile.travelResolution === "ContinuousDistance";
-                const navRequired = navigationResolutionDue(runtime, checkbox(form, "suppressNav").checked, checkbox(form, "doubleBack").checked);
-                const encounterRequired = encounterCheckDue(runtime);
-                const request: RuntimeAdvanceRequest = {
-                    expectedVersion: runtime.version,
-                    intendedDirection: integer(select(form, "direction")),
-                    paceKey: input(form, "pace").value.trim() || "normal",
-                    activities: input(form, "activities").value.split(",").map(value => value.trim()).filter(Boolean),
-                    navigationAidKey: input(form, "navigationAid").value.trim() || "none",
-                    suppressesNavigationCheck: checkbox(form, "suppressNav").checked,
-                    resetsVeerAtBoundary: checkbox(form, "resetVeer").checked,
-                    resolutionSource: "ManualRoll",
-                    travelResolutionSource: select(form, "travelSource").value as ResolutionSource,
-                    travelResolutionNote: optionalText(input(form, "travelNote")),
-                    deliberateDoubleBack: runtime.profile.supportsDeliberateDoubleBack && checkbox(form, "doubleBack").checked,
-                    continueAcrossBoundaries: checkbox(form, "continueAcross").checked
-                };
-
-                if (continuous && runtime.profile.actualDistanceResolution === "Fixed") request.effectiveDistance = numeric(input(form, "effectiveDistance"));
-                else if (continuous) {
-                    request.expectedDistance = numeric(input(form, "expectedDistance"));
-                    request.actualDistance = numeric(input(form, "actualDistance"));
-                } else request.hexSteps = integer(input(form, "hexSteps"));
-
-                if (navRequired) {
-                    request.navigationOutcome = select(form, "navigationOutcome").value as "Succeeded" | "Failed";
-                    if (request.navigationOutcome === "Failed") request.veerSteps = nonZeroInteger(input(form, "veerSteps"));
-                    request.navigationResolutionSource = select(form, "navigationSource").value as ResolutionSource;
-                    request.navigationResolutionNote = optionalText(input(form, "navigationNote"));
-                }
-
-                if (encounterRequired) {
-                    request.encounterOutcome = select(form, "encounterOutcome").value as RuntimeAdvanceRequest["encounterOutcome"];
-                    request.encounterResolutionSource = select(form, "encounterSource").value as ResolutionSource;
-                    request.encounterResolutionNote = optionalText(input(form, "encounterSourceNote"));
-                    if (request.encounterOutcome !== "None") request.encounterHour = numeric(input(form, "encounterHour"));
-                    if (request.encounterOutcome === "KeyedLocationDiscovery") {
-                        if (!locationSelect.value) throw new Error("A keyed-location encounter requires a location.");
-                        request.locationId = locationSelect.value;
-                    }
-                    request.encounterNote = optionalText(input(form, "encounterNote"));
-                }
-
-                if (runtime.pauseReason === "LostRecognitionRequired") {
-                    request.recognizedLost = checkbox(form, "recognizedLost").checked;
-                    request.reorient = checkbox(form, "reorient").checked;
-                    request.boundaryResolutionSource = select(form, "boundarySource").value as ResolutionSource;
-                    request.boundaryResolutionNote = optionalText(input(form, "boundaryNote"));
-                }
-
-                request.dmOverrideNote = optionalText(input(form, "dmOverrideNote"));
-                apply(await api.advanceExpedition(runtime.id, request));
-            } finally {
-                advancePending = false;
-                if (!disposed) {
-                    advanceButton.disabled = false;
-                    advanceButton.textContent = watchActionLabel(runtime);
-                }
-            }
-        });
-    });
-
     apply(runtime);
     return () => {
         disposed = true;
+        watchController.dispose();
         map?.dispose();
     };
 
-    function subjectLabel(id: string): string {
-        if (!world) return id;
-        return world.locations.find(item => item.id === id)?.name
-            ?? world.features.find(item => item.id === id)?.name
-            ?? id;
-    }
+
 }
 
 function directionOptions(): string {
@@ -415,17 +266,6 @@ function spatialState(runtime: ExpeditionDetail): SpatialRuntimeExpedition {
         throw new Error("This operation requires a spatial crawl session.");
     }
     return runtime.expedition;
-}
-
-function throwContextError(message: string): never {
-    throw new Error(message);
-}
-
-function paragraph(text: string): HTMLParagraphElement {
-    const item = document.createElement("p");
-    item.className = "hc-hint";
-    item.textContent = text;
-    return item;
 }
 
 function sameHex(left: { q: number; r: number }, right: { q: number; r: number }): boolean {
