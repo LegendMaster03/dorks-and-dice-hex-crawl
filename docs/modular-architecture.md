@@ -114,12 +114,16 @@ Owns read-only procedure and presentation catalogs. It has no module dependency.
 
 Authentication against the Dorks & Dice Tool Host, persistence implementation selection, filesystem asset-root configuration, health checks, and deployment-specific configuration remain host/framework composition concerns. A feature module should not acquire knowledge of TrueNAS, hostnames, reverse proxies, or deployment secrets.
 
+## Deterministic runtime locality
+
+`CrawlRuntimeEngine` remains one sealed deterministic engine with one public `Advance` entry point. Its implementation is physically divided under `Domain/Runtime/Engine/` into watch lifecycle, navigation/direction handling, movement, and support/event collection. This is intentionally a partial-class split rather than an object graph: it improves human navigation and limits routine edits without changing execution order, state ownership, or introducing replaceable runtime stages that the domain does not currently need.
+
 ## Next decomposition targets
 
 This first slice deliberately preserves behavior and public routes. The next structural work should follow the same ownership boundaries instead of performing a broad rewrite:
 
 1. Reduce the remaining `HexCrawlService` compatibility surface when focused services already provide the same operation and consumers can migrate without churn. Do not create replacement services merely to eliminate a partial class.
-2. Split `CrawlRuntimeEngine` into explicit travel, navigation, encounter, and watch-transition collaborators only where doing so preserves the deterministic runtime boundary.
+2. Evaluate whether the now physically separated `CrawlRuntimeEngine` responsibilities should remain one deterministic partial-class boundary or graduate into collaborators. Do not introduce collaborator interfaces until they provide a concrete testing, substitution, or dependency benefit.
 3. Move Web API contracts next to their owning modules when shared-contract analysis shows that doing so does not create duplication.
 4. Give the browser client the same feature locality. Route handlers should be registered by client modules rather than accumulated in `app.ts`, and large views such as expedition and source-map workspaces should be decomposed into focused components.
 5. Split SQLite persistence by aggregate/concern behind the existing `IHexCrawlStore` contract before changing storage semantics.
