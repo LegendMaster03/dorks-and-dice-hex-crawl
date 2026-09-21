@@ -140,6 +140,10 @@ This first slice deliberately preserves behavior and public routes. The next str
 
 The browser bootstrap now dispatches through a validated client-module catalog rather than importing and switching over every feature view directly. Home, Worlds, Expeditions, and Assistants own their route kinds and rendering composition. The catalog rejects duplicate or missing route ownership, which gives new client capabilities the same explicit composition model as server modules. Generic DOM/form helpers that were duplicated across several feature views now live under `Client/src/ui/`; feature-specific helpers remain with their owning view. Read-only expedition presentation is separated from watch mutation and discovery orchestration in `expedition-presentation.ts`. Stateful sub-workflows are also isolated when they have a real lifecycle boundary: source-map affine registration owns its control-point state, preview lifecycle, map-click interception, and save flow in `source-map-registration-controller.ts`; Wonderdraft inspection, candidate review, and semantic import selection live in `wonderdraft-import-controller.ts`.
 
+## Format-adapter locality
+
+Binary and image import code remains implementation-oriented infrastructure rather than becoming domain abstractions. `RasterImageInspector` keeps one public inspection API, while PNG, JPEG, and WebP structural validation live in separate partial files. Shared bounded stream-reading mechanics remain in the core inspector. This makes format-specific maintenance local without changing accepted formats, validation behavior, or the upload contract.
+
 ## Persistence locality
 
 `SqliteHexCrawlStore` still implements the existing `IHexCrawlStore` contract and uses the same schema and serialized shapes. Its implementation is now separated into world persistence, expedition/event persistence, shared connection/serialization mechanics, runtime snapshots, and world snapshots. Snapshot types remain private implementation details, which keeps persisted compatibility concerns close to the SQLite adapter rather than leaking them into Domain.
