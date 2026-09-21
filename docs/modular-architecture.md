@@ -125,9 +125,13 @@ This first slice deliberately preserves behavior and public routes. The next str
 1. Reduce the remaining `HexCrawlService` compatibility surface when focused services already provide the same operation and consumers can migrate without churn. Do not create replacement services merely to eliminate a partial class.
 2. Evaluate whether the now physically separated `CrawlRuntimeEngine` responsibilities should remain one deterministic partial-class boundary or graduate into collaborators. Do not introduce collaborator interfaces until they provide a concrete testing, substitution, or dependency benefit.
 3. Move Web API contracts next to their owning modules when shared-contract analysis shows that doing so does not create duplication.
-4. Give the browser client the same feature locality. Route handlers should be registered by client modules rather than accumulated in `app.ts`, and large views such as expedition and source-map workspaces should be decomposed into focused components.
+4. Continue decomposing large browser views such as expedition and source-map workspaces into focused components now that route ownership is module-driven. Keep view components local to the feature that owns them.
 5. Evaluate whether the physically separated SQLite aggregate operations should eventually become independent stores. Keep `IHexCrawlStore` as the compatibility boundary until a narrower contract provides a concrete benefit; do not change storage semantics merely for type count.
 6. Keep import formats such as Wonderdraft as adapters. They should produce reviewed semantic inputs rather than become core world types.
+
+## Browser-client locality
+
+The browser bootstrap now dispatches through a validated client-module catalog rather than importing and switching over every feature view directly. Home, Worlds, Expeditions, and Assistants own their route kinds and rendering composition. The catalog rejects duplicate or missing route ownership, which gives new client capabilities the same explicit composition model as server modules.
 
 ## Persistence locality
 
