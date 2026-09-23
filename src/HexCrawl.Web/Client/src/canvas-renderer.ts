@@ -1,7 +1,19 @@
 import { sourceMapAssetUrl } from "./api";
 import { hexCorners, hexToWorld, visibleHexBounds } from "./hex-math";
 import { RasterImageCache } from "./raster-image-cache";
-import type { DemoWorld, HexCoordinate, MapRegistrationTransform, SourceMapRepresentation, SpatialFeature, WorldPoint } from "./types";
+import type { DemoWorld, HexCoordinate, MapRegistrationTransform, SpatialFeature, WorldPoint } from "./types";
+
+export type MapReviewGeometry = {
+    id: string;
+    kind: "Point" | "Line" | "Region";
+    position: WorldPoint | null;
+    points: WorldPoint[];
+};
+
+export type MapReviewOverlay = {
+    items: MapReviewGeometry[];
+    selectedId: string | null;
+};
 import { Viewport } from "./viewport";
 
 export class CanvasMapRenderer {
@@ -10,6 +22,7 @@ export class CanvasMapRenderer {
     public discoveredSubjectIds = new Set<string>();
     public hiddenSourceMapIds = new Set<string>();
     public registrationPreview: { sourceMapId: string; transform: MapRegistrationTransform } | null = null;
+    public reviewOverlay: MapReviewOverlay | null = null;
     private readonly rasterCache = new RasterImageCache();
 
     public constructor(
@@ -41,12 +54,46 @@ export class CanvasMapRenderer {
         ctx.clearRect(0, 0, width, height);
 
         this.drawSourceMaps(ctx, world, width, height);
+        this.drawReviewOverlay(ctx, width, height);
         this.drawRegions(ctx, world, width, height);
         this.drawGrid(ctx, world, width, height);
         this.drawLinesAndPoints(ctx, world.features, width, height);
         this.drawLocations(ctx, world, width, height);
         this.drawSelection(ctx, world, width, height);
         this.drawExpedition(ctx, world, width, height);
+    }
+
+    public hitTestReview(point: WorldPoint): string | null {
+        const overlay = this.reviewOverlay;
+        if (!overlay) return null;
+        const tolerance = 12 / this.viewport.zoom;
+
+        for (const item of [...overlay.items].reverse()) {
+            if (item.kind === "Point" && item.position) {
+                if (distance(point, item.position) <= tolerance) return item.id;
+                continue;
+            }
+
+            if (item.kind === "Region" && item.points.length >= 3 && pointInPolygon(point, item.points)) {
+                return item.id;
+            }
+
+            for (let index = 1; index < item.points.length; index++) {
+                if (distanceToSegment(point, item.points[index - 1], item.points[index]) <= tolerance) {
+                    return item.id;
+                }
+            }
+            if (item.kind === "Region"
+                && item.points.length >= 3
+                && distanceToSegment(
+                    point,
+                    item.points[item.points.length - 1],
+                    item.points[0]) <= tolerance) {
+                return item.id;
+            }
+        }
+
+        return null;
     }
 
     public dispose(): void {
@@ -89,6 +136,43 @@ export class CanvasMapRenderer {
         ctx.transform(a, b, c, d, e, f);
         ctx.drawImage(image, 0, 0);
         ctx.restore();
+    }
+
+    private drawReviewOverlay(
+        ctx: CanvasRenderingContext2D,
+        width: number,
+        height: number): void {
+        const overlay = this.reviewOverlay;
+        if (!overlay) return;
+
+        for (const item of overlay.items) {
+            const selected = item.id === overlay.selectedId;
+            ctx.save();
+            ctx.strokeStyle = selected ? "rgba(166, 63, 30, .98)" : "rgba(180, 111, 28, .78)";
+            ctx.fillStyle = selected ? "rgba(210, 91, 46, .26)" : "rgba(222, 164, 72, .16)";
+            ctx.lineWidth = selected ? 5 : 3;
+            ctx.setLineDash(selected ? [] : [8, 5]);
+
+            if (item.kind === "Point" && item.position) {
+                const point = this.toScreen(item.position, width, height);
+                ctx.beginPath();
+                ctx.arc(point.x, point.y, selected ? 11 : 8, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+            } else if (item.points.length > 0) {
+                const points = item.points.map(point => this.toScreen(point, width, height));
+                ctx.beginPath();
+                points.forEach((point, index) =>
+                    index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
+                if (item.kind === "Region") {
+                    ctx.closePath();
+                    ctx.fill();
+                }
+                ctx.stroke();
+            }
+
+            ctx.restore();
+        }
     }
 
     private drawGrid(ctx: CanvasRenderingContext2D, world: DemoWorld, width: number, height: number): void {
@@ -224,4 +308,33 @@ export class CanvasMapRenderer {
     private toScreen(point: WorldPoint, width: number, height: number): WorldPoint {
         return this.viewport.worldToScreen(point, width, height);
     }
+}
+
+function distance(a: WorldPoint, b: WorldPoint): number {
+    return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function distanceToSegment(point: WorldPoint, start: WorldPoint, end: WorldPoint): number {
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const lengthSquared = (dx * dx) + (dy * dy);
+    if (lengthSquared <= Number.EPSILON) return distance(point, start);
+    const t = Math.max(0, Math.min(1,
+        (((point.x - start.x) * dx) + ((point.y - start.y) * dy)) / lengthSquared));
+    return distance(point, {
+        x: start.x + (t * dx),
+        y: start.y + (t * dy)
+    });
+}
+
+function pointInPolygon(point: WorldPoint, polygon: readonly WorldPoint[]): boolean {
+    let inside = false;
+    for (let index = 0, previous = polygon.length - 1; index < polygon.length; previous = index++) {
+        const a = polygon[index];
+        const b = polygon[previous];
+        const intersects = ((a.y > point.y) !== (b.y > point.y))
+            && (point.x < ((b.x - a.x) * (point.y - a.y) / ((b.y - a.y) || Number.EPSILON)) + a.x);
+        if (intersects) inside = !inside;
+    }
+    return inside;
 }

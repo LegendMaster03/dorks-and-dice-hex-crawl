@@ -15,6 +15,7 @@ export class MapSurface {
     private readonly accessibilityStatus: HTMLElement;
     private disposed = false;
     private clickInterceptor: ((point: WorldPoint) => boolean) | null = null;
+    private reviewSelectionHandler: ((id: string) => void) | null = null;
 
     public constructor(
         host: HTMLElement,
@@ -98,6 +99,10 @@ export class MapSurface {
         this.clickInterceptor = interceptor;
     }
 
+    public setReviewSelectionHandler(handler: ((id: string) => void) | null): void {
+        this.reviewSelectionHandler = handler;
+    }
+
     public requestRender(): void {
         if (!this.disposed) this.lifecycle.requestRender();
     }
@@ -112,11 +117,20 @@ export class MapSurface {
     public dispose(): void {
         this.disposed = true;
         this.clickInterceptor = null;
+        this.reviewSelectionHandler = null;
         this.resizeObserver.disconnect();
         this.renderer.dispose();
     }
 
     private activatePoint(point: WorldPoint): void {
+        if (this.clickInterceptor?.(point)) return;
+
+        const reviewId = this.renderer.hitTestReview(point);
+        if (reviewId && this.reviewSelectionHandler) {
+            this.reviewSelectionHandler(reviewId);
+            return;
+        }
+
         const world = this.getWorld();
         if (world) {
             const selected = worldToHex(world.grid, point);
@@ -127,7 +141,6 @@ export class MapSurface {
             this.accessibilityStatus.textContent = `Selected map position ${point.x.toFixed(2)}, ${point.y.toFixed(2)}.`;
         }
 
-        if (this.clickInterceptor?.(point)) return;
         this.onWorldClick?.(point);
     }
 

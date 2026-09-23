@@ -64,4 +64,7 @@ public sealed record SourceMapRepresentation(
     int PixelWidth = 0,
     int PixelHeight = 0,
     string MediaType = "application/octet-stream",
-    string? OriginalFileName = null);
+    string? OriginalFileName = null,
+    IReadOnlyList<SourceMapContentElement>? ImportedContent = null,
+    SourceMapImportProvenance? ImportProvenance = null,
+    SourceMapSourceArchive? SourceArchive = null);

@@ -172,6 +172,28 @@ public static partial class SourceMapApiEndpoints
         return Results.Stream(stream, map.MediaType, enableRangeProcessing: true);
     }
 
+    private static async Task<IResult> GetSourceArchiveAsync(
+        Guid overworldId,
+        Guid sourceMapId,
+        HttpContext context,
+        SourceMapApplicationService service,
+        IMapAssetStore assetStore,
+        CancellationToken cancellationToken)
+    {
+        var world = await service.GetOverworldAsync(overworldId, UserId(context), cancellationToken);
+        var map = world.World.SourceMaps.FirstOrDefault(item => item.Id == sourceMapId)
+            ?? throw new HexCrawlNotFoundException("Source-map representation was not found.");
+        if (map.SourceArchive is not { } archive
+            || await assetStore.GetInfoAsync(archive.AssetKey, cancellationToken) is null)
+        {
+            return Results.NotFound();
+        }
+
+        var stream = await assetStore.OpenReadAsync(archive.AssetKey, cancellationToken);
+        context.Response.Headers.CacheControl = "private, max-age=300";
+        return Results.Stream(stream, archive.MediaType, enableRangeProcessing: true);
+    }
+
     private static async Task<IResult> DeleteAsync(
         Guid overworldId,
         Guid sourceMapId,
@@ -185,25 +207,44 @@ public static partial class SourceMapApiEndpoints
         var deleted = await service.DeleteAsync(
             overworldId, sourceMapId, UserId(context), expectedVersion, cancellationToken);
         var logger = loggerFactory.CreateLogger("HexCrawl.SourceMapDelete");
-        try
+        var cleanupKeys = new[] { deleted.SourceMap.AssetKey, deleted.SourceMap.SourceArchive?.AssetKey }
+            .Where(key => !string.IsNullOrWhiteSpace(key))
+            .Cast<string>()
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var cleanupProblems = new List<string>();
+        foreach (var assetKey in cleanupKeys)
         {
-            if (!await assetStore.DeleteAsync(deleted.SourceMap.AssetKey, CancellationToken.None))
+            try
             {
-                logger.LogError("Source-map metadata {SourceMapId} was deleted, but asset {AssetKey} was already missing.", sourceMapId, deleted.SourceMap.AssetKey);
-                return Results.Problem(
-                    title: "Source map deleted with asset cleanup problem",
-                    detail: "The representation metadata was deleted, but its binary asset was missing during cleanup.",
-                    statusCode: StatusCodes.Status500InternalServerError);
+                if (!await assetStore.DeleteAsync(assetKey, CancellationToken.None))
+                {
+                    logger.LogError(
+                        "Source-map metadata {SourceMapId} was deleted, but asset {AssetKey} was already missing.",
+                        sourceMapId,
+                        assetKey);
+                    cleanupProblems.Add($"{assetKey}: missing");
+                }
+            }
+            catch (Exception exception)
+            {
+                logger.LogError(
+                    exception,
+                    "Source-map metadata {SourceMapId} was deleted, but asset {AssetKey} cleanup failed.",
+                    sourceMapId,
+                    assetKey);
+                cleanupProblems.Add($"{assetKey}: cleanup failed");
             }
         }
-        catch (Exception exception)
+
+        if (cleanupProblems.Count > 0)
         {
-            logger.LogError(exception, "Source-map metadata {SourceMapId} was deleted, but asset {AssetKey} cleanup failed.", sourceMapId, deleted.SourceMap.AssetKey);
             return Results.Problem(
                 title: "Source map deleted with asset cleanup problem",
-                detail: "The representation metadata was deleted, but its binary asset could not be removed. Manual cleanup may be required.",
+                detail: "The representation metadata was deleted, but one or more owned binary assets could not be fully cleaned up. Manual cleanup may be required.",
                 statusCode: StatusCodes.Status500InternalServerError);
         }
+
         return Results.Ok(OverworldContract.From(deleted.World));
     }
 

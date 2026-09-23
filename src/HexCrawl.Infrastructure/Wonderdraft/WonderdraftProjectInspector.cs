@@ -15,7 +15,19 @@ public sealed record WonderdraftProjectSummary(
     int TerritoryCount,
     bool HasGrid,
     IReadOnlyList<string> IncludedPacks,
-    IReadOnlyList<string> IncludedDefaultPacks);
+    IReadOnlyList<string> IncludedDefaultPacks,
+    IReadOnlyDictionary<string, string>? GridMetadata = null,
+    IReadOnlyDictionary<string, string>? ScaleMetadata = null,
+    WonderdraftPhysicalScale? PhysicalScale = null);
+
+public sealed record WonderdraftPhysicalScale(
+    string UnitLabel,
+    double DistancePerSegment,
+    int SegmentCount,
+    double PixelLength)
+{
+    public double UnitsPerPixel => (DistancePerSegment * SegmentCount) / PixelLength;
+}
 
 public enum WonderdraftCandidateKind
 {
@@ -34,7 +46,8 @@ public sealed record WonderdraftImportCandidate(
     string? Descriptor,
     WonderdraftPixelPoint? Position,
     IReadOnlyList<WonderdraftPixelPoint> Points,
-    string? Problem);
+    string? Problem,
+    IReadOnlyDictionary<string, string>? Properties = null);
 
 public sealed record WonderdraftProjectDocument(
     WonderdraftProjectSummary Summary,
@@ -92,6 +105,8 @@ public static partial class WonderdraftProjectInspector
             throw new InvalidDataException("Wonderdraft project root must be a Godot Dictionary.");
         }
 
+        var gridMetadata = FlattenMetadata(root.Get("grid"), "grid", 256);
+        var scaleMetadata = ExtractScaleMetadata(root);
         var summary = new WonderdraftProjectSummary(
             OptionalInteger(root.Get("version")),
             RequiredDimension(root.Get("map_width"), "map_width"),
@@ -102,7 +117,10 @@ public static partial class WonderdraftProjectInspector
             TerritoryCount(root),
             root.Get("grid") is { } grid && grid is not NilValue,
             StringArray(root.Get("included_packs")),
-            StringArray(root.Get("included_default_packs")));
+            StringArray(root.Get("included_default_packs")),
+            gridMetadata,
+            scaleMetadata,
+            TryReadPhysicalScale(scaleMetadata));
 
         return new WonderdraftProjectDocument(summary, ExtractCandidates(root));
     }
@@ -168,7 +186,8 @@ public static partial class WonderdraftProjectInspector
                 descriptor,
                 position,
                 [],
-                position is null ? "Wonderdraft record has no finite Vector2 position." : null));
+                position is null ? "Wonderdraft record has no finite Vector2 position." : null,
+                FlattenMetadata(record, "", 64)));
         }
     }
 
@@ -212,7 +231,8 @@ public static partial class WonderdraftProjectInspector
                 positioned,
                 positioned.Length < minimumPoints
                     ? $"Wonderdraft {kind.ToString().ToLowerInvariant()} does not contain at least {minimumPoints} finite points."
-                    : null));
+                    : null,
+                FlattenMetadata(record, "", 64)));
         }
     }
 
@@ -268,6 +288,153 @@ public static partial class WonderdraftProjectInspector
         }
 
         return new WonderdraftPixelPoint(x, y);
+    }
+
+    private static IReadOnlyDictionary<string, string> ExtractScaleMetadata(DictionaryValue root)
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (key, value) in root.Values)
+        {
+            if (!key.Contains("scale", StringComparison.OrdinalIgnoreCase)
+                && !key.Contains("ruler", StringComparison.OrdinalIgnoreCase)
+                && !key.Contains("measure", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            FlattenMetadataInto(value, key, result, 256, 0);
+            if (result.Count >= 256) break;
+        }
+
+        return result;
+    }
+
+    private static IReadOnlyDictionary<string, string> FlattenMetadata(
+        WonderdraftValue? value,
+        string prefix,
+        int maximumEntries)
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        FlattenMetadataInto(value, prefix, result, maximumEntries, 0);
+        return result;
+    }
+
+    private static void FlattenMetadataInto(
+        WonderdraftValue? value,
+        string prefix,
+        Dictionary<string, string> destination,
+        int maximumEntries,
+        int depth)
+    {
+        if (value is null || destination.Count >= maximumEntries || depth > 6) return;
+        if (MetadataText(value) is { } scalar)
+        {
+            if (!string.IsNullOrWhiteSpace(prefix)) destination[prefix] = scalar;
+            return;
+        }
+
+        switch (value)
+        {
+            case DictionaryValue dictionary:
+                foreach (var (key, nested) in dictionary.Values)
+                {
+                    if (destination.Count >= maximumEntries) break;
+                    var path = string.IsNullOrWhiteSpace(prefix) ? key : $"{prefix}.{key}";
+                    FlattenMetadataInto(nested, path, destination, maximumEntries, depth + 1);
+                }
+                break;
+
+            case ArrayValue array:
+                for (var index = 0; index < array.Values.Count && destination.Count < maximumEntries; index++)
+                {
+                    FlattenMetadataInto(
+                        array.Values[index],
+                        $"{prefix}[{index}]",
+                        destination,
+                        maximumEntries,
+                        depth + 1);
+                }
+                break;
+        }
+    }
+
+    private static string? MetadataText(WonderdraftValue value) => value switch
+    {
+        NilValue _ => "null",
+        StringValue text => text.Value.Trim(),
+        BooleanValue boolean => boolean.Value ? "true" : "false",
+        IntegerValue integer => integer.Value.ToString(CultureInfo.InvariantCulture),
+        RealValue real when double.IsFinite(real.Value) => real.Value.ToString("R", CultureInfo.InvariantCulture),
+        VectorValue vector when vector.Values.All(double.IsFinite) =>
+            $"{vector.Kind}({string.Join(",", vector.Values.Select(item => item.ToString("R", CultureInfo.InvariantCulture)))})",
+        VectorArrayValue vectors when vectors.Values.All(item => item.All(double.IsFinite)) =>
+            $"{vectors.Kind}({string.Join(";", vectors.Values.Select(item => string.Join(",", item.Select(component => component.ToString("R", CultureInfo.InvariantCulture)))))})",
+        _ => null
+    };
+
+    private static WonderdraftPhysicalScale? TryReadPhysicalScale(IReadOnlyDictionary<string, string> metadata)
+    {
+        var unit = metadata
+            .Where(item => LastMetadataKey(item.Key).Contains("unit", StringComparison.OrdinalIgnoreCase))
+            .Select(item => item.Value.Trim())
+            .FirstOrDefault(item => !string.IsNullOrWhiteSpace(item)
+                && !double.TryParse(item, NumberStyles.Float, CultureInfo.InvariantCulture, out _));
+        var segmentDistance = FindMetadataNumber(metadata, key =>
+            key.Contains("segment", StringComparison.OrdinalIgnoreCase)
+            && key.Contains("distance", StringComparison.OrdinalIgnoreCase));
+        var segmentCountNumber = FindMetadataNumber(metadata, key =>
+            key.Contains("segment", StringComparison.OrdinalIgnoreCase)
+            && (key.Contains("count", StringComparison.OrdinalIgnoreCase)
+                || key.Contains("number", StringComparison.OrdinalIgnoreCase)
+                || key.Contains("num", StringComparison.OrdinalIgnoreCase)
+                || key.Equals("segments", StringComparison.OrdinalIgnoreCase)));
+        var pixelLength = FindMetadataNumber(metadata, key =>
+            key.Equals("width", StringComparison.OrdinalIgnoreCase)
+            || key.Equals("length", StringComparison.OrdinalIgnoreCase)
+            || (key.Contains("pixel", StringComparison.OrdinalIgnoreCase)
+                && (key.Contains("width", StringComparison.OrdinalIgnoreCase)
+                    || key.Contains("length", StringComparison.OrdinalIgnoreCase)
+                    || key.Contains("size", StringComparison.OrdinalIgnoreCase))));
+
+        if (unit is null
+            || segmentDistance is null || segmentDistance <= 0
+            || segmentCountNumber is null || segmentCountNumber <= 0
+            || Math.Truncate(segmentCountNumber.Value) != segmentCountNumber.Value
+            || segmentCountNumber > int.MaxValue
+            || pixelLength is null || pixelLength <= 0)
+        {
+            return null;
+        }
+
+        return new WonderdraftPhysicalScale(
+            unit,
+            segmentDistance.Value,
+            (int)segmentCountNumber.Value,
+            pixelLength.Value);
+    }
+
+    private static double? FindMetadataNumber(
+        IReadOnlyDictionary<string, string> metadata,
+        Func<string, bool> predicate)
+    {
+        foreach (var (path, value) in metadata)
+        {
+            var key = LastMetadataKey(path);
+            if (!predicate(key)) continue;
+            if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var number)
+                && double.IsFinite(number))
+            {
+                return number;
+            }
+        }
+
+        return null;
+    }
+
+    private static string LastMetadataKey(string path)
+    {
+        var index = path.LastIndexOf('.');
+        return index < 0 ? path : path[(index + 1)..];
     }
 
     private static string? Text(WonderdraftValue? value) =>

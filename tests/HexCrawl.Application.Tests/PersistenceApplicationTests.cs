@@ -214,6 +214,87 @@ public sealed class PersistenceApplicationTests
     }
 
     [Fact]
+    public async Task LegacySourceMapMetadataUpdatePreservesImportedSourceState()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var legacy = await database.ServiceAsync();
+        var world = await legacy.CreateOverworldAsync("alice", WorldCommand());
+
+        var store = new SqliteHexCrawlStore(database.ConnectionString);
+        await store.InitializeAsync();
+        var sourceMaps = new SourceMapApplicationService(store);
+        world = await sourceMaps.CreateUploadedAsync(
+            world.World.Id,
+            "alice",
+            new UploadSourceMapCommand(
+                "northlands",
+                "Imported map",
+                SourceMapRole.Gm,
+                "maps/northlands/imported/v1",
+                false,
+                100,
+                100,
+                "image/png",
+                "map.png",
+                world.Version));
+        var mapId = Assert.Single(world.World.SourceMaps).Id;
+
+        world = await sourceMaps.ImportContentAsync(
+            world.World.Id,
+            mapId,
+            "alice",
+            new ImportSourceMapContentCommand(
+                [new SourceMapContentElement(
+                    "label:0",
+                    SourceMapContentKind.Label,
+                    "Old Harbor",
+                    null,
+                    new WorldPoint(5, 5),
+                    [],
+                    new Dictionary<string, string> { ["size"] = "24" })],
+                new SourceMapImportProvenance(
+                    "wonderdraft",
+                    "abc123",
+                    DateTimeOffset.UtcNow,
+                    1),
+                new SourceMapSourceArchive(
+                    "maps/source/archive/v1",
+                    1234,
+                    "application/octet-stream",
+                    "campaign.wonderdraft_map"),
+                null,
+                world.Version));
+
+        var imported = Assert.Single(world.World.SourceMaps);
+        world = await legacy.UpdateSourceMapAsync(
+            world.World.Id,
+            mapId,
+            "alice",
+            new UpdateSourceMapCommand(
+                "northlands",
+                "Renamed imported map",
+                SourceMapRole.Neutral,
+                imported.AssetKey,
+                true,
+                imported.Alignment,
+                imported.WorldCoverageBoundary,
+                world.Version));
+
+        var updated = Assert.Single(world.World.SourceMaps);
+        Assert.Equal("Renamed imported map", updated.Name);
+        Assert.Equal(SourceMapRole.Neutral, updated.Role);
+        Assert.True(updated.ContainsBakedGrid);
+        Assert.Equal(100, updated.PixelWidth);
+        Assert.Equal(100, updated.PixelHeight);
+        Assert.Equal("image/png", updated.MediaType);
+        Assert.Equal("map.png", updated.OriginalFileName);
+        Assert.Single(updated.ImportedContent!);
+        Assert.Equal("abc123", updated.ImportProvenance!.SourceFingerprint);
+        Assert.Equal("maps/source/archive/v1", updated.SourceArchive!.AssetKey);
+        Assert.Equal("campaign.wonderdraft_map", updated.SourceArchive.OriginalFileName);
+    }
+
+    [Fact]
     public async Task OptimisticConcurrencyRejectsStaleWorldMutation()
     {
         await using var database = await TestDatabase.CreateAsync();

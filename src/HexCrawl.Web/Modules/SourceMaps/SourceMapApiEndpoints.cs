@@ -9,11 +9,13 @@ public static partial class SourceMapApiEndpoints
         api.MapGet("", ListAsync);
         api.MapPost("", UploadAsync);
         api.MapPost("/wonderdraft/inspect", InspectWonderdraftAsync);
+        api.MapPost("/{sourceMapId:guid}/wonderdraft/source", ImportWonderdraftSourceAsync);
         api.MapPost("/{sourceMapId:guid}/wonderdraft/candidates", PreviewWonderdraftCandidatesAsync);
         api.MapPost("/{sourceMapId:guid}/wonderdraft/import", ImportWonderdraftCandidatesAsync);
         api.MapPut("/{sourceMapId:guid}", UpdateMetadataAsync);
         api.MapPut("/{sourceMapId:guid}/registration", RegisterAsync);
         api.MapGet("/{sourceMapId:guid}/asset", GetAssetAsync);
+        api.MapGet("/{sourceMapId:guid}/source-archive", GetSourceArchiveAsync);
         api.MapDelete("/{sourceMapId:guid}", DeleteAsync);
     }
 

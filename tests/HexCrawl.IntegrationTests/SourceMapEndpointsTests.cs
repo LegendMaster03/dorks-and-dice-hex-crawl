@@ -156,6 +156,12 @@ public sealed class SourceMapEndpointsTests
             Assert.Equal(12, label.GetProperty("worldPosition").GetProperty("x").GetDouble(), 8);
             Assert.Equal(23, label.GetProperty("worldPosition").GetProperty("y").GetDouble(), 8);
 
+            var symbol = preview.GetProperty("candidates").EnumerateArray()
+                .Single(item => item.GetProperty("key").GetString() == "symbol:0");
+            Assert.Equal(
+                "res://sprites/symbols/towns/castle",
+                symbol.GetProperty("properties").GetProperty("texture").GetString());
+
             var pathCandidate = preview.GetProperty("candidates").EnumerateArray()
                 .Single(item => item.GetProperty("key").GetString() == "path:0");
             Assert.Equal("Line", pathCandidate.GetProperty("geometryKind").GetString());
@@ -165,6 +171,340 @@ public sealed class SourceMapEndpointsTests
             Assert.Equal(version, reopened.GetProperty("version").GetInt64());
             Assert.Empty(reopened.GetProperty("features").EnumerateArray());
             Assert.Empty(reopened.GetProperty("locations").EnumerateArray());
+        }
+        finally
+        {
+            TestWebHost.DeleteDatabase(database);
+        }
+    }
+
+    [Fact]
+    public async Task NativeWonderdraftSourceImportPreservesCartographyAndAutomaticallyRegistersMatchingRaster()
+    {
+        var database = TestWebHost.NewDatabasePath();
+        try
+        {
+            Guid worldId;
+            Guid sourceMapId;
+            long importVersion;
+            using (var factory = TestWebHost.Create(database, "alice"))
+            using (var client = factory.CreateClient())
+            {
+                var world = await CreateWorld(client, "Native Wonderdraft import");
+                worldId = world.GetProperty("id").GetGuid();
+                using var uploadResponse = await UploadResponse(
+                    client,
+                    worldId,
+                    world.GetProperty("version").GetInt64(),
+                    "Wonderdraft",
+                    "Matching export",
+                    "GM",
+                    false,
+                    BuildPng(2048, 1536));
+                uploadResponse.EnsureSuccessStatusCode();
+                var uploaded = await uploadResponse.Content.ReadFromJsonAsync<JsonElement>();
+                sourceMapId = uploaded.GetProperty("sourceMaps")[0].GetProperty("id").GetGuid();
+                importVersion = uploaded.GetProperty("version").GetInt64();
+
+                using var sourceContent = new MultipartFormDataContent();
+                sourceContent.Add(new ByteArrayContent(BuildWonderdraftProject(2048, 1536)), "file", "campaign.wonderdraft_map");
+                sourceContent.Add(
+                    new StringContent(importVersion.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                    "expectedVersion");
+                using var importResponse = await client.PostAsync(
+                    $"/api/overworlds/{worldId:D}/source-maps/{sourceMapId:D}/wonderdraft/source",
+                    sourceContent);
+                importResponse.EnsureSuccessStatusCode();
+                var imported = await importResponse.Content.ReadFromJsonAsync<JsonElement>();
+
+                Assert.Equal("PhysicalScale", imported.GetProperty("registrationMode").GetString());
+                Assert.Equal(8, imported.GetProperty("sourceRecordCount").GetInt32());
+                Assert.Equal(importVersion + 1, imported.GetProperty("world").GetProperty("version").GetInt64());
+                Assert.Empty(imported.GetProperty("world").GetProperty("locations").EnumerateArray());
+                Assert.Empty(imported.GetProperty("world").GetProperty("features").EnumerateArray());
+
+                var sourceMap = Assert.Single(imported.GetProperty("world").GetProperty("sourceMaps").EnumerateArray());
+                Assert.Equal("Affine", sourceMap.GetProperty("alignment").GetProperty("kind").GetString());
+
+                using var previewContent = new MultipartFormDataContent();
+                previewContent.Add(new ByteArrayContent(BuildWonderdraftProject(2048, 1536)), "file", "campaign.wonderdraft_map");
+                using var previewResponse = await client.PostAsync(
+                    $"/api/overworlds/{worldId:D}/source-maps/{sourceMapId:D}/wonderdraft/candidates",
+                    previewContent);
+                previewResponse.EnsureSuccessStatusCode();
+                var preview = await previewResponse.Content.ReadFromJsonAsync<JsonElement>();
+                Assert.Equal(1, preview.GetProperty("sourceScaleX").GetDouble(), 12);
+                Assert.Equal(1, preview.GetProperty("sourceScaleY").GetDouble(), 12);
+                var label = preview.GetProperty("candidates").EnumerateArray()
+                    .Single(item => item.GetProperty("key").GetString() == "label:0");
+                Assert.Equal(0, label.GetProperty("worldPosition").GetProperty("x").GetDouble(), 8);
+                Assert.Equal(0, label.GetProperty("worldPosition").GetProperty("y").GetDouble(), 8);
+
+                var list = await client.GetFromJsonAsync<JsonElement>($"/api/overworlds/{worldId:D}/source-maps");
+                var detail = Assert.Single(list.GetProperty("sourceMaps").EnumerateArray());
+                Assert.Equal(8, detail.GetProperty("importedContentCount").GetInt32());
+                Assert.Equal("wonderdraft", detail.GetProperty("importProvenance").GetProperty("sourceType").GetString());
+
+                using var staleContent = new MultipartFormDataContent();
+                staleContent.Add(new ByteArrayContent(BuildWonderdraftProject(2048, 1536)), "file", "campaign.wonderdraft_map");
+                staleContent.Add(
+                    new StringContent(importVersion.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                    "expectedVersion");
+                using var stale = await client.PostAsync(
+                    $"/api/overworlds/{worldId:D}/source-maps/{sourceMapId:D}/wonderdraft/source",
+                    staleContent);
+                Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
+            }
+
+            using var reopenedFactory = TestWebHost.Create(database, "alice");
+            using var reopenedClient = reopenedFactory.CreateClient();
+            var reopenedList = await reopenedClient.GetFromJsonAsync<JsonElement>(
+                $"/api/overworlds/{worldId:D}/source-maps");
+            var reopenedMap = Assert.Single(reopenedList.GetProperty("sourceMaps").EnumerateArray());
+            Assert.Equal(8, reopenedMap.GetProperty("importedContentCount").GetInt32());
+            Assert.Equal("wonderdraft", reopenedMap.GetProperty("importProvenance").GetProperty("sourceType").GetString());
+        }
+        finally
+        {
+            TestWebHost.DeleteDatabase(database);
+        }
+    }
+
+    [Fact]
+    public async Task NativeWonderdraftSourceArchiveRoundTripsAndDoesNotLeakOnReimportOrDelete()
+    {
+        var database = TestWebHost.NewDatabasePath();
+        var assetDirectory = Path.Combine(database + ".assets", "maps");
+        try
+        {
+            Guid worldId;
+            Guid sourceMapId;
+            long version;
+            var originalProject = BuildWonderdraftProject(labelText: "Old Harbor");
+            var revisedProject = BuildWonderdraftProject(labelText: "New Harbor");
+
+            using (var factory = TestWebHost.Create(database, "alice"))
+            using (var client = factory.CreateClient())
+            {
+                var world = await CreateWorld(client, "Wonderdraft source archive");
+                worldId = world.GetProperty("id").GetGuid();
+
+                using var uploadResponse = await UploadResponse(
+                    client,
+                    worldId,
+                    world.GetProperty("version").GetInt64(),
+                    "Wonderdraft",
+                    "Archive test",
+                    "GM",
+                    false,
+                    BuildPng(1024, 768));
+                uploadResponse.EnsureSuccessStatusCode();
+                var uploaded = await uploadResponse.Content.ReadFromJsonAsync<JsonElement>();
+                sourceMapId = uploaded.GetProperty("sourceMaps")[0].GetProperty("id").GetGuid();
+
+                using var firstContent = new MultipartFormDataContent();
+                firstContent.Add(new ByteArrayContent(originalProject), "file", "campaign.wonderdraft_map");
+                firstContent.Add(
+                    new StringContent(
+                        uploaded.GetProperty("version").GetInt64().ToString(
+                            System.Globalization.CultureInfo.InvariantCulture)),
+                    "expectedVersion");
+                using var firstResponse = await client.PostAsync(
+                    $"/api/overworlds/{worldId:D}/source-maps/{sourceMapId:D}/wonderdraft/source",
+                    firstContent);
+                firstResponse.EnsureSuccessStatusCode();
+                var first = await firstResponse.Content.ReadFromJsonAsync<JsonElement>();
+                version = first.GetProperty("world").GetProperty("version").GetInt64();
+
+                var firstArchive = await client.GetByteArrayAsync(
+                    $"/api/overworlds/{worldId:D}/source-maps/{sourceMapId:D}/source-archive");
+                Assert.Equal(originalProject, firstArchive);
+                Assert.Equal(2, Directory.GetFiles(assetDirectory).Length);
+
+                var list = await client.GetFromJsonAsync<JsonElement>(
+                    $"/api/overworlds/{worldId:D}/source-maps");
+                var detail = Assert.Single(list.GetProperty("sourceMaps").EnumerateArray());
+                var archive = detail.GetProperty("sourceArchive");
+                Assert.Equal(originalProject.Length, archive.GetProperty("length").GetInt64());
+                Assert.Equal("application/octet-stream", archive.GetProperty("mediaType").GetString());
+                Assert.Equal("campaign.wonderdraft_map", archive.GetProperty("originalFileName").GetString());
+
+                using var repeatContent = new MultipartFormDataContent();
+                repeatContent.Add(new ByteArrayContent(originalProject), "file", "campaign.wonderdraft_map");
+                repeatContent.Add(
+                    new StringContent(version.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                    "expectedVersion");
+                using var repeatResponse = await client.PostAsync(
+                    $"/api/overworlds/{worldId:D}/source-maps/{sourceMapId:D}/wonderdraft/source",
+                    repeatContent);
+                repeatResponse.EnsureSuccessStatusCode();
+                var repeated = await repeatResponse.Content.ReadFromJsonAsync<JsonElement>();
+                version = repeated.GetProperty("world").GetProperty("version").GetInt64();
+                Assert.Equal(2, Directory.GetFiles(assetDirectory).Length);
+
+                using var revisedContent = new MultipartFormDataContent();
+                revisedContent.Add(new ByteArrayContent(revisedProject), "file", "campaign.wonderdraft_map");
+                revisedContent.Add(
+                    new StringContent(version.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                    "expectedVersion");
+                using var revisedResponse = await client.PostAsync(
+                    $"/api/overworlds/{worldId:D}/source-maps/{sourceMapId:D}/wonderdraft/source",
+                    revisedContent);
+                revisedResponse.EnsureSuccessStatusCode();
+                var revised = await revisedResponse.Content.ReadFromJsonAsync<JsonElement>();
+                version = revised.GetProperty("world").GetProperty("version").GetInt64();
+
+                var revisedArchive = await client.GetByteArrayAsync(
+                    $"/api/overworlds/{worldId:D}/source-maps/{sourceMapId:D}/source-archive");
+                Assert.Equal(revisedProject, revisedArchive);
+                Assert.Equal(2, Directory.GetFiles(assetDirectory).Length);
+            }
+
+            using (var reopenedFactory = TestWebHost.Create(database, "alice"))
+            using (var reopenedClient = reopenedFactory.CreateClient())
+            {
+                var reopenedArchive = await reopenedClient.GetByteArrayAsync(
+                    $"/api/overworlds/{worldId:D}/source-maps/{sourceMapId:D}/source-archive");
+                Assert.Equal(revisedProject, reopenedArchive);
+
+                using var deleteResponse = await reopenedClient.DeleteAsync(
+                    $"/api/overworlds/{worldId:D}/source-maps/{sourceMapId:D}?expectedVersion={version}");
+                deleteResponse.EnsureSuccessStatusCode();
+                Assert.Empty(Directory.GetFiles(assetDirectory));
+
+                using var missingArchive = await reopenedClient.GetAsync(
+                    $"/api/overworlds/{worldId:D}/source-maps/{sourceMapId:D}/source-archive");
+                Assert.Equal(HttpStatusCode.NotFound, missingArchive.StatusCode);
+            }
+        }
+        finally
+        {
+            TestWebHost.DeleteDatabase(database);
+        }
+    }
+
+    [Fact]
+    public async Task NativeWonderdraftImportSupportsProportionallyScaledExports()
+    {
+        var database = TestWebHost.NewDatabasePath();
+        try
+        {
+            using var factory = TestWebHost.Create(database, "alice");
+            using var client = factory.CreateClient();
+            var world = await CreateWorld(client, "Scaled Wonderdraft export");
+            var worldId = world.GetProperty("id").GetGuid();
+
+            using var uploadResponse = await UploadResponse(
+                client,
+                worldId,
+                world.GetProperty("version").GetInt64(),
+                "Wonderdraft",
+                "2x export",
+                "GM",
+                false,
+                BuildPng(2048, 1536));
+            uploadResponse.EnsureSuccessStatusCode();
+            var uploaded = await uploadResponse.Content.ReadFromJsonAsync<JsonElement>();
+            var sourceMapId = uploaded.GetProperty("sourceMaps")[0].GetProperty("id").GetGuid();
+
+            using var sourceContent = new MultipartFormDataContent();
+            sourceContent.Add(new ByteArrayContent(BuildWonderdraftProject()), "file", "campaign.wonderdraft_map");
+            sourceContent.Add(
+                new StringContent(
+                    uploaded.GetProperty("version").GetInt64().ToString(
+                        System.Globalization.CultureInfo.InvariantCulture)),
+                "expectedVersion");
+            using var importResponse = await client.PostAsync(
+                $"/api/overworlds/{worldId:D}/source-maps/{sourceMapId:D}/wonderdraft/source",
+                sourceContent);
+            importResponse.EnsureSuccessStatusCode();
+            var imported = await importResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("PhysicalScale", imported.GetProperty("registrationMode").GetString());
+
+            using var previewContent = new MultipartFormDataContent();
+            previewContent.Add(new ByteArrayContent(BuildWonderdraftProject()), "file", "campaign.wonderdraft_map");
+            using var previewResponse = await client.PostAsync(
+                $"/api/overworlds/{worldId:D}/source-maps/{sourceMapId:D}/wonderdraft/candidates",
+                previewContent);
+            previewResponse.EnsureSuccessStatusCode();
+            var preview = await previewResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(2, preview.GetProperty("sourceScaleX").GetDouble(), 12);
+            Assert.Equal(2, preview.GetProperty("sourceScaleY").GetDouble(), 12);
+
+            var label = preview.GetProperty("candidates").EnumerateArray()
+                .Single(item => item.GetProperty("key").GetString() == "label:0");
+            Assert.Equal(0, label.GetProperty("worldPosition").GetProperty("x").GetDouble(), 8);
+            Assert.Equal(0, label.GetProperty("worldPosition").GetProperty("y").GetDouble(), 8);
+        }
+        finally
+        {
+            TestWebHost.DeleteDatabase(database);
+        }
+    }
+
+    [Fact]
+    public async Task NativeWonderdraftImportDoesNotGuessPlacementAgainstExistingWorldTruth()
+    {
+        var database = TestWebHost.NewDatabasePath();
+        try
+        {
+            using var factory = TestWebHost.Create(database, "alice");
+            using var client = factory.CreateClient();
+            var world = await CreateWorld(client, "Anchored Wonderdraft import");
+            var worldId = world.GetProperty("id").GetGuid();
+
+            using var locationResponse = await client.PostAsJsonAsync(
+                $"/api/overworlds/{worldId:D}/locations",
+                new
+                {
+                    name = "Existing landmark",
+                    category = "settlement",
+                    position = new { x = 20, y = -10 },
+                    discoverability = "Obvious",
+                    expectedVersion = world.GetProperty("version").GetInt64()
+                });
+            locationResponse.EnsureSuccessStatusCode();
+            var anchored = await locationResponse.Content.ReadFromJsonAsync<JsonElement>();
+
+            using var uploadResponse = await UploadResponse(
+                client,
+                worldId,
+                anchored.GetProperty("version").GetInt64(),
+                "Wonderdraft",
+                "Matching export",
+                "GM",
+                false,
+                BuildPng(1024, 768));
+            uploadResponse.EnsureSuccessStatusCode();
+            var uploaded = await uploadResponse.Content.ReadFromJsonAsync<JsonElement>();
+            var sourceMapId = uploaded.GetProperty("sourceMaps")[0].GetProperty("id").GetGuid();
+
+            using var sourceContent = new MultipartFormDataContent();
+            sourceContent.Add(new ByteArrayContent(BuildWonderdraftProject()), "file", "campaign.wonderdraft_map");
+            sourceContent.Add(
+                new StringContent(
+                    uploaded.GetProperty("version").GetInt64().ToString(
+                        System.Globalization.CultureInfo.InvariantCulture)),
+                "expectedVersion");
+            using var response = await client.PostAsync(
+                $"/api/overworlds/{worldId:D}/source-maps/{sourceMapId:D}/wonderdraft/source",
+                sourceContent);
+            response.EnsureSuccessStatusCode();
+            var imported = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+            Assert.Equal("SourceOnly", imported.GetProperty("registrationMode").GetString());
+            Assert.Contains(
+                "translation and rotation",
+                imported.GetProperty("registrationNote").GetString(),
+                StringComparison.OrdinalIgnoreCase);
+            var map = Assert.Single(imported.GetProperty("world").GetProperty("sourceMaps").EnumerateArray());
+            Assert.Equal(JsonValueKind.Null, map.GetProperty("alignment").ValueKind);
+            Assert.Single(imported.GetProperty("world").GetProperty("locations").EnumerateArray());
+
+            var list = await client.GetFromJsonAsync<JsonElement>(
+                $"/api/overworlds/{worldId:D}/source-maps");
+            var detail = Assert.Single(list.GetProperty("sourceMaps").EnumerateArray());
+            Assert.Equal(8, detail.GetProperty("importedContentCount").GetInt32());
         }
         finally
         {
@@ -542,14 +882,17 @@ public sealed class SourceMapEndpointsTests
         return await client.PostAsync($"/api/overworlds/{worldId:D}/source-maps", content);
     }
 
-    private static byte[] BuildWonderdraftProject()
+    private static byte[] BuildWonderdraftProject(
+        int width = 1024,
+        int height = 768,
+        string labelText = "Old Harbor")
     {
         using var body = new MemoryStream();
         WriteVariantHeader(body, 18);
-        WriteUInt32(body, 8);
+        WriteUInt32(body, 9);
         WriteVariantEntry(body, "version", () => WriteVariantInteger(body, 15));
-        WriteVariantEntry(body, "map_width", () => WriteVariantInteger(body, 1024));
-        WriteVariantEntry(body, "map_height", () => WriteVariantInteger(body, 768));
+        WriteVariantEntry(body, "map_width", () => WriteVariantInteger(body, width));
+        WriteVariantEntry(body, "map_height", () => WriteVariantInteger(body, height));
         WriteVariantEntry(body, "symbols", () => WriteVariantArray(body, 2, index =>
         {
             if (index == 0)
@@ -565,8 +908,8 @@ public sealed class SourceMapEndpointsTests
         }));
         WriteVariantEntry(body, "labels", () => WriteVariantArray(body, 1, _ =>
             WriteVariantDictionary(body,
-                ("text", () => WriteVariantString(body, "Old Harbor")),
-                ("position", () => WriteVariantVector2(body, 512, 384)))));
+                ("text", () => WriteVariantString(body, labelText)),
+                ("position", () => WriteVariantVector2(body, width / 2f, height / 2f)))));
         WriteVariantEntry(body, "paths", () => WriteVariantArray(body, 3, index =>
         {
             if (index == 0)
@@ -603,6 +946,12 @@ public sealed class SourceMapEndpointsTests
             WriteVariantHeader(body, 18);
             WriteUInt32(body, 0);
         });
+        WriteVariantEntry(body, "scale", () =>
+            WriteVariantDictionary(body,
+                ("unit_label", () => WriteVariantString(body, "Miles")),
+                ("segment_distance", () => WriteVariantInteger(body, 10)),
+                ("segment_count", () => WriteVariantInteger(body, 3)),
+                ("pixel_length", () => WriteVariantInteger(body, 220))));
 
         var variant = body.ToArray();
         using var raw = new MemoryStream();
@@ -629,6 +978,48 @@ public sealed class SourceMapEndpointsTests
         foreach (var block in blocks) output.Write(block);
         output.Write("GCPF"u8);
         return output.ToArray();
+    }
+
+    private static byte[] BuildPng(int width, int height)
+    {
+        using var output = new MemoryStream();
+        output.Write(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 });
+
+        Span<byte> ihdr = stackalloc byte[13];
+        BinaryPrimitives.WriteInt32BigEndian(ihdr[..4], width);
+        BinaryPrimitives.WriteInt32BigEndian(ihdr.Slice(4, 4), height);
+        ihdr[8] = 8;
+        ihdr[9] = 6;
+        WritePngChunk(output, "IHDR"u8, ihdr);
+        WritePngChunk(output, "IDAT"u8, ReadOnlySpan<byte>.Empty);
+        WritePngChunk(output, "IEND"u8, ReadOnlySpan<byte>.Empty);
+        return output.ToArray();
+    }
+
+    private static void WritePngChunk(Stream stream, ReadOnlySpan<byte> type, ReadOnlySpan<byte> data)
+    {
+        Span<byte> length = stackalloc byte[4];
+        BinaryPrimitives.WriteUInt32BigEndian(length, checked((uint)data.Length));
+        stream.Write(length);
+        stream.Write(type);
+        stream.Write(data);
+
+        var crc = 0xffffffffu;
+        foreach (var value in type) crc = UpdatePngCrc(crc, value);
+        foreach (var value in data) crc = UpdatePngCrc(crc, value);
+        Span<byte> crcBytes = stackalloc byte[4];
+        BinaryPrimitives.WriteUInt32BigEndian(crcBytes, crc ^ 0xffffffffu);
+        stream.Write(crcBytes);
+    }
+
+    private static uint UpdatePngCrc(uint crc, byte value)
+    {
+        crc ^= value;
+        for (var bit = 0; bit < 8; bit++)
+        {
+            crc = (crc & 1) != 0 ? 0xedb88320u ^ (crc >> 1) : crc >> 1;
+        }
+        return crc;
     }
 
     private static byte[] EncodeFastLzLiteral(ReadOnlySpan<byte> data)

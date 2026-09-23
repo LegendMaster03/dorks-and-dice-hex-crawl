@@ -22,7 +22,7 @@ Production config sets `MapAssets:RootPath=/data/assets`. The existing `hex-craw
 /data/assets/.tmp/...
 ```
 
-The filesystem provider is an infrastructure choice, not a domain contract. A future object-store, NAS, or other blob provider can implement `IMapAssetStore` without changing `SourceMapRepresentation` or semantic world truth. Binary maps are never stored as SQLite blobs.
+The filesystem provider is an infrastructure choice, not a domain contract. A future object-store, NAS, or other blob provider can implement `IMapAssetStore` without changing semantic world truth. Raster assets and opaque import source archives are stored through this boundary and are never stored as SQLite blobs.
 
 Writes use a temporary file in the asset root, flush successfully, and then rename into the final generated key. A failed write never creates a final asset. Startup creates missing asset directories but performs no destructive cleanup.
 
@@ -73,6 +73,7 @@ GET    /api/overworlds/{worldId}/source-maps
 POST   /api/overworlds/{worldId}/source-maps
 PUT    /api/overworlds/{worldId}/source-maps/{sourceMapId}
 PUT    /api/overworlds/{worldId}/source-maps/{sourceMapId}/registration
+GET    /api/overworlds/{worldId}/source-maps/{sourceMapId}/source-archive
 DELETE /api/overworlds/{worldId}/source-maps/{sourceMapId}
 ```
 
@@ -117,52 +118,123 @@ Semantic objects remain separate and interactive above the raster.
 
 The world editor keeps show/hide state only in the renderer. Visibility toggles do not mutate or version world truth. The expedition runtime uses the same Canvas renderer, so registered source maps are available as base geography there as well.
 
-## Wonderdraft project review and selective semantic import
+## Native Wonderdraft source import
 
-Native `.wonderdraft_map` projects are import sources, not runtime dependencies or world truth. The server reads the Godot `GCPF` container, bounded FastLZ blocks, and binary Variant structure directly. Decoded size, collection size, nesting depth, and candidate geometry have explicit limits; embedded image byte arrays are skipped for semantic review rather than promoted as map truth.
+Native `.wonderdraft_map` projects are structured import sources, not runtime dependencies and not automatically semantic world truth. The server continues to parse the Godot `GCPF` container, bounded FastLZ blocks, and Variant data under explicit decoded-size, collection-size, nesting, string, and geometry limits.
 
-Inspection is owner-scoped and non-mutating:
+The normal Wonderdraft workflow is source-first:
+
+1. upload or select the raster export that belongs to the Wonderdraft project;
+2. choose the `.wonderdraft_map` project;
+3. import the project as source-derived map content;
+4. determine the deterministic project-to-raster scale from their pixel dimensions;
+5. preserve labels, symbols, paths, territories, and source metadata without requiring semantic classification;
+6. preserve source-grid and scale metadata;
+7. place the raster automatically when the source physical scale and the Hex Crawl campaign scale provide enough information;
+8. review only optional semantic promotions and genuine exceptions.
+
+The native mutation endpoint is:
 
 ```text
-POST /api/overworlds/{worldId}/source-maps/wonderdraft/inspect
+POST /api/overworlds/{worldId}/source-maps/{sourceMapId}/wonderdraft/source
 ```
 
-Candidate review is also non-mutating and requires a registered source raster:
+The request resubmits the Wonderdraft project and the expected overworld version. The server re-parses all source records and replaces the source-derived content attached to that source-map representation in one optimistic-concurrency save. A SHA-256 source fingerprint, source type, import time, and source-record count are retained as generic import provenance. Re-importing therefore replaces the retained source layer instead of appending another copy of every decorative record.
+
+Source-derived content is intentionally separate from `Location` and `SpatialFeature`. A tree, mountain icon, map title, credit label, or unknown path remains cartographic source information unless the DM later promotes it to semantic world truth. This prevents large Wonderdraft projects from creating thousands of false POIs.
+
+Lossless preservation and interpreted content are separate layers. The original uploaded project is stored byte-for-byte as an opaque source archive asset owned by the source-map representation. Its provider-relative storage key is not exposed through the detail contract. The archive survives restart, is replaced on a changed re-import, is reused for an identical re-import, and is deleted with the owning source map. This preserves unknown top-level fields, embedded paint data, boxes, windroses, future-version fields, and any other data that the current parser does not yet interpret.
+
+The parsed operational layer stores generic source-map content kinds—label, symbol, line, and region—with a source record key, display name, descriptor, source geometry, scalar/nested source properties, and generic provenance. Wonderdraft-specific parsing and translation remain in the import boundary; universal world objects do not gain Wonderdraft-specific fields. Future Wonderdraft presentation adapters can re-read the opaque archive when richer format-specific rendering is needed instead of relying on a lossy reconstruction.
+
+### Project-to-raster registration
+
+For an export produced from the same Wonderdraft project, project coordinates and raster pixels are not independently registered by clicking landmarks. The server computes:
+
+```text
+project pixel
+    -> project/export scale
+raster pixel
+    -> source-map world registration
+world point
+    -> viewport/canvas transform
+screen point
+```
+
+The project/export scale is derived independently on X and Y from the project canvas dimensions and raster pixel dimensions. Browser viewport size, CSS image fitting, canvas backing dimensions, device-pixel ratio, browser zoom, pan, and viewport zoom are downstream presentation transforms and do not alter source registration.
+
+If the selected raster already has a saved world registration, native Wonderdraft import preserves it.
+
+If the raster is unplaced and Wonderdraft provides a usable physical scale, the importer may establish initial world placement automatically. The current physical-scale path requires:
+
+- a source unit with a known physical conversion, currently miles or kilometers;
+- source scale-bar segment distance, segment count, and pixel length;
+- a Hex Crawl grid whose neighboring-hex distance has a physical unit conversion;
+- a proportional raster export rather than independent X/Y stretching.
+
+The importer converts Wonderdraft physical distance per raster pixel into Hex Crawl world units per raster pixel. When the world has no semantic locations/features and no other placed source map, it may use the Hex Crawl grid origin as the initial coordinate-frame center. The raster and all imported Wonderdraft geometry remain locked together.
+
+If existing semantic objects or another placed source map already anchor the world, physical scale alone is not treated as proof of translation or rotation. The importer preserves the recovered scale but reports source-only placement rather than guessing. The DM may then use advanced registration once for the whole raster. Individual Wonderdraft records do not require separate registration.
+
+The three-point affine tool therefore remains useful for independently sourced, cropped, rotated, skewed, scanned, or otherwise unrelated representations. It is not the default same-project Wonderdraft workflow.
+
+### Grid and physical-scale metadata
+
+The importer no longer reduces the Wonderdraft grid to a boolean. Scalar grid metadata is preserved generically, and scale/ruler/measurement metadata is retained separately. A typed physical scale is derived only when the stored keys clearly identify the unit label, distance per segment, segment count, and pixel length. Unknown fields remain preserved source metadata instead of being guessed.
+
+Wonderdraft's source-grid configuration and Hex Crawl's mathematical hex grid remain distinct. A visible or configured Wonderdraft grid is not assumed to define Hex Crawl hexes. Physical scale can relate source pixels to campaign distance even when the source map has no baked-in visible hex grid.
+
+More format-specific grid interpretation—such as applying a verified native grid orientation or phase directly to the Hex Crawl grid—requires verified Wonderdraft field semantics. The importer does not invent those meanings from opaque field names.
+
+### Optional semantic promotion
+
+After a placed source import, the existing candidate-preview endpoint remains available for semantic refinement:
 
 ```text
 POST /api/overworlds/{worldId}/source-maps/{sourceMapId}/wonderdraft/candidates
 ```
 
-Wonderdraft canvas coordinates are first scaled into the selected raster's pixel dimensions, then transformed through that raster's saved registration. The server, not the browser, derives overworld geometry. Labels and symbols expose point candidates; paths expose line candidates; territories expose region candidates. Source type, texture/path descriptor, and unsupported-record problems are retained for review. No terrain, settlement, road, river, or other semantic category is inferred automatically.
+The server maps project geometry through the selected raster dimensions and saved/derived world registration. Preview geometry remains server-authoritative.
 
-Selective promotion is a separate mutation:
+The browser review is no longer a first-200-record list. It provides:
+
+- source-kind filtering;
+- metadata-aware text search across names, texture/type/style, and preserved properties;
+- symbol grouping/filtering using explicit Wonderdraft `type` when available and texture-path grouping otherwise;
+- 50-record paging;
+- a default suggested-review view that suppresses obviously decorative symbol noise without promoting anything automatically;
+- the raster and world map under the review geometry;
+- highlighted point, line, and region candidates;
+- list-to-map selection;
+- map-to-list selection.
+
+Every source record remains retained even when it is not shown in the suggested semantic view.
+
+Explicit semantic promotion still uses:
 
 ```text
 POST /api/overworlds/{worldId}/source-maps/{sourceMapId}/wonderdraft/import
 ```
 
-The multipart request resubmits the Wonderdraft project, the expected overworld version, and an explicit JSON selection list. Every selected record requires a semantic target, name, and category. Point records may become a Location or Point feature; paths may become Line features; territories may become Region features. Location discoverability is explicit. The server re-parses the project and recomputes registered world coordinates instead of trusting preview geometry from the client.
+Only records that the DM deliberately promotes need a semantic target, name, category, and, for locations, discoverability. The server re-parses the uploaded project and recomputes world coordinates instead of trusting browser-submitted geometry. Selected semantic objects are validated before one optimistic-concurrency save.
 
-All selected objects are validated before one optimistic-concurrency save. A failed candidate, stale version, invalid region, incompatible target, duplicate candidate key, or malformed project leaves the overworld unchanged. Successful promotion increments the world version once and creates ordinary semantic objects with stable IDs. The Wonderdraft project itself is not persisted, and later deletion of the source raster does not delete promoted semantic objects.
+Promoted semantic objects remain ordinary world objects and are not deleted when the source raster is deleted. Source provenance currently applies to the retained source layer; automatic reconciliation or deduplication of previously promoted semantic objects across later source revisions is not yet implemented.
 
-Re-import deduplication/provenance is intentionally not implicit in this first slice. Re-running an import can create additional semantic objects, so the review UI defaults every candidate to Skip and requires deliberate selection.
+Territory and other source geometry is retained as stored, including coordinates outside the nominal raster canvas. The source layer does not silently clamp geometry. Any later semantic promotion passes through the normal semantic geometry validation separately.
 
 ## Intentionally deferred analysis
 
-This slice does not perform or pretend to perform automatic map interpretation. The following remain future import-analysis work:
+The importer preserves source truth without pretending to understand cartographic meaning that Wonderdraft does not encode explicitly. The following remain separate future work:
 
-- automatic hex-grid/Hough detection;
-- automatic overlapping-map or feature registration;
-- four-point/projective registration UI;
+- verified format-specific interpretation of Wonderdraft grid orientation, phase, and other native grid fields beyond the preserved generic metadata;
+- automatic reconciliation/deduplication of semantic objects that were promoted from an older revision of the same source;
+- automatic association of nearby labels and settlement markers unless an explicit Wonderdraft relationship or sufficiently auditable inference is available;
+- four-point/projective registration UI for perspective-distorted sources;
+- automatic overlapping-map or unrelated-feature registration;
 - GM/player image differencing;
-- icon, tower, or star recognition;
-- repeated-icon matching;
-- road, trail, or river tracing;
-- terrain segmentation;
-- OCR;
-- AI/ML map interpretation;
-- Wonderdraft re-import provenance/deduplication;
-- paged review for projects with more than 200 browser-visible candidates;
+- icon recognition beyond source metadata;
+- road, trail, river, terrain, or other semantic interpretation not explicitly encoded by the source;
+- OCR or AI/ML interpretation of raster-only information;
 - final player-facing source-map presentation policy.
 
-Those systems can now build on persisted, authorized source rasters with known dimensions, geography grouping, and real pixel-to-world registration rather than on placeholders.
+These are not required for lossless native source import. They can build on persisted source content, provenance, source/raster coordinate linkage, and server-authoritative world registration.

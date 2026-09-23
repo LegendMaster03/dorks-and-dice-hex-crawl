@@ -55,6 +55,52 @@ public sealed class WonderdraftProjectInspectorTests
     }
 
     [Fact]
+    public async Task ReaderHandlesHumblewoodShapedPopulationAndPreservesSourceMetadata()
+    {
+        var document = await WonderdraftProjectInspector.ReadAsync(
+            new MemoryStream(BuildHumblewoodShapedProject(), writable: false));
+
+        Assert.Equal(86, document.Summary.LabelCount);
+        Assert.Equal(2_510, document.Summary.SymbolCount);
+        Assert.Equal(19, document.Summary.PathCount);
+        Assert.Equal(1, document.Summary.TerritoryCount);
+        Assert.Equal(2_616, document.Candidates.Count);
+
+        var firstLabel = Assert.Single(
+            document.Candidates,
+            item => item.Key == "label:0");
+        Assert.Equal("Alderheart", firstLabel.DisplayName);
+        Assert.Equal("32", firstLabel.Properties!["font_size"]);
+        Assert.Equal("settlement", firstLabel.Properties["style.kind"]);
+
+        var tree = Assert.Single(
+            document.Candidates,
+            item => item.Key == "symbol:0");
+        Assert.Contains("trees", tree.Descriptor, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("0.75", tree.Properties!["scale"]);
+
+        var pathCandidate = Assert.Single(
+            document.Candidates,
+            item => item.Key == "path:18");
+        Assert.Equal(2, pathCandidate.Points.Count);
+
+        var territory = Assert.Single(
+            document.Candidates,
+            item => item.Kind == WonderdraftCandidateKind.Territory);
+        Assert.Contains(territory.Points, point => point.X < 0 || point.Y < 0);
+        Assert.Contains(territory.Points, point =>
+            point.X > document.Summary.PixelWidth || point.Y > document.Summary.PixelHeight);
+
+        Assert.Equal("hex", document.Summary.GridMetadata!["grid.type"]);
+        Assert.Equal("Miles", document.Summary.ScaleMetadata!["scale.unit_label"]);
+        Assert.NotNull(document.Summary.PhysicalScale);
+        Assert.Equal(10, document.Summary.PhysicalScale!.DistancePerSegment);
+        Assert.Equal(3, document.Summary.PhysicalScale.SegmentCount);
+        Assert.Equal(220, document.Summary.PhysicalScale.PixelLength);
+        Assert.Equal(30d / 220d, document.Summary.PhysicalScale.UnitsPerPixel, 12);
+    }
+
+    [Fact]
     public async Task InspectorRejectsNonGcpfInput()
     {
         var bytes = BuildProject();
@@ -103,6 +149,83 @@ public sealed class WonderdraftProjectInspectorTests
 
         await Assert.ThrowsAsync<InvalidDataException>(() =>
             WonderdraftProjectInspector.InspectAsync(new MemoryStream(bytes, writable: false)));
+    }
+
+    private static byte[] BuildHumblewoodShapedProject()
+    {
+        using var body = new MemoryStream();
+        WriteHeader(body, 18);
+        WriteUInt32(body, 11);
+        WriteEntry(body, "version", () => WriteInteger(body, 15));
+        WriteEntry(body, "map_width", () => WriteInteger(body, 2048));
+        WriteEntry(body, "map_height", () => WriteInteger(body, 1536));
+        WriteEntry(body, "labels", () => WriteArray(body, 86, index =>
+        {
+            if (index == 0)
+            {
+                WriteDictionary(body,
+                    ("text", () => WriteString(body, "Alderheart")),
+                    ("position", () => WriteVector2(body, 1024, 768)),
+                    ("font_size", () => WriteInteger(body, 32)),
+                    ("style", () => WriteDictionary(body,
+                        ("kind", () => WriteString(body, "settlement")))));
+                return;
+            }
+
+            WriteDictionary(body,
+                ("text", () => WriteString(body, $"Label {index + 1}")),
+                ("position", () => WriteVector2(body, 20 + index, 30 + index)));
+        }));
+        WriteEntry(body, "symbols", () => WriteArray(body, 2_510, index =>
+        {
+            var texture = index < 2_097
+                ? "res://sprites/symbols/trees/oak"
+                : index < 2_372
+                    ? "res://sprites/symbols/mountains/peak"
+                    : "res://sprites/symbols/other/decorative";
+            WriteDictionary(body,
+                ("texture", () => WriteString(body, texture)),
+                ("position", () => WriteVector2(body, index % 2048, (index * 3) % 1536)),
+                ("scale", () => WriteReal(body, 0.75f)));
+        }));
+        WriteEntry(body, "paths", () => WriteArray(body, 19, index =>
+            WriteDictionary(body,
+                ("style", () => WriteString(body, "custom/path")),
+                ("points", () => WriteString(
+                    body,
+                    $"[ Vector2( {100 + index}, {200 + index} ), Vector2( {300 + index}, {400 + index} ) ]")))));
+        WriteEntry(body, "territories", () =>
+        {
+            WriteDictionary(body,
+                ("territories", () =>
+                    WriteArray(body, 1, () =>
+                        WriteDictionary(body,
+                            ("points", () =>
+                                WritePoolVector2Array(
+                                    body,
+                                    (-100, -50),
+                                    (2200, -50),
+                                    (2200, 1700),
+                                    (-100, 1700)))))));
+        });
+        WriteEntry(body, "grid", () =>
+            WriteDictionary(body,
+                ("type", () => WriteString(body, "hex")),
+                ("visible", () => WriteInteger(body, 1))));
+        WriteEntry(body, "scale", () =>
+            WriteDictionary(body,
+                ("unit_label", () => WriteString(body, "Miles")),
+                ("segment_distance", () => WriteInteger(body, 10)),
+                ("segment_count", () => WriteInteger(body, 3)),
+                ("pixel_length", () => WriteInteger(body, 220))));
+        WriteEntry(body, "included_packs", () => WriteStringArray(body, "Humblewood"));
+        WriteEntry(body, "included_default_packs", () => WriteStringArray(body, "Default"));
+
+        var variant = body.ToArray();
+        using var raw = new MemoryStream();
+        WriteUInt32(raw, checked((uint)variant.Length));
+        raw.Write(variant);
+        return WrapGcpf(raw.ToArray(), blockSize: 4096);
     }
 
     private static byte[] BuildCandidateProject()
@@ -279,6 +402,13 @@ public sealed class WonderdraftProjectInspectorTests
         WriteHeader(stream, 19);
         WriteUInt32(stream, checked((uint)count));
         for (var index = 0; index < count; index++) writeValue();
+    }
+
+    private static void WriteArray(Stream stream, int count, Action<int> writeValue)
+    {
+        WriteHeader(stream, 19);
+        WriteUInt32(stream, checked((uint)count));
+        for (var index = 0; index < count; index++) writeValue(index);
     }
 
     private static void WriteNil(Stream stream) => WriteHeader(stream, 0);

@@ -74,6 +74,18 @@ export type SourceMapDetail = SourceMapRepresentation & {
     pixelHeight: number;
     mediaType: string;
     originalFileName: string | null;
+    importedContentCount: number;
+    importProvenance: {
+        sourceType: string;
+        sourceFingerprint: string;
+        importedAt: string;
+        sourceRecordCount: number;
+    } | null;
+    sourceArchive: {
+        length: number;
+        mediaType: string;
+        originalFileName: string | null;
+    } | null;
 };
 
 export type SourceMapList = {
