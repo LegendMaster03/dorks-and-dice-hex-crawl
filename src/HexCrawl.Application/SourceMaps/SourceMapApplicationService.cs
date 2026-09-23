@@ -28,7 +28,7 @@ public sealed record RegisterSourceMapCommand(
 
 public sealed record DeletedSourceMapResult(StoredOverworld World, SourceMapRepresentation SourceMap);
 
-public sealed class SourceMapApplicationService(IHexCrawlStore store)
+public sealed partial class SourceMapApplicationService(IHexCrawlStore store)
 {
     public async Task<StoredOverworld> GetOverworldAsync(
         Guid overworldId,

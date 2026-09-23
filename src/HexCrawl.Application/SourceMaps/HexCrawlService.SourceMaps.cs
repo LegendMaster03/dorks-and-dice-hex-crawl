@@ -40,20 +40,19 @@ public sealed partial class HexCrawlService
     {
         var current = await GetOverworldAsync(overworldId, ownerUserId, cancellationToken);
         RequireVersion(command.ExpectedVersion, current.Version);
-        if (!current.World.SourceMaps.Any(item => item.Id == sourceMapId))
-        {
-            throw new HexCrawlNotFoundException("Source-map representation was not found.");
-        }
+        var existing = current.World.SourceMaps.FirstOrDefault(item => item.Id == sourceMapId)
+            ?? throw new HexCrawlNotFoundException("Source-map representation was not found.");
         ValidatePoints(command.WorldCoverageBoundary, "Source-map coverage");
-        var replacement = new SourceMapRepresentation(
-            sourceMapId,
-            RequiredText(command.GeographyKey, "Geography key"),
-            RequiredText(command.Name, "Source-map name"),
-            command.Role,
-            RequiredAssetKey(command.AssetKey),
-            command.ContainsBakedGrid,
-            command.Alignment,
-            command.WorldCoverageBoundary ?? []);
+        var replacement = existing with
+        {
+            GeographyKey = RequiredText(command.GeographyKey, "Geography key"),
+            Name = RequiredText(command.Name, "Source-map name"),
+            Role = command.Role,
+            AssetKey = RequiredAssetKey(command.AssetKey),
+            ContainsBakedGrid = command.ContainsBakedGrid,
+            Alignment = command.Alignment,
+            WorldCoverageBoundary = command.WorldCoverageBoundary ?? []
+        };
         var updated = current with
         {
             World = current.World with

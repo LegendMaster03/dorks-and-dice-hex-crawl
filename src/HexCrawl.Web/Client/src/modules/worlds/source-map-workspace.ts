@@ -48,11 +48,11 @@ export class SourceMapWorkspace {
                 <button type="submit" class="hc-primary-action">Upload raster map</button>
             </form>
             <form class="hc-form" data-wonderdraft-inspect>
-                <p class="hc-subsection-title">Review Wonderdraft project</p>
-                <p class="hc-hint">Read native Wonderdraft structure without persisting the project. Choose a registered raster map to place import candidates into the world map coordinate space.</p>
+                <p class="hc-subsection-title">Import Wonderdraft project</p>
+                <p class="hc-hint">Select the matching raster export. Hex Crawl preserves Wonderdraft source content first, automatically uses compatible physical scale when available, and only asks for optional semantic promotion afterward.</p>
                 <label>Wonderdraft project <input name="file" type="file" accept=".wonderdraft_map" required></label>
-                <label>Registered raster map <select name="sourceMap"></select></label>
-                <button type="submit">Inspect / review project</button>
+                <label>Matching raster map <select name="sourceMap"></select></label>
+                <button type="submit">Import source / inspect</button>
                 <div class="hc-status-section" data-wonderdraft-result hidden></div>
             </form>
             <form class="hc-form" data-source-map-edit hidden>
@@ -108,6 +108,7 @@ export class SourceMapWorkspace {
         this.wonderdraftController = new WonderdraftImportController(
             this.host,
             this.api,
+            this.map,
             this.getWorld,
             this.applyWorld,
             (form, action) => { void this.run(form, action); },
@@ -184,7 +185,7 @@ export class SourceMapWorkspace {
             heading.textContent = map.name;
             const metadata = document.createElement("p");
             metadata.className = "hc-hint";
-            metadata.textContent = `${roleLabel(map.role)} · ${map.geographyKey} · ${map.pixelWidth}×${map.pixelHeight} · ${map.containsBakedGrid ? "baked grid" : "gridless"} · ${map.alignment ? "registered" : "unregistered"}`;
+            metadata.textContent = `${roleLabel(map.role)} · ${map.geographyKey} · ${map.pixelWidth}×${map.pixelHeight} · ${map.containsBakedGrid ? "baked grid" : "gridless"} · ${map.alignment ? "placed" : "unplaced"} · ${(map.importedContentCount ?? 0) > 0 ? `${map.importedContentCount} imported source records` : "no source records"}`;
             const controls = document.createElement("div");
             controls.className = "hc-button-row";
             const visibleLabel = document.createElement("label");
@@ -226,7 +227,7 @@ export class SourceMapWorkspace {
         select(this.editForm, "role").value = this.selected.role;
         input(this.editForm, "bakedGrid").checked = this.selected.containsBakedGrid;
         required<HTMLElement>(this.editForm, "[data-source-map-selected-meta]").textContent =
-            `${this.selected.pixelWidth}×${this.selected.pixelHeight} ${this.selected.mediaType}; ${this.selected.originalFileName ?? "original filename unavailable"}; ${this.selected.alignment ? "registered" : "not registered"}.`;
+            `${this.selected.pixelWidth}×${this.selected.pixelHeight} ${this.selected.mediaType}; ${this.selected.originalFileName ?? "original filename unavailable"}; ${this.selected.alignment ? "placed" : "not placed"}; ${this.selected.importedContentCount ?? 0} imported source records.`;
     }
 
     private async upload(): Promise<void> {

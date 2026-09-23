@@ -4,6 +4,11 @@ using HexCrawl.Domain.World;
 
 namespace HexCrawl.Web.Api;
 
+public sealed record SourceMapSourceArchiveContract(
+    long Length,
+    string MediaType,
+    string? OriginalFileName);
+
 public sealed record SourceMapDetailContract(
     Guid Id,
     string GeographyKey,
@@ -16,7 +21,10 @@ public sealed record SourceMapDetailContract(
     string MediaType,
     string? OriginalFileName,
     MapRegistrationTransform? Alignment,
-    IReadOnlyList<WorldPoint> WorldCoverageBoundary)
+    IReadOnlyList<WorldPoint> WorldCoverageBoundary,
+    int ImportedContentCount,
+    SourceMapImportProvenance? ImportProvenance,
+    SourceMapSourceArchiveContract? SourceArchive)
 {
     public static SourceMapDetailContract From(SourceMapRepresentation map) => new(
         map.Id,
@@ -30,7 +38,15 @@ public sealed record SourceMapDetailContract(
         map.MediaType,
         map.OriginalFileName,
         map.Alignment,
-        map.WorldCoverageBoundary);
+        map.WorldCoverageBoundary,
+        map.ImportedContent?.Count ?? 0,
+        map.ImportProvenance,
+        map.SourceArchive is null
+            ? null
+            : new SourceMapSourceArchiveContract(
+                map.SourceArchive.Length,
+                map.SourceArchive.MediaType,
+                map.SourceArchive.OriginalFileName));
 }
 
 public sealed record SourceMapListContract(long OverworldVersion, IReadOnlyList<SourceMapDetailContract> SourceMaps);
@@ -45,7 +61,25 @@ public sealed record WonderdraftInspectionContract(
     int TerritoryCount,
     bool HasGrid,
     IReadOnlyList<string> IncludedPacks,
-    IReadOnlyList<string> IncludedDefaultPacks);
+    IReadOnlyList<string> IncludedDefaultPacks,
+    IReadOnlyDictionary<string, string> GridMetadata,
+    IReadOnlyDictionary<string, string> ScaleMetadata,
+    WonderdraftPhysicalScaleContract? PhysicalScale);
+
+public sealed record WonderdraftPhysicalScaleContract(
+    string UnitLabel,
+    double DistancePerSegment,
+    int SegmentCount,
+    double PixelLength,
+    double UnitsPerPixel);
+
+public sealed record WonderdraftSourceImportContract(
+    OverworldContract World,
+    WonderdraftInspectionContract Summary,
+    Guid SourceMapId,
+    int SourceRecordCount,
+    string RegistrationMode,
+    string? RegistrationNote);
 
 public sealed record WonderdraftCandidateContract(
     string Key,
@@ -54,6 +88,7 @@ public sealed record WonderdraftCandidateContract(
     string DisplayName,
     string? Descriptor,
     string? Problem,
+    IReadOnlyDictionary<string, string> Properties,
     WorldPoint? SourcePosition,
     IReadOnlyList<WorldPoint> SourcePoints,
     WorldPoint? WorldPosition,

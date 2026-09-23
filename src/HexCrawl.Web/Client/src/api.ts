@@ -66,6 +66,15 @@ export type WonderdraftInspection = {
     hasGrid: boolean;
     includedPacks: string[];
     includedDefaultPacks: string[];
+    gridMetadata: Record<string, string>;
+    scaleMetadata: Record<string, string>;
+    physicalScale: {
+        unitLabel: string;
+        distancePerSegment: number;
+        segmentCount: number;
+        pixelLength: number;
+        unitsPerPixel: number;
+    } | null;
 };
 export type WonderdraftCandidate = {
     key: string;
@@ -74,6 +83,7 @@ export type WonderdraftCandidate = {
     displayName: string;
     descriptor: string | null;
     problem: string | null;
+    properties: Record<string, string>;
     sourcePosition: WorldPoint | null;
     sourcePoints: WorldPoint[];
     worldPosition: WorldPoint | null;
@@ -86,6 +96,15 @@ export type WonderdraftCandidatePreview = {
     summary: WonderdraftInspection;
     candidates: WonderdraftCandidate[];
 };
+export type WonderdraftSourceImportResult = {
+    world: Overworld;
+    summary: WonderdraftInspection;
+    sourceMapId: string;
+    sourceRecordCount: number;
+    registrationMode: "Existing" | "PhysicalScale" | "SourceOnly";
+    registrationNote: string | null;
+};
+
 export type WonderdraftImportSelection = {
     candidateKey: string;
     target: "Location" | "PointFeature" | "LineFeature" | "RegionFeature";
@@ -183,6 +202,21 @@ export class HexCrawlApi {
             `/api/overworlds/${encodeURIComponent(worldId)}/source-maps/wonderdraft/inspect`,
             form,
             "Inspect Wonderdraft project");
+    }
+
+    public importWonderdraftSource(
+        worldId: string,
+        sourceMapId: string,
+        file: File,
+        expectedVersion: number): Promise<WonderdraftSourceImportResult> {
+        const form = new FormData();
+        form.append("file", file, file.name);
+        form.append("expectedVersion", String(expectedVersion));
+        return this.sendForm(
+            "POST",
+            `/api/overworlds/${encodeURIComponent(worldId)}/source-maps/${encodeURIComponent(sourceMapId)}/wonderdraft/source`,
+            form,
+            "Import Wonderdraft source");
     }
 
     public previewWonderdraftCandidates(

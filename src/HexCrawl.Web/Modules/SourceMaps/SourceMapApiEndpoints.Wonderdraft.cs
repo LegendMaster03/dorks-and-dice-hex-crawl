@@ -154,6 +154,7 @@ public static partial class SourceMapApiEndpoints
                 candidate.DisplayName,
                 candidate.Descriptor,
                 candidate.Problem,
+                candidate.Properties ?? new Dictionary<string, string>(),
                 sourcePosition,
                 sourcePoints,
                 worldPosition,
@@ -383,7 +384,17 @@ public static partial class SourceMapApiEndpoints
         summary.TerritoryCount,
         summary.HasGrid,
         summary.IncludedPacks,
-        summary.IncludedDefaultPacks);
+        summary.IncludedDefaultPacks,
+        summary.GridMetadata ?? new Dictionary<string, string>(),
+        summary.ScaleMetadata ?? new Dictionary<string, string>(),
+        summary.PhysicalScale is null
+            ? null
+            : new WonderdraftPhysicalScaleContract(
+                summary.PhysicalScale.UnitLabel,
+                summary.PhysicalScale.DistancePerSegment,
+                summary.PhysicalScale.SegmentCount,
+                summary.PhysicalScale.PixelLength,
+                summary.PhysicalScale.UnitsPerPixel));
 
 
 }
