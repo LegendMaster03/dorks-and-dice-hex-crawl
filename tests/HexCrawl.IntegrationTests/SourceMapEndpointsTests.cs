@@ -304,6 +304,75 @@ public sealed class SourceMapEndpointsTests
     }
 
     [Fact]
+    public async Task NativeWonderdraftImportUsesVariableScaleMetadataAndKilometers()
+    {
+        var database = TestWebHost.NewDatabasePath();
+        try
+        {
+            using var factory = TestWebHost.Create(database, "alice");
+            using var client = factory.CreateClient();
+            var world = await CreateWorld(client, "Variable Wonderdraft scale");
+            var worldId = world.GetProperty("id").GetGuid();
+
+            using var uploadResponse = await UploadResponse(
+                client,
+                worldId,
+                world.GetProperty("version").GetInt64(),
+                "Wonderdraft",
+                "Variable scale export",
+                "GM",
+                false,
+                BuildPng(1024, 768));
+            uploadResponse.EnsureSuccessStatusCode();
+            var uploaded = await uploadResponse.Content.ReadFromJsonAsync<JsonElement>();
+            var sourceMapId = uploaded.GetProperty("sourceMaps")[0].GetProperty("id").GetGuid();
+
+            var project = BuildWonderdraftProject(
+                units: "Kilometers",
+                segmentDistance: 7,
+                segmentCount: 4,
+                scaleWidth: 350,
+                scaleHeight: 11);
+            using var sourceContent = new MultipartFormDataContent();
+            sourceContent.Add(new ByteArrayContent(project), "file", "variable-scale.wonderdraft_map");
+            sourceContent.Add(
+                new StringContent(
+                    uploaded.GetProperty("version").GetInt64().ToString(
+                        System.Globalization.CultureInfo.InvariantCulture)),
+                "expectedVersion");
+
+            using var importResponse = await client.PostAsync(
+                $"/api/overworlds/{worldId:D}/source-maps/{sourceMapId:D}/wonderdraft/source",
+                sourceContent);
+            importResponse.EnsureSuccessStatusCode();
+            var imported = await importResponse.Content.ReadFromJsonAsync<JsonElement>();
+
+            Assert.Equal("PhysicalScale", imported.GetProperty("registrationMode").GetString());
+            var physicalScale = imported.GetProperty("summary").GetProperty("physicalScale");
+            Assert.Equal("Kilometers", physicalScale.GetProperty("unitLabel").GetString());
+            Assert.Equal(7, physicalScale.GetProperty("distancePerSegment").GetDouble(), 12);
+            Assert.Equal(4, physicalScale.GetProperty("segmentCount").GetInt32());
+            Assert.Equal(350, physicalScale.GetProperty("pixelLength").GetDouble(), 12);
+            Assert.Equal(28d / 350d, physicalScale.GetProperty("unitsPerPixel").GetDouble(), 12);
+
+            var sourceMap = Assert.Single(imported.GetProperty("world").GetProperty("sourceMaps").EnumerateArray());
+            Assert.Equal("Affine", sourceMap.GetProperty("alignment").GetProperty("kind").GetString());
+            Assert.Contains(
+                "7 Kilometers",
+                imported.GetProperty("registrationNote").GetString(),
+                StringComparison.Ordinal);
+            Assert.Contains(
+                "350 project pixels",
+                imported.GetProperty("registrationNote").GetString(),
+                StringComparison.Ordinal);
+        }
+        finally
+        {
+            TestWebHost.DeleteDatabase(database);
+        }
+    }
+
+    [Fact]
     public async Task NativeWonderdraftSourceArchiveRoundTripsAndDoesNotLeakOnReimportOrDelete()
     {
         var database = TestWebHost.NewDatabasePath();
@@ -918,7 +987,12 @@ public sealed class SourceMapEndpointsTests
     private static byte[] BuildWonderdraftProject(
         int width = 1024,
         int height = 768,
-        string labelText = "Old Harbor")
+        string labelText = "Old Harbor",
+        string units = "Miles",
+        int segmentDistance = 10,
+        int segmentCount = 3,
+        float scaleWidth = 220,
+        float scaleHeight = 16)
     {
         using var body = new MemoryStream();
         WriteVariantHeader(body, 18);
@@ -981,10 +1055,10 @@ public sealed class SourceMapEndpointsTests
         });
         WriteVariantEntry(body, "scale", () =>
             WriteVariantDictionary(body,
-                ("units", () => WriteVariantString(body, "Miles")),
-                ("segment_distance", () => WriteVariantInteger(body, 10)),
-                ("segments", () => WriteVariantInteger(body, 3)),
-                ("size", () => WriteVariantVector2(body, 220, 16)),
+                ("units", () => WriteVariantString(body, units)),
+                ("segment_distance", () => WriteVariantInteger(body, segmentDistance)),
+                ("segments", () => WriteVariantInteger(body, segmentCount)),
+                ("size", () => WriteVariantVector2(body, scaleWidth, scaleHeight)),
                 ("line_width", () => WriteVariantInteger(body, 3))));
 
         var variant = body.ToArray();
