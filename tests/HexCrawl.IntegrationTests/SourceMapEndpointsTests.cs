@@ -218,6 +218,10 @@ public sealed class SourceMapEndpointsTests
                 var imported = await importResponse.Content.ReadFromJsonAsync<JsonElement>();
 
                 Assert.Equal("PhysicalScale", imported.GetProperty("registrationMode").GetString());
+                var physicalScale = imported.GetProperty("summary").GetProperty("physicalScale");
+                Assert.Equal("Miles", physicalScale.GetProperty("unitLabel").GetString());
+                Assert.Equal(220, physicalScale.GetProperty("pixelLength").GetDouble(), 12);
+                Assert.Equal(30d / 220d, physicalScale.GetProperty("unitsPerPixel").GetDouble(), 12);
                 Assert.Equal(8, imported.GetProperty("sourceRecordCount").GetInt32());
                 Assert.Equal(importVersion + 1, imported.GetProperty("world").GetProperty("version").GetInt64());
                 Assert.Empty(imported.GetProperty("world").GetProperty("locations").EnumerateArray());
@@ -263,6 +267,35 @@ public sealed class SourceMapEndpointsTests
             var reopenedMap = Assert.Single(reopenedList.GetProperty("sourceMaps").EnumerateArray());
             Assert.Equal(8, reopenedMap.GetProperty("importedContentCount").GetInt32());
             Assert.Equal("wonderdraft", reopenedMap.GetProperty("importProvenance").GetProperty("sourceType").GetString());
+
+            using var retainedPreviewResponse = await reopenedClient.GetAsync(
+                $"/api/overworlds/{worldId:D}/source-maps/{sourceMapId:D}/wonderdraft/candidates");
+            retainedPreviewResponse.EnsureSuccessStatusCode();
+            var retainedPreview = await retainedPreviewResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(8, retainedPreview.GetProperty("candidates").GetArrayLength());
+            Assert.Equal(220, retainedPreview.GetProperty("summary").GetProperty("physicalScale").GetProperty("pixelLength").GetDouble(), 12);
+
+            using var retainedPromotion = await reopenedClient.PostAsJsonAsync(
+                $"/api/overworlds/{worldId:D}/source-maps/{sourceMapId:D}/wonderdraft/promote",
+                new
+                {
+                    expectedVersion = reopenedList.GetProperty("overworldVersion").GetInt64(),
+                    selections = new[]
+                    {
+                        new
+                        {
+                            candidateKey = "label:0",
+                            target = "Location",
+                            name = "Old Harbor",
+                            category = "settlement",
+                            discoverability = "Obvious"
+                        }
+                    }
+                });
+            retainedPromotion.EnsureSuccessStatusCode();
+            var promoted = await retainedPromotion.Content.ReadFromJsonAsync<JsonElement>();
+            var promotedLocation = Assert.Single(promoted.GetProperty("locations").EnumerateArray());
+            Assert.Equal("Old Harbor", promotedLocation.GetProperty("name").GetString());
         }
         finally
         {
@@ -948,10 +981,11 @@ public sealed class SourceMapEndpointsTests
         });
         WriteVariantEntry(body, "scale", () =>
             WriteVariantDictionary(body,
-                ("unit_label", () => WriteVariantString(body, "Miles")),
+                ("units", () => WriteVariantString(body, "Miles")),
                 ("segment_distance", () => WriteVariantInteger(body, 10)),
-                ("segment_count", () => WriteVariantInteger(body, 3)),
-                ("pixel_length", () => WriteVariantInteger(body, 220))));
+                ("segments", () => WriteVariantInteger(body, 3)),
+                ("size", () => WriteVariantVector2(body, 220, 16)),
+                ("line_width", () => WriteVariantInteger(body, 3))));
 
         var variant = body.ToArray();
         using var raw = new MemoryStream();
