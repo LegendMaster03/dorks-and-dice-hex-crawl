@@ -92,12 +92,39 @@ public sealed class WonderdraftProjectInspectorTests
             point.X > document.Summary.PixelWidth || point.Y > document.Summary.PixelHeight);
 
         Assert.Equal("hex", document.Summary.GridMetadata!["grid.type"]);
-        Assert.Equal("Miles", document.Summary.ScaleMetadata!["scale.unit_label"]);
+        Assert.Equal("Miles", document.Summary.ScaleMetadata!["scale.units"]);
+        Assert.Equal("Vector2(220,16)", document.Summary.ScaleMetadata["scale.size"]);
         Assert.NotNull(document.Summary.PhysicalScale);
         Assert.Equal(10, document.Summary.PhysicalScale!.DistancePerSegment);
         Assert.Equal(3, document.Summary.PhysicalScale.SegmentCount);
         Assert.Equal(220, document.Summary.PhysicalScale.PixelLength);
         Assert.Equal(30d / 220d, document.Summary.PhysicalScale.UnitsPerPixel, 12);
+    }
+
+    [Fact]
+    public async Task ReaderUsesVariableWonderdraftScaleValuesInsteadOfFixtureConstants()
+    {
+        var document = await WonderdraftProjectInspector.ReadAsync(
+            new MemoryStream(
+                BuildScaleOnlyProject(
+                    units: "Kilometers",
+                    segmentDistance: 7,
+                    segmentCount: 4,
+                    scaleWidth: 350,
+                    scaleHeight: 11),
+                writable: false));
+
+        Assert.Equal("Kilometers", document.Summary.ScaleMetadata!["scale.units"]);
+        Assert.Equal("7", document.Summary.ScaleMetadata["scale.segment_distance"]);
+        Assert.Equal("4", document.Summary.ScaleMetadata["scale.segments"]);
+        Assert.Equal("Vector2(350,11)", document.Summary.ScaleMetadata["scale.size"]);
+
+        var scale = Assert.IsType<WonderdraftPhysicalScale>(document.Summary.PhysicalScale);
+        Assert.Equal("Kilometers", scale.UnitLabel);
+        Assert.Equal(7, scale.DistancePerSegment);
+        Assert.Equal(4, scale.SegmentCount);
+        Assert.Equal(350, scale.PixelLength);
+        Assert.Equal(28d / 350d, scale.UnitsPerPixel, 12);
     }
 
     [Fact]
@@ -214,10 +241,11 @@ public sealed class WonderdraftProjectInspectorTests
                 ("visible", () => WriteInteger(body, 1))));
         WriteEntry(body, "scale", () =>
             WriteDictionary(body,
-                ("unit_label", () => WriteString(body, "Miles")),
+                ("units", () => WriteString(body, "Miles")),
                 ("segment_distance", () => WriteInteger(body, 10)),
-                ("segment_count", () => WriteInteger(body, 3)),
-                ("pixel_length", () => WriteInteger(body, 220))));
+                ("segments", () => WriteInteger(body, 3)),
+                ("size", () => WriteVector2(body, 220, 16)),
+                ("line_width", () => WriteInteger(body, 3))));
         WriteEntry(body, "included_packs", () => WriteStringArray(body, "Humblewood"));
         WriteEntry(body, "included_default_packs", () => WriteStringArray(body, "Default"));
 
@@ -226,6 +254,34 @@ public sealed class WonderdraftProjectInspectorTests
         WriteUInt32(raw, checked((uint)variant.Length));
         raw.Write(variant);
         return WrapGcpf(raw.ToArray(), blockSize: 4096);
+    }
+
+    private static byte[] BuildScaleOnlyProject(
+        string units,
+        int segmentDistance,
+        int segmentCount,
+        float scaleWidth,
+        float scaleHeight)
+    {
+        using var body = new MemoryStream();
+        WriteHeader(body, 18);
+        WriteUInt32(body, 4);
+        WriteEntry(body, "version", () => WriteInteger(body, 15));
+        WriteEntry(body, "map_width", () => WriteInteger(body, 1200));
+        WriteEntry(body, "map_height", () => WriteInteger(body, 800));
+        WriteEntry(body, "scale", () =>
+            WriteDictionary(body,
+                ("units", () => WriteString(body, units)),
+                ("segment_distance", () => WriteInteger(body, segmentDistance)),
+                ("segments", () => WriteInteger(body, segmentCount)),
+                ("size", () => WriteVector2(body, scaleWidth, scaleHeight)),
+                ("line_width", () => WriteInteger(body, 5))));
+
+        var variant = body.ToArray();
+        using var raw = new MemoryStream();
+        WriteUInt32(raw, checked((uint)variant.Length));
+        raw.Write(variant);
+        return WrapGcpf(raw.ToArray(), blockSize: 256);
     }
 
     private static byte[] BuildCandidateProject()

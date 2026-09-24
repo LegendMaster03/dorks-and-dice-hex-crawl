@@ -394,7 +394,11 @@ public static partial class WonderdraftProjectInspector
             || (key.Contains("pixel", StringComparison.OrdinalIgnoreCase)
                 && (key.Contains("width", StringComparison.OrdinalIgnoreCase)
                     || key.Contains("length", StringComparison.OrdinalIgnoreCase)
-                    || key.Contains("size", StringComparison.OrdinalIgnoreCase))));
+                    || key.Contains("size", StringComparison.OrdinalIgnoreCase))))
+            ?? FindMetadataVectorComponent(
+                metadata,
+                key => key.Equals("size", StringComparison.OrdinalIgnoreCase),
+                componentIndex: 0);
 
         if (unit is null
             || segmentDistance is null || segmentDistance <= 0
@@ -422,6 +426,34 @@ public static partial class WonderdraftProjectInspector
             var key = LastMetadataKey(path);
             if (!predicate(key)) continue;
             if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var number)
+                && double.IsFinite(number))
+            {
+                return number;
+            }
+        }
+
+        return null;
+    }
+
+    private static double? FindMetadataVectorComponent(
+        IReadOnlyDictionary<string, string> metadata,
+        Func<string, bool> predicate,
+        int componentIndex)
+    {
+        foreach (var (path, value) in metadata)
+        {
+            var key = LastMetadataKey(path);
+            if (!predicate(key)) continue;
+
+            var match = Vector2TextPattern.Match(value);
+            if (!match.Success) continue;
+            var group = componentIndex switch
+            {
+                0 => match.Groups["x"],
+                1 => match.Groups["y"],
+                _ => throw new ArgumentOutOfRangeException(nameof(componentIndex))
+            };
+            if (double.TryParse(group.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var number)
                 && double.IsFinite(number))
             {
                 return number;

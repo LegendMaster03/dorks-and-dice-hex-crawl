@@ -71,6 +71,43 @@ export class WonderdraftImportController {
         }
     }
 
+    public async openStoredReview(sourceMap: SourceMapDetail): Promise<void> {
+        if ((sourceMap.importedContentCount ?? 0) <= 0
+            || sourceMap.importProvenance?.sourceType.toLocaleLowerCase() !== "wonderdraft"
+            || !sourceMap.sourceArchive) {
+            throw new Error("This raster map has no retained Wonderdraft source to review.");
+        }
+        if (!sourceMap.alignment) {
+            throw new Error("Place the raster map before reviewing retained Wonderdraft source.");
+        }
+
+        this.preview = null;
+        this.drafts.clear();
+        this.map.renderer.reviewOverlay = null;
+        this.map.requestRender();
+        this.sourceMapSelect.value = sourceMap.id;
+
+        const preview = await this.api.previewStoredWonderdraftCandidates(
+            this.getWorld().id,
+            sourceMap.id);
+        this.preview = preview;
+        const retainedName = sourceMap.sourceArchive.originalFileName
+            ?? sourceMap.originalFileName
+            ?? sourceMap.name;
+        this.renderInspection(
+            preview.summary,
+            retainedName,
+            preview,
+            {
+                world: this.getWorld(),
+                summary: preview.summary,
+                sourceMapId: sourceMap.id,
+                sourceRecordCount: preview.candidates.length,
+                registrationMode: "Existing",
+                registrationNote: "Loaded from the retained Wonderdraft source; no project re-upload was required."
+            });
+    }
+
     public dispose(): void {
         this.preview = null;
         this.drafts.clear();
@@ -109,10 +146,9 @@ export class WonderdraftImportController {
             return;
         }
 
-        const preview = await this.api.previewWonderdraftCandidates(
+        const preview = await this.api.previewStoredWonderdraftCandidates(
             imported.world.id,
-            sourceMapId,
-            file);
+            sourceMapId);
         this.preview = preview;
         this.renderInspection(preview.summary, file.name, preview, imported);
     }
@@ -157,8 +193,9 @@ export class WonderdraftImportController {
         if (imported) {
             const sourceStatus = document.createElement("p");
             sourceStatus.className = "hc-hint";
-            sourceStatus.textContent =
-                `Imported ${imported.sourceRecordCount} source records without promoting decorative cartography to world truth. ${imported.registrationNote ?? ""}`.trim();
+            sourceStatus.textContent = imported.registrationNote?.startsWith("Loaded from the retained")
+                ? `${imported.sourceRecordCount} retained source records are available for review. ${imported.registrationNote}`
+                : `Imported ${imported.sourceRecordCount} source records without promoting decorative cartography to world truth. ${imported.registrationNote ?? ""}`.trim();
             this.result.append(sourceStatus);
         } else {
             const note = document.createElement("p");
@@ -460,11 +497,6 @@ export class WonderdraftImportController {
                 "The selected source map changed. Import the Wonderdraft source again before semantic promotion.");
         }
 
-        const file = input(this.form, "file").files?.[0];
-        if (!file) {
-            throw new Error("Choose the .wonderdraft_map project file again before importing.");
-        }
-
         const selections: WonderdraftImportSelection[] = [];
         for (const [candidateKey, draft] of this.drafts) {
             if (draft.target === "Skip") continue;
@@ -486,10 +518,9 @@ export class WonderdraftImportController {
         }
 
         const world = this.getWorld();
-        const updated = await this.api.importWonderdraftCandidates(
+        const updated = await this.api.promoteStoredWonderdraftCandidates(
             world.id,
             preview.sourceMapId,
-            file,
             selections,
             world.version);
         this.applyWorld(updated);

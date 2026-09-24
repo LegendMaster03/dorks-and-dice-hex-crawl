@@ -108,6 +108,10 @@ public sealed record WonderdraftImportSelectionContract(
     string Category,
     string? Discoverability);
 
+public sealed record WonderdraftStoredImportRequest(
+    IReadOnlyList<WonderdraftImportSelectionContract>? Selections,
+    long ExpectedVersion);
+
 public sealed record SourceMapMetadataRequest(
     string GeographyKey,
     string Name,

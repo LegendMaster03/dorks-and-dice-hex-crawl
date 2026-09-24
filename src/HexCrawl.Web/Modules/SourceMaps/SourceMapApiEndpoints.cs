@@ -11,7 +11,9 @@ public static partial class SourceMapApiEndpoints
         api.MapPost("/wonderdraft/inspect", InspectWonderdraftAsync);
         api.MapPost("/{sourceMapId:guid}/wonderdraft/source", ImportWonderdraftSourceAsync);
         api.MapPost("/{sourceMapId:guid}/wonderdraft/candidates", PreviewWonderdraftCandidatesAsync);
+        api.MapGet("/{sourceMapId:guid}/wonderdraft/candidates", PreviewStoredWonderdraftCandidatesAsync);
         api.MapPost("/{sourceMapId:guid}/wonderdraft/import", ImportWonderdraftCandidatesAsync);
+        api.MapPost("/{sourceMapId:guid}/wonderdraft/promote", ImportStoredWonderdraftCandidatesAsync);
         api.MapPut("/{sourceMapId:guid}", UpdateMetadataAsync);
         api.MapPut("/{sourceMapId:guid}/registration", RegisterAsync);
         api.MapGet("/{sourceMapId:guid}/asset", GetAssetAsync);

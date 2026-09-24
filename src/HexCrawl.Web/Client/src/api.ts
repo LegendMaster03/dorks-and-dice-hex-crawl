@@ -232,6 +232,14 @@ export class HexCrawlApi {
             "Review Wonderdraft candidates");
     }
 
+    public previewStoredWonderdraftCandidates(
+        worldId: string,
+        sourceMapId: string): Promise<WonderdraftCandidatePreview> {
+        return this.getJson(
+            `/api/overworlds/${encodeURIComponent(worldId)}/source-maps/${encodeURIComponent(sourceMapId)}/wonderdraft/candidates`,
+            "Review retained Wonderdraft source");
+    }
+
     public importWonderdraftCandidates(
         worldId: string,
         sourceMapId: string,
@@ -247,6 +255,18 @@ export class HexCrawlApi {
             `/api/overworlds/${encodeURIComponent(worldId)}/source-maps/${encodeURIComponent(sourceMapId)}/wonderdraft/import`,
             form,
             "Import Wonderdraft candidates");
+    }
+
+    public promoteStoredWonderdraftCandidates(
+        worldId: string,
+        sourceMapId: string,
+        selections: WonderdraftImportSelection[],
+        expectedVersion: number): Promise<Overworld> {
+        return this.sendJson(
+            "POST",
+            `/api/overworlds/${encodeURIComponent(worldId)}/source-maps/${encodeURIComponent(sourceMapId)}/wonderdraft/promote`,
+            { selections, expectedVersion },
+            "Promote retained Wonderdraft candidates");
     }
 
     public updateSourceMap(worldId: string, sourceMapId: string, input: SourceMapMetadataInput): Promise<Overworld> {

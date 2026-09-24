@@ -1,5 +1,6 @@
 using System.Text.Json;
 using HexCrawl.Application;
+using HexCrawl.Application.Assets;
 using HexCrawl.Domain.Spatial;
 using HexCrawl.Domain.World;
 using HexCrawl.Infrastructure.Wonderdraft;
@@ -129,44 +130,43 @@ public static partial class SourceMapApiEndpoints
             });
         }
 
-        var scaleX = (double)map.PixelWidth / summary.PixelWidth;
-        var scaleY = (double)map.PixelHeight / summary.PixelHeight;
-        WorldPoint SourcePoint(WonderdraftPixelPoint point) => new(point.X * scaleX, point.Y * scaleY);
-        WorldPoint WorldPointFrom(WonderdraftPixelPoint point) => map.Alignment.ToWorld(SourcePoint(point));
+        return Results.Ok(BuildWonderdraftCandidatePreview(map, document));
+    }
 
-        var candidates = document.Candidates.Select(candidate =>
+    private static async Task<IResult> PreviewStoredWonderdraftCandidatesAsync(
+        Guid overworldId,
+        Guid sourceMapId,
+        HttpContext context,
+        SourceMapApplicationService service,
+        IMapAssetStore assetStore,
+        IOptions<MapImportOptions> configuredOptions,
+        CancellationToken cancellationToken)
+    {
+        var options = configuredOptions.Value;
+        options.Validate();
+        var world = await service.GetOverworldAsync(overworldId, UserId(context), cancellationToken);
+        var map = world.World.SourceMaps.FirstOrDefault(item => item.Id == sourceMapId)
+            ?? throw new HexCrawlNotFoundException("Source-map representation was not found.");
+        if (map.Alignment is null)
         {
-            WorldPoint? sourcePosition = candidate.Position is null ? null : SourcePoint(candidate.Position);
-            var sourcePoints = candidate.Points.Select(SourcePoint).ToArray();
-            WorldPoint? worldPosition = candidate.Position is null ? null : WorldPointFrom(candidate.Position);
-            var worldPoints = candidate.Points.Select(WorldPointFrom).ToArray();
-            var geometryKind = candidate.Kind switch
-            {
-                WonderdraftCandidateKind.Label or WonderdraftCandidateKind.Symbol => "Point",
-                WonderdraftCandidateKind.Path => "Line",
-                WonderdraftCandidateKind.Territory => "Region",
-                _ => throw new ArgumentOutOfRangeException(nameof(candidate.Kind))
-            };
-            return new WonderdraftCandidateContract(
-                candidate.Key,
-                candidate.Kind.ToString(),
-                geometryKind,
-                candidate.DisplayName,
-                candidate.Descriptor,
-                candidate.Problem,
-                candidate.Properties ?? new Dictionary<string, string>(),
-                sourcePosition,
-                sourcePoints,
-                worldPosition,
-                worldPoints);
-        }).ToArray();
+            return Results.BadRequest(new { error = "Register the source-map representation before reviewing retained Wonderdraft source." });
+        }
+        if (map.PixelWidth <= 0 || map.PixelHeight <= 0)
+        {
+            return Results.BadRequest(new { error = "The registered source map has no usable raster dimensions." });
+        }
 
-        return Results.Ok(new WonderdraftCandidatePreviewContract(
-            map.Id,
-            scaleX,
-            scaleY,
-            InspectionContract(summary),
-            candidates));
+        WonderdraftProjectDocument document;
+        try
+        {
+            document = await ReadStoredWonderdraftProjectAsync(map, assetStore, options, cancellationToken);
+        }
+        catch (InvalidDataException exception)
+        {
+            return Results.BadRequest(new { error = exception.Message });
+        }
+
+        return Results.Ok(BuildWonderdraftCandidatePreview(map, document));
     }
 
     private static async Task<IResult> ImportWonderdraftCandidatesAsync(
@@ -274,11 +274,100 @@ public static partial class SourceMapApiEndpoints
             });
         }
 
+        return await PromoteWonderdraftCandidatesAsync(
+            overworldId,
+            owner,
+            map,
+            document,
+            selections,
+            expectedVersion,
+            semanticWorld,
+            cancellationToken);
+    }
+
+    private static async Task<IResult> ImportStoredWonderdraftCandidatesAsync(
+        Guid overworldId,
+        Guid sourceMapId,
+        WonderdraftStoredImportRequest request,
+        HttpContext context,
+        SourceMapApplicationService sourceMaps,
+        HexCrawlService semanticWorld,
+        IMapAssetStore assetStore,
+        IOptions<MapImportOptions> configuredOptions,
+        CancellationToken cancellationToken)
+    {
+        const int maxSelections = 5_000;
+        var options = configuredOptions.Value;
+        options.Validate();
+        var owner = UserId(context);
+        var world = await sourceMaps.GetOverworldAsync(overworldId, owner, cancellationToken);
+        var map = world.World.SourceMaps.FirstOrDefault(item => item.Id == sourceMapId)
+            ?? throw new HexCrawlNotFoundException("Source-map representation was not found.");
+        if (map.Alignment is null)
+        {
+            return Results.BadRequest(new { error = "Register the source-map representation before promoting retained Wonderdraft source." });
+        }
+        if (request.ExpectedVersion != world.Version)
+        {
+            throw new HexCrawlConcurrencyException(
+                $"Expected overworld version {request.ExpectedVersion}, but current version is {world.Version}.");
+        }
+
+        var selections = request.Selections?.ToArray() ?? [];
+        if (selections.Length == 0)
+        {
+            return Results.BadRequest(new { error = "Select at least one Wonderdraft candidate to promote." });
+        }
+        if (selections.Length > maxSelections)
+        {
+            return Results.BadRequest(new { error = $"At most {maxSelections} Wonderdraft candidates may be promoted in one request." });
+        }
+        if (selections.Any(selection => string.IsNullOrWhiteSpace(selection.CandidateKey)))
+        {
+            return Results.BadRequest(new { error = "Every promotion selection requires a candidateKey." });
+        }
+        if (selections.Select(selection => selection.CandidateKey).Distinct(StringComparer.Ordinal).Count() != selections.Length)
+        {
+            return Results.BadRequest(new { error = "A Wonderdraft candidate may be selected only once per promotion." });
+        }
+
+        WonderdraftProjectDocument document;
+        try
+        {
+            document = await ReadStoredWonderdraftProjectAsync(map, assetStore, options, cancellationToken);
+        }
+        catch (InvalidDataException exception)
+        {
+            return Results.BadRequest(new { error = exception.Message });
+        }
+
+        return await PromoteWonderdraftCandidatesAsync(
+            overworldId,
+            owner,
+            map,
+            document,
+            selections,
+            request.ExpectedVersion,
+            semanticWorld,
+            cancellationToken);
+    }
+
+    private static async Task<IResult> PromoteWonderdraftCandidatesAsync(
+        Guid overworldId,
+        string owner,
+        SourceMapRepresentation map,
+        WonderdraftProjectDocument document,
+        IReadOnlyList<WonderdraftImportSelectionContract> selections,
+        long expectedVersion,
+        HexCrawlService semanticWorld,
+        CancellationToken cancellationToken)
+    {
+        var summary = document.Summary;
         var candidates = document.Candidates.ToDictionary(candidate => candidate.Key, StringComparer.Ordinal);
         var scaleX = (double)map.PixelWidth / summary.PixelWidth;
         var scaleY = (double)map.PixelHeight / summary.PixelHeight;
         WorldPoint WorldPointFrom(WonderdraftPixelPoint point) =>
-            map.Alignment.ToWorld(new WorldPoint(point.X * scaleX, point.Y * scaleY));
+            map.Alignment!.ToWorld(new WorldPoint(point.X * scaleX, point.Y * scaleY));
 
         var locations = new List<ImportedLocationDefinition>();
         var features = new List<ImportedFeatureDefinition>();
@@ -286,11 +375,11 @@ public static partial class SourceMapApiEndpoints
         {
             if (!candidates.TryGetValue(selection.CandidateKey, out var candidate))
             {
-                return Results.BadRequest(new { error = $"Wonderdraft candidate '{selection.CandidateKey}' was not found in the uploaded project." });
+                return Results.BadRequest(new { error = $"Wonderdraft candidate '{selection.CandidateKey}' was not found in the retained project." });
             }
             if (candidate.Problem is not null)
             {
-                return Results.BadRequest(new { error = $"Wonderdraft candidate '{selection.CandidateKey}' can not be imported: {candidate.Problem}" });
+                return Results.BadRequest(new { error = $"Wonderdraft candidate '{selection.CandidateKey}' can not be promoted: {candidate.Problem}" });
             }
             if (string.IsNullOrWhiteSpace(selection.Name) || string.IsNullOrWhiteSpace(selection.Category))
             {
@@ -372,6 +461,87 @@ public static partial class SourceMapApiEndpoints
             new ImportWorldObjectsCommand(locations, features, expectedVersion),
             cancellationToken);
         return Results.Ok(OverworldContract.From(updated));
+    }
+
+    private static async Task<WonderdraftProjectDocument> ReadStoredWonderdraftProjectAsync(
+        SourceMapRepresentation map,
+        IMapAssetStore assetStore,
+        MapImportOptions options,
+        CancellationToken cancellationToken)
+    {
+        if (!string.Equals(map.ImportProvenance?.SourceType, "wonderdraft", StringComparison.OrdinalIgnoreCase)
+            || map.SourceArchive is not { } archive)
+        {
+            throw new HexCrawlNotFoundException("This source map has no retained Wonderdraft project.");
+        }
+
+        var info = await assetStore.GetInfoAsync(archive.AssetKey, cancellationToken)
+            ?? throw new HexCrawlNotFoundException("The retained Wonderdraft project archive is missing.");
+        if (info.Length > options.MaxFileBytes)
+        {
+            throw new InvalidDataException(
+                $"The retained Wonderdraft project exceeds the configured {options.MaxFileBytes} byte Hex Crawl upload limit.");
+        }
+
+        await using var projectStream = await assetStore.OpenReadAsync(archive.AssetKey, cancellationToken);
+        var document = await WonderdraftProjectInspector.ReadAsync(
+            projectStream,
+            options.MaxWonderdraftDecodedBytes,
+            cancellationToken);
+        var summary = document.Summary;
+        if (summary.PixelWidth > options.MaxDimension || summary.PixelHeight > options.MaxDimension
+            || ((long)summary.PixelWidth * summary.PixelHeight) > options.MaxPixelCount)
+        {
+            throw new InvalidDataException(
+                $"Wonderdraft canvas dimensions {summary.PixelWidth}×{summary.PixelHeight} exceed the configured map-dimension safety limits.");
+        }
+
+        return document;
+    }
+
+    private static WonderdraftCandidatePreviewContract BuildWonderdraftCandidatePreview(
+        SourceMapRepresentation map,
+        WonderdraftProjectDocument document)
+    {
+        var summary = document.Summary;
+        var scaleX = (double)map.PixelWidth / summary.PixelWidth;
+        var scaleY = (double)map.PixelHeight / summary.PixelHeight;
+        WorldPoint SourcePoint(WonderdraftPixelPoint point) => new(point.X * scaleX, point.Y * scaleY);
+        WorldPoint WorldPointFrom(WonderdraftPixelPoint point) => map.Alignment!.ToWorld(SourcePoint(point));
+
+        var candidates = document.Candidates.Select(candidate =>
+        {
+            WorldPoint? sourcePosition = candidate.Position is null ? null : SourcePoint(candidate.Position);
+            var sourcePoints = candidate.Points.Select(SourcePoint).ToArray();
+            WorldPoint? worldPosition = candidate.Position is null ? null : WorldPointFrom(candidate.Position);
+            var worldPoints = candidate.Points.Select(WorldPointFrom).ToArray();
+            var geometryKind = candidate.Kind switch
+            {
+                WonderdraftCandidateKind.Label or WonderdraftCandidateKind.Symbol => "Point",
+                WonderdraftCandidateKind.Path => "Line",
+                WonderdraftCandidateKind.Territory => "Region",
+                _ => throw new ArgumentOutOfRangeException(nameof(candidate.Kind))
+            };
+            return new WonderdraftCandidateContract(
+                candidate.Key,
+                candidate.Kind.ToString(),
+                geometryKind,
+                candidate.DisplayName,
+                candidate.Descriptor,
+                candidate.Problem,
+                candidate.Properties ?? new Dictionary<string, string>(),
+                sourcePosition,
+                sourcePoints,
+                worldPosition,
+                worldPoints);
+        }).ToArray();
+
+        return new WonderdraftCandidatePreviewContract(
+            map.Id,
+            scaleX,
+            scaleY,
+            InspectionContract(summary),
+            candidates);
     }
 
     private static WonderdraftInspectionContract InspectionContract(WonderdraftProjectSummary summary) => new(
