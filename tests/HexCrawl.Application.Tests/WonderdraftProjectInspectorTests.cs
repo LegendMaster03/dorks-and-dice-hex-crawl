@@ -92,7 +92,8 @@ public sealed class WonderdraftProjectInspectorTests
             point.X > document.Summary.PixelWidth || point.Y > document.Summary.PixelHeight);
 
         Assert.Equal("hex", document.Summary.GridMetadata!["grid.type"]);
-        Assert.Equal("Miles", document.Summary.ScaleMetadata!["scale.unit_label"]);
+        Assert.Equal("Miles", document.Summary.ScaleMetadata!["scale.units"]);
+        Assert.Equal("Vector2(220,16)", document.Summary.ScaleMetadata["scale.size"]);
         Assert.NotNull(document.Summary.PhysicalScale);
         Assert.Equal(10, document.Summary.PhysicalScale!.DistancePerSegment);
         Assert.Equal(3, document.Summary.PhysicalScale.SegmentCount);
@@ -214,10 +215,11 @@ public sealed class WonderdraftProjectInspectorTests
                 ("visible", () => WriteInteger(body, 1))));
         WriteEntry(body, "scale", () =>
             WriteDictionary(body,
-                ("unit_label", () => WriteString(body, "Miles")),
+                ("units", () => WriteString(body, "Miles")),
                 ("segment_distance", () => WriteInteger(body, 10)),
-                ("segment_count", () => WriteInteger(body, 3)),
-                ("pixel_length", () => WriteInteger(body, 220))));
+                ("segments", () => WriteInteger(body, 3)),
+                ("size", () => WriteVector2(body, 220, 16)),
+                ("line_width", () => WriteInteger(body, 3))));
         WriteEntry(body, "included_packs", () => WriteStringArray(body, "Humblewood"));
         WriteEntry(body, "included_default_packs", () => WriteStringArray(body, "Default"));
 
