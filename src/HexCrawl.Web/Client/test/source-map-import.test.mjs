@@ -90,6 +90,9 @@ test("Wonderdraft source import is automatic, scalable, and spatially reviewable
     const surface = fs.readFileSync(path.join(sourceRoot, "map-surface.ts"), "utf8");
 
     assert.match(controller, /importWonderdraftSource/);
+    assert.match(controller, /previewStoredWonderdraftCandidates/);
+    assert.match(controller, /promoteStoredWonderdraftCandidates/);
+    assert.doesNotMatch(controller, /Choose the \.wonderdraft_map project file again/);
     assert.match(controller, /Suggested semantic review/);
     assert.match(controller, /Symbol group/);
     assert.match(controller, /candidate\.properties/);
@@ -99,6 +102,7 @@ test("Wonderdraft source import is automatic, scalable, and spatially reviewable
     assert.doesNotMatch(controller, /maximumRendered\s*=\s*200/);
     assert.match(controller, /Highlight on map/);
     assert.match(workspace, /preserves Wonderdraft source content first/);
+    assert.match(workspace, /Review source/);
     assert.match(renderer, /reviewOverlay/);
     assert.match(renderer, /hitTestReview/);
     assert.match(surface, /setReviewSelectionHandler/);
