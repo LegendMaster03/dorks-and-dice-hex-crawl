@@ -214,6 +214,25 @@ export class SourceMapWorkspace {
                 this.registrationController.begin(this.selected);
             });
             controls.append(visibleLabel, selectButton, registerButton);
+            const hasRetainedWonderdraft =
+                (map.importedContentCount ?? 0) > 0
+                && map.importProvenance?.sourceType.toLocaleLowerCase() === "wonderdraft"
+                && !!map.sourceArchive;
+            if (hasRetainedWonderdraft) {
+                const reviewButton = document.createElement("button");
+                reviewButton.type = "button";
+                reviewButton.textContent = "Review source";
+                reviewButton.disabled = !map.alignment;
+                reviewButton.title = map.alignment
+                    ? "Review the retained Wonderdraft source without uploading the project again."
+                    : "Place the raster map before reviewing retained Wonderdraft source.";
+                reviewButton.addEventListener("click", () => {
+                    this.selected = map;
+                    this.renderSelected();
+                    void this.run(null, () => this.wonderdraftController.openStoredReview(map));
+                });
+                controls.append(reviewButton);
+            }
             row.append(heading, metadata, controls);
             this.list.append(row);
         }
