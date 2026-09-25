@@ -84,6 +84,107 @@ public sealed class ExpeditionWorkbenchEndpointsTests
     }
 
     [Fact]
+    public async Task CustomizedProcedureHelpersRoundTripThroughHttpAndRestart()
+    {
+        var database = TestWebHost.NewDatabasePath();
+        try
+        {
+            Guid expeditionId;
+            using (var factory = TestWebHost.Create(database))
+            using (var client = factory.CreateClient())
+            {
+                var world = await CreateWorld(client);
+                var worldId = world.GetProperty("id").GetGuid();
+
+                using var startResponse = await client.PostAsJsonAsync($"/api/overworlds/{worldId:D}/expeditions", new
+                {
+                    name = "Customized helper expedition",
+                    procedureKey = "alexandrian-advanced",
+                    presentationKey = "exploration-map",
+                    startHex = new { q = 0, r = 0 },
+                    procedureSnapshot = new
+                    {
+                        key = "alexandrian-advanced",
+                        name = "House helper profile",
+                        watchHours = 6,
+                        travelResolution = "ContinuousDistance",
+                        actualDistanceResolution = "VariableResolved",
+                        encounterCadence = "PerWatch",
+                        usesNavigationChecks = true,
+                        usesPersistentVeer = true,
+                        tracksIntraHexProgress = true,
+                        directionChangesCostProgress = true,
+                        supportsDeliberateDoubleBack = true,
+                        startingExitProgressFactor = 0.5,
+                        nearExitProgressFactor = 0.5,
+                        farExitProgressFactor = 1.0,
+                        backExitProgressFactor = 0.5,
+                        directionChangeProgressCostFactor = 1.0 / 6.0,
+                        resolutionHelpers = new
+                        {
+                            travel = new
+                            {
+                                roll = new { diceCount = 1, dieSides = 6, modifier = 2 },
+                                distanceFactorPerRollPoint = 0.2
+                            },
+                            navigation = new
+                            {
+                                checkRoll = new { diceCount = 2, dieSides = 10, modifier = -1 }
+                            },
+                            encounter = new
+                            {
+                                checkRoll = new { diceCount = 1, dieSides = 6, modifier = 0 },
+                                wanderingResults = new[] { 1, 2 },
+                                keyedLocationResults = new[] { 6 },
+                                timingSlots = 6
+                            }
+                        }
+                    }
+                });
+                startResponse.EnsureSuccessStatusCode();
+                var started = await startResponse.Content.ReadFromJsonAsync<JsonElement>();
+                expeditionId = started.GetProperty("id").GetGuid();
+                AssertCustomizedHelpers(started.GetProperty("profile"));
+            }
+
+            using (var restartedFactory = TestWebHost.Create(database))
+            using (var restartedClient = restartedFactory.CreateClient())
+            {
+                var reloaded = await restartedClient.GetFromJsonAsync<JsonElement>(
+                    $"/api/expeditions/{expeditionId:D}");
+                AssertCustomizedHelpers(reloaded.GetProperty("profile"));
+            }
+        }
+        finally
+        {
+            TestWebHost.DeleteDatabase(database);
+        }
+    }
+
+    private static void AssertCustomizedHelpers(JsonElement profile)
+    {
+        Assert.Equal("House helper profile", profile.GetProperty("name").GetString());
+        Assert.Equal(6, profile.GetProperty("watchHours").GetDouble());
+
+        var helpers = profile.GetProperty("resolutionHelpers");
+        var travel = helpers.GetProperty("travel");
+        Assert.Equal(1, travel.GetProperty("roll").GetProperty("diceCount").GetInt32());
+        Assert.Equal(6, travel.GetProperty("roll").GetProperty("dieSides").GetInt32());
+        Assert.Equal(2, travel.GetProperty("roll").GetProperty("modifier").GetInt32());
+        Assert.Equal(0.2, travel.GetProperty("distanceFactorPerRollPoint").GetDouble(), 6);
+
+        var navigation = helpers.GetProperty("navigation");
+        Assert.Equal(2, navigation.GetProperty("checkRoll").GetProperty("diceCount").GetInt32());
+        Assert.Equal(10, navigation.GetProperty("checkRoll").GetProperty("dieSides").GetInt32());
+        Assert.Equal(-1, navigation.GetProperty("checkRoll").GetProperty("modifier").GetInt32());
+
+        var encounter = helpers.GetProperty("encounter");
+        Assert.Equal(6, encounter.GetProperty("timingSlots").GetInt32());
+        Assert.Equal([1, 2], encounter.GetProperty("wanderingResults").EnumerateArray().Select(item => item.GetInt32()).ToArray());
+        Assert.Equal([6], encounter.GetProperty("keyedLocationResults").EnumerateArray().Select(item => item.GetInt32()).ToArray());
+    }
+
+    [Fact]
     public async Task ExpeditionCollectionListsOwnerExpeditionsAcrossWorlds()
     {
         var database = TestWebHost.NewDatabasePath();
