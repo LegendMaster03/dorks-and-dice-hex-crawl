@@ -30,6 +30,9 @@ export class ExpeditionWatchController {
     private readonly locationSelect: HTMLSelectElement;
     private disposed = false;
     private advancePending = false;
+    private generatedResolutionId: string | null = null;
+    private generatedEncounterLocationId: string | null | undefined;
+    private segmentStateKey: string | null = null;
 
     public constructor(
         private readonly root: HTMLElement,
@@ -52,6 +55,11 @@ export class ExpeditionWatchController {
             for (const source of manualEntryResolutionSources) {
                 control.append(option(source, sourceLabel(source)));
             }
+            if (name !== "boundarySource") {
+                const automatic = option("AutomaticRoll", sourceLabel("AutomaticRoll"));
+                automatic.disabled = true;
+                control.append(automatic);
+            }
             control.value = "ManualRoll";
         }
 
@@ -66,13 +74,38 @@ export class ExpeditionWatchController {
         }
 
         checkbox(this.form, "suppressNav")
-            .addEventListener("change", () => this.syncNavigationVisibility());
+            .addEventListener("change", () => {
+                this.markGeneratedComponentEdited("navigation");
+                this.syncNavigationVisibility();
+                this.syncResolutionHelperVisibility();
+            });
         checkbox(this.form, "doubleBack")
-            .addEventListener("change", () => this.syncNavigationVisibility());
+            .addEventListener("change", () => {
+                this.markGeneratedComponentEdited("navigation");
+                this.syncNavigationVisibility();
+                this.syncResolutionHelperVisibility();
+            });
         select(this.form, "navigationOutcome")
-            .addEventListener("change", () => this.syncNavigationVisibility());
+            .addEventListener("change", () => {
+                this.markGeneratedComponentEdited("navigation");
+                this.syncNavigationVisibility();
+            });
+        input(this.form, "veerSteps")
+            .addEventListener("input", () => this.markGeneratedComponentEdited("navigation"));
         select(this.form, "encounterOutcome")
-            .addEventListener("change", () => this.syncEncounterFields());
+            .addEventListener("change", () => {
+                this.markGeneratedComponentEdited("encounter");
+                this.syncEncounterFields();
+            });
+        input(this.form, "encounterHour")
+            .addEventListener("input", () => this.markGeneratedComponentEdited("encounter"));
+        this.locationSelect.addEventListener("change", () => this.handleGeneratedLocationEdit());
+        for (const name of ["expectedDistance", "actualDistance"] as const) {
+            input(this.form, name)
+                .addEventListener("input", () => this.markGeneratedComponentEdited("travel"));
+        }
+        required<HTMLButtonElement>(this.root, "[data-resolution-helper-button]")
+            .addEventListener("click", () => this.generateProcedureResolution());
         this.form.addEventListener("submit", event => this.submit(event));
     }
 
