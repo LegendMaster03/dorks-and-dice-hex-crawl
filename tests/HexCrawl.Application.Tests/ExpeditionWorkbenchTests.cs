@@ -314,6 +314,68 @@ public sealed class ExpeditionWorkbenchTests
     }
 
     [Fact]
+    public async Task FocusedNavigationResolutionSatisfiesUpcomingWatchCheck()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var (core, workbench) = await database.ServicesAsync();
+        var assistants = await database.AssistantServiceAsync();
+        var world = await core.CreateOverworldAsync("alice", WorldCommand());
+        var profile = CrawlProcedureProfile.SimplifiedFixedDistance() with
+        {
+            Name = "Shared navigation state",
+            UsesNavigationChecks = true,
+            UsesPersistentVeer = true
+        };
+        var expedition = await workbench.StartAsync(
+            world.World.Id,
+            "alice",
+            new StartExpeditionWorkbenchCommand(
+                "Shared navigation resolution",
+                profile.Key,
+                "exploration-map",
+                new HexCoordinate(0, 0),
+                profile));
+
+        expedition = await assistants.RecordNavigationAsync(
+            expedition.State.Id,
+            "alice",
+            new NavigationAssistantCommand
+            {
+                ExpectedVersion = expedition.Version,
+                IsLost = true,
+                VeerSteps = 1,
+                IntendedDirection = 0,
+                ResolutionSource = ResolutionSource.ManualRoll,
+                Note = "focused navigation result"
+            });
+
+        Assert.False(ExpeditionProcedureRequirements.IsNavigationResolutionPotentiallyRequired(profile, expedition.State));
+        Assert.Single(
+            expedition.State.History,
+            item => item.Kind == CrawlRuntimeEventKind.NavigationCheckResolved
+                && item.WatchNumber == 1);
+
+        expedition = await workbench.AdvanceAsync(expedition.State.Id, "alice", new AdvanceExpeditionWorkbenchCommand
+        {
+            ExpectedVersion = expedition.Version,
+            IntendedDirection = 0,
+            EffectiveDistance = 1,
+            ContinueAcrossBoundaries = true,
+            TravelResolutionSource = ResolutionSource.ProcedureDefault
+        });
+
+        Assert.Equal(1, expedition.State.CompletedWatches);
+        Assert.True(expedition.State.Navigation.IsLost);
+        Assert.Equal(1, expedition.State.Navigation.VeerSteps);
+        Assert.Equal(new HexDirection(1), expedition.State.ActualDirection);
+        Assert.Single(
+            expedition.State.History,
+            item => item.Kind == CrawlRuntimeEventKind.NavigationCheckResolved
+                && item.WatchNumber == 1);
+        Assert.True(ExpeditionProcedureRequirements.IsNavigationResolutionPotentiallyRequired(profile, expedition.State));
+    }
+
+    [Fact]
     public async Task LegacyCustomEncounterCadenceSurvivesRestartAndRetainsPerWatchBehavior()
     {
         await using var database = await TestDatabase.CreateAsync();
