@@ -184,3 +184,27 @@ test("expedition watch controller owns watch form policy and mutation submission
     assert.match(controller, /encounterCheckDue/);
     assert.match(controller, /persisted runtime values remain 0–5/);
 });
+
+
+test("running sheet exposes the persisted party register through a dedicated controller", () => {
+    const view = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-view.ts"), "utf8");
+    const party = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-party-sheet.ts"), "utf8");
+    assert.match(view, /ExpeditionPartySheetController/);
+    assert.match(view, /data-party-summary/);
+    assert.match(view, /data-party-editor/);
+    assert.match(party, /updateExpeditionParty/);
+    assert.match(party, /Marching order/);
+    assert.match(party, /Watch list/);
+    assert.match(party, /Standing orders/);
+    assert.match(party, /Per hour/);
+    assert.match(party, /Per watch/);
+    assert.match(party, /Per march/);
+    assert.match(party, /runtime\.context\.hexCenterDistance\?\.unit/);
+});
+
+test("watch planning uses travel-duty terminology without changing persisted activity input", () => {
+    const view = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-view.ts"), "utf8");
+    assert.match(view, /Travel duties \/ activities/);
+    assert.match(view, /name="activities"/);
+    assert.match(view, /navigate, forage, map, scout/);
+});
