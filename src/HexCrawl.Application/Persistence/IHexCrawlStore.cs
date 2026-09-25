@@ -32,6 +32,8 @@ public sealed record StoredExpedition(
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt)
 {
+    public CrawlPartySheet Party { get; init; } = CrawlPartySheet.Empty;
+
     public Guid Id => Runtime.Id;
 
     public ExpeditionState State => Runtime as ExpeditionState
