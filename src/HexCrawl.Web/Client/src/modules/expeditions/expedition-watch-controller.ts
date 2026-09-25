@@ -233,6 +233,7 @@ export class ExpeditionWatchController {
         }
         input(this.form, "travelNote").value = "";
         input(this.form, "navigationNote").value = "";
+        input(this.form, "veerSteps").value = "";
         input(this.form, "encounterHour").value = "";
         input(this.form, "encounterNote").value = "";
         input(this.form, "encounterSourceNote").value = "";
