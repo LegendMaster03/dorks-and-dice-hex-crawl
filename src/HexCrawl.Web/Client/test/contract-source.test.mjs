@@ -269,3 +269,16 @@ test("watch controller clears resolved inputs only when authoritative segment st
     assert.match(controller, /clearResolvedSegmentInputs/);
     assert.doesNotMatch(controller, /runtime\.version[\s\S]{0,100}segmentStateKey/);
 });
+
+
+test("running sheet requires explicit provenance and navigation-helper inputs", () => {
+    const view = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-view.ts"), "utf8");
+    const controller = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-watch-controller.ts"), "utf8");
+    assert.doesNotMatch(view, /helperNavigationModifier"[^>]*value="0"/);
+    assert.match(controller, /Select resolution source/);
+    assert.match(controller, /readResolutionSource\("travelSource", "travel"\)/);
+    assert.match(controller, /readResolutionSource\("navigationSource", "navigation"\)/);
+    assert.match(controller, /readResolutionSource\("encounterSource", "encounter"\)/);
+    assert.match(controller, /readResolutionSource\("boundarySource", "boundary", false\)/);
+    assert.doesNotMatch(controller, /control\.value = "ManualRoll"/);
+});
