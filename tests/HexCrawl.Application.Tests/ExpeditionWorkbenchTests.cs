@@ -166,7 +166,7 @@ public sealed class ExpeditionWorkbenchTests
                 EffectiveDistance = 1,
                 ContinueAcrossBoundaries = true,
                 TravelResolutionSource = ResolutionSource.ProcedureDefault,
-                EncounterResolutionSource = ResolutionSource.AutomaticRoll,
+                EncounterResolutionSource = ResolutionSource.ManualRoll,
                 EncounterOutcome = EncounterOutcomeKind.None
             });
         }
@@ -324,14 +324,14 @@ public sealed class ExpeditionWorkbenchTests
             TravelResolutionNote = "physical dice",
             NavigationResolutionSource = ResolutionSource.ExternalSystem,
             NavigationResolutionNote = "Rules Core result",
-            EncounterResolutionSource = ResolutionSource.AutomaticRoll,
-            EncounterResolutionNote = "trusted future helper result"
+            EncounterResolutionSource = ResolutionSource.ProcedureDefault,
+            EncounterResolutionNote = "procedure result"
         });
 
         var audit = Assert.Single(expedition.State.History, item => item.Kind == CrawlRuntimeEventKind.ResolutionProvenanceRecorded);
         Assert.Contains("travel=ManualRoll (physical dice)", audit.Message);
         Assert.Contains("navigation=ExternalSystem (Rules Core result)", audit.Message);
-        Assert.Contains("encounter=AutomaticRoll (trusted future helper result)", audit.Message);
+        Assert.Contains("encounter=ProcedureDefault (procedure result)", audit.Message);
     }
 
     [Fact]
