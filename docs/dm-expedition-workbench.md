@@ -206,7 +206,7 @@ GM source-map rasters remain DM evidence. The knowledge preview does not reinter
 
 ## Persistence and restart behavior
 
-The existing SQLite `expeditions` table remains the compatibility envelope, but schema v2 persists required `context_json`, nullable `overworld_id`, nullable world-only `knowledge_json`, procedure state, discriminated runtime state, pause reason, and remaining watch time. Runtime history remains in `expedition_events`.
+The existing SQLite `expeditions` table remains the compatibility envelope. Current schema v4 persists required `context_json`, nullable `overworld_id`, nullable world-only `knowledge_json`, `party_json`, `generated_resolutions_json`, procedure state, discriminated runtime state, pause reason, and remaining watch time. Runtime history remains in `expedition_events`.
 
 Schema-v1 rows migrate to `WorldBound` using their existing real Overworld ID. New `AbstractHex` and `NonSpatial` rows store `NULL` in `overworld_id`; no placeholder world is created. Non-spatial active-watch state is serialized inside the existing runtime snapshot, so adding partial/resume bookkeeping requires no schema-v3 migration. No separate expedition-clock table or presentation table was introduced.
 
@@ -231,7 +231,10 @@ The workbench does not add:
 - edition-specific navigation skill/DC formulas;
 - encounter-table or monster content;
 - semantic terrain-to-mechanics interpretation;
-- an automatic dice/resolution helper;
+- Journey Challenge / Complex Hazard state;
+- progressive expedition condition/effect state;
+- structured Block Initiative encounter handoff context;
+- typed Rules Core mechanic references for challenge approaches/travel duties;
 - typed custom encounter-cadence parameters or a scheduling DSL;
 - machine vision, OCR, or raster analysis;
 - arbitrary-bearing procedure travel;
@@ -240,4 +243,4 @@ The workbench does not add:
 - real-time multiplayer synchronization;
 - a general campaign calendar/rest clock.
 
-Those systems can consume or extend the existing boundaries later without moving authoritative crawl state into the browser or an integration service.
+Those systems can consume or extend the existing boundaries later without moving authoritative crawl state into the browser or an integration service. See `docs/design-references.md` for the edition reference hierarchy and the explicit rule that 4e-style Journey Challenges remain an optional layer over, not a replacement for, Travel -> Watch -> Navigation -> Encounter.
