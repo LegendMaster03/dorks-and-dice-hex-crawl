@@ -6,6 +6,7 @@ using HexCrawl.Application.Persistence;
 using HexCrawl.Infrastructure.Assets;
 using HexCrawl.Infrastructure.Hosting;
 using HexCrawl.Infrastructure.Persistence;
+using HexCrawl.Infrastructure.Runtime;
 using HexCrawl.Web.Api;
 using HexCrawl.Web.Authentication;
 using HexCrawl.Web.Framework;
@@ -49,6 +50,7 @@ if (!string.IsNullOrWhiteSpace(toolHostBaseUrl))
 
 builder.Services.AddSingleton<IHexCrawlStore>(_ => new SqliteHexCrawlStore(connectionString));
 builder.Services.AddSingleton<IMapAssetStore>(_ => new FilesystemMapAssetStore(assetRoot));
+builder.Services.AddSingleton<IProcedureResolutionRandomSource, CryptographicProcedureResolutionRandomSource>();
 HexCrawlModuleCatalog.RegisterServices(builder.Services);
 builder.Services
     .AddHttpClient<IToolHostAuthenticationClient, DorksAndDiceToolHostAuthenticationClient>(client =>
