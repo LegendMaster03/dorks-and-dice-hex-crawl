@@ -88,7 +88,7 @@ export async function renderExpedition(
                         <section class="hc-sheet-ledger" aria-labelledby="hc-watch-log-title">
                             <div class="hc-sheet-ledger-heading">
                                 <h3 id="hc-watch-log-title">Watch log</h3>
-                                <span>Day · Watch · Elapsed · Hex · Record</span>
+                                <span>Day · Watch · Route · Progress · Navigation · Encounter</span>
                             </div>
                             <div data-history></div>
                         </section>
