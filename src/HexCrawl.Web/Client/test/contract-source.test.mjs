@@ -281,6 +281,28 @@ test("watch forms do not invent unresolved travel results", () => {
 });
 
 
+test("running surfaces use document scrolling and focused assistants keep a readable content width", () => {
+    const styles = fs.readFileSync(path.join(sourceDir, "styles.ts"), "utf8");
+    assert.match(styles, /\.hc-sidebar \{ display: grid; gap: \.6rem; max-height: none; overflow: visible;/);
+    assert.match(styles, /\.hc-history \{ margin-bottom: 0;/);
+    assert.doesNotMatch(styles, /\.hc-history \{[^}]*max-height:/);
+    assert.doesNotMatch(styles, /\.hc-event-audit-list \{[^}]*overflow: auto/);
+    assert.match(styles, /\.hc-assistant-grid \{ display: grid; grid-template-columns: minmax\(0, 44rem\) minmax\(18rem, 30rem\);/);
+    assert.match(styles, /justify-content: start/);
+});
+
+test("triggered encounters expose a Block Initiative handoff without loading another tool inside Hex Crawl", () => {
+    const view = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-view.ts"), "utf8");
+    const assistant = fs.readFileSync(path.join(sourceDir, "modules/assistants/expedition-assistant-view.ts"), "utf8");
+    const handoff = fs.readFileSync(path.join(sourceDir, "encounter-handoff.ts"), "utf8");
+    assert.match(view, /Open in Block Initiative/);
+    assert.match(view, /runtime\.pauseReason !== "EncounterTriggered"/);
+    assert.match(assistant, /Open in Block Initiative/);
+    assert.match(handoff, /sourceTool: "hex-crawl"/);
+    assert.match(handoff, /\/tools\/block-initiative/);
+    assert.match(handoff, /combatants: EncounterHandoffCombatant\[\]/);
+});
+
 test("wide world-bound workbench places map beside current sheet while ledger remains full-width", () => {
     const view = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-view.ts"), "utf8");
     const styles = fs.readFileSync(path.join(sourceDir, "styles.ts"), "utf8");
