@@ -228,8 +228,12 @@ test("watch form does not invent unresolved travel results", () => {
 });
 
 
-test("wide world-bound workbench places map beside the running sheet and preserves responsive stacking", () => {
+test("wide world-bound workbench places map beside current sheet while ledger remains full-width", () => {
+    const view = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-view.ts"), "utf8");
     const styles = fs.readFileSync(path.join(sourceDir, "styles.ts"), "utf8");
-    assert.match(styles, /@media \(min-width: 1350px\)[\s\S]*\.hc-workspace-grid \.hc-map-panel\.hc-run-column[\s\S]*grid-template-columns:/);
+    assert.match(view, /hc-map-sheet-top/);
+    assert.match(view, /\$\{ledgerMarkup\}[\s\S]*<\/section>/);
+    assert.match(styles, /@media \(min-width: 1350px\)[\s\S]*\.hc-workspace-grid \.hc-map-sheet-top[\s\S]*grid-template-columns:/);
+    assert.match(styles, /\.hc-map-panel > \.hc-running-ledger-panel/);
     assert.match(styles, /@media \(max-width: 820px\)[\s\S]*\.hc-workspace-grid[\s\S]*grid-template-columns: 1fr/);
 });
