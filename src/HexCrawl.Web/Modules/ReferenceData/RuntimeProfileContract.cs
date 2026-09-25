@@ -2,6 +2,69 @@ using HexCrawl.Domain.Procedure;
 
 namespace HexCrawl.Web.Api;
 
+public sealed record DiceRollFormulaContract(int DiceCount, int DieSides, int Modifier)
+{
+    public static DiceRollFormulaContract From(DiceRollFormula formula) =>
+        new(formula.DiceCount, formula.DieSides, formula.Modifier);
+
+    public DiceRollFormula ToDomain() => new(DiceCount, DieSides, Modifier);
+}
+
+public sealed record TravelResolutionHelperProfileContract(
+    DiceRollFormulaContract Roll,
+    double DistanceFactorPerRollPoint)
+{
+    public static TravelResolutionHelperProfileContract From(TravelResolutionHelperProfile profile) =>
+        new(DiceRollFormulaContract.From(profile.Roll), profile.DistanceFactorPerRollPoint);
+
+    public TravelResolutionHelperProfile ToDomain() =>
+        new(Roll.ToDomain(), DistanceFactorPerRollPoint);
+}
+
+public sealed record NavigationResolutionHelperProfileContract(DiceRollFormulaContract CheckRoll)
+{
+    public static NavigationResolutionHelperProfileContract From(NavigationResolutionHelperProfile profile) =>
+        new(DiceRollFormulaContract.From(profile.CheckRoll));
+
+    public NavigationResolutionHelperProfile ToDomain() => new(CheckRoll.ToDomain());
+}
+
+public sealed record EncounterResolutionHelperProfileContract(
+    DiceRollFormulaContract CheckRoll,
+    IReadOnlyList<int> WanderingResults,
+    IReadOnlyList<int> KeyedLocationResults,
+    int TimingSlots)
+{
+    public static EncounterResolutionHelperProfileContract From(EncounterResolutionHelperProfile profile) =>
+        new(
+            DiceRollFormulaContract.From(profile.CheckRoll),
+            profile.WanderingResults.Values,
+            profile.KeyedLocationResults.Values,
+            profile.TimingSlots);
+
+    public EncounterResolutionHelperProfile ToDomain() =>
+        new(
+            CheckRoll.ToDomain(),
+            DiceRollResultSet.From(WanderingResults),
+            DiceRollResultSet.From(KeyedLocationResults),
+            TimingSlots);
+}
+
+public sealed record ProcedureResolutionHelperProfileContract(
+    TravelResolutionHelperProfileContract? Travel,
+    NavigationResolutionHelperProfileContract? Navigation,
+    EncounterResolutionHelperProfileContract? Encounter)
+{
+    public static ProcedureResolutionHelperProfileContract From(ProcedureResolutionHelperProfile profile) =>
+        new(
+            profile.Travel is null ? null : TravelResolutionHelperProfileContract.From(profile.Travel),
+            profile.Navigation is null ? null : NavigationResolutionHelperProfileContract.From(profile.Navigation),
+            profile.Encounter is null ? null : EncounterResolutionHelperProfileContract.From(profile.Encounter));
+
+    public ProcedureResolutionHelperProfile ToDomain() =>
+        new(Travel?.ToDomain(), Navigation?.ToDomain(), Encounter?.ToDomain());
+}
+
 public sealed record RuntimeProfileContract(
     string Key,
     string Name,
@@ -18,7 +81,8 @@ public sealed record RuntimeProfileContract(
     double NearExitProgressFactor,
     double FarExitProgressFactor,
     double BackExitProgressFactor,
-    double DirectionChangeProgressCostFactor)
+    double DirectionChangeProgressCostFactor,
+    ProcedureResolutionHelperProfileContract? ResolutionHelpers = null)
 {
     public static RuntimeProfileContract From(CrawlProcedureProfile profile) => new(
         profile.Key,
@@ -36,6 +100,7 @@ public sealed record RuntimeProfileContract(
         profile.NearExitProgressFactor,
         profile.FarExitProgressFactor,
         profile.BackExitProgressFactor,
-        profile.DirectionChangeProgressCostFactor);
+        profile.DirectionChangeProgressCostFactor,
+        profile.ResolutionHelpers is null ? null : ProcedureResolutionHelperProfileContract.From(profile.ResolutionHelpers));
 }
 
