@@ -172,6 +172,8 @@ test("direction controls retain numeric values but present axial step labels", (
     assert.match(assistant, /<option value="">Select intended direction<\/option>/);
     assert.match(assistant, /\$\{directionLabel\(value\)\}<\/option>/);
     assert.match(watch, /state\.intendedDirection === null \? "" : String\(state\.intendedDirection\)/);
+    assert.match(watch, /else if \(!direction\.value && state\.intendedDirection !== null\)/);
+    assert.match(watch, /direction\.value = String\(state\.intendedDirection\)/);
     assert.match(watch, /persisted runtime values remain 0–5/);
 });
 

@@ -176,8 +176,9 @@ export class ExpeditionWatchController {
         required<HTMLElement>(this.form, "[data-reset-veer-row]").hidden =
             !runtime.profile.usesPersistentVeer;
 
+        const direction = select(this.form, "direction");
         if (state.activeWatchNumber !== null) {
-            select(this.form, "direction").value =
+            direction.value =
                 state.intendedDirection === null ? "" : String(state.intendedDirection);
             input(this.form, "pace").value = state.activePaceKey ?? "normal";
             input(this.form, "activities").value = state.activeActivities.join(", ");
@@ -186,6 +187,8 @@ export class ExpeditionWatchController {
             checkbox(this.form, "resetVeer").checked = state.activeResetsVeerAtBoundary;
             checkbox(this.form, "doubleBack").checked = state.activeDeliberateDoubleBack;
             checkbox(this.form, "continueAcross").checked = state.activeContinueAcrossBoundaries;
+        } else if (!direction.value && state.intendedDirection !== null) {
+            direction.value = String(state.intendedDirection);
         }
 
         if (!runtime.context.hexCenterDistance) {
