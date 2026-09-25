@@ -83,6 +83,11 @@ public sealed partial class HexCrawlService
         var state = expedition.Runtime as ExpeditionState
             ?? throw new InvalidOperationException("Spatial expedition advancement requires a spatial crawl session.");
         var (runtimeContext, world) = await ResolveSpatialContextAsync(expedition, ownerUserId, cancellationToken);
+        if (command.ResolutionSource == ResolutionSource.AutomaticRoll)
+        {
+            throw new InvalidOperationException(
+                "AutomaticRoll is reserved for server-verified procedure-helper results and can not be supplied to the legacy manual advance path.");
+        }
         var provenance = new ResolutionProvenance(command.ResolutionSource, command.DmOverrideNote);
         var profile = expedition.Procedure;
         var travel = BuildTravel(profile, runtimeContext.HexCenterDistance.Unit, command, provenance);
