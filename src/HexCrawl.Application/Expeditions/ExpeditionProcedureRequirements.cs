@@ -26,8 +26,18 @@ public static class ExpeditionProcedureRequirements
             state.ActiveWatch?.WatchNumber ?? Math.Max(1, state.CompletedWatches + 1),
             state.ElapsedTime);
 
-    public static bool IsNavigationResolutionPotentiallyRequired(CrawlProcedureProfile profile, ExpeditionState state) =>
-        state.ActiveWatch is null && profile.UsesNavigationChecks;
+    public static bool IsNavigationResolutionPotentiallyRequired(CrawlProcedureProfile profile, ExpeditionState state)
+    {
+        if (state.ActiveWatch is not null || !profile.UsesNavigationChecks)
+        {
+            return false;
+        }
+
+        var watchNumber = Math.Max(1, state.CompletedWatches + 1);
+        return !state.History.Any(runtimeEvent =>
+            runtimeEvent.Kind == CrawlRuntimeEventKind.NavigationCheckResolved
+            && runtimeEvent.WatchNumber == watchNumber);
+    }
 
     private static bool IsEncounterCheckDue(
         CrawlProcedureProfile profile,
