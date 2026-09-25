@@ -167,8 +167,11 @@ test("direction controls retain numeric values but present axial step labels", (
     const assistant = fs.readFileSync(path.join(sourceDir, "modules/assistants/expedition-assistant-view.ts"), "utf8");
     assert.match(runtime, /"Toward \+q"/);
     assert.match(runtime, /"Toward -q"/);
+    assert.match(expedition, /<option value="">Select intended direction<\/option>/);
     assert.match(expedition, /<option value="\$\{value\}">\$\{directionLabel\(value\)\}<\/option>/);
+    assert.match(assistant, /<option value="">Select intended direction<\/option>/);
     assert.match(assistant, /\$\{directionLabel\(value\)\}<\/option>/);
+    assert.match(watch, /state\.intendedDirection === null \? "" : String\(state\.intendedDirection\)/);
     assert.match(watch, /persisted runtime values remain 0–5/);
 });
 

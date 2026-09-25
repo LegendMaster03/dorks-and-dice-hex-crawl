@@ -177,7 +177,8 @@ export class ExpeditionWatchController {
             !runtime.profile.usesPersistentVeer;
 
         if (state.activeWatchNumber !== null) {
-            select(this.form, "direction").value = String(state.intendedDirection ?? 0);
+            select(this.form, "direction").value =
+                state.intendedDirection === null ? "" : String(state.intendedDirection);
             input(this.form, "pace").value = state.activePaceKey ?? "normal";
             input(this.form, "activities").value = state.activeActivities.join(", ");
             input(this.form, "navigationAid").value = state.activeNavigationAidKey ?? "none";

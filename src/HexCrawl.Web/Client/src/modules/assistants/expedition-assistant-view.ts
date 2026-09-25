@@ -216,7 +216,7 @@ function travelForm(runtime: ExpeditionDetail): string {
             <label>Resulting hex r <input name="r" type="number" step="1" value="${state.currentHex.r}"></label>
         </div>
         ${progress}
-        <label>Intended direction <select name="intendedDirection">${directionOptions(state.intendedDirection ?? 0)}</select></label>
+        <label>Intended direction <select name="intendedDirection" required><option value="">Select intended direction</option>${directionOptions(state.intendedDirection)}</select></label>
         <label>Actual direction override <select name="actualDirection"><option value="">Derive from navigation state</option>${directionOptions(state.actualDirection)}</select></label>
         <label><input name="completeWatch" type="checkbox" checked> Mark one watch complete</label>
         ${provenanceFields("travel")}
@@ -240,7 +240,7 @@ function nonSpatialWatchForm(runtime: ExpeditionDetail): string {
 function navigationForm(runtime: ExpeditionDetail): string {
     const state = spatialState(runtime);
     return `
-        <label>Intended direction <select name="intendedDirection">${directionOptions(state.intendedDirection ?? 0)}</select></label>
+        <label>Intended direction <select name="intendedDirection" required><option value="">Select intended direction</option>${directionOptions(state.intendedDirection)}</select></label>
         <label><input name="isLost" type="checkbox" ${state.isLost ? "checked" : ""}> Expedition is lost</label>
         <label>Veer steps <input name="veerSteps" type="number" step="1" value="${state.isLost ? state.veerSteps : 0}"></label>
         ${provenanceFields("navigation")}

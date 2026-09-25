@@ -116,7 +116,7 @@ export async function renderExpedition(
                         <form class="hc-form" data-advance>
                             <fieldset data-plan-fields data-focus-group="travel navigation">
                                 <legend>Orders for this watch</legend>
-                                <label>Intended direction <select name="direction">${directionOptions()}</select></label>
+                                <label>Intended direction <select name="direction" required><option value="">Select intended direction</option>${directionOptions()}</select></label>
                                 <label>Pace / travel mode <input name="pace" value="normal"></label>
                                 <label>Travel duties / activities <input name="activities" placeholder="navigate, forage, map, scout"></label>
                                 <label>Navigation aid/context <input name="navigationAid" value="none"></label>
