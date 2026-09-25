@@ -167,7 +167,10 @@ public sealed partial class CrawlRuntimeEngine
                 break;
             }
 
-            if (!plan.ContinueAcrossBoundaries)
+            var watchEndsAtThisBoundary =
+                segmentDuration == callRemaining
+                && remainingDistance <= Epsilon;
+            if (!plan.ContinueAcrossBoundaries && !watchEndsAtThisBoundary)
             {
                 events.Add(
                     active.WatchNumber,
@@ -276,7 +279,10 @@ public sealed partial class CrawlRuntimeEngine
                 break;
             }
 
-            if (!plan.ContinueAcrossBoundaries)
+            var watchEndsAtThisBoundary =
+                segmentDuration == callRemaining
+                && completed >= targetSteps;
+            if (!plan.ContinueAcrossBoundaries && !watchEndsAtThisBoundary)
             {
                 events.Add(active.WatchNumber, CrawlRuntimeEventKind.ConditionsReviewRequired, eventTime, entered, "Review travel conditions before continuing.");
                 pause = RuntimePauseReason.ConditionsReviewRequired;
