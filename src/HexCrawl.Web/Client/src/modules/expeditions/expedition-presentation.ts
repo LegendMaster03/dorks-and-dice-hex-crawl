@@ -1,4 +1,5 @@
 import { pauseInstruction, watchPhase } from "./expedition-workflow";
+import { buildWatchLedger } from "./expedition-watch-ledger";
 import { directionLabel, formatDistance, formatHours } from "../../runtime-view";
 import type { ExpeditionDetail, Overworld, SpatialRuntimeExpedition } from "../../types";
 import { prettyEnum, required, statusCell } from "../../ui/dom";
@@ -70,8 +71,9 @@ export function renderExpeditionPause(root: HTMLElement, runtime: ExpeditionDeta
 export function renderExpeditionHistory(root: HTMLElement, runtime: ExpeditionDetail): void {
     const host = required<HTMLElement>(root, "[data-history]");
     host.replaceChildren();
-    const recent = [...runtime.history].reverse().slice(0, 30);
-    if (recent.length === 0) {
+
+    const rows = buildWatchLedger(runtime);
+    if (rows.length === 0) {
         const empty = document.createElement("p");
         empty.className = "hc-sheet-empty";
         empty.textContent =
@@ -80,11 +82,13 @@ export function renderExpeditionHistory(root: HTMLElement, runtime: ExpeditionDe
         return;
     }
 
+    const tableWrap = document.createElement("div");
+    tableWrap.className = "hc-watch-ledger-wrap";
     const table = document.createElement("table");
     table.className = "hc-watch-ledger";
     const head = document.createElement("thead");
     const headRow = document.createElement("tr");
-    for (const label of ["Day", "Watch", "Elapsed", "Hex", "Record"]) {
+    for (const label of ["Day", "Watch", "Route / hex", "Travel / progress", "Navigation", "Encounter", "State"]) {
         const cell = document.createElement("th");
         cell.scope = "col";
         cell.textContent = label;
@@ -93,23 +97,46 @@ export function renderExpeditionHistory(root: HTMLElement, runtime: ExpeditionDe
     head.append(headRow);
 
     const body = document.createElement("tbody");
-    for (const event of recent) {
+    for (const entry of rows) {
         const row = document.createElement("tr");
-        const day = document.createElement("td");
-        day.textContent = String(Math.floor(event.expeditionElapsedHours / 24) + 1);
-        const watch = document.createElement("td");
-        watch.textContent = String(event.watchNumber);
-        const elapsed = document.createElement("td");
-        elapsed.textContent = formatHours(event.expeditionElapsedHours);
-        const hex = document.createElement("td");
-        hex.textContent = event.hex ? `${event.hex.q}, ${event.hex.r}` : "—";
-        const record = document.createElement("td");
-        record.textContent = event.message;
-        row.append(day, watch, elapsed, hex, record);
+        row.append(
+            textCell(String(entry.day)),
+            textCell(String(entry.watchNumber)),
+            textCell(entry.route),
+            textCell(entry.progress),
+            textCell(entry.navigation),
+            textCell(entry.encounter),
+            textCell(entry.status));
         body.append(row);
     }
     table.append(head, body);
-    host.append(table);
+    tableWrap.append(table);
+    host.append(tableWrap);
+
+    const audit = document.createElement("details");
+    audit.className = "hc-event-audit";
+    const summary = document.createElement("summary");
+    summary.textContent = `Detailed event history (${runtime.history.length})`;
+    const list = document.createElement("ol");
+    list.className = "hc-event-audit-list";
+    for (const event of [...runtime.history].reverse().slice(0, 40)) {
+        const item = document.createElement("li");
+        const meta = document.createElement("strong");
+        meta.textContent =
+            `#${event.sequence} · watch ${event.watchNumber} · ${formatHours(event.expeditionElapsedHours)}`;
+        const message = document.createElement("span");
+        message.textContent = event.message;
+        item.append(meta, message);
+        list.append(item);
+    }
+    audit.append(summary, list);
+    host.append(audit);
+}
+
+function textCell(value: string): HTMLTableCellElement {
+    const cell = document.createElement("td");
+    cell.textContent = value;
+    return cell;
 }
 
 export function renderPlayerKnowledgePreview(
