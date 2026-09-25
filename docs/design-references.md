@@ -14,6 +14,22 @@ The current reference hierarchy is:
 
 This order is not a quality ranking. It describes what each source family is primarily being used to inform.
 
+## Reviewed source mechanics currently encoded
+
+The built-in `alexandrian-advanced` profile is the current concrete source-backed baseline. Its reviewed mechanics are regression-tested so later refactors do not silently change the procedure:
+
+- a watch is 4 hours;
+- travel uses continuous distance with separately resolved expected and actual distance;
+- the optional actual-distance helper rolls `2d6+3` and applies each roll point as 10% of expected distance;
+- encounter cadence is once per watch;
+- the automatic advanced encounter check uses `1d8`, with 1 as the wandering-encounter result and 8 as the keyed-location result;
+- encounter timing divides the 4-hour watch into eight equal slots;
+- navigation uses a `1d20` helper while the DC, situational modifier, and failure veer remain explicit DM-confirmed inputs;
+- persistent veer, deliberate double-back, intra-hex progress, and direction-change progress costs remain active;
+- near/far progress and turn costs are stored as scale-independent factors rather than hard-coded miles, so the familiar 6-mile near exit, 12-mile far exit, and 2-mile direction-change cost emerge on a 12-mile center-to-center hex without making 12-mile hexes a global assumption.
+
+The source material contains additional mechanics that are **not yet automated** here: movement tables derived from creature speed, pace-specific movement and check consequences, terrain and weather modifiers, foraging/exploration actions, the check for accurately estimating actual distance traveled, mounts/vehicles, and encounter-table content. Those remain DM-resolved inputs or future Rules Core/Character integrations. They should not be copied into Hex Crawl as hidden hard-coded edition tables merely to make the current UI appear more automatic.
+
 ## Core-procedure rule
 
 The existing Hex Crawl procedure remains:
