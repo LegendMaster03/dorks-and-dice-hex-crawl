@@ -295,6 +295,7 @@ test("watch controller clears resolved inputs only when authoritative segment st
     assert.match(controller, /activeWatchElapsedHours/);
     assert.match(controller, /clearResolvedSegmentInputs/);
     assert.match(controller, /input\(this\.form, "veerSteps"\)\.value = ""/);
+    assert.match(controller, /checkbox\(this\.form, "doubleBack"\)\.checked = false/);
     assert.doesNotMatch(controller, /runtime\.version[\s\S]{0,100}segmentStateKey/);
 });
 

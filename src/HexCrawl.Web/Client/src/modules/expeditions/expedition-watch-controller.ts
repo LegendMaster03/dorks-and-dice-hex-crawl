@@ -248,6 +248,7 @@ export class ExpeditionWatchController {
         input(this.form, "helperFailureVeer").value = "";
         checkbox(this.form, "recognizedLost").checked = false;
         checkbox(this.form, "reorient").checked = false;
+        checkbox(this.form, "doubleBack").checked = false;
         select(this.form, "navigationOutcome").value = "";
         select(this.form, "encounterOutcome").value = "";
         this.locationSelect.value = "";
