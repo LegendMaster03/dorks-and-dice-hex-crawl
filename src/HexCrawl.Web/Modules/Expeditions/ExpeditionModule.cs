@@ -24,6 +24,7 @@ public sealed class ExpeditionModule : IHexCrawlModule
         services.AddScoped<CrawlSessionService>();
         services.AddScoped<ExpeditionWorkbenchService>();
         services.AddScoped<ExpeditionAssistantService>();
+        services.AddScoped<ExpeditionPartyService>();
     }
 
     public void MapEndpoints(RouteGroupBuilder api)
@@ -35,6 +36,7 @@ public sealed class ExpeditionModule : IHexCrawlModule
         api.MapGet("/expeditions/{expeditionId:guid}", GetExpeditionAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/advance", AdvanceExpeditionAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/discover", DiscoverAsync);
+        api.MapPut("/expeditions/{expeditionId:guid}/party", UpdatePartyAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/assistants/travel", RecordTravelAssistantAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/assistants/watch", RecordNonSpatialWatchAssistantAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/assistants/navigation", RecordNavigationAssistantAsync);
@@ -130,6 +132,23 @@ public sealed class ExpeditionModule : IHexCrawlModule
     {
         var owner = UserId(context);
         var expedition = await service.DiscoverAsync(
+            expeditionId,
+            owner,
+            request.ToCommand(),
+            cancellationToken);
+        return Results.Ok(await ContractAsync(expedition, owner, service, cancellationToken));
+    }
+
+    private static async Task<IResult> UpdatePartyAsync(
+        Guid expeditionId,
+        UpdateExpeditionPartyRequest request,
+        HttpContext context,
+        ExpeditionPartyService parties,
+        HexCrawlService service,
+        CancellationToken cancellationToken)
+    {
+        var owner = UserId(context);
+        var expedition = await parties.UpdateAsync(
             expeditionId,
             owner,
             request.ToCommand(),
