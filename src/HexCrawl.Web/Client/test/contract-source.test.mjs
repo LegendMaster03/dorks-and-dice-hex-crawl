@@ -247,6 +247,15 @@ test("wide world-bound workbench places map beside current sheet while ledger re
 });
 
 
+test("custom procedure summary follows active custom mechanics and resets to the preset when customization is disabled", () => {
+    const setup = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-setup.ts"), "utf8");
+    assert.match(setup, /renderCustomizedProcedureSummary/);
+    assert.match(setup, /customization\.addEventListener\("input", renderCustomizedProcedureSummary\)/);
+    assert.match(setup, /customization\.addEventListener\("change", renderCustomizedProcedureSummary\)/);
+    assert.match(setup, /if \(customize\.checked\)[\s\S]{0,160}fillProcedure\(profile\)[\s\S]{0,120}else[\s\S]{0,120}renderProcedureSummary\(profile\)/);
+    assert.match(setup, /Complete the custom procedure fields to refresh this summary/);
+});
+
 test("custom procedure snapshots drop helper components that no longer match the selected mechanics", () => {
     const setup = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-setup.ts"), "utf8");
     assert.match(setup, /compatibleResolutionHelpers/);

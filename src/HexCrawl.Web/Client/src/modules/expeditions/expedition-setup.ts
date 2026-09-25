@@ -63,7 +63,12 @@ export async function enhanceExpeditionSetup(
     const customize = checkbox(form, "customize");
     const syncCustomization = (): void => {
         customization.hidden = !customize.checked;
-        if (customize.checked) fillProcedure(selectedProfile(profiles, procedure.value));
+        const profile = selectedProfile(profiles, procedure.value);
+        if (customize.checked) {
+            fillProcedure(profile);
+        } else {
+            renderProcedureSummary(profile);
+        }
     };
     const fillProcedure = (profile: RuntimeProfile): void => {
         numberInput(form, "watchHours").value = String(profile.watchHours);
@@ -91,6 +96,17 @@ export async function enhanceExpeditionSetup(
         required<HTMLElement>(form, "[data-presentation-summary]").textContent =
             `${policy.playerGrid.toLowerCase()} player grid · terrain ${policy.terrainMode.replace(/([A-Z])/g, " $1").trim().toLowerCase()} · ${automation}`;
     };
+    const renderCustomizedProcedureSummary = (): void => {
+        if (!customize.checked) return;
+        try {
+            renderProcedureSummary(profileFromForm(
+                form,
+                selectedProfile(profiles, procedure.value)));
+        } catch {
+            required<HTMLElement>(form, "[data-procedure-summary]").textContent =
+                "Complete the custom procedure fields to refresh this summary.";
+        }
+    };
 
     procedure.addEventListener("change", () => {
         const profile = selectedProfile(profiles, procedure.value);
@@ -99,6 +115,8 @@ export async function enhanceExpeditionSetup(
     });
     presentation.addEventListener("change", () => renderPresentationSummary(selectedPresentation(presentations, presentation.value)));
     customize.addEventListener("change", syncCustomization);
+    customization.addEventListener("input", renderCustomizedProcedureSummary);
+    customization.addEventListener("change", renderCustomizedProcedureSummary);
 
     fillProcedure(selectedProfile(profiles, procedure.value));
     renderPresentationSummary(selectedPresentation(presentations, presentation.value));
