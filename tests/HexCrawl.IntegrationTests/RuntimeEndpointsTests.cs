@@ -16,7 +16,17 @@ public sealed class RuntimeEndpointsTests
             using var client = factory.CreateClient();
             var profiles = await client.GetFromJsonAsync<JsonElement>("/api/runtime/profiles");
             Assert.Equal(3, profiles.GetArrayLength());
-            Assert.Contains(profiles.EnumerateArray(), profile => profile.GetProperty("key").GetString() == "alexandrian-advanced");
+            var advanced = Assert.Single(
+                profiles.EnumerateArray(),
+                profile => profile.GetProperty("key").GetString() == "alexandrian-advanced");
+            var helpers = advanced.GetProperty("resolutionHelpers");
+            Assert.Equal(2, helpers.GetProperty("travel").GetProperty("roll").GetProperty("diceCount").GetInt32());
+            Assert.Equal(6, helpers.GetProperty("travel").GetProperty("roll").GetProperty("dieSides").GetInt32());
+            Assert.Equal(3, helpers.GetProperty("travel").GetProperty("roll").GetProperty("modifier").GetInt32());
+            Assert.Equal(0.1d, helpers.GetProperty("travel").GetProperty("distanceFactorPerRollPoint").GetDouble(), 12);
+            Assert.Equal(20, helpers.GetProperty("navigation").GetProperty("checkRoll").GetProperty("dieSides").GetInt32());
+            Assert.Equal(8, helpers.GetProperty("encounter").GetProperty("checkRoll").GetProperty("dieSides").GetInt32());
+            Assert.Equal(8, helpers.GetProperty("encounter").GetProperty("timingSlots").GetInt32());
             Assert.Contains(profiles.EnumerateArray(), profile => profile.GetProperty("key").GetString() == "simple-fixed-distance");
             Assert.Contains(profiles.EnumerateArray(), profile => profile.GetProperty("key").GetString() == "simple-hex-step");
         }

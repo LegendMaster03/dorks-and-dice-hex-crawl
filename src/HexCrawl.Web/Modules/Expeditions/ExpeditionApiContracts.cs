@@ -279,28 +279,8 @@ public sealed record StartStandaloneCrawlSessionRequest(
         ProcedureKey,
         Context.ToDomain(),
         StartHex,
-        ProcedureSnapshot is null ? null : ToProcedure(ProcedureSnapshot));
+        ProcedureSnapshot?.ToDomain());
 
-    private static CrawlProcedureProfile ToProcedure(RuntimeProfileContract profile) => new()
-    {
-        Key = profile.Key,
-        Name = profile.Name,
-        WatchLength = TimeSpan.FromHours(profile.WatchHours),
-        TravelResolution = profile.TravelResolution,
-        ActualDistanceResolution = profile.ActualDistanceResolution,
-        EncounterCadence = profile.EncounterCadence,
-        UsesNavigationChecks = profile.UsesNavigationChecks,
-        UsesPersistentVeer = profile.UsesPersistentVeer,
-        TracksIntraHexProgress = profile.TracksIntraHexProgress,
-        DirectionChangesCostProgress = profile.DirectionChangesCostProgress,
-        SupportsDeliberateDoubleBack = profile.SupportsDeliberateDoubleBack,
-        StartingExitProgressFactor = profile.StartingExitProgressFactor,
-        NearExitProgressFactor = profile.NearExitProgressFactor,
-        FarExitProgressFactor = profile.FarExitProgressFactor,
-        BackExitProgressFactor = profile.BackExitProgressFactor,
-        DirectionChangeProgressCostFactor = profile.DirectionChangeProgressCostFactor,
-        ResolutionHelpers = profile.ResolutionHelpers?.ToDomain()
-    };
 }
 
 public sealed record StartExpeditionWorkbenchRequest(
@@ -315,28 +295,8 @@ public sealed record StartExpeditionWorkbenchRequest(
         ProcedureKey,
         string.IsNullOrWhiteSpace(PresentationKey) ? "exploration-map" : PresentationKey.Trim(),
         StartHex,
-        ProcedureSnapshot is null ? null : ToProcedure(ProcedureSnapshot));
+        ProcedureSnapshot?.ToDomain());
 
-    private static CrawlProcedureProfile ToProcedure(RuntimeProfileContract profile) => new()
-    {
-        Key = profile.Key,
-        Name = profile.Name,
-        WatchLength = TimeSpan.FromHours(profile.WatchHours),
-        TravelResolution = profile.TravelResolution,
-        ActualDistanceResolution = profile.ActualDistanceResolution,
-        EncounterCadence = profile.EncounterCadence,
-        UsesNavigationChecks = profile.UsesNavigationChecks,
-        UsesPersistentVeer = profile.UsesPersistentVeer,
-        TracksIntraHexProgress = profile.TracksIntraHexProgress,
-        DirectionChangesCostProgress = profile.DirectionChangesCostProgress,
-        SupportsDeliberateDoubleBack = profile.SupportsDeliberateDoubleBack,
-        StartingExitProgressFactor = profile.StartingExitProgressFactor,
-        NearExitProgressFactor = profile.NearExitProgressFactor,
-        FarExitProgressFactor = profile.FarExitProgressFactor,
-        BackExitProgressFactor = profile.BackExitProgressFactor,
-        DirectionChangeProgressCostFactor = profile.DirectionChangeProgressCostFactor,
-        ResolutionHelpers = profile.ResolutionHelpers?.ToDomain()
-    };
 }
 
 public sealed record AdvanceExpeditionWorkbenchRequest

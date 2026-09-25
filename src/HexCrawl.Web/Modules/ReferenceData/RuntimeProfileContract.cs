@@ -102,5 +102,26 @@ public sealed record RuntimeProfileContract(
         profile.BackExitProgressFactor,
         profile.DirectionChangeProgressCostFactor,
         profile.ResolutionHelpers is null ? null : ProcedureResolutionHelperProfileContract.From(profile.ResolutionHelpers));
+
+    public CrawlProcedureProfile ToDomain() => new()
+    {
+        Key = Key,
+        Name = Name,
+        WatchLength = TimeSpan.FromHours(WatchHours),
+        TravelResolution = TravelResolution,
+        ActualDistanceResolution = ActualDistanceResolution,
+        EncounterCadence = EncounterCadence,
+        UsesNavigationChecks = UsesNavigationChecks,
+        UsesPersistentVeer = UsesPersistentVeer,
+        TracksIntraHexProgress = TracksIntraHexProgress,
+        DirectionChangesCostProgress = DirectionChangesCostProgress,
+        SupportsDeliberateDoubleBack = SupportsDeliberateDoubleBack,
+        StartingExitProgressFactor = StartingExitProgressFactor,
+        NearExitProgressFactor = NearExitProgressFactor,
+        FarExitProgressFactor = FarExitProgressFactor,
+        BackExitProgressFactor = BackExitProgressFactor,
+        DirectionChangeProgressCostFactor = DirectionChangeProgressCostFactor,
+        ResolutionHelpers = ResolutionHelpers?.ToDomain()
+    };
 }
 
