@@ -43,7 +43,7 @@ public sealed class ExpeditionPartyEndpointsTests
                         expectedVersion = started.GetProperty("version").GetInt64(),
                         members = new[]
                         {
-                            new { id = scoutId, name = "Scout", externalCharacterId = "character:scout", countsTowardPartyMovement = true },
+                            new { id = scoutId, name = "Scout", externalCharacterId = (string?)"character:scout", countsTowardPartyMovement = true },
                             new { id = guardId, name = "Guard", externalCharacterId = (string?)null, countsTowardPartyMovement = true }
                         },
                         marchingOrder = new[]
