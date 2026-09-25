@@ -201,14 +201,14 @@ function travelForm(runtime: ExpeditionDetail): string {
     const state = spatialState(runtime);
     const contextDistance = runtime.context.hexCenterDistance;
     if (!contextDistance) throw new Error("Spatial crawl context is missing its hex-center distance.");
-    const scale = contextDistance.value;
     const travelInput = runtime.profile.travelResolution === "HexSteps"
-        ? `<label>Resolved hex steps <input name="hexSteps" type="number" min="0" step="1" value="1"></label>`
-        : `<label>Distance traveled (${contextDistance.unit.symbol}) <input name="distance" type="number" min="0" step="any" value="${scale}"></label>`;
+        ? `<label>Resolved hex steps <input name="hexSteps" type="number" min="0" step="1" required></label>`
+        : `<label>Distance traveled (${contextDistance.unit.symbol}) <input name="distance" type="number" min="0" step="any" required></label>`;
     const progress = runtime.profile.tracksIntraHexProgress
         ? `<label>Resulting intra-hex progress (${contextDistance.unit.symbol}) <input name="hexProgress" type="number" min="0" step="any" value="${state.hexProgress.value}"></label>`
         : "";
     return `
+        <p class="hc-hint">Enter the movement result you already resolved. This assistant does not infer distance or hex steps from the map scale, procedure name, pace, or terrain.</p>
         <label>Elapsed travel hours <input name="elapsedHours" type="number" min="0" step="any" value="${runtime.profile.watchHours}"></label>
         ${travelInput}
         <div class="hc-inline">

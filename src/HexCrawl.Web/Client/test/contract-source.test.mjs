@@ -234,12 +234,16 @@ test("party movement editor derives units from persisted session data without a 
 });
 
 
-test("watch form does not invent unresolved travel results", () => {
+test("watch forms do not invent unresolved travel results", () => {
     const view = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-view.ts"), "utf8");
     const controller = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-watch-controller.ts"), "utf8");
+    const assistant = fs.readFileSync(path.join(sourceDir, "modules/assistants/expedition-assistant-view.ts"), "utf8");
     assert.doesNotMatch(view, /name="hexSteps"[^>]*value="1"/);
     assert.doesNotMatch(controller, /actualDistance"\)\.value = String\(scale\)/);
     assert.match(controller, /suggestedWatchDistance\(runtime\)/);
+    assert.doesNotMatch(assistant, /name="hexSteps"[^>]*value="1"/);
+    assert.doesNotMatch(assistant, /name="distance"[^>]*value="\$\{scale\}"/);
+    assert.match(assistant, /does not infer distance or hex steps from the map scale/);
 });
 
 
