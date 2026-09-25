@@ -24,11 +24,11 @@ export async function renderWorldList(
                     <form data-create-world class="hc-form">
                         <label>Name <input name="name" required value="New overworld" autocomplete="off"></label>
                         <label>Orientation <select name="orientation"><option value="PointyTop">Pointy top</option><option value="FlatTop">Flat top</option></select></label>
-                        <label>Hex center distance <input name="scale" type="number" min="0.001" step="any" value="12" required><span class="hc-hint">Center-to-center distance between adjacent hexes.</span></label>
-                        <label>Unit <select name="unit"><option value="Mile">Miles</option><option value="Kilometer">Kilometers</option><option value="Custom">Custom</option></select></label>
+                        <label>Hex center distance <input name="scale" type="number" min="0.001" step="any" required><span class="hc-hint">Center-to-center distance between adjacent hexes. No default physical scale is assumed.</span></label>
+                        <label>Unit <select name="unit" required><option value="">Select distance unit</option><option value="Mile">Miles</option><option value="Kilometer">Kilometers</option><option value="Custom">Custom</option></select></label>
                         <div class="hc-custom-unit-fields" data-custom-unit hidden>
-                            <label>Custom symbol <input name="symbol" value="u" autocomplete="off"></label>
-                            <label>Custom meters per unit <input name="meters" type="number" min="0.001" step="any" value="1"></label>
+                            <label>Custom symbol <input name="symbol" autocomplete="off"></label>
+                            <label>Custom meters per unit <input name="meters" type="number" min="0.001" step="any"></label>
                         </div>
                         <details><summary>Advanced grid alignment</summary>
                             <div class="hc-form">

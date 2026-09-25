@@ -59,6 +59,19 @@ test("mapless session creation never creates a placeholder Overworld", () => {
     assert.match(source, /kind: "NonSpatial"/);
 });
 
+test("crawl creation surfaces do not assume a 12-mile physical scale", () => {
+    const world = fs.readFileSync(path.join(sourceDir, "modules/worlds/world-list-view.ts"), "utf8");
+    const home = fs.readFileSync(path.join(sourceDir, "modules/home/tool-home-view.ts"), "utf8");
+    const assistant = fs.readFileSync(path.join(sourceDir, "modules/assistants/assistant-entry-view.ts"), "utf8");
+    for (const source of [world, home, assistant]) {
+        assert.doesNotMatch(source, /name="scale"[^>]*value="12"/);
+        assert.match(source, /Select distance unit/);
+    }
+    assert.match(world, /No default physical scale is assumed/);
+    assert.match(home, /unit\.required = abstract/);
+    assert.match(assistant, /unit\.required = abstract/);
+});
+
 test("standalone crawl sessions post directly to the expedition collection", () => {
     const source = fs.readFileSync(path.join(sourceDir, "api.ts"), "utf8");
     assert.match(source, /startStandaloneSession/);

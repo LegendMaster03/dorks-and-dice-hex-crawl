@@ -66,11 +66,11 @@ export async function renderToolHome(
                         <div class="hc-form" data-abstract-context hidden>
                             <label>Context name <input name="contextName" value="Mapless hex crawl" autocomplete="off"></label>
                             <label>Hex orientation <select name="orientation"><option value="PointyTop">Pointy top</option><option value="FlatTop">Flat top</option></select></label>
-                            <label>Hex center distance <input name="scale" type="number" min="0.001" step="any" value="12"></label>
-                            <label>Distance unit <select name="unit"><option value="Mile">Miles</option><option value="Kilometer">Kilometers</option><option value="Custom">Custom</option></select></label>
+                            <label>Hex center distance <input name="scale" type="number" min="0.001" step="any" placeholder="required"></label>
+                            <label>Distance unit <select name="unit"><option value="">Select distance unit</option><option value="Mile">Miles</option><option value="Kilometer">Kilometers</option><option value="Custom">Custom</option></select></label>
                             <div class="hc-form" data-custom-unit hidden>
-                                <label>Custom symbol <input name="symbol" value="u" autocomplete="off"></label>
-                                <label>Custom meters per unit <input name="meters" type="number" min="0.001" step="any" value="1"></label>
+                                <label>Custom symbol <input name="symbol" autocomplete="off"></label>
+                                <label>Custom meters per unit <input name="meters" type="number" min="0.001" step="any"></label>
                             </div>
                             <div class="hc-inline">
                                 <label>Start q <input name="q" type="number" step="1" value="0"></label>
@@ -120,6 +120,7 @@ export async function renderToolHome(
         nonSpatialContext.hidden = !nonSpatial;
         input(form, "contextName").required = abstract;
         input(form, "scale").required = abstract;
+        unit.required = abstract;
         input(form, "q").required = abstract;
         input(form, "r").required = abstract;
         input(form, "nonSpatialName").required = nonSpatial;
