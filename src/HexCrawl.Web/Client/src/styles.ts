@@ -296,6 +296,10 @@ export function ensureStyles(): void {
         .hc-watch-ledger th:nth-child(5), .hc-watch-ledger td:nth-child(5) { width: 8rem; }
         .hc-watch-ledger th:nth-child(6), .hc-watch-ledger td:nth-child(6) { width: 13rem; }
         .hc-watch-ledger th:nth-child(7), .hc-watch-ledger td:nth-child(7) { width: 8rem; }
+        .hc-watch-ledger-nonspatial { min-width: 560px; }
+        .hc-watch-ledger-nonspatial th:nth-child(3), .hc-watch-ledger-nonspatial td:nth-child(3) { width: 11rem; }
+        .hc-watch-ledger-nonspatial th:nth-child(4), .hc-watch-ledger-nonspatial td:nth-child(4) { width: 13rem; }
+        .hc-watch-ledger-nonspatial th:nth-child(5), .hc-watch-ledger-nonspatial td:nth-child(5) { width: 8rem; }
         .hc-watch-ledger tbody tr:first-child td { background: color-mix(in srgb, var(--hc-primary) 7%, var(--hc-surface)); }
         .hc-event-audit { margin-top: .65rem; padding: .55rem .65rem; border: 1px solid var(--hc-border); border-radius: .4rem; background: var(--hc-surface-elevated); }
         .hc-event-audit > summary { cursor: pointer; color: var(--hc-text-strong); font-size: .82rem; font-weight: 700; }

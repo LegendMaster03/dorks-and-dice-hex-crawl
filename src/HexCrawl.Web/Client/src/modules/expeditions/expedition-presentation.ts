@@ -84,11 +84,17 @@ export function renderExpeditionHistory(root: HTMLElement, runtime: ExpeditionDe
 
     const tableWrap = document.createElement("div");
     tableWrap.className = "hc-watch-ledger-wrap";
+    const spatial = runtime.expedition.isSpatial;
     const table = document.createElement("table");
-    table.className = "hc-watch-ledger";
+    table.className = spatial
+        ? "hc-watch-ledger"
+        : "hc-watch-ledger hc-watch-ledger-nonspatial";
     const head = document.createElement("thead");
     const headRow = document.createElement("tr");
-    for (const label of ["Day", "Watch", "Route / hex", "Travel / progress", "Navigation", "Encounter", "State"]) {
+    const labels = spatial
+        ? ["Day", "Watch", "Route / hex", "Travel / progress", "Navigation", "Encounter", "State"]
+        : ["Day", "Watch", "Travel / progress", "Encounter", "State"];
+    for (const label of labels) {
         const cell = document.createElement("th");
         cell.scope = "col";
         cell.textContent = label;
@@ -99,14 +105,15 @@ export function renderExpeditionHistory(root: HTMLElement, runtime: ExpeditionDe
     const body = document.createElement("tbody");
     for (const entry of rows) {
         const row = document.createElement("tr");
-        row.append(
+        const cells = [
             textCell(String(entry.day)),
-            textCell(String(entry.watchNumber)),
-            textCell(entry.route),
-            textCell(entry.progress),
-            textCell(entry.navigation),
-            textCell(entry.encounter),
-            textCell(entry.status));
+            textCell(String(entry.watchNumber))
+        ];
+        if (spatial) cells.push(textCell(entry.route));
+        cells.push(textCell(entry.progress));
+        if (spatial) cells.push(textCell(entry.navigation));
+        cells.push(textCell(entry.encounter), textCell(entry.status));
+        row.append(...cells);
         body.append(row);
     }
     table.append(head, body);

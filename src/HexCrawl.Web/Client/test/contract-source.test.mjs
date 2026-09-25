@@ -162,6 +162,14 @@ test("direction controls retain numeric values but present axial step labels", (
 });
 
 
+test("non-spatial running-sheet ledger omits spatial-only route and navigation columns", () => {
+    const presentation = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-presentation.ts"), "utf8");
+    assert.match(presentation, /const spatial = runtime\.expedition\.isSpatial/);
+    assert.match(presentation, /\["Day", "Watch", "Travel \/ progress", "Encounter", "State"\]/);
+    assert.match(presentation, /if \(spatial\) cells\.push\(textCell\(entry\.route\)\)/);
+    assert.match(presentation, /if \(spatial\) cells\.push\(textCell\(entry\.navigation\)\)/);
+});
+
 test("expedition workbench keeps presentation separate from mutation orchestration", () => {
     const view = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-view.ts"), "utf8");
     const presentation = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-presentation.ts"), "utf8");
