@@ -35,4 +35,4 @@ dotnet test dorks-and-dice-hex-crawl.slnx -p:BuildClient=false
 docker build -t dorks-and-dice-hex-crawl:test -f src/HexCrawl.Web/Dockerfile .
 ```
 
-See `docs/architecture.md` and `docs/tool-hosting.md` for the decisions that this foundation establishes.
+See `docs/architecture.md`, `docs/design-references.md`, and `docs/tool-hosting.md` for the architectural and cross-edition design decisions that this foundation establishes.
