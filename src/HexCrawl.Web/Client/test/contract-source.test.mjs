@@ -260,6 +260,16 @@ test("running sheet wires server-verified automatic procedure resolution through
     assert.match(controller, /generatedEncounterLocationId === null/);
 });
 
+test("automatic resolution provenance expires when another session mutation advances the version", () => {
+    const controller = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-watch-controller.ts"), "utf8");
+    assert.match(controller, /private generatedResolutionVersion: number \| null = null/);
+    assert.match(controller, /expireGeneratedResolutionIfVersionChanged\(runtime\.version\)/);
+    assert.match(controller, /this\.generatedResolutionVersion = result\.generatedResolutionId === null/);
+    assert.match(controller, /this\.generatedResolutionVersion === runtimeVersion/);
+    assert.match(controller, /source\.value = ""/);
+    assert.match(controller, /Generated procedure inputs expired because the crawl session changed/);
+});
+
 test("automatic resolution and watch advancement lock each other while pending", () => {
     const controller = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-watch-controller.ts"), "utf8");
     assert.match(controller, /private resolutionPending = false/);

@@ -33,6 +33,7 @@ export class ExpeditionWatchController {
     private advancePending = false;
     private resolutionPending = false;
     private generatedResolutionId: string | null = null;
+    private generatedResolutionVersion: number | null = null;
     private generatedEncounterLocationId: string | null | undefined;
     private segmentStateKey: string | null = null;
 
@@ -115,6 +116,7 @@ export class ExpeditionWatchController {
     }
 
     public sync(runtime: ExpeditionDetail): void {
+        this.expireGeneratedResolutionIfVersionChanged(runtime.version);
         const state = spatialState(runtime);
         this.syncSegmentState(runtime, state);
         const newWatch = state.activeWatchNumber === null;
@@ -252,6 +254,7 @@ export class ExpeditionWatchController {
         select(this.form, "encounterSource").value = "";
         select(this.form, "boundarySource").value = "";
         this.generatedResolutionId = null;
+        this.generatedResolutionVersion = null;
         this.generatedEncounterLocationId = undefined;
         const helperResult = this.root.querySelector<HTMLElement>("[data-resolution-helper-result]");
         if (helperResult) helperResult.textContent = "";
@@ -374,6 +377,9 @@ export class ExpeditionWatchController {
 
     private applyGeneratedResolution(result: ProcedureResolutionHelperResult): void {
         this.generatedResolutionId = result.generatedResolutionId;
+        this.generatedResolutionVersion = result.generatedResolutionId === null
+            ? null
+            : result.expeditionVersion;
         this.generatedEncounterLocationId = result.encounter?.locationId;
 
         if (result.travel) {
@@ -464,6 +470,36 @@ export class ExpeditionWatchController {
             "A generated result was edited. That component is now a DM override; generate again to restore AutomaticRoll provenance.";
     }
 
+    private expireGeneratedResolutionIfVersionChanged(runtimeVersion: number): void {
+        if (this.generatedResolutionId === null
+            || this.generatedResolutionVersion === null
+            || this.generatedResolutionVersion === runtimeVersion) {
+            return;
+        }
+
+        const fields = [
+            ["travelSource", "travelNote"],
+            ["navigationSource", "navigationNote"],
+            ["encounterSource", "encounterSourceNote"]
+        ] as const;
+        let hadAutomaticComponent = false;
+        for (const [sourceName, noteName] of fields) {
+            const source = select(this.form, sourceName);
+            if (source.value !== "AutomaticRoll") continue;
+            hadAutomaticComponent = true;
+            source.value = "";
+            input(this.form, noteName).value = "";
+        }
+
+        this.generatedResolutionId = null;
+        this.generatedResolutionVersion = null;
+        this.generatedEncounterLocationId = undefined;
+        if (hadAutomaticComponent) {
+            required<HTMLElement>(this.root, "[data-resolution-helper-result]").textContent =
+                "Generated procedure inputs expired because the crawl session changed. Generate again or choose an explicit resolution source before running the watch.";
+        }
+    }
+
     private handleGeneratedLocationEdit(): void {
         if (select(this.form, "encounterSource").value !== "AutomaticRoll") return;
         if (this.generatedEncounterLocationId === null) {
@@ -480,6 +516,7 @@ export class ExpeditionWatchController {
         if (["travelSource", "navigationSource", "encounterSource"]
             .every(name => select(this.form, name).value !== "AutomaticRoll")) {
             this.generatedResolutionId = null;
+            this.generatedResolutionVersion = null;
             this.generatedEncounterLocationId = undefined;
         }
     }
@@ -611,6 +648,7 @@ export class ExpeditionWatchController {
 
                 const advanced = await this.api.advanceExpedition(runtime.id, request);
                 this.generatedResolutionId = null;
+                this.generatedResolutionVersion = null;
                 this.generatedEncounterLocationId = undefined;
                 this.applyRuntime(advanced);
             } finally {
