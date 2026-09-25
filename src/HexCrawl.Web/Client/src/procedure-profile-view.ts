@@ -49,7 +49,7 @@ export function procedureHelperMechanics(profile: RuntimeProfile): ProcedureHelp
         travel: helpers.travel
             && profile.travelResolution === "ContinuousDistance"
             && profile.actualDistanceResolution === "VariableResolved"
-            ? `Actual distance = expected distance × ${formatDiceFormula(helpers.travel.roll)} total × ${formatNumber(helpers.travel.distanceFactorPerRollPoint)}.`
+            ? `actual distance = expected distance × ${formatDiceFormula(helpers.travel.roll)} total × ${formatNumber(helpers.travel.distanceFactorPerRollPoint)}.`
             : null,
         navigation: helpers.navigation && profile.usesNavigationChecks
             ? `${formatDiceFormula(helpers.navigation.checkRoll)} + the entered situational modifier vs. the DM-confirmed DC; a failed check uses the DM-confirmed non-zero veer.`
