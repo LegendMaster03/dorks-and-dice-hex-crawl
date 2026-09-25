@@ -255,14 +255,19 @@ test("custom procedure snapshots drop helper components that no longer match the
     assert.match(setup, /encounter: encounterCadence === "None" \? null : helpers\.encounter/);
 });
 
-test("procedure reference exposes the mechanics and applicable automatic helper formulas in force", () => {
+test("procedure mechanics use one shared presentation policy across setup, assistants, and running sheet", () => {
+    const profileView = fs.readFileSync(path.join(sourceDir, "procedure-profile-view.ts"), "utf8");
+    const setup = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-setup.ts"), "utf8");
+    const assistant = fs.readFileSync(path.join(sourceDir, "modules/assistants/assistant-entry-view.ts"), "utf8");
     const presentation = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-presentation.ts"), "utf8");
+    assert.match(setup, /procedureProfileSummary/);
+    assert.match(assistant, /procedureProfileSummary/);
     assert.match(presentation, /procedureMechanicLines/);
-    assert.match(presentation, /exit factors start/);
-    assert.match(presentation, /actual distance = expected distance/);
-    assert.match(presentation, /situational modifier vs\. the DM-confirmed DC/);
-    assert.match(presentation, /encounter time uses 1d/);
-    assert.match(presentation, /configured components are not applicable to the active procedure mechanics/);
+    assert.match(profileView, /exit factors start/);
+    assert.match(profileView, /actual distance = expected distance/);
+    assert.match(profileView, /situational modifier vs\. the DM-confirmed DC/);
+    assert.match(profileView, /encounter time uses 1d/);
+    assert.match(profileView, /configured components are not applicable to the active procedure mechanics/);
 });
 
 test("running sheet wires server-verified automatic procedure resolution through the watch controller", () => {

@@ -2,6 +2,7 @@ import type { HexCrawlApi } from "../../api";
 import { newExpeditionEncounterCadences } from "./expedition-input-policy";
 import type { PresentationProfile, RuntimeProfile } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
+import { procedureProfileSummary } from "../../procedure-profile-view";
 
 export async function enhanceExpeditionSetup(
     root: HTMLElement,
@@ -83,7 +84,7 @@ export async function enhanceExpeditionSetup(
     };
     const renderProcedureSummary = (profile: RuntimeProfile): void => {
         required<HTMLElement>(form, "[data-procedure-summary]").textContent =
-            `${profile.watchHours}h watches · ${profile.travelResolution === "HexSteps" ? "hex-step travel" : profile.actualDistanceResolution === "Fixed" ? "fixed distance" : "resolved variable distance"} · ${profile.usesNavigationChecks ? "navigation checks" : "no navigation checks"} · encounters ${profile.encounterCadence.toLowerCase()}`;
+            procedureProfileSummary(profile);
     };
     const renderPresentationSummary = (policy: PresentationProfile): void => {
         const automation = policy.automationMode === "DmControlled" ? "DM controls every reveal" : policy.markEnteredHexKnown ? "explored hexes become known" : "no travel-based reveal";

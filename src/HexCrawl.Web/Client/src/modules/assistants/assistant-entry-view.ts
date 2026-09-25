@@ -8,6 +8,7 @@ import type {
     StartStandaloneCrawlSessionInput
 } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
+import { procedureProfileSummary } from "../../procedure-profile-view";
 import { input, integer, numeric, option, required, select } from "../../ui/dom";
 
 export async function renderAssistantEntry(
@@ -144,7 +145,7 @@ export async function renderAssistantEntry(
     const syncProcedure = (): void => {
         const profile = profiles.find(candidate => candidate.key === procedure.value);
         required<HTMLElement>(form, "[data-procedure-summary]").textContent = profile
-            ? profileSummary(profile)
+            ? procedureProfileSummary(profile)
             : "";
     };
 
@@ -282,9 +283,6 @@ function chooseDefaultProcedure(
     if (profiles.some(profile => profile.key === preferred)) selectElement.value = preferred;
 }
 
-function profileSummary(profile: RuntimeProfile): string {
-    return `${profile.watchHours}h watches · ${profile.travelResolution === "HexSteps" ? "hex-step travel" : profile.actualDistanceResolution === "Fixed" ? "fixed distance" : "resolved variable distance"} · ${profile.usesNavigationChecks ? "navigation checks" : "no navigation checks"} · encounters ${profile.encounterCadence.toLowerCase()}`;
-}
 
 function title(assistant: ExpeditionAssistant): string {
     if (assistant === "travel") return "Travel / Watch Assistant";
