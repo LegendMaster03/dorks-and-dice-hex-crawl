@@ -3,6 +3,7 @@ import { manualEntryResolutionSources } from "./expedition-input-policy";
 import { suggestedWatchDistance } from "./expedition-party-movement";
 import { encounterCheckDue, navigationResolutionDue, watchActionLabel } from "./expedition-workflow";
 import { formatHours } from "../../runtime-view";
+import { procedureHelperMechanics } from "../../procedure-profile-view";
 import type {
     ExpeditionDetail,
     Overworld,
@@ -310,6 +311,15 @@ export class ExpeditionWatchController {
         required<HTMLElement>(this.root, "[data-helper-travel]").hidden = !applicability.travel;
         required<HTMLElement>(this.root, "[data-helper-navigation]").hidden = !applicability.navigation;
         required<HTMLElement>(this.root, "[data-helper-encounter]").hidden = !applicability.encounter;
+
+        const mechanics = procedureHelperMechanics(runtime.profile);
+        required<HTMLElement>(this.root, "[data-helper-travel-mechanic]").textContent =
+            mechanics.travel ?? "";
+        required<HTMLElement>(this.root, "[data-helper-navigation-mechanic]").textContent =
+            mechanics.navigation ?? "";
+        required<HTMLElement>(this.root, "[data-helper-encounter-mechanic]").textContent =
+            mechanics.encounter ?? "";
+
         const button = required<HTMLButtonElement>(this.root, "[data-resolution-helper-button]");
         button.disabled = !any || this.advancePending || this.resolutionPending;
     }

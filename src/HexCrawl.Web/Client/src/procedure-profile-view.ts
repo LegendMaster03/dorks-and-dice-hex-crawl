@@ -35,29 +35,42 @@ export function procedureMechanicLines(profile: RuntimeProfile): string[] {
     ];
 }
 
-function procedureHelperLines(profile: RuntimeProfile): string[] {
+export type ProcedureHelperMechanics = {
+    travel: string | null;
+    navigation: string | null;
+    encounter: string | null;
+};
+
+export function procedureHelperMechanics(profile: RuntimeProfile): ProcedureHelperMechanics {
     const helpers = profile.resolutionHelpers;
-    if (!helpers) return ["Automatic helpers: none configured."];
+    if (!helpers) return { travel: null, navigation: null, encounter: null };
 
+    return {
+        travel: helpers.travel
+            && profile.travelResolution === "ContinuousDistance"
+            && profile.actualDistanceResolution === "VariableResolved"
+            ? `Actual distance = expected distance × ${formatDiceFormula(helpers.travel.roll)} total × ${formatNumber(helpers.travel.distanceFactorPerRollPoint)}.`
+            : null,
+        navigation: helpers.navigation && profile.usesNavigationChecks
+            ? `${formatDiceFormula(helpers.navigation.checkRoll)} + the entered situational modifier vs. the DM-confirmed DC; a failed check uses the DM-confirmed non-zero veer.`
+            : null,
+        encounter: helpers.encounter && profile.encounterCadence !== "None"
+            ? `${formatDiceFormula(helpers.encounter.checkRoll)}; wandering on ${formatResultSet(helpers.encounter.wanderingResults)}, keyed location on ${formatResultSet(helpers.encounter.keyedLocationResults)}; encounter time uses 1d${helpers.encounter.timingSlots} equal watch slots.`
+            : null
+    };
+}
+
+function procedureHelperLines(profile: RuntimeProfile): string[] {
+    const mechanics = procedureHelperMechanics(profile);
     const lines: string[] = [];
-    if (helpers.travel
-        && profile.travelResolution === "ContinuousDistance"
-        && profile.actualDistanceResolution === "VariableResolved") {
-        lines.push(
-            `Travel helper: actual distance = expected distance × ${formatDiceFormula(helpers.travel.roll)} total × ${formatNumber(helpers.travel.distanceFactorPerRollPoint)}.`);
-    }
-    if (helpers.navigation && profile.usesNavigationChecks) {
-        lines.push(
-            `Navigation helper: ${formatDiceFormula(helpers.navigation.checkRoll)} + the entered situational modifier vs. the DM-confirmed DC; a failed check uses the DM-confirmed non-zero veer.`);
-    }
-    if (helpers.encounter && profile.encounterCadence !== "None") {
-        lines.push(
-            `Encounter helper: ${formatDiceFormula(helpers.encounter.checkRoll)}; wandering on ${formatResultSet(helpers.encounter.wanderingResults)}, keyed location on ${formatResultSet(helpers.encounter.keyedLocationResults)}; encounter time uses 1d${helpers.encounter.timingSlots} equal watch slots.`);
-    }
+    if (mechanics.travel) lines.push(`Travel helper: ${mechanics.travel}`);
+    if (mechanics.navigation) lines.push(`Navigation helper: ${mechanics.navigation}`);
+    if (mechanics.encounter) lines.push(`Encounter helper: ${mechanics.encounter}`);
 
-    return lines.length > 0
-        ? lines
-        : ["Automatic helpers: configured components are not applicable to the active procedure mechanics."];
+    if (lines.length > 0) return lines;
+    return profile.resolutionHelpers
+        ? ["Automatic helpers: configured components are not applicable to the active procedure mechanics."]
+        : ["Automatic helpers: none configured."];
 }
 
 function formatDiceFormula(formula: DiceRollFormula): string {

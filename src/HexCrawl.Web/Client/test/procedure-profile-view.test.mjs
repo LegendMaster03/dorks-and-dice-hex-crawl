@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+    procedureHelperMechanics,
     procedureMechanicLines,
     procedureProfileSummary
 } from "../.test-dist/procedure-profile-view.js";
@@ -84,4 +85,12 @@ test("procedure mechanics do not advertise incompatible retained helper componen
     assert.doesNotMatch(lines.join("\n"), /actual distance = expected distance/);
     assert.doesNotMatch(lines.join("\n"), /Navigation helper:/);
     assert.doesNotMatch(lines.join("\n"), /Encounter helper:/);
+});
+
+
+test("helper mechanics expose component-specific formulas for inline controls", () => {
+    const mechanics = procedureHelperMechanics(advanced);
+    assert.equal(mechanics.travel, "Actual distance = expected distance × 2d6+3 total × 0.1.");
+    assert.equal(mechanics.navigation, "1d20 + the entered situational modifier vs. the DM-confirmed DC; a failed check uses the DM-confirmed non-zero veer.");
+    assert.equal(mechanics.encounter, "1d8; wandering on 1, keyed location on 8; encounter time uses 1d8 equal watch slots.");
 });

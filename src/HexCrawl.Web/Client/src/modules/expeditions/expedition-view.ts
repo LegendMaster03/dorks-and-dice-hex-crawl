@@ -131,16 +131,18 @@ export async function renderExpedition(
                                 <legend>Automatic procedure resolution</legend>
                                 <p class="hc-hint">Roll the procedure-defined inputs for this watch. Generated results are recorded immediately and remain separate from advancing the watch until you apply them.</p>
                                 <div data-helper-travel>
-                                    <p class="hc-hint">Travel uses the expected distance below as the situational input; the procedure supplies the configured roll and multiplier.</p>
+                                    <p class="hc-hint" data-helper-travel-mechanic></p>
+                                    <p class="hc-hint">Travel uses the expected distance below as the situational input.</p>
                                 </div>
                                 <div data-helper-navigation class="hc-form">
+                                    <p class="hc-hint" data-helper-navigation-mechanic></p>
                                     <label>Navigation DC <input name="helperNavigationDc" type="number" step="1" placeholder="DM-confirmed DC"></label>
                                     <label>Navigation modifier <input name="helperNavigationModifier" type="number" step="1" placeholder="+0 if none"></label>
                                     <label>Failure veer <input name="helperFailureVeer" type="number" step="1" placeholder="+1 or -1"></label>
                                     <p class="hc-hint">The DC, situational modifier, and failed-check veer stay explicit because they are not inferred by the procedure profile.</p>
                                 </div>
                                 <div data-helper-encounter>
-                                    <p class="hc-hint">When an encounter check is due, the procedure can roll both the check and the encounter time automatically.</p>
+                                    <p class="hc-hint" data-helper-encounter-mechanic></p>
                                 </div>
                                 <button type="button" data-resolution-helper-button>Roll procedure inputs</button>
                                 <p class="hc-hint" data-resolution-helper-result aria-live="polite"></p>

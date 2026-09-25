@@ -288,6 +288,18 @@ test("procedure mechanics use one shared presentation policy across setup, assis
     assert.match(profileView, /configured components are not applicable to the active procedure mechanics/);
 });
 
+test("automatic helper controls show the persisted procedure formulas at the point of use", () => {
+    const view = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-view.ts"), "utf8");
+    const controller = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-watch-controller.ts"), "utf8");
+    assert.match(view, /data-helper-travel-mechanic/);
+    assert.match(view, /data-helper-navigation-mechanic/);
+    assert.match(view, /data-helper-encounter-mechanic/);
+    assert.match(controller, /procedureHelperMechanics\(runtime\.profile\)/);
+    assert.match(controller, /mechanics\.travel \?\? ""/);
+    assert.match(controller, /mechanics\.navigation \?\? ""/);
+    assert.match(controller, /mechanics\.encounter \?\? ""/);
+});
+
 test("running sheet wires server-verified automatic procedure resolution through the watch controller", () => {
     const view = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-view.ts"), "utf8");
     const controller = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-watch-controller.ts"), "utf8");
