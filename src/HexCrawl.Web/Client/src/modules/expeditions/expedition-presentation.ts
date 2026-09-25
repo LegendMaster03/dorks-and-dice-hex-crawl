@@ -62,23 +62,46 @@ export function renderExpeditionPause(root: HTMLElement, runtime: ExpeditionDeta
 }
 
 export function renderExpeditionHistory(root: HTMLElement, runtime: ExpeditionDetail): void {
-    const host = required<HTMLOListElement>(root, "[data-history]");
+    const host = required<HTMLElement>(root, "[data-history]");
     host.replaceChildren();
     const recent = [...runtime.history].reverse().slice(0, 30);
     if (recent.length === 0) {
-        const item = document.createElement("li");
-        item.textContent =
-            "No procedure history yet. Run the first watch or record a procedure result to create history.";
-        host.append(item);
+        const empty = document.createElement("p");
+        empty.className = "hc-sheet-empty";
+        empty.textContent =
+            "No watch entries yet. The first recorded result will appear here.";
+        host.append(empty);
         return;
     }
-    for (const event of recent) {
-        const item = document.createElement("li");
-        const hex = event.hex ? ` · hex ${event.hex.q},${event.hex.r}` : "";
-        item.textContent =
-            `#${event.sequence} · watch ${event.watchNumber} · ${formatHours(event.expeditionElapsedHours)}${hex} · ${event.message}`;
-        host.append(item);
+
+    const table = document.createElement("table");
+    table.className = "hc-watch-ledger";
+    const head = document.createElement("thead");
+    const headRow = document.createElement("tr");
+    for (const label of ["Watch", "Elapsed", "Hex", "Record"]) {
+        const cell = document.createElement("th");
+        cell.scope = "col";
+        cell.textContent = label;
+        headRow.append(cell);
     }
+    head.append(headRow);
+
+    const body = document.createElement("tbody");
+    for (const event of recent) {
+        const row = document.createElement("tr");
+        const watch = document.createElement("td");
+        watch.textContent = String(event.watchNumber);
+        const elapsed = document.createElement("td");
+        elapsed.textContent = formatHours(event.expeditionElapsedHours);
+        const hex = document.createElement("td");
+        hex.textContent = event.hex ? `${event.hex.q}, ${event.hex.r}` : "—";
+        const record = document.createElement("td");
+        record.textContent = event.message;
+        row.append(watch, elapsed, hex, record);
+        body.append(row);
+    }
+    table.append(head, body);
+    host.append(table);
 }
 
 export function renderPlayerKnowledgePreview(
@@ -169,14 +192,15 @@ export function renderNonSpatialTracker(
                 </div>
                 <nav>
                     <button type="button" data-home>DM tools</button>
-                    <button type="button" data-watch>Watch / time</button>
-                    <button type="button" data-encounters>Encounter cadence</button>
                 </nav>
             </header>
             <div class="hc-columns">
-                <section class="hc-panel">
-                    <h2>Procedure state</h2>
-                    <div class="hc-status-grid">
+                <section class="hc-panel hc-running-sheet">
+                    <header class="hc-sheet-heading">
+                        <div><span class="hc-sheet-kicker">Running sheet</span><h2>Procedure state</h2></div>
+                        <span class="hc-sheet-note">Non-spatial</span>
+                    </header>
+                    <div class="hc-status-grid hc-sheet-status">
                         <div><strong>Day</strong><span>${state.currentDay}</span></div>
                         <div><strong>Watch</strong><span>${state.activeWatchNumber === null ? `Ready for watch ${state.completedWatches + 1}` : `Watch ${state.activeWatchNumber}`}</span></div>
                         <div><strong>Watch length</strong><span>${formatHours(state.activeWatchTotalHours ?? runtime.profile.watchHours)}</span></div>
@@ -186,30 +210,28 @@ export function renderNonSpatialTracker(
                         <div><strong>Total elapsed</strong><span>${formatHours(state.elapsedTravelHours)}</span></div>
                         <div><strong>Context</strong><span>Non-spatial</span></div>
                     </div>
-                    <p class="hc-hint">This session intentionally has no hex coordinates, distance scale, world position, or Overworld. Spatial travel and navigation tools do not apply.</p>
+                    <p class="hc-hint">This running sheet intentionally omits map-only information. Use only the watch/time and encounter tools that apply to your procedure.</p>
+                    <section class="hc-sheet-ledger" aria-labelledby="hc-nonspatial-watch-log">
+                        <div class="hc-sheet-ledger-heading">
+                            <h3 id="hc-nonspatial-watch-log">Watch log</h3>
+                            <span>Watch · Elapsed · Record</span>
+                        </div>
+                        <div data-history></div>
+                    </section>
+                    <p class="hc-hint">${escapeHtml(runtime.profile.name)} · encounters ${escapeHtml(prettyEnum(runtime.profile.encounterCadence))}</p>
                 </section>
                 <section class="hc-panel">
-                    <h2>Recent procedure history</h2>
-                    <ol class="hc-history" data-history></ol>
-                    <p class="hc-hint">${escapeHtml(runtime.profile.name)} · encounters ${escapeHtml(prettyEnum(runtime.profile.encounterCadence))}</p>
+                    <h2>Optional tools</h2>
+                    <p class="hc-muted">Open only the bookkeeping surface you need. The running sheet remains usable without either helper.</p>
+                    <div class="hc-button-row">
+                        <button type="button" class="hc-primary-action" data-watch>Watch / time</button>
+                        <button type="button" data-encounters>Encounter cadence</button>
+                    </div>
                 </section>
             </div>
         </section>`;
 
-    const history = required<HTMLOListElement>(root, "[data-history]");
-    const recent = [...runtime.history].reverse().slice(0, 30);
-    if (recent.length === 0) {
-        const item = document.createElement("li");
-        item.textContent = "No procedure events yet.";
-        history.append(item);
-    } else {
-        for (const event of recent) {
-            const item = document.createElement("li");
-            item.textContent =
-                `#${event.sequence} · ${formatHours(event.expeditionElapsedHours)} · ${event.message}`;
-            history.append(item);
-        }
-    }
+    renderExpeditionHistory(root, runtime);
 
     required<HTMLButtonElement>(root, "[data-home]")
         .addEventListener("click", () => navigate("/"));
