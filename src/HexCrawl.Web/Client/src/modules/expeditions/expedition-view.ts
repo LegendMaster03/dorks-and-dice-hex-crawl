@@ -9,6 +9,7 @@ import { renderExpeditionHistory, renderExpeditionPause, renderExpeditionSnapsho
 import { ExpeditionPartySheetController } from "./expedition-party-sheet";
 import { ExpeditionWatchController } from "./expedition-watch-controller";
 import { required } from "../../ui/dom";
+import { blockInitiativeHandoffHref, encounterHandoffFromRuntime } from "../../encounter-handoff";
 
 export type ExpeditionViewMode = "map" | "tracker";
 
@@ -105,6 +106,7 @@ export async function renderExpedition(
                 <button type="button" data-view-encounters>Encounters</button>
             </div>
             <p class="hc-focus-hint">Run the crawl from the sheet, or open a focused tool when you only want that part of the procedure. None of the focused tools are required.</p>
+            <div class="hc-encounter-handoff" data-encounter-handoff hidden></div>
             <div class="hc-error" data-error hidden role="alert"></div>
             <div class="${showMap ? "hc-workspace-grid" : "hc-tracker-grid"}">
                 ${runSurfaceMarkup}
@@ -230,6 +232,27 @@ export async function renderExpedition(
         action => mutate(null, action));
     let partyController: ExpeditionPartySheetController;
 
+    const renderEncounterHandoff = (): void => {
+        const host = required<HTMLElement>(root, "[data-encounter-handoff]");
+        host.replaceChildren();
+        host.hidden = true;
+        if (runtime.pauseReason !== "EncounterTriggered") return;
+
+        const handoff = encounterHandoffFromRuntime(runtime, {
+            returnPath: window.location.pathname
+        });
+        if (!handoff) return;
+
+        const text = document.createElement("span");
+        text.textContent = "This encounter interrupted the watch.";
+        const link = document.createElement("a");
+        link.className = "hc-button-link";
+        link.href = blockInitiativeHandoffHref(handoff);
+        link.textContent = "Open in Block Initiative";
+        host.append(text, link);
+        host.hidden = false;
+    };
+
     const apply = (next: ExpeditionDetail): void => {
         runtime = next;
         required<HTMLElement>(root, "[data-title]").textContent = showMap && world ? `${world.name}: ${next.name}` : next.name;
@@ -243,6 +266,7 @@ export async function renderExpedition(
         }
         renderExpeditionStatus(root, runtime);
         renderExpeditionPause(root, runtime);
+        renderEncounterHandoff();
         renderExpeditionHistory(root, runtime);
         if (showMap) {
             renderDiscovery();

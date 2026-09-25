@@ -214,6 +214,9 @@ export function ensureStyles(): void {
         .hc-assistant-grid { display: grid; grid-template-columns: minmax(0, 44rem) minmax(18rem, 30rem); gap: .85rem; align-items: start; justify-content: start; }
         .hc-assistant-form { margin-top: .8rem; }
         .hc-assistant-warning { margin: .75rem 0; padding: .65rem .7rem; border: 1px solid var(--hc-warning-border); border-left: .28rem solid var(--hc-warning); border-radius: .45rem; background: var(--hc-warning-bg); color: var(--hc-warning-text); font-size: .86rem; }
+        .hc-encounter-handoff { display: flex; flex-wrap: wrap; gap: .65rem; align-items: center; justify-content: space-between; margin: .8rem 0; padding: .7rem .8rem; border: 1px solid var(--hc-border); border-left: .28rem solid var(--hc-accent); border-radius: .5rem; background: var(--hc-surface-elevated); }
+        .hc-button-link { display: inline-flex; align-items: center; min-height: 2.15rem; padding: .42rem .7rem; border: 1px solid var(--hc-accent); border-radius: .45rem; color: var(--hc-text-strong); text-decoration: none; font-weight: 700; }
+        .hc-button-link:hover, .hc-button-link:focus-visible { background: color-mix(in srgb, var(--hc-accent) 14%, transparent); }
         .hc-runtime-panel { min-width: 0; }
         .hc-focus-primary { border-color: var(--hc-focus) !important; box-shadow: 0 0 0 .12rem color-mix(in srgb, var(--hc-focus) 18%, transparent); }
         .hc-focus-secondary { opacity: .78; }

@@ -13,6 +13,7 @@ import type {
 } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
 import { checkbox, input, integer, numeric, option, optionalText, prettyEnum, required, select, sourceLabel, statusCell } from "../../ui/dom";
+import { blockInitiativeHandoffHref, encounterHandoffFromRuntime } from "../../encounter-handoff";
 
 export type ExpeditionAssistantMode = "travel" | "navigation" | "encounters";
 
@@ -52,6 +53,7 @@ export async function renderExpeditionAssistant(
                     <div class="hc-status-grid" data-status></div>
                     <div data-active-watch-warning hidden class="hc-assistant-warning"></div>
                     <form class="hc-form hc-assistant-form" data-form></form>
+                    <div class="hc-encounter-handoff" data-encounter-handoff hidden></div>
                 </section>
                 <section class="hc-panel">
                     <h2>Relevant history</h2>
@@ -88,6 +90,7 @@ export async function renderExpeditionAssistant(
         renderStatus();
         renderHistory();
         renderForm();
+        renderEncounterHandoff();
     };
 
     const renderStatus = (): void => {
@@ -123,6 +126,31 @@ export async function renderExpeditionAssistant(
             item.textContent = `#${event.sequence} · ${formatHours(event.expeditionElapsedHours)} · ${event.message}`;
             host.append(item);
         }
+    };
+
+    let lastEncounterSelection: { outcome: string; note: string | null } | null = null;
+
+    const renderEncounterHandoff = (): void => {
+        const host = required<HTMLElement>(root, "[data-encounter-handoff]");
+        host.replaceChildren();
+        host.hidden = true;
+        if (mode !== "encounters") return;
+
+        const handoff = encounterHandoffFromRuntime(runtime, {
+            outcome: lastEncounterSelection?.outcome,
+            note: lastEncounterSelection?.note,
+            returnPath: window.location.pathname
+        });
+        if (!handoff) return;
+
+        const text = document.createElement("span");
+        text.textContent = "Continue this encounter in the combat tracker.";
+        const link = document.createElement("a");
+        link.className = "hc-button-link";
+        link.href = blockInitiativeHandoffHref(handoff);
+        link.textContent = "Open in Block Initiative";
+        host.append(text, link);
+        host.hidden = false;
     };
 
     const renderForm = (): void => {
@@ -179,7 +207,13 @@ export async function renderExpeditionAssistant(
                         : await api.recordWatchAssistant(runtime.id, nonSpatialWatchRequest(form, runtime))
                     : mode === "navigation"
                         ? await api.recordNavigationAssistant(runtime.id, navigationRequest(form, runtime))
-                        : await api.recordEncounterAssistant(runtime.id, encounterRequest(form, runtime));
+                        : (() => {
+                            const request = encounterRequest(form, runtime);
+                            lastEncounterSelection = request.outcome === "None"
+                                ? null
+                                : { outcome: request.outcome, note: request.note ?? null };
+                            return api.recordEncounterAssistant(runtime.id, request);
+                        })();
                 if (!disposed) apply(next);
             } catch (value) {
                 if (!disposed) showUiError(error, value);
