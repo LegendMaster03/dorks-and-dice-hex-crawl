@@ -180,6 +180,8 @@ export class ExpeditionWatchController {
             input(this.form, "pace").value = state.activePaceKey ?? "normal";
             input(this.form, "activities").value = state.activeActivities.join(", ");
             input(this.form, "navigationAid").value = state.activeNavigationAidKey ?? "none";
+            checkbox(this.form, "suppressNav").checked = state.activeSuppressesNavigationCheck;
+            checkbox(this.form, "resetVeer").checked = state.activeResetsVeerAtBoundary;
             checkbox(this.form, "doubleBack").checked = state.activeDeliberateDoubleBack;
             checkbox(this.form, "continueAcross").checked = state.activeContinueAcrossBoundaries;
         }

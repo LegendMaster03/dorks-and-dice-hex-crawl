@@ -692,6 +692,64 @@ public sealed class ExpeditionWorkbenchEndpointsTests
         }
     }
 
+    [Fact]
+    public async Task ActiveWatchContractPreservesNavigationAidFlagsAcrossReload()
+    {
+        var database = TestWebHost.NewDatabasePath();
+        try
+        {
+            using var factory = TestWebHost.Create(database);
+            using var client = factory.CreateClient();
+            var world = await CreateWorld(client);
+            var worldId = world.GetProperty("id").GetGuid();
+
+            using var startResponse = await client.PostAsJsonAsync($"/api/overworlds/{worldId:D}/expeditions", new
+            {
+                name = "Navigation aid persistence",
+                procedureKey = "simple-fixed-distance",
+                presentationKey = "exploration-map",
+                startHex = new { q = 0, r = 0 }
+            });
+            startResponse.EnsureSuccessStatusCode();
+            var expedition = await startResponse.Content.ReadFromJsonAsync<JsonElement>();
+            var expeditionId = expedition.GetProperty("id").GetGuid();
+
+            using var advanceResponse = await client.PostAsJsonAsync(
+                $"/api/expeditions/{expeditionId:D}/advance",
+                new
+                {
+                    expectedVersion = expedition.GetProperty("version").GetInt64(),
+                    intendedDirection = 0,
+                    paceKey = "normal",
+                    activities = Array.Empty<string>(),
+                    navigationAidKey = "trail-markers",
+                    suppressesNavigationCheck = true,
+                    resetsVeerAtBoundary = true,
+                    effectiveDistance = 12,
+                    travelResolutionSource = "ManualRoll",
+                    continueAcrossBoundaries = false
+                });
+            advanceResponse.EnsureSuccessStatusCode();
+            expedition = await advanceResponse.Content.ReadFromJsonAsync<JsonElement>();
+            var active = expedition.GetProperty("expedition");
+
+            Assert.Equal(1, active.GetProperty("activeWatchNumber").GetInt32());
+            Assert.Equal("trail-markers", active.GetProperty("activeNavigationAidKey").GetString());
+            Assert.True(active.GetProperty("activeSuppressesNavigationCheck").GetBoolean());
+            Assert.True(active.GetProperty("activeResetsVeerAtBoundary").GetBoolean());
+
+            expedition = await client.GetFromJsonAsync<JsonElement>($"/api/expeditions/{expeditionId:D}");
+            active = expedition.GetProperty("expedition");
+            Assert.Equal("trail-markers", active.GetProperty("activeNavigationAidKey").GetString());
+            Assert.True(active.GetProperty("activeSuppressesNavigationCheck").GetBoolean());
+            Assert.True(active.GetProperty("activeResetsVeerAtBoundary").GetBoolean());
+        }
+        finally
+        {
+            TestWebHost.DeleteDatabase(database);
+        }
+    }
+
     private static async Task<JsonElement> CreateWorld(HttpClient client)
     {
         using var response = await client.PostAsJsonAsync("/api/overworlds", new

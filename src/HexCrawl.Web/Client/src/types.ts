@@ -203,6 +203,8 @@ export type SpatialRuntimeExpedition = {
     activePaceKey: string | null;
     activeActivities: string[];
     activeNavigationAidKey: string | null;
+    activeSuppressesNavigationCheck: boolean;
+    activeResetsVeerAtBoundary: boolean;
     activeDeliberateDoubleBack: boolean;
     activeContinueAcrossBoundaries: boolean;
     activeEncounterKind: "None" | "WanderingEncounter" | "KeyedLocationDiscovery" | "ManualCustom" | null;
@@ -237,6 +239,8 @@ export type NonSpatialRuntimeExpedition = {
     activePaceKey: null;
     activeActivities: [];
     activeNavigationAidKey: null;
+    activeSuppressesNavigationCheck: false;
+    activeResetsVeerAtBoundary: false;
     activeDeliberateDoubleBack: false;
     activeContinueAcrossBoundaries: false;
     activeEncounterKind: null;
