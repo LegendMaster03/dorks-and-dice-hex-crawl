@@ -42,6 +42,47 @@ export async function renderExpedition(
 
     const modeLabel = showMap ? "Running sheet + map" : "Running sheet";
     const mapMarkup = showMap ? '<div class="hc-map-host" data-map></div>' : "";
+    const ledgerMarkup = `
+        <section class="hc-sheet-ledger hc-running-ledger-panel" aria-labelledby="hc-watch-log-title">
+            <div class="hc-sheet-ledger-heading">
+                <h3 id="hc-watch-log-title">Watch log</h3>
+                <span>Day · Watch · Route · Progress · Navigation · Encounter</span>
+            </div>
+            <div data-history></div>
+        </section>`;
+    const currentSheetMarkup = `
+        <section class="hc-running-sheet" aria-labelledby="hc-expedition-state-title">
+            <header class="hc-sheet-heading">
+                <div>
+                    <span class="hc-sheet-kicker">Running sheet</span>
+                    <h2 id="hc-expedition-state-title">Current crawl record</h2>
+                </div>
+                <span class="hc-sheet-note">Authoritative session state</span>
+            </header>
+            <div class="hc-status-grid hc-sheet-status" data-status></div>
+            <section data-pause-panel hidden></section>
+            <section class="hc-party-register" aria-labelledby="hc-party-register-title">
+                <div class="hc-sheet-ledger-heading">
+                    <h3 id="hc-party-register-title">Party & travel order</h3>
+                    <span>Persistent expedition reference</span>
+                </div>
+                <div data-party-summary></div>
+            </section>
+            ${showMap ? "" : ledgerMarkup}
+        </section>`;
+    const runSurfaceMarkup = showMap
+        ? `
+            <section class="hc-map-panel hc-run-column" aria-label="Running sheet and map">
+                <div class="hc-map-sheet-top">
+                    ${mapMarkup}
+                    ${currentSheetMarkup}
+                </div>
+                ${ledgerMarkup}
+            </section>`
+        : `
+            <section class="hc-panel hc-runtime-panel hc-run-column" aria-label="Running sheet">
+                ${currentSheetMarkup}
+            </section>`;
     const mapOnlyTools = showMap
         ? `
                     <details open><summary>Current-area discovery</summary><div data-discovery></div></details>
@@ -66,34 +107,7 @@ export async function renderExpedition(
             <p class="hc-focus-hint">Run the crawl from the sheet, or open a focused tool when you only want that part of the procedure. None of the focused tools are required.</p>
             <div class="hc-error" data-error hidden role="alert"></div>
             <div class="${showMap ? "hc-workspace-grid" : "hc-tracker-grid"}">
-                <section class="${showMap ? "hc-map-panel hc-run-column" : "hc-panel hc-runtime-panel hc-run-column"}" aria-label="Running sheet${showMap ? " and map" : ""}">
-                    ${mapMarkup}
-                    <section class="hc-running-sheet" aria-labelledby="hc-expedition-state-title">
-                        <header class="hc-sheet-heading">
-                            <div>
-                                <span class="hc-sheet-kicker">Running sheet</span>
-                                <h2 id="hc-expedition-state-title">Current crawl record</h2>
-                            </div>
-                            <span class="hc-sheet-note">Authoritative session state</span>
-                        </header>
-                        <div class="hc-status-grid hc-sheet-status" data-status></div>
-                        <section data-pause-panel hidden></section>
-                        <section class="hc-party-register" aria-labelledby="hc-party-register-title">
-                            <div class="hc-sheet-ledger-heading">
-                                <h3 id="hc-party-register-title">Party & travel order</h3>
-                                <span>Persistent expedition reference</span>
-                            </div>
-                            <div data-party-summary></div>
-                        </section>
-                        <section class="hc-sheet-ledger" aria-labelledby="hc-watch-log-title">
-                            <div class="hc-sheet-ledger-heading">
-                                <h3 id="hc-watch-log-title">Watch log</h3>
-                                <span>Day · Watch · Route · Progress · Navigation · Encounter</span>
-                            </div>
-                            <div data-history></div>
-                        </section>
-                    </section>
-                </section>
+                ${runSurfaceMarkup}
                 <aside class="hc-sidebar" aria-label="Expedition controls">
                     <details class="hc-party-editor-panel"><summary>Party & travel order</summary><div data-party-editor></div></details>
                     <details open class="hc-sheet-controls"><summary data-watch-summary>Run watch</summary>
