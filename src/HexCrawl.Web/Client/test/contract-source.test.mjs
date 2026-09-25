@@ -271,6 +271,17 @@ test("custom procedure snapshots drop helper components that no longer match the
     assert.match(setup, /encounter: encounterCadence === "None" \? null : helpers\.encounter/);
 });
 
+test("procedure selectors expose full persisted mechanics before a session is created", () => {
+    const setup = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-setup.ts"), "utf8");
+    const assistant = fs.readFileSync(path.join(sourceDir, "modules/assistants/assistant-entry-view.ts"), "utf8");
+    const home = fs.readFileSync(path.join(sourceDir, "modules/home/tool-home-view.ts"), "utf8");
+    for (const source of [setup, assistant, home]) {
+        assert.match(source, /<summary>Procedure mechanics<\/summary>/);
+        assert.match(source, /data-procedure-mechanics/);
+        assert.match(source, /renderProcedureMechanicList/);
+    }
+});
+
 test("procedure mechanics use one shared presentation policy across setup, assistants, and running sheet", () => {
     const profileView = fs.readFileSync(path.join(sourceDir, "procedure-profile-view.ts"), "utf8");
     const setup = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-setup.ts"), "utf8");

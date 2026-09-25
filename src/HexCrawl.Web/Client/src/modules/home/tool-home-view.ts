@@ -3,7 +3,7 @@ import { customUnitFieldsVisible } from "../worlds/world-form";
 import type { DistanceUnitKind } from "../worlds/world-form";
 import type { ExpeditionSummary, OverworldSummary, RuntimeProfile, StartStandaloneCrawlSessionInput } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
-import { procedureProfileSummary } from "../../procedure-profile-view";
+import { procedureProfileSummary, renderProcedureMechanicList } from "../../procedure-profile-view";
 import { input, integer, numeric, option, required, select } from "../../ui/dom";
 
 const ABSTRACT_CONTEXT = "__abstract__";
@@ -61,6 +61,7 @@ export async function renderToolHome(
                         <label>Session name <input name="name" required value="Expedition" autocomplete="off"></label>
                         <label>Procedure preset <select name="procedure"></select></label>
                         <p class="hc-hint" data-procedure-summary></p>
+                        <details class="hc-optional-reference"><summary>Procedure mechanics</summary><ul data-procedure-mechanics></ul></details>
                         <label>Crawl context <select name="context"></select></label>
                         <div class="hc-form" data-abstract-context hidden>
                             <label>Context name <input name="contextName" value="Mapless hex crawl" autocomplete="off"></label>
@@ -135,6 +136,9 @@ export async function renderToolHome(
         required<HTMLElement>(form, "[data-procedure-summary]").textContent = profile
             ? procedureProfileSummary(profile)
             : "";
+        const mechanics = required<HTMLElement>(form, "[data-procedure-mechanics]");
+        if (profile) renderProcedureMechanicList(mechanics, profile);
+        else mechanics.replaceChildren();
     };
 
     try {

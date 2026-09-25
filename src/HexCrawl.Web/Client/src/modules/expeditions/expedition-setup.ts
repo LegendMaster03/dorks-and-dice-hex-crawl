@@ -2,7 +2,7 @@ import type { HexCrawlApi } from "../../api";
 import { newExpeditionEncounterCadences } from "./expedition-input-policy";
 import type { PresentationProfile, RuntimeProfile } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
-import { procedureProfileSummary } from "../../procedure-profile-view";
+import { procedureProfileSummary, renderProcedureMechanicList } from "../../procedure-profile-view";
 
 export async function enhanceExpeditionSetup(
     root: HTMLElement,
@@ -23,6 +23,7 @@ export async function enhanceExpeditionSetup(
         <label>Name <input name="name" required value="Expedition"></label>
         <label>Procedure preset <select name="procedure"></select></label>
         <p class="hc-hint" data-procedure-summary></p>
+        <details class="hc-optional-reference"><summary>Procedure mechanics</summary><ul data-procedure-mechanics></ul></details>
         <label>Map presentation <select name="presentation"></select></label>
         <p class="hc-hint" data-presentation-summary></p>
         <div class="hc-inline"><label>Start q <input name="q" type="number" step="1" value="0"></label><label>Start r <input name="r" type="number" step="1" value="0"></label></div>
@@ -90,6 +91,9 @@ export async function enhanceExpeditionSetup(
     const renderProcedureSummary = (profile: RuntimeProfile): void => {
         required<HTMLElement>(form, "[data-procedure-summary]").textContent =
             procedureProfileSummary(profile);
+        renderProcedureMechanicList(
+            required<HTMLElement>(form, "[data-procedure-mechanics]"),
+            profile);
     };
     const renderPresentationSummary = (policy: PresentationProfile): void => {
         const automation = policy.automationMode === "DmControlled" ? "DM controls every reveal" : policy.markEnteredHexKnown ? "explored hexes become known" : "no travel-based reveal";
@@ -105,6 +109,7 @@ export async function enhanceExpeditionSetup(
         } catch {
             required<HTMLElement>(form, "[data-procedure-summary]").textContent =
                 "Complete the custom procedure fields to refresh this summary.";
+            required<HTMLElement>(form, "[data-procedure-mechanics]").replaceChildren();
         }
     };
 

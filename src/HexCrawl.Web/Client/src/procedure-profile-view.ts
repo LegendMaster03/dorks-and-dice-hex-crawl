@@ -11,6 +11,15 @@ export function procedureProfileSummary(profile: RuntimeProfile): string {
         : "no navigation checks"} · encounters ${prettyWords(profile.encounterCadence)}`;
 }
 
+export function renderProcedureMechanicList(host: HTMLElement, profile: RuntimeProfile): void {
+    host.replaceChildren();
+    for (const line of procedureMechanicLines(profile)) {
+        const item = document.createElement("li");
+        item.textContent = line;
+        host.append(item);
+    }
+}
+
 export function procedureMechanicLines(profile: RuntimeProfile): string[] {
     const travel = profile.travelResolution === "HexSteps"
         ? "Travel: resolved hex-step movement."

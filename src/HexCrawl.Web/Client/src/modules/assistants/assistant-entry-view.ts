@@ -8,7 +8,7 @@ import type {
     StartStandaloneCrawlSessionInput
 } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
-import { procedureProfileSummary } from "../../procedure-profile-view";
+import { procedureProfileSummary, renderProcedureMechanicList } from "../../procedure-profile-view";
 import { input, integer, numeric, option, required, select } from "../../ui/dom";
 
 export async function renderAssistantEntry(
@@ -48,6 +48,7 @@ export async function renderAssistantEntry(
                         <label>Session name <input name="name" required autocomplete="off"></label>
                         <label>Procedure preset <select name="procedure"></select></label>
                         <p class="hc-hint" data-procedure-summary></p>
+                        <details class="hc-optional-reference"><summary>Procedure mechanics</summary><ul data-procedure-mechanics></ul></details>
                         ${assistant === "travel" ? `
                             <label>Bookkeeping mode
                                 <select name="mode">
@@ -147,6 +148,9 @@ export async function renderAssistantEntry(
         required<HTMLElement>(form, "[data-procedure-summary]").textContent = profile
             ? procedureProfileSummary(profile)
             : "";
+        const mechanics = required<HTMLElement>(form, "[data-procedure-mechanics]");
+        if (profile) renderProcedureMechanicList(mechanics, profile);
+        else mechanics.replaceChildren();
     };
 
     mode?.addEventListener("change", syncMode);
