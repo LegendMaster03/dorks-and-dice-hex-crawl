@@ -27,7 +27,7 @@ export async function renderWorldEditor(
     root.innerHTML = `
         <section class="hc-page hc-workspace hc-world-editor">
             <header class="hc-page-header">
-                <div><span class="hc-sheet-kicker">Map preparation</span><h1 data-title></h1><p>World authoring, source maps, locations, and features.</p></div>
+                <div><span class="hc-sheet-kicker">Map preparation</span><h1 data-title></h1><p>World map editor · source maps, locations, and features.</p></div>
                 <nav><button type="button" data-worlds>All overworlds</button><button type="button" data-reset-view>Reset map view</button></nav>
             </header>
             <div class="hc-error" data-error hidden role="alert"></div>
