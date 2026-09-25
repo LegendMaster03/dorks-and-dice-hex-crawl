@@ -572,12 +572,15 @@ export class ExpeditionPartySheetController {
     private preferredUnit(): DistanceUnit {
         const runtime = this.runtimeForUnits ?? this.getRuntime();
         const movement = this.requireDraft().baseMovement;
-        return movement?.perHour?.unit
+        const existing = movement?.perHour?.unit
             ?? movement?.perWatch?.unit
-            ?? movement?.perMarch?.unit
-            ?? runtime.context.hexCenterDistance?.unit
-            ?? (runtime.expedition.isSpatial ? runtime.expedition.distanceTraveled.unit : null)
-            ?? { kind: "Mile", symbol: "mi", metersPerUnit: 1609.344 };
+            ?? movement?.perMarch?.unit;
+        if (existing) return existing;
+        if (!runtime.expedition.isSpatial) {
+            throw new Error("A non-spatial session has no implicit movement unit.");
+        }
+        return runtime.context.hexCenterDistance?.unit
+            ?? runtime.expedition.distanceTraveled.unit;
     }
 
     private validateDraft(): void {
@@ -615,8 +618,14 @@ export class ExpeditionPartySheetController {
             if (!Number.isFinite(distance.value) || distance.value < 0) {
                 throw new Error("Movement reference distances must be finite and non-negative.");
             }
-            if (distance.unit.kind === "Custom" && !distance.unit.symbol.trim()) {
-                throw new Error("A custom movement unit requires a symbol.");
+            if (distance.unit.kind === "Custom") {
+                if (!distance.unit.symbol.trim()) {
+                    throw new Error("A custom movement unit requires a symbol.");
+                }
+                if (distance.unit.metersPerUnit !== null
+                    && (!Number.isFinite(distance.unit.metersPerUnit) || distance.unit.metersPerUnit <= 0)) {
+                    throw new Error("A custom movement unit conversion must be a finite positive number.");
+                }
             }
         }
     }
