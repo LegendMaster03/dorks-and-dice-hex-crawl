@@ -13,10 +13,17 @@ export function encounterCheckDue(runtime: ExpeditionDetail): boolean {
 }
 
 export function navigationResolutionDue(runtime: ExpeditionDetail, suppressesNavigationCheck: boolean, deliberateDoubleBack: boolean): boolean {
-    return runtime.expedition.activeWatchNumber === null
-        && runtime.profile.usesNavigationChecks
-        && !suppressesNavigationCheck
-        && !deliberateDoubleBack;
+    if (runtime.expedition.activeWatchNumber !== null
+        || !runtime.profile.usesNavigationChecks
+        || suppressesNavigationCheck
+        || deliberateDoubleBack) {
+        return false;
+    }
+
+    const watchNumber = runtime.expedition.completedWatches + 1;
+    return !runtime.history.some(event =>
+        event.kind === "NavigationCheckResolved"
+        && event.watchNumber === watchNumber);
 }
 
 export function watchActionLabel(runtime: ExpeditionDetail): string {
