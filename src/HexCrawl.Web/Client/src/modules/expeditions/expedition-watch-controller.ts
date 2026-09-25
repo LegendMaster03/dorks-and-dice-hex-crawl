@@ -111,6 +111,7 @@ export class ExpeditionWatchController {
 
     public sync(runtime: ExpeditionDetail): void {
         const state = spatialState(runtime);
+        this.syncSegmentState(runtime, state);
         const newWatch = state.activeWatchNumber === null;
         required<HTMLElement>(this.root, "[data-watch-summary]").textContent =
             watchActionLabel(runtime);
@@ -191,6 +192,7 @@ export class ExpeditionWatchController {
 
         this.syncNavigationVisibility();
         this.syncEncounterFields();
+        this.syncResolutionHelperVisibility(runtime);
 
         const directionHelp = runtime.profile.directionChangesCostProgress
             ? "Changing course can consume intra-hex progress under this procedure. The runtime applies the configured cost."
@@ -201,6 +203,44 @@ export class ExpeditionWatchController {
 
     public dispose(): void {
         this.disposed = true;
+    }
+
+    private syncSegmentState(
+        runtime: ExpeditionDetail,
+        state: SpatialRuntimeExpedition): void {
+        const key = [
+            state.completedWatches,
+            state.activeWatchNumber ?? "ready",
+            state.activeWatchElapsedHours ?? 0,
+            `${state.currentHex.q},${state.currentHex.r}`,
+            runtime.pauseReason ?? "none"
+        ].join(":");
+
+        if (this.segmentStateKey !== null && this.segmentStateKey !== key) {
+            this.clearResolvedSegmentInputs();
+        }
+        this.segmentStateKey = key;
+    }
+
+    private clearResolvedSegmentInputs(): void {
+        for (const name of ["effectiveDistance", "expectedDistance", "actualDistance", "hexSteps"] as const) {
+            input(this.form, name).value = "";
+        }
+        input(this.form, "travelNote").value = "";
+        input(this.form, "navigationNote").value = "";
+        input(this.form, "encounterHour").value = "";
+        input(this.form, "encounterNote").value = "";
+        input(this.form, "encounterSourceNote").value = "";
+        select(this.form, "navigationOutcome").value = "";
+        select(this.form, "encounterOutcome").value = "";
+        this.locationSelect.value = "";
+        select(this.form, "travelSource").value = "ManualRoll";
+        select(this.form, "navigationSource").value = "ManualRoll";
+        select(this.form, "encounterSource").value = "ManualRoll";
+        this.generatedResolutionId = null;
+        this.generatedEncounterLocationId = undefined;
+        const helperResult = this.root.querySelector<HTMLElement>("[data-resolution-helper-result]");
+        if (helperResult) helperResult.textContent = "";
     }
 
     private syncNavigationVisibility(): void {
