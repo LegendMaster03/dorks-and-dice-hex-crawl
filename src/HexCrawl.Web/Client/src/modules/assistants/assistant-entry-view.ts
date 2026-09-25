@@ -22,6 +22,7 @@ export async function renderAssistantEntry(
         <section class="hc-page">
             <header class="hc-page-header">
                 <div>
+                    <span class="hc-sheet-kicker">Optional focused tool</span>
                     <h1>${title(assistant)}</h1>
                     <p>${subtitle(assistant)}</p>
                 </div>
@@ -32,7 +33,7 @@ export async function renderAssistantEntry(
                 <section class="hc-panel">
                     <div class="hc-panel-heading">
                         <div>
-                            <h2>Continue a saved session</h2>
+                            <h2>Use an existing running sheet</h2>
                             <p class="hc-muted">${existingHint(assistant)}</p>
                         </div>
                         <span class="hc-muted" data-count></span>
@@ -40,8 +41,8 @@ export async function renderAssistantEntry(
                     <div class="hc-expedition-list" data-sessions></div>
                 </section>
                 <section class="hc-panel">
-                    <h2>${createHeading(assistant)}</h2>
-                    <p class="hc-muted">${createHint(assistant)}</p>
+                    <h2>Start with minimal context</h2>
+                    <p class="hc-muted">${createHint(assistant)} This creates only the state this focused tool actually needs.</p>
                     <form class="hc-form" data-create>
                         <label>Session name <input name="name" required autocomplete="off"></label>
                         <label>Procedure preset <select name="procedure"></select></label>
