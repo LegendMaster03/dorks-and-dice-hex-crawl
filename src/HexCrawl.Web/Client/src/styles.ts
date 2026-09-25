@@ -245,6 +245,55 @@ export function ensureStyles(): void {
         .hc-error-page { display: grid; max-width: 46rem; gap: .75rem; }
         .hc-error-page h1, .hc-error-page p { margin: 0; }
         .hc-error-page p { color: var(--hc-muted); }
+
+        /* Running-sheet presentation: recognizable paper workflow with modern, optional automation. */
+        .hc-run-toolbar { align-items: center; padding: .45rem; border: 1px solid var(--hc-border); border-radius: .65rem; background: var(--hc-surface); }
+        .hc-run-toolbar-divider { width: 1px; height: 1.8rem; margin: 0 .2rem; background: var(--hc-border); }
+        .hc-run-toolbar-label { color: var(--hc-muted); font-size: .76rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+        .hc-run-column { display: grid; gap: .75rem; }
+        .hc-running-sheet {
+            min-width: 0;
+            padding: .85rem;
+            border: 1px solid var(--hc-border);
+            border-radius: .55rem;
+            background:
+                linear-gradient(var(--hc-surface), var(--hc-surface)) padding-box,
+                repeating-linear-gradient(0deg, transparent 0, transparent 31px, color-mix(in srgb, var(--hc-border) 35%, transparent) 32px) border-box;
+        }
+        .hc-map-panel > .hc-running-sheet { margin-top: .75rem; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hc-border) 35%, transparent); }
+        .hc-sheet-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; padding-bottom: .65rem; border-bottom: 2px solid var(--hc-text-strong); }
+        .hc-sheet-heading h2 { margin: .1rem 0 0; color: var(--hc-text-strong); font-size: 1.08rem; }
+        .hc-sheet-kicker { color: var(--hc-muted); font-size: .7rem; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+        .hc-sheet-note { color: var(--hc-muted); font-size: .76rem; font-weight: 700; }
+        .hc-sheet-status { margin-top: .7rem; }
+        .hc-sheet-status > div { border-radius: .2rem; box-shadow: none; }
+        .hc-sheet-status strong { letter-spacing: .075em; }
+        .hc-sheet-ledger { margin-top: .8rem; border-top: 1px solid var(--hc-border); padding-top: .7rem; }
+        .hc-sheet-ledger-heading { display: flex; justify-content: space-between; align-items: baseline; gap: .75rem; margin-bottom: .45rem; }
+        .hc-sheet-ledger-heading h3 { margin: 0; color: var(--hc-text-strong); font-size: .95rem; }
+        .hc-sheet-ledger-heading span { color: var(--hc-muted); font-size: .72rem; }
+        .hc-sheet-empty { margin: 0; padding: .8rem; border: 1px dashed var(--hc-border); color: var(--hc-muted); font-size: .84rem; }
+        .hc-watch-ledger { width: 100%; border-collapse: collapse; table-layout: fixed; background: var(--hc-surface); font-size: .82rem; }
+        .hc-watch-ledger th, .hc-watch-ledger td { padding: .42rem .48rem; border: 1px solid var(--hc-border); vertical-align: top; text-align: left; overflow-wrap: anywhere; }
+        .hc-watch-ledger th { background: var(--hc-surface-soft); color: var(--hc-text-strong); font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; }
+        .hc-watch-ledger th:nth-child(1), .hc-watch-ledger td:nth-child(1) { width: 4.5rem; text-align: center; }
+        .hc-watch-ledger th:nth-child(2), .hc-watch-ledger td:nth-child(2) { width: 6.5rem; }
+        .hc-watch-ledger th:nth-child(3), .hc-watch-ledger td:nth-child(3) { width: 6.5rem; }
+        .hc-watch-ledger tbody tr:first-child td { background: color-mix(in srgb, var(--hc-primary) 7%, var(--hc-surface)); }
+        .hc-sheet-controls > summary { font-size: .98rem; }
+        .hc-sheet-controls fieldset { margin: 0; padding: .7rem; border: 1px solid var(--hc-border); border-radius: .45rem; }
+        .hc-sheet-controls fieldset legend { padding: 0 .3rem; color: var(--hc-text-strong); font-size: .78rem; font-weight: 800; letter-spacing: .055em; text-transform: uppercase; }
+        .hc-watch-requirements { margin-bottom: .7rem; padding: .55rem .65rem; border-left: .22rem solid var(--hc-primary); background: var(--hc-surface-elevated); }
+        .hc-watch-requirements .hc-hint { margin: .15rem 0; }
+        .hc-optional-reference { opacity: .92; }
+
+        @media (max-width: 720px) {
+            .hc-run-toolbar-divider, .hc-run-toolbar-label { display: none; }
+            .hc-sheet-heading, .hc-sheet-ledger-heading { display: grid; gap: .2rem; }
+            .hc-watch-ledger { font-size: .78rem; }
+            .hc-watch-ledger th:nth-child(2), .hc-watch-ledger td:nth-child(2),
+            .hc-watch-ledger th:nth-child(3), .hc-watch-ledger td:nth-child(3) { width: auto; }
+        }
         @media (max-width: 1050px) {
             .hc-workspace-grid { grid-template-columns: minmax(0, 1fr) minmax(17rem, 21rem); }
             .hc-tracker-grid { grid-template-columns: minmax(0, 1fr) minmax(18rem, 24rem); }
