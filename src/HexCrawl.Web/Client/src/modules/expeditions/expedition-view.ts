@@ -135,7 +135,7 @@ export async function renderExpedition(
                                 </div>
                                 <div data-helper-navigation class="hc-form">
                                     <label>Navigation DC <input name="helperNavigationDc" type="number" step="1" placeholder="DM-confirmed DC"></label>
-                                    <label>Navigation modifier <input name="helperNavigationModifier" type="number" step="1" value="0"></label>
+                                    <label>Navigation modifier <input name="helperNavigationModifier" type="number" step="1" placeholder="+0 if none"></label>
                                     <label>Failure veer <input name="helperFailureVeer" type="number" step="1" placeholder="+1 or -1"></label>
                                     <p class="hc-hint">The DC, situational modifier, and failed-check veer stay explicit because they are not inferred by the procedure profile.</p>
                                 </div>
