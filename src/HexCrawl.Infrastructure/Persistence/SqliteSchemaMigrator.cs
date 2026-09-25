@@ -4,7 +4,7 @@ namespace HexCrawl.Infrastructure.Persistence;
 
 public sealed class SqliteSchemaMigrator(string connectionString)
 {
-    public const int CurrentVersion = 2;
+    public const int CurrentVersion = 3;
 
     public async Task MigrateAsync(CancellationToken cancellationToken = default)
     {
@@ -37,6 +37,11 @@ public sealed class SqliteSchemaMigrator(string connectionString)
         if (current < 2)
         {
             await ApplyVersion2Async(connection, cancellationToken);
+            current = 2;
+        }
+        if (current < 3)
+        {
+            await ApplyVersion3Async(connection, cancellationToken);
         }
     }
 
@@ -100,6 +105,25 @@ public sealed class SqliteSchemaMigrator(string connectionString)
 
             INSERT INTO schema_migrations(version, applied_at)
             VALUES (1, $appliedAt);
+            """;
+        command.Parameters.AddWithValue("$appliedAt", DateTimeOffset.UtcNow.ToString("O"));
+        await command.ExecuteNonQueryAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    private static async Task ApplyVersion3Async(
+        SqliteConnection connection,
+        CancellationToken cancellationToken)
+    {
+        await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            ALTER TABLE expeditions
+                ADD COLUMN party_json TEXT NOT NULL DEFAULT '{}';
+
+            INSERT INTO schema_migrations(version, applied_at)
+            VALUES (3, $appliedAt);
             """;
         command.Parameters.AddWithValue("$appliedAt", DateTimeOffset.UtcNow.ToString("O"));
         await command.ExecuteNonQueryAsync(cancellationToken);
