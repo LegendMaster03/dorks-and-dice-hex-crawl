@@ -21,6 +21,7 @@ import type {
     StartExpeditionInput,
     StartStandaloneCrawlSessionInput,
     ToolHostContext,
+    UpdateExpeditionPartyRequest,
     WorldPoint
 } from "./types";
 
@@ -335,6 +336,10 @@ export class HexCrawlApi {
 
     public advanceExpedition(expeditionId: string, input: RuntimeAdvanceRequest): Promise<ExpeditionDetail> {
         return this.sendJson("POST", `/api/expeditions/${encodeURIComponent(expeditionId)}/advance`, input, "Advance expedition");
+    }
+
+    public updateExpeditionParty(expeditionId: string, input: UpdateExpeditionPartyRequest): Promise<ExpeditionDetail> {
+        return this.sendJson("PUT", `/api/expeditions/${encodeURIComponent(expeditionId)}/party`, input, "Update party sheet");
     }
 
     public discover(expeditionId: string, expectedVersion: number, subjectId: string, subjectType: "Location" | "Feature"): Promise<ExpeditionDetail> {
