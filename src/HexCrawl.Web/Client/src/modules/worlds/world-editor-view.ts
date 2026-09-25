@@ -43,8 +43,8 @@ export async function renderWorldEditor(
                         <label>Hex center distance <input name="scale" type="number" min="0.001" step="any" required><span class="hc-hint">Center-to-center distance between adjacent hexes.</span></label>
                         <label>Unit <select name="unitKind"><option value="Mile">Miles</option><option value="Kilometer">Kilometers</option><option value="Custom">Custom</option></select></label>
                         <div class="hc-custom-unit-fields" data-custom-unit hidden>
-                            <label>Custom symbol <input name="unitSymbol" value="u"></label>
-                            <label>Custom meters per unit <input name="metersPerUnit" type="number" min="0.001" step="any" value="1"></label>
+                            <label>Custom symbol <input name="unitSymbol"></label>
+                            <label>Custom meters per unit <input name="metersPerUnit" type="number" min="0.001" step="any"></label>
                         </div>
                         <details><summary>Advanced grid alignment</summary><div class="hc-form"><p class="hc-hint">These values define the internal world-coordinate frame. Most maps can keep the existing values.</p>
                             <div class="hc-inline"><label>Origin X <input name="originX" type="number" step="any"></label><label>Origin Y <input name="originY" type="number" step="any"></label></div>

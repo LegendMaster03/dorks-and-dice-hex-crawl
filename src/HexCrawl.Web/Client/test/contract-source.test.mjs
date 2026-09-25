@@ -63,9 +63,14 @@ test("crawl creation surfaces do not assume a 12-mile physical scale", () => {
     const world = fs.readFileSync(path.join(sourceDir, "modules/worlds/world-list-view.ts"), "utf8");
     const home = fs.readFileSync(path.join(sourceDir, "modules/home/tool-home-view.ts"), "utf8");
     const assistant = fs.readFileSync(path.join(sourceDir, "modules/assistants/assistant-entry-view.ts"), "utf8");
+    const editor = fs.readFileSync(path.join(sourceDir, "modules/worlds/world-editor-view.ts"), "utf8");
     for (const source of [world, home, assistant]) {
         assert.doesNotMatch(source, /name="scale"[^>]*value="12"/);
         assert.match(source, /Select distance unit/);
+    }
+    for (const source of [world, home, assistant, editor]) {
+        assert.doesNotMatch(source, /name="(?:symbol|unitSymbol)"[^>]*value="u"/);
+        assert.doesNotMatch(source, /name="(?:meters|metersPerUnit)"[^>]*value="1"/);
     }
     assert.match(world, /No default physical scale is assumed/);
     assert.match(home, /unit\.required = abstract/);
