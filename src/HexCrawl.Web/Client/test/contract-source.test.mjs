@@ -237,3 +237,35 @@ test("wide world-bound workbench places map beside current sheet while ledger re
     assert.match(styles, /\.hc-map-panel > \.hc-running-ledger-panel/);
     assert.match(styles, /@media \(max-width: 820px\)[\s\S]*\.hc-workspace-grid[\s\S]*grid-template-columns: 1fr/);
 });
+
+
+test("running sheet wires server-verified automatic procedure resolution through the watch controller", () => {
+    const view = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-view.ts"), "utf8");
+    const controller = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-watch-controller.ts"), "utf8");
+    assert.match(view, /data-resolution-helper-button/);
+    assert.match(controller, /resolveProcedureInputs/);
+    assert.match(controller, /getExpedition/);
+    assert.match(controller, /generatedProcedureResolutionId/);
+    assert.match(controller, /AutomaticRoll/);
+    assert.match(controller, /Edited after automatic generation/);
+    assert.match(controller, /DmOverride/);
+    assert.match(controller, /generatedEncounterLocationId === null/);
+});
+
+test("due navigation and encounter inputs have no implicit successful result", () => {
+    const view = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-view.ts"), "utf8");
+    const controller = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-watch-controller.ts"), "utf8");
+    assert.match(view, /name="navigationOutcome"><option value="">Select resolved result/);
+    assert.match(view, /name="encounterOutcome"><option value="">Select resolved outcome/);
+    assert.doesNotMatch(view, /name="veerSteps"[^>]*value="1"/);
+    assert.match(controller, /A navigation check is due\. Select its resolved result\./);
+    assert.match(controller, /An encounter check is due\. Select its resolved outcome\./);
+});
+
+test("watch controller clears resolved inputs only when authoritative segment state changes", () => {
+    const controller = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-watch-controller.ts"), "utf8");
+    assert.match(controller, /segmentStateKey/);
+    assert.match(controller, /activeWatchElapsedHours/);
+    assert.match(controller, /clearResolvedSegmentInputs/);
+    assert.doesNotMatch(controller, /runtime\.version[\s\S]{0,100}segmentStateKey/);
+});
