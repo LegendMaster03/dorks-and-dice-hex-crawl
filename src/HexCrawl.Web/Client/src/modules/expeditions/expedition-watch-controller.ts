@@ -6,6 +6,7 @@ import { formatHours } from "../../runtime-view";
 import type {
     ExpeditionDetail,
     Overworld,
+    ProcedureResolutionHelperResult,
     ResolutionSource,
     RuntimeAdvanceRequest,
     SpatialRuntimeExpedition
@@ -256,9 +257,213 @@ export class ExpeditionWatchController {
 
     private syncEncounterFields(): void {
         const outcome = select(this.form, "encounterOutcome").value;
-        required<HTMLElement>(this.form, "[data-encounter-hour]").hidden = outcome === "None";
+        required<HTMLElement>(this.form, "[data-encounter-hour]").hidden =
+            outcome === "" || outcome === "None";
         required<HTMLElement>(this.form, "[data-encounter-location]").hidden =
             outcome !== "KeyedLocationDiscovery";
+    }
+
+    private helperApplicability(runtime: ExpeditionDetail): {
+        travel: boolean;
+        navigation: boolean;
+        encounter: boolean;
+    } {
+        const configured = runtime.profile.resolutionHelpers;
+        if (!configured) return { travel: false, navigation: false, encounter: false };
+
+        return {
+            travel: configured.travel !== null
+                && runtime.profile.travelResolution === "ContinuousDistance"
+                && runtime.profile.actualDistanceResolution === "VariableResolved",
+            navigation: configured.navigation !== null
+                && navigationResolutionDue(
+                    runtime,
+                    checkbox(this.form, "suppressNav").checked,
+                    checkbox(this.form, "doubleBack").checked),
+            encounter: configured.encounter !== null && encounterCheckDue(runtime)
+        };
+    }
+
+    private syncResolutionHelperVisibility(runtime = this.getRuntime()): void {
+        const applicability = this.helperApplicability(runtime);
+        const any = applicability.travel || applicability.navigation || applicability.encounter;
+        required<HTMLElement>(this.root, "[data-resolution-helper]").hidden = !any;
+        required<HTMLElement>(this.root, "[data-helper-travel]").hidden = !applicability.travel;
+        required<HTMLElement>(this.root, "[data-helper-navigation]").hidden = !applicability.navigation;
+        required<HTMLElement>(this.root, "[data-helper-encounter]").hidden = !applicability.encounter;
+        const button = required<HTMLButtonElement>(this.root, "[data-resolution-helper-button]");
+        if (!this.advancePending) button.disabled = !any;
+    }
+
+    private generateProcedureResolution(): void {
+        if (this.disposed) return;
+        const button = required<HTMLButtonElement>(this.root, "[data-resolution-helper-button]");
+        if (button.disabled) return;
+
+        const idleText = button.textContent ?? "Roll procedure inputs";
+        button.disabled = true;
+        button.textContent = "Rolling…";
+
+        void this.runMutation(async () => {
+            try {
+                const runtime = this.getRuntime();
+                const applicability = this.helperApplicability(runtime);
+                if (!applicability.travel && !applicability.navigation && !applicability.encounter) {
+                    throw new Error("No automatic procedure helper is applicable to the current watch state.");
+                }
+
+                const request = {
+                    expectedVersion: runtime.version,
+                    suppressesNavigationCheck: checkbox(this.form, "suppressNav").checked,
+                    deliberateDoubleBack:
+                        runtime.profile.supportsDeliberateDoubleBack
+                        && checkbox(this.form, "doubleBack").checked,
+                    navigationModifier: applicability.navigation
+                        ? integer(input(this.form, "helperNavigationModifier"))
+                        : 0,
+                    expectedDistance: applicability.travel
+                        ? numeric(input(this.form, "expectedDistance"))
+                        : undefined,
+                    navigationDifficultyClass: applicability.navigation
+                        ? integer(input(this.form, "helperNavigationDc"))
+                        : undefined,
+                    failureVeerSteps: applicability.navigation
+                        ? nonZeroInteger(input(this.form, "helperFailureVeer"))
+                        : undefined,
+                    keyedLocationId: applicability.encounter && this.locationSelect.value
+                        ? this.locationSelect.value
+                        : undefined
+                };
+
+                const result = await this.api.resolveProcedureInputs(runtime.id, request);
+                if (result.generatedResolutionId !== null) {
+                    const refreshed = await this.api.getExpedition(runtime.id);
+                    if (refreshed.version !== result.expeditionVersion) {
+                        throw new Error(
+                            "The crawl session changed after procedure inputs were generated. Generate them again for the current version.");
+                    }
+                    this.applyRuntime(refreshed);
+                }
+                this.applyGeneratedResolution(result);
+            } finally {
+                if (!this.disposed) {
+                    button.textContent = idleText;
+                    this.syncResolutionHelperVisibility();
+                }
+            }
+        });
+    }
+
+    private applyGeneratedResolution(result: ProcedureResolutionHelperResult): void {
+        this.generatedResolutionId = result.generatedResolutionId;
+        this.generatedEncounterLocationId = result.encounter?.locationId;
+
+        if (result.travel) {
+            input(this.form, "expectedDistance").value = String(result.travel.expectedDistance);
+            input(this.form, "actualDistance").value = String(result.travel.actualDistance);
+            this.setAutomaticSource(
+                "travelSource",
+                "travelNote",
+                result.travel.provenance.note);
+        }
+
+        if (result.navigation) {
+            select(this.form, "navigationOutcome").value = result.navigation.outcome;
+            input(this.form, "veerSteps").value =
+                result.navigation.veerSteps === null ? "" : String(result.navigation.veerSteps);
+            this.setAutomaticSource(
+                "navigationSource",
+                "navigationNote",
+                result.navigation.provenance.note);
+        }
+
+        if (result.encounter) {
+            select(this.form, "encounterOutcome").value = result.encounter.kind;
+            input(this.form, "encounterHour").value =
+                result.encounter.occursAtHours === null ? "" : String(result.encounter.occursAtHours);
+            if (result.encounter.locationId) this.locationSelect.value = result.encounter.locationId;
+            input(this.form, "encounterNote").value = result.encounter.note ?? "";
+            this.setAutomaticSource(
+                "encounterSource",
+                "encounterSourceNote",
+                result.encounter.provenance.note);
+        }
+
+        this.syncNavigationVisibility();
+        this.syncEncounterFields();
+
+        const summary = required<HTMLElement>(this.root, "[data-resolution-helper-result]");
+        const parts: string[] = [];
+        if (result.rolls.length > 0) {
+            parts.push(result.rolls
+                .map(roll => `${roll.purpose}: ${roll.formula} [${roll.dice.join(", ")}] = ${roll.total}`)
+                .join("; "));
+        }
+        if (result.travel) {
+            parts.push(
+                `travel ${formatNumber(result.travel.actualDistance)} from expected ${formatNumber(result.travel.expectedDistance)}`);
+        }
+        if (result.navigation) {
+            parts.push(
+                `navigation ${prettyEnum(result.navigation.outcome)}${result.navigation.veerSteps === null ? "" : ` · veer ${result.navigation.veerSteps}`}`);
+        }
+        if (result.encounter) {
+            parts.push(
+                `encounter ${prettyEnum(result.encounter.kind)}${result.encounter.occursAtHours === null ? "" : ` at ${formatHours(result.encounter.occursAtHours)}`}`);
+        }
+        parts.push(...result.notes);
+        summary.textContent = parts.join(" · ") || "No procedure-defined helper result was generated.";
+    }
+
+    private setAutomaticSource(
+        sourceName: "travelSource" | "navigationSource" | "encounterSource",
+        noteName: "travelNote" | "navigationNote" | "encounterSourceNote",
+        note: string | null): void {
+        select(this.form, sourceName).value = "AutomaticRoll";
+        input(this.form, noteName).value = note ?? "";
+    }
+
+    private markGeneratedComponentEdited(
+        component: "travel" | "navigation" | "encounter"): void {
+        const fields = {
+            travel: ["travelSource", "travelNote"],
+            navigation: ["navigationSource", "navigationNote"],
+            encounter: ["encounterSource", "encounterSourceNote"]
+        } as const;
+        const [sourceName, noteName] = fields[component];
+        const source = select(this.form, sourceName);
+        if (source.value !== "AutomaticRoll") return;
+
+        source.value = "DmOverride";
+        const note = input(this.form, noteName);
+        const suffix = "Edited after automatic generation.";
+        note.value = note.value.trim()
+            ? `${note.value.trim()} ${suffix}`
+            : suffix;
+        this.releaseGeneratedResolutionIfUnused();
+
+        required<HTMLElement>(this.root, "[data-resolution-helper-result]").textContent =
+            "A generated result was edited. That component is now a DM override; generate again to restore AutomaticRoll provenance.";
+    }
+
+    private handleGeneratedLocationEdit(): void {
+        if (select(this.form, "encounterSource").value !== "AutomaticRoll") return;
+        if (this.generatedEncounterLocationId === null) {
+            // A keyed-location roll may intentionally leave location choice to the DM.
+            return;
+        }
+        if (this.generatedEncounterLocationId !== undefined
+            && this.locationSelect.value !== this.generatedEncounterLocationId) {
+            this.markGeneratedComponentEdited("encounter");
+        }
+    }
+
+    private releaseGeneratedResolutionIfUnused(): void {
+        if (["travelSource", "navigationSource", "encounterSource"]
+            .every(name => select(this.form, name).value !== "AutomaticRoll")) {
+            this.generatedResolutionId = null;
+            this.generatedEncounterLocationId = undefined;
+        }
     }
 
     private submit(event: SubmitEvent): void {
