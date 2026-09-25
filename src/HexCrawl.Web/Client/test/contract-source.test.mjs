@@ -226,3 +226,10 @@ test("watch form does not invent unresolved travel results", () => {
     assert.doesNotMatch(controller, /actualDistance"\)\.value = String\(scale\)/);
     assert.match(controller, /suggestedWatchDistance\(runtime\)/);
 });
+
+
+test("wide world-bound workbench places map beside the running sheet and preserves responsive stacking", () => {
+    const styles = fs.readFileSync(path.join(sourceDir, "styles.ts"), "utf8");
+    assert.match(styles, /@media \(min-width: 1350px\)[\s\S]*\.hc-workspace-grid \.hc-map-panel\.hc-run-column[\s\S]*grid-template-columns:/);
+    assert.match(styles, /@media \(max-width: 820px\)[\s\S]*\.hc-workspace-grid[\s\S]*grid-template-columns: 1fr/);
+});
