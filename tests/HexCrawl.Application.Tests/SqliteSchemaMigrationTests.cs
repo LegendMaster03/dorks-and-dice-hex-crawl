@@ -97,15 +97,25 @@ public sealed class SqliteSchemaMigrationTests
                 await using var reader = await command.ExecuteReaderAsync();
                 var overworldNullable = false;
                 var contextRequired = false;
+                var partyRequired = false;
                 while (await reader.ReadAsync())
                 {
                     var name = reader.GetString(1);
                     var notNull = reader.GetInt32(3) == 1;
                     if (name == "overworld_id") overworldNullable = !notNull;
                     if (name == "context_json") contextRequired = notNull;
+                    if (name == "party_json") partyRequired = notNull;
                 }
                 Assert.True(overworldNullable);
                 Assert.True(contextRequired);
+                Assert.True(partyRequired);
+            }
+
+            await using (var command = migrated.CreateCommand())
+            {
+                command.CommandText = "SELECT party_json FROM expeditions WHERE id = $id;";
+                command.Parameters.AddWithValue("$id", expeditionId.ToString("D"));
+                Assert.Equal("{}", Convert.ToString(await command.ExecuteScalarAsync()));
             }
 
             await using (var command = migrated.CreateCommand())
