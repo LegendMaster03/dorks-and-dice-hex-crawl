@@ -300,6 +300,11 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
         {
             return null;
         }
+        if (!ExpeditionProcedureRequirements.IsNavigationResolutionPotentiallyRequired(profile, state)
+            && command.NavigationOutcome is null)
+        {
+            return null;
+        }
         var outcome = command.NavigationOutcome
             ?? throw new InvalidOperationException("This watch requires an explicit navigation outcome.");
         if (outcome == NavigationCheckOutcome.NotRequired)
