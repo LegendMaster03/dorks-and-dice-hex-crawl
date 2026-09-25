@@ -251,8 +251,13 @@ export async function renderExpedition(
         if (runtime.overworldId) navigate(`/worlds/${runtime.overworldId}/edit`);
     });
     required<HTMLButtonElement>(root, "[data-worlds]").addEventListener("click", () => navigate("/worlds"));
-    required<HTMLButtonElement>(root, "[data-view-tracker]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}`));
+    const trackerButton = required<HTMLButtonElement>(root, "[data-view-tracker]");
+    trackerButton.classList.toggle("hc-active-view", !showMap);
+    trackerButton.setAttribute("aria-current", showMap ? "false" : "page");
+    trackerButton.addEventListener("click", () => navigate(`/expeditions/${runtime.id}`));
     const mapButton = required<HTMLButtonElement>(root, "[data-view-map]");
+    mapButton.classList.toggle("hc-active-view", showMap);
+    mapButton.setAttribute("aria-current", showMap ? "page" : "false");
     mapButton.hidden = runtime.overworldId === null;
     mapButton.addEventListener("click", () => {
         if (runtime.overworldId) navigate(`/worlds/${runtime.overworldId}/expeditions/${runtime.id}`);
