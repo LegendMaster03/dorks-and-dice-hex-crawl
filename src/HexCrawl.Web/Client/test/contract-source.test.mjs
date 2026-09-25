@@ -217,3 +217,12 @@ test("party movement editor derives units from persisted session data without a 
     assert.doesNotMatch(party, /\?\? \{ kind: "Mile", symbol: "mi", metersPerUnit: 1609\.344 \}/);
     assert.match(party, /custom movement unit conversion must be a finite positive number/i);
 });
+
+
+test("watch form does not invent unresolved travel results", () => {
+    const view = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-view.ts"), "utf8");
+    const controller = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-watch-controller.ts"), "utf8");
+    assert.doesNotMatch(view, /name="hexSteps"[^>]*value="1"/);
+    assert.doesNotMatch(controller, /actualDistance"\)\.value = String\(scale\)/);
+    assert.match(controller, /suggestedWatchDistance\(runtime\)/);
+});
