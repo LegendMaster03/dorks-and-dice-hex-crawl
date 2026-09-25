@@ -2,6 +2,8 @@
 
 ## Boundaries
 
+Hex Crawl's cross-edition design reference hierarchy is documented in [design-references.md](design-references.md). B/X + AD&D remain the core exploration-procedure references; 3.Xe informs detailed mechanics; 5.Xe informs modern compatibility and character-facing travel rules; the Alexandrian informs practical procedure/layout; and 4e informs future Journey Challenge / Complex Hazard, progressive-hazard, and encounter-handoff design without replacing the core travel loop.
+
 Hex Crawl maintains independent state axes rather than turning a rendered hex into the unit of all data:
 
 1. **World/spatial truth** — `OverworldDefinition`, mathematical grid, semantic point/line/region features, locations, and source-map representations.
@@ -127,7 +129,7 @@ Automatic grid detection, image feature matching, overlapping-map registration, 
 
 ## Deferred work
 
-Still deferred are campaign sharing, real-time collaborative editing, a dedicated player delivery/session surface for the persisted presentation state, automatic map analysis, four-point projective registration UI, arbitrary-bearing runtime travel, multi-hex automatic backtracking, a general campaign calendar/rest clock, and battle maps.
+Still deferred are campaign sharing, real-time collaborative editing, a dedicated player delivery/session surface for the persisted presentation state, automatic map analysis, four-point projective registration UI, arbitrary-bearing runtime travel, multi-hex automatic backtracking, a general campaign calendar/rest clock, battle maps, Journey Challenge / Complex Hazard state, progressive expedition effects, and structured encounter handoff to combat tools.
 
 Rules Core/Characters integration remains optional future resolved-input plumbing; those systems do not become owners of Hex Crawl spatial/runtime state.
 
