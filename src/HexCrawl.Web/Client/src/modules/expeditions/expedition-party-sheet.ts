@@ -75,7 +75,7 @@ export class ExpeditionPartySheetController {
                 return `${entry.label?.trim() || `Watch ${entry.slot}`}: ${names}`;
             })
             .join(" · ") || "—";
-        const movement = movementSummary(party.baseMovement);
+        const movement = movementSummary(party.baseMovement, memberById);
         const activeOrders = party.standingOrders.filter(order => order.enabled);
         const orders = activeOrders.map(order => order.text).join(" · ") || "—";
 
@@ -644,13 +644,18 @@ export class ExpeditionPartySheetController {
     }
 }
 
-function movementSummary(movement: PartyMovementReference | null): string {
+function movementSummary(
+    movement: PartyMovementReference | null,
+    memberById: ReadonlyMap<string, string>): string {
     if (!movement) return "—";
     const parts = [
         movement.perHour ? `${formatDistance(movement.perHour)}/hour` : null,
         movement.perWatch ? `${formatDistance(movement.perWatch)}/watch` : null,
         movement.perMarch ? `${formatDistance(movement.perMarch)}/march` : null
     ].filter((value): value is string => value !== null);
+    if (movement.limitingMemberId) {
+        parts.push(`limited by ${memberById.get(movement.limitingMemberId) ?? "unknown member"}`);
+    }
     if (movement.note) parts.push(movement.note);
     return parts.join(" · ") || "—";
 }
