@@ -10,8 +10,8 @@ export async function renderWorldList(
     root.innerHTML = `
         <section class="hc-page">
             <header class="hc-page-header">
-                <div><h1>Overworlds</h1><p>Create and manage persistent hex-crawl worlds.</p></div>
-                <nav><button type="button" data-home>DM tools</button></nav>
+                <div><span class="hc-sheet-kicker">Map preparation</span><h1>Overworlds</h1><p>Create and manage persistent hex-crawl worlds separately from the running sheet.</p></div>
+                <nav><button type="button" data-home>Running sheets</button></nav>
             </header>
             <div class="hc-error" data-error hidden role="alert"></div>
             <div class="hc-columns">
@@ -20,7 +20,7 @@ export async function renderWorldList(
                     <div class="hc-world-list" data-world-list role="list"></div>
                 </section>
                 <section class="hc-panel">
-                    <h2>Create overworld</h2>
+                    <h2>New overworld</h2>
                     <form data-create-world class="hc-form">
                         <label>Name <input name="name" required value="New overworld" autocomplete="off"></label>
                         <label>Orientation <select name="orientation"><option value="PointyTop">Pointy top</option><option value="FlatTop">Flat top</option></select></label>
@@ -90,8 +90,8 @@ export async function renderWorldList(
                 copy.append(title, meta);
                 const button = document.createElement("button");
                 button.type = "button";
-                button.textContent = "Open";
-                button.setAttribute("aria-label", `Open ${world.name}`);
+                button.textContent = "Edit map";
+                button.setAttribute("aria-label", `Edit map for ${world.name}`);
                 button.addEventListener("click", () => navigate(`/worlds/${world.id}/edit`));
                 row.append(copy, button);
                 list.append(row);
