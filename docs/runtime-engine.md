@@ -69,7 +69,7 @@ Navigation remains edition-neutral. `ResolvedNavigation` carries a resolved outc
 
 The engine does not perform consequential random rolls. `ResolutionProvenance` supports `ProcedureDefault`, `AutomaticRoll`, `ManualRoll`, `ExternalSystem`, or `DmOverride`.
 
-`AutomaticRoll` is a domain/application provenance value for a trusted helper or integration that actually generated the corresponding resolved value. The current DM workbench has no automatic generator, so ordinary manual selectors do not expose `AutomaticRoll`. Manual DM entry can record `ProcedureDefault`, `ManualRoll`, `ExternalSystem`, or `DmOverride`. A future helper can set `AutomaticRoll` programmatically when it genuinely produces a value.
+`AutomaticRoll` is reserved for a value produced by the server-side procedure-resolution helper. Ordinary manual selectors do not expose `AutomaticRoll`; manual DM entry can record `ProcedureDefault`, `ManualRoll`, `ExternalSystem`, or `DmOverride`. Generated results are persisted with a server-generated resolution identifier, watch/version context, exact resolved values, and audit sequence before they can be applied.
 
 The DM workbench carries independent provenance for travel, navigation, encounter, and boundary-decision inputs rather than applying one source label to an entire watch. It appends a compact `ResolutionProvenanceRecorded` history event after each application transition.
 
@@ -94,7 +94,7 @@ Important transitions append `CrawlRuntimeEvent` records covering watch lifecycl
 The storage design is intentionally **snapshot + retained history**, not full event sourcing:
 
 - the persisted expedition snapshot is authoritative current state;
-- player knowledge, known hexes, and presentation policy are part of the persisted expedition envelope;
+- party running-sheet state, player knowledge where applicable, procedure configuration, and generated-resolution verification records are part of the persisted expedition envelope;
 - runtime events are retained separately in `expedition_events` for auditability, session history, debugging, and future filtered projections;
 - `(expedition_id, sequence)` is unique, so saving/reloading does not duplicate history;
 - reloading reconstructs `ExpeditionState.History` in sequence order before the next deterministic transition.
