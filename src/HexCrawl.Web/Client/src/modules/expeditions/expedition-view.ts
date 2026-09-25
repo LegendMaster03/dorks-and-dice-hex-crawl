@@ -6,6 +6,7 @@ import { canonicalExpeditionRoute } from "../../tool-route";
 import type { ExpeditionDetail, Overworld, SpatialRuntimeExpedition } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
 import { renderExpeditionHistory, renderExpeditionPause, renderExpeditionSnapshots, renderExpeditionStatus, renderNonSpatialTracker, renderPlayerKnowledgePreview } from "./expedition-presentation";
+import { ExpeditionPartySheetController } from "./expedition-party-sheet";
 import { ExpeditionWatchController } from "./expedition-watch-controller";
 import { required } from "../../ui/dom";
 
@@ -77,6 +78,13 @@ export async function renderExpedition(
                         </header>
                         <div class="hc-status-grid hc-sheet-status" data-status></div>
                         <section data-pause-panel hidden></section>
+                        <section class="hc-party-register" aria-labelledby="hc-party-register-title">
+                            <div class="hc-sheet-ledger-heading">
+                                <h3 id="hc-party-register-title">Party & travel order</h3>
+                                <span>Persistent expedition reference</span>
+                            </div>
+                            <div data-party-summary></div>
+                        </section>
                         <section class="hc-sheet-ledger" aria-labelledby="hc-watch-log-title">
                             <div class="hc-sheet-ledger-heading">
                                 <h3 id="hc-watch-log-title">Watch log</h3>
@@ -87,6 +95,7 @@ export async function renderExpedition(
                     </section>
                 </section>
                 <aside class="hc-sidebar" aria-label="Expedition controls">
+                    <details class="hc-party-editor-panel"><summary>Party & travel order</summary><div data-party-editor></div></details>
                     <details open class="hc-sheet-controls"><summary data-watch-summary>Run watch</summary>
                         <p class="hc-hint">Fill only the parts that apply to the procedure you are using. Hidden sections are not required.</p>
                         <div class="hc-form hc-watch-requirements" data-requirements></div>
@@ -95,7 +104,7 @@ export async function renderExpedition(
                                 <legend>Orders for this watch</legend>
                                 <label>Intended direction <select name="direction">${directionOptions()}</select></label>
                                 <label>Pace / travel mode <input name="pace" value="normal"></label>
-                                <label>Party activities <input name="activities" placeholder="scout, forage, map"></label>
+                                <label>Travel duties / activities <input name="activities" placeholder="navigate, forage, map, scout"></label>
                                 <label>Navigation aid/context <input name="navigationAid" value="none"></label>
                                 <label data-suppress-nav-row><input name="suppressNav" type="checkbox"> Navigation aid suppresses the check</label>
                                 <label data-reset-veer-row><input name="resetVeer" type="checkbox"> Navigation aid resets veer at a boundary</label>
@@ -203,6 +212,7 @@ export async function renderExpedition(
         () => runtime,
         next => apply(next),
         action => mutate(null, action));
+    let partyController: ExpeditionPartySheetController;
 
     const apply = (next: ExpeditionDetail): void => {
         runtime = next;
@@ -223,8 +233,16 @@ export async function renderExpedition(
             if (world) renderPlayerKnowledgePreview(root, runtime, world);
         }
         renderExpeditionSnapshots(root, runtime, showMap);
+        partyController.sync(next);
         watchController.sync(next);
     };
+
+    partyController = new ExpeditionPartySheetController(
+        root,
+        api,
+        () => runtime,
+        next => apply(next),
+        mutate);
 
     const renderDiscovery = (): void => {
         if (!world) return;
