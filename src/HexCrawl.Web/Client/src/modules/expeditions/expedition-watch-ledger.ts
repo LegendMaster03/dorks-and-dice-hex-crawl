@@ -1,4 +1,3 @@
-import { formatHours } from "../../runtime-view";
 import type { ExpeditionDetail, RuntimeEvent } from "../../types";
 
 export type WatchLedgerRow = {
@@ -146,6 +145,11 @@ function statusLabel(
 
 function splitEnum(value: string): string {
     return value.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase();
+}
+
+function formatHours(hours: number): string {
+    if (Math.abs(hours) < 0.000001) return "0 h";
+    return `${formatNumber(hours)} h`;
 }
 
 function formatNumber(value: number): string {
