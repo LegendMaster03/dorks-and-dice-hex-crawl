@@ -508,6 +508,37 @@ public sealed class ExpeditionWorkbenchEndpointsTests
     }
 
     [Fact]
+    public async Task AbstractHexSessionRejectsMissingDistanceUnit()
+    {
+        var database = TestWebHost.NewDatabasePath();
+        try
+        {
+            using var factory = TestWebHost.Create(database);
+            using var client = factory.CreateClient();
+
+            using var response = await client.PostAsJsonAsync("/api/expeditions", new
+            {
+                name = "Unitless crawl",
+                procedureKey = "simple-fixed-distance",
+                context = new
+                {
+                    kind = "AbstractHex",
+                    name = "Unitless paper map",
+                    orientation = "PointyTop",
+                    hexCenterDistance = 12
+                },
+                startHex = new { q = 0, r = 0 }
+            });
+
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        }
+        finally
+        {
+            TestWebHost.DeleteDatabase(database);
+        }
+    }
+
+    [Fact]
     public async Task NonSpatialSessionTracksPartialWatchAcrossRestartWithoutFakeSpatialState()
     {
         var database = TestWebHost.NewDatabasePath();
