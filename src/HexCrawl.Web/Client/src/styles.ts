@@ -211,7 +211,7 @@ export function ensureStyles(): void {
         .hc-custom-unit-fields { display: grid; gap: .65rem; padding: .1rem 0; }
         .hc-workspace-grid { display: grid; grid-template-columns: minmax(28rem, 1fr) minmax(18rem, 24rem); gap: .85rem; align-items: start; }
         .hc-tracker-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(20rem, 28rem); gap: .85rem; align-items: start; }
-        .hc-assistant-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(18rem, .75fr); gap: .85rem; align-items: start; }
+        .hc-assistant-grid { display: grid; grid-template-columns: minmax(0, 44rem) minmax(18rem, 30rem); gap: .85rem; align-items: start; justify-content: start; }
         .hc-assistant-form { margin-top: .8rem; }
         .hc-assistant-warning { margin: .75rem 0; padding: .65rem .7rem; border: 1px solid var(--hc-warning-border); border-left: .28rem solid var(--hc-warning); border-radius: .45rem; background: var(--hc-warning-bg); color: var(--hc-warning-text); font-size: .86rem; }
         .hc-runtime-panel { min-width: 0; }
@@ -220,8 +220,7 @@ export function ensureStyles(): void {
         .hc-map-panel { min-width: 0; padding: .65rem; background: var(--hc-surface); }
         .hc-map-host { min-height: 560px; height: 68vh; overflow: hidden; border: 1px solid var(--hc-map-border); border-radius: .55rem; background: var(--hc-map-bg); }
         .hc-map-canvas { display: block; width: 100%; height: 100%; min-height: 560px; touch-action: none; }
-        .hc-sidebar { display: grid; gap: .6rem; max-height: 82vh; overflow: auto; padding-right: .12rem; }
-        .hc-world-editor .hc-sidebar { max-height: none; overflow: visible; padding-right: 0; }
+        .hc-sidebar { display: grid; gap: .6rem; max-height: none; overflow: visible; padding-right: 0; }
         .hc-world-editor .hc-map-panel { position: sticky; top: .75rem; }
         .hc-sidebar details { box-shadow: none; }
         .hc-sidebar details summary { cursor: pointer; font-weight: 700; }
@@ -239,7 +238,7 @@ export function ensureStyles(): void {
         .hc-status-grid span { overflow-wrap: anywhere; color: var(--hc-text-strong); font-size: .88rem; }
         .hc-history-panel { margin-top: .65rem; padding: .7rem; border: 1px solid var(--hc-border); border-radius: .55rem; background: var(--hc-surface-elevated); }
         .hc-history-panel summary { cursor: pointer; color: var(--hc-text-strong); font-weight: 700; }
-        .hc-history { max-height: 260px; overflow: auto; margin-bottom: 0; padding-left: 1.35rem; color: var(--hc-muted); font-size: .84rem; }
+        .hc-history { margin-bottom: 0; padding-left: 1.35rem; color: var(--hc-muted); font-size: .84rem; }
         .hc-history li + li { margin-top: .3rem; }
         .hc-subsection-title { margin: .2rem 0 .1rem; color: var(--hc-muted); font-size: .72rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
         .hc-error-page { display: grid; max-width: 46rem; gap: .75rem; }
@@ -303,7 +302,7 @@ export function ensureStyles(): void {
         .hc-watch-ledger tbody tr:first-child td { background: color-mix(in srgb, var(--hc-primary) 7%, var(--hc-surface)); }
         .hc-event-audit { margin-top: .65rem; padding: .55rem .65rem; border: 1px solid var(--hc-border); border-radius: .4rem; background: var(--hc-surface-elevated); }
         .hc-event-audit > summary { cursor: pointer; color: var(--hc-text-strong); font-size: .82rem; font-weight: 700; }
-        .hc-event-audit-list { display: grid; gap: .4rem; max-height: 18rem; overflow: auto; margin: .55rem 0 0; padding-left: 1.35rem; }
+        .hc-event-audit-list { display: grid; gap: .4rem; margin: .55rem 0 0; padding-left: 1.35rem; }
         .hc-event-audit-list li { color: var(--hc-muted); font-size: .78rem; }
         .hc-event-audit-list li strong, .hc-event-audit-list li span { display: block; }
         .hc-event-audit-list li strong { color: var(--hc-text); font-size: .72rem; }
@@ -359,7 +358,7 @@ export function ensureStyles(): void {
         @media (max-width: 1050px) {
             .hc-workspace-grid { grid-template-columns: minmax(0, 1fr) minmax(17rem, 21rem); }
             .hc-tracker-grid { grid-template-columns: minmax(0, 1fr) minmax(18rem, 24rem); }
-            .hc-assistant-grid { grid-template-columns: minmax(0, 1fr) minmax(17rem, 22rem); }
+            .hc-assistant-grid { grid-template-columns: minmax(0, 1fr) minmax(17rem, 24rem); }
             .hc-map-host, .hc-map-canvas { min-height: 470px; height: 60vh; }
         }
         @media (max-width: 820px) {
