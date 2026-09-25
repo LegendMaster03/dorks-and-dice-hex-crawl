@@ -291,7 +291,8 @@ public sealed record StartStandaloneCrawlSessionRequest(
         NearExitProgressFactor = profile.NearExitProgressFactor,
         FarExitProgressFactor = profile.FarExitProgressFactor,
         BackExitProgressFactor = profile.BackExitProgressFactor,
-        DirectionChangeProgressCostFactor = profile.DirectionChangeProgressCostFactor
+        DirectionChangeProgressCostFactor = profile.DirectionChangeProgressCostFactor,
+        ResolutionHelpers = profile.ResolutionHelpers?.ToDomain()
     };
 }
 
@@ -326,7 +327,8 @@ public sealed record StartExpeditionWorkbenchRequest(
         NearExitProgressFactor = profile.NearExitProgressFactor,
         FarExitProgressFactor = profile.FarExitProgressFactor,
         BackExitProgressFactor = profile.BackExitProgressFactor,
-        DirectionChangeProgressCostFactor = profile.DirectionChangeProgressCostFactor
+        DirectionChangeProgressCostFactor = profile.DirectionChangeProgressCostFactor,
+        ResolutionHelpers = profile.ResolutionHelpers?.ToDomain()
     };
 }
 
@@ -363,6 +365,7 @@ public sealed record AdvanceExpeditionWorkbenchRequest
     public bool? RecognizedLost { get; init; }
     public bool? Reorient { get; init; }
     public string? DmOverrideNote { get; init; }
+    public Guid? GeneratedProcedureResolutionId { get; init; }
 
     public AdvanceExpeditionWorkbenchCommand ToCommand() => new()
     {
@@ -396,7 +399,8 @@ public sealed record AdvanceExpeditionWorkbenchRequest
         ContinueAcrossBoundaries = ContinueAcrossBoundaries,
         RecognizedLost = RecognizedLost,
         Reorient = Reorient,
-        DmOverrideNote = DmOverrideNote
+        DmOverrideNote = DmOverrideNote,
+        GeneratedProcedureResolutionId = GeneratedProcedureResolutionId
     };
 }
 
