@@ -245,7 +245,7 @@ The workbench does not add:
 - semantic terrain-to-mechanics interpretation;
 - Journey Challenge / Complex Hazard state;
 - progressive expedition condition/effect state;
-- structured Block Initiative encounter handoff context;
+- richer Block Initiative handoff composition beyond the current versioned encounter-context contract, especially source-backed combatant rosters;
 - typed Rules Core mechanic references for challenge approaches/travel duties;
 - typed custom encounter-cadence parameters or a scheduling DSL;
 - machine vision, OCR, or raster analysis;

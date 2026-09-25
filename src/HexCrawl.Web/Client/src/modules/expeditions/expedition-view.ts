@@ -238,7 +238,12 @@ export async function renderExpedition(
         host.hidden = true;
         if (runtime.pauseReason !== "EncounterTriggered") return;
 
+        const triggered = [...runtime.history].reverse().find(event => event.kind === "EncounterTriggered");
+        const locationName = triggered?.subjectId
+            ? world?.locations.find(location => location.id === triggered.subjectId)?.name ?? null
+            : null;
         const handoff = encounterHandoffFromRuntime(runtime, {
+            locationName,
             returnPath: window.location.pathname
         });
         if (!handoff) return;

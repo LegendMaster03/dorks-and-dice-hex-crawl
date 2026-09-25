@@ -152,7 +152,7 @@ Areas that will require deliberate future design, but not current refactoring:
 1. **Persistent challenge/hazard state.** There is no generic long-running expedition complication aggregate today. Add a dedicated typed model rather than bloating `ActiveWatchState`.
 2. **Rules Core mechanic references.** Current travel activities are strings. Journey Challenges will need stable, typed mechanic references for skills/competencies/tools and possibly source/version identity.
 3. **Structured consequences.** `CrawlRuntimeEvent` currently has generic event metadata plus message/subject/distance fields. Rich cross-tool consequences should receive typed payload/context rather than being encoded only in `Message`.
-4. **Encounter handoff contract.** `ResolvedEncounter` currently describes encounter kind, timing, keyed location, note, and provenance. A separate structured handoff/context contract will be needed before Hex Crawl can communicate starting circumstances to Block Initiative.
+4. **Encounter handoff contract.** Hex Crawl now emits a versioned Block Initiative handoff for triggered encounters containing expedition/watch/hex/location/outcome/note context plus an optional structured combatant array. Block Initiative owns tactical combat after import. Hex Crawl does not infer combatants from free-text encounter notes; future encounter-table or Rules Core integrations can populate the existing combatant array.
 5. **Progressive conditions/effects.** Current navigation and pause state are purpose-specific. A future expedition-effect model should be introduced instead of repurposing lost state or pause reasons.
 6. **Derived movement integration.** Party movement is currently stored as an optional reference. Deriving it from creatures, mounts, vehicles, and characters requires Rules Core/Character integration but does not require replacing the distance model.
 
@@ -168,6 +168,6 @@ For the current running-sheet/backend pass:
 - keep Rules Core integration external and identifier-based;
 - keep marching order/watch data flexible;
 - retain structured provenance and audit history;
-- do not implement Journey Challenges, progressive hazards, or Block Initiative handoff yet.
+- do not implement Journey Challenges or progressive hazards yet; keep the current Block Initiative handoff limited to encounter context and explicitly supplied structured combatants.
 
 Journey Challenge / Complex Hazard support is the highest-priority future 4e-derived feature. The remaining 4e concepts are design guidance or backlog items until they naturally intersect scheduled work.
