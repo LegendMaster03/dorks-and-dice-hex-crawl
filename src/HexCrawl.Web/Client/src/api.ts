@@ -8,6 +8,8 @@ import type {
     Overworld,
     OverworldSummary,
     PresentationProfile,
+    ProcedureResolutionHelperRequest,
+    ProcedureResolutionHelperResult,
     RegistrationControlPoint,
     RuntimeAdvanceRequest,
     RuntimeProfile,
@@ -340,6 +342,10 @@ export class HexCrawlApi {
 
     public updateExpeditionParty(expeditionId: string, input: UpdateExpeditionPartyRequest): Promise<ExpeditionDetail> {
         return this.sendJson("PUT", `/api/expeditions/${encodeURIComponent(expeditionId)}/party`, input, "Update party sheet");
+    }
+
+    public resolveProcedureInputs(expeditionId: string, input: ProcedureResolutionHelperRequest): Promise<ProcedureResolutionHelperResult> {
+        return this.sendJson("POST", `/api/expeditions/${encodeURIComponent(expeditionId)}/resolution-helper`, input, "Resolve procedure inputs");
     }
 
     public discover(expeditionId: string, expectedVersion: number, subjectId: string, subjectType: "Location" | "Feature"): Promise<ExpeditionDetail> {
