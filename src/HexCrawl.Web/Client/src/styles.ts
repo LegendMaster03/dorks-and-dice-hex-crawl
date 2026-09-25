@@ -291,12 +291,42 @@ export function ensureStyles(): void {
         .hc-watch-requirements .hc-hint { margin: .15rem 0; }
         .hc-optional-reference { opacity: .92; }
 
+        .hc-party-register { margin-top: .8rem; padding-top: .7rem; border-top: 1px solid var(--hc-border); }
+        .hc-party-register-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--hc-border); background: var(--hc-surface); }
+        .hc-party-register-grid > div { display: grid; gap: .15rem; min-width: 0; padding: .5rem .55rem; border-right: 1px solid var(--hc-border); border-bottom: 1px solid var(--hc-border); }
+        .hc-party-register-grid > div:nth-child(3n) { border-right: 0; }
+        .hc-party-register-grid > div:last-child { border-bottom: 0; }
+        .hc-party-register-grid strong { color: var(--hc-muted); font-size: .68rem; letter-spacing: .065em; text-transform: uppercase; }
+        .hc-party-register-grid span { overflow-wrap: anywhere; color: var(--hc-text-strong); font-size: .82rem; line-height: 1.35; }
+        .hc-party-register-grid .hc-party-register-wide { grid-column: 1 / -1; border-right: 0; }
+        .hc-party-form fieldset { margin: 0; padding: .65rem; border: 1px solid var(--hc-border); border-radius: .45rem; }
+        .hc-party-form fieldset legend { padding: 0 .3rem; color: var(--hc-text-strong); font-size: .78rem; font-weight: 800; letter-spacing: .055em; text-transform: uppercase; }
+        .hc-party-editor-list { display: grid; gap: .5rem; margin-bottom: .55rem; }
+        .hc-party-editor-row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto; gap: .45rem; align-items: end; padding: .5rem; border: 1px solid var(--hc-border); border-radius: .4rem; background: var(--hc-surface-elevated); }
+        .hc-party-member-row { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(10rem, auto) auto; }
+        .hc-marching-row { grid-template-columns: minmax(0, 1fr) 5rem 5rem auto; }
+        .hc-standing-order-row { grid-template-columns: auto minmax(0, 1fr) auto; }
+        .hc-party-checkbox { align-self: center; }
+        .hc-watch-entry { display: grid; gap: .4rem; padding: .5rem; border: 1px solid var(--hc-border); border-radius: .4rem; background: var(--hc-surface-elevated); }
+        .hc-watch-heading-row { grid-template-columns: 5rem minmax(0, 1fr) auto; padding: 0; border: 0; background: transparent; }
+        .hc-watch-members { display: flex; flex-wrap: wrap; gap: .35rem .7rem; }
+        .hc-watch-member { display: inline-flex !important; grid-template-columns: none !important; flex-direction: row; align-items: center; gap: .3rem !important; font-size: .82rem !important; font-weight: 500 !important; }
+        .hc-party-movement-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .45rem; }
+        .hc-movement-reference { display: grid; gap: .4rem; padding: .5rem; border: 1px solid var(--hc-border); border-radius: .4rem; background: var(--hc-surface-elevated); }
+        .hc-party-save-row { display: flex; justify-content: space-between; align-items: center; gap: .6rem; padding-top: .25rem; border-top: 1px solid var(--hc-border); }
+        .hc-party-empty-line { margin: 0; padding: .35rem 0; }
+        .hc-party-editor-panel[open] > summary { margin-bottom: .7rem; }
+
         @media (max-width: 720px) {
             .hc-run-toolbar-divider, .hc-run-toolbar-label { display: none; }
             .hc-sheet-heading, .hc-sheet-ledger-heading { display: grid; gap: .2rem; }
             .hc-watch-ledger { font-size: .78rem; }
             .hc-watch-ledger th:nth-child(2), .hc-watch-ledger td:nth-child(2),
             .hc-watch-ledger th:nth-child(3), .hc-watch-ledger td:nth-child(3) { width: auto; }
+            .hc-party-register-grid, .hc-party-movement-grid { grid-template-columns: 1fr; }
+            .hc-party-register-grid > div { grid-column: 1 !important; border-right: 0; }
+            .hc-party-member-row, .hc-party-editor-row, .hc-marching-row, .hc-standing-order-row, .hc-watch-heading-row { grid-template-columns: 1fr; }
+            .hc-party-save-row { align-items: stretch; flex-direction: column; }
         }
         @media (max-width: 1050px) {
             .hc-workspace-grid { grid-template-columns: minmax(0, 1fr) minmax(17rem, 21rem); }
