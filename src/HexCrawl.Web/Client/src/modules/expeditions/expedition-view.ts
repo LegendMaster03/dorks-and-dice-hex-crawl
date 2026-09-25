@@ -39,7 +39,7 @@ export async function renderExpedition(
     const world: Overworld | null = showMap ? await api.getOverworld(runtime.overworldId!) : null;
     let disposed = false;
 
-    const modeLabel = showMap ? "Full crawl workbench" : "Mapless expedition tracker";
+    const modeLabel = showMap ? "Running sheet + map" : "Running sheet";
     const mapMarkup = showMap ? '<div class="hc-map-host" data-map></div>' : "";
     const mapOnlyTools = showMap
         ? `
@@ -53,30 +53,46 @@ export async function renderExpedition(
                 <div><h1 data-title></h1><p><span data-mode-label></span> · <span data-context></span></p></div>
                 <nav><button type="button" data-home>DM tools</button><button type="button" data-edit>World authoring</button><button type="button" data-worlds>Overworlds</button></nav>
             </header>
-            <div class="hc-view-switcher" aria-label="Expedition views">
-                <button type="button" data-view-tracker>Tracker</button>
-                <button type="button" data-view-map>Full map</button>
+            <div class="hc-view-switcher hc-run-toolbar" aria-label="Expedition views">
+                <button type="button" data-view-tracker>Running sheet</button>
+                <button type="button" data-view-map>Map + sheet</button>
+                <span class="hc-run-toolbar-divider" aria-hidden="true"></span>
+                <span class="hc-run-toolbar-label">Optional focused tools</span>
                 <button type="button" data-view-travel>Travel / watch</button>
                 <button type="button" data-view-navigation>Navigation</button>
                 <button type="button" data-view-encounters>Encounters</button>
             </div>
+            <p class="hc-focus-hint">Run the crawl from the sheet, or open a focused tool when you only want that part of the procedure. None of the focused tools are required.</p>
             <div class="hc-error" data-error hidden role="alert"></div>
             <div class="${showMap ? "hc-workspace-grid" : "hc-tracker-grid"}">
-                <section class="${showMap ? "hc-map-panel" : "hc-panel hc-runtime-panel"}" aria-label="Expedition state${showMap ? " and map" : ""}">
+                <section class="${showMap ? "hc-map-panel hc-run-column" : "hc-panel hc-runtime-panel hc-run-column"}" aria-label="Running sheet${showMap ? " and map" : ""}">
                     ${mapMarkup}
-                    <section class="hc-status-section" aria-labelledby="hc-expedition-state-title">
-                        <h2 id="hc-expedition-state-title">Expedition state</h2>
-                        <div class="hc-status-grid" data-status></div>
+                    <section class="hc-running-sheet" aria-labelledby="hc-expedition-state-title">
+                        <header class="hc-sheet-heading">
+                            <div>
+                                <span class="hc-sheet-kicker">Running sheet</span>
+                                <h2 id="hc-expedition-state-title">Current crawl record</h2>
+                            </div>
+                            <span class="hc-sheet-note">Authoritative session state</span>
+                        </header>
+                        <div class="hc-status-grid hc-sheet-status" data-status></div>
+                        <section data-pause-panel hidden></section>
+                        <section class="hc-sheet-ledger" aria-labelledby="hc-watch-log-title">
+                            <div class="hc-sheet-ledger-heading">
+                                <h3 id="hc-watch-log-title">Watch log</h3>
+                                <span>Day · Watch · Hex · Time · Event</span>
+                            </div>
+                            <div data-history></div>
+                        </section>
                     </section>
-                    <section data-pause-panel hidden></section>
-                    <details open><summary>Recent procedure history</summary><ol class="hc-history" data-history></ol></details>
                 </section>
                 <aside class="hc-sidebar" aria-label="Expedition controls">
-                    <details open><summary data-watch-summary>Run watch</summary>
-                        <div class="hc-form" data-requirements></div>
+                    <details open class="hc-sheet-controls"><summary data-watch-summary>Run watch</summary>
+                        <p class="hc-hint">Fill only the parts that apply to the procedure you are using. Hidden sections are not required.</p>
+                        <div class="hc-form hc-watch-requirements" data-requirements></div>
                         <form class="hc-form" data-advance>
                             <fieldset data-plan-fields data-focus-group="travel navigation">
-                                <legend>Travel plan</legend>
+                                <legend>Orders for this watch</legend>
                                 <label>Intended direction <select name="direction">${directionOptions()}</select></label>
                                 <label>Pace / travel mode <input name="pace" value="normal"></label>
                                 <label>Party activities <input name="activities" placeholder="scout, forage, map"></label>
@@ -89,7 +105,7 @@ export async function renderExpedition(
                             </fieldset>
 
                             <fieldset data-travel-resolution data-focus-group="travel">
-                                <legend>Resolved travel context</legend>
+                                <legend>Travel / progress</legend>
                                 <p class="hc-hint">Supply the effective movement result for this watch segment. Terrain and route category names are descriptive; the runtime does not infer a multiplier from them.</p>
                                 <div data-fixed-distance><label>Effective distance <input name="effectiveDistance" type="number" min="0" step="any"></label></div>
                                 <div data-variable-distance><label>Expected distance <input name="expectedDistance" type="number" min="0" step="any"></label><label>Actual resolved distance <input name="actualDistance" type="number" min="0" step="any"></label></div>
@@ -99,7 +115,7 @@ export async function renderExpedition(
                             </fieldset>
 
                             <fieldset data-navigation-resolution data-focus-group="navigation">
-                                <legend>Navigation resolution</legend>
+                                <legend>Navigation / veer</legend>
                                 <label>Result <select name="navigationOutcome"><option value="Succeeded">Succeeded</option><option value="Failed">Failed / lost</option></select></label>
                                 <label data-veer-row>Resolved veer steps <input name="veerSteps" type="number" step="1" value="1"></label>
                                 <label>Navigation result source <select name="navigationSource"></select></label>
@@ -107,7 +123,7 @@ export async function renderExpedition(
                             </fieldset>
 
                             <fieldset data-encounter-resolution data-focus-group="encounters">
-                                <legend>Encounter check</legend>
+                                <legend>Encounter</legend>
                                 <label>Resolved outcome <select name="encounterOutcome"><option value="None">No encounter</option><option value="WanderingEncounter">Wandering encounter</option><option value="KeyedLocationDiscovery">Keyed location discovery</option><option value="ManualCustom">Manual / custom interruption</option></select></label>
                                 <label data-encounter-hour>Occurs at hour within watch <input name="encounterHour" type="number" min="0" step="any"></label>
                                 <label data-encounter-location>Keyed location <select name="locationId"><option value="">—</option></select></label>
@@ -117,7 +133,7 @@ export async function renderExpedition(
                             </fieldset>
 
                             <fieldset data-boundary-resolution data-focus-group="navigation">
-                                <legend>Lost boundary decision</legend>
+                                <legend>Lost / boundary decision</legend>
                                 <label><input name="recognizedLost" type="checkbox"> The party recognizes that it is lost</label>
                                 <label><input name="reorient" type="checkbox"> The party reorients</label>
                                 <label>Decision source <select name="boundarySource"></select></label>
@@ -133,7 +149,7 @@ export async function renderExpedition(
                     </details>
 
                     ${mapOnlyTools}
-                    <details><summary>${showMap ? "Procedure and presentation snapshots" : "Procedure snapshot"}</summary><div data-snapshots></div></details>
+                    <details class="hc-optional-reference"><summary>${showMap ? "Procedure and presentation reference" : "Procedure reference"}</summary><div data-snapshots></div></details>
                 </aside>
             </div>
         </section>`;
