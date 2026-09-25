@@ -134,10 +134,10 @@ export async function renderExpedition(
 
                             <fieldset data-travel-resolution data-focus-group="travel">
                                 <legend>Travel / progress</legend>
-                                <p class="hc-hint">Supply the effective movement result for this watch segment. Terrain and route category names are descriptive; the runtime does not infer a multiplier from them.</p>
+                                <p class="hc-hint">Supply the effective movement result for this watch segment. A compatible party movement reference may prefill the base distance; adjust it for the actual pace, terrain, route, mounts, vehicles, or other conditions. The runtime does not infer those modifiers.</p>
                                 <div data-fixed-distance><label>Effective distance <input name="effectiveDistance" type="number" min="0" step="any"></label></div>
                                 <div data-variable-distance><label>Expected distance <input name="expectedDistance" type="number" min="0" step="any"></label><label>Actual resolved distance <input name="actualDistance" type="number" min="0" step="any"></label></div>
-                                <div data-step-distance><label>Resolved hex steps <input name="hexSteps" type="number" min="0" step="1" value="1"></label></div>
+                                <div data-step-distance><label>Resolved hex steps <input name="hexSteps" type="number" min="0" step="1"></label></div>
                                 <label>Travel result source <select name="travelSource"></select></label>
                                 <label>Travel source note <input name="travelNote" placeholder="optional"></label>
                             </fieldset>
