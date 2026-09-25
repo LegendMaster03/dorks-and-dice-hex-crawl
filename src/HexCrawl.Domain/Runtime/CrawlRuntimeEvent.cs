@@ -26,6 +26,8 @@ public enum CrawlRuntimeEventKind
     NavigationDecisionRequired,
     ConditionsReviewRequired,
     DmOverrideApplied,
+    ProcedureResolutionHelperGenerated,
+    ProcedureResolutionHelperConsumed,
     ResolutionProvenanceRecorded
 }
 
