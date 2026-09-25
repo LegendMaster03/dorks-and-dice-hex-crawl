@@ -1,5 +1,6 @@
 import type { HexCrawlApi } from "../../api";
 import { manualEntryResolutionSources } from "./expedition-input-policy";
+import { suggestedWatchDistance } from "./expedition-party-movement";
 import { encounterCheckDue, navigationResolutionDue, watchActionLabel } from "./expedition-workflow";
 import { formatHours } from "../../runtime-view";
 import type {
@@ -142,18 +143,17 @@ export class ExpeditionWatchController {
             checkbox(this.form, "continueAcross").checked = state.activeContinueAcrossBoundaries;
         }
 
-        const scale = runtime.context.hexCenterDistance?.value;
-        if (scale === undefined) {
+        if (!runtime.context.hexCenterDistance) {
             throw new Error("Spatial crawl session is missing hex-center distance.");
         }
-        if (!input(this.form, "effectiveDistance").value) {
-            input(this.form, "effectiveDistance").value = String(scale);
-        }
-        if (!input(this.form, "expectedDistance").value) {
-            input(this.form, "expectedDistance").value = String(scale);
-        }
-        if (!input(this.form, "actualDistance").value) {
-            input(this.form, "actualDistance").value = String(scale);
+        const suggestedDistance = suggestedWatchDistance(runtime);
+        if (suggestedDistance !== null) {
+            if (!input(this.form, "effectiveDistance").value) {
+                input(this.form, "effectiveDistance").value = String(suggestedDistance);
+            }
+            if (!input(this.form, "expectedDistance").value) {
+                input(this.form, "expectedDistance").value = String(suggestedDistance);
+            }
         }
 
         this.syncNavigationVisibility();
