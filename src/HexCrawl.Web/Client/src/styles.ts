@@ -248,6 +248,10 @@ export function ensureStyles(): void {
 
         /* Running-sheet presentation: recognizable paper workflow with modern, optional automation. */
         .hc-run-toolbar { align-items: center; padding: .45rem; border: 1px solid var(--hc-border); border-radius: .65rem; background: var(--hc-surface); }
+        .hc-run-toolbar .hc-active-view { border-color: var(--hc-primary); background: color-mix(in srgb, var(--hc-primary) 12%, var(--hc-surface)); box-shadow: inset 0 -2px 0 var(--hc-primary); }
+        .hc-home-optional-tools { margin-bottom: 1rem; }
+        .hc-home-optional-tools > summary { cursor: pointer; color: var(--hc-text-strong); font-weight: 800; }
+        .hc-home-optional-tools[open] > summary { margin-bottom: .7rem; }
         .hc-run-toolbar-divider { width: 1px; height: 1.8rem; margin: 0 .2rem; background: var(--hc-border); }
         .hc-run-toolbar-label { color: var(--hc-muted); font-size: .76rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
         .hc-run-column { display: grid; gap: .75rem; }
