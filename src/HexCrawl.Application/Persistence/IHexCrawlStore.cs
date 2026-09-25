@@ -1,3 +1,4 @@
+using HexCrawl.Application;
 using HexCrawl.Domain.Knowledge;
 using HexCrawl.Domain.Procedure;
 using HexCrawl.Domain.Runtime;
@@ -33,6 +34,7 @@ public sealed record StoredExpedition(
     DateTimeOffset UpdatedAt)
 {
     public CrawlPartySheet Party { get; init; } = CrawlPartySheet.Empty;
+    public IReadOnlyList<GeneratedProcedureResolution> GeneratedProcedureResolutions { get; init; } = [];
 
     public Guid Id => Runtime.Id;
 
