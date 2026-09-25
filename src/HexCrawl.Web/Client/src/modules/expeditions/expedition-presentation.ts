@@ -30,6 +30,12 @@ export function renderExpeditionStatus(root: HTMLElement, runtime: ExpeditionDet
                     ? "Watch active"
                     : "Ready")
     ];
+    if (state.activePaceKey) {
+        cells.push(statusCell("Pace", state.activePaceKey));
+    }
+    if (state.activeActivities.length > 0) {
+        cells.push(statusCell("Travel duties", state.activeActivities.join(", ")));
+    }
     if (runtime.profile.tracksIntraHexProgress) {
         cells.push(statusCell(
             "Intra-hex progress",
@@ -78,7 +84,7 @@ export function renderExpeditionHistory(root: HTMLElement, runtime: ExpeditionDe
     table.className = "hc-watch-ledger";
     const head = document.createElement("thead");
     const headRow = document.createElement("tr");
-    for (const label of ["Watch", "Elapsed", "Hex", "Record"]) {
+    for (const label of ["Day", "Watch", "Elapsed", "Hex", "Record"]) {
         const cell = document.createElement("th");
         cell.scope = "col";
         cell.textContent = label;
@@ -89,6 +95,8 @@ export function renderExpeditionHistory(root: HTMLElement, runtime: ExpeditionDe
     const body = document.createElement("tbody");
     for (const event of recent) {
         const row = document.createElement("tr");
+        const day = document.createElement("td");
+        day.textContent = String(Math.floor(event.expeditionElapsedHours / 24) + 1);
         const watch = document.createElement("td");
         watch.textContent = String(event.watchNumber);
         const elapsed = document.createElement("td");
@@ -97,7 +105,7 @@ export function renderExpeditionHistory(root: HTMLElement, runtime: ExpeditionDe
         hex.textContent = event.hex ? `${event.hex.q}, ${event.hex.r}` : "—";
         const record = document.createElement("td");
         record.textContent = event.message;
-        row.append(watch, elapsed, hex, record);
+        row.append(day, watch, elapsed, hex, record);
         body.append(row);
     }
     table.append(head, body);
