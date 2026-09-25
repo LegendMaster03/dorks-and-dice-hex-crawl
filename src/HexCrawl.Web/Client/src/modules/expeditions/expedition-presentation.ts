@@ -1,7 +1,7 @@
 import { pauseInstruction, watchPhase } from "./expedition-workflow";
 import { buildWatchLedger } from "./expedition-watch-ledger";
 import { directionLabel, formatDistance, formatHours } from "../../runtime-view";
-import type { ExpeditionDetail, Overworld, RuntimeProfile, SpatialRuntimeExpedition } from "../../types";
+import type { DiceRollFormula, ExpeditionDetail, Overworld, RuntimeProfile, SpatialRuntimeExpedition } from "../../types";
 import { prettyEnum, required, statusCell } from "../../ui/dom";
 
 export function renderExpeditionStatus(root: HTMLElement, runtime: ExpeditionDetail): void {
@@ -276,9 +276,7 @@ function procedureHelperLines(profile: RuntimeProfile): string[] {
         : ["Automatic helpers: configured components are not applicable to the active procedure mechanics."];
 }
 
-function formatDiceFormula(formula: RuntimeProfile["resolutionHelpers"] extends infer _T
-    ? { diceCount: number; dieSides: number; modifier: number }
-    : never): string {
+function formatDiceFormula(formula: DiceRollFormula): string {
     const modifier = formula.modifier > 0
         ? `+${formula.modifier}`
         : formula.modifier < 0
