@@ -8,7 +8,7 @@ export function procedureProfileSummary(profile: RuntimeProfile): string {
             ? "fixed distance"
             : "resolved variable distance"} · ${profile.usesNavigationChecks
         ? "navigation checks"
-        : "no navigation checks"} · encounters ${profile.encounterCadence.toLowerCase()}`;
+        : "no navigation checks"} · encounters ${prettyWords(profile.encounterCadence)}`;
 }
 
 export function procedureMechanicLines(profile: RuntimeProfile): string[] {
