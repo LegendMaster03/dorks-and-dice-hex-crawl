@@ -241,6 +241,79 @@ public sealed class ExpeditionWorkbenchTests
     }
 
     [Fact]
+    public async Task FocusedEncounterResolutionSatisfiesUpcomingPerWatchCheck()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var (core, workbench) = await database.ServicesAsync();
+        var assistants = await database.AssistantServiceAsync();
+        var world = await core.CreateOverworldAsync("alice", WorldCommand());
+        var profile = CrawlProcedureProfile.SimplifiedFixedDistance() with
+        {
+            Name = "Shared encounter cadence",
+            EncounterCadence = EncounterCheckCadence.PerWatch
+        };
+        var expedition = await workbench.StartAsync(
+            world.World.Id,
+            "alice",
+            new StartExpeditionWorkbenchCommand(
+                "Shared cadence state",
+                profile.Key,
+                "exploration-map",
+                new HexCoordinate(0, 0),
+                profile));
+
+        expedition = await workbench.AdvanceAsync(expedition.State.Id, "alice", new AdvanceExpeditionWorkbenchCommand
+        {
+            ExpectedVersion = expedition.Version,
+            IntendedDirection = 0,
+            EffectiveDistance = 1,
+            ContinueAcrossBoundaries = true,
+            TravelResolutionSource = ResolutionSource.ProcedureDefault,
+            EncounterResolutionSource = ResolutionSource.ManualRoll,
+            EncounterOutcome = EncounterOutcomeKind.None
+        });
+        Assert.Equal(1, expedition.State.CompletedWatches);
+        Assert.True(ExpeditionProcedureRequirements.IsEncounterCheckDue(profile, expedition.State));
+
+        expedition = await assistants.RecordEncounterCadenceAsync(
+            expedition.State.Id,
+            "alice",
+            new EncounterCadenceAssistantCommand
+            {
+                ExpectedVersion = expedition.Version,
+                Outcome = EncounterOutcomeKind.WanderingEncounter,
+                ResolutionSource = ResolutionSource.ManualRoll,
+                Note = "focused assistant result"
+            });
+
+        Assert.False(ExpeditionProcedureRequirements.IsEncounterCheckDue(profile, expedition.State));
+        Assert.Single(
+            expedition.State.History,
+            item => item.Kind == CrawlRuntimeEventKind.EncounterCheckPerformed
+                && item.WatchNumber == 2);
+
+        expedition = await workbench.AdvanceAsync(expedition.State.Id, "alice", new AdvanceExpeditionWorkbenchCommand
+        {
+            ExpectedVersion = expedition.Version,
+            IntendedDirection = 0,
+            EffectiveDistance = 1,
+            ContinueAcrossBoundaries = true,
+            TravelResolutionSource = ResolutionSource.ProcedureDefault
+        });
+
+        Assert.Equal(2, expedition.State.CompletedWatches);
+        Assert.Single(
+            expedition.State.History,
+            item => item.Kind == CrawlRuntimeEventKind.EncounterCheckPerformed
+                && item.WatchNumber == 2);
+        Assert.DoesNotContain(
+            expedition.State.History,
+            item => item.Kind == CrawlRuntimeEventKind.EncounterCheckPerformed
+                && item.WatchNumber == 2
+                && item.Message.Contains("None", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task LegacyCustomEncounterCadenceSurvivesRestartAndRetainsPerWatchBehavior()
     {
         await using var database = await TestDatabase.CreateAsync();
@@ -430,6 +503,15 @@ public sealed class ExpeditionWorkbenchTests
             var store = new SqliteHexCrawlStore(database.ConnectionString);
             await store.InitializeAsync();
             return database;
+        }
+
+        public async Task<ExpeditionAssistantService> AssistantServiceAsync()
+        {
+            var store = new SqliteHexCrawlStore(ConnectionString);
+            await store.InitializeAsync();
+            var core = new HexCrawlService(store);
+            var resolver = new CrawlSessionContextResolver(core);
+            return new ExpeditionAssistantService(store, core, resolver);
         }
 
         public async Task<(HexCrawlService Core, ExpeditionWorkbenchService Workbench)> ServicesAsync()
