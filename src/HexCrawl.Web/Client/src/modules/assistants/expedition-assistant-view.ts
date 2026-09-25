@@ -201,19 +201,20 @@ export async function renderExpeditionAssistant(
             const idle = submit.textContent ?? "Save";
             submit.textContent = "Saving…";
             try {
-                const next = mode === "travel"
-                    ? runtime.expedition.isSpatial
+                let next: ExpeditionDetail;
+                if (mode === "travel") {
+                    next = runtime.expedition.isSpatial
                         ? await api.recordTravelAssistant(runtime.id, travelRequest(form, runtime))
-                        : await api.recordWatchAssistant(runtime.id, nonSpatialWatchRequest(form, runtime))
-                    : mode === "navigation"
-                        ? await api.recordNavigationAssistant(runtime.id, navigationRequest(form, runtime))
-                        : (() => {
-                            const request = encounterRequest(form, runtime);
-                            lastEncounterSelection = request.outcome === "None"
-                                ? null
-                                : { outcome: request.outcome, note: request.note ?? null };
-                            return api.recordEncounterAssistant(runtime.id, request);
-                        })();
+                        : await api.recordWatchAssistant(runtime.id, nonSpatialWatchRequest(form, runtime));
+                } else if (mode === "navigation") {
+                    next = await api.recordNavigationAssistant(runtime.id, navigationRequest(form, runtime));
+                } else {
+                    const request = encounterRequest(form, runtime);
+                    lastEncounterSelection = request.outcome === "None"
+                        ? null
+                        : { outcome: request.outcome, note: request.note ?? null };
+                    next = await api.recordEncounterAssistant(runtime.id, request);
+                }
                 if (!disposed) apply(next);
             } catch (value) {
                 if (!disposed) showUiError(error, value);

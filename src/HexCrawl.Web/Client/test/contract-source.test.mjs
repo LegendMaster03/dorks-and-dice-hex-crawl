@@ -143,7 +143,7 @@ test("world editor removes nested control scrolling without changing narrow-layo
     const view = fs.readFileSync(path.join(sourceDir, "modules/worlds/world-editor-view.ts"), "utf8");
     const styles = fs.readFileSync(path.join(sourceDir, "styles.ts"), "utf8");
     assert.match(view, /hc-world-editor/);
-    assert.match(styles, /\.hc-world-editor \.hc-sidebar \{ max-height: none; overflow: visible;/);
+    assert.match(styles, /\.hc-sidebar \{ display: grid; gap: \.6rem; max-height: none; overflow: visible;/);
     assert.match(styles, /\.hc-world-editor \.hc-map-panel \{ position: sticky; top: \.75rem; \}/);
     assert.match(styles, /@media \(max-width: 820px\)[\s\S]*\.hc-world-editor \.hc-map-panel \{ position: static; \}/);
 });
