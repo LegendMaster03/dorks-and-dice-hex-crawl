@@ -30,7 +30,27 @@ test("conditional workflow hides resolutions that are not due", () => {
 
     const watch = runtime();
     assert.equal(encounterCheckDue(watch), true);
+    const resolvedWatch = {
+        ...watch,
+        history: [{ kind: "EncounterCheckPerformed", watchNumber: 1, expeditionElapsedHours: 0 }]
+    };
+    assert.equal(encounterCheckDue(resolvedWatch), false);
+    const followingWatch = {
+        ...resolvedWatch,
+        expedition: { ...resolvedWatch.expedition, completedWatches: 1 }
+    };
+    assert.equal(encounterCheckDue(followingWatch), true);
     assert.equal(navigationResolutionDue(watch, false, false), true);
+    const navigationResolved = {
+        ...watch,
+        history: [{ kind: "NavigationCheckResolved", watchNumber: 1, expeditionElapsedHours: 0 }]
+    };
+    assert.equal(navigationResolutionDue(navigationResolved, false, false), false);
+    const nextNavigationWatch = {
+        ...navigationResolved,
+        expedition: { ...navigationResolved.expedition, completedWatches: 1 }
+    };
+    assert.equal(navigationResolutionDue(nextNavigationWatch, false, false), true);
     assert.equal(navigationResolutionDue(watch, true, false), false);
     assert.equal(navigationResolutionDue(watch, false, true), false);
 });

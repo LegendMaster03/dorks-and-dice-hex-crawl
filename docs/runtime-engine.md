@@ -105,7 +105,7 @@ An expedition record also persists pause reason and remaining watch time, becaus
 
 `CrawlSessionService` creates true standalone `AbstractHex` and `NonSpatial` sessions without creating an Overworld. `CrawlSessionContextResolver` resolves world-bound scale from the actual Overworld, abstract-hex scale from the persisted context, and no spatial context for non-spatial sessions.
 
-`ExpeditionWorkbenchService` is the full-watch application orchestration layer over the spatial engine. It starts expeditions from procedure/presentation presets, persists customized procedure snapshots, determines whether per-day encounter resolution is due, preserves legacy `Custom` cadence behavior, builds independent resolved-input provenance, calls `CrawlRuntimeEngine`, composes world/knowledge projection, applies presentation projection, and saves with optimistic concurrency.
+`ExpeditionWorkbenchService` is the full-watch application orchestration layer over the spatial engine. It starts expeditions from procedure/presentation presets, persists customized procedure snapshots, determines whether the configured encounter cadence is still due for the current watch/day, preserves legacy `Custom` cadence behavior, builds independent resolved-input provenance, calls `CrawlRuntimeEngine`, composes world/knowledge projection, applies presentation projection, and saves with optimistic concurrency. Focused Encounter Cadence and Navigation resolutions are authoritative for that same upcoming watch/day. Reopening the full workbench reuses those persisted resolutions instead of asking for or recording a second check; an explicitly supplied new navigation resolution can still override the retained focused result.
 
 `ExpeditionAssistantService` exposes independent manual bookkeeping mutations over the same persisted session. Spatial travel/watch, navigation, and encounter-cadence assistants each mutate only their owned state/history and do not silently resolve the other subsystems. Spatial focused mutations are blocked while a full-workbench `ActiveWatchState` exists so a partial full-watch transition can not be corrupted by an independent helper. Non-spatial sessions instead use the dedicated watch mutation, which advances only procedure time, persists a lightweight active watch for partial/resume behavior, records provenance/DM overrides, and automatically completes the watch when its configured duration is fully consumed.
 
@@ -115,7 +115,7 @@ Every runtime mutation carries an optimistic `ExpectedVersion`. Two stale browse
 
 Grid geometry can not be changed after an expedition exists for the world. This prevents reload from reinterpreting persisted hex/spatial state against a different coordinate system.
 
-The standalone container smoke now proves a partially completed watch survives a full container restart and resumes as watch 1 with its remaining two hours rather than becoming a new watch.
+The standalone container smoke now proves a partially completed watch survives a full container restart and resumes as watch 1 with its remaining two hours rather than becoming a new watch. A boundary crossed at the exact end of a watch completes the watch directly; condition review is only required when travel time remains after the crossing.
 
 See `docs/dm-expedition-workbench.md` for the complete workbench ownership and presentation model.
 

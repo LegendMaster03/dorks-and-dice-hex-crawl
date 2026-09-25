@@ -143,11 +143,9 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
         var boundaryProvenance = Provenance(command.BoundaryResolutionSource, command.ResolutionSource, command.BoundaryResolutionNote, command.DmOverrideNote);
 
         var encounterDue = ExpeditionProcedureRequirements.IsEncounterCheckDue(profile, state);
-        var runtimeProfile = profile.EncounterCadence == EncounterCheckCadence.PerDay
-            && state.ActiveWatch is null
-            && !encounterDue
-                ? profile with { EncounterCadence = EncounterCheckCadence.None }
-                : profile;
+        var runtimeProfile = state.ActiveWatch is null && !encounterDue
+            ? profile with { EncounterCadence = EncounterCheckCadence.None }
+            : profile;
 
         var travel = BuildTravel(profile, runtimeContext.HexCenterDistance.Unit, command, travelProvenance);
         var navigation = BuildNavigation(profile, state, command, navigationProvenance);
@@ -299,6 +297,11 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
             || !profile.UsesNavigationChecks
             || command.SuppressesNavigationCheck
             || command.DeliberateDoubleBack)
+        {
+            return null;
+        }
+        if (!ExpeditionProcedureRequirements.IsNavigationResolutionPotentiallyRequired(profile, state)
+            && command.NavigationOutcome is null)
         {
             return null;
         }
