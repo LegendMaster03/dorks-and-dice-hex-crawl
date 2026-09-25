@@ -158,15 +158,15 @@ export async function renderExpedition(
 
                             <fieldset data-navigation-resolution data-focus-group="navigation">
                                 <legend>Navigation / veer</legend>
-                                <label>Result <select name="navigationOutcome"><option value="Succeeded">Succeeded</option><option value="Failed">Failed / lost</option></select></label>
-                                <label data-veer-row>Resolved veer steps <input name="veerSteps" type="number" step="1" value="1"></label>
+                                <label>Result <select name="navigationOutcome"><option value="">Select resolved result</option><option value="Succeeded">Succeeded</option><option value="Failed">Failed / lost</option></select></label>
+                                <label data-veer-row>Resolved veer steps <input name="veerSteps" type="number" step="1" placeholder="+1 or -1"></label>
                                 <label>Navigation result source <select name="navigationSource"></select></label>
                                 <label>Navigation source note <input name="navigationNote" placeholder="optional"></label>
                             </fieldset>
 
                             <fieldset data-encounter-resolution data-focus-group="encounters">
                                 <legend>Encounter</legend>
-                                <label>Resolved outcome <select name="encounterOutcome"><option value="None">No encounter</option><option value="WanderingEncounter">Wandering encounter</option><option value="KeyedLocationDiscovery">Keyed location discovery</option><option value="ManualCustom">Manual / custom interruption</option></select></label>
+                                <label>Resolved outcome <select name="encounterOutcome"><option value="">Select resolved outcome</option><option value="None">No encounter</option><option value="WanderingEncounter">Wandering encounter</option><option value="KeyedLocationDiscovery">Keyed location discovery</option><option value="ManualCustom">Manual / custom interruption</option></select></label>
                                 <label data-encounter-hour>Occurs at hour within watch <input name="encounterHour" type="number" min="0" step="any"></label>
                                 <label data-encounter-location>Keyed location <select name="locationId"><option value="">—</option></select></label>
                                 <label>Encounter note <input name="encounterNote" placeholder="optional"></label>
