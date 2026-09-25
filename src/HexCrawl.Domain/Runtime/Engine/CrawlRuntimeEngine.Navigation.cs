@@ -30,6 +30,14 @@ public sealed partial class CrawlRuntimeEngine
             return state;
         }
 
+        if (resolved is null
+            && state.History.Any(runtimeEvent =>
+                runtimeEvent.Kind == CrawlRuntimeEventKind.NavigationCheckResolved
+                && runtimeEvent.WatchNumber == watchNumber))
+        {
+            return state;
+        }
+
         var navigation = resolved
             ?? throw new InvalidOperationException("This watch requires an explicit resolved navigation outcome.");
         if (navigation.Outcome == NavigationCheckOutcome.NotRequired)
