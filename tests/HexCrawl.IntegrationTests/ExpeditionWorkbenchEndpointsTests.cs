@@ -219,6 +219,123 @@ public sealed class ExpeditionWorkbenchEndpointsTests
     }
 
     [Fact]
+    public async Task FocusedEncounterResolutionPreventsDuplicateWorkbenchCheck()
+    {
+        var database = TestWebHost.NewDatabasePath();
+        try
+        {
+            using var factory = TestWebHost.Create(database);
+            using var client = factory.CreateClient();
+            var world = await CreateWorld(client);
+            var worldId = world.GetProperty("id").GetGuid();
+
+            using var startResponse = await client.PostAsJsonAsync(
+                $"/api/overworlds/{worldId:D}/expeditions",
+                new
+                {
+                    name = "Shared encounter resolution",
+                    procedureKey = "simple-fixed-distance",
+                    presentationKey = "exploration-map",
+                    startHex = new { q = 0, r = 0 },
+                    procedureSnapshot = new
+                    {
+                        key = "simple-fixed-distance",
+                        name = "Per-watch shared encounter state",
+                        watchHours = 4,
+                        travelResolution = "ContinuousDistance",
+                        actualDistanceResolution = "Fixed",
+                        encounterCadence = "PerWatch",
+                        usesNavigationChecks = false,
+                        usesPersistentVeer = false,
+                        tracksIntraHexProgress = true,
+                        directionChangesCostProgress = false,
+                        supportsDeliberateDoubleBack = false,
+                        startingExitProgressFactor = 0.5,
+                        nearExitProgressFactor = 0.5,
+                        farExitProgressFactor = 1.0,
+                        backExitProgressFactor = 0.5,
+                        directionChangeProgressCostFactor = 0.0
+                    }
+                });
+            startResponse.EnsureSuccessStatusCode();
+            var expedition = await startResponse.Content.ReadFromJsonAsync<JsonElement>();
+            var expeditionId = expedition.GetProperty("id").GetGuid();
+
+            using var firstWatch = await client.PostAsJsonAsync(
+                $"/api/expeditions/{expeditionId:D}/advance",
+                new
+                {
+                    expectedVersion = expedition.GetProperty("version").GetInt64(),
+                    intendedDirection = 0,
+                    paceKey = "normal",
+                    activities = Array.Empty<string>(),
+                    navigationAidKey = "none",
+                    suppressesNavigationCheck = false,
+                    resetsVeerAtBoundary = false,
+                    effectiveDistance = 1,
+                    encounterOutcome = "None",
+                    encounterResolutionSource = "ManualRoll",
+                    resolutionSource = "ProcedureDefault",
+                    deliberateDoubleBack = false,
+                    continueAcrossBoundaries = true
+                });
+            firstWatch.EnsureSuccessStatusCode();
+            expedition = await firstWatch.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(1, expedition.GetProperty("expedition").GetProperty("completedWatches").GetInt32());
+
+            using var focusedEncounter = await client.PostAsJsonAsync(
+                $"/api/expeditions/{expeditionId:D}/assistants/encounters",
+                new
+                {
+                    expectedVersion = expedition.GetProperty("version").GetInt64(),
+                    outcome = "WanderingEncounter",
+                    resolutionSource = "ManualRoll",
+                    note = "QA cadence result"
+                });
+            focusedEncounter.EnsureSuccessStatusCode();
+            expedition = await focusedEncounter.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Single(
+                expedition.GetProperty("history").EnumerateArray(),
+                item => item.GetProperty("kind").GetString() == "EncounterCheckPerformed"
+                    && item.GetProperty("watchNumber").GetInt32() == 2);
+
+            using var secondWatch = await client.PostAsJsonAsync(
+                $"/api/expeditions/{expeditionId:D}/advance",
+                new
+                {
+                    expectedVersion = expedition.GetProperty("version").GetInt64(),
+                    intendedDirection = 0,
+                    paceKey = "normal",
+                    activities = Array.Empty<string>(),
+                    navigationAidKey = "none",
+                    suppressesNavigationCheck = false,
+                    resetsVeerAtBoundary = false,
+                    effectiveDistance = 1,
+                    resolutionSource = "ProcedureDefault",
+                    deliberateDoubleBack = false,
+                    continueAcrossBoundaries = true
+                });
+            secondWatch.EnsureSuccessStatusCode();
+            expedition = await secondWatch.Content.ReadFromJsonAsync<JsonElement>();
+
+            Assert.Equal(2, expedition.GetProperty("expedition").GetProperty("completedWatches").GetInt32());
+            Assert.Single(
+                expedition.GetProperty("history").EnumerateArray(),
+                item => item.GetProperty("kind").GetString() == "EncounterCheckPerformed"
+                    && item.GetProperty("watchNumber").GetInt32() == 2);
+            Assert.DoesNotContain(
+                expedition.GetProperty("history").EnumerateArray(),
+                item => item.GetProperty("kind").GetString() == "EncounterCheckPerformed"
+                    && item.GetProperty("watchNumber").GetInt32() == 2
+                    && item.GetProperty("message").GetString()!.Contains("resolved as None", StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            TestWebHost.DeleteDatabase(database);
+        }
+    }
+
+    [Fact]
     public async Task AbstractHexSessionPersistsAndAdvancesWithoutAnyOverworld()
     {
         var database = TestWebHost.NewDatabasePath();
