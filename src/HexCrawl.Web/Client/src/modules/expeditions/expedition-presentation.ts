@@ -1,7 +1,7 @@
 import { pauseInstruction, watchPhase } from "./expedition-workflow";
 import { buildWatchLedger } from "./expedition-watch-ledger";
 import { directionLabel, formatDistance, formatHours } from "../../runtime-view";
-import type { ExpeditionDetail, Overworld, SpatialRuntimeExpedition } from "../../types";
+import type { ExpeditionDetail, Overworld, RuntimeProfile, SpatialRuntimeExpedition } from "../../types";
 import { prettyEnum, required, statusCell } from "../../ui/dom";
 
 export function renderExpeditionStatus(root: HTMLElement, runtime: ExpeditionDetail): void {
@@ -200,7 +200,16 @@ export function renderExpeditionSnapshots(
 
     const procedure = document.createElement("p");
     procedure.textContent =
-        `${runtime.profile.name} (${runtime.profile.key}) · ${runtime.profile.watchHours}h watch · ${prettyEnum(runtime.profile.travelResolution)} · ${prettyEnum(runtime.profile.actualDistanceResolution)} · encounters ${prettyEnum(runtime.profile.encounterCadence)} · navigation ${runtime.profile.usesNavigationChecks ? "enabled" : "disabled"} · veer ${runtime.profile.usesPersistentVeer ? "persistent" : "non-persistent"}.`;
+        `${runtime.profile.name} (${runtime.profile.key}) · persisted procedure mechanics`;
+
+    const mechanics = document.createElement("ul");
+    mechanics.className = "hc-procedure-mechanics";
+    for (const line of procedureMechanicLines(runtime.profile)) {
+        const item = document.createElement("li");
+        item.textContent = line;
+        mechanics.append(item);
+    }
+
     const note = document.createElement("p");
     note.className = "hc-hint";
 
@@ -209,13 +218,81 @@ export function renderExpeditionSnapshots(
         presentation.textContent =
             `${runtime.presentation.name} (${runtime.presentation.key}) · grid ${runtime.presentation.playerGrid.toLowerCase()} · terrain ${prettyEnum(runtime.presentation.terrainMode)} · automation ${prettyEnum(runtime.presentation.automationMode)}.`;
         note.textContent =
-            "Both are stored snapshots for this expedition. Catalog changes do not reconstruct active expedition behavior.";
-        host.append(procedure, presentation, note);
+            "The procedure mechanics and presentation policy are stored snapshots for this expedition. Catalog changes do not reconstruct active expedition behavior.";
+        host.append(procedure, mechanics, presentation, note);
     } else {
         note.textContent =
             "The tracker uses the persisted crawl procedure snapshot. Map presentation remains owned by the full map workbench.";
-        host.append(procedure, note);
+        host.append(procedure, mechanics, note);
     }
+}
+
+function procedureMechanicLines(profile: RuntimeProfile): string[] {
+    const travel = profile.travelResolution === "HexSteps"
+        ? "Travel: resolved hex-step movement."
+        : profile.actualDistanceResolution === "VariableResolved"
+            ? "Travel: continuous distance with a separately resolved expected and actual distance."
+            : "Travel: continuous distance with a fixed resolved movement amount.";
+
+    const navigation = profile.usesNavigationChecks
+        ? `Navigation: checks enabled; veer is ${profile.usesPersistentVeer ? "persistent" : "not persistent"}; deliberate single-hex double-back ${profile.supportsDeliberateDoubleBack ? "supported" : "not supported"}.`
+        : "Navigation: procedure checks disabled.";
+
+    const progress = profile.tracksIntraHexProgress
+        ? `Progress: intra-hex tracking enabled; exit factors start ${formatNumber(profile.startingExitProgressFactor)}, near ${formatNumber(profile.nearExitProgressFactor)}, far ${formatNumber(profile.farExitProgressFactor)}, back ${formatNumber(profile.backExitProgressFactor)}${profile.directionChangesCostProgress ? `; direction-change cost factor ${formatNumber(profile.directionChangeProgressCostFactor)}` : ""}.`
+        : "Progress: discrete hex steps; no intra-hex progress tracking.";
+
+    return [
+        `Watch: ${formatHours(profile.watchHours)}; encounter cadence ${prettyEnum(profile.encounterCadence)}.`,
+        travel,
+        navigation,
+        progress,
+        ...procedureHelperLines(profile)
+    ];
+}
+
+function procedureHelperLines(profile: RuntimeProfile): string[] {
+    const helpers = profile.resolutionHelpers;
+    if (!helpers) return ["Automatic helpers: none configured."];
+
+    const lines: string[] = [];
+    if (helpers.travel
+        && profile.travelResolution === "ContinuousDistance"
+        && profile.actualDistanceResolution === "VariableResolved") {
+        lines.push(
+            `Travel helper: actual distance = expected distance × ${formatDiceFormula(helpers.travel.roll)} total × ${formatNumber(helpers.travel.distanceFactorPerRollPoint)}.`);
+    }
+    if (helpers.navigation && profile.usesNavigationChecks) {
+        lines.push(
+            `Navigation helper: ${formatDiceFormula(helpers.navigation.checkRoll)} + the entered situational modifier vs. the DM-confirmed DC; a failed check uses the DM-confirmed non-zero veer.`);
+    }
+    if (helpers.encounter && profile.encounterCadence !== "None") {
+        lines.push(
+            `Encounter helper: ${formatDiceFormula(helpers.encounter.checkRoll)}; wandering on ${formatResultSet(helpers.encounter.wanderingResults)}, keyed location on ${formatResultSet(helpers.encounter.keyedLocationResults)}; encounter time uses 1d${helpers.encounter.timingSlots} equal watch slots.`);
+    }
+
+    return lines.length > 0
+        ? lines
+        : ["Automatic helpers: configured components are not applicable to the active procedure mechanics."];
+}
+
+function formatDiceFormula(formula: RuntimeProfile["resolutionHelpers"] extends infer _T
+    ? { diceCount: number; dieSides: number; modifier: number }
+    : never): string {
+    const modifier = formula.modifier > 0
+        ? `+${formula.modifier}`
+        : formula.modifier < 0
+            ? String(formula.modifier)
+            : "";
+    return `${formula.diceCount}d${formula.dieSides}${modifier}`;
+}
+
+function formatResultSet(values: number[]): string {
+    return values.length > 0 ? values.join(", ") : "no configured results";
+}
+
+function formatNumber(value: number): string {
+    return Number.isInteger(value) ? String(value) : value.toFixed(3).replace(/0+$/, "").replace(/\.$/, "");
 }
 
 export function renderNonSpatialTracker(

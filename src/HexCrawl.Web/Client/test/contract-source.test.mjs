@@ -247,6 +247,24 @@ test("wide world-bound workbench places map beside current sheet while ledger re
 });
 
 
+test("custom procedure snapshots drop helper components that no longer match the selected mechanics", () => {
+    const setup = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-setup.ts"), "utf8");
+    assert.match(setup, /compatibleResolutionHelpers/);
+    assert.match(setup, /travelResolution === "ContinuousDistance"[\s\S]{0,120}actualDistanceResolution === "VariableResolved"/);
+    assert.match(setup, /navigation: usesNavigationChecks \? helpers\.navigation : null/);
+    assert.match(setup, /encounter: encounterCadence === "None" \? null : helpers\.encounter/);
+});
+
+test("procedure reference exposes the mechanics and applicable automatic helper formulas in force", () => {
+    const presentation = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-presentation.ts"), "utf8");
+    assert.match(presentation, /procedureMechanicLines/);
+    assert.match(presentation, /exit factors start/);
+    assert.match(presentation, /actual distance = expected distance/);
+    assert.match(presentation, /situational modifier vs\. the DM-confirmed DC/);
+    assert.match(presentation, /encounter time uses 1d/);
+    assert.match(presentation, /configured components are not applicable to the active procedure mechanics/);
+});
+
 test("running sheet wires server-verified automatic procedure resolution through the watch controller", () => {
     const view = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-view.ts"), "utf8");
     const controller = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-watch-controller.ts"), "utf8");

@@ -138,13 +138,21 @@ export async function enhanceExpeditionSetup(
 }
 
 function profileFromForm(form: HTMLFormElement, preset: RuntimeProfile): RuntimeProfile {
+    const travelResolution =
+        select(form, "travelResolution").value as RuntimeProfile["travelResolution"];
+    const actualDistanceResolution =
+        select(form, "actualDistanceResolution").value as RuntimeProfile["actualDistanceResolution"];
+    const encounterCadence =
+        select(form, "encounterCadence").value as RuntimeProfile["encounterCadence"];
+    const usesNavigationChecks = checkbox(form, "usesNavigationChecks").checked;
+
     return {
         ...preset,
         watchHours: numeric(numberInput(form, "watchHours")),
-        travelResolution: select(form, "travelResolution").value as RuntimeProfile["travelResolution"],
-        actualDistanceResolution: select(form, "actualDistanceResolution").value as RuntimeProfile["actualDistanceResolution"],
-        encounterCadence: select(form, "encounterCadence").value as RuntimeProfile["encounterCadence"],
-        usesNavigationChecks: checkbox(form, "usesNavigationChecks").checked,
+        travelResolution,
+        actualDistanceResolution,
+        encounterCadence,
+        usesNavigationChecks,
         usesPersistentVeer: checkbox(form, "usesPersistentVeer").checked,
         tracksIntraHexProgress: checkbox(form, "tracksIntraHexProgress").checked,
         directionChangesCostProgress: checkbox(form, "directionChangesCostProgress").checked,
@@ -153,8 +161,36 @@ function profileFromForm(form: HTMLFormElement, preset: RuntimeProfile): Runtime
         nearExitProgressFactor: numeric(numberInput(form, "nearExitProgressFactor")),
         farExitProgressFactor: numeric(numberInput(form, "farExitProgressFactor")),
         backExitProgressFactor: numeric(numberInput(form, "backExitProgressFactor")),
-        directionChangeProgressCostFactor: numeric(numberInput(form, "directionChangeProgressCostFactor"))
+        directionChangeProgressCostFactor: numeric(numberInput(form, "directionChangeProgressCostFactor")),
+        resolutionHelpers: compatibleResolutionHelpers(
+            preset.resolutionHelpers,
+            travelResolution,
+            actualDistanceResolution,
+            usesNavigationChecks,
+            encounterCadence)
     };
+}
+
+function compatibleResolutionHelpers(
+    helpers: RuntimeProfile["resolutionHelpers"],
+    travelResolution: RuntimeProfile["travelResolution"],
+    actualDistanceResolution: RuntimeProfile["actualDistanceResolution"],
+    usesNavigationChecks: boolean,
+    encounterCadence: RuntimeProfile["encounterCadence"]): RuntimeProfile["resolutionHelpers"] {
+    if (!helpers) return null;
+
+    const compatible = {
+        travel: travelResolution === "ContinuousDistance"
+            && actualDistanceResolution === "VariableResolved"
+            ? helpers.travel
+            : null,
+        navigation: usesNavigationChecks ? helpers.navigation : null,
+        encounter: encounterCadence === "None" ? null : helpers.encounter
+    };
+
+    return compatible.travel || compatible.navigation || compatible.encounter
+        ? compatible
+        : null;
 }
 
 function selectedProfile(profiles: RuntimeProfile[], key: string): RuntimeProfile {
