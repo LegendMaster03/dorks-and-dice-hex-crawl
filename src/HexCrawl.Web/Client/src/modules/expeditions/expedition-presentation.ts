@@ -270,7 +270,10 @@ export function renderNonSpatialTracker(
                         </div>
                         <div data-history></div>
                     </section>
-                    <p class="hc-hint">${escapeHtml(runtime.profile.name)} · encounters ${escapeHtml(prettyEnum(runtime.profile.encounterCadence))}</p>
+                    <details class="hc-optional-reference">
+                        <summary>Procedure reference</summary>
+                        <div data-snapshots></div>
+                    </details>
                 </section>
                 <section class="hc-panel">
                     <h2>Optional tools</h2>
@@ -284,6 +287,7 @@ export function renderNonSpatialTracker(
         </section>`;
 
     renderExpeditionHistory(root, runtime);
+    renderExpeditionSnapshots(root, runtime, false);
 
     required<HTMLButtonElement>(root, "[data-home]")
         .addEventListener("click", () => navigate("/"));

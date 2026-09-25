@@ -170,6 +170,13 @@ test("non-spatial running-sheet ledger omits spatial-only route and navigation c
     assert.match(presentation, /if \(spatial\) cells\.push\(textCell\(entry\.navigation\)\)/);
 });
 
+test("non-spatial running sheet exposes the same persisted procedure mechanics reference", () => {
+    const presentation = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-presentation.ts"), "utf8");
+    assert.match(presentation, /<summary>Procedure reference<\/summary>/);
+    assert.match(presentation, /<div data-snapshots><\/div>/);
+    assert.match(presentation, /renderExpeditionHistory\(root, runtime\);\s*renderExpeditionSnapshots\(root, runtime, false\);/);
+});
+
 test("expedition workbench keeps presentation separate from mutation orchestration", () => {
     const view = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-view.ts"), "utf8");
     const presentation = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-presentation.ts"), "utf8");
