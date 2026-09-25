@@ -1,4 +1,4 @@
-import { formatHours } from "./runtime-view";
+import { formatHours } from "./runtime-view.js";
 import type { DiceRollFormula, RuntimeProfile } from "./types";
 
 export function procedureProfileSummary(profile: RuntimeProfile): string {
