@@ -198,6 +198,7 @@ public sealed record ExpeditionWorkbenchContract(
     RuntimePauseReason? PauseReason,
     double RemainingWatchHours,
     WorkbenchExpeditionStateContract Expedition,
+    ExpeditionPartyContract Party,
     IReadOnlyList<HexCoordinate> KnownHexes,
     IReadOnlyList<KnowledgeEntryContract> Knowledge,
     IReadOnlyList<RuntimeEventContract> History)
@@ -223,6 +224,7 @@ public sealed record ExpeditionWorkbenchContract(
             expedition.PauseReason,
             expedition.RemainingWatchTime.TotalHours,
             WorkbenchExpeditionStateContract.From(expedition.Runtime),
+            ExpeditionPartyContract.From(expedition.Party),
             expedition.Knowledge?.KnownHexes ?? [],
             expedition.Knowledge?.Entries.Values
                 .OrderBy(item => item.SubjectType)
