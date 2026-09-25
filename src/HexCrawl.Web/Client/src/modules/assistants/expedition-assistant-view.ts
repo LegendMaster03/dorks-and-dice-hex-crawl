@@ -254,7 +254,8 @@ function encounterForm(runtime: ExpeditionDetail): string {
     return `
         <p class="hc-hint">${assistantEncounterCheckDue(runtime) ? "The configured cadence indicates a check is due." : "The configured cadence does not currently indicate a new check is due. You may still record a manual check."}</p>
         ${automaticHelperNote}
-        <label>Outcome <select name="outcome">
+        <label>Outcome <select name="outcome" required>
+            <option value="">Select resolved outcome</option>
             <option value="None">No encounter</option>
             <option value="WanderingEncounter">Wandering encounter</option>
             <option value="ManualCustom">Manual / custom encounter</option>
@@ -266,15 +267,16 @@ function encounterForm(runtime: ExpeditionDetail): string {
 
 function provenanceFields(prefix: string): string {
     return `
-        <label>Result source <select name="source" data-source></select></label>
+        <label>Result source <select name="source" data-source required></select></label>
         <label>Source note <input name="resolutionNote" placeholder="optional"></label>
         ${prefix === "encounter" ? "" : '<label>Bookkeeping note <input name="note" placeholder="optional"></label>'}`;
 }
 
 function populateSources(form: HTMLFormElement): void {
     const source = select(form, "source");
+    source.append(option("", "Select result source"));
     for (const value of manualEntryResolutionSources) source.append(option(value, sourceLabel(value)));
-    source.value = "ManualRoll";
+    source.value = "";
 }
 
 function travelRequest(form: HTMLFormElement, runtime: ExpeditionDetail): TravelWatchAssistantRequest {

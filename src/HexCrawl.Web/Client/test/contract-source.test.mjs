@@ -40,6 +40,17 @@ test("focused assistants never load an Overworld or construct a map surface", ()
 });
 
 
+test("focused assistants require explicit resolved outcomes and provenance", () => {
+    const source = fs.readFileSync(path.join(sourceDir, "modules/assistants/expedition-assistant-view.ts"), "utf8");
+    assert.match(source, /<option value="">Select resolved outcome<\/option>/);
+    assert.match(source, /<select name="outcome" required>/);
+    assert.match(source, /<select name="source" data-source required>/);
+    assert.match(source, /source\.append\(option\("", "Select result source"\)\)/);
+    assert.match(source, /source\.value = ""/);
+    assert.doesNotMatch(source, /source\.value = "ManualRoll"/);
+    assert.match(source, /select\(form, "source"\)\.value = "ProcedureDefault"/);
+});
+
 test("mapless session creation never creates a placeholder Overworld", () => {
     const source = fs.readFileSync(path.join(sourceDir, "modules/home/tool-home-view.ts"), "utf8");
     assert.equal(source.includes("api.createOverworld("), false);
