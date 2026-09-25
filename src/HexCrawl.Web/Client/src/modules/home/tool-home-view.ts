@@ -18,19 +18,15 @@ export async function renderToolHome(
         <section class="hc-page">
             <header class="hc-page-header">
                 <div>
-                    <h1>Hex Crawl DM tools</h1>
-                    <p>Use crawl bookkeeping with an authored world, an abstract hex map, a physical map, another VTT, or no spatial map at all.</p>
+                    <h1>Hex Crawl</h1>
+                    <p>Running sheets for traditional hex-crawl procedure, with optional automation and map tools when you want them.</p>
                 </div>
                 <nav><button type="button" data-worlds>Overworlds & maps</button></nav>
             </header>
             <div class="hc-error" data-error hidden role="alert"></div>
-            <section class="hc-mode-section" aria-labelledby="hc-assistants-title">
-                <div class="hc-panel-heading">
-                    <div>
-                        <h2 id="hc-assistants-title">Focused DM assistants</h2>
-                        <p class="hc-muted">Open a focused workflow directly. Create only the minimum saved context needed by that assistant, or continue a compatible session.</p>
-                    </div>
-                </div>
+            <details class="hc-panel hc-home-optional-tools">
+                <summary id="hc-assistants-title">Optional focused tools</summary>
+                <p class="hc-muted">Use these independently when you want automation for one part of the crawl. They are not required to use a running sheet.</p>
                 <div class="hc-mode-grid hc-home-three-column-grid">
                     <article class="hc-mode-card">
                         <h3>Travel / Watch Assistant</h3>
@@ -48,18 +44,18 @@ export async function renderToolHome(
                         <button type="button" class="hc-primary-action" data-assistant-encounters>Open Encounter Cadence</button>
                     </article>
                 </div>
-            </section>
+            </details>
             <div class="hc-columns hc-home-three-column-grid hc-home-main-grid">
                 <section class="hc-panel">
                     <div class="hc-panel-heading">
-                        <div><h2>Crawl sessions</h2><p class="hc-muted">Persistent procedure state is independent of whether a session has an Overworld.</p></div>
+                        <div><h2>Running sheets</h2><p class="hc-muted">Continue an existing crawl record. A sheet can be world-bound, abstract-hex, or non-spatial.</p></div>
                         <span class="hc-muted" data-expedition-count></span>
                     </div>
                     <div class="hc-expedition-list" data-expedition-list></div>
                 </section>
                 <section class="hc-panel">
-                    <h2>Start crawl session</h2>
-                    <p class="hc-muted">Choose a real Overworld, an abstract hex context, or a non-spatial procedure session.</p>
+                    <h2>New running sheet</h2>
+                    <p class="hc-muted">Choose only the context your procedure needs. You can run without an Overworld or map.</p>
                     <form class="hc-form" data-start-mapless>
                         <label>Session name <input name="name" required value="Expedition" autocomplete="off"></label>
                         <label>Procedure preset <select name="procedure"></select></label>
@@ -89,7 +85,7 @@ export async function renderToolHome(
                 </section>
             </div>
             <section class="hc-mode-section" aria-labelledby="hc-mode-title">
-                <h2 id="hc-mode-title">Session contexts</h2>
+                <h2 id="hc-mode-title">Available levels of map support</h2>
                 <div class="hc-mode-grid hc-home-three-column-grid">
                     <article class="hc-mode-card"><h3>World-bound</h3><p>Uses an authored Overworld and can add map rendering, discovery, and player knowledge.</p></article>
                     <article class="hc-mode-card"><h3>Abstract hex</h3><p>Uses persisted hex scale and coordinates without creating or loading an Overworld.</p></article>
@@ -268,11 +264,11 @@ function renderExpeditions(
 
         const actions = document.createElement("div");
         actions.className = "hc-button-row";
-        actions.append(action("Open tracker", () => navigate(`/expeditions/${expedition.id}`), true));
+        actions.append(action("Open running sheet", () => navigate(`/expeditions/${expedition.id}`), true));
 
         const spatial = expedition.context.kind !== "NonSpatial";
         if (expedition.context.kind === "WorldBound" && expedition.context.overworldId) {
-            actions.append(action("Full map", () => navigate(`/worlds/${expedition.context.overworldId}/expeditions/${expedition.id}`)));
+            actions.append(action("Map + sheet", () => navigate(`/worlds/${expedition.context.overworldId}/expeditions/${expedition.id}`)));
         }
         if (spatial) {
             actions.append(
