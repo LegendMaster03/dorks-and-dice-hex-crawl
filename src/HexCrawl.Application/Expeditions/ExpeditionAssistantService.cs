@@ -70,7 +70,7 @@ public sealed class ExpeditionAssistantService(
         var context = resolvedContext.RuntimeContext
             ?? throw new InvalidOperationException("Travel/watch bookkeeping requires a spatial crawl session.");
         var unit = context.HexCenterDistance.Unit;
-        var provenance = new ResolutionProvenance(command.ResolutionSource, command.ResolutionNote);
+        var provenance = ClientSuppliedProvenance(command.ResolutionSource, command.ResolutionNote);
 
         ResolvedTravelAmount travel;
         if (expedition.Procedure.TravelResolution == TravelResolutionMode.HexSteps)
@@ -142,7 +142,7 @@ public sealed class ExpeditionAssistantService(
             stateBefore,
             new NonSpatialWatchAssistantInput(
                 TimeSpan.FromHours(command.ElapsedHours),
-                new ResolutionProvenance(command.ResolutionSource, command.ResolutionNote),
+                ClientSuppliedProvenance(command.ResolutionSource, command.ResolutionNote),
                 command.Note));
 
         return await SaveAsync(
@@ -177,7 +177,7 @@ public sealed class ExpeditionAssistantService(
                 command.IsLost,
                 command.VeerSteps,
                 command.IntendedDirection.HasValue ? new HexDirection(command.IntendedDirection.Value) : null,
-                new ResolutionProvenance(command.ResolutionSource, command.ResolutionNote),
+                ClientSuppliedProvenance(command.ResolutionSource, command.ResolutionNote),
                 command.Note));
 
         return await SaveAsync(
@@ -197,7 +197,7 @@ public sealed class ExpeditionAssistantService(
 
         var input = new EncounterCadenceAssistantInput(
             command.Outcome,
-            new ResolutionProvenance(command.ResolutionSource, command.ResolutionNote),
+            ClientSuppliedProvenance(command.ResolutionSource, command.ResolutionNote),
             command.Note);
 
         CrawlSessionRuntimeState runtime = expedition.Runtime switch
@@ -211,6 +211,18 @@ public sealed class ExpeditionAssistantService(
             expedition with { Runtime = runtime },
             command.ExpectedVersion,
             cancellationToken);
+    }
+
+    private static ResolutionProvenance ClientSuppliedProvenance(
+        ResolutionSource source,
+        string? note)
+    {
+        if (source == ResolutionSource.AutomaticRoll)
+        {
+            throw new InvalidOperationException(
+                "AutomaticRoll is reserved for server-verified procedure-helper results and can not be supplied to a focused manual assistant.");
+        }
+        return new ResolutionProvenance(source, note);
     }
 
     private async Task<StoredExpedition> SaveAsync(
