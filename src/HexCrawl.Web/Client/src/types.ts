@@ -264,6 +264,52 @@ export type ExpeditionSummary = {
     updatedAt: string;
 };
 
+export type CrawlPartyMember = {
+    id: string;
+    name: string;
+    externalCharacterId: string | null;
+    countsTowardPartyMovement: boolean;
+};
+
+export type MarchingOrderPosition = {
+    memberId: string;
+    rank: number;
+    file: number;
+};
+
+export type WatchRotationEntry = {
+    slot: number;
+    memberIds: string[];
+    label: string | null;
+};
+
+export type StandingOrder = {
+    id: string;
+    text: string;
+    enabled: boolean;
+};
+
+export type PartyMovementReference = {
+    perHour: DistanceValue | null;
+    perWatch: DistanceValue | null;
+    perMarch: DistanceValue | null;
+    limitingMemberId: string | null;
+    note: string | null;
+};
+
+export type ExpeditionParty = {
+    members: CrawlPartyMember[];
+    marchingOrder: MarchingOrderPosition[];
+    watchList: WatchRotationEntry[];
+    standingOrders: StandingOrder[];
+    defaultNavigatorMemberId: string | null;
+    baseMovement: PartyMovementReference | null;
+};
+
+export type UpdateExpeditionPartyRequest = ExpeditionParty & {
+    expectedVersion: number;
+};
+
 export type ExpeditionDetail = {
     id: string;
     overworldId: string | null;
@@ -277,6 +323,7 @@ export type ExpeditionDetail = {
     pauseReason: RuntimePauseReason | null;
     remainingWatchHours: number;
     expedition: RuntimeExpedition;
+    party: ExpeditionParty;
     knownHexes: HexCoordinate[];
     knowledge: RuntimeKnowledgeEntry[];
     history: RuntimeEvent[];
