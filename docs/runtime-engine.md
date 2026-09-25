@@ -73,7 +73,7 @@ The engine does not perform consequential random rolls. `ResolutionProvenance` s
 
 The DM workbench carries independent provenance for travel, navigation, encounter, and boundary-decision inputs rather than applying one source label to an entire watch. It appends a compact `ResolutionProvenanceRecorded` history event after each application transition.
 
-The same runtime therefore remains able to accept future helper-generated results, physical dice, results from another tool, or explicit DM overrides without making Rules Core or another integration authoritative over spatial/runtime state.
+The same runtime therefore accepts trusted helper-generated results, physical dice, results from another tool, or explicit DM overrides without making Rules Core or another integration authoritative over spatial/runtime state. Automatic results are verified against the persisted generated-resolution record before application.
 
 ## Encounters and discovery
 
@@ -127,4 +127,6 @@ The Alexandrian profile remains optional. Terrain movement tables, encounter con
 
 ## Deferred runtime work
 
-Still deferred are Rules Core/Characters integration, authoritative terrain/route mechanical interpretation, encounter-table content, an automatic dice/resolution helper, typed custom encounter-cadence parameters or a scheduling DSL, arbitrary-bearing procedure travel, multi-hex route unwinding, a general campaign calendar/rest clock, real-time multiplayer synchronization, and battle-map behavior.
+Still deferred are Rules Core/Characters integration, authoritative terrain/route mechanical interpretation, encounter-table content, Journey Challenge / Complex Hazard state, progressive expedition effects, structured encounter handoff context, typed Rules Core mechanic references for challenge approaches and travel duties, typed custom encounter-cadence parameters or a scheduling DSL, arbitrary-bearing procedure travel, multi-hex route unwinding, a general campaign calendar/rest clock, real-time multiplayer synchronization, and battle-map behavior.
+
+The future Journey Challenge / Complex Hazard layer is explicitly additive: it may span multiple ordinary watches and produce persistent consequences, but it does not replace Travel -> Watch -> Navigation -> Encounter. See `docs/design-references.md`.
