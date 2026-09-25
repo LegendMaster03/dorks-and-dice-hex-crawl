@@ -32,7 +32,7 @@ Top-level assistant routes are setup-and-entry surfaces over the same persisted 
 
 - **Travel / Watch** lists every compatible saved session. New inline setup defaults to `NonSpatial`, requiring only a session name and procedure profile for generic watch/time bookkeeping. The DM can explicitly switch to spatial travel, which creates an `AbstractHex` session with only orientation, physical hex-center scale/unit, and starting axial coordinate.
 - **Navigation** lists only spatial saved sessions (`WorldBound` or `AbstractHex`). Inline creation always creates `AbstractHex`, because navigation needs direction/spatial context but does not need an Overworld.
-- **Encounter Cadence** lists compatible saved sessions and creates `NonSpatial` inline by default because encounter cadence itself requires no map, grid, coordinate, or distance scale.
+- **Encounter Cadence** lists compatible saved sessions and creates `NonSpatial` inline by default because encounter cadence itself requires no map, grid, coordinate, or distance scale. It remains a manual bookkeeping surface. A configured automatic encounter helper also resolves watch timing, so this focused assistant does not consume that helper until its contract can preserve the generated timing result rather than discard it.
 
 After selection or inline creation, each entry route navigates to the existing session-attached assistant route. Persistence is preferred here because it reuses optimistic concurrency, restart behavior, procedure snapshots, and runtime history instead of introducing a second unsaved assistant state model.
 
@@ -56,11 +56,12 @@ Bookkeeping remains split across the established state axes.
 - intra-hex progress;
 - direction-change progress cost;
 - deliberate double-back support;
-- start/near/far/back exit factors and direction-change cost factor.
+- start/near/far/back exit factors and direction-change cost factor;
+- optional automatic-resolution helper configuration for travel roll/factor, navigation roll, encounter trigger results, and encounter timing slots.
 
 Built-in procedure keys are presets, not reload-time authorities. A customized expedition retains the selected preset key as provenance but persists the full customized snapshot. Later changes to a catalog preset therefore do not silently alter an ongoing expedition.
 
-Domain `CrawlProcedureProfile.Validate()` is the validity boundary. The setup UI intentionally does not maintain an independent matrix of valid combinations.
+Domain `CrawlProcedureProfile.Validate()` remains the validity boundary. The setup UI derives field visibility and strips inherited automatic-helper components that can no longer apply after a customization, but it does not maintain a separate competing validity matrix.
 
 ### Session context and runtime state
 
@@ -204,7 +205,12 @@ The expedition page derives DM-facing status from authoritative persisted state.
 - intra-hex progress only for profiles that use it;
 - current pause/pending decision;
 - encounter resolution state;
-- recent runtime history;
+- recent runtime history and the condensed watch ledger;
+- the persisted party register, marching order, watch rotation, standing orders, and movement reference;
+- the complete persisted procedure-mechanics reference, including applicable automatic-helper formulas;
+- procedure mechanics preview before session creation, including customized profile changes;
+- inline automatic-helper formulas next to the situational inputs they consume;
+- generated helper rolls, resolved results, notes, and server-verified provenance before watch application;
 - manual subject discovery controls;
 - a player-knowledge preview using the persisted presentation policy.
 

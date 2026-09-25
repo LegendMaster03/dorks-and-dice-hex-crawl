@@ -271,6 +271,13 @@ test("custom procedure snapshots drop helper components that no longer match the
     assert.match(setup, /encounter: encounterCadence === "None" \? null : helpers\.encounter/);
 });
 
+test("focused encounter assistant does not imply it can discard automatic helper timing", () => {
+    const assistant = fs.readFileSync(path.join(sourceDir, "modules/assistants/expedition-assistant-view.ts"), "utf8");
+    assert.match(assistant, /resolutionHelpers\?\.encounter/);
+    assert.match(assistant, /does not apply it because the helper also resolves encounter timing/);
+    assert.match(assistant, /manual, external, or DM-override bookkeeping/);
+});
+
 test("procedure selectors expose full persisted mechanics before a session is created", () => {
     const setup = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-setup.ts"), "utf8");
     const assistant = fs.readFileSync(path.join(sourceDir, "modules/assistants/assistant-entry-view.ts"), "utf8");

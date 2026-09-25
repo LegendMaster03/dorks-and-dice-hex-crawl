@@ -248,8 +248,12 @@ function navigationForm(runtime: ExpeditionDetail): string {
 }
 
 function encounterForm(runtime: ExpeditionDetail): string {
+    const automaticHelperNote = runtime.profile.resolutionHelpers?.encounter
+        ? '<p class="hc-hint">This procedure also configures an automatic encounter helper. This focused assistant does not apply it because the helper also resolves encounter timing; use this surface for manual, external, or DM-override bookkeeping.</p>'
+        : "";
     return `
         <p class="hc-hint">${assistantEncounterCheckDue(runtime) ? "The configured cadence indicates a check is due." : "The configured cadence does not currently indicate a new check is due. You may still record a manual check."}</p>
+        ${automaticHelperNote}
         <label>Outcome <select name="outcome">
             <option value="None">No encounter</option>
             <option value="WanderingEncounter">Wandering encounter</option>
