@@ -264,7 +264,15 @@ export function ensureStyles(): void {
                 linear-gradient(var(--hc-surface), var(--hc-surface)) padding-box,
                 repeating-linear-gradient(0deg, transparent 0, transparent 31px, color-mix(in srgb, var(--hc-border) 35%, transparent) 32px) border-box;
         }
-        .hc-map-panel > .hc-running-sheet { margin-top: .75rem; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hc-border) 35%, transparent); }
+        .hc-map-sheet-top { display: grid; gap: .75rem; align-items: start; }
+        .hc-map-sheet-top > .hc-running-sheet { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hc-border) 35%, transparent); }
+        .hc-map-panel > .hc-running-ledger-panel {
+            margin-top: 0;
+            padding: .8rem;
+            border: 1px solid var(--hc-border);
+            border-radius: .55rem;
+            background: var(--hc-surface);
+        }
         .hc-sheet-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; padding-bottom: .65rem; border-bottom: 2px solid var(--hc-text-strong); }
         .hc-sheet-heading h2 { margin: .1rem 0 0; color: var(--hc-text-strong); font-size: 1.08rem; }
         .hc-sheet-kicker { color: var(--hc-muted); font-size: .7rem; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
@@ -329,11 +337,9 @@ export function ensureStyles(): void {
         .hc-party-editor-panel[open] > summary { margin-bottom: .7rem; }
 
         @media (min-width: 1350px) {
-            .hc-workspace-grid .hc-map-panel.hc-run-column {
+            .hc-workspace-grid .hc-map-sheet-top {
                 grid-template-columns: minmax(28rem, 1.15fr) minmax(24rem, .85fr);
-                align-items: start;
             }
-            .hc-workspace-grid .hc-map-panel > .hc-running-sheet { margin-top: 0; }
         }
 
         @media (max-width: 720px) {
