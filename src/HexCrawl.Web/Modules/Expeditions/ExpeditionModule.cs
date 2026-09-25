@@ -25,6 +25,8 @@ public sealed class ExpeditionModule : IHexCrawlModule
         services.AddScoped<ExpeditionWorkbenchService>();
         services.AddScoped<ExpeditionAssistantService>();
         services.AddScoped<ExpeditionPartyService>();
+        services.AddScoped<ProcedureResolutionResolver>();
+        services.AddScoped<ProcedureResolutionHelperService>();
     }
 
     public void MapEndpoints(RouteGroupBuilder api)
@@ -35,6 +37,7 @@ public sealed class ExpeditionModule : IHexCrawlModule
         api.MapPost("/overworlds/{overworldId:guid}/expeditions", StartExpeditionAsync);
         api.MapGet("/expeditions/{expeditionId:guid}", GetExpeditionAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/advance", AdvanceExpeditionAsync);
+        api.MapPost("/expeditions/{expeditionId:guid}/resolution-helper", ResolveProcedureInputsAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/discover", DiscoverAsync);
         api.MapPut("/expeditions/{expeditionId:guid}/party", UpdatePartyAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/assistants/travel", RecordTravelAssistantAsync);
@@ -121,6 +124,21 @@ public sealed class ExpeditionModule : IHexCrawlModule
             request.ToCommand(),
             cancellationToken);
         return Results.Ok(await ContractAsync(expedition, owner, service, cancellationToken));
+    }
+
+    private static async Task<IResult> ResolveProcedureInputsAsync(
+        Guid expeditionId,
+        ResolveProcedureInputsRequest request,
+        HttpContext context,
+        ProcedureResolutionHelperService helper,
+        CancellationToken cancellationToken)
+    {
+        var result = await helper.ResolveAsync(
+            expeditionId,
+            UserId(context),
+            request.ToCommand(),
+            cancellationToken);
+        return Results.Ok(result);
     }
 
     private static async Task<IResult> DiscoverAsync(
