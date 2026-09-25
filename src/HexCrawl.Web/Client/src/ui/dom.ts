@@ -54,7 +54,11 @@ export function select(root: ParentNode, name: string): HTMLSelectElement {
 }
 
 export function numeric(element: HTMLInputElement | HTMLSelectElement): number {
-    const value = Number(element.value);
+    const raw = element.value.trim();
+    if (!raw) {
+        throw new Error(`${element.getAttribute("name") ?? "value"} requires a number.`);
+    }
+    const value = Number(raw);
     if (!Number.isFinite(value)) {
         throw new Error(`${element.getAttribute("name") ?? "value"} must be a finite number.`);
     }
@@ -62,7 +66,11 @@ export function numeric(element: HTMLInputElement | HTMLSelectElement): number {
 }
 
 export function integer(element: HTMLInputElement | HTMLSelectElement): number {
-    const value = Number(element.value);
+    const raw = element.value.trim();
+    if (!raw) {
+        throw new Error(`${element.getAttribute("name") ?? "value"} requires an integer.`);
+    }
+    const value = Number(raw);
     if (!Number.isInteger(value)) {
         throw new Error(`${element.getAttribute("name") ?? "value"} must be an integer.`);
     }
