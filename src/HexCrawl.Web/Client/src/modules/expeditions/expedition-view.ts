@@ -104,6 +104,25 @@ export async function renderExpedition(
                                 <p class="hc-hint" data-direction-hint></p>
                             </fieldset>
 
+                            <fieldset data-resolution-helper hidden>
+                                <legend>Automatic procedure resolution</legend>
+                                <p class="hc-hint">Roll the procedure-defined inputs for this watch. Generated results are recorded immediately and remain separate from advancing the watch until you apply them.</p>
+                                <div data-helper-travel>
+                                    <p class="hc-hint">Travel uses the expected distance below as the situational input; the procedure supplies the configured roll and multiplier.</p>
+                                </div>
+                                <div data-helper-navigation class="hc-form">
+                                    <label>Navigation DC <input name="helperNavigationDc" type="number" step="1" placeholder="DM-confirmed DC"></label>
+                                    <label>Navigation modifier <input name="helperNavigationModifier" type="number" step="1" value="0"></label>
+                                    <label>Failure veer <input name="helperFailureVeer" type="number" step="1" placeholder="+1 or -1"></label>
+                                    <p class="hc-hint">The DC, situational modifier, and failed-check veer stay explicit because they are not inferred by the procedure profile.</p>
+                                </div>
+                                <div data-helper-encounter>
+                                    <p class="hc-hint">When an encounter check is due, the procedure can roll both the check and the encounter time automatically.</p>
+                                </div>
+                                <button type="button" data-resolution-helper-button>Roll procedure inputs</button>
+                                <p class="hc-hint" data-resolution-helper-result aria-live="polite"></p>
+                            </fieldset>
+
                             <fieldset data-travel-resolution data-focus-group="travel">
                                 <legend>Travel / progress</legend>
                                 <p class="hc-hint">Supply the effective movement result for this watch segment. Terrain and route category names are descriptive; the runtime does not infer a multiplier from them.</p>
