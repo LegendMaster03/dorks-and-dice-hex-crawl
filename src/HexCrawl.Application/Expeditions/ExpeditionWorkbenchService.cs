@@ -47,6 +47,7 @@ public sealed record AdvanceExpeditionWorkbenchCommand
     public bool? RecognizedLost { get; init; }
     public bool? Reorient { get; init; }
     public string? DmOverrideNote { get; init; }
+    public Guid? GeneratedProcedureResolutionId { get; init; }
 }
 
 public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlService coreService, CrawlSessionContextResolver contextResolver)
@@ -137,17 +138,37 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
             }
         }
 
-        var travelProvenance = Provenance(command.TravelResolutionSource, command.ResolutionSource, command.TravelResolutionNote, command.DmOverrideNote);
-        var navigationProvenance = Provenance(command.NavigationResolutionSource, command.ResolutionSource, command.NavigationResolutionNote, command.DmOverrideNote);
-        var encounterProvenance = Provenance(command.EncounterResolutionSource, command.ResolutionSource, command.EncounterResolutionNote, command.DmOverrideNote);
-        var boundaryProvenance = Provenance(command.BoundaryResolutionSource, command.ResolutionSource, command.BoundaryResolutionNote, command.DmOverrideNote);
-
         var encounterDue = ExpeditionProcedureRequirements.IsEncounterCheckDue(profile, state);
         var runtimeProfile = profile.EncounterCadence == EncounterCheckCadence.PerDay
             && state.ActiveWatch is null
             && !encounterDue
                 ? profile with { EncounterCadence = EncounterCheckCadence.None }
                 : profile;
+
+        var automaticResolution = ValidateAutomaticResolution(expedition, state, runtimeProfile, command);
+        var travelProvenance = Provenance(
+            command.TravelResolutionSource,
+            command.ResolutionSource,
+            command.TravelResolutionNote,
+            command.DmOverrideNote,
+            automaticResolution?.Travel?.Provenance);
+        var navigationProvenance = Provenance(
+            command.NavigationResolutionSource,
+            command.ResolutionSource,
+            command.NavigationResolutionNote,
+            command.DmOverrideNote,
+            automaticResolution?.Navigation?.Provenance);
+        var encounterProvenance = Provenance(
+            command.EncounterResolutionSource,
+            command.ResolutionSource,
+            command.EncounterResolutionNote,
+            command.DmOverrideNote,
+            automaticResolution?.Encounter?.Provenance);
+        var boundaryProvenance = Provenance(
+            command.BoundaryResolutionSource,
+            command.ResolutionSource,
+            command.BoundaryResolutionNote,
+            command.DmOverrideNote);
 
         var travel = BuildTravel(profile, runtimeContext.HexCenterDistance.Unit, command, travelProvenance);
         var navigation = BuildNavigation(profile, state, command, navigationProvenance);
@@ -202,12 +223,18 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
             encounter?.Provenance,
             boundaryDecision?.Provenance);
 
+        var finalized = FinalizeGeneratedResolutionUse(
+            expedition,
+            stateWithProvenance,
+            automaticResolution,
+            command.ExpectedVersion);
         var updated = expedition with
         {
-            Runtime = stateWithProvenance,
+            Runtime = finalized.State,
             Knowledge = projectedKnowledge,
             PauseReason = result.PauseReason,
-            RemainingWatchTime = result.RemainingWatchTime
+            RemainingWatchTime = result.RemainingWatchTime,
+            GeneratedProcedureResolutions = finalized.Resolutions
         };
         return await SaveAsync(updated, command.ExpectedVersion, cancellationToken);
     }
@@ -336,8 +363,202 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
         ResolutionSource? specific,
         ResolutionSource fallback,
         string? note,
-        string? dmOverrideNote) =>
-        new(specific ?? fallback, string.IsNullOrWhiteSpace(note) ? dmOverrideNote : note.Trim());
+        string? dmOverrideNote,
+        ResolutionProvenance? verifiedAutomatic = null)
+    {
+        var source = specific ?? fallback;
+        if (source == ResolutionSource.AutomaticRoll)
+        {
+            return verifiedAutomatic
+                ?? throw new InvalidOperationException("AutomaticRoll provenance requires a verified persisted helper generation.");
+        }
+        return new ResolutionProvenance(
+            source,
+            string.IsNullOrWhiteSpace(note) ? dmOverrideNote : note.Trim());
+    }
+
+    private static GeneratedProcedureResolution? ValidateAutomaticResolution(
+        StoredExpedition expedition,
+        ExpeditionState state,
+        CrawlProcedureProfile runtimeProfile,
+        AdvanceExpeditionWorkbenchCommand command)
+    {
+        if (command.ResolutionSource == ResolutionSource.AutomaticRoll)
+        {
+            throw new InvalidOperationException(
+                "AutomaticRoll can not be supplied as a blanket resolution source. Use a server-generated resolution id with the specific generated component.");
+        }
+        if (command.BoundaryResolutionSource == ResolutionSource.AutomaticRoll)
+        {
+            throw new InvalidOperationException("The procedure helper does not generate lost-boundary decisions.");
+        }
+
+        var travelAutomatic = command.TravelResolutionSource == ResolutionSource.AutomaticRoll;
+        var navigationAutomatic = command.NavigationResolutionSource == ResolutionSource.AutomaticRoll;
+        var encounterAutomatic = command.EncounterResolutionSource == ResolutionSource.AutomaticRoll;
+        var anyAutomatic = travelAutomatic || navigationAutomatic || encounterAutomatic;
+
+        if (!anyAutomatic)
+        {
+            if (command.GeneratedProcedureResolutionId.HasValue)
+            {
+                throw new InvalidOperationException(
+                    "A generated procedure-resolution id may only be supplied when applying an AutomaticRoll component.");
+            }
+            return null;
+        }
+
+        var id = command.GeneratedProcedureResolutionId
+            ?? throw new InvalidOperationException(
+                "AutomaticRoll requires the server-generated procedure-resolution id returned by the helper.");
+
+        var generated = expedition.GeneratedProcedureResolutions
+            .SingleOrDefault(item => item.Id == id)
+            ?? throw new InvalidOperationException(
+                "The supplied generated procedure resolution does not belong to this crawl session.");
+
+        if (generated.SessionId != expedition.Id)
+        {
+            throw new InvalidOperationException(
+                "The supplied generated procedure resolution does not belong to this crawl session.");
+        }
+        if (generated.Status != GeneratedProcedureResolutionStatus.Available)
+        {
+            throw new InvalidOperationException(
+                $"Generated procedure resolution {generated.Id:D} is {generated.Status} and can not be applied.");
+        }
+        if (generated.GeneratedAtVersion != expedition.Version
+            || generated.GeneratedAtVersion != command.ExpectedVersion)
+        {
+            throw new InvalidOperationException(
+                "The generated procedure resolution is not valid for the current crawl-session version.");
+        }
+
+        var currentWatch = ProcedureResolutionHelperService.CurrentWatchNumber(state);
+        if (generated.WatchNumber != currentWatch)
+        {
+            throw new InvalidOperationException(
+                "The generated procedure resolution belongs to a different watch context.");
+        }
+
+        if (travelAutomatic)
+        {
+            var expected = generated.Travel
+                ?? throw new InvalidOperationException("The selected helper generation did not produce a travel result.");
+            RequireEqual(command.ExpectedDistance, expected.ExpectedDistance, "expected travel distance");
+            RequireEqual(command.ActualDistance, expected.ActualDistance, "actual travel distance");
+        }
+
+        if (navigationAutomatic)
+        {
+            if (state.ActiveWatch is not null
+                || !runtimeProfile.UsesNavigationChecks
+                || command.SuppressesNavigationCheck
+                || command.DeliberateDoubleBack)
+            {
+                throw new InvalidOperationException("Automatic navigation resolution is not applicable to this watch.");
+            }
+
+            var expected = generated.Navigation
+                ?? throw new InvalidOperationException("The selected helper generation did not produce a navigation result.");
+            if (command.NavigationOutcome != expected.Outcome
+                || command.VeerSteps != expected.VeerSteps)
+            {
+                throw new InvalidOperationException(
+                    "The submitted navigation values do not match the persisted generated result.");
+            }
+        }
+
+        if (encounterAutomatic)
+        {
+            if (state.ActiveWatch is not null || runtimeProfile.EncounterCadence == EncounterCheckCadence.None)
+            {
+                throw new InvalidOperationException("Automatic encounter resolution is not applicable to this watch.");
+            }
+
+            var expected = generated.Encounter
+                ?? throw new InvalidOperationException("The selected helper generation did not produce an encounter result.");
+            if (command.EncounterOutcome != expected.Kind)
+            {
+                throw new InvalidOperationException(
+                    "The submitted encounter outcome does not match the persisted generated result.");
+            }
+            RequireEqual(command.EncounterHour, expected.OccursAtHours, "encounter time");
+
+            if (expected.LocationId.HasValue && command.LocationId != expected.LocationId)
+            {
+                throw new InvalidOperationException(
+                    "The submitted keyed location does not match the persisted generated result.");
+            }
+            if (expected.Kind != EncounterOutcomeKind.KeyedLocationDiscovery
+                && command.LocationId.HasValue != expected.LocationId.HasValue)
+            {
+                throw new InvalidOperationException(
+                    "The submitted encounter location does not match the persisted generated result.");
+            }
+        }
+
+        return generated;
+    }
+
+    private static void RequireEqual(double? actual, double? expected, string label)
+    {
+        if (actual.HasValue != expected.HasValue
+            || (actual.HasValue && actual.Value != expected!.Value))
+        {
+            throw new InvalidOperationException(
+                $"The submitted {label} does not match the persisted generated result.");
+        }
+    }
+
+    private static (ExpeditionState State, IReadOnlyList<GeneratedProcedureResolution> Resolutions)
+        FinalizeGeneratedResolutionUse(
+            StoredExpedition expedition,
+            ExpeditionState state,
+            GeneratedProcedureResolution? consumed,
+            long expectedVersion)
+    {
+        var resolutions = expedition.GeneratedProcedureResolutions;
+        if (resolutions.Count == 0)
+        {
+            return (state, resolutions);
+        }
+
+        long? consumedSequence = null;
+        if (consumed is not null)
+        {
+            consumedSequence = state.History.Count == 0 ? 1 : state.History[^1].Sequence + 1;
+            var audit = new CrawlRuntimeEvent(
+                consumedSequence.Value,
+                consumed.WatchNumber,
+                CrawlRuntimeEventKind.ProcedureResolutionHelperConsumed,
+                state.ElapsedTravelTime,
+                state.CurrentHex,
+                $"Generated procedure resolution {consumed.Id:D} consumed for watch {consumed.WatchNumber}.");
+            state = state with { History = [.. state.History, audit] };
+        }
+
+        var nextVersion = checked(expectedVersion + 1);
+        var updated = resolutions.Select(item =>
+        {
+            if (item.Status != GeneratedProcedureResolutionStatus.Available)
+            {
+                return item;
+            }
+            if (consumed is not null && item.Id == consumed.Id)
+            {
+                return item with
+                {
+                    Status = GeneratedProcedureResolutionStatus.Consumed,
+                    ConsumedAtVersion = nextVersion,
+                    ConsumedAuditSequence = consumedSequence
+                };
+            }
+            return item with { Status = GeneratedProcedureResolutionStatus.Superseded };
+        }).ToArray();
+
+        return (state, updated);
+    }
 
     private static string RequiredText(string? value, string label) =>
         !string.IsNullOrWhiteSpace(value)
