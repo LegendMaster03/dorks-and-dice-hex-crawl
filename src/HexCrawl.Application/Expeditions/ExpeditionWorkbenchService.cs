@@ -139,11 +139,9 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
         }
 
         var encounterDue = ExpeditionProcedureRequirements.IsEncounterCheckDue(profile, state);
-        var runtimeProfile = profile.EncounterCadence == EncounterCheckCadence.PerDay
-            && state.ActiveWatch is null
-            && !encounterDue
-                ? profile with { EncounterCadence = EncounterCheckCadence.None }
-                : profile;
+        var runtimeProfile = state.ActiveWatch is null && !encounterDue
+            ? profile with { EncounterCadence = EncounterCheckCadence.None }
+            : profile;
 
         var automaticResolution = ValidateAutomaticResolution(expedition, state, runtimeProfile, command);
         var travelProvenance = Provenance(
@@ -326,6 +324,11 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
             || !profile.UsesNavigationChecks
             || command.SuppressesNavigationCheck
             || command.DeliberateDoubleBack)
+        {
+            return null;
+        }
+        if (!ExpeditionProcedureRequirements.IsNavigationResolutionPotentiallyRequired(profile, state)
+            && command.NavigationOutcome is null)
         {
             return null;
         }

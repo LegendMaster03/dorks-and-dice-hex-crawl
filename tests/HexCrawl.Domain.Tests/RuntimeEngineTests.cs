@@ -228,6 +228,54 @@ public sealed class RuntimeEngineTests
     }
 
     [Fact]
+    public void BoundaryAtExactWatchEndCompletesWithoutConditionReviewPause()
+    {
+        var setup = CreateSetup();
+        var result = Advance(
+            setup,
+            CrawlProcedureProfile.SimplifiedFixedDistance(),
+            6,
+            continueAcrossBoundaries: false);
+
+        Assert.Null(result.PauseReason);
+        Assert.Equal(TimeSpan.Zero, result.RemainingWatchTime);
+        Assert.Equal(1, result.Expedition.CompletedWatches);
+        Assert.Null(result.Expedition.ActiveWatch);
+        Assert.Equal(new HexCoordinate(1, 0), result.Expedition.CurrentHex);
+        Assert.DoesNotContain(
+            result.Events,
+            item => item.Kind == CrawlRuntimeEventKind.ConditionsReviewRequired);
+        Assert.Contains(
+            result.Events,
+            item => item.Kind == CrawlRuntimeEventKind.WatchCompleted);
+    }
+
+    [Fact]
+    public void FinalHexStepAtWatchEndCompletesWithoutConditionReviewPause()
+    {
+        var setup = CreateSetup();
+        var profile = CrawlProcedureProfile.SimplifiedHexStep();
+        var result = _engine.Advance(
+            setup.Context,
+            profile,
+            setup.Expedition,
+            Plan(0, false),
+            new WatchAdvanceInputs(
+                ResolvedTravelAmount.Steps(
+                    1,
+                    ResolutionProvenance.ProcedureDefault)));
+
+        Assert.Null(result.PauseReason);
+        Assert.Equal(TimeSpan.Zero, result.RemainingWatchTime);
+        Assert.Equal(1, result.Expedition.CompletedWatches);
+        Assert.Null(result.Expedition.ActiveWatch);
+        Assert.Equal(new HexCoordinate(1, 0), result.Expedition.CurrentHex);
+        Assert.DoesNotContain(
+            result.Events,
+            item => item.Kind == CrawlRuntimeEventKind.ConditionsReviewRequired);
+    }
+
+    [Fact]
     public void NoEncounterCompletesNormally()
     {
         var setup = CreateSetup();

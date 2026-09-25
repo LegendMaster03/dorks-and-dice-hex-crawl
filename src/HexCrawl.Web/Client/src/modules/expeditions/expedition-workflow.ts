@@ -9,21 +9,21 @@ export function watchPhase(runtime: ExpeditionDetail): WatchPhase {
 
 export function encounterCheckDue(runtime: ExpeditionDetail): boolean {
     if (runtime.expedition.activeWatchNumber !== null) return false;
-    const cadence = runtime.profile.encounterCadence;
-    if (cadence === "None") return false;
-    if (cadence === "PerWatch" || cadence === "Custom") return true;
-
-    const dayIndex = runtime.expedition.currentDay - 1;
-    return !runtime.history.some(event =>
-        event.kind === "EncounterCheckPerformed"
-        && Math.floor(event.expeditionElapsedHours / 24) === dayIndex);
+    return encounterCheckDueForWatch(runtime, runtime.expedition.completedWatches + 1);
 }
 
 export function navigationResolutionDue(runtime: ExpeditionDetail, suppressesNavigationCheck: boolean, deliberateDoubleBack: boolean): boolean {
-    return runtime.expedition.activeWatchNumber === null
-        && runtime.profile.usesNavigationChecks
-        && !suppressesNavigationCheck
-        && !deliberateDoubleBack;
+    if (runtime.expedition.activeWatchNumber !== null
+        || !runtime.profile.usesNavigationChecks
+        || suppressesNavigationCheck
+        || deliberateDoubleBack) {
+        return false;
+    }
+
+    const watchNumber = runtime.expedition.completedWatches + 1;
+    return !runtime.history.some(event =>
+        event.kind === "NavigationCheckResolved"
+        && event.watchNumber === watchNumber);
 }
 
 export function watchActionLabel(runtime: ExpeditionDetail): string {
@@ -49,10 +49,14 @@ export function pauseInstruction(runtime: ExpeditionDetail): string | null {
 
 export function assistantEncounterCheckDue(runtime: ExpeditionDetail): boolean {
     if (runtime.expedition.isSpatial && runtime.expedition.activeWatchNumber !== null) return false;
+    const watchNumber = runtime.expedition.activeWatchNumber ?? runtime.expedition.completedWatches + 1;
+    return encounterCheckDueForWatch(runtime, watchNumber);
+}
+
+function encounterCheckDueForWatch(runtime: ExpeditionDetail, watchNumber: number): boolean {
     const cadence = runtime.profile.encounterCadence;
     if (cadence === "None") return false;
     if (cadence === "PerWatch" || cadence === "Custom") {
-        const watchNumber = runtime.expedition.activeWatchNumber ?? runtime.expedition.completedWatches + 1;
         return !runtime.history.some(event =>
             event.kind === "EncounterCheckPerformed"
             && event.watchNumber === watchNumber);
