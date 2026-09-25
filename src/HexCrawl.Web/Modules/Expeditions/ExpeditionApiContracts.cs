@@ -251,7 +251,8 @@ public sealed record StandaloneCrawlContextRequest(
                 HexCenterDistance is > 0 and < double.PositiveInfinity
                     ? HexCenterDistance.Value
                     : throw new ArgumentException("Abstract-hex context requires a positive finite hex-center distance."),
-                DistanceUnit?.ToDomain() ?? HexCrawl.Domain.Spatial.DistanceUnit.Miles))),
+                (DistanceUnit ?? throw new ArgumentException(
+                    "Abstract-hex context requires an explicit distance unit.")).ToDomain()))),
         CrawlSessionContextKind.NonSpatial => new NonSpatialCrawlSessionContext(
             string.IsNullOrWhiteSpace(Name) ? "Non-spatial session" : Name.Trim()),
         CrawlSessionContextKind.WorldBound => throw new ArgumentException(
