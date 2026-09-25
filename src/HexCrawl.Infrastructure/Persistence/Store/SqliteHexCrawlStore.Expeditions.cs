@@ -24,10 +24,10 @@ public sealed partial class SqliteHexCrawlStore
         command.CommandText = """
             INSERT INTO expeditions(
                 id, overworld_id, context_json, owner_user_id, name, state_json, knowledge_json,
-                procedure_json, pause_reason, remaining_watch_ticks, version, created_at, updated_at)
+                party_json, procedure_json, pause_reason, remaining_watch_ticks, version, created_at, updated_at)
             VALUES(
                 $id, $world, $context, $owner, $name, $state, $knowledge,
-                $procedure, $pause, $remaining, $version, $created, $updated);
+                $party, $procedure, $pause, $remaining, $version, $created, $updated);
             """;
         BindExpedition(command, expedition);
         await command.ExecuteNonQueryAsync(cancellationToken);
@@ -107,7 +107,7 @@ public sealed partial class SqliteHexCrawlStore
         await using var connection = await OpenAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT name, context_json, state_json, knowledge_json, procedure_json, pause_reason,
+            SELECT name, context_json, state_json, knowledge_json, party_json, procedure_json, pause_reason,
                    remaining_watch_ticks, version, created_at, updated_at
             FROM expeditions
             WHERE id = $id AND owner_user_id = $owner;
@@ -124,14 +124,16 @@ public sealed partial class SqliteHexCrawlStore
         var context = Deserialize<CrawlSessionContextSnapshot>(reader.GetString(1)).ToDomain();
         var runtime = Deserialize<RuntimeStateSnapshot>(reader.GetString(2)).ToDomain();
         var knowledge = reader.IsDBNull(3) ? null : Deserialize<PlayerKnowledgeState>(reader.GetString(3));
-        var procedure = Deserialize<CrawlProcedureProfile>(reader.GetString(4));
-        RuntimePauseReason? pauseReason = reader.IsDBNull(5)
+        var party = Deserialize<CrawlPartySheet>(reader.GetString(4));
+        party.Validate();
+        var procedure = Deserialize<CrawlProcedureProfile>(reader.GetString(5));
+        RuntimePauseReason? pauseReason = reader.IsDBNull(6)
             ? null
-            : Enum.Parse<RuntimePauseReason>(reader.GetString(5), true);
-        var remaining = TimeSpan.FromTicks(reader.GetInt64(6));
-        var version = reader.GetInt64(7);
-        var created = ParseDate(reader.GetString(8));
-        var updated = ParseDate(reader.GetString(9));
+            : Enum.Parse<RuntimePauseReason>(reader.GetString(6), true);
+        var remaining = TimeSpan.FromTicks(reader.GetInt64(7));
+        var version = reader.GetInt64(8);
+        var created = ParseDate(reader.GetString(9));
+        var updated = ParseDate(reader.GetString(10));
         await reader.CloseAsync();
         var events = await ReadEventsAsync(connection, expeditionId, cancellationToken);
         runtime = runtime switch
@@ -151,7 +153,10 @@ public sealed partial class SqliteHexCrawlStore
             ownerUserId,
             version,
             created,
-            updated);
+            updated)
+        {
+            Party = party
+        };
     }
 
     public async Task<SaveResult<StoredExpedition>> SaveExpeditionAsync(
@@ -193,6 +198,7 @@ public sealed partial class SqliteHexCrawlStore
                 name = $name,
                 state_json = $state,
                 knowledge_json = $knowledge,
+                party_json = $party,
                 procedure_json = $procedure,
                 pause_reason = $pause,
                 remaining_watch_ticks = $remaining,
@@ -207,6 +213,8 @@ public sealed partial class SqliteHexCrawlStore
         command.Parameters.AddWithValue("$name", updated.Name);
         command.Parameters.AddWithValue("$state", Serialize(RuntimeStateSnapshot.FromDomain(updated.Runtime)));
         command.Parameters.AddWithValue("$knowledge", updated.Knowledge is null ? DBNull.Value : Serialize(updated.Knowledge));
+        updated.Party.Validate();
+        command.Parameters.AddWithValue("$party", Serialize(updated.Party));
         command.Parameters.AddWithValue("$procedure", Serialize(updated.Procedure));
         command.Parameters.AddWithValue("$pause", updated.PauseReason?.ToString() is { } pause ? pause : DBNull.Value);
         command.Parameters.AddWithValue("$remaining", updated.RemainingWatchTime.Ticks);
@@ -279,6 +287,8 @@ public sealed partial class SqliteHexCrawlStore
         command.Parameters.AddWithValue("$name", expedition.Name);
         command.Parameters.AddWithValue("$state", Serialize(RuntimeStateSnapshot.FromDomain(expedition.Runtime)));
         command.Parameters.AddWithValue("$knowledge", expedition.Knowledge is null ? DBNull.Value : Serialize(expedition.Knowledge));
+        expedition.Party.Validate();
+        command.Parameters.AddWithValue("$party", Serialize(expedition.Party));
         command.Parameters.AddWithValue("$procedure", Serialize(expedition.Procedure));
         command.Parameters.AddWithValue("$pause", expedition.PauseReason?.ToString() is { } pause ? pause : DBNull.Value);
         command.Parameters.AddWithValue("$remaining", expedition.RemainingWatchTime.Ticks);
