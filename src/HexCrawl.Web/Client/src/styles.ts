@@ -277,14 +277,24 @@ export function ensureStyles(): void {
         .hc-sheet-ledger-heading h3 { margin: 0; color: var(--hc-text-strong); font-size: .95rem; }
         .hc-sheet-ledger-heading span { color: var(--hc-muted); font-size: .72rem; }
         .hc-sheet-empty { margin: 0; padding: .8rem; border: 1px dashed var(--hc-border); color: var(--hc-muted); font-size: .84rem; }
-        .hc-watch-ledger { width: 100%; border-collapse: collapse; table-layout: fixed; background: var(--hc-surface); font-size: .82rem; }
+        .hc-watch-ledger-wrap { width: 100%; overflow-x: auto; }
+        .hc-watch-ledger { width: 100%; min-width: 820px; border-collapse: collapse; table-layout: fixed; background: var(--hc-surface); font-size: .82rem; }
         .hc-watch-ledger th, .hc-watch-ledger td { padding: .42rem .48rem; border: 1px solid var(--hc-border); vertical-align: top; text-align: left; overflow-wrap: anywhere; }
         .hc-watch-ledger th { background: var(--hc-surface-soft); color: var(--hc-text-strong); font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; }
         .hc-watch-ledger th:nth-child(1), .hc-watch-ledger td:nth-child(1) { width: 3.5rem; text-align: center; }
         .hc-watch-ledger th:nth-child(2), .hc-watch-ledger td:nth-child(2) { width: 4.5rem; text-align: center; }
-        .hc-watch-ledger th:nth-child(3), .hc-watch-ledger td:nth-child(3) { width: 6.5rem; }
-        .hc-watch-ledger th:nth-child(4), .hc-watch-ledger td:nth-child(4) { width: 6.5rem; }
+        .hc-watch-ledger th:nth-child(3), .hc-watch-ledger td:nth-child(3) { width: 11rem; }
+        .hc-watch-ledger th:nth-child(4), .hc-watch-ledger td:nth-child(4) { width: 10rem; }
+        .hc-watch-ledger th:nth-child(5), .hc-watch-ledger td:nth-child(5) { width: 8rem; }
+        .hc-watch-ledger th:nth-child(6), .hc-watch-ledger td:nth-child(6) { width: 13rem; }
+        .hc-watch-ledger th:nth-child(7), .hc-watch-ledger td:nth-child(7) { width: 8rem; }
         .hc-watch-ledger tbody tr:first-child td { background: color-mix(in srgb, var(--hc-primary) 7%, var(--hc-surface)); }
+        .hc-event-audit { margin-top: .65rem; padding: .55rem .65rem; border: 1px solid var(--hc-border); border-radius: .4rem; background: var(--hc-surface-elevated); }
+        .hc-event-audit > summary { cursor: pointer; color: var(--hc-text-strong); font-size: .82rem; font-weight: 700; }
+        .hc-event-audit-list { display: grid; gap: .4rem; max-height: 18rem; overflow: auto; margin: .55rem 0 0; padding-left: 1.35rem; }
+        .hc-event-audit-list li { color: var(--hc-muted); font-size: .78rem; }
+        .hc-event-audit-list li strong, .hc-event-audit-list li span { display: block; }
+        .hc-event-audit-list li strong { color: var(--hc-text); font-size: .72rem; }
         .hc-sheet-controls > summary { font-size: .98rem; }
         .hc-sheet-controls fieldset { margin: 0; padding: .7rem; border: 1px solid var(--hc-border); border-radius: .45rem; }
         .hc-sheet-controls fieldset legend { padding: 0 .3rem; color: var(--hc-text-strong); font-size: .78rem; font-weight: 800; letter-spacing: .055em; text-transform: uppercase; }
@@ -322,9 +332,7 @@ export function ensureStyles(): void {
             .hc-run-toolbar-divider, .hc-run-toolbar-label { display: none; }
             .hc-sheet-heading, .hc-sheet-ledger-heading { display: grid; gap: .2rem; }
             .hc-watch-ledger { font-size: .78rem; }
-            .hc-watch-ledger th:nth-child(2), .hc-watch-ledger td:nth-child(2),
-            .hc-watch-ledger th:nth-child(3), .hc-watch-ledger td:nth-child(3),
-            .hc-watch-ledger th:nth-child(4), .hc-watch-ledger td:nth-child(4) { width: auto; }
+            .hc-watch-ledger th:nth-child(n), .hc-watch-ledger td:nth-child(n) { width: auto; }
             .hc-party-register-grid, .hc-party-movement-grid { grid-template-columns: 1fr; }
             .hc-party-register-grid > div { grid-column: 1 !important; border-right: 0; }
             .hc-party-member-row, .hc-party-editor-row, .hc-marching-row, .hc-standing-order-row, .hc-watch-heading-row { grid-template-columns: 1fr; }
