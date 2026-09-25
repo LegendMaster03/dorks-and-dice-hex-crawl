@@ -328,6 +328,14 @@ export function ensureStyles(): void {
         .hc-party-empty-line { margin: 0; padding: .35rem 0; }
         .hc-party-editor-panel[open] > summary { margin-bottom: .7rem; }
 
+        @media (min-width: 1350px) {
+            .hc-workspace-grid .hc-map-panel.hc-run-column {
+                grid-template-columns: minmax(28rem, 1.15fr) minmax(24rem, .85fr);
+                align-items: start;
+            }
+            .hc-workspace-grid .hc-map-panel > .hc-running-sheet { margin-top: 0; }
+        }
+
         @media (max-width: 720px) {
             .hc-run-toolbar-divider, .hc-run-toolbar-label { display: none; }
             .hc-sheet-heading, .hc-sheet-ledger-heading { display: grid; gap: .2rem; }
