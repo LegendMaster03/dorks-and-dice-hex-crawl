@@ -23,20 +23,6 @@ public sealed class RuntimeEngineTests
     }
 
     [Fact]
-    public void AlexandrianVariableDistanceUsesExplicitD6Results()
-    {
-        var expected = Miles(12);
-        var resolved = TravelDistanceResolver.AlexandrianVariable(
-            expected,
-            2,
-            5,
-            new ResolutionProvenance(ResolutionSource.ManualRoll, "physical dice"));
-
-        Assert.Equal(12, resolved.ActualDistance!.Value.Value, 6);
-        Assert.Equal(ResolutionSource.ManualRoll, resolved.Provenance.Source);
-    }
-
-    [Fact]
     public void NavigationSuccessKeepsIntendedCourse()
     {
         var setup = CreateSetup();

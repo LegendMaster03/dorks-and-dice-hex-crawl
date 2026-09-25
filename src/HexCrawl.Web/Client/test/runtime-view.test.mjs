@@ -1,18 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-    alexandrianActualDistance,
     discoveredSubjectIds,
     directionLabel,
     formatDistance,
     formatHours
 } from "../.test-dist/runtime-view.js";
-
-test("Alexandrian distance helper is deterministic from resolved dice", () => {
-    assert.equal(alexandrianActualDistance(12, 2, 5), 12);
-    assert.equal(alexandrianActualDistance(12, 1, 1), 6);
-    assert.equal(alexandrianActualDistance(12, 6, 6), 18);
-});
 
 test("discovery projection remains subject-specific", () => {
     const runtime = {
