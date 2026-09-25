@@ -252,6 +252,15 @@ test("running sheet wires server-verified automatic procedure resolution through
     assert.match(controller, /generatedEncounterLocationId === null/);
 });
 
+test("automatic resolution and watch advancement lock each other while pending", () => {
+    const controller = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-watch-controller.ts"), "utf8");
+    assert.match(controller, /private resolutionPending = false/);
+    assert.match(controller, /button\.disabled = !any \|\| this\.advancePending \|\| this\.resolutionPending/);
+    assert.match(controller, /this\.disposed \|\| this\.advancePending \|\| this\.resolutionPending/);
+    assert.match(controller, /this\.advancePending \|\| this\.resolutionPending \|\| this\.disposed/);
+    assert.match(controller, /this\.advanceButton\.disabled = true;[\s\S]{0,160}button\.disabled = true;/);
+});
+
 test("due navigation and encounter inputs have no implicit successful result", () => {
     const view = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-view.ts"), "utf8");
     const controller = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-watch-controller.ts"), "utf8");

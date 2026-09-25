@@ -105,5 +105,27 @@ test("watch ledger keeps distinct distance units separate instead of assuming co
         ]
     }));
 
-    assert.equal(ledger[0].progress, "2 mi + 3 hex · 2 h elapsed");
+    assert.equal(ledger[0].progress, "2 mi + 3 hex · 1 h elapsed");
+});
+
+test("watch ledger reports watch-local elapsed time after earlier watches", () => {
+    const ledger = buildWatchLedger(runtime({
+        expedition: {
+            completedWatches: 2,
+            activeWatchNumber: null,
+            activeWatchTotalHours: null,
+            activeWatchRemainingHours: null,
+            activeEncounterKind: null,
+            activeEncounterHandled: null
+        },
+        history: [
+            event(10, 2, "WatchStarted", 4, { q: 1, r: 0 }, "Watch started."),
+            event(11, 2, "DistanceTraveled", 8, { q: 2, r: 0 }, "Traveled.", 6, "mi"),
+            event(12, 2, "WatchCompleted", 8, { q: 2, r: 0 }, "Watch completed.")
+        ]
+    }));
+
+    assert.equal(ledger[0].day, 1);
+    assert.equal(ledger[0].watchNumber, 2);
+    assert.equal(ledger[0].progress, "6 mi · 4 h elapsed");
 });

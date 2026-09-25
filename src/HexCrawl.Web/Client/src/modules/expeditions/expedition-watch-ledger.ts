@@ -36,11 +36,13 @@ function buildRow(
     const lastElapsed = events.reduce(
         (value, event) => Math.max(value, event.expeditionElapsedHours),
         0);
+    const watchStartElapsed = Number.isFinite(firstElapsed) ? firstElapsed : lastElapsed;
+    const watchElapsed = Math.max(0, lastElapsed - watchStartElapsed);
 
     return {
-        day: Math.floor((Number.isFinite(firstElapsed) ? firstElapsed : lastElapsed) / 24) + 1,
+        day: Math.floor(watchStartElapsed / 24) + 1,
         watchNumber,
-        progress: progressLabel(events, lastElapsed),
+        progress: progressLabel(events, watchElapsed),
         route: routeLabel(events),
         navigation: navigationLabel(events),
         encounter: encounterLabel(runtime, watchNumber, events),

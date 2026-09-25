@@ -31,6 +31,7 @@ export class ExpeditionWatchController {
     private readonly locationSelect: HTMLSelectElement;
     private disposed = false;
     private advancePending = false;
+    private resolutionPending = false;
     private generatedResolutionId: string | null = null;
     private generatedEncounterLocationId: string | null | undefined;
     private segmentStateKey: string | null = null;
@@ -303,15 +304,17 @@ export class ExpeditionWatchController {
         required<HTMLElement>(this.root, "[data-helper-navigation]").hidden = !applicability.navigation;
         required<HTMLElement>(this.root, "[data-helper-encounter]").hidden = !applicability.encounter;
         const button = required<HTMLButtonElement>(this.root, "[data-resolution-helper-button]");
-        if (!this.advancePending) button.disabled = !any;
+        button.disabled = !any || this.advancePending || this.resolutionPending;
     }
 
     private generateProcedureResolution(): void {
-        if (this.disposed) return;
+        if (this.disposed || this.advancePending || this.resolutionPending) return;
         const button = required<HTMLButtonElement>(this.root, "[data-resolution-helper-button]");
         if (button.disabled) return;
 
         const idleText = button.textContent ?? "Roll procedure inputs";
+        this.resolutionPending = true;
+        this.advanceButton.disabled = true;
         button.disabled = true;
         button.textContent = "Rolling…";
 
@@ -357,8 +360,11 @@ export class ExpeditionWatchController {
                 }
                 this.applyGeneratedResolution(result);
             } finally {
+                this.resolutionPending = false;
                 if (!this.disposed) {
                     button.textContent = idleText;
+                    this.advanceButton.disabled = false;
+                    this.advanceButton.textContent = watchActionLabel(this.getRuntime());
                     this.syncResolutionHelperVisibility();
                 }
             }
@@ -493,11 +499,12 @@ export class ExpeditionWatchController {
 
     private submit(event: SubmitEvent): void {
         event.preventDefault();
-        if (this.advancePending || this.disposed) return;
+        if (this.advancePending || this.resolutionPending || this.disposed) return;
 
         this.advancePending = true;
         this.advanceButton.disabled = true;
         this.advanceButton.textContent = "Applying…";
+        this.syncResolutionHelperVisibility();
 
         void this.runMutation(async () => {
             try {
@@ -611,6 +618,7 @@ export class ExpeditionWatchController {
                     this.advanceButton.disabled = false;
                     this.advanceButton.textContent =
                         watchActionLabel(this.getRuntime());
+                    this.syncResolutionHelperVisibility();
                 }
             }
         });
