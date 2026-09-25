@@ -53,6 +53,9 @@ export class ExpeditionWatchController {
             "boundarySource"
         ] as const) {
             const control = select(this.form, name);
+            const placeholder = option("", "Select resolution source");
+            placeholder.disabled = true;
+            control.append(placeholder);
             for (const source of manualEntryResolutionSources) {
                 control.append(option(source, sourceLabel(source)));
             }
@@ -61,7 +64,7 @@ export class ExpeditionWatchController {
                 automatic.disabled = true;
                 control.append(automatic);
             }
-            control.value = "ManualRoll";
+            control.value = "";
         }
 
         if (world) {
@@ -232,12 +235,20 @@ export class ExpeditionWatchController {
         input(this.form, "encounterHour").value = "";
         input(this.form, "encounterNote").value = "";
         input(this.form, "encounterSourceNote").value = "";
+        input(this.form, "boundaryNote").value = "";
+        input(this.form, "dmOverrideNote").value = "";
+        input(this.form, "helperNavigationDc").value = "";
+        input(this.form, "helperNavigationModifier").value = "";
+        input(this.form, "helperFailureVeer").value = "";
+        checkbox(this.form, "recognizedLost").checked = false;
+        checkbox(this.form, "reorient").checked = false;
         select(this.form, "navigationOutcome").value = "";
         select(this.form, "encounterOutcome").value = "";
         this.locationSelect.value = "";
-        select(this.form, "travelSource").value = "ManualRoll";
-        select(this.form, "navigationSource").value = "ManualRoll";
-        select(this.form, "encounterSource").value = "ManualRoll";
+        select(this.form, "travelSource").value = "";
+        select(this.form, "navigationSource").value = "";
+        select(this.form, "encounterSource").value = "";
+        select(this.form, "boundarySource").value = "";
         this.generatedResolutionId = null;
         this.generatedEncounterLocationId = undefined;
         const helperResult = this.root.querySelector<HTMLElement>("[data-resolution-helper-result]");
@@ -466,6 +477,20 @@ export class ExpeditionWatchController {
         }
     }
 
+    private readResolutionSource(
+        name: "travelSource" | "navigationSource" | "encounterSource" | "boundarySource",
+        label: string,
+        allowAutomatic = true): ResolutionSource {
+        const value = select(this.form, name).value;
+        if (!value) {
+            throw new Error(`Select the ${label} resolution source.`);
+        }
+        if (value === "AutomaticRoll" && !allowAutomatic) {
+            throw new Error(`${label} can not use automatic procedure provenance.`);
+        }
+        return value as ResolutionSource;
+    }
+
     private submit(event: SubmitEvent): void {
         event.preventDefault();
         if (this.advancePending || this.disposed) return;
@@ -496,7 +521,7 @@ export class ExpeditionWatchController {
                     resetsVeerAtBoundary: checkbox(this.form, "resetVeer").checked,
                     resolutionSource: "ManualRoll",
                     travelResolutionSource:
-                        select(this.form, "travelSource").value as ResolutionSource,
+                        this.readResolutionSource("travelSource", "travel"),
                     travelResolutionNote: optionalText(input(this.form, "travelNote")),
                     deliberateDoubleBack:
                         runtime.profile.supportsDeliberateDoubleBack
@@ -523,7 +548,7 @@ export class ExpeditionWatchController {
                         request.veerSteps = nonZeroInteger(input(this.form, "veerSteps"));
                     }
                     request.navigationResolutionSource =
-                        select(this.form, "navigationSource").value as ResolutionSource;
+                        this.readResolutionSource("navigationSource", "navigation");
                     request.navigationResolutionNote =
                         optionalText(input(this.form, "navigationNote"));
                 }
@@ -537,7 +562,7 @@ export class ExpeditionWatchController {
                     request.encounterOutcome =
                         encounterOutcome as RuntimeAdvanceRequest["encounterOutcome"];
                     request.encounterResolutionSource =
-                        select(this.form, "encounterSource").value as ResolutionSource;
+                        this.readResolutionSource("encounterSource", "encounter");
                     request.encounterResolutionNote =
                         optionalText(input(this.form, "encounterSourceNote"));
                     if (request.encounterOutcome !== "None") {
@@ -557,7 +582,7 @@ export class ExpeditionWatchController {
                     request.recognizedLost = checkbox(this.form, "recognizedLost").checked;
                     request.reorient = checkbox(this.form, "reorient").checked;
                     request.boundaryResolutionSource =
-                        select(this.form, "boundarySource").value as ResolutionSource;
+                        this.readResolutionSource("boundarySource", "boundary", false);
                     request.boundaryResolutionNote =
                         optionalText(input(this.form, "boundaryNote"));
                 }
