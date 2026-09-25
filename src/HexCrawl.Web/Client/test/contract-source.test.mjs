@@ -259,9 +259,11 @@ test("procedure mechanics use one shared presentation policy across setup, assis
     const profileView = fs.readFileSync(path.join(sourceDir, "procedure-profile-view.ts"), "utf8");
     const setup = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-setup.ts"), "utf8");
     const assistant = fs.readFileSync(path.join(sourceDir, "modules/assistants/assistant-entry-view.ts"), "utf8");
+    const home = fs.readFileSync(path.join(sourceDir, "modules/home/tool-home-view.ts"), "utf8");
     const presentation = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-presentation.ts"), "utf8");
     assert.match(setup, /procedureProfileSummary/);
     assert.match(assistant, /procedureProfileSummary/);
+    assert.match(home, /procedureProfileSummary/);
     assert.match(presentation, /procedureMechanicLines/);
     assert.match(profileView, /exit factors start/);
     assert.match(profileView, /actual distance = expected distance/);

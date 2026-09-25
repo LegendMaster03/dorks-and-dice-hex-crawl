@@ -3,6 +3,7 @@ import { customUnitFieldsVisible } from "../worlds/world-form";
 import type { DistanceUnitKind } from "../worlds/world-form";
 import type { ExpeditionSummary, OverworldSummary, RuntimeProfile, StartStandaloneCrawlSessionInput } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
+import { procedureProfileSummary } from "../../procedure-profile-view";
 import { input, integer, numeric, option, required, select } from "../../ui/dom";
 
 const ABSTRACT_CONTEXT = "__abstract__";
@@ -132,7 +133,7 @@ export async function renderToolHome(
     const syncProcedure = (): void => {
         const profile = profiles.find(candidate => candidate.key === procedure.value);
         required<HTMLElement>(form, "[data-procedure-summary]").textContent = profile
-            ? `${profile.watchHours}h watches · ${profile.travelResolution === "HexSteps" ? "hex-step travel" : profile.actualDistanceResolution === "Fixed" ? "fixed distance" : "resolved variable distance"} · ${profile.usesNavigationChecks ? "navigation checks" : "no navigation checks"} · encounters ${profile.encounterCadence.toLowerCase()}`
+            ? procedureProfileSummary(profile)
             : "";
     };
 
