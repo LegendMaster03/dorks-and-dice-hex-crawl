@@ -33,9 +33,12 @@ public readonly record struct DistanceUnit
             throw new ArgumentException("A custom distance unit requires a symbol.", nameof(symbol));
         }
 
-        if (metersPerUnit.HasValue && metersPerUnit.Value <= 0)
+        if (metersPerUnit.HasValue
+            && (!double.IsFinite(metersPerUnit.Value) || metersPerUnit.Value <= 0))
         {
-            throw new ArgumentOutOfRangeException(nameof(metersPerUnit));
+            throw new ArgumentOutOfRangeException(
+                nameof(metersPerUnit),
+                "A custom distance conversion must be finite and positive.");
         }
 
         return new DistanceUnit(DistanceUnitKind.Custom, symbol.Trim(), metersPerUnit);
