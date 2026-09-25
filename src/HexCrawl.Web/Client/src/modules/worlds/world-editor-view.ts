@@ -27,8 +27,8 @@ export async function renderWorldEditor(
     root.innerHTML = `
         <section class="hc-page hc-workspace hc-world-editor">
             <header class="hc-page-header">
-                <div><h1 data-title></h1><p>World map editor</p></div>
-                <nav><button type="button" data-worlds>Overworlds</button><button type="button" data-reset-view>Reset map view</button></nav>
+                <div><span class="hc-sheet-kicker">Map preparation</span><h1 data-title></h1><p>World authoring, source maps, locations, and features.</p></div>
+                <nav><button type="button" data-worlds>All overworlds</button><button type="button" data-reset-view>Reset map view</button></nav>
             </header>
             <div class="hc-error" data-error hidden role="alert"></div>
             <div class="hc-workspace-grid">
@@ -81,13 +81,13 @@ export async function renderWorldEditor(
                         </form>
                     </details>
 
-                    <details><summary>Expeditions</summary><div data-expedition-list></div>
+                    <details><summary>Running sheets for this world</summary><div data-expedition-list></div>
                         <form class="hc-form" data-expedition-form>
                             <label>Name <input name="name" required value="Expedition"></label>
                             <label>Procedure <select name="procedure"></select></label>
                             <div class="hc-inline"><label>Start hex q <input name="q" type="number" step="1" value="0"></label><label>Start hex r <input name="r" type="number" step="1" value="0"></label></div>
                             <p class="hc-hint">Advanced: q/r are axial hex coordinates and remain the persisted coordinate format.</p>
-                            <button type="submit" class="hc-primary-action">Start expedition</button>
+                            <button type="submit" class="hc-primary-action">Start running sheet</button>
                         </form>
                     </details>
                     <details><summary>Source-map metadata</summary><p data-source-maps></p></details>
