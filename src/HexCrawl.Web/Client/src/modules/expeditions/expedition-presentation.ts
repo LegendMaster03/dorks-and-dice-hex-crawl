@@ -214,7 +214,7 @@ export function renderNonSpatialTracker(
                     <section class="hc-sheet-ledger" aria-labelledby="hc-nonspatial-watch-log">
                         <div class="hc-sheet-ledger-heading">
                             <h3 id="hc-nonspatial-watch-log">Watch log</h3>
-                            <span>Watch · Elapsed · Record</span>
+                            <span>Watch · Elapsed · Hex · Record</span>
                         </div>
                         <div data-history></div>
                     </section>
