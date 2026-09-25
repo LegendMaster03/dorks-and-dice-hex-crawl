@@ -83,6 +83,12 @@ Boundary interruptions remain the same watch. A reload therefore restores the ac
 
 The DM-facing `CurrentDay` value is currently derived from elapsed session/travel time in 24-hour bands. This is intentionally travel-time semantics, not yet a general campaign calendar. A future rest/calendar system should introduce explicit world-time state rather than silently changing the meaning of `ElapsedTravelTime`.
 
+### Party running sheet
+
+`CrawlPartySheet` is optional persistent expedition-owned reference data. It currently stores party members, a flexible rank/file marching order, watch rotation, standing orders, a default navigator, and optional Hour / Watch / March movement references with explicit distance units.
+
+This state is deliberately adjacent to the deterministic crawl runtime rather than embedded in `ActiveWatchState`. It can later accept richer travel-role or movement derivation without making party composition a prerequisite for ordinary watch advancement. The current active-watch activities remain open strings/keys; a future Rules Core integration that needs character-to-duty assignments should add typed mechanic and assignment references rather than hard-code a Hex Crawl skill list.
+
 ### Player knowledge and presentation policy
 
 `PlayerKnowledgeState` exists only for `WorldBound` sessions, because disclosure refers to actual authored world subjects. `AbstractHex` and `NonSpatial` sessions persist no synthetic knowledge snapshot.
@@ -176,9 +182,9 @@ The domain and application contracts support independent provenance for travel, 
 - `ExternalSystem`;
 - `DmOverride`.
 
-`AutomaticRoll` means that a trusted helper or integration actually generated the corresponding resolved value. The current workbench does not contain such a helper. Therefore ordinary manual DM entry offers only `ProcedureDefault`, `ManualRoll`, `ExternalSystem`, and `DmOverride`; it does not allow a manually typed value to be labeled `AutomaticRoll`.
+`AutomaticRoll` means that the server-side procedure-resolution helper actually generated the corresponding resolved value. Ordinary manual DM entry still offers only `ProcedureDefault`, `ManualRoll`, `ExternalSystem`, and `DmOverride`; it can not label a manually typed value `AutomaticRoll`.
 
-A future helper may set `AutomaticRoll` programmatically when it genuinely produces a travel, navigation, encounter, or boundary result. This preserves the domain value without fabricating provenance in the current UI.
+Generated helper results are persisted with a server-generated resolution ID, audit sequence, watch number, exact generated values, and aggregate version. Applying `AutomaticRoll` values requires the matching persisted generated result; forged provenance text, stale generations, cross-session identifiers, tampered values, and reused consumed results are rejected.
 
 Optional notes can describe physical dice, an external system result, an override context, a table clock, or a future trusted helper result. Non-spatial watch bookkeeping records the provenance of each elapsed-time segment; `DmOverride` additionally produces `DmOverrideApplied` history. The workbench appends compact `ResolutionProvenanceRecorded` entries for auditability.
 
