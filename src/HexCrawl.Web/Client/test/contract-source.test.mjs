@@ -208,3 +208,12 @@ test("watch planning uses travel-duty terminology without changing persisted act
     assert.match(view, /name="activities"/);
     assert.match(view, /navigate, forage, map, scout/);
 });
+
+
+test("party movement editor derives units from persisted session data without a mile fallback", () => {
+    const party = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-party-sheet.ts"), "utf8");
+    assert.match(party, /runtime\.context\.hexCenterDistance\?\.unit/);
+    assert.match(party, /runtime\.expedition\.distanceTraveled\.unit/);
+    assert.doesNotMatch(party, /\?\? \{ kind: "Mile", symbol: "mi", metersPerUnit: 1609\.344 \}/);
+    assert.match(party, /custom movement unit conversion must be a finite positive number/i);
+});
