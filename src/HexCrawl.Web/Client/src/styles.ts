@@ -280,9 +280,10 @@ export function ensureStyles(): void {
         .hc-watch-ledger { width: 100%; border-collapse: collapse; table-layout: fixed; background: var(--hc-surface); font-size: .82rem; }
         .hc-watch-ledger th, .hc-watch-ledger td { padding: .42rem .48rem; border: 1px solid var(--hc-border); vertical-align: top; text-align: left; overflow-wrap: anywhere; }
         .hc-watch-ledger th { background: var(--hc-surface-soft); color: var(--hc-text-strong); font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; }
-        .hc-watch-ledger th:nth-child(1), .hc-watch-ledger td:nth-child(1) { width: 4.5rem; text-align: center; }
-        .hc-watch-ledger th:nth-child(2), .hc-watch-ledger td:nth-child(2) { width: 6.5rem; }
+        .hc-watch-ledger th:nth-child(1), .hc-watch-ledger td:nth-child(1) { width: 3.5rem; text-align: center; }
+        .hc-watch-ledger th:nth-child(2), .hc-watch-ledger td:nth-child(2) { width: 4.5rem; text-align: center; }
         .hc-watch-ledger th:nth-child(3), .hc-watch-ledger td:nth-child(3) { width: 6.5rem; }
+        .hc-watch-ledger th:nth-child(4), .hc-watch-ledger td:nth-child(4) { width: 6.5rem; }
         .hc-watch-ledger tbody tr:first-child td { background: color-mix(in srgb, var(--hc-primary) 7%, var(--hc-surface)); }
         .hc-sheet-controls > summary { font-size: .98rem; }
         .hc-sheet-controls fieldset { margin: 0; padding: .7rem; border: 1px solid var(--hc-border); border-radius: .45rem; }
@@ -322,7 +323,8 @@ export function ensureStyles(): void {
             .hc-sheet-heading, .hc-sheet-ledger-heading { display: grid; gap: .2rem; }
             .hc-watch-ledger { font-size: .78rem; }
             .hc-watch-ledger th:nth-child(2), .hc-watch-ledger td:nth-child(2),
-            .hc-watch-ledger th:nth-child(3), .hc-watch-ledger td:nth-child(3) { width: auto; }
+            .hc-watch-ledger th:nth-child(3), .hc-watch-ledger td:nth-child(3),
+            .hc-watch-ledger th:nth-child(4), .hc-watch-ledger td:nth-child(4) { width: auto; }
             .hc-party-register-grid, .hc-party-movement-grid { grid-template-columns: 1fr; }
             .hc-party-register-grid > div { grid-column: 1 !important; border-right: 0; }
             .hc-party-member-row, .hc-party-editor-row, .hc-marching-row, .hc-standing-order-row, .hc-watch-heading-row { grid-template-columns: 1fr; }
