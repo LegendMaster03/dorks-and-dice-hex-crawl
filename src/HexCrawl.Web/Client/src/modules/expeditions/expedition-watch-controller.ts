@@ -514,8 +514,11 @@ export class ExpeditionWatchController {
                 }
 
                 if (navRequired) {
-                    request.navigationOutcome =
-                        select(this.form, "navigationOutcome").value as "Succeeded" | "Failed";
+                    const navigationOutcome = select(this.form, "navigationOutcome").value;
+                    if (navigationOutcome !== "Succeeded" && navigationOutcome !== "Failed") {
+                        throw new Error("A navigation check is due. Select its resolved result.");
+                    }
+                    request.navigationOutcome = navigationOutcome;
                     if (request.navigationOutcome === "Failed") {
                         request.veerSteps = nonZeroInteger(input(this.form, "veerSteps"));
                     }
@@ -526,9 +529,13 @@ export class ExpeditionWatchController {
                 }
 
                 if (encounterRequired) {
-                    request.encounterOutcome = (
-                        select(this.form, "encounterOutcome").value
-                    ) as RuntimeAdvanceRequest["encounterOutcome"];
+                    const encounterOutcome = select(this.form, "encounterOutcome").value;
+                    if (!["None", "WanderingEncounter", "KeyedLocationDiscovery", "ManualCustom"]
+                        .includes(encounterOutcome)) {
+                        throw new Error("An encounter check is due. Select its resolved outcome.");
+                    }
+                    request.encounterOutcome =
+                        encounterOutcome as RuntimeAdvanceRequest["encounterOutcome"];
                     request.encounterResolutionSource =
                         select(this.form, "encounterSource").value as ResolutionSource;
                     request.encounterResolutionNote =
@@ -556,7 +563,23 @@ export class ExpeditionWatchController {
                 }
 
                 request.dmOverrideNote = optionalText(input(this.form, "dmOverrideNote"));
-                this.applyRuntime(await this.api.advanceExpedition(runtime.id, request));
+                const usesAutomatic = [
+                    request.travelResolutionSource,
+                    request.navigationResolutionSource,
+                    request.encounterResolutionSource
+                ].some(source => source === "AutomaticRoll");
+                if (usesAutomatic) {
+                    if (!this.generatedResolutionId) {
+                        throw new Error(
+                            "Automatic procedure results are no longer valid. Generate them again before running the watch.");
+                    }
+                    request.generatedProcedureResolutionId = this.generatedResolutionId;
+                }
+
+                const advanced = await this.api.advanceExpedition(runtime.id, request);
+                this.generatedResolutionId = null;
+                this.generatedEncounterLocationId = undefined;
+                this.applyRuntime(advanced);
             } finally {
                 this.advancePending = false;
                 if (!this.disposed) {
@@ -581,4 +604,10 @@ function paragraph(text: string): HTMLParagraphElement {
     item.className = "hc-hint";
     item.textContent = text;
     return item;
+}
+
+function formatNumber(value: number): string {
+    return Number.isInteger(value)
+        ? String(value)
+        : value.toFixed(3).replace(/0+$/, "").replace(/\.$/, "");
 }
