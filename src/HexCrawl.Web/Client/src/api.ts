@@ -26,6 +26,7 @@ import type {
     UpdateExpeditionPartyRequest,
     WorldPoint
 } from "./types";
+import type { TravelEnvironmentCatalog } from "./travel-rules";
 
 let activeBackendBaseUrl = "";
 
@@ -334,6 +335,12 @@ export class HexCrawlApi {
 
     public getExpedition(expeditionId: string): Promise<ExpeditionDetail> {
         return this.getJson(`/api/expeditions/${encodeURIComponent(expeditionId)}`, "Expedition");
+    }
+
+    public getTravelEnvironmentCatalog(expeditionId: string): Promise<TravelEnvironmentCatalog> {
+        return this.getJson(
+            `/api/expeditions/${encodeURIComponent(expeditionId)}/travel-environment`,
+            "Travel and environment rules");
     }
 
     public advanceExpedition(expeditionId: string, input: RuntimeAdvanceRequest): Promise<ExpeditionDetail> {
