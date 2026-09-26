@@ -122,7 +122,8 @@ public sealed partial class SqliteHexCrawlStore
         }
 
         var name = reader.GetString(0);
-        var context = Deserialize<CrawlSessionContextSnapshot>(reader.GetString(1)).ToDomain();
+        var contextSnapshot = Deserialize<CrawlSessionContextSnapshot>(reader.GetString(1));
+        var context = contextSnapshot.ToDomain();
         var runtime = Deserialize<RuntimeStateSnapshot>(reader.GetString(2)).ToDomain();
         var knowledge = reader.IsDBNull(3) ? null : Deserialize<PlayerKnowledgeState>(reader.GetString(3));
         var party = Deserialize<CrawlPartySheet>(reader.GetString(4));
@@ -158,7 +159,8 @@ public sealed partial class SqliteHexCrawlStore
             updated)
         {
             Party = party,
-            GeneratedProcedureResolutions = generatedResolutions
+            GeneratedProcedureResolutions = generatedResolutions,
+            CampaignId = contextSnapshot.CampaignId
         };
     }
 
@@ -212,7 +214,7 @@ public sealed partial class SqliteHexCrawlStore
             """;
         command.Parameters.AddWithValue("$id", updated.Id.ToString("D"));
         command.Parameters.AddWithValue("$world", updated.Context.OverworldId?.ToString("D") is { } worldId ? worldId : DBNull.Value);
-        command.Parameters.AddWithValue("$context", Serialize(CrawlSessionContextSnapshot.FromDomain(updated.Context)));
+        command.Parameters.AddWithValue("$context", Serialize(CrawlSessionContextSnapshot.FromDomain(updated.Context, updated.CampaignId)));
         command.Parameters.AddWithValue("$owner", updated.OwnerUserId);
         command.Parameters.AddWithValue("$name", updated.Name);
         command.Parameters.AddWithValue("$state", Serialize(RuntimeStateSnapshot.FromDomain(updated.Runtime)));
@@ -287,7 +289,7 @@ public sealed partial class SqliteHexCrawlStore
     {
         command.Parameters.AddWithValue("$id", expedition.Id.ToString("D"));
         command.Parameters.AddWithValue("$world", expedition.Context.OverworldId?.ToString("D") is { } worldId ? worldId : DBNull.Value);
-        command.Parameters.AddWithValue("$context", Serialize(CrawlSessionContextSnapshot.FromDomain(expedition.Context)));
+        command.Parameters.AddWithValue("$context", Serialize(CrawlSessionContextSnapshot.FromDomain(expedition.Context, expedition.CampaignId)));
         command.Parameters.AddWithValue("$owner", expedition.OwnerUserId);
         command.Parameters.AddWithValue("$name", expedition.Name);
         command.Parameters.AddWithValue("$state", Serialize(RuntimeStateSnapshot.FromDomain(expedition.Runtime)));

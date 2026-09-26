@@ -1,6 +1,7 @@
 using HexCrawl.Web.Modules.Expeditions;
 using HexCrawl.Web.Modules.ReferenceData;
 using HexCrawl.Web.Modules.SourceMaps;
+using HexCrawl.Web.Modules.TravelRules;
 using HexCrawl.Web.Modules.Worlds;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
@@ -17,6 +18,7 @@ public static class HexCrawlModuleCatalog
     [
         new WorldModule(),
         new ExpeditionModule(),
+        new TravelRulesModule(),
         new SourceMapModule(),
         new ReferenceDataModule()
     ]);
