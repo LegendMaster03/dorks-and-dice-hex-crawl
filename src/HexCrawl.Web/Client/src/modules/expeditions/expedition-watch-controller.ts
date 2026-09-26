@@ -4,6 +4,7 @@ import { suggestedWatchDistance } from "./expedition-party-movement";
 import { encounterCheckDue, navigationResolutionDue, watchActionLabel } from "./expedition-workflow";
 import { formatHours } from "../../runtime-view";
 import { procedureHelperMechanics } from "../../procedure-profile-view";
+import type { SourceBackedProcedureResolutionHelperRequest } from "../../travel-rules";
 import type {
     ExpeditionDetail,
     Overworld,
@@ -25,11 +26,13 @@ import {
     select,
     sourceLabel
 } from "../../ui/dom";
+import { RulesCoreTravelUi } from "./rules-core-travel-ui";
 
 export class ExpeditionWatchController {
     private readonly form: HTMLFormElement;
     private readonly advanceButton: HTMLButtonElement;
     private readonly locationSelect: HTMLSelectElement;
+    private readonly rulesCoreTravelUi: RulesCoreTravelUi;
     private disposed = false;
     private advancePending = false;
     private resolutionPending = false;
@@ -48,6 +51,8 @@ export class ExpeditionWatchController {
         this.form = required<HTMLFormElement>(root, "[data-advance]");
         this.advanceButton = required<HTMLButtonElement>(this.form, "[data-advance-button]");
         this.locationSelect = select(this.form, "locationId");
+        this.rulesCoreTravelUi = new RulesCoreTravelUi(root, api);
+        void this.rulesCoreTravelUi.load(this.getRuntime().id);
 
         for (const name of [
             "travelSource",
@@ -217,6 +222,7 @@ export class ExpeditionWatchController {
 
     public dispose(): void {
         this.disposed = true;
+        this.rulesCoreTravelUi.dispose();
     }
 
     private syncSegmentState(
@@ -347,7 +353,7 @@ export class ExpeditionWatchController {
                     throw new Error("No automatic procedure helper is applicable to the current watch state.");
                 }
 
-                const request = {
+                const request: SourceBackedProcedureResolutionHelperRequest = {
                     expectedVersion: runtime.version,
                     suppressesNavigationCheck: checkbox(this.form, "suppressNav").checked,
                     deliberateDoubleBack:
@@ -357,10 +363,10 @@ export class ExpeditionWatchController {
                         ? integer(input(this.form, "helperNavigationModifier"))
                         : 0,
                     expectedDistance: applicability.travel
-                        ? numeric(input(this.form, "expectedDistance"))
+                        ? optionalNumeric(input(this.form, "expectedDistance"))
                         : undefined,
                     navigationDifficultyClass: applicability.navigation
-                        ? integer(input(this.form, "helperNavigationDc"))
+                        ? optionalInteger(input(this.form, "helperNavigationDc"))
                         : undefined,
                     failureVeerSteps: applicability.navigation
                         ? nonZeroInteger(input(this.form, "helperFailureVeer"))
@@ -369,6 +375,7 @@ export class ExpeditionWatchController {
                         ? this.locationSelect.value
                         : undefined
                 };
+                this.rulesCoreTravelUi.applySourceInputs(request, applicability);
 
                 const result = await this.api.resolveProcedureInputs(runtime.id, request);
                 if (result.generatedResolutionId !== null) {
@@ -693,6 +700,14 @@ function paragraph(text: string): HTMLParagraphElement {
     item.className = "hc-hint";
     item.textContent = text;
     return item;
+}
+
+function optionalNumeric(control: HTMLInputElement): number | undefined {
+    return control.value.trim() ? numeric(control) : undefined;
+}
+
+function optionalInteger(control: HTMLInputElement): number | undefined {
+    return control.value.trim() ? integer(control) : undefined;
 }
 
 function formatNumber(value: number): string {
