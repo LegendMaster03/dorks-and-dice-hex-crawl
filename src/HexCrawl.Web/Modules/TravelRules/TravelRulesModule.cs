@@ -22,6 +22,7 @@ public sealed class TravelRulesModule : IHexCrawlModule
     public void RegisterServices(IServiceCollection services)
     {
         services.AddScoped<ExpeditionTravelRulesService>();
+        services.AddScoped<ProcedureResolutionRulesCoreAdapter>();
     }
 
     public void MapEndpoints(RouteGroupBuilder api)
