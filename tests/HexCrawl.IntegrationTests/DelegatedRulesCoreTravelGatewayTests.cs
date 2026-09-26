@@ -6,6 +6,7 @@ using HexCrawl.Application.Rules;
 using HexCrawl.Web.Authentication;
 using HexCrawl.Web.Rules;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace HexCrawl.IntegrationTests;
@@ -80,8 +81,8 @@ public sealed class DelegatedRulesCoreTravelGatewayTests
 
     private static async Task<DefaultHttpContext> AuthenticatedContextAsync(Guid? campaignId)
     {
-        var campaigns = campaignId.HasValue
-            ? new[] { new ToolHostCampaignContext(campaignId.Value, "Campaign", "dm") }
+        IReadOnlyList<ToolHostCampaignContext> campaigns = campaignId.HasValue
+            ? [new ToolHostCampaignContext(campaignId.Value, "Campaign", "dm")]
             : [];
         var auth = new ToolHostAuthenticationContext(
             1,
@@ -98,7 +99,8 @@ public sealed class DelegatedRulesCoreTravelGatewayTests
         context.Request.Headers[ToolHostAuthenticationHeaders.Ticket] = "ticket";
         context.Request.Headers[ToolHostAuthenticationHeaders.IntrospectionPath] =
             "/tool-host/hex-crawl/api/introspect";
-        var middleware = new HostedToolAuthenticationMiddleware(_ => Task.CompletedTask);
+        var configuration = new ConfigurationBuilder().Build();
+        var middleware = new HostedToolAuthenticationMiddleware(_ => Task.CompletedTask, configuration);
         await middleware.InvokeAsync(context, new StaticAuthenticationClient(auth));
         return context;
     }
