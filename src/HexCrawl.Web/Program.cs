@@ -3,6 +3,7 @@ using HexCrawl.Application;
 using HexCrawl.Application.Assets;
 using HexCrawl.Application.Hosting;
 using HexCrawl.Application.Persistence;
+using HexCrawl.Application.Rules;
 using HexCrawl.Infrastructure.Assets;
 using HexCrawl.Infrastructure.Hosting;
 using HexCrawl.Infrastructure.Persistence;
@@ -10,6 +11,7 @@ using HexCrawl.Infrastructure.Runtime;
 using HexCrawl.Web.Api;
 using HexCrawl.Web.Authentication;
 using HexCrawl.Web.Framework;
+using HexCrawl.Web.Rules;
 using Microsoft.AspNetCore.Http.Features;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -51,11 +53,23 @@ if (!string.IsNullOrWhiteSpace(toolHostBaseUrl))
 builder.Services.AddSingleton<IHexCrawlStore>(_ => new SqliteHexCrawlStore(connectionString));
 builder.Services.AddSingleton<IMapAssetStore>(_ => new FilesystemMapAssetStore(assetRoot));
 builder.Services.AddSingleton<IProcedureResolutionRandomSource, CryptographicProcedureResolutionRandomSource>();
+builder.Services.AddHttpContextAccessor();
 HexCrawlModuleCatalog.RegisterServices(builder.Services);
 builder.Services
     .AddHttpClient<IToolHostAuthenticationClient, DorksAndDiceToolHostAuthenticationClient>(client =>
     {
         client.Timeout = TimeSpan.FromSeconds(3);
+        client.BaseAddress = toolHostBaseUri;
+    })
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+    {
+        AllowAutoRedirect = false,
+        UseCookies = false
+    });
+builder.Services
+    .AddHttpClient<IRulesCoreTravelGateway, DelegatedRulesCoreTravelGateway>(client =>
+    {
+        client.Timeout = TimeSpan.FromSeconds(5);
         client.BaseAddress = toolHostBaseUri;
     })
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler

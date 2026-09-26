@@ -11,6 +11,7 @@ public sealed class DorksAndDiceToolHostAuthenticationClient(HttpClient httpClie
 {
     public const string ExpectedToolSlug = "hex-crawl";
     public const string ExpectedIntrospectionPath = "/tool-host/hex-crawl/api/introspect";
+    public const string ExpectedDelegationPath = "/tool-host/hex-crawl/api/delegate/{targetSlug}/upstream";
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -43,7 +44,45 @@ public sealed class DorksAndDiceToolHostAuthenticationClient(HttpClient httpClie
         var context = await response.Content.ReadFromJsonAsync<ToolHostAuthenticationContext>(JsonOptions, cancellationToken)
             ?? throw new InvalidDataException("Tool Host introspection returned an empty authentication context.");
         Validate(context);
-        return context;
+
+        var delegationCapability = ReadOptionalSingleHeader(
+            response,
+            ToolHostAuthenticationHeaders.DelegationCapability);
+        var delegationPath = ReadOptionalSingleHeader(
+            response,
+            ToolHostAuthenticationHeaders.DelegationPath);
+        if ((delegationCapability is null) != (delegationPath is null))
+        {
+            throw new InvalidDataException(
+                "Tool Host delegation capability and path must be supplied together.");
+        }
+        if (delegationPath is not null
+            && !string.Equals(delegationPath, ExpectedDelegationPath, StringComparison.Ordinal))
+        {
+            throw new InvalidDataException("Tool Host returned an unexpected delegation path.");
+        }
+
+        return context with
+        {
+            DelegationCapability = delegationCapability,
+            DelegationPath = delegationPath
+        };
+    }
+
+    private static string? ReadOptionalSingleHeader(HttpResponseMessage response, string name)
+    {
+        if (!response.Headers.TryGetValues(name, out var values))
+        {
+            return null;
+        }
+
+        var entries = values.Where(value => !string.IsNullOrWhiteSpace(value)).ToArray();
+        if (entries.Length != 1)
+        {
+            throw new InvalidDataException($"Tool Host returned an invalid '{name}' header.");
+        }
+
+        return entries[0].Trim();
     }
 
     private static void Validate(ToolHostAuthenticationContext context)
