@@ -62,12 +62,7 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
     {
         var world = await coreService.GetOverworldAsync(overworldId, ownerUserId, cancellationToken);
         var preset = CrawlProcedureCatalog.Resolve(command.ProcedureKey);
-        var profile = command.ProcedureSnapshot ?? preset;
-        if (!string.Equals(profile.Key, preset.Key, StringComparison.OrdinalIgnoreCase))
-        {
-            throw new ArgumentException("A customized procedure snapshot must retain the selected preset key as provenance.", nameof(command));
-        }
-        profile.Validate();
+        var profile = preset.Materialize(command.ProcedureSnapshot);
 
         var presentation = MapPresentationPolicyCatalog.Resolve(command.PresentationKey);
         presentation.Validate();
@@ -102,7 +97,10 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
             world.OwnerUserId,
             1,
             now,
-            now), cancellationToken);
+            now)
+        {
+            ProcedureOrigin = preset.Origin
+        }, cancellationToken);
     }
 
     public async Task<StoredExpedition> AdvanceAsync(

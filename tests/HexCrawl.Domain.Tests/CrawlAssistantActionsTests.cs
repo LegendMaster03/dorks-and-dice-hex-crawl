@@ -18,7 +18,7 @@ public sealed class CrawlAssistantActionsTests
 
         var result = CrawlAssistantActions.RecordTravelWatch(
             context,
-            CrawlProcedureProfile.SimplifiedFixedDistance(),
+            TestProcedureProfiles.FixedDistance(),
             state,
             new TravelWatchAssistantInput(
                 TimeSpan.FromHours(2),
@@ -130,7 +130,7 @@ public sealed class CrawlAssistantActionsTests
     [Fact]
     public void NonSpatialWatchSupportsPartialResumeAndCompletion()
     {
-        var profile = CrawlProcedureProfile.SimplifiedFixedDistance();
+        var profile = TestProcedureProfiles.FixedDistance();
         var state = new NonSpatialSessionState { Id = Guid.NewGuid() };
 
         var partial = CrawlAssistantActions.RecordWatch(
@@ -174,7 +174,7 @@ public sealed class CrawlAssistantActionsTests
     [Fact]
     public void NonSpatialWatchRejectsElapsedTimeBeyondRemainingWatch()
     {
-        var profile = CrawlProcedureProfile.SimplifiedFixedDistance();
+        var profile = TestProcedureProfiles.FixedDistance();
         var state = new NonSpatialSessionState
         {
             Id = Guid.NewGuid(),
@@ -198,7 +198,7 @@ public sealed class CrawlAssistantActionsTests
     [Fact]
     public void NonSpatialWatchRecordsDmOverrideWithoutInventingSpatialState()
     {
-        var profile = CrawlProcedureProfile.SimplifiedFixedDistance();
+        var profile = TestProcedureProfiles.FixedDistance();
         var state = new NonSpatialSessionState { Id = Guid.NewGuid() };
 
         var result = CrawlAssistantActions.RecordWatch(

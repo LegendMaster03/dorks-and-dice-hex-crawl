@@ -41,7 +41,8 @@ public sealed partial class HexCrawlService
         CancellationToken cancellationToken = default)
     {
         var world = await GetOverworldAsync(overworldId, ownerUserId, cancellationToken);
-        var profile = CrawlProcedureCatalog.Resolve(command.ProcedureKey);
+        var preset = CrawlProcedureCatalog.Resolve(command.ProcedureKey);
+        var profile = preset.Materialize();
         var expeditionId = Guid.NewGuid();
         var state = new ExpeditionState
         {
@@ -69,7 +70,10 @@ public sealed partial class HexCrawlService
             world.OwnerUserId,
             1,
             now,
-            now), cancellationToken);
+            now)
+        {
+            ProcedureOrigin = preset.Origin
+        }, cancellationToken);
     }
 
     public async Task<StoredExpedition> AdvanceExpeditionAsync(

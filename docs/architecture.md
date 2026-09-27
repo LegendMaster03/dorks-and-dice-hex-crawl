@@ -134,3 +134,13 @@ Still deferred are campaign sharing, real-time collaborative editing, a dedicate
 Rules Core/Characters integration remains optional future resolved-input plumbing; those systems do not become owners of Hex Crawl spatial/runtime state.
 
 The filesystem map provider is intentionally replaceable infrastructure. The source-map domain, continuous-overworld model, procedure snapshots, and presentation snapshots do not require redesign when storage or later analysis/integration implementations change.
+
+## Procedure preset identity boundary (Phase 0)
+
+Named crawl procedures are creation-time catalog presets. `CrawlProcedurePresetDefinition` owns preset identity, display metadata, revision, and the executable template used when a DM creates a crawl session. Applying a preset materializes a complete `CrawlProcedureProfile`; after that point the stored profile is the authoritative executable state.
+
+`CrawlProcedureProfile.Key` and `Name` remain in the compatibility projection so existing serialized procedure snapshots continue to deserialize, but they are not required to match the originating preset key or display name. Runtime services execute `StoredExpedition.Procedure` directly and do not re-resolve `CrawlProcedureCatalog` during reload or advancement.
+
+`StoredExpedition.ProcedureOrigin` is nullable informational provenance (`presetKey`, display name, and revision). Schema v5 stores it separately in nullable `procedure_origin_json`. Existing schema-v4 rows migrate forward with `NULL` origin metadata and retain their existing `procedure_json` unchanged. Removing the metadata or removing the corresponding preset from the catalog does not change executable behavior.
+
+Rules Core remains optional enrichment. The deterministic crawl runtime still consumes the materialized profile and resolved inputs rather than requiring Rules Core or any originating preset.

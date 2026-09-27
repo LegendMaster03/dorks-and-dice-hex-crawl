@@ -99,6 +99,7 @@ public sealed class SqliteSchemaMigrationTests
                 var contextRequired = false;
                 var partyRequired = false;
                 var generatedResolutionsRequired = false;
+                var procedureOriginNullable = false;
                 while (await reader.ReadAsync())
                 {
                     var name = reader.GetString(1);
@@ -107,11 +108,13 @@ public sealed class SqliteSchemaMigrationTests
                     if (name == "context_json") contextRequired = notNull;
                     if (name == "party_json") partyRequired = notNull;
                     if (name == "generated_resolutions_json") generatedResolutionsRequired = notNull;
+                    if (name == "procedure_origin_json") procedureOriginNullable = !notNull;
                 }
                 Assert.True(overworldNullable);
                 Assert.True(contextRequired);
                 Assert.True(partyRequired);
                 Assert.True(generatedResolutionsRequired);
+                Assert.True(procedureOriginNullable);
             }
 
             await using (var command = migrated.CreateCommand())
@@ -126,6 +129,14 @@ public sealed class SqliteSchemaMigrationTests
                 command.CommandText = "SELECT generated_resolutions_json FROM expeditions WHERE id = $id;";
                 command.Parameters.AddWithValue("$id", expeditionId.ToString("D"));
                 Assert.Equal("[]", Convert.ToString(await command.ExecuteScalarAsync()));
+            }
+
+            await using (var command = migrated.CreateCommand())
+            {
+                command.CommandText = "SELECT procedure_origin_json FROM expeditions WHERE id = $id;";
+                command.Parameters.AddWithValue("$id", expeditionId.ToString("D"));
+                var originValue = await command.ExecuteScalarAsync();
+                Assert.True(originValue is null || originValue == DBNull.Value);
             }
 
             await using (var command = migrated.CreateCommand())

@@ -171,3 +171,11 @@ For the current running-sheet/backend pass:
 - do not implement Journey Challenges or progressive hazards yet; keep the current Block Initiative handoff limited to encounter context and explicitly supplied structured combatants.
 
 Journey Challenge / Complex Hazard support is the highest-priority future 4e-derived feature. The remaining 4e concepts are design guidance or backlog items until they naturally intersect scheduled work.
+
+## Phase 0 preset/procedure separation
+
+Published, community, and otherwise named crawl procedures are represented by creation-time preset metadata rather than by named runtime implementations. The preset catalog owns the name/key/revision and produces a generic executable `CrawlProcedureProfile` compatibility snapshot. The runtime owns behavior only.
+
+The persisted expedition stores that executable snapshot independently from nullable `ProcedureOriginMetadata`. Origin metadata is informational and removable. A missing or changed catalog preset does not cause a persisted expedition to be reconstructed or reinterpreted, so catalog changes affect only later applications of the preset unless an explicit future migration/update operation is introduced.
+
+This keeps the current deterministic engine and Rules Core travel integration intact while establishing the boundary required for the later generic module/mechanic architecture.

@@ -108,7 +108,7 @@ public sealed class ProcedureResolutionRulesCoreAdapterTests
 
         Assert.Equal(15, prepared.NavigationDifficultyClass);
 
-        var baseline = CrawlProcedureProfile.AlexandrianAdvancedBaseline();
+        var baseline = CrawlProcedureCatalog.Resolve("alexandrian-advanced").Materialize();
         var navigationOnly = baseline with
         {
             EncounterCadence = EncounterCheckCadence.None,
@@ -251,7 +251,7 @@ public sealed class ProcedureResolutionRulesCoreAdapterTests
     private static StoredExpedition Expedition(Guid? campaignId = null)
     {
         var now = DateTimeOffset.UtcNow;
-        var profile = CrawlProcedureProfile.AlexandrianAdvancedBaseline();
+        var profile = CrawlProcedureCatalog.Resolve("alexandrian-advanced").Materialize();
         return new StoredExpedition(
             "Rules Core test",
             State(),

@@ -38,7 +38,7 @@ public sealed class ExpeditionWorkbenchTests
         var (core, workbench) = await database.ServicesAsync();
         var world = await core.CreateOverworldAsync("alice", WorldCommand());
         var startHex = new HexCoordinate(2, -1);
-        var customized = CrawlProcedureProfile.SimplifiedFixedDistance() with
+        var customized = CrawlProcedureCatalog.Resolve("simple-fixed-distance").Materialize() with
         {
             Name = "Six-hour house procedure",
             WatchLength = TimeSpan.FromHours(6),
@@ -70,7 +70,7 @@ public sealed class ExpeditionWorkbenchTests
         await using var database = await TestDatabase.CreateAsync();
         var (core, workbench) = await database.ServicesAsync();
         var world = await core.CreateOverworldAsync("alice", WorldCommand());
-        var invalid = CrawlProcedureProfile.SimplifiedFixedDistance() with
+        var invalid = CrawlProcedureCatalog.Resolve("simple-fixed-distance").Materialize() with
         {
             TravelResolution = TravelResolutionMode.HexSteps,
             TracksIntraHexProgress = true
@@ -142,7 +142,7 @@ public sealed class ExpeditionWorkbenchTests
         await using var database = await TestDatabase.CreateAsync();
         var (core, workbench) = await database.ServicesAsync();
         var world = await core.CreateOverworldAsync("alice", WorldCommand());
-        var profile = CrawlProcedureProfile.SimplifiedFixedDistance() with
+        var profile = CrawlProcedureCatalog.Resolve("simple-fixed-distance").Materialize() with
         {
             Name = "Daily encounter procedure",
             EncounterCadence = EncounterCheckCadence.PerDay
@@ -183,7 +183,7 @@ public sealed class ExpeditionWorkbenchTests
         var (core, workbench) = await database.ServicesAsync();
         var world = await core.CreateOverworldAsync("alice", WorldCommand());
 
-        var noneProfile = CrawlProcedureProfile.SimplifiedFixedDistance() with
+        var noneProfile = CrawlProcedureCatalog.Resolve("simple-fixed-distance").Materialize() with
         {
             Name = "No encounter checks",
             EncounterCadence = EncounterCheckCadence.None
@@ -210,7 +210,7 @@ public sealed class ExpeditionWorkbenchTests
         }
         Assert.DoesNotContain(none.State.History, item => item.Kind == CrawlRuntimeEventKind.EncounterCheckPerformed);
 
-        var perWatchProfile = CrawlProcedureProfile.SimplifiedFixedDistance() with
+        var perWatchProfile = CrawlProcedureCatalog.Resolve("simple-fixed-distance").Materialize() with
         {
             Name = "Per-watch encounter checks",
             EncounterCadence = EncounterCheckCadence.PerWatch
@@ -247,7 +247,7 @@ public sealed class ExpeditionWorkbenchTests
         var (core, workbench) = await database.ServicesAsync();
         var assistants = await database.AssistantServiceAsync();
         var world = await core.CreateOverworldAsync("alice", WorldCommand());
-        var profile = CrawlProcedureProfile.SimplifiedFixedDistance() with
+        var profile = CrawlProcedureCatalog.Resolve("simple-fixed-distance").Materialize() with
         {
             Name = "Shared encounter cadence",
             EncounterCadence = EncounterCheckCadence.PerWatch
@@ -320,7 +320,7 @@ public sealed class ExpeditionWorkbenchTests
         var (core, workbench) = await database.ServicesAsync();
         var assistants = await database.AssistantServiceAsync();
         var world = await core.CreateOverworldAsync("alice", WorldCommand());
-        var profile = CrawlProcedureProfile.SimplifiedFixedDistance() with
+        var profile = CrawlProcedureCatalog.Resolve("simple-fixed-distance").Materialize() with
         {
             Name = "Shared navigation state",
             UsesNavigationChecks = true,
@@ -381,7 +381,7 @@ public sealed class ExpeditionWorkbenchTests
         await using var database = await TestDatabase.CreateAsync();
         var (core, workbench) = await database.ServicesAsync();
         var world = await core.CreateOverworldAsync("alice", WorldCommand());
-        var legacyProfile = CrawlProcedureProfile.SimplifiedFixedDistance() with
+        var legacyProfile = CrawlProcedureCatalog.Resolve("simple-fixed-distance").Materialize() with
         {
             Name = "Legacy custom encounter cadence",
             EncounterCadence = EncounterCheckCadence.Custom
@@ -432,7 +432,7 @@ public sealed class ExpeditionWorkbenchTests
         await using var database = await TestDatabase.CreateAsync();
         var (core, workbench) = await database.ServicesAsync();
         var world = await core.CreateOverworldAsync("alice", WorldCommand());
-        var profile = CrawlProcedureProfile.SimplifiedFixedDistance() with
+        var profile = CrawlProcedureCatalog.Resolve("simple-fixed-distance").Materialize() with
         {
             Name = "Resolved-input procedure",
             UsesNavigationChecks = true,
@@ -482,7 +482,7 @@ public sealed class ExpeditionWorkbenchTests
             LocationDiscoverability.Hidden,
             world.Version));
         var location = Assert.Single(world.World.Locations);
-        var profile = CrawlProcedureProfile.SimplifiedFixedDistance() with
+        var profile = CrawlProcedureCatalog.Resolve("simple-fixed-distance").Materialize() with
         {
             Name = "Encounter procedure",
             EncounterCadence = EncounterCheckCadence.PerWatch

@@ -5,9 +5,9 @@ namespace HexCrawl.Domain.Tests;
 public sealed class CrawlProcedureProfileTests
 {
     [Fact]
-    public void AlexandrianAdvancedBaselineRetainsReviewedSourceMechanics()
+    public void AdvancedContinuousProfileRetainsRuntimeMechanics()
     {
-        var profile = CrawlProcedureProfile.AlexandrianAdvancedBaseline();
+        var profile = TestProcedureProfiles.AdvancedContinuous();
 
         Assert.Equal(TimeSpan.FromHours(4), profile.WatchLength);
         Assert.Equal(TravelResolutionMode.ContinuousDistance, profile.TravelResolution);
