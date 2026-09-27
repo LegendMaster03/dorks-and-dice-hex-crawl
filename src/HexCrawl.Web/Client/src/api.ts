@@ -159,6 +159,23 @@ export class HexCrawlApi {
         return this.sendJson("PUT", `/api/overworlds/${encodeURIComponent(id)}`, { name, grid, expectedVersion }, "Update overworld");
     }
 
+    public async deleteOverworld(id: string, expectedVersion: number): Promise<Overworld> {
+        const response = await fetch(
+            `${this.backendBaseUrl}/api/overworlds/${encodeURIComponent(id)}?expectedVersion=${expectedVersion}`,
+            { method: "DELETE", headers: { Accept: "application/json" } });
+        if (!response.ok) {
+            if (response.status === 409) {
+                const blockedMessage = "The overworld can not be deleted while it has saved expeditions. Remove those expeditions first.";
+                const detail = await responseDetail(response.clone());
+                if (detail === blockedMessage) {
+                    throw new HexCrawlApiError(response.status, "conflict", `Delete overworld failed: ${blockedMessage}`);
+                }
+            }
+            throw await apiError(response, "Delete overworld");
+        }
+        return await response.json() as Overworld;
+    }
+
     public createLocation(worldId: string, input: LocationMutationInput): Promise<Overworld> {
         return this.sendJson("POST", `/api/overworlds/${encodeURIComponent(worldId)}/locations`, input, "Create location");
     }
@@ -415,7 +432,7 @@ export class HexCrawlApi {
 
 export async function apiError(response: Response, label: string): Promise<HexCrawlApiError> {
     const kind = errorKind(response.status);
-    const detail = kind === "validation" ? await validationDetail(response) : null;
+    const detail = kind === "validation" ? await responseDetail(response) : null;
     const message = detail
         ? `${label} failed: ${detail}`
         : kind === "auth"
@@ -436,7 +453,7 @@ function errorKind(status: number): ApiErrorKind {
     return "server";
 }
 
-async function validationDetail(response: Response): Promise<string | null> {
+async function responseDetail(response: Response): Promise<string | null> {
     try {
         const body = await response.json() as { error?: unknown; detail?: unknown };
         if (typeof body.error === "string" && body.error.trim()) return body.error.trim();

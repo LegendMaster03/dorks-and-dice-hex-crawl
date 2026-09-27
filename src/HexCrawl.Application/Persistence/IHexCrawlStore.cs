@@ -65,6 +65,14 @@ public enum SaveOutcome
     Conflict
 }
 
+public enum DeleteOverworldOutcome
+{
+    Deleted,
+    NotFound,
+    Conflict,
+    HasExpeditions
+}
+
 public sealed record SaveResult<T>(SaveOutcome Outcome, T? Value);
 
 public interface IHexCrawlStore
@@ -86,6 +94,12 @@ public interface IHexCrawlStore
 
     Task<SaveResult<StoredOverworld>> SaveOverworldAsync(
         StoredOverworld overworld,
+        long expectedVersion,
+        CancellationToken cancellationToken = default);
+
+    Task<DeleteOverworldOutcome> DeleteOverworldAsync(
+        Guid overworldId,
+        string ownerUserId,
         long expectedVersion,
         CancellationToken cancellationToken = default);
 

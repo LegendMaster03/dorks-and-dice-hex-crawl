@@ -55,6 +55,18 @@ export async function renderWorldList(
     const createButton = required<HTMLButtonElement>(form, "[data-create-button]");
     let disposed = false;
     let busy = false;
+    let worldCount = 0;
+
+    const syncWorldCount = (): void => {
+        count.textContent = worldCount === 1 ? "1 world" : `${worldCount} worlds`;
+    };
+    const renderEmptyState = (): void => {
+        if (list.querySelector(".hc-empty-state")) return;
+        const empty = document.createElement("div");
+        empty.className = "hc-empty-state";
+        empty.innerHTML = "<strong>No overworlds yet.</strong><span>Create the first overworld with the form beside this list.</span>";
+        list.append(empty);
+    };
 
     const syncCustomUnit = (): void => {
         const visible = customUnitFieldsVisible(unitSelect.value as DistanceUnitKind);
@@ -68,12 +80,10 @@ export async function renderWorldList(
     try {
         const worlds = await api.listOverworlds();
         if (disposed) return () => {};
-        count.textContent = worlds.length === 1 ? "1 world" : `${worlds.length} worlds`;
+        worldCount = worlds.length;
+        syncWorldCount();
         if (worlds.length === 0) {
-            const empty = document.createElement("div");
-            empty.className = "hc-empty-state";
-            empty.innerHTML = "<strong>No overworlds yet.</strong><span>Create the first overworld with the form beside this list.</span>";
-            list.append(empty);
+            renderEmptyState();
         } else {
             for (const world of worlds) {
                 const row = document.createElement("article");
@@ -88,12 +98,53 @@ export async function renderWorldList(
                 meta.className = "hc-world-card-meta";
                 meta.textContent = `Updated ${formatTimestamp(world.updatedAt)}`;
                 copy.append(title, meta);
-                const button = document.createElement("button");
-                button.type = "button";
-                button.textContent = "Edit map";
-                button.setAttribute("aria-label", `Edit map for ${world.name}`);
-                button.addEventListener("click", () => navigate(`/worlds/${world.id}/edit`));
-                row.append(copy, button);
+
+                const actions = document.createElement("div");
+                actions.className = "hc-button-row";
+                const editButton = document.createElement("button");
+                editButton.type = "button";
+                editButton.textContent = "Edit map";
+                editButton.setAttribute("aria-label", `Edit map for ${world.name}`);
+                editButton.addEventListener("click", () => navigate(`/worlds/${world.id}/edit`));
+
+                const deleteButton = document.createElement("button");
+                deleteButton.type = "button";
+                deleteButton.className = "hc-danger-action";
+                deleteButton.textContent = "Delete";
+                deleteButton.setAttribute("aria-label", `Delete overworld ${world.name}`);
+                let deleting = false;
+                deleteButton.addEventListener("click", () => {
+                    if (deleting) return;
+                    const confirmed = window.confirm(
+                        `Delete “${world.name}”?\n\nThis permanently deletes the overworld and its uploaded map files. Overworlds with saved expeditions can not be deleted.`);
+                    if (!confirmed) return;
+                    void (async () => {
+                        clearUiError(error);
+                        deleting = true;
+                        editButton.disabled = true;
+                        deleteButton.disabled = true;
+                        deleteButton.textContent = "Deleting…";
+                        try {
+                            await api.deleteOverworld(world.id, world.version);
+                            if (disposed) return;
+                            row.remove();
+                            worldCount = Math.max(0, worldCount - 1);
+                            syncWorldCount();
+                            if (worldCount === 0) renderEmptyState();
+                        } catch (value) {
+                            if (!disposed) showUiError(error, value);
+                            deleting = false;
+                            if (!disposed) {
+                                editButton.disabled = false;
+                                deleteButton.disabled = false;
+                                deleteButton.textContent = "Delete";
+                            }
+                        }
+                    })();
+                });
+
+                actions.append(editButton, deleteButton);
+                row.append(copy, actions);
                 list.append(row);
             }
         }

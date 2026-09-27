@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using HexCrawl.Application;
+using HexCrawl.Application.Assets;
 using HexCrawl.Web.Api;
 using HexCrawl.Web.Framework;
 using Microsoft.AspNetCore.Routing;
@@ -22,6 +23,7 @@ public sealed class WorldModule : IHexCrawlModule
         api.MapPost("/overworlds", CreateOverworldAsync);
         api.MapGet("/overworlds/{overworldId:guid}", GetOverworldAsync);
         api.MapPut("/overworlds/{overworldId:guid}", UpdateOverworldAsync);
+        api.MapDelete("/overworlds/{overworldId:guid}", DeleteOverworldAsync);
 
         api.MapPost("/overworlds/{overworldId:guid}/locations", CreateLocationAsync);
         api.MapPut("/overworlds/{overworldId:guid}/locations/{locationId:guid}", UpdateLocationAsync);
@@ -71,6 +73,62 @@ public sealed class WorldModule : IHexCrawlModule
             UserId(context),
             request.ToCommand(),
             cancellationToken)));
+
+    private static async Task<IResult> DeleteOverworldAsync(
+        Guid overworldId,
+        long expectedVersion,
+        HttpContext context,
+        HexCrawlService service,
+        IMapAssetStore assetStore,
+        ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken)
+    {
+        var deleted = await service.DeleteOverworldAsync(
+            overworldId,
+            UserId(context),
+            expectedVersion,
+            cancellationToken);
+        var logger = loggerFactory.CreateLogger("HexCrawl.OverworldDelete");
+        var cleanupKeys = deleted.World.SourceMaps
+            .SelectMany(map => new[] { map.AssetKey, map.SourceArchive?.AssetKey })
+            .Where(key => !string.IsNullOrWhiteSpace(key))
+            .Cast<string>()
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var cleanupProblems = new List<string>();
+        foreach (var assetKey in cleanupKeys)
+        {
+            try
+            {
+                if (!await assetStore.DeleteAsync(assetKey, CancellationToken.None))
+                {
+                    logger.LogWarning(
+                        "Overworld {OverworldId} was deleted, but owned asset {AssetKey} was already missing.",
+                        overworldId,
+                        assetKey);
+                }
+            }
+            catch (Exception exception)
+            {
+                logger.LogError(
+                    exception,
+                    "Overworld {OverworldId} was deleted, but owned asset {AssetKey} cleanup failed.",
+                    overworldId,
+                    assetKey);
+                cleanupProblems.Add(assetKey);
+            }
+        }
+
+        if (cleanupProblems.Count > 0)
+        {
+            return Results.Problem(
+                title: "Overworld deleted with asset cleanup problem",
+                detail: "The overworld was deleted, but one or more owned binary map assets could not be cleaned up. Manual cleanup may be required.",
+                statusCode: StatusCodes.Status500InternalServerError);
+        }
+
+        return Results.Ok(OverworldContract.From(deleted));
+    }
 
     private static async Task<IResult> CreateLocationAsync(
         Guid overworldId,

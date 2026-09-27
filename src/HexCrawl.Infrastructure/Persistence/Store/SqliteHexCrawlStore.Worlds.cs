@@ -135,6 +135,69 @@ public sealed partial class SqliteHexCrawlStore
         return new SaveResult<StoredOverworld>(SaveOutcome.Saved, updated);
     }
 
+    public async Task<DeleteOverworldOutcome> DeleteOverworldAsync(
+        Guid overworldId,
+        string ownerUserId,
+        long expectedVersion,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken);
+        var currentVersion = await ReadVersionAsync(
+            connection,
+            transaction,
+            "overworlds",
+            overworldId,
+            ownerUserId,
+            cancellationToken);
+        if (!currentVersion.HasValue)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return DeleteOverworldOutcome.NotFound;
+        }
+        if (currentVersion.Value != expectedVersion)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return DeleteOverworldOutcome.Conflict;
+        }
+
+        await using (var dependentCommand = connection.CreateCommand())
+        {
+            dependentCommand.Transaction = transaction;
+            dependentCommand.CommandText = """
+                SELECT EXISTS(
+                    SELECT 1 FROM expeditions
+                    WHERE overworld_id = $world AND owner_user_id = $owner
+                );
+                """;
+            dependentCommand.Parameters.AddWithValue("$world", overworldId.ToString("D"));
+            dependentCommand.Parameters.AddWithValue("$owner", ownerUserId);
+            if (Convert.ToInt32(await dependentCommand.ExecuteScalarAsync(cancellationToken)) == 1)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return DeleteOverworldOutcome.HasExpeditions;
+            }
+        }
+
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            DELETE FROM overworlds
+            WHERE id = $id AND owner_user_id = $owner AND version = $expectedVersion;
+            """;
+        command.Parameters.AddWithValue("$id", overworldId.ToString("D"));
+        command.Parameters.AddWithValue("$owner", ownerUserId);
+        command.Parameters.AddWithValue("$expectedVersion", expectedVersion);
+        if (await command.ExecuteNonQueryAsync(cancellationToken) != 1)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return DeleteOverworldOutcome.Conflict;
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        return DeleteOverworldOutcome.Deleted;
+    }
+
     public async Task<bool> HasExpeditionsAsync(
         Guid overworldId,
         string ownerUserId,

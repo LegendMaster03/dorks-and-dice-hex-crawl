@@ -81,5 +81,26 @@ public sealed partial class HexCrawlService
         return await SaveWorldAsync(updated, command.ExpectedVersion, cancellationToken);
     }
 
-
+    public async Task<StoredOverworld> DeleteOverworldAsync(
+        Guid overworldId,
+        string ownerUserId,
+        long expectedVersion,
+        CancellationToken cancellationToken = default)
+    {
+        var current = await GetOverworldAsync(overworldId, ownerUserId, cancellationToken);
+        RequireVersion(expectedVersion, current.Version);
+        var outcome = await _store.DeleteOverworldAsync(
+            overworldId,
+            current.OwnerUserId,
+            expectedVersion,
+            cancellationToken);
+        return outcome switch
+        {
+            DeleteOverworldOutcome.Deleted => current,
+            DeleteOverworldOutcome.NotFound => throw new HexCrawlNotFoundException("Overworld was not found."),
+            DeleteOverworldOutcome.Conflict => throw new HexCrawlConcurrencyException("The overworld was changed by another request. Reload it before deleting it."),
+            DeleteOverworldOutcome.HasExpeditions => throw new HexCrawlConflictException("The overworld can not be deleted while it has saved expeditions. Remove those expeditions first."),
+            _ => throw new InvalidOperationException("The overworld delete operation returned an unknown result.")
+        };
+    }
 }
