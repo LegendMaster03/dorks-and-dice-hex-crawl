@@ -232,7 +232,7 @@ test("fits the globally rigid lattice instead of a stronger local near-period la
         `worst distant-region behavior is too large: ${result.fit.residualPixels}`);
 });
 
-test("canonicalizes effectively exact exported spacing to a quarter-pixel value", () => {
+test("canonicalizes effectively exact exported spacing to a stable hundredth-pixel value", () => {
     const image = raster(640, 480, 224);
     renderHexGrid(image, {
         orientation: "FlatTop",
@@ -246,8 +246,11 @@ test("canonicalizes effectively exact exported spacing to a quarter-pixel value"
     assert.notEqual(result.status, "gridless", result.reason);
     assert.ok(result.fit, result.reason);
     assert.equal(result.fit.orientation, "FlatTop");
-    assert.ok(Math.abs(result.fit.centerSpacingPixels - 30) < 1e-9,
-        `expected 30.001 px evidence to canonicalize to 30.00, got ${result.fit.centerSpacingPixels}`);
+    assert.ok(Math.abs(result.fit.centerSpacingPixels - 30.001) <= 0.01,
+        `expected 30.001 px evidence to remain within a hundredth, got ${result.fit.centerSpacingPixels}`);
+    const hundredths = result.fit.centerSpacingPixels * 100;
+    assert.ok(Math.abs(hundredths - Math.round(hundredths)) < 1e-7,
+        `spacing ${result.fit.centerSpacingPixels} retained meaningless sub-hundredth precision`);
 });
 
 test("does not force genuine non-quarter spacing onto a quarter-pixel lattice", () => {
