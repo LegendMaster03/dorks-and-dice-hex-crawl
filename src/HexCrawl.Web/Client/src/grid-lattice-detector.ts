@@ -66,6 +66,14 @@ type PhaseFit = {
     score: number;
     coverage: number;
 };
+type FinalLatticeCandidate = {
+    spatial: SpatialLatticeEvaluation;
+    model: { orientation: HexLatticeOrientation; rotationDegrees: number };
+    centerSpacingPixels: number;
+    phase: PhaseFit;
+    distantResidual: DistantPhaseResidual;
+    canonicalStepPixels: number | null;
+};
 
 type PhaseAccumulator = {
     x: number;
@@ -82,6 +90,7 @@ const HOUGH_HARMONIC_WEIGHTS = [1, 0.8, 0.6, 0.4] as const;
 const SPATIAL_REFINEMENT_TILES = 5;
 const DISTANT_RESIDUAL_TILES = 3;
 const SPATIAL_REFINEMENT_SAMPLE_LIMIT = 90_000;
+const CANONICAL_CENTER_SPACING_STEPS = [0.25, 0.01] as const;
 
 export function detectHexLattice(
     raster: GrayscaleRaster,
@@ -119,36 +128,23 @@ export function detectHexLattice(
     // browser down-sampling. Refine angle and pitch against phase consistency across
     // widely separated image regions so a locally plausible period can not accumulate
     // visible drift at the opposite side of the raster.
-    const spatial = refineSpatialLattice(
+    const spatialSeed = refineSpatialLattice(
         field,
         refinedHough.baseNormalDegrees,
         houghCarrierPitch);
-    const model = classifyOrientation(spatial.baseNormalDegrees * DEG);
-    const centerSpacing = spatial.carrierPitchPixels * 2;
 
-    // Establish the lattice parity from rendered hex edges, then refine the origin
-    // against distant-region phase evidence. The second step removes the old 12×12
-    // phase quantization from the final proposal without allowing a shear/warp.
-    const coarsePhase = fitPhase(
-        field.strength,
-        raster.width,
-        raster.height,
-        model.orientation,
-        model.rotationDegrees,
-        centerSpacing);
-    const phase = refinePhaseAnchor(
-        field,
-        model.orientation,
-        model.rotationDegrees,
-        spatial.baseNormalDegrees,
-        spatial.carrierPitchPixels,
-        centerSpacing,
-        coarsePhase);
-    const distantResidual = measureDistantOverlayResidual(
-        field,
-        spatial.baseNormalDegrees,
-        spatial.carrierPitchPixels,
-        phase.anchor);
+    // Continuous fitting can leave meaningless thousandths of a pixel in otherwise
+    // canonical exported grid spacing. Test nearby quarter-pixel and hundredth-pixel
+    // hypotheses as complete rigid lattices: re-fit the small rotation and phase/origin,
+    // then compare the same distant-region residuals used by the apply gate. This is not
+    // blind rounding; a canonical value is retained only when the raster supports it as
+    // well as the unconstrained solution.
+    const selected = selectFinalLattice(field, spatialSeed);
+    const spatial = selected.spatial;
+    const model = selected.model;
+    const centerSpacing = selected.centerSpacingPixels;
+    const phase = selected.phase;
+    const distantResidual = selected.distantResidual;
 
     const periodicityConfidence = clamp01((refinedHough.score - 0.30) / 0.52);
     const uniqueness = clamp01(
@@ -554,6 +550,154 @@ function refineSpatialLattice(
     }
 
     return best;
+}
+
+function selectFinalLattice(
+    field: EdgeField,
+    spatialSeed: SpatialLatticeEvaluation): FinalLatticeCandidate {
+    const continuous = evaluateFinalLatticeCandidate(field, spatialSeed, null);
+    const candidates: FinalLatticeCandidate[] = [continuous];
+
+    for (const step of CANONICAL_CENTER_SPACING_STEPS) {
+        const snappedSpacing = roundToStep(continuous.centerSpacingPixels, step);
+        if (!Number.isFinite(snappedSpacing) || snappedSpacing <= 4) continue;
+        if (candidates.some(candidate =>
+            Math.abs(candidate.centerSpacingPixels - snappedSpacing) <= 1e-9)) continue;
+
+        const snappedSpatial = refineAngleAtFixedPitch(
+            field,
+            spatialSeed.baseNormalDegrees,
+            snappedSpacing / 2);
+        candidates.push(evaluateFinalLatticeCandidate(field, snappedSpatial, step));
+    }
+
+    let best = candidates[0];
+    for (let index = 1; index < candidates.length; index++) {
+        if (isBetterFinalLatticeCandidate(candidates[index], best)) {
+            best = candidates[index];
+        }
+    }
+
+    // Prefer the coarser canonical representation when it is experimentally
+    // indistinguishable from the best candidate. A 0.25 px grid includes whole and
+    // half pixels, while the 0.01 px candidate preserves legitimate exported scales
+    // that do not land on quarter pixels.
+    const canonical = candidates
+        .filter(candidate => candidate.canonicalStepPixels !== null)
+        .sort((left, right) =>
+            (right.canonicalStepPixels ?? 0) - (left.canonicalStepPixels ?? 0));
+    for (const candidate of canonical) {
+        if (isCanonicalEquivalent(candidate, best)) return candidate;
+    }
+    return best;
+}
+
+function evaluateFinalLatticeCandidate(
+    field: EdgeField,
+    spatial: SpatialLatticeEvaluation,
+    canonicalStepPixels: number | null): FinalLatticeCandidate {
+    const model = classifyOrientation(spatial.baseNormalDegrees * DEG);
+    const centerSpacingPixels = spatial.carrierPitchPixels * 2;
+    const coarsePhase = fitPhase(
+        field.strength,
+        field.width,
+        field.height,
+        model.orientation,
+        model.rotationDegrees,
+        centerSpacingPixels);
+    const phase = refinePhaseAnchor(
+        field,
+        model.orientation,
+        model.rotationDegrees,
+        spatial.baseNormalDegrees,
+        spatial.carrierPitchPixels,
+        centerSpacingPixels,
+        coarsePhase);
+    const distantResidual = measureDistantOverlayResidual(
+        field,
+        spatial.baseNormalDegrees,
+        spatial.carrierPitchPixels,
+        phase.anchor);
+    return {
+        spatial,
+        model,
+        centerSpacingPixels,
+        phase,
+        distantResidual,
+        canonicalStepPixels
+    };
+}
+
+function refineAngleAtFixedPitch(
+    field: EdgeField,
+    baseNormalDegrees: number,
+    carrierPitchPixels: number): SpatialLatticeEvaluation {
+    const originalDegrees = normalizePeriod(baseNormalDegrees, 60);
+    let best = evaluateSpatialLattice(field, originalDegrees, carrierPitchPixels);
+    let bestPreference = spatialPreference(best, originalDegrees);
+
+    for (let angleOffset = -0.08; angleOffset <= 0.080001; angleOffset += 0.04) {
+        const degrees = normalizePeriod(originalDegrees + angleOffset, 60);
+        const candidate = evaluateSpatialLattice(field, degrees, carrierPitchPixels);
+        const preference = spatialPreference(candidate, originalDegrees);
+        if (preference > bestPreference + 1e-9) {
+            best = candidate;
+            bestPreference = preference;
+        }
+    }
+    return best;
+}
+
+function isBetterFinalLatticeCandidate(
+    candidate: FinalLatticeCandidate,
+    current: FinalLatticeCandidate): boolean {
+    const candidateBroad = candidate.distantResidual.supportedRegions >= 6;
+    const currentBroad = current.distantResidual.supportedRegions >= 6;
+    if (candidateBroad !== currentBroad) return candidateBroad;
+
+    const candidateWorst = candidate.distantResidual.worstRegionResidualPixels;
+    const currentWorst = current.distantResidual.worstRegionResidualPixels;
+    if (candidateWorst < currentWorst - 1e-6) return true;
+    if (candidateWorst > currentWorst + 1e-6) return false;
+
+    const candidateRms = candidate.distantResidual.residualPixels;
+    const currentRms = current.distantResidual.residualPixels;
+    if (candidateRms < currentRms - 1e-6) return true;
+    if (candidateRms > currentRms + 1e-6) return false;
+
+    if (candidate.distantResidual.supportedRegions
+        !== current.distantResidual.supportedRegions) {
+        return candidate.distantResidual.supportedRegions
+            > current.distantResidual.supportedRegions;
+    }
+    if (candidate.phase.score !== current.phase.score) {
+        return candidate.phase.score > current.phase.score;
+    }
+    return candidate.spatial.score > current.spatial.score;
+}
+
+function isCanonicalEquivalent(
+    candidate: FinalLatticeCandidate,
+    reference: FinalLatticeCandidate): boolean {
+    if (candidate.canonicalStepPixels === null) return false;
+    if (candidate.distantResidual.supportedRegions
+        < reference.distantResidual.supportedRegions) return false;
+
+    const residualTolerance = Math.max(
+        0.02,
+        reference.centerSpacingPixels * 0.0005);
+    if (candidate.distantResidual.worstRegionResidualPixels
+        > reference.distantResidual.worstRegionResidualPixels + residualTolerance) return false;
+    if (candidate.distantResidual.residualPixels
+        > reference.distantResidual.residualPixels + residualTolerance) return false;
+    if (candidate.phase.score < reference.phase.score - 0.005) return false;
+    if (candidate.phase.coverage < reference.phase.coverage - 0.01) return false;
+    if (candidate.spatial.score < reference.spatial.score - 0.01) return false;
+    return true;
+}
+
+function roundToStep(value: number, step: number): number {
+    return Math.round(value / step) * step;
 }
 
 function spatialPreference(

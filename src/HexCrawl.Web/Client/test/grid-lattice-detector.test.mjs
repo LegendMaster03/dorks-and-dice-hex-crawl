@@ -221,12 +221,37 @@ test("fits the globally rigid lattice instead of a stronger local near-period la
     assert.notEqual(result.status, "gridless", result.reason);
     assert.ok(result.fit, result.reason);
     assert.equal(result.fit.orientation, expected.orientation);
-    assert.ok(Math.abs(result.fit.centerSpacingPixels - expected.spacing) < 0.12,
-        `distant fit drifted to ${result.fit.centerSpacingPixels}`);
+    assert.ok(Math.abs(result.fit.centerSpacingPixels - expected.spacing) < 1e-9,
+        `expected canonical ${expected.spacing}, got ${result.fit.centerSpacingPixels}`);
     assert.ok(Math.abs(result.fit.rotationDegrees - expected.rotationDegrees) < 0.5,
         `rotation ${result.fit.rotationDegrees}`);
     assert.ok(result.fit.residualPixels < 1.5,
         `worst distant-region behavior is too large: ${result.fit.residualPixels}`);
+});
+
+test("does not force genuine non-quarter spacing onto a quarter-pixel lattice", () => {
+    const image = raster(900, 660, 224);
+    const expected = {
+        orientation: "FlatTop",
+        spacing: 30.37,
+        rotationDegrees: 1.25,
+        anchor: { x: 10.7, y: 14.2 },
+        lineValue: 64
+    };
+    renderHexGrid(image, expected);
+
+    const result = detectHexLattice(image, { minimumConfidence: 0.22 });
+    assert.notEqual(result.status, "gridless", result.reason);
+    assert.ok(result.fit, result.reason);
+    assert.equal(result.fit.orientation, expected.orientation);
+
+    const nearestQuarter = Math.round(expected.spacing / 0.25) * 0.25;
+    const detectedError = Math.abs(result.fit.centerSpacingPixels - expected.spacing);
+    const quarterError = Math.abs(nearestQuarter - expected.spacing);
+    assert.ok(detectedError < quarterError,
+        `spacing ${result.fit.centerSpacingPixels} was forced toward quarter-pixel ${nearestQuarter}`);
+    assert.ok(Math.abs(result.fit.centerSpacingPixels - nearestQuarter) > 0.03,
+        `spacing ${result.fit.centerSpacingPixels} should remain non-quarter-pixel`);
 });
 
 test("rejects a center-plausible fit that drifts in distant regions", () => {
