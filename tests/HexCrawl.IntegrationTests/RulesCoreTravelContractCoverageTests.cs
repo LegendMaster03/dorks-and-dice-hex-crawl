@@ -134,7 +134,7 @@ public sealed class RulesCoreTravelContractCoverageTests
         var context = await AuthenticatedContextAsync(campaignId);
         return new DelegatedRulesCoreTravelGateway(
             http,
-            new HttpContextAccessor { HttpContext = context },
+            new StaticHttpContextAccessor(context),
             NullLogger<DelegatedRulesCoreTravelGateway>.Instance);
     }
 
@@ -178,6 +178,11 @@ public sealed class RulesCoreTravelContractCoverageTests
             string introspectionPath,
             CancellationToken cancellationToken = default) =>
             Task.FromResult<ToolHostAuthenticationContext?>(context);
+    }
+
+    private sealed class StaticHttpContextAccessor(HttpContext context) : IHttpContextAccessor
+    {
+        public HttpContext? HttpContext { get; set; } = context;
     }
 
     private sealed class RecordingHandler(
