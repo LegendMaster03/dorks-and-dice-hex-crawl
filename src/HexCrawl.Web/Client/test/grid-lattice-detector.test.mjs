@@ -221,12 +221,33 @@ test("fits the globally rigid lattice instead of a stronger local near-period la
     assert.notEqual(result.status, "gridless", result.reason);
     assert.ok(result.fit, result.reason);
     assert.equal(result.fit.orientation, expected.orientation);
-    assert.ok(Math.abs(result.fit.centerSpacingPixels - expected.spacing) < 1e-9,
-        `expected canonical ${expected.spacing}, got ${result.fit.centerSpacingPixels}`);
+    assert.ok(Math.abs(result.fit.centerSpacingPixels - expected.spacing) < 0.12,
+        `distant fit drifted to ${result.fit.centerSpacingPixels}`);
+    const hundredths = result.fit.centerSpacingPixels * 100;
+    assert.ok(Math.abs(hundredths - Math.round(hundredths)) < 1e-7,
+        `spacing ${result.fit.centerSpacingPixels} retained meaningless sub-hundredth precision`);
     assert.ok(Math.abs(result.fit.rotationDegrees - expected.rotationDegrees) < 0.5,
         `rotation ${result.fit.rotationDegrees}`);
     assert.ok(result.fit.residualPixels < 1.5,
         `worst distant-region behavior is too large: ${result.fit.residualPixels}`);
+});
+
+test("canonicalizes effectively exact exported spacing to a quarter-pixel value", () => {
+    const image = raster(640, 480, 224);
+    renderHexGrid(image, {
+        orientation: "FlatTop",
+        spacing: 30.001,
+        rotationDegrees: 0,
+        anchor: { x: 9.5, y: 11.25 },
+        lineValue: 64
+    });
+
+    const result = detectHexLattice(image, { minimumConfidence: 0.22 });
+    assert.notEqual(result.status, "gridless", result.reason);
+    assert.ok(result.fit, result.reason);
+    assert.equal(result.fit.orientation, "FlatTop");
+    assert.ok(Math.abs(result.fit.centerSpacingPixels - 30) < 1e-9,
+        `expected 30.001 px evidence to canonicalize to 30.00, got ${result.fit.centerSpacingPixels}`);
 });
 
 test("does not force genuine non-quarter spacing onto a quarter-pixel lattice", () => {
