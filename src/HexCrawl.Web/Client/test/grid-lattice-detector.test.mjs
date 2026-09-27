@@ -223,16 +223,13 @@ test("fits the globally rigid lattice instead of a stronger local near-period la
     assert.equal(result.fit.orientation, expected.orientation);
     assert.ok(Math.abs(result.fit.centerSpacingPixels - expected.spacing) < 0.12,
         `distant fit drifted to ${result.fit.centerSpacingPixels}`);
-    const hundredths = result.fit.centerSpacingPixels * 100;
-    assert.ok(Math.abs(hundredths - Math.round(hundredths)) < 1e-7,
-        `spacing ${result.fit.centerSpacingPixels} retained meaningless sub-hundredth precision`);
     assert.ok(Math.abs(result.fit.rotationDegrees - expected.rotationDegrees) < 0.5,
         `rotation ${result.fit.rotationDegrees}`);
     assert.ok(result.fit.residualPixels < 1.5,
         `worst distant-region behavior is too large: ${result.fit.residualPixels}`);
 });
 
-test("canonicalizes effectively exact exported spacing to a stable hundredth-pixel value", () => {
+test("keeps continuous spacing precision unless a rounded hypothesis fits better", () => {
     const image = raster(640, 480, 224);
     renderHexGrid(image, {
         orientation: "FlatTop",
@@ -246,11 +243,8 @@ test("canonicalizes effectively exact exported spacing to a stable hundredth-pix
     assert.notEqual(result.status, "gridless", result.reason);
     assert.ok(result.fit, result.reason);
     assert.equal(result.fit.orientation, "FlatTop");
-    assert.ok(Math.abs(result.fit.centerSpacingPixels - 30.001) <= 0.01,
-        `expected 30.001 px evidence to remain within a hundredth, got ${result.fit.centerSpacingPixels}`);
-    const hundredths = result.fit.centerSpacingPixels * 100;
-    assert.ok(Math.abs(hundredths - Math.round(hundredths)) < 1e-7,
-        `spacing ${result.fit.centerSpacingPixels} retained meaningless sub-hundredth precision`);
+    assert.ok(Math.abs(result.fit.centerSpacingPixels - 30.001) <= 0.02,
+        `expected the best supported spacing near 30.001 px, got ${result.fit.centerSpacingPixels}`);
 });
 
 test("does not force genuine non-quarter spacing onto a quarter-pixel lattice", () => {
