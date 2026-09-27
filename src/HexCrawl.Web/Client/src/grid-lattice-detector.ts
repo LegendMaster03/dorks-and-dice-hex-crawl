@@ -133,12 +133,10 @@ export function detectHexLattice(
         refinedHough.baseNormalDegrees,
         houghCarrierPitch);
 
-    // Continuous fitting can leave meaningless thousandths of a pixel in otherwise
-    // canonical exported grid spacing. Test nearby quarter-pixel and hundredth-pixel
-    // hypotheses as complete rigid lattices: re-fit the small rotation and phase/origin,
-    // then compare the same distant-region residuals used by the apply gate. This is not
-    // blind rounding; a canonical value is retained only when the raster supports it as
-    // well as the unconstrained solution.
+    // Test nearby quarter-pixel and hundredth-pixel spacing hypotheses as complete
+    // rigid lattices, but do not round merely to simplify the stored value. Re-fit the
+    // small rotation and phase/origin for each candidate and retain a snapped value only
+    // when it actually improves the final multi-region fit over the continuous solution.
     const selected = selectFinalLattice(field, spatialSeed);
     const spatial = selected.spatial;
     const model = selected.model;
@@ -577,18 +575,6 @@ function selectFinalLattice(
             best = candidates[index];
         }
     }
-
-    // Prefer the coarser canonical representation when it is experimentally
-    // indistinguishable from the best candidate. A 0.25 px grid includes whole and
-    // half pixels, while the 0.01 px candidate preserves legitimate exported scales
-    // that do not land on quarter pixels.
-    const canonical = candidates
-        .filter(candidate => candidate.canonicalStepPixels !== null)
-        .sort((left, right) =>
-            (right.canonicalStepPixels ?? 0) - (left.canonicalStepPixels ?? 0));
-    for (const candidate of canonical) {
-        if (isCanonicalEquivalent(candidate, best)) return candidate;
-    }
     return best;
 }
 
@@ -674,26 +660,6 @@ function isBetterFinalLatticeCandidate(
         return candidate.phase.score > current.phase.score;
     }
     return candidate.spatial.score > current.spatial.score;
-}
-
-function isCanonicalEquivalent(
-    candidate: FinalLatticeCandidate,
-    reference: FinalLatticeCandidate): boolean {
-    if (candidate.canonicalStepPixels === null) return false;
-    if (candidate.distantResidual.supportedRegions
-        < reference.distantResidual.supportedRegions) return false;
-
-    const residualTolerance = Math.max(
-        0.02,
-        reference.centerSpacingPixels * 0.0005);
-    if (candidate.distantResidual.worstRegionResidualPixels
-        > reference.distantResidual.worstRegionResidualPixels + residualTolerance) return false;
-    if (candidate.distantResidual.residualPixels
-        > reference.distantResidual.residualPixels + residualTolerance) return false;
-    if (candidate.phase.score < reference.phase.score - 0.005) return false;
-    if (candidate.phase.coverage < reference.phase.coverage - 0.01) return false;
-    if (candidate.spatial.score < reference.spatial.score - 0.01) return false;
-    return true;
 }
 
 function roundToStep(value: number, step: number): number {
