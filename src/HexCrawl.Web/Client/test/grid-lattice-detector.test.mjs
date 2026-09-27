@@ -66,6 +66,15 @@ function renderHexGrid(image, {
     }
 }
 
+function overlayRectangle(target, source, x0, y0, x1, y1) {
+    for (let y = Math.max(0, y0); y < Math.min(target.height, y1); y++) {
+        for (let x = Math.max(0, x0); x < Math.min(target.width, x1); x++) {
+            const index = y * target.width + x;
+            target.pixels[index] = Math.min(target.pixels[index], source.pixels[index]);
+        }
+    }
+}
+
 function addMapNoise(image) {
     for (let y = 0; y < image.height; y++) {
         for (let x = 0; x < image.width; x++) {
@@ -83,6 +92,15 @@ function eraseRectangle(image, x0, y0, x1, y1, value = 214) {
     for (let y = Math.max(0, y0); y < Math.min(image.height, y1); y++) {
         for (let x = Math.max(0, x0); x < Math.min(image.width, x1); x++) {
             image.pixels[y * image.width + x] = value;
+        }
+    }
+}
+
+function replaceRightHalf(target, source) {
+    const split = Math.floor(target.width / 2);
+    for (let y = 0; y < target.height; y++) {
+        for (let x = split; x < target.width; x++) {
+            target.pixels[y * target.width + x] = source.pixels[y * source.width + x];
         }
     }
 }
@@ -172,6 +190,113 @@ test("uses the fundamental period for a faint grid beneath stronger map artwork"
         `expected fundamental ${expected.spacing}, got ${result.fit.centerSpacingPixels}`);
     assert.ok(result.fit.residualPixels < expected.spacing * 0.35,
         `far-field residual ${result.fit.residualPixels}`);
+});
+
+test("fits the globally rigid lattice instead of a stronger local near-period lattice", () => {
+    const image = raster(768, 576, 218);
+    const expected = {
+        orientation: "FlatTop",
+        spacing: 30,
+        rotationDegrees: 0,
+        anchor: { x: 11, y: 8 },
+        lineValue: 166
+    };
+    renderHexGrid(image, expected);
+    addMapNoise(image);
+
+    // This models the Humblewood browser failure at analysis scale: a 0.18 px
+    // center-spacing error here becomes about 0.48 px after scaling back to the
+    // 2048 px raster. Stronger local repeated artwork must not move the one rigid
+    // lattice that is supported across the distant regions of the image.
+    const localDistractor = raster(image.width, image.height, 255);
+    renderHexGrid(localDistractor, {
+        ...expected,
+        spacing: 30.18,
+        anchor: { x: 12.5, y: 9.5 },
+        lineValue: 38
+    });
+    overlayRectangle(image, localDistractor, 190, 95, 610, 485);
+
+    const result = detectHexLattice(image, { minimumConfidence: 0.28 });
+    assert.notEqual(result.status, "gridless", result.reason);
+    assert.ok(result.fit, result.reason);
+    assert.equal(result.fit.orientation, expected.orientation);
+    assert.ok(Math.abs(result.fit.centerSpacingPixels - expected.spacing) < 0.12,
+        `distant fit drifted to ${result.fit.centerSpacingPixels}`);
+    assert.ok(Math.abs(result.fit.rotationDegrees - expected.rotationDegrees) < 0.5,
+        `rotation ${result.fit.rotationDegrees}`);
+    assert.ok(result.fit.residualPixels < 1.5,
+        `worst distant-region behavior is too large: ${result.fit.residualPixels}`);
+});
+
+test("keeps continuous spacing precision unless a rounded hypothesis fits better", () => {
+    const image = raster(640, 480, 224);
+    renderHexGrid(image, {
+        orientation: "FlatTop",
+        spacing: 30.001,
+        rotationDegrees: 0,
+        anchor: { x: 9.5, y: 11.25 },
+        lineValue: 64
+    });
+
+    const result = detectHexLattice(image, { minimumConfidence: 0.22 });
+    assert.notEqual(result.status, "gridless", result.reason);
+    assert.ok(result.fit, result.reason);
+    assert.equal(result.fit.orientation, "FlatTop");
+    assert.ok(Math.abs(result.fit.centerSpacingPixels - 30.001) <= 0.02,
+        `expected the best supported spacing near 30.001 px, got ${result.fit.centerSpacingPixels}`);
+});
+
+test("does not force genuine non-quarter spacing onto a quarter-pixel lattice", () => {
+    const image = raster(900, 660, 224);
+    const expected = {
+        orientation: "FlatTop",
+        spacing: 30.37,
+        rotationDegrees: 1.25,
+        anchor: { x: 10.7, y: 14.2 },
+        lineValue: 64
+    };
+    renderHexGrid(image, expected);
+
+    const result = detectHexLattice(image, { minimumConfidence: 0.22 });
+    assert.notEqual(result.status, "gridless", result.reason);
+    assert.ok(result.fit, result.reason);
+    assert.equal(result.fit.orientation, expected.orientation);
+
+    const nearestQuarter = Math.round(expected.spacing / 0.25) * 0.25;
+    const detectedError = Math.abs(result.fit.centerSpacingPixels - expected.spacing);
+    const quarterError = Math.abs(nearestQuarter - expected.spacing);
+    assert.ok(detectedError < quarterError,
+        `spacing ${result.fit.centerSpacingPixels} was forced toward quarter-pixel ${nearestQuarter}`);
+    assert.ok(Math.abs(result.fit.centerSpacingPixels - nearestQuarter) > 0.03,
+        `spacing ${result.fit.centerSpacingPixels} should remain non-quarter-pixel`);
+});
+
+test("rejects a center-plausible fit that drifts in distant regions", () => {
+    const left = raster(640, 420, 220);
+    const right = raster(640, 420, 220);
+    renderHexGrid(left, {
+        orientation: "FlatTop",
+        spacing: 30,
+        anchor: { x: 8, y: 17 },
+        lineValue: 80
+    });
+    renderHexGrid(right, {
+        orientation: "FlatTop",
+        spacing: 31,
+        anchor: { x: 8, y: 17 },
+        lineValue: 80
+    });
+    addMapNoise(left);
+    addMapNoise(right);
+    replaceRightHalf(left, right);
+
+    const result = detectHexLattice(left, { minimumConfidence: 0.25 });
+    assert.equal(result.status, "inconclusive", result.reason);
+    assert.ok(result.fit, result.reason);
+    assert.match(result.reason, /final rigid overlay misses|stable rigid lattice/i);
+    assert.ok(result.fit.residualPixels > 2.4,
+        `worst distant residual ${result.fit.residualPixels}`);
 });
 
 test("does not invent a canonical lattice on a gridless raster", () => {

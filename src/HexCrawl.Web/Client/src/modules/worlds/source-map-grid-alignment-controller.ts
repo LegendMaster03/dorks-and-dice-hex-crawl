@@ -137,10 +137,10 @@ export class SourceMapGridAlignmentController {
             `${fit.centerSpacingPixels.toFixed(2)} px center spacing`,
             `${fit.rotationDegrees.toFixed(2)}° raster rotation`,
             `confidence ${(fit.confidence * 100).toFixed(1)}%`,
-            `residual ${fit.residualPixels.toFixed(2)} px`,
+            `worst distant residual ${fit.residualPixels.toFixed(2)} px`,
             `coverage ${(fit.supportCoverage * 100).toFixed(1)}%`
         ];
-        if (scaleContext.summary) summary.push(scaleContext.summary);
+        if (scaleContext.summary) summary.splice(1, 0, scaleContext.summary);
         const warnings = [
             ...proposal.warnings,
             ...scaleContext.warnings,
@@ -386,7 +386,7 @@ function compareWonderdraftGridMetadata(
     const scaledMetadataSize = projectGridSize * projectToRasterScale;
     const difference = Math.abs(fit.centerSpacingPixels - scaledMetadataSize);
     const relativeDifference = difference / Math.max(fit.centerSpacingPixels, scaledMetadataSize);
-    const comparison = `Wonderdraft grid.size ${projectGridSize.toFixed(3)} project px → ${scaledMetadataSize.toFixed(2)} raster px; detected spacing differs ${(relativeDifference * 100).toFixed(2)}%`;
+    const comparison = `Wonderdraft grid.size=${projectGridSize.toFixed(3)} project px → ${scaledMetadataSize.toFixed(2)} raster px; raster detector ${fit.centerSpacingPixels.toFixed(2)} px; difference ${(relativeDifference * 100).toFixed(2)}%`;
 
     // This is deliberately a cross-check, not an alternate source of lattice geometry.
     // Humblewood provides direct evidence that grid.size=80 agrees with its baked
