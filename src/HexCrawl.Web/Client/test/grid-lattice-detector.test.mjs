@@ -299,6 +299,45 @@ test("rejects a center-plausible fit that drifts in distant regions", () => {
         `worst distant residual ${result.fit.residualPixels}`);
 });
 
+test("keeps a Bellowing-Wilds-scale lattice eligible instead of selecting a small rotated alias", () => {
+    const image = raster(768, 480, 224);
+    const expected = {
+        orientation: "FlatTop",
+        spacing: 132.67,
+        rotationDegrees: 0,
+        anchor: { x: 31, y: 27 },
+        lineValue: 64
+    };
+    renderHexGrid(image, expected);
+
+    // Model the browser regression: a smaller rotated repeated pattern exists locally,
+    // but the one lattice supported across the whole raster is the approximately
+    // 132.7 px flat-top grid. The old 120 px Hough-lag ceiling made the true candidate
+    // impossible to generate and left smaller aliases to win by default.
+    const localAlias = raster(image.width, image.height, 255);
+    renderHexGrid(localAlias, {
+        orientation: "FlatTop",
+        spacing: 29.42,
+        rotationDegrees: 3.68,
+        anchor: { x: 11, y: 8 },
+        lineValue: 100
+    });
+    overlayRectangle(image, localAlias, 204, 120, 564, 360);
+
+    const result = detectHexLattice(image, { minimumConfidence: 0.30 });
+    assert.notEqual(result.status, "gridless", result.reason);
+    assert.ok(result.fit, result.reason);
+    assert.equal(result.fit.orientation, expected.orientation);
+    assert.ok(Math.abs(result.fit.centerSpacingPixels - expected.spacing) < 2.0,
+        `expected Bellowing-scale spacing near ${expected.spacing}, got ${result.fit.centerSpacingPixels}`);
+    assert.ok(Math.abs(result.fit.rotationDegrees) < 1.0,
+        `expected near-zero Bellowing rotation, got ${result.fit.rotationDegrees}`);
+    assert.ok(result.fit.residualPixels < 2.5,
+        `Bellowing-scale distant phase is unstable: ${result.fit.residualPixels}`);
+    assert.ok(result.fit.centerSpacingPixels > 120,
+        `smaller alias incorrectly won at ${result.fit.centerSpacingPixels} px`);
+});
+
 test("does not invent a canonical lattice on a gridless raster", () => {
     const image = raster(280, 220, 210);
     addMapNoise(image);

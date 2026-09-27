@@ -85,7 +85,11 @@ const PI = Math.PI;
 const DEG = PI / 180;
 const SQRT3 = Math.sqrt(3);
 const HOUGH_ORIENTATION_TOLERANCE = 7 * DEG;
-const HOUGH_MAX_LAG = 120;
+// Carrier pitch is half the hex-center spacing, and ranking needs the second
+// harmonic to stay inside the sampled autocorrelation curve. A 120 px lag cap
+// silently excluded valid grids above 120 px center spacing, including the
+// approximately 132.7 px Bellowing Wilds lattice.
+const HOUGH_MAX_LAG = 160;
 const HOUGH_HARMONIC_WEIGHTS = [1, 0.8, 0.6, 0.4] as const;
 const SPATIAL_REFINEMENT_TILES = 5;
 const DISTANT_RESIDUAL_TILES = 3;
