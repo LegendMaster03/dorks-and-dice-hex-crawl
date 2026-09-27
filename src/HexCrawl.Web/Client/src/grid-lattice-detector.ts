@@ -48,10 +48,29 @@ type HoughCandidate = {
     score: number;
     combinedCorrelation: Float64Array;
 };
+type SpatialLatticeEvaluation = {
+    baseNormalDegrees: number;
+    carrierPitchPixels: number;
+    score: number;
+    supportedChecks: number;
+    totalChecks: number;
+};
 type DistantPhaseResidual = {
     residualPixels: number;
+    worstRegionResidualPixels: number;
     supportedRegions: number;
     totalRegions: number;
+};
+type PhaseFit = {
+    anchor: { x: number; y: number };
+    score: number;
+    coverage: number;
+};
+
+type PhaseAccumulator = {
+    x: number;
+    y: number;
+    count: number;
 };
 
 const PI = Math.PI;
@@ -60,6 +79,9 @@ const SQRT3 = Math.sqrt(3);
 const HOUGH_ORIENTATION_TOLERANCE = 7 * DEG;
 const HOUGH_MAX_LAG = 120;
 const HOUGH_HARMONIC_WEIGHTS = [1, 0.8, 0.6, 0.4] as const;
+const SPATIAL_REFINEMENT_TILES = 5;
+const DISTANT_RESIDUAL_TILES = 3;
+const SPATIAL_REFINEMENT_SAMPLE_LIMIT = 90_000;
 
 export function detectHexLattice(
     raster: GrayscaleRaster,
@@ -84,43 +106,68 @@ export function detectHexLattice(
             "Raster edges do not form three repeated line families with a stable hex-lattice period.");
     }
 
-    const refined = refineHoughCandidate(
+    const refinedHough = refineHoughCandidate(
         field,
         hough.best,
         minimumCenterSpacing,
         maximumCenterSpacing);
-    const model = classifyOrientation(refined.baseNormalDegrees * DEG);
-    const refinedCarrierPitch = refinePeak(
-        refined.combinedCorrelation,
-        refined.carrierPitchPixels);
-    const centerSpacing = refinedCarrierPitch * 2;
-    const phase = fitPhase(
+    const houghCarrierPitch = refinePeak(
+        refinedHough.combinedCorrelation,
+        refinedHough.carrierPitchPixels);
+
+    // The global autocorrelation gives a good seed but can be biased by artwork after
+    // browser down-sampling. Refine angle and pitch against phase consistency across
+    // widely separated image regions so a locally plausible period can not accumulate
+    // visible drift at the opposite side of the raster.
+    const spatial = refineSpatialLattice(
+        field,
+        refinedHough.baseNormalDegrees,
+        houghCarrierPitch);
+    const model = classifyOrientation(spatial.baseNormalDegrees * DEG);
+    const centerSpacing = spatial.carrierPitchPixels * 2;
+
+    // Establish the lattice parity from rendered hex edges, then refine the origin
+    // against distant-region phase evidence. The second step removes the old 12×12
+    // phase quantization from the final proposal without allowing a shear/warp.
+    const coarsePhase = fitPhase(
         field.strength,
         raster.width,
         raster.height,
         model.orientation,
         model.rotationDegrees,
         centerSpacing);
-    const distantResidual = measureDistantPhaseResidual(
+    const phase = refinePhaseAnchor(
         field,
-        refined.baseNormalDegrees,
-        refinedCarrierPitch);
+        model.orientation,
+        model.rotationDegrees,
+        spatial.baseNormalDegrees,
+        spatial.carrierPitchPixels,
+        centerSpacing,
+        coarsePhase);
+    const distantResidual = measureDistantOverlayResidual(
+        field,
+        spatial.baseNormalDegrees,
+        spatial.carrierPitchPixels,
+        phase.anchor);
 
-    const periodicityConfidence = clamp01((refined.score - 0.30) / 0.52);
+    const periodicityConfidence = clamp01((refinedHough.score - 0.30) / 0.52);
     const uniqueness = clamp01(
-        (refined.score - hough.competitorScore) / 0.18);
+        (refinedHough.score - hough.competitorScore) / 0.18);
+    const spatialConfidence = clamp01((spatial.score - 0.30) / 0.55);
     const phaseConfidence = clamp01((phase.score - 0.10) / 0.32);
     const coverageConfidence = clamp01((phase.coverage - 0.10) / 0.60);
     const distantCoverageConfidence = clamp01(
-        (distantResidual.supportedRegions - 6) / 15);
+        (distantResidual.supportedRegions - 4) / Math.max(1, distantResidual.totalRegions - 4));
+    const residualScale = Math.max(1.5, centerSpacing * 0.10);
     const residualConfidence = clamp01(
-        1 - distantResidual.residualPixels / Math.max(4, centerSpacing * 0.12));
+        1 - distantResidual.worstRegionResidualPixels / residualScale);
     const confidence = clamp01(
-        periodicityConfidence * 0.38
-        + uniqueness * 0.14
-        + phaseConfidence * 0.16
-        + coverageConfidence * 0.12
-        + distantCoverageConfidence * 0.10
+        periodicityConfidence * 0.26
+        + uniqueness * 0.12
+        + spatialConfidence * 0.20
+        + phaseConfidence * 0.14
+        + coverageConfidence * 0.10
+        + distantCoverageConfidence * 0.08
         + residualConfidence * 0.10);
 
     const fit: HexLatticeFit = {
@@ -129,25 +176,37 @@ export function detectHexLattice(
         centerSpacingPixels: centerSpacing,
         anchorPixel: phase.anchor,
         confidence,
-        residualPixels: distantResidual.residualPixels,
+        // residualPixels is deliberately the worst supported distant-region error.
+        // This keeps the existing public/UI field conservative instead of reporting an
+        // average that can hide a visibly drifting corner.
+        residualPixels: distantResidual.worstRegionResidualPixels,
         supportCoverage: phase.coverage,
-        orientationSupport: refined.score,
-        translationScore: refined.score,
+        orientationSupport: refinedHough.score,
+        translationScore: spatial.score,
         competingTranslationScore: hough.competitorScore,
-        linePeriodicityScore: refined.score,
+        linePeriodicityScore: refinedHough.score,
         phaseScore: phase.score
     };
 
     const threshold = options.minimumConfidence ?? 0.52;
-    if (confidence < threshold || phase.coverage < 0.10 || distantResidual.supportedRegions < 6) {
+    const maximumWorstRegionResidual = Math.max(2, centerSpacing * 0.08);
+    const insufficientDistantSupport = distantResidual.supportedRegions < 6;
+    const excessiveDistantResidual =
+        distantResidual.worstRegionResidualPixels > maximumWorstRegionResidual;
+    if (confidence < threshold
+        || phase.coverage < 0.10
+        || insufficientDistantSupport
+        || excessiveDistantResidual) {
         return {
             status: "inconclusive",
             fit,
             reason: confidence < threshold
                 ? `A repeated hex lattice was found, but confidence ${confidence.toFixed(2)} is below the ${threshold.toFixed(2)} automatic-apply threshold.`
-                : distantResidual.supportedRegions < 6
-                    ? "A repeated local pattern was found, but too few distant image regions support one stable lattice."
-                    : "A repeated hex lattice was found, but too little of the raster supports the fitted phase."
+                : insufficientDistantSupport
+                    ? "A repeated local pattern was found, but too few distant image regions support one stable rigid lattice."
+                    : excessiveDistantResidual
+                        ? `A repeated hex lattice was found, but the final rigid overlay misses at least one distant region by ${distantResidual.worstRegionResidualPixels.toFixed(2)} px.`
+                        : "A repeated hex lattice was found, but too little of the raster supports the fitted phase."
         };
     }
 
@@ -455,15 +514,246 @@ function movingAverage(values: Float64Array, radius: number): Float64Array {
     return result;
 }
 
-function measureDistantPhaseResidual(
+function refineSpatialLattice(
     field: EdgeField,
     baseNormalDegrees: number,
-    carrierPitchPixels: number): DistantPhaseResidual {
-    const tilesPerAxis = 3;
-    const totalRegions = 3 * tilesPerAxis * tilesPerAxis;
-    let weightedSquaredResidual = 0;
-    let totalWeight = 0;
-    let supportedRegions = 0;
+    carrierPitchPixels: number): SpatialLatticeEvaluation {
+    const originalDegrees = normalizePeriod(baseNormalDegrees, 60);
+    let best = evaluateSpatialLattice(field, originalDegrees, carrierPitchPixels);
+    let bestPreference = spatialPreference(best, originalDegrees);
+
+    const stages = [
+        { angleRadius: 0.30, angleStep: 0.15, pitchRadius: 0.015, pitchStep: 0.0015 },
+        { angleRadius: 0.08, angleStep: 0.04, pitchRadius: 0.003, pitchStep: 0.0005 }
+    ] as const;
+
+    for (const stage of stages) {
+        const seedDegrees = best.baseNormalDegrees;
+        const seedPitch = best.carrierPitchPixels;
+        let stageBest = best;
+        let stagePreference = bestPreference;
+        for (let angleOffset = -stage.angleRadius;
+            angleOffset <= stage.angleRadius + 1e-9;
+            angleOffset += stage.angleStep) {
+            for (let pitchOffset = -stage.pitchRadius;
+                pitchOffset <= stage.pitchRadius + 1e-9;
+                pitchOffset += stage.pitchStep) {
+                const degrees = normalizePeriod(seedDegrees + angleOffset, 60);
+                const pitch = seedPitch * (1 + pitchOffset);
+                if (!Number.isFinite(pitch) || pitch <= 2) continue;
+                const candidate = evaluateSpatialLattice(field, degrees, pitch);
+                const preference = spatialPreference(candidate, originalDegrees);
+                if (preference > stagePreference + 1e-9) {
+                    stageBest = candidate;
+                    stagePreference = preference;
+                }
+            }
+        }
+        best = stageBest;
+        bestPreference = stagePreference;
+    }
+
+    return best;
+}
+
+function spatialPreference(
+    evaluation: SpatialLatticeEvaluation,
+    originalDegrees: number): number {
+    // Global Hough orientation is already strong. Penalize tiny angle excursions unless
+    // distant phase consistency materially improves, while allowing pitch to move freely.
+    const angleDistance = periodDistance(evaluation.baseNormalDegrees, originalDegrees, 60);
+    return evaluation.score - (angleDistance * 0.06);
+}
+
+function evaluateSpatialLattice(
+    field: EdgeField,
+    baseNormalDegrees: number,
+    carrierPitchPixels: number): SpatialLatticeEvaluation {
+    const tiles = SPATIAL_REFINEMENT_TILES;
+    const familyTileCount = 3 * tiles * tiles;
+    const accumulators: PhaseAccumulator[] = Array.from(
+        { length: familyTileCount },
+        () => ({ x: 0, y: 0, count: 0 }));
+    const stride = Math.max(
+        1,
+        Math.ceil(field.samples.length / SPATIAL_REFINEMENT_SAMPLE_LIMIT));
+
+    for (let index = 0; index < field.samples.length; index += stride) {
+        const sample = field.samples[index];
+        let bestFamily = -1;
+        let bestDistance = Number.POSITIVE_INFINITY;
+        for (let family = 0; family < 3; family++) {
+            const normal = ((baseNormalDegrees * DEG) + (family * PI / 3));
+            const distance = halfTurnDistance(sample.normal, normal);
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                bestFamily = family;
+            }
+        }
+        if (bestFamily < 0 || bestDistance > HOUGH_ORIENTATION_TOLERANCE) continue;
+
+        const normal = (baseNormalDegrees * DEG) + (bestFamily * PI / 3);
+        const rho = (sample.x * Math.cos(normal)) + (sample.y * Math.sin(normal));
+        const phase = (2 * PI * rho) / carrierPitchPixels;
+        const tileX = Math.min(tiles - 1, Math.floor(sample.x * tiles / field.width));
+        const tileY = Math.min(tiles - 1, Math.floor(sample.y * tiles / field.height));
+        const accumulator = accumulators[
+            bestFamily * tiles * tiles + tileY * tiles + tileX];
+        accumulator.x += Math.cos(phase);
+        accumulator.y += Math.sin(phase);
+        accumulator.count++;
+    }
+
+    let alignmentTotal = 0;
+    let alignmentWeight = 0;
+    let supportedChecks = 0;
+
+    for (let family = 0; family < 3; family++) {
+        const local: Array<{ phase: number; coherence: number; count: number }> = [];
+        for (let tile = 0; tile < tiles * tiles; tile++) {
+            const accumulator = accumulators[family * tiles * tiles + tile];
+            if (accumulator.count < 8) continue;
+            const coherence = Math.hypot(accumulator.x, accumulator.y) / accumulator.count;
+            if (coherence < 0.06) continue;
+            local.push({
+                phase: Math.atan2(accumulator.y, accumulator.x),
+                coherence,
+                count: accumulator.count
+            });
+        }
+        if (local.length < 4) continue;
+
+        const globalPhase = weightedCircularMean(local, null);
+
+        for (let index = 0; index < local.length; index++) {
+            const item = local[index];
+            const delta = circularDistance(item.phase, globalPhase);
+            const weight = phaseTileWeight(item.coherence, item.count);
+            alignmentTotal += Math.cos(delta) * weight;
+            alignmentWeight += weight;
+            supportedChecks++;
+        }
+    }
+
+    const alignment = alignmentWeight > 0 ? alignmentTotal / alignmentWeight : -1;
+    const coverage = supportedChecks / familyTileCount;
+    const score = clamp01(alignment * 0.92 + coverage * 0.08);
+    return {
+        baseNormalDegrees: normalizePeriod(baseNormalDegrees, 60),
+        carrierPitchPixels,
+        score,
+        supportedChecks,
+        totalChecks: familyTileCount
+    };
+}
+
+function weightedCircularMean(
+    values: ReadonlyArray<{ phase: number; coherence: number; count: number }>,
+    multipliers: readonly number[] | null): number {
+    let x = 0;
+    let y = 0;
+    for (let index = 0; index < values.length; index++) {
+        const item = values[index];
+        const weight = phaseTileWeight(item.coherence, item.count)
+            * (multipliers?.[index] ?? 1);
+        x += Math.cos(item.phase) * weight;
+        y += Math.sin(item.phase) * weight;
+    }
+    return Math.atan2(y, x);
+}
+
+function phaseTileWeight(coherence: number, count: number): number {
+    return Math.max(0.02, coherence)
+        * Math.min(20, Math.sqrt(count));
+}
+
+function refinePhaseAnchor(
+    field: EdgeField,
+    orientation: HexLatticeOrientation,
+    rotationDegrees: number,
+    baseNormalDegrees: number,
+    carrierPitchPixels: number,
+    spacing: number,
+    coarse: PhaseFit): PhaseFit {
+    const basisAngle = ((orientation === "PointyTop" ? 0 : 30) + rotationDegrees) * DEG;
+    const u = { x: spacing * Math.cos(basisAngle), y: spacing * Math.sin(basisAngle) };
+    const v = { x: spacing * Math.cos(basisAngle + PI / 3), y: spacing * Math.sin(basisAngle + PI / 3) };
+    let best = {
+        phase: coarse,
+        residual: measureDistantOverlayResidual(
+            field,
+            baseNormalDegrees,
+            carrierPitchPixels,
+            coarse.anchor)
+    };
+
+    for (const divisor of [48, 192]) {
+        const center = { ...best.phase.anchor };
+        for (let ai = -2; ai <= 2; ai++) {
+            for (let bi = -2; bi <= 2; bi++) {
+                const anchor = {
+                    x: center.x + (ai / divisor) * u.x + (bi / divisor) * v.x,
+                    y: center.y + (ai / divisor) * u.y + (bi / divisor) * v.y
+                };
+                const residual = measureDistantOverlayResidual(
+                    field,
+                    baseNormalDegrees,
+                    carrierPitchPixels,
+                    anchor);
+                if (!isBetterDistantResidual(residual, best.residual)) continue;
+                const scored = scorePhase(
+                    field.strength,
+                    field.width,
+                    field.height,
+                    orientation,
+                    rotationDegrees,
+                    spacing,
+                    anchor,
+                    u,
+                    v);
+                // Preserve the parity selected by the coarse hex-edge score. A candidate
+                // may improve line-family phase while crossing into the wrong half-cell.
+                if (scored.score < coarse.score * 0.88) continue;
+                best = {
+                    phase: { anchor, ...scored },
+                    residual
+                };
+            }
+        }
+    }
+
+    return best.phase;
+}
+
+function isBetterDistantResidual(
+    candidate: DistantPhaseResidual,
+    current: DistantPhaseResidual): boolean {
+    const candidateHasBroadSupport = candidate.supportedRegions >= 6;
+    const currentHasBroadSupport = current.supportedRegions >= 6;
+    if (candidateHasBroadSupport !== currentHasBroadSupport) {
+        return candidateHasBroadSupport;
+    }
+    if (candidate.worstRegionResidualPixels < current.worstRegionResidualPixels - 1e-6) {
+        return true;
+    }
+    if (Math.abs(candidate.worstRegionResidualPixels - current.worstRegionResidualPixels) <= 1e-6) {
+        if (candidate.residualPixels < current.residualPixels - 1e-6) return true;
+        if (Math.abs(candidate.residualPixels - current.residualPixels) <= 1e-6) {
+            return candidate.supportedRegions > current.supportedRegions;
+        }
+    }
+    return false;
+}
+
+function measureDistantOverlayResidual(
+    field: EdgeField,
+    baseNormalDegrees: number,
+    carrierPitchPixels: number,
+    anchor: { x: number; y: number }): DistantPhaseResidual {
+    const tiles = DISTANT_RESIDUAL_TILES;
+    const totalRegions = tiles * tiles;
+    const regionResiduals: number[][] = Array.from({ length: totalRegions }, () => []);
+    const regionWeights: number[][] = Array.from({ length: totalRegions }, () => []);
 
     for (let family = 0; family < 3; family++) {
         const normal = (baseNormalDegrees * DEG) + (family * PI / 3);
@@ -473,23 +763,14 @@ function measureDistantPhaseResidual(
             sample => halfTurnDistance(sample.normal, normal) <= HOUGH_ORIENTATION_TOLERANCE);
         if (samples.length < 120) continue;
 
-        let globalX = 0;
-        let globalY = 0;
-        for (const sample of samples) {
-            const rho = (sample.x * cos) + (sample.y * sin);
-            const phase = (2 * PI * rho) / carrierPitchPixels;
-            globalX += Math.cos(phase);
-            globalY += Math.sin(phase);
-        }
-        if (Math.hypot(globalX, globalY) < 1) continue;
-        const globalPhase = Math.atan2(globalY, globalX);
-
-        for (let tileY = 0; tileY < tilesPerAxis; tileY++) {
-            for (let tileX = 0; tileX < tilesPerAxis; tileX++) {
-                const minX = tileX * field.width / tilesPerAxis;
-                const maxX = (tileX + 1) * field.width / tilesPerAxis;
-                const minY = tileY * field.height / tilesPerAxis;
-                const maxY = (tileY + 1) * field.height / tilesPerAxis;
+        const expectedPhase = (2 * PI * ((anchor.x * cos) + (anchor.y * sin)))
+            / carrierPitchPixels;
+        for (let tileY = 0; tileY < tiles; tileY++) {
+            for (let tileX = 0; tileX < tiles; tileX++) {
+                const minX = tileX * field.width / tiles;
+                const maxX = (tileX + 1) * field.width / tiles;
+                const minY = tileY * field.height / tiles;
+                const maxY = (tileY + 1) * field.height / tiles;
                 let localX = 0;
                 let localY = 0;
                 let count = 0;
@@ -504,26 +785,47 @@ function measureDistantPhaseResidual(
                 }
                 if (count < 20) continue;
                 const coherence = Math.hypot(localX, localY) / count;
-                if (coherence < 0.08) continue;
+                if (coherence < 0.04) continue;
 
                 const localPhase = Math.atan2(localY, localX);
-                const delta = Math.atan2(
-                    Math.sin(localPhase - globalPhase),
-                    Math.cos(localPhase - globalPhase));
+                const delta = circularDistance(localPhase, expectedPhase);
                 const residual = Math.abs(delta) / (2 * PI) * carrierPitchPixels;
-                const weight = Math.max(0.05, coherence) * Math.sqrt(count);
-                weightedSquaredResidual += weight * residual * residual;
-                totalWeight += weight;
-                supportedRegions++;
+                const region = tileY * tiles + tileX;
+                regionResiduals[region].push(residual);
+                regionWeights[region].push(phaseTileWeight(coherence, count));
             }
         }
     }
 
+    const supported: Array<{ residual: number; weight: number }> = [];
+    for (let region = 0; region < totalRegions; region++) {
+        const values = regionResiduals[region];
+        // Two agreeing line families are enough to constrain a 2D rigid lattice while
+        // tolerating one family being obscured by labels, roads, coastlines, or borders.
+        if (values.length < 2) continue;
+        values.sort((a, b) => a - b);
+        const residual = values.length % 2 === 0
+            ? (values[values.length / 2 - 1] + values[values.length / 2]) / 2
+            : values[Math.floor(values.length / 2)];
+        supported.push({
+            residual,
+            weight: regionWeights[region].reduce((sum, value) => sum + value, 0)
+        });
+    }
+
+    const totalWeight = supported.reduce((sum, region) => sum + region.weight, 0);
+    const residualPixels = totalWeight > 0
+        ? Math.sqrt(supported.reduce(
+            (sum, region) => sum + region.weight * region.residual * region.residual,
+            0) / totalWeight)
+        : carrierPitchPixels / 2;
+    const worstRegionResidualPixels = supported.length > 0
+        ? Math.max(...supported.map(region => region.residual))
+        : carrierPitchPixels / 2;
     return {
-        residualPixels: totalWeight > 0
-            ? Math.sqrt(weightedSquaredResidual / totalWeight)
-            : carrierPitchPixels / 2,
-        supportedRegions,
+        residualPixels,
+        worstRegionResidualPixels,
+        supportedRegions: supported.length,
         totalRegions
     };
 }
@@ -548,11 +850,11 @@ function fitPhase(
     height: number,
     orientation: HexLatticeOrientation,
     rotationDegrees: number,
-    spacing: number): { anchor: { x: number; y: number }; score: number; coverage: number; residual: number } {
+    spacing: number): PhaseFit {
     const basisAngle = ((orientation === "PointyTop" ? 0 : 30) + rotationDegrees) * DEG;
     const u = { x: spacing * Math.cos(basisAngle), y: spacing * Math.sin(basisAngle) };
     const v = { x: spacing * Math.cos(basisAngle + PI / 3), y: spacing * Math.sin(basisAngle + PI / 3) };
-    let best = { anchor: { x: 0, y: 0 }, score: -1, coverage: 0, residual: 4 };
+    let best: PhaseFit = { anchor: { x: 0, y: 0 }, score: -1, coverage: 0 };
 
     for (let ai = 0; ai < 12; ai++) {
         for (let bi = 0; bi < 12; bi++) {
@@ -570,7 +872,11 @@ function fitPhase(
                 anchor,
                 u,
                 v);
-            if (result.score > best.score) best = { anchor, ...result };
+            if (result.score > best.score
+                || (Math.abs(result.score - best.score) <= 1e-9
+                    && result.coverage > best.coverage)) {
+                best = { anchor, ...result };
+            }
         }
     }
     return best;
@@ -585,15 +891,13 @@ function scorePhase(
     spacing: number,
     anchor: { x: number; y: number },
     u: { x: number; y: number },
-    v: { x: number; y: number }): { score: number; coverage: number; residual: number } {
+    v: { x: number; y: number }): { score: number; coverage: number } {
     const radius = spacing / SQRT3;
     const cornerStart = ((orientation === "PointyTop" ? -30 : 0) + rotationDegrees) * DEG;
     const reach = Math.ceil(Math.hypot(width, height) / spacing) + 4;
     let total = 0;
     let count = 0;
     let supported = 0;
-    let residual = 0;
-    let residualCount = 0;
 
     for (let i = -reach; i <= reach; i++) {
         for (let j = -reach; j <= reach; j++) {
@@ -618,35 +922,13 @@ function scorePhase(
                     total += value;
                     count++;
                     if (value >= 0.22) supported++;
-                    if ((edge & 1) === 0 && residualCount < 1200) {
-                        const nx = -(b.y - a.y);
-                        const ny = b.x - a.x;
-                        const nlen = Math.hypot(nx, ny) || 1;
-                        let bestOffset = 4;
-                        let bestValue = value;
-                        for (let offset = -4; offset <= 4; offset++) {
-                            const shifted = bilinear(
-                                strength,
-                                width,
-                                height,
-                                x + (nx / nlen * offset),
-                                y + (ny / nlen * offset));
-                            if (shifted > bestValue) {
-                                bestValue = shifted;
-                                bestOffset = Math.abs(offset);
-                            }
-                        }
-                        residual += bestValue >= 0.18 ? bestOffset : 4;
-                        residualCount++;
-                    }
                 }
             }
         }
     }
     return {
         score: count ? total / count : 0,
-        coverage: count ? supported / count : 0,
-        residual: residualCount ? residual / residualCount : 4
+        coverage: count ? supported / count : 0
     };
 }
 
@@ -671,6 +953,15 @@ function bilinear(values: Float32Array, width: number, height: number, x: number
     const top = values[i] * (1 - tx) + values[i + 1] * tx;
     const bottom = values[i + width] * (1 - tx) + values[i + width + 1] * tx;
     return top * (1 - ty) + bottom * ty;
+}
+
+function circularDistance(a: number, b: number): number {
+    return Math.atan2(Math.sin(a - b), Math.cos(a - b));
+}
+
+function periodDistance(a: number, b: number, period: number): number {
+    const delta = Math.abs(normalizePeriod(a, period) - normalizePeriod(b, period));
+    return Math.min(delta, period - delta);
 }
 
 function halfTurnDistance(a: number, b: number): number {

@@ -96,6 +96,15 @@ function eraseRectangle(image, x0, y0, x1, y1, value = 214) {
     }
 }
 
+function replaceRightHalf(target, source) {
+    const split = Math.floor(target.width / 2);
+    for (let y = 0; y < target.height; y++) {
+        for (let x = split; x < target.width; x++) {
+            target.pixels[y * target.width + x] = source.pixels[y * source.width + x];
+        }
+    }
+}
+
 test("detects a rotated flat-top hex lattice with noise", () => {
     const image = raster(320, 240);
     const expected = {
@@ -218,6 +227,33 @@ test("fits the globally rigid lattice instead of a stronger local near-period la
         `rotation ${result.fit.rotationDegrees}`);
     assert.ok(result.fit.residualPixels < 1.5,
         `worst distant-region behavior is too large: ${result.fit.residualPixels}`);
+});
+
+test("rejects a center-plausible fit that drifts in distant regions", () => {
+    const left = raster(640, 420, 220);
+    const right = raster(640, 420, 220);
+    renderHexGrid(left, {
+        orientation: "FlatTop",
+        spacing: 30,
+        anchor: { x: 8, y: 17 },
+        lineValue: 80
+    });
+    renderHexGrid(right, {
+        orientation: "FlatTop",
+        spacing: 31,
+        anchor: { x: 8, y: 17 },
+        lineValue: 80
+    });
+    addMapNoise(left);
+    addMapNoise(right);
+    replaceRightHalf(left, right);
+
+    const result = detectHexLattice(left, { minimumConfidence: 0.25 });
+    assert.equal(result.status, "inconclusive", result.reason);
+    assert.ok(result.fit, result.reason);
+    assert.match(result.reason, /final rigid overlay misses|stable rigid lattice/i);
+    assert.ok(result.fit.residualPixels > 2.4,
+        `worst distant residual ${result.fit.residualPixels}`);
 });
 
 test("does not invent a canonical lattice on a gridless raster", () => {
