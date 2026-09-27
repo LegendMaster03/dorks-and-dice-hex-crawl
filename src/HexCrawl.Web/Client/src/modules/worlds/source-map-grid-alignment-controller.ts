@@ -61,7 +61,18 @@ export class SourceMapGridAlignmentController {
 
     public async beginAndPreview(sourceMap: SourceMapDetail | null): Promise<void> {
         this.begin(sourceMap);
-        await this.detectAndPreview();
+        try {
+            await this.detectAndPreview();
+        } catch (value) {
+            this.detection = null;
+            this.proposal = null;
+            this.physicalScaleChange = null;
+            this.applyButton.disabled = true;
+            this.clearPreview();
+            const detail = value instanceof Error ? value.message : "Unknown raster-analysis error.";
+            this.status.textContent =
+                `Automatic grid preview could not complete: ${detail} Use Detect and preview to retry, or use Advanced registration as a fallback.`;
+        }
     }
 
     public cancelIfMap(sourceMapId: string): void {
@@ -370,9 +381,6 @@ function compareWonderdraftGridMetadata(
     metadata: Record<string, string>,
     fit: HexLatticeFit,
     projectToRasterScale: number): WonderdraftGridCrossCheck {
-    if (metadata["grid.type"]?.trim().toLocaleLowerCase() !== "hex") {
-        return { summary: null, warning: null };
-    }
     const rawSize = metadata["grid.size"];
     if (!rawSize) return { summary: null, warning: null };
     const projectGridSize = Number(rawSize);
@@ -388,10 +396,10 @@ function compareWonderdraftGridMetadata(
     const relativeDifference = difference / Math.max(fit.centerSpacingPixels, scaledMetadataSize);
     const comparison = `Wonderdraft grid.size ${projectGridSize.toFixed(3)} project px → ${scaledMetadataSize.toFixed(2)} raster px; detected spacing differs ${(relativeDifference * 100).toFixed(2)}%`;
 
-    // This is deliberately a cross-check, not an alternate source of lattice geometry.
-    // Humblewood provides direct evidence that grid.size=80 agrees with its baked
-    // 80-pixel center spacing, but raster detection remains authoritative so other
-    // Wonderdraft versions/patterns do not inherit an unverified semantic assumption.
+    // Treat grid.size as an opaque candidate size and only report agreement or disagreement.
+    // Humblewood supplies direct fixture evidence that grid.size=80 agrees with its baked
+    // 80-pixel center spacing. Raster detection remains authoritative so other Wonderdraft
+    // versions and grid patterns do not inherit an unverified semantic assumption.
     if (relativeDifference <= 0.03) {
         return { summary: `${comparison} (agreement)`, warning: null };
     }

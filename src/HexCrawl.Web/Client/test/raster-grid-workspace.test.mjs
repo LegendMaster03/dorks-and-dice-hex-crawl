@@ -39,6 +39,8 @@ test("unplaced baked-grid Wonderdraft import automatically starts a non-saving d
     assert.match(controller, /public async beginAndPreview/);
     assert.match(controller, /this\.begin\(sourceMap\)/);
     assert.match(controller, /await this\.detectAndPreview\(\)/);
+    assert.match(controller, /Automatic grid preview could not complete/);
+    assert.match(controller, /Advanced registration as a fallback/);
     assert.match(workspace, /importedSourceMap\?\.containsBakedGrid && !importedSourceMap\.alignment/);
     assert.match(workspace, /await this\.gridAlignmentController\.beginAndPreview\(importedSourceMap\)/);
     assert.doesNotMatch(workspace, /containsBakedGrid && importedSourceMap\.alignment[^\n]*beginAndPreview/);
@@ -63,6 +65,8 @@ test("Wonderdraft grid metadata and scale-bar metadata remain independent cross-
 
     assert.match(controller, /gridMetadata: Record<string, string>/);
     assert.match(controller, /metadata\["grid\.size"\]/);
+    assert.doesNotMatch(controller, /metadata\["grid\.type"\]/);
+    assert.match(controller, /opaque candidate size/);
     assert.match(controller, /grid\.size .* detected spacing differs/);
     assert.match(controller, /raster geometry is not overridden/);
     assert.match(controller, /scale-bar metadata/);
