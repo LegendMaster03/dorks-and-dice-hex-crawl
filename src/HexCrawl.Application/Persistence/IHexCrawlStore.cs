@@ -73,6 +73,13 @@ public enum DeleteOverworldOutcome
     HasExpeditions
 }
 
+public enum DeleteExpeditionOutcome
+{
+    Deleted,
+    NotFound,
+    Conflict
+}
+
 public sealed record SaveResult<T>(SaveOutcome Outcome, T? Value);
 
 public interface IHexCrawlStore
@@ -128,6 +135,12 @@ public interface IHexCrawlStore
 
     Task<SaveResult<StoredExpedition>> SaveExpeditionAsync(
         StoredExpedition expedition,
+        long expectedVersion,
+        CancellationToken cancellationToken = default);
+
+    Task<DeleteExpeditionOutcome> DeleteExpeditionAsync(
+        Guid expeditionId,
+        string ownerUserId,
         long expectedVersion,
         CancellationToken cancellationToken = default);
 }

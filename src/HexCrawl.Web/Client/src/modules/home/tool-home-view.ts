@@ -159,8 +159,8 @@ export async function renderToolHome(
         );
         if (worlds.length === 0) context.value = ABSTRACT_CONTEXT;
 
-        count.textContent = expeditions.length === 1 ? "1 session" : `${expeditions.length} sessions`;
-        renderExpeditions(list, expeditions, worlds, navigate);
+        syncExpeditionCount(count, expeditions.length);
+        renderExpeditions(list, expeditions, worlds, api, error, count, navigate);
         syncContext();
         syncProcedure();
     } catch (value) {
@@ -242,14 +242,14 @@ function renderExpeditions(
     host: HTMLElement,
     expeditions: ExpeditionSummary[],
     worlds: OverworldSummary[],
+    api: HexCrawlApi,
+    error: HTMLElement,
+    count: HTMLElement,
     navigate: (route: string, replace?: boolean) => void): void {
     host.replaceChildren();
     const worldNames = new Map(worlds.map(world => [world.id, world.name]));
     if (expeditions.length === 0) {
-        const empty = document.createElement("div");
-        empty.className = "hc-empty-state";
-        empty.innerHTML = "<strong>No crawl sessions yet.</strong><span>Start one without creating a world, or bind one to an authored Overworld.</span>";
-        host.append(empty);
+        renderEmptyExpeditions(host);
         return;
     }
 
@@ -286,9 +286,48 @@ function renderExpeditions(
         }
         actions.append(action("Encounters", () => navigate(`/expeditions/${expedition.id}/encounters`)));
 
+        const deleteButton = document.createElement("button");
+        deleteButton.type = "button";
+        deleteButton.className = "hc-danger-action";
+        deleteButton.textContent = "Delete running sheet";
+        deleteButton.setAttribute("aria-label", `Delete running sheet ${expedition.name}`);
+        deleteButton.addEventListener("click", () => {
+            const confirmed = window.confirm(
+                `Delete running sheet “${expedition.name}”?\n\nThis permanently deletes the saved session, including its watch history and running-sheet state. The overworld itself will not be deleted.`);
+            if (!confirmed) return;
+            void (async () => {
+                clearUiError(error);
+                deleteButton.disabled = true;
+                deleteButton.textContent = "Deleting…";
+                try {
+                    await api.deleteExpedition(expedition.id, expedition.version);
+                    card.remove();
+                    const remaining = host.querySelectorAll(".hc-expedition-card").length;
+                    syncExpeditionCount(count, remaining);
+                    if (remaining === 0) renderEmptyExpeditions(host);
+                } catch (value) {
+                    showUiError(error, value);
+                    deleteButton.disabled = false;
+                    deleteButton.textContent = "Delete running sheet";
+                }
+            })();
+        });
+        actions.append(deleteButton);
+
         card.append(copy, actions);
         host.append(card);
     }
+}
+
+function renderEmptyExpeditions(host: HTMLElement): void {
+    const empty = document.createElement("div");
+    empty.className = "hc-empty-state";
+    empty.innerHTML = "<strong>No crawl sessions yet.</strong><span>Start one without creating a world, or bind one to an authored Overworld.</span>";
+    host.append(empty);
+}
+
+function syncExpeditionCount(count: HTMLElement, value: number): void {
+    count.textContent = value === 1 ? "1 session" : `${value} sessions`;
 }
 
 function distanceUnit(kind: DistanceUnitKind, form: HTMLFormElement) {
@@ -321,4 +360,3 @@ function formatTimestamp(value: string): string {
     if (Number.isNaN(date.valueOf())) return value;
     return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(date);
 }
-

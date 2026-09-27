@@ -354,6 +354,13 @@ export class HexCrawlApi {
         return this.getJson(`/api/expeditions/${encodeURIComponent(expeditionId)}`, "Expedition");
     }
 
+    public async deleteExpedition(expeditionId: string, expectedVersion: number): Promise<void> {
+        const response = await fetch(
+            `${this.backendBaseUrl}/api/expeditions/${encodeURIComponent(expeditionId)}?expectedVersion=${expectedVersion}`,
+            { method: "DELETE", headers: { Accept: "application/json" } });
+        if (!response.ok) throw await apiError(response, "Delete running sheet");
+    }
+
     public getTravelEnvironmentCatalog(expeditionId: string): Promise<TravelEnvironmentCatalog> {
         return this.getJson(
             `/api/expeditions/${encodeURIComponent(expeditionId)}/travel-environment`,

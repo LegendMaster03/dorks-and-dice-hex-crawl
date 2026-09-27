@@ -1,7 +1,10 @@
-import { HexCrawlApiError } from "./api";
+import { HexCrawlApiError } from "./api.js";
 
 export type UiErrorKind = "validation" | "auth" | "not-found" | "conflict" | "server" | "unknown";
 export type UiError = { kind: UiErrorKind; message: string };
+
+const savedExpeditionDependencyMessage =
+    "Delete overworld failed: The overworld can not be deleted while it has saved expeditions. Remove those expeditions first.";
 
 export function describeUiError(value: unknown): UiError {
     if (value instanceof HexCrawlApiError) {
@@ -9,7 +12,12 @@ export function describeUiError(value: unknown): UiError {
             case "validation": return { kind: "validation", message: value.message };
             case "auth": return { kind: "auth", message: "Your Dorks & Dice session is no longer available. Refresh or sign in again, then retry." };
             case "not-found": return { kind: "not-found", message: value.message };
-            case "conflict": return { kind: "conflict", message: "This resource changed in another session. Reload the latest state before saving again." };
+            case "conflict": return {
+                kind: "conflict",
+                message: value.message === savedExpeditionDependencyMessage
+                    ? value.message
+                    : "This resource changed in another session. Reload the latest state before saving again."
+            };
             case "server": return { kind: "server", message: value.message };
         }
     }

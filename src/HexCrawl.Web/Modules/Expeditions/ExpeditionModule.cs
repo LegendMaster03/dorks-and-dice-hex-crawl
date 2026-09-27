@@ -36,6 +36,7 @@ public sealed class ExpeditionModule : IHexCrawlModule
         api.MapGet("/overworlds/{overworldId:guid}/expeditions", ListExpeditionsAsync);
         api.MapPost("/overworlds/{overworldId:guid}/expeditions", StartExpeditionAsync);
         api.MapGet("/expeditions/{expeditionId:guid}", GetExpeditionAsync);
+        api.MapDelete("/expeditions/{expeditionId:guid}", DeleteExpeditionAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/advance", AdvanceExpeditionAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/resolution-helper", ResolveProcedureInputsAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/discover", DiscoverAsync);
@@ -107,6 +108,21 @@ public sealed class ExpeditionModule : IHexCrawlModule
         var owner = UserId(context);
         var expedition = await service.GetExpeditionAsync(expeditionId, owner, cancellationToken);
         return Results.Ok(await ContractAsync(expedition, owner, service, cancellationToken));
+    }
+
+    private static async Task<IResult> DeleteExpeditionAsync(
+        Guid expeditionId,
+        long expectedVersion,
+        HttpContext context,
+        HexCrawlService service,
+        CancellationToken cancellationToken)
+    {
+        await service.DeleteExpeditionAsync(
+            expeditionId,
+            UserId(context),
+            expectedVersion,
+            cancellationToken);
+        return Results.NoContent();
     }
 
     private static async Task<IResult> AdvanceExpeditionAsync(

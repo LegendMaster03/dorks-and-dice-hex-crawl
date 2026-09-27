@@ -238,6 +238,51 @@ public sealed partial class SqliteHexCrawlStore
         return new SaveResult<StoredExpedition>(SaveOutcome.Saved, updated);
     }
 
+    public async Task<DeleteExpeditionOutcome> DeleteExpeditionAsync(
+        Guid expeditionId,
+        string ownerUserId,
+        long expectedVersion,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken);
+        var currentVersion = await ReadVersionAsync(
+            connection,
+            transaction,
+            "expeditions",
+            expeditionId,
+            ownerUserId,
+            cancellationToken);
+        if (!currentVersion.HasValue)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return DeleteExpeditionOutcome.NotFound;
+        }
+        if (currentVersion.Value != expectedVersion)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return DeleteExpeditionOutcome.Conflict;
+        }
+
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            DELETE FROM expeditions
+            WHERE id = $id AND owner_user_id = $owner AND version = $expectedVersion;
+            """;
+        command.Parameters.AddWithValue("$id", expeditionId.ToString("D"));
+        command.Parameters.AddWithValue("$owner", ownerUserId);
+        command.Parameters.AddWithValue("$expectedVersion", expectedVersion);
+        if (await command.ExecuteNonQueryAsync(cancellationToken) != 1)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return DeleteExpeditionOutcome.Conflict;
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        return DeleteExpeditionOutcome.Deleted;
+    }
+
     private static async Task<IReadOnlyList<CrawlRuntimeEvent>> ReadEventsAsync(
         SqliteConnection connection,
         Guid expeditionId,
