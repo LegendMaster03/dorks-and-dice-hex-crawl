@@ -1,6 +1,10 @@
 import type { HexCrawlApi } from "../../api";
 import { detectHexLattice, type HexLatticeDetection, type HexLatticeFit } from "../../grid-lattice-detector";
-import { buildRasterGridAlignmentProposal, type RasterGridAlignmentProposal } from "../../raster-grid-alignment";
+import {
+    buildRasterGridAlignmentProposal,
+    selectPhysicalDistancePerHex,
+    type RasterGridAlignmentProposal
+} from "../../raster-grid-alignment";
 import {
     isCanonicalSourceFit,
     mapDetectionToSourceImage,
@@ -256,6 +260,7 @@ type PhysicalScaleContext = {
 type WonderdraftGridCrossCheck = {
     summary: string | null;
     warning: string | null;
+    trustedCenterSpacingPixels: number | null;
 };
 
 type PhysicalScaleChange = {
@@ -286,7 +291,7 @@ async function analyzeRaster(
         const context = canvas.getContext("2d", { willReadFrequently: true });
         if (!context) throw new Error("The browser could not create a raster-analysis canvas.");
         context.drawImage(bitmap, 0, 0, width, height);
-        const rgba = context.getImageData(0, 0, width, height).data;
+        const rgba = context.getImageData(0, 0,width, height).data;
         const pixels = new Uint8Array(width * height);
         for (let source = 0, target = 0; source < rgba.length; source += 4, target++) {
             pixels[target] = Math.round(
@@ -361,16 +366,33 @@ async function loadPhysicalScaleContext(
 
     const unitsPerRasterPixel = physicalScale.unitsPerPixel / context.uniformScale;
     const distanceMeters = fit.centerSpacingPixels * unitsPerRasterPixel * sourceMetersPerUnit;
-    const distancePerHex = distanceMeters / targetMetersPerUnit;
-    if (!Number.isFinite(distancePerHex) || distancePerHex <= 0) {
+    const directDistancePerHex = distanceMeters / targetMetersPerUnit;
+    if (!Number.isFinite(directDistancePerHex) || directDistancePerHex <= 0) {
         return {
             distancePerHex: null,
             summary: summaries.length > 0 ? summaries.join(" · ") : null,
             warnings: [...warnings, "Wonderdraft physical scale produced an invalid distance and was ignored."]
         };
     }
-    summaries.push(
-        `physical scale ${distancePerHex.toFixed(3)} ${grid.neighborCenterDistance.unit.symbol}/hex from retained Wonderdraft scale-bar metadata (${context.rasterRelationship})`);
+
+    const crossCheckDistancePerHex = gridCrossCheck.trustedCenterSpacingPixels == null
+        ? null
+        : (gridCrossCheck.trustedCenterSpacingPixels
+            * unitsPerRasterPixel
+            * sourceMetersPerUnit) / targetMetersPerUnit;
+    const selection = selectPhysicalDistancePerHex({
+        directDistancePerHex,
+        crossCheckDistancePerHex,
+        considerWholeUnits: grid.neighborCenterDistance.unit.kind === "Mile"
+    });
+    const distancePerHex = selection.distancePerHex;
+    if (selection.usedWholeUnitCandidate && selection.crossCheckDistancePerHex != null) {
+        summaries.push(
+            `physical scale ${distancePerHex.toFixed(3)} ${grid.neighborCenterDistance.unit.symbol}/hex; whole-mile candidate selected because it better reconciles the direct scale-bar/raster estimate ${selection.directDistancePerHex.toFixed(3)} ${grid.neighborCenterDistance.unit.symbol}/hex with the Wonderdraft grid.size estimate ${selection.crossCheckDistancePerHex.toFixed(3)} ${grid.neighborCenterDistance.unit.symbol}/hex (${context.rasterRelationship})`);
+    } else {
+        summaries.push(
+            `physical scale ${distancePerHex.toFixed(3)} ${grid.neighborCenterDistance.unit.symbol}/hex from retained Wonderdraft scale-bar metadata (${context.rasterRelationship})`);
+    }
     return {
         distancePerHex,
         summary: summaries.join(" · "),
@@ -386,14 +408,16 @@ function compareWonderdraftGridMetadata(
     if (!rawSize) {
         return {
             summary: null,
-            warning: "Wonderdraft alignment metadata did not expose grid.size, so no project-grid size cross-check is available."
+            warning: "Wonderdraft alignment metadata did not expose grid.size, so no project-grid size cross-check is available.",
+            trustedCenterSpacingPixels: null
         };
     }
     const projectGridSize = Number(rawSize);
     if (!Number.isFinite(projectGridSize) || projectGridSize <= 0) {
         return {
             summary: null,
-            warning: `Wonderdraft grid.size metadata '${rawSize}' is not a usable positive number and was ignored.`
+            warning: `Wonderdraft grid.size metadata '${rawSize}' is not a usable positive number and was ignored.`,
+            trustedCenterSpacingPixels: null
         };
     }
 
@@ -401,17 +425,32 @@ function compareWonderdraftGridMetadata(
     const difference = Math.abs(fit.centerSpacingPixels - scaledMetadataSize);
     const relativeDifference = difference / Math.max(fit.centerSpacingPixels, scaledMetadataSize);
     const rawType = metadataValue(metadata, "grid.type");
+    const normalizedType = rawType?.trim().toLocaleLowerCase() ?? null;
     const typeDetail = rawType ? `; grid.type=${rawType}` : "; grid.type not exposed";
     const comparison = `Wonderdraft grid.size=${projectGridSize.toFixed(3)} project px → ${scaledMetadataSize.toFixed(2)} raster px; raster detector ${fit.centerSpacingPixels.toFixed(2)} px; difference ${(relativeDifference * 100).toFixed(2)}%${typeDetail}`;
 
     // grid.size is only an independent cross-check. The baked raster remains the
     // authoritative geometry even when the retained project metadata agrees exactly.
+    // An explicit non-hex grid type invalidates the cross-check; missing grid.type is
+    // reported but does not hide an otherwise matching Wonderdraft grid.size value.
+    if (normalizedType != null && normalizedType !== "hex") {
+        return {
+            summary: null,
+            warning: `${comparison}. Wonderdraft grid.type is not hex, so grid.size is not used as a hex-spacing cross-check.`,
+            trustedCenterSpacingPixels: null
+        };
+    }
     if (relativeDifference <= 0.03) {
-        return { summary: `${comparison} (agreement)`, warning: null };
+        return {
+            summary: `${comparison} (agreement)`,
+            warning: null,
+            trustedCenterSpacingPixels: scaledMetadataSize
+        };
     }
     return {
         summary: null,
-        warning: `${comparison}. The metadata is retained only as a cross-check; raster geometry is not overridden.`
+        warning: `${comparison}. The metadata is retained only as a cross-check; raster geometry is not overridden.`,
+        trustedCenterSpacingPixels: null
     };
 }
 
