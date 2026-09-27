@@ -328,21 +328,14 @@ public sealed class RasterGridAlignmentTests
         }
     }
 
-    private static string TemporaryDatabasePath() =>
-        Path.Combine(Path.GetTempPath(), $"hex-crawl-raster-grid-{Guid.NewGuid():N}.db");
+    private static string TemporaryDatabasePath() => PostgresTestDatabase.CreateConnectionString();
 
-    private static async Task<SqliteHexCrawlStore> OpenStoreAsync(string path)
+    private static async Task<PostgresHexCrawlStore> OpenStoreAsync(string path)
     {
-        var store = new SqliteHexCrawlStore($"Data Source={path}");
+        var store = new PostgresHexCrawlStore(path);
         await store.InitializeAsync();
         return store;
     }
 
-    private static void DeleteDatabase(string path)
-    {
-        foreach (var candidate in new[] { path, path + "-wal", path + "-shm" })
-        {
-            if (File.Exists(candidate)) File.Delete(candidate);
-        }
-    }
+    private static void DeleteDatabase(string path) => PostgresTestDatabase.Delete(path);
 }

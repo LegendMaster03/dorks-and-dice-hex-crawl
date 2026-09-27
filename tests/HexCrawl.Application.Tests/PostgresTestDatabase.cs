@@ -18,8 +18,7 @@ internal sealed class PostgresTestDatabase : IAsyncDisposable
 
     public static async Task<PostgresTestDatabase> CreateAsync(CancellationToken cancellationToken = default)
     {
-        var adminConnectionString = Environment.GetEnvironmentVariable("HEXCRAWL_TEST_POSTGRES")
-            ?? "Host=127.0.0.1;Port=5432;Database=postgres;Username=postgres;Password=postgres";
+        var adminConnectionString = BaseConnectionString();
         var schema = $"hex_test_{Guid.NewGuid():N}";
         await using (var connection = new NpgsqlConnection(adminConnectionString))
         {
@@ -35,6 +34,45 @@ internal sealed class PostgresTestDatabase : IAsyncDisposable
         };
         return new PostgresTestDatabase(adminConnectionString, schema, builder.ConnectionString);
     }
+
+    public static string CreateConnectionString()
+    {
+        var adminConnectionString = BaseConnectionString();
+        var schema = $"hex_test_{Guid.NewGuid():N}";
+        using (var connection = new NpgsqlConnection(adminConnectionString))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = $"CREATE SCHEMA \"{schema}\";";
+            command.ExecuteNonQuery();
+        }
+
+        return new NpgsqlConnectionStringBuilder(adminConnectionString)
+        {
+            SearchPath = schema
+        }.ConnectionString;
+    }
+
+    public static void Delete(string connectionString)
+    {
+        var builder = new NpgsqlConnectionStringBuilder(connectionString);
+        var schema = builder.SearchPath;
+        if (string.IsNullOrWhiteSpace(schema))
+        {
+            throw new ArgumentException("The PostgreSQL test connection string must identify its isolated schema.", nameof(connectionString));
+        }
+
+        builder.SearchPath = string.Empty;
+        using var connection = new NpgsqlConnection(builder.ConnectionString);
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = $"DROP SCHEMA IF EXISTS \"{schema}\" CASCADE;";
+        command.ExecuteNonQuery();
+    }
+
+    private static string BaseConnectionString() =>
+        Environment.GetEnvironmentVariable("HEXCRAWL_TEST_POSTGRES")
+        ?? "Host=127.0.0.1;Port=5432;Database=postgres;Username=postgres;Password=postgres";
 
     public async ValueTask DisposeAsync()
     {
