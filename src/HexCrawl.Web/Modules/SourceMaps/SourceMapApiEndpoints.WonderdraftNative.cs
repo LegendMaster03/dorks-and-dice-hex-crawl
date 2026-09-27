@@ -84,10 +84,29 @@ public static partial class SourceMapApiEndpoints
             return Results.BadRequest(new { error = "The selected raster map has no usable pixel dimensions." });
         }
 
-        var sourceScaleX = (double)map.PixelWidth / summary.PixelWidth;
-        var sourceScaleY = (double)map.PixelHeight / summary.PixelHeight;
+        var rasterRelationship = WonderdraftRasterRelationship.Analyze(
+            summary.PixelWidth,
+            summary.PixelHeight,
+            map.PixelWidth,
+            map.PixelHeight);
+        if (!rasterRelationship.CanMapProjectCoordinates
+            || rasterRelationship.UniformScale is not { } sourceScale)
+        {
+            return Results.BadRequest(new
+            {
+                error = rasterRelationship.Explanation,
+                projectDimensions = new { width = summary.PixelWidth, height = summary.PixelHeight },
+                rasterDimensions = new { width = map.PixelWidth, height = map.PixelHeight },
+                rasterRelationship = rasterRelationship.Kind.ToString(),
+                rasterRelationship.ScaleX,
+                rasterRelationship.ScaleY,
+                rasterRelationship.WidthResidualPixels,
+                rasterRelationship.HeightResidualPixels
+            });
+        }
+
         WorldPoint RasterPoint(WonderdraftPixelPoint point) =>
-            new(point.X * sourceScaleX, point.Y * sourceScaleY);
+            new(point.X * sourceScale, point.Y * sourceScale);
 
         var content = document.Candidates.Select(candidate =>
         {
@@ -142,7 +161,7 @@ public static partial class SourceMapApiEndpoints
         var alignment = map.Alignment;
         var registrationMode = alignment is null ? "SourceOnly" : "Existing";
         string? registrationNote = alignment is null
-            ? "Source records were imported, but the raster still needs whole-map placement because the project did not provide enough compatible physical scale information."
+            ? "Source records were imported, but the raster still needs whole-map placement."
             : "The existing raster registration was preserved.";
 
         var hasExistingWorldAnchors =
@@ -151,19 +170,25 @@ public static partial class SourceMapApiEndpoints
             || world.World.SourceMaps.Any(item => item.Id != map.Id && item.Alignment is not null);
 
         if (alignment is null
+            && !map.ContainsBakedGrid
             && !hasExistingWorldAnchors
             && TryCreateWonderdraftScaleAlignment(
                 world.World.Grid,
                 map,
                 summary,
-                sourceScaleX,
-                sourceScaleY,
+                sourceScale,
                 out var derived,
                 out var note))
         {
             alignment = derived;
             registrationMode = "PhysicalScale";
             registrationNote = note;
+        }
+        else if (alignment is null && map.ContainsBakedGrid)
+        {
+            registrationNote = summary.PhysicalScale is null
+                ? "The Wonderdraft source records were retained. The raster is marked as containing a baked grid, so Hex Crawl will use raster lattice detection for orientation, spacing, and phase instead of centering an unanchored map."
+                : "The Wonderdraft source records and physical scale were retained. Physical scale alone does not determine the baked grid's orientation or phase; use Detect / repair hex grid to align the raster lattice before semantic review.";
         }
         else if (alignment is null
             && hasExistingWorldAnchors
@@ -246,8 +271,7 @@ public static partial class SourceMapApiEndpoints
         HexGridDefinition grid,
         SourceMapRepresentation map,
         WonderdraftProjectSummary summary,
-        double sourceScaleX,
-        double sourceScaleY,
+        double sourceScale,
         out MapRegistrationTransform alignment,
         out string note)
     {
@@ -266,9 +290,7 @@ public static partial class SourceMapApiEndpoints
         {
             return false;
         }
-        if (sourceScaleX <= 0 || sourceScaleY <= 0
-            || !double.IsFinite(sourceScaleX) || !double.IsFinite(sourceScaleY)
-            || Math.Abs(sourceScaleX - sourceScaleY) > Math.Max(sourceScaleX, sourceScaleY) * 1e-6)
+        if (sourceScale <= 0 || !double.IsFinite(sourceScale))
         {
             return false;
         }
@@ -277,7 +299,7 @@ public static partial class SourceMapApiEndpoints
         var metersPerWorldUnit =
             (grid.NeighborCenterDistance.Value * worldMetersPerUnit) / neighborWorldUnits;
         var metersPerRasterPixel =
-            (scale.UnitsPerPixel * sourceMetersPerUnit) / sourceScaleX;
+            (scale.UnitsPerPixel * sourceMetersPerUnit) / sourceScale;
         var worldUnitsPerRasterPixel = metersPerRasterPixel / metersPerWorldUnit;
         if (worldUnitsPerRasterPixel <= 0 || !double.IsFinite(worldUnitsPerRasterPixel))
         {
@@ -292,7 +314,7 @@ public static partial class SourceMapApiEndpoints
             grid.Origin.X - ((map.PixelWidth * worldUnitsPerRasterPixel) / 2d),
             grid.Origin.Y - ((map.PixelHeight * worldUnitsPerRasterPixel) / 2d));
         note =
-            $"The raster was centered on the Hex Crawl grid origin and scaled from Wonderdraft's {scale.DistancePerSegment:g} {scale.UnitLabel} × {scale.SegmentCount} scale over {scale.PixelLength:g} project pixels.";
+            $"The gridless raster was centered on the Hex Crawl grid origin and scaled from Wonderdraft's {scale.DistancePerSegment:g} {scale.UnitLabel} × {scale.SegmentCount} scale over {scale.PixelLength:g} project pixels.";
         return true;
     }
 

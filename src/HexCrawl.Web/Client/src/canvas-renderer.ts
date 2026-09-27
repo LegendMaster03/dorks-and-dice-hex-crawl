@@ -1,7 +1,7 @@
 import { sourceMapAssetUrl } from "./api";
 import { hexCorners, hexToWorld, visibleHexBounds } from "./hex-math";
 import { RasterImageCache } from "./raster-image-cache";
-import type { DemoWorld, HexCoordinate, MapRegistrationTransform, SpatialFeature, WorldPoint } from "./types";
+import type { DemoWorld, GridDefinition, HexCoordinate, MapRegistrationTransform, SpatialFeature, WorldPoint } from "./types";
 
 export type MapReviewGeometry = {
     id: string;
@@ -22,6 +22,7 @@ export class CanvasMapRenderer {
     public discoveredSubjectIds = new Set<string>();
     public hiddenSourceMapIds = new Set<string>();
     public registrationPreview: { sourceMapId: string; transform: MapRegistrationTransform } | null = null;
+    public gridPreview: GridDefinition | null = null;
     public reviewOverlay: MapReviewOverlay | null = null;
     private readonly rasterCache = new RasterImageCache();
 
@@ -176,30 +177,31 @@ export class CanvasMapRenderer {
     }
 
     private drawGrid(ctx: CanvasRenderingContext2D, world: DemoWorld, width: number, height: number): void {
+        const grid = this.gridPreview ?? world.grid;
         const corners = [
             this.viewport.screenToWorld(0, 0, width, height),
             this.viewport.screenToWorld(width, 0, width, height),
             this.viewport.screenToWorld(width, height, width, height),
             this.viewport.screenToWorld(0, height, width, height)
         ];
-        const bounds = visibleHexBounds(world.grid, corners);
-        ctx.strokeStyle = "rgba(52, 67, 55, .38)";
-        ctx.lineWidth = 1;
+        const bounds = visibleHexBounds(grid, corners);
+        ctx.strokeStyle = this.gridPreview ? "rgba(139, 76, 20, .70)" : "rgba(52, 67, 55, .38)";
+        ctx.lineWidth = this.gridPreview ? 1.5 : 1;
         ctx.font = "11px ui-monospace, SFMono-Regular, Menlo, monospace";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillStyle = "rgba(35, 49, 39, .72)";
+        ctx.fillStyle = this.gridPreview ? "rgba(112, 58, 14, .82)" : "rgba(35, 49, 39, .72)";
 
         for (let q = bounds.minQ; q <= bounds.maxQ; q++) {
             for (let r = bounds.minR; r <= bounds.maxR; r++) {
                 const hex = { q, r };
-                const screenCorners = hexCorners(world.grid, hex).map(point => this.toScreen(point, width, height));
+                const screenCorners = hexCorners(grid, hex).map(point => this.toScreen(point, width, height));
                 ctx.beginPath();
                 screenCorners.forEach((point, index) => index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
                 ctx.closePath();
                 ctx.stroke();
                 if (this.viewport.zoom >= 38) {
-                    const center = this.toScreen(hexToWorld(world.grid, hex), width, height);
+                    const center = this.toScreen(hexToWorld(grid, hex), width, height);
                     ctx.fillText(`${q},${r}`, center.x, center.y);
                 }
             }
