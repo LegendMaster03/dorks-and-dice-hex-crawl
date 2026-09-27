@@ -538,7 +538,7 @@ public sealed class SqliteToPostgresMigrator(
             var result = new List<LegacyExpedition>();
             while (await reader.ReadAsync(cancellationToken))
             {
-                var overworldId = reader.IsDBNull(1) ? null : Guid.Parse(reader.GetString(1));
+                Guid? overworldId = reader.IsDBNull(1) ? null : Guid.Parse(reader.GetString(1));
                 var contextJson = reader.IsDBNull(2)
                     ? overworldId.HasValue
                         ? $"{{\"kind\":\"WorldBound\",\"overworldId\":\"{overworldId.Value:D}\"}}"

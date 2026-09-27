@@ -1,7 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using Microsoft.Data.Sqlite;
+using Npgsql;
+using NpgsqlTypes;
 
 namespace HexCrawl.IntegrationTests;
 
@@ -178,24 +179,24 @@ public sealed class ExpeditionDeletionEndpointsTests
 
     private static async Task InsertDependentEvent(string database, Guid expeditionId)
     {
-        await using var connection = new SqliteConnection($"Data Source={database}");
+        await using var connection = new NpgsqlConnection(database);
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = """
             INSERT INTO expedition_events(expedition_id, sequence, kind, subject_id, subject_type, event_json)
-            VALUES($expedition, 999999, 'TestDependency', NULL, NULL, '{}');
+            VALUES(@expedition, 999999, 'TestDependency', NULL, NULL, '{}');
             """;
-        command.Parameters.AddWithValue("$expedition", expeditionId.ToString("D"));
+        command.Parameters.AddWithValue("expedition", NpgsqlDbType.Uuid, expeditionId);
         Assert.Equal(1, await command.ExecuteNonQueryAsync());
     }
 
     private static async Task IncrementVersion(string database, Guid expeditionId)
     {
-        await using var connection = new SqliteConnection($"Data Source={database}");
+        await using var connection = new NpgsqlConnection(database);
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
-        command.CommandText = "UPDATE expeditions SET version = version + 1 WHERE id = $id;";
-        command.Parameters.AddWithValue("$id", expeditionId.ToString("D"));
+        command.CommandText = "UPDATE expeditions SET version = version + 1 WHERE id = @id;";
+        command.Parameters.AddWithValue("id", NpgsqlDbType.Uuid, expeditionId);
         Assert.Equal(1, await command.ExecuteNonQueryAsync());
     }
 
@@ -203,11 +204,11 @@ public sealed class ExpeditionDeletionEndpointsTests
     {
         if (table is not ("expeditions" or "expedition_events")) throw new ArgumentOutOfRangeException(nameof(table));
         if (keyColumn is not ("id" or "expedition_id")) throw new ArgumentOutOfRangeException(nameof(keyColumn));
-        await using var connection = new SqliteConnection($"Data Source={database}");
+        await using var connection = new NpgsqlConnection(database);
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
-        command.CommandText = $"SELECT COUNT(*) FROM {table} WHERE {keyColumn} = $id;";
-        command.Parameters.AddWithValue("$id", id.ToString("D"));
+        command.CommandText = $"SELECT COUNT(*) FROM {table} WHERE {keyColumn} = @id;";
+        command.Parameters.AddWithValue("id", NpgsqlDbType.Uuid, id);
         return Convert.ToInt64(await command.ExecuteScalarAsync());
     }
 }
