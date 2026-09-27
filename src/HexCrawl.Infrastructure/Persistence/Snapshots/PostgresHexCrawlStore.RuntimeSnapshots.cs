@@ -1,17 +1,9 @@
-using System.Globalization;
-using System.Text.Json;
-using System.Text.Json.Serialization;
-using HexCrawl.Application.Persistence;
-using HexCrawl.Domain.Knowledge;
-using HexCrawl.Domain.Procedure;
 using HexCrawl.Domain.Runtime;
 using HexCrawl.Domain.Spatial;
-using HexCrawl.Domain.World;
-using Microsoft.Data.Sqlite;
 
 namespace HexCrawl.Infrastructure.Persistence;
 
-public sealed partial class SqliteHexCrawlStore
+public sealed partial class PostgresHexCrawlStore
 {
     private enum RuntimeStateKind
     {
@@ -24,8 +16,8 @@ public sealed partial class SqliteHexCrawlStore
         public RuntimeStateKind Kind { get; init; } = RuntimeStateKind.Spatial;
         public Guid Id { get; init; }
 
-        // Legacy v1 snapshots included OverworldId here. It is ignored after
-        // migration because CrawlSessionContext is now authoritative.
+        // Legacy v1 snapshots included OverworldId here. It remains tolerated because
+        // CrawlSessionContext is authoritative after the historical SQLite v2 migration.
         public Guid? OverworldId { get; init; }
 
         public WorldPoint? Position { get; init; }
@@ -270,6 +262,4 @@ public sealed partial class SqliteHexCrawlStore
             Note,
             new ResolutionProvenance(Source, ProvenanceNote));
     }
-
-
 }

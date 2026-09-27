@@ -1,0 +1,69 @@
+name: Phase 0B test harness migration
+
+on:
+  push:
+    branches: [ "feature/postgres-persistence" ]
+
+permissions:
+  contents: write
+
+jobs:
+  migrate-test-harness:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/postgres-persistence
+          fetch-depth: 0
+
+      - name: Convert application persistence harness to PostgreSQL
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('tests/HexCrawl.Application.Tests/PersistenceApplicationTests.cs')
+          text = path.read_text()
+          text = text.replace('SqliteHexCrawlStore', 'PostgresHexCrawlStore')
+          marker = '    private sealed class TestDatabase : IAsyncDisposable\n'
+          start = text.index(marker)
+          replacement = '''    private sealed class TestDatabase : IAsyncDisposable
+              {
+                  private readonly PostgresTestDatabase _database;
+                  public string ConnectionString => _database.ConnectionString;
+
+                  private TestDatabase(PostgresTestDatabase database)
+                  {
+                      _database = database;
+                  }
+
+                  public static async Task<TestDatabase> CreateAsync()
+                  {
+                      var database = await PostgresTestDatabase.CreateAsync();
+                      var store = new PostgresHexCrawlStore(database.ConnectionString);
+                      await store.InitializeAsync();
+                      return new TestDatabase(database);
+                  }
+
+                  public async Task<HexCrawlService> ServiceAsync()
+                  {
+                      var store = new PostgresHexCrawlStore(ConnectionString);
+                      await store.InitializeAsync();
+                      return new HexCrawlService(store);
+                  }
+
+                  public ValueTask DisposeAsync() => _database.DisposeAsync();
+              }
+          }
+          '''
+          path.write_text(text[:start] + replacement)
+          PY
+
+          git diff --check
+          git add tests/HexCrawl.Application.Tests/PersistenceApplicationTests.cs
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m 'Move persistence application tests to PostgreSQL'
+          git push origin HEAD:feature/postgres-persistence
