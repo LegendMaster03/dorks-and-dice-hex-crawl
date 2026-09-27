@@ -44,16 +44,19 @@ test("unplaced baked-grid Wonderdraft import automatically starts a non-saving d
     assert.doesNotMatch(workspace, /containsBakedGrid && importedSourceMap\.alignment[^\n]*beginAndPreview/);
 });
 
-test("grid detection analyzes a bounded-resolution copy and rescales measurements to source pixels", () => {
+test("grid detection verifies phase at source resolution before automatic Apply", () => {
     const controller = fs.readFileSync(
         path.join(sourceRoot, "modules/worlds/source-map-grid-alignment-controller.ts"),
         "utf8");
 
-    assert.match(controller, /AnalysisMaximumDimension = 768/);
-    assert.match(controller, /createImageBitmap/);
-    assert.match(controller, /centerSpacingPixels: fit\.centerSpacingPixels \/ scale/);
-    assert.match(controller, /anchorPixel:/);
-    assert.match(controller, /residualPixels: fit\.residualPixels \/ scale/);
+    assert.match(controller, /rasterGridAnalysisScale/);
+    assert.match(controller, /mapDetectionToSourceImage/);
+    assert.match(controller, /source-resolution phase verified/);
+    assert.match(controller, /downscaled phase only/);
+    assert.match(controller, /Source-resolution phase verification is required before automatic Apply/);
+    assert.match(controller, /isCanonicalSourceFit/);
+    assert.match(controller, /rasterGridCanonicalResidualLimit/);
+    assert.doesNotMatch(controller, /AnalysisMaximumDimension = 768/);
 });
 
 test("Wonderdraft grid metadata and scale-bar metadata remain independent cross-checks", () => {
@@ -62,8 +65,9 @@ test("Wonderdraft grid metadata and scale-bar metadata remain independent cross-
         "utf8");
 
     assert.match(controller, /gridMetadata: Record<string, string>/);
-    assert.match(controller, /metadata\["grid\.size"\]/);
+    assert.match(controller, /metadataValue\(metadata, "grid\.size"\)/);
     assert.match(controller, /grid\.size=/);
+    assert.match(controller, /grid\.type not exposed/);
     assert.match(controller, /raster detector/);
     assert.match(controller, /difference/);
     assert.match(controller, /raster geometry is not overridden/);
@@ -71,13 +75,15 @@ test("Wonderdraft grid metadata and scale-bar metadata remain independent cross-
     assert.match(controller, /physicalScale\.unitsPerPixel \/ context\.uniformScale/);
 });
 
-test("preview reports final worst distant-region behavior", () => {
+test("preview reports and gates final worst distant-region behavior", () => {
     const controller = fs.readFileSync(
         path.join(sourceRoot, "modules/worlds/source-map-grid-alignment-controller.ts"),
         "utf8");
 
     assert.match(controller, /worst distant residual/);
     assert.match(controller, /fit\.residualPixels/);
+    assert.match(controller, /final rigid overlay misses at least one distant region/);
+    assert.match(controller, /automatic Apply requires at most/);
 });
 
 test("verified physical-scale conflicts require explicit confirmation before apply", () => {
