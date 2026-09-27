@@ -3,6 +3,7 @@ import test from "node:test";
 import {
     buildRasterGridAlignmentProposal,
     physicalDistancePerDetectedHex,
+    selectPhysicalDistancePerHex,
     transformPoint
 } from "../.test-dist/raster-grid-alignment.js";
 
@@ -159,4 +160,50 @@ test("physical-scale conversion accounts for proportional raster exports", () =>
     });
 
     assert.equal(distanceKilometers, 8);
+});
+
+test("whole-mile candidate is selected only when it better reconciles independent scale evidence", () => {
+    const selection = selectPhysicalDistancePerHex({
+        directDistancePerHex: 10.9,
+        crossCheckDistancePerHex: 11.07,
+        considerWholeUnits: true
+    });
+
+    assert.equal(selection.distancePerHex, 11);
+    assert.equal(selection.usedWholeUnitCandidate, true);
+    assert.ok(selection.selectedWorstRelativeError < selection.directWorstRelativeError);
+});
+
+test("Humblewood scale stays continuous when a whole mile is not a better fit", () => {
+    const direct = 80 * 30 / 220;
+    const selection = selectPhysicalDistancePerHex({
+        directDistancePerHex: direct,
+        crossCheckDistancePerHex: direct,
+        considerWholeUnits: true
+    });
+
+    assert.equal(selection.distancePerHex, direct);
+    assert.equal(selection.usedWholeUnitCandidate, false);
+});
+
+test("a nearby whole mile is not selected when it worsens the Wonderdraft grid cross-check", () => {
+    const selection = selectPhysicalDistancePerHex({
+        directDistancePerHex: 10.967,
+        crossCheckDistancePerHex: 10.909,
+        considerWholeUnits: true
+    });
+
+    assert.equal(selection.distancePerHex, 10.967);
+    assert.equal(selection.usedWholeUnitCandidate, false);
+});
+
+test("whole-unit candidates are not applied to non-mile distance units", () => {
+    const selection = selectPhysicalDistancePerHex({
+        directDistancePerHex: 10.9,
+        crossCheckDistancePerHex: 11.07,
+        considerWholeUnits: false
+    });
+
+    assert.equal(selection.distancePerHex, 10.9);
+    assert.equal(selection.usedWholeUnitCandidate, false);
 });
