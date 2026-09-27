@@ -69,6 +69,9 @@ test("Wonderdraft grid metadata and scale-bar metadata remain independent cross-
     assert.match(controller, /raster geometry is not overridden/);
     assert.match(controller, /scale-bar metadata/);
     assert.match(controller, /physicalScale\.unitsPerPixel \/ context\.uniformScale/);
+    assert.match(controller, /selectPhysicalDistancePerHex/);
+    assert.match(controller, /considerWholeUnits: grid\.neighborCenterDistance\.unit\.kind === "Mile"/);
+    assert.match(controller, /whole-mile candidate selected because it better reconciles/);
 });
 
 test("preview reports final worst distant-region behavior", () => {
