@@ -152,6 +152,20 @@ public static partial class SourceMapApiEndpoints
         Results.Ok(OverworldContract.From(await service.RegisterAsync(
             overworldId, sourceMapId, UserId(context), request.ToCommand(), cancellationToken)));
 
+    private static async Task<IResult> ApplyGridAlignmentAsync(
+        Guid overworldId,
+        Guid sourceMapId,
+        RasterGridAlignmentRequest request,
+        HttpContext context,
+        SourceMapApplicationService service,
+        CancellationToken cancellationToken) =>
+        Results.Ok(OverworldContract.From(await service.ApplyRasterGridAlignmentAsync(
+            overworldId,
+            sourceMapId,
+            UserId(context),
+            request.ToCommand(),
+            cancellationToken)));
+
     private static async Task<IResult> GetAssetAsync(
         Guid overworldId,
         Guid sourceMapId,

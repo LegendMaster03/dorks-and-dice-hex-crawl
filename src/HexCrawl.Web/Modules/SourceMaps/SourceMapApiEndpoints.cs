@@ -12,10 +12,12 @@ public static partial class SourceMapApiEndpoints
         api.MapPost("/{sourceMapId:guid}/wonderdraft/source", ImportWonderdraftSourceAsync);
         api.MapPost("/{sourceMapId:guid}/wonderdraft/candidates", PreviewWonderdraftCandidatesAsync);
         api.MapGet("/{sourceMapId:guid}/wonderdraft/candidates", PreviewStoredWonderdraftCandidatesAsync);
+        api.MapGet("/{sourceMapId:guid}/wonderdraft/alignment-context", GetStoredWonderdraftAlignmentContextAsync);
         api.MapPost("/{sourceMapId:guid}/wonderdraft/import", ImportWonderdraftCandidatesAsync);
         api.MapPost("/{sourceMapId:guid}/wonderdraft/promote", ImportStoredWonderdraftCandidatesAsync);
         api.MapPut("/{sourceMapId:guid}", UpdateMetadataAsync);
         api.MapPut("/{sourceMapId:guid}/registration", RegisterAsync);
+        api.MapPut("/{sourceMapId:guid}/grid-alignment", ApplyGridAlignmentAsync);
         api.MapGet("/{sourceMapId:guid}/asset", GetAssetAsync);
         api.MapGet("/{sourceMapId:guid}/source-archive", GetSourceArchiveAsync);
         api.MapDelete("/{sourceMapId:guid}", DeleteAsync);

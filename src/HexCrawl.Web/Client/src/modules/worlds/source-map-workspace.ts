@@ -7,6 +7,7 @@ import type {
 } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
 import { input, required, select } from "../../ui/dom";
+import { SourceMapGridAlignmentController } from "./source-map-grid-alignment-controller";
 import { SourceMapRegistrationController } from "./source-map-registration-controller";
 import { WonderdraftImportController } from "./wonderdraft-import-controller";
 
@@ -15,6 +16,7 @@ const newGeographyValue = "__new_geography__";
 export class SourceMapWorkspace {
     private details: SourceMapDetail[] = [];
     private selected: SourceMapDetail | null = null;
+    private readonly gridAlignmentController: SourceMapGridAlignmentController;
     private readonly registrationController: SourceMapRegistrationController;
     private readonly wonderdraftController: WonderdraftImportController;
     private readonly list: HTMLElement;
@@ -64,13 +66,24 @@ export class SourceMapWorkspace {
                 <label><input name="bakedGrid" type="checkbox"> Image contains a baked-in hex grid</label>
                 <div class="hc-button-row">
                     <button type="submit" class="hc-primary-action">Save metadata</button>
-                    <button type="button" data-register>Register / re-register</button>
+                    <button type="button" data-align-grid>Detect / repair hex grid</button>
+                    <button type="button" data-register>Advanced registration</button>
                     <button type="button" class="hc-danger-action" data-delete>Delete raster map</button>
                 </div>
             </form>
+            <section data-grid-alignment-panel hidden>
+                <p class="hc-subsection-title">Automatic hex-grid alignment</p>
+                <p class="hc-hint">Hex Crawl analyzes the raster itself for a repeated hex lattice. Detection previews the proposed raster placement and mathematical grid without saving. Physical distance per hex is only changed when a separate trustworthy scale source is available.</p>
+                <p class="hc-hint" data-grid-alignment-status></p>
+                <div class="hc-button-row">
+                    <button type="button" data-grid-alignment-preview>Detect and preview</button>
+                    <button type="button" class="hc-primary-action" data-grid-alignment-apply disabled>Apply detected alignment</button>
+                    <button type="button" data-grid-alignment-cancel>Cancel</button>
+                </div>
+            </section>
             <section data-registration-panel hidden>
-                <p class="hc-subsection-title">Map alignment</p>
-                <p class="hc-hint">Advanced: alignment uses three non-collinear point pairs. Choose a landmark in the raster image, then choose the same place on the world map, and repeat three times.</p>
+                <p class="hc-subsection-title">Advanced map registration</p>
+                <p class="hc-hint">Manual fallback: alignment uses three non-collinear point pairs. Choose a landmark in the raster image, then choose the same place on the world map, and repeat three times.</p>
                 <img data-registration-image alt="Source map registration preview" style="display:block;max-width:100%;max-height:280px;object-fit:contain;cursor:crosshair;border:1px solid rgba(0,0,0,.2)">
                 <p class="hc-hint" data-registration-status></p>
                 <div class="hc-button-row">
@@ -105,6 +118,14 @@ export class SourceMapWorkspace {
             this.errorHost,
             action => { void this.run(null, action); },
             async () => { await this.refresh(); });
+        this.gridAlignmentController = new SourceMapGridAlignmentController(
+            this.host,
+            this.api,
+            this.map,
+            this.getWorld,
+            this.applyWorld,
+            action => { void this.run(null, action); },
+            async () => { await this.refresh(); });
         this.wonderdraftController = new WonderdraftImportController(
             this.host,
             this.api,
@@ -112,9 +133,26 @@ export class SourceMapWorkspace {
             this.getWorld,
             this.applyWorld,
             (form, action) => { void this.run(form, action); },
-            async () => { await this.refresh(); });
-        required<HTMLButtonElement>(this.host, "[data-register]").addEventListener("click", () =>
-            this.registrationController.begin(this.selected));
+            async () => {
+                await this.refresh();
+                const wonderdraftForm = required<HTMLFormElement>(this.host, "[data-wonderdraft-inspect]");
+                const importedSourceMapId = select(wonderdraftForm, "sourceMap").value;
+                const importedSourceMap = this.details.find(map => map.id === importedSourceMapId) ?? null;
+                if (importedSourceMap?.containsBakedGrid && !importedSourceMap.alignment) {
+                    this.selected = importedSourceMap;
+                    this.renderSelected();
+                    this.registrationController.cancelIfMap(importedSourceMap.id);
+                    await this.gridAlignmentController.beginAndPreview(importedSourceMap);
+                }
+            });
+        required<HTMLButtonElement>(this.host, "[data-align-grid]").addEventListener("click", () => {
+            if (this.selected) this.registrationController.cancelIfMap(this.selected.id);
+            this.gridAlignmentController.begin(this.selected);
+        });
+        required<HTMLButtonElement>(this.host, "[data-register]").addEventListener("click", () => {
+            if (this.selected) this.gridAlignmentController.cancelIfMap(this.selected.id);
+            this.registrationController.begin(this.selected);
+        });
         required<HTMLButtonElement>(this.host, "[data-delete]").addEventListener("click", () =>
             void this.run(null, () => this.deleteSelected()));
     }
@@ -136,6 +174,7 @@ export class SourceMapWorkspace {
 
     public dispose(): void {
         this.disposed = true;
+        this.gridAlignmentController.dispose();
         this.registrationController.dispose();
         this.wonderdraftController.dispose();
     }
@@ -205,15 +244,25 @@ export class SourceMapWorkspace {
                 this.selected = map;
                 this.renderSelected();
             });
+            const alignButton = document.createElement("button");
+            alignButton.type = "button";
+            alignButton.textContent = map.alignment ? "Repair grid alignment" : "Detect grid";
+            alignButton.addEventListener("click", () => {
+                this.selected = map;
+                this.renderSelected();
+                this.registrationController.cancelIfMap(map.id);
+                this.gridAlignmentController.begin(this.selected);
+            });
             const registerButton = document.createElement("button");
             registerButton.type = "button";
-            registerButton.textContent = map.alignment ? "Re-register" : "Register";
+            registerButton.textContent = "Advanced registration";
             registerButton.addEventListener("click", () => {
                 this.selected = map;
                 this.renderSelected();
+                this.gridAlignmentController.cancelIfMap(map.id);
                 this.registrationController.begin(this.selected);
             });
-            controls.append(visibleLabel, selectButton, registerButton);
+            controls.append(visibleLabel, selectButton, alignButton, registerButton);
             const hasRetainedWonderdraft =
                 (map.importedContentCount ?? 0) > 0
                 && map.importProvenance?.sourceType.toLocaleLowerCase() === "wonderdraft"
@@ -291,6 +340,7 @@ export class SourceMapWorkspace {
         const id = this.selected.id;
         const updated = await this.api.deleteSourceMap(world.id, id, world.version);
         this.map.renderer.hiddenSourceMapIds.delete(id);
+        this.gridAlignmentController.cancelIfMap(id);
         this.registrationController.cancelIfMap(id);
         this.selected = null;
         this.applyWorld(updated);
@@ -319,4 +369,3 @@ function setPending(form: HTMLFormElement, pending: boolean): void {
     form.dataset.pending = String(pending);
     for (const button of form.querySelectorAll<HTMLButtonElement>("button")) button.disabled = pending;
 }
-

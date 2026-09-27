@@ -61,8 +61,12 @@ export class WonderdraftImportController {
         for (const map of available) {
             const option = document.createElement("option");
             option.value = map.id;
-            option.textContent =
-                `${map.name} — ${map.geographyKey} — ${map.alignment ? "placed" : "automatic placement if scale permits"}`;
+            const placement = map.alignment
+                ? "placed"
+                : map.containsBakedGrid
+                    ? "baked grid — detect alignment after import"
+                    : "automatic placement if physical scale permits";
+            option.textContent = `${map.name} — ${map.geographyKey} — ${placement}`;
             this.sourceMapSelect.append(option);
         }
 
@@ -178,7 +182,7 @@ export class WonderdraftImportController {
             const scaleText = document.createElement("p");
             scaleText.className = "hc-hint";
             scaleText.textContent =
-                `Wonderdraft physical scale: ${formatNumber(scale.distancePerSegment)} ${scale.unitLabel} × ${scale.segmentCount} segments over ${formatNumber(scale.pixelLength)} project pixels (${scale.unitsPerPixel.toPrecision(6)} ${scale.unitLabel}/pixel).`;
+                `Wonderdraft scale-bar metadata: ${formatNumber(scale.distancePerSegment)} ${scale.unitLabel} × ${scale.segmentCount} segments over ${formatNumber(scale.pixelLength)} project pixels (${scale.unitsPerPixel.toPrecision(6)} ${scale.unitLabel}/pixel).`;
             this.result.append(scaleText);
         }
 
@@ -215,8 +219,9 @@ export class WonderdraftImportController {
         } else if (imported?.registrationMode === "SourceOnly") {
             const placement = document.createElement("p");
             placement.className = "hc-hint";
-            placement.textContent =
-                "The project and raster are locked together, but their absolute world placement is still unknown. Use advanced map registration once for the whole raster; individual Wonderdraft records do not need registration.";
+            placement.textContent = imported.registrationNote?.includes("Detect / repair hex grid")
+                ? "The project source is retained, but the baked raster grid has not been placed yet. Use Detect / repair hex grid on the raster map; individual Wonderdraft records do not need registration."
+                : "The project and raster share a verified pixel relationship, but their absolute world placement is still unknown. Use Advanced registration once for the whole raster; individual Wonderdraft records do not need registration.";
             this.result.append(placement);
         }
 
