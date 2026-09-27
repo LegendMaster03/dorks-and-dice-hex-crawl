@@ -35,6 +35,7 @@ public sealed record StoredExpedition(
 {
     public CrawlPartySheet Party { get; init; } = CrawlPartySheet.Empty;
     public IReadOnlyList<GeneratedProcedureResolution> GeneratedProcedureResolutions { get; init; } = [];
+    public Guid? CampaignId { get; init; }
 
     public Guid Id => Runtime.Id;
 

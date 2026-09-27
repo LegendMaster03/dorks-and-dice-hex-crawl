@@ -1,4 +1,5 @@
 using HexCrawl.Application;
+using HexCrawl.Application.Rules;
 
 namespace HexCrawl.Web.Api;
 
@@ -21,6 +22,10 @@ public sealed class HexCrawlExceptionMiddleware(RequestDelegate next)
         catch (HexCrawlConflictException exception)
         {
             await WriteAsync(context, StatusCodes.Status409Conflict, exception.Message);
+        }
+        catch (RulesCoreTravelGatewayException exception)
+        {
+            await WriteAsync(context, StatusCodes.Status503ServiceUnavailable, exception.Message);
         }
         catch (UnauthorizedAccessException exception)
         {

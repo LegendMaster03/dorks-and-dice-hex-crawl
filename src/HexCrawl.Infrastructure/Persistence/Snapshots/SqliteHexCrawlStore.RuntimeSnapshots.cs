@@ -153,19 +153,27 @@ public sealed partial class SqliteHexCrawlStore
         Guid? OverworldId = null,
         string? Name = null,
         HexOrientation? Orientation = null,
-        DistanceMeasure? HexCenterDistance = null)
+        DistanceMeasure? HexCenterDistance = null,
+        Guid? CampaignId = null)
     {
-        public static CrawlSessionContextSnapshot FromDomain(CrawlSessionContext context) => context switch
+        public static CrawlSessionContextSnapshot FromDomain(
+            CrawlSessionContext context,
+            Guid? campaignId = null) => context switch
         {
-            WorldBoundCrawlSessionContext world => new(context.Kind, world.WorldId),
+            WorldBoundCrawlSessionContext world => new(
+                context.Kind,
+                world.WorldId,
+                CampaignId: campaignId),
             AbstractHexCrawlSessionContext hex => new(
                 context.Kind,
                 Name: hex.DisplayName,
                 Orientation: hex.Orientation,
-                HexCenterDistance: hex.HexContext.HexCenterDistance),
+                HexCenterDistance: hex.HexContext.HexCenterDistance,
+                CampaignId: campaignId),
             NonSpatialCrawlSessionContext nonSpatial => new(
                 context.Kind,
-                Name: nonSpatial.DisplayName),
+                Name: nonSpatial.DisplayName,
+                CampaignId: campaignId),
             _ => throw new ArgumentOutOfRangeException(nameof(context))
         };
 

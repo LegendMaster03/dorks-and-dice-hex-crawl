@@ -1,5 +1,6 @@
 using System.Globalization;
 using HexCrawl.Application.Persistence;
+using HexCrawl.Application.Rules;
 using HexCrawl.Domain.Procedure;
 using HexCrawl.Domain.Runtime;
 
@@ -20,6 +21,13 @@ public sealed record ProcedureResolutionHelperCommand
     public int NavigationModifier { get; init; }
     public int? FailureVeerSteps { get; init; }
     public Guid? KeyedLocationId { get; init; }
+    public string? TravelDistanceRule { get; init; }
+    public int? BaseSpeedFeet { get; init; }
+    public string? Terrain { get; init; }
+    public string? Route { get; init; }
+    public IReadOnlyList<string> NavigationRiskFactors { get; init; } = [];
+    internal string? ExpectedDistanceRulesNote { get; init; }
+    internal string? NavigationDifficultyRulesNote { get; init; }
 }
 
 public sealed record ProcedureResolutionRoll(
@@ -155,7 +163,8 @@ public sealed class ProcedureResolutionResolver(IProcedureResolutionRandomSource
         }
 
         var expected = command.ExpectedDistance
-            ?? throw new InvalidOperationException("The travel helper requires the DM-confirmed expected distance for this watch segment.");
+            ?? throw new InvalidOperationException(
+                "The travel helper requires an explicit DM expected distance or sufficient source-backed travel inputs.");
         if (!double.IsFinite(expected) || expected < 0)
         {
             throw new InvalidOperationException("Expected travel distance must be finite and non-negative.");
@@ -171,6 +180,10 @@ public sealed class ProcedureResolutionResolver(IProcedureResolutionRandomSource
         var note = string.Create(
             CultureInfo.InvariantCulture,
             $"Automatic travel helper: {Describe(roll)}; expected={expected:0.###}; factor={helper.DistanceFactorPerRollPoint:0.###}; actual={actual:0.###}.");
+        if (!string.IsNullOrWhiteSpace(command.ExpectedDistanceRulesNote))
+        {
+            note += " " + command.ExpectedDistanceRulesNote.Trim();
+        }
         return new ProcedureResolvedTravel(
             expected,
             actual,
@@ -194,7 +207,8 @@ public sealed class ProcedureResolutionResolver(IProcedureResolutionRandomSource
         }
 
         var difficultyClass = command.NavigationDifficultyClass
-            ?? throw new InvalidOperationException("The navigation helper requires a DM-confirmed navigation difficulty class.");
+            ?? throw new InvalidOperationException(
+                "The navigation helper requires an explicit DM DC or sufficient source-backed navigation inputs.");
         var roll = Roll("navigation-check", helper.CheckRoll, rolls);
         var resolvedTotal = checked(roll.Total + command.NavigationModifier);
         var outcome = resolvedTotal >= difficultyClass
@@ -212,6 +226,10 @@ public sealed class ProcedureResolutionResolver(IProcedureResolutionRandomSource
         }
 
         var note = $"Automatic navigation helper: {Describe(roll)}; situational modifier={command.NavigationModifier}; total={resolvedTotal}; DC={difficultyClass}.";
+        if (!string.IsNullOrWhiteSpace(command.NavigationDifficultyRulesNote))
+        {
+            note += " " + command.NavigationDifficultyRulesNote.Trim();
+        }
         if (veer.HasValue)
         {
             note += $" DM-confirmed failure veer={veer.Value}.";
@@ -329,7 +347,8 @@ public sealed class ProcedureResolutionResolver(IProcedureResolutionRandomSource
 public sealed class ProcedureResolutionHelperService(
     IHexCrawlStore store,
     HexCrawlService coreService,
-    ProcedureResolutionResolver resolver)
+    ProcedureResolutionResolver resolver,
+    ProcedureResolutionRulesCoreAdapter rulesCore)
 {
     public async Task<ProcedureResolutionHelperResult> ResolveAsync(
         Guid expeditionId,
@@ -344,6 +363,7 @@ public sealed class ProcedureResolutionHelperService(
                 "The crawl session changed before procedure inputs were resolved. Reload it before generating another helper result.");
         }
 
+        command = await rulesCore.PrepareAsync(expedition, command, cancellationToken);
         var generated = resolver.Resolve(
             expedition.Procedure,
             expedition.Context,

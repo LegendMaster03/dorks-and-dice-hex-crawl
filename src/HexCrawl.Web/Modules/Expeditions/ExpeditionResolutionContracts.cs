@@ -10,7 +10,12 @@ public sealed record ResolveProcedureInputsRequest(
     int? NavigationDifficultyClass = null,
     int NavigationModifier = 0,
     int? FailureVeerSteps = null,
-    Guid? KeyedLocationId = null)
+    Guid? KeyedLocationId = null,
+    string? TravelDistanceRule = null,
+    int? BaseSpeedFeet = null,
+    string? Terrain = null,
+    string? Route = null,
+    IReadOnlyList<string>? NavigationRiskFactors = null)
 {
     public ProcedureResolutionHelperCommand ToCommand() => new()
     {
@@ -21,6 +26,11 @@ public sealed record ResolveProcedureInputsRequest(
         NavigationDifficultyClass = NavigationDifficultyClass,
         NavigationModifier = NavigationModifier,
         FailureVeerSteps = FailureVeerSteps,
-        KeyedLocationId = KeyedLocationId
+        KeyedLocationId = KeyedLocationId,
+        TravelDistanceRule = TravelDistanceRule,
+        BaseSpeedFeet = BaseSpeedFeet,
+        Terrain = Terrain,
+        Route = Route,
+        NavigationRiskFactors = NavigationRiskFactors ?? []
     };
 }
