@@ -24,6 +24,26 @@ export type RasterPhysicalScaleInput = {
     targetMetersPerUnit: number;
 };
 
+export type PhysicalDistanceSelectionInput = {
+    directDistancePerHex: number;
+    crossCheckDistancePerHex?: number | null;
+    considerWholeUnits?: boolean;
+};
+
+export type PhysicalDistanceSelection = {
+    distancePerHex: number;
+    directDistancePerHex: number;
+    crossCheckDistancePerHex: number | null;
+    usedWholeUnitCandidate: boolean;
+    directWorstRelativeError: number;
+    selectedWorstRelativeError: number;
+};
+
+type PhysicalDistanceCandidateScore = {
+    worstRelativeError: number;
+    rmsRelativeError: number;
+};
+
 const SQRT3 = Math.sqrt(3);
 const EPSILON = 1e-10;
 
@@ -45,6 +65,64 @@ export function physicalDistancePerDetectedHex(input: RasterPhysicalScaleInput):
         * sourceUnitsPerRasterPixel
         * input.sourceMetersPerUnit;
     return metersPerHex / input.targetMetersPerUnit;
+}
+
+export function selectPhysicalDistancePerHex(
+    input: PhysicalDistanceSelectionInput): PhysicalDistanceSelection {
+    const direct = input.directDistancePerHex;
+    if (!Number.isFinite(direct) || direct <= 0) {
+        throw new Error("Direct physical distance per hex must be finite and positive.");
+    }
+
+    const crossCheck = input.crossCheckDistancePerHex ?? null;
+    if (crossCheck != null && (!Number.isFinite(crossCheck) || crossCheck <= 0)) {
+        throw new Error("Cross-check physical distance per hex must be finite and positive when supplied.");
+    }
+
+    const evidence = crossCheck == null ? [direct] : [direct, crossCheck];
+    const directScore = scorePhysicalDistanceCandidate(direct, evidence);
+    let bestDistance = direct;
+    let bestScore = directScore;
+
+    if (input.considerWholeUnits && crossCheck != null) {
+        const lower = Math.max(1, Math.floor(Math.min(direct, crossCheck)) - 1);
+        const upper = Math.ceil(Math.max(direct, crossCheck)) + 1;
+        for (let candidate = lower; candidate <= upper; candidate++) {
+            if (Math.abs(candidate - direct) <= 1e-12) continue;
+            const score = scorePhysicalDistanceCandidate(candidate, evidence);
+            if (isBetterPhysicalDistanceScore(score, bestScore)) {
+                bestDistance = candidate;
+                bestScore = score;
+            }
+        }
+    }
+
+    return {
+        distancePerHex: bestDistance,
+        directDistancePerHex: direct,
+        crossCheckDistancePerHex: crossCheck,
+        usedWholeUnitCandidate: Math.abs(bestDistance - direct) > 1e-12,
+        directWorstRelativeError: directScore.worstRelativeError,
+        selectedWorstRelativeError: bestScore.worstRelativeError
+    };
+}
+
+function scorePhysicalDistanceCandidate(
+    candidate: number,
+    evidence: readonly number[]): PhysicalDistanceCandidateScore {
+    const errors = evidence.map(value => Math.abs(candidate - value) / value);
+    const worstRelativeError = Math.max(...errors);
+    const rmsRelativeError = Math.sqrt(
+        errors.reduce((sum, value) => sum + value * value, 0) / errors.length);
+    return { worstRelativeError, rmsRelativeError };
+}
+
+function isBetterPhysicalDistanceScore(
+    candidate: PhysicalDistanceCandidateScore,
+    current: PhysicalDistanceCandidateScore): boolean {
+    if (candidate.worstRelativeError < current.worstRelativeError - 1e-12) return true;
+    if (candidate.worstRelativeError > current.worstRelativeError + 1e-12) return false;
+    return candidate.rmsRelativeError < current.rmsRelativeError - 1e-12;
 }
 
 export function buildRasterGridAlignmentProposal(

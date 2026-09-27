@@ -1,11 +1,20 @@
 import type { HexCrawlApi } from "../../api";
 import { detectHexLattice, type HexLatticeDetection, type HexLatticeFit } from "../../grid-lattice-detector";
-import { buildRasterGridAlignmentProposal, type RasterGridAlignmentProposal } from "../../raster-grid-alignment";
+import {
+    buildRasterGridAlignmentProposal,
+    selectPhysicalDistancePerHex,
+    type RasterGridAlignmentProposal
+} from "../../raster-grid-alignment";
+import {
+    isCanonicalSourceFit,
+    mapDetectionToSourceImage,
+    rasterGridAnalysisScale,
+    rasterGridCanonicalResidualLimit
+} from "../../raster-analysis-space";
 import type { MapSurface } from "../../map-surface";
 import type { GridDefinition, Overworld, SourceMapDetail } from "../../types";
 import { required } from "../../ui/dom";
 
-const AnalysisMaximumDimension = 768;
 const AutomaticApplyConfidence = 0.54;
 const PhysicalScaleConfirmationTolerance = 0.01;
 
@@ -90,7 +99,14 @@ export class SourceMapGridAlignmentController {
             minimumSpacingPixels: Math.max(8, Math.floor(12 * analyzed.scale)),
             minimumConfidence: AutomaticApplyConfidence
         });
-        this.detection = rescaleDetection(detection, analyzed.scale);
+        this.detection = mapDetectionToSourceImage(detection, analyzed.scale);
+        if (this.detection.fit && !analyzed.sourceResolution) {
+            this.detection = {
+                ...this.detection,
+                status: "inconclusive",
+                reason: "The lattice preview was measured from a downscaled analysis image. Source-resolution phase verification is required before automatic Apply."
+            };
+        }
 
         if (!this.detection.fit) {
             this.proposal = null;
@@ -138,21 +154,28 @@ export class SourceMapGridAlignmentController {
             `${fit.rotationDegrees.toFixed(2)}° raster rotation`,
             `confidence ${(fit.confidence * 100).toFixed(1)}%`,
             `worst distant residual ${fit.residualPixels.toFixed(2)} px`,
-            `coverage ${(fit.supportCoverage * 100).toFixed(1)}%`
+            `coverage ${(fit.supportCoverage * 100).toFixed(1)}%`,
+            analyzed.sourceResolution ? "source-resolution phase verified" : "downscaled phase only"
         ];
         if (scaleContext.summary) summary.splice(1, 0, scaleContext.summary);
         const warnings = [
             ...proposal.warnings,
             ...scaleContext.warnings,
+            ...(this.detection.status === "inconclusive" ? [this.detection.reason] : []),
             ...impactWarnings(world, sourceMap.id, proposal.grid)
         ];
+        const canonicalResidualLimit = rasterGridCanonicalResidualLimit(fit.centerSpacingPixels);
+        if (fit.residualPixels > canonicalResidualLimit) {
+            warnings.push(
+                `The final rigid overlay misses at least one distant region by ${fit.residualPixels.toFixed(2)} px; automatic Apply requires at most ${canonicalResidualLimit.toFixed(2)} px for this lattice spacing.`);
+        }
         if (this.physicalScaleChange) {
             warnings.push(
                 `Physical distance changes from ${formatPhysicalScale(this.physicalScaleChange.currentValue, this.physicalScaleChange.unitSymbol)} to ${formatPhysicalScale(this.physicalScaleChange.proposedValue, this.physicalScaleChange.unitSymbol)}. Apply requires explicit confirmation.`);
         }
         this.status.textContent = `${summary.join(" · ")}.${warnings.length > 0 ? ` ${warnings.join(" ")}` : ""}`;
-        this.applyButton.disabled = this.detection.status !== "detected"
-            || fit.confidence < AutomaticApplyConfidence;
+        this.applyButton.disabled = fit.confidence < AutomaticApplyConfidence
+            || !isCanonicalSourceFit(this.detection, analyzed.scale);
     }
 
     private async apply(): Promise<void> {
@@ -160,10 +183,15 @@ export class SourceMapGridAlignmentController {
         const detection = this.detection;
         const proposal = this.proposal;
         if (!sourceMap || !detection?.fit || !proposal || detection.status !== "detected") {
-            throw new Error("A high-confidence grid detection must be previewed before it can be applied.");
+            throw new Error("A high-confidence, source-verified grid detection must be previewed before it can be applied.");
         }
         if (detection.fit.confidence < AutomaticApplyConfidence) {
             throw new Error("The detected lattice is below the automatic-apply confidence threshold.");
+        }
+        const canonicalResidualLimit = rasterGridCanonicalResidualLimit(detection.fit.centerSpacingPixels);
+        if (detection.fit.residualPixels > canonicalResidualLimit) {
+            throw new Error(
+                `The final rigid overlay misses a distant region by ${detection.fit.residualPixels.toFixed(2)} px; automatic Apply requires at most ${canonicalResidualLimit.toFixed(2)} px for this lattice spacing.`);
         }
 
         if (this.physicalScaleChange) {
@@ -206,6 +234,7 @@ export class SourceMapGridAlignmentController {
 type AnalyzedRaster = {
     raster: { width: number; height: number; pixels: Uint8Array };
     scale: number;
+    sourceResolution: boolean;
 };
 
 type WonderdraftAlignmentContext = {
@@ -231,6 +260,7 @@ type PhysicalScaleContext = {
 type WonderdraftGridCrossCheck = {
     summary: string | null;
     warning: string | null;
+    trustedCenterSpacingPixels: number | null;
 };
 
 type PhysicalScaleChange = {
@@ -252,7 +282,7 @@ async function analyzeRaster(
             throw new Error(
                 `Stored raster dimensions ${bitmap.width}×${bitmap.height} do not match source-map metadata ${expectedWidth}×${expectedHeight}.`);
         }
-        const scale = Math.min(1, AnalysisMaximumDimension / Math.max(bitmap.width, bitmap.height));
+        const scale = rasterGridAnalysisScale(bitmap.width, bitmap.height);
         const width = Math.max(1, Math.round(bitmap.width * scale));
         const height = Math.max(1, Math.round(bitmap.height * scale));
         const canvas = document.createElement("canvas");
@@ -261,7 +291,7 @@ async function analyzeRaster(
         const context = canvas.getContext("2d", { willReadFrequently: true });
         if (!context) throw new Error("The browser could not create a raster-analysis canvas.");
         context.drawImage(bitmap, 0, 0, width, height);
-        const rgba = context.getImageData(0, 0, width, height).data;
+        const rgba = context.getImageData(0, 0,width, height).data;
         const pixels = new Uint8Array(width * height);
         for (let source = 0, target = 0; source < rgba.length; source += 4, target++) {
             pixels[target] = Math.round(
@@ -269,27 +299,14 @@ async function analyzeRaster(
                 + (0.7152 * rgba[source + 1])
                 + (0.0722 * rgba[source + 2]));
         }
-        return { raster: { width, height, pixels }, scale };
+        return {
+            raster: { width, height, pixels },
+            scale,
+            sourceResolution: Math.abs(scale - 1) <= Number.EPSILON
+        };
     } finally {
         bitmap.close();
     }
-}
-
-function rescaleDetection(detection: HexLatticeDetection, scale: number): HexLatticeDetection {
-    if (!detection.fit || scale === 1) return detection;
-    const fit = detection.fit;
-    return {
-        ...detection,
-        fit: {
-            ...fit,
-            centerSpacingPixels: fit.centerSpacingPixels / scale,
-            anchorPixel: {
-                x: fit.anchorPixel.x / scale,
-                y: fit.anchorPixel.y / scale
-            },
-            residualPixels: fit.residualPixels / scale
-        }
-    };
 }
 
 async function loadPhysicalScaleContext(
@@ -349,16 +366,33 @@ async function loadPhysicalScaleContext(
 
     const unitsPerRasterPixel = physicalScale.unitsPerPixel / context.uniformScale;
     const distanceMeters = fit.centerSpacingPixels * unitsPerRasterPixel * sourceMetersPerUnit;
-    const distancePerHex = distanceMeters / targetMetersPerUnit;
-    if (!Number.isFinite(distancePerHex) || distancePerHex <= 0) {
+    const directDistancePerHex = distanceMeters / targetMetersPerUnit;
+    if (!Number.isFinite(directDistancePerHex) || directDistancePerHex <= 0) {
         return {
             distancePerHex: null,
             summary: summaries.length > 0 ? summaries.join(" · ") : null,
             warnings: [...warnings, "Wonderdraft physical scale produced an invalid distance and was ignored."]
         };
     }
-    summaries.push(
-        `physical scale ${distancePerHex.toFixed(3)} ${grid.neighborCenterDistance.unit.symbol}/hex from retained Wonderdraft scale-bar metadata (${context.rasterRelationship})`);
+
+    const crossCheckDistancePerHex = gridCrossCheck.trustedCenterSpacingPixels == null
+        ? null
+        : (gridCrossCheck.trustedCenterSpacingPixels
+            * unitsPerRasterPixel
+            * sourceMetersPerUnit) / targetMetersPerUnit;
+    const selection = selectPhysicalDistancePerHex({
+        directDistancePerHex,
+        crossCheckDistancePerHex,
+        considerWholeUnits: grid.neighborCenterDistance.unit.kind === "Mile"
+    });
+    const distancePerHex = selection.distancePerHex;
+    if (selection.usedWholeUnitCandidate && selection.crossCheckDistancePerHex != null) {
+        summaries.push(
+            `physical scale ${distancePerHex.toFixed(3)} ${grid.neighborCenterDistance.unit.symbol}/hex; whole-mile candidate selected because it better reconciles the direct scale-bar/raster estimate ${selection.directDistancePerHex.toFixed(3)} ${grid.neighborCenterDistance.unit.symbol}/hex with the Wonderdraft grid.size estimate ${selection.crossCheckDistancePerHex.toFixed(3)} ${grid.neighborCenterDistance.unit.symbol}/hex (${context.rasterRelationship})`);
+    } else {
+        summaries.push(
+            `physical scale ${distancePerHex.toFixed(3)} ${grid.neighborCenterDistance.unit.symbol}/hex from retained Wonderdraft scale-bar metadata (${context.rasterRelationship})`);
+    }
     return {
         distancePerHex,
         summary: summaries.join(" · "),
@@ -370,35 +404,62 @@ function compareWonderdraftGridMetadata(
     metadata: Record<string, string>,
     fit: HexLatticeFit,
     projectToRasterScale: number): WonderdraftGridCrossCheck {
-    if (metadata["grid.type"]?.trim().toLocaleLowerCase() !== "hex") {
-        return { summary: null, warning: null };
+    const rawSize = metadataValue(metadata, "grid.size");
+    if (!rawSize) {
+        return {
+            summary: null,
+            warning: "Wonderdraft alignment metadata did not expose grid.size, so no project-grid size cross-check is available.",
+            trustedCenterSpacingPixels: null
+        };
     }
-    const rawSize = metadata["grid.size"];
-    if (!rawSize) return { summary: null, warning: null };
     const projectGridSize = Number(rawSize);
     if (!Number.isFinite(projectGridSize) || projectGridSize <= 0) {
         return {
             summary: null,
-            warning: `Wonderdraft grid.size metadata '${rawSize}' is not a usable positive number and was ignored.`
+            warning: `Wonderdraft grid.size metadata '${rawSize}' is not a usable positive number and was ignored.`,
+            trustedCenterSpacingPixels: null
         };
     }
 
     const scaledMetadataSize = projectGridSize * projectToRasterScale;
     const difference = Math.abs(fit.centerSpacingPixels - scaledMetadataSize);
     const relativeDifference = difference / Math.max(fit.centerSpacingPixels, scaledMetadataSize);
-    const comparison = `Wonderdraft grid.size=${projectGridSize.toFixed(3)} project px → ${scaledMetadataSize.toFixed(2)} raster px; raster detector ${fit.centerSpacingPixels.toFixed(2)} px; difference ${(relativeDifference * 100).toFixed(2)}%`;
+    const rawType = metadataValue(metadata, "grid.type");
+    const normalizedType = rawType?.trim().toLocaleLowerCase() ?? null;
+    const typeDetail = rawType ? `; grid.type=${rawType}` : "; grid.type not exposed";
+    const comparison = `Wonderdraft grid.size=${projectGridSize.toFixed(3)} project px → ${scaledMetadataSize.toFixed(2)} raster px; raster detector ${fit.centerSpacingPixels.toFixed(2)} px; difference ${(relativeDifference * 100).toFixed(2)}%${typeDetail}`;
 
-    // This is deliberately a cross-check, not an alternate source of lattice geometry.
-    // Humblewood provides direct evidence that grid.size=80 agrees with its baked
-    // 80-pixel center spacing, but raster detection remains authoritative so other
-    // Wonderdraft versions/patterns do not inherit an unverified semantic assumption.
+    // grid.size is only an independent cross-check. The baked raster remains the
+    // authoritative geometry even when the retained project metadata agrees exactly.
+    // An explicit non-hex grid type invalidates the cross-check; missing grid.type is
+    // reported but does not hide an otherwise matching Wonderdraft grid.size value.
+    if (normalizedType != null && normalizedType !== "hex") {
+        return {
+            summary: null,
+            warning: `${comparison}. Wonderdraft grid.type is not hex, so grid.size is not used as a hex-spacing cross-check.`,
+            trustedCenterSpacingPixels: null
+        };
+    }
     if (relativeDifference <= 0.03) {
-        return { summary: `${comparison} (agreement)`, warning: null };
+        return {
+            summary: `${comparison} (agreement)`,
+            warning: null,
+            trustedCenterSpacingPixels: scaledMetadataSize
+        };
     }
     return {
         summary: null,
-        warning: `${comparison}. The metadata is retained only as a cross-check; raster geometry is not overridden.`
+        warning: `${comparison}. The metadata is retained only as a cross-check; raster geometry is not overridden.`,
+        trustedCenterSpacingPixels: null
     };
+}
+
+function metadataValue(metadata: Record<string, string>, key: string): string | null {
+    const normalized = key.trim().toLocaleLowerCase();
+    for (const [candidate, value] of Object.entries(metadata)) {
+        if (candidate.trim().toLocaleLowerCase() === normalized) return value;
+    }
+    return null;
 }
 
 async function applyGridAlignment(
