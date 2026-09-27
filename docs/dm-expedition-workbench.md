@@ -218,22 +218,13 @@ GM source-map rasters remain DM evidence. The knowledge preview does not reinter
 
 ## Persistence and restart behavior
 
-The existing SQLite `expeditions` table remains the compatibility envelope. Current schema v5 persists required `context_json`, nullable `overworld_id`, nullable world-only `knowledge_json`, `party_json`, `generated_resolutions_json`, procedure state, nullable `procedure_origin_json`, discriminated runtime state, pause reason, and remaining watch time. Runtime history remains in `expedition_events`.
+Production persistence is PostgreSQL through `PostgresHexCrawlStore`; `IHexCrawlStore` remains the application boundary. The PostgreSQL `expeditions` table stores required context, nullable world reference and world-only knowledge, party state, generated procedure resolutions, the complete executable procedure snapshot, nullable procedure-origin metadata, discriminated runtime state, pause reason, remaining watch time, aggregate version, and timestamps. Ordered runtime history remains in `expedition_events`.
 
-Schema-v1 rows migrate to `WorldBound` using their existing real Overworld ID. New `AbstractHex` and `NonSpatial` rows store `NULL` in `overworld_id`; no placeholder world is created. Non-spatial active-watch state is serialized inside the existing runtime snapshot, so adding partial/resume bookkeeping requires no schema-v3 migration. No separate expedition-clock table or presentation table was introduced.
+The one-time SQLite importer accepts legacy schema generations 1 through 5. Schema-v1 rows are deterministically projected to `WorldBound` from their existing Overworld IDs; pre-v3 rows receive the historical empty party state; pre-v4 rows receive an empty generated-resolution list; and databases without `procedure_origin_json` import `NULL` origin metadata. The source SQLite database is read as-is and is not upgraded or deleted.
 
-Validation includes two isolated end-to-end container restart smokes.
+Validation uses PostgreSQL for application persistence tests, HTTP integration tests, and container restart smokes. The mapped smoke persists a world, source-map asset, expedition, procedure snapshot/origin, and runtime advancement; then restarts PostgreSQL and the application before reloading the same state and binary asset. A separate mapless smoke persists and reloads a true `NonSpatial` session through PostgreSQL without creating an Overworld. `/ready` must report `postgresql-ready`; process health alone is not sufficient.
 
-The mapped smoke:
-
-1. creates a world and expedition;
-2. advances far enough to cross a boundary and pause with two hours remaining in watch 1;
-3. restarts the container against the same `/data` volume;
-4. reloads the same active watch, procedure, presentation, and known-hex state;
-5. resumes the watch;
-6. verifies watch 1 completes at four elapsed travel hours.
-
-The mapless smoke uses a fresh data directory and starts with `GET /api/overworlds == []`. It creates a true `NonSpatial` session through `POST /api/expeditions`, records half of a four-hour watch, records encounter history during that active watch, verifies zero Overworlds, restarts the container against the same data, verifies the procedure snapshot/elapsed time/active-watch state/history survived without spatial state, resumes and completes the same watch, and verifies `GET /api/overworlds` is still empty. It also requests all three standalone `/assistants/*` deep links from the container shell.
+The production cutover remains operator-controlled: stop writes, back up `hex-crawl.db`, initialize PostgreSQL, run the migration and semantic verification utility, switch the server-side connection string, verify `/health` and `/ready`, perform deployed read/behavior checks, and retain both the SQLite backup and `hex-crawl-data` volume for rollback. See `docs/postgresql-persistence.md`.
 
 ## Explicitly deferred work
 

@@ -216,44 +216,58 @@ ProcedureModuleDefinition
   presentationMetadata
 ```
 
-## Phase 0 — separate preset identity from execution
+## Phase 0 — compatibility normalization before generic procedure composition
 
-Phase 0 is a compatibility-focused migration step that should happen before the broader generic module system.
+Phase 0 is a compatibility-focused migration stage that must complete before the broader generic module system. It has two separately reviewable checkpoints that combine for the final Phase 0 review. Neither checkpoint changes game/runtime behavior.
 
-### Goal
+### Phase 0A — separate preset identity from execution
 
-Separate preset identity from executable procedure state **without changing current runtime behavior**.
+Goal: separate creation-time preset identity from executable procedure state while retaining `CrawlProcedureProfile` as the compatibility projection consumed by the deterministic runtime.
 
-### Required work
+Required work:
 
-1. Introduce a `PresetDefinition` or equivalent catalog/template concept outside the executable Domain procedure model.
-2. Introduce optional `ProcedureOriginMetadata` or equivalent informational metadata.
+1. Introduce a preset/catalog concept outside the executable Domain procedure model.
+2. Introduce nullable informational `ProcedureOriginMetadata`.
 3. Move named-system construction out of `CrawlProcedureProfile` Domain factories.
-4. Preserve `CrawlProcedureProfile` as the current executable/runtime compatibility projection.
-5. Remove the invariant that a customized executable procedure's key must equal the selected preset key.
-6. Keep existing persisted expeditions readable and behaviorally unchanged.
-7. Ensure a persisted expedition remains usable if the originating preset no longer exists in `CrawlProcedureCatalog`.
-8. Ensure origin metadata can be removed without changing execution.
-9. Add a version-safe migration path toward a future `CampaignProcedure` / `CampaignProcedureSnapshot`.
-10. Add tests for preset deletion/absence, metadata removal, customized procedure persistence, and old persisted shapes.
-11. Update architecture documentation so presets are explicitly creation-time recipes and `CrawlProcedureProfile` is documented as a compatibility projection during migration.
+4. Remove the invariant that a customized executable procedure key must equal the selected preset key.
+5. Persist the complete executable snapshot independently of origin metadata.
+6. Prove an expedition remains executable if its originating preset or origin metadata disappears.
+7. Keep Rules Core optional and avoid runtime catalog re-resolution.
+8. Preserve old persisted shapes and add regression coverage.
 
-### Explicit non-goals
+Phase 0A is implemented on its dedicated checkpoint branch and remains the behavioral base for Phase 0B.
+
+### Phase 0B — normalize production persistence on PostgreSQL
+
+Goal: move structured Hex Crawl production persistence from SQLite to PostgreSQL without redesigning the domain, application contracts, or runtime.
+
+Required work:
+
+1. Keep `IHexCrawlStore` as the application persistence boundary and implement it with Npgsql plus hand-written PostgreSQL SQL; do not introduce Entity Framework merely for platform consistency.
+2. Use PostgreSQL-native UUID, bigint, timestamptz, boolean where applicable, and structured JSON storage while retaining complete aggregate snapshots rather than normalizing runtime/domain state into relational tables.
+3. Preserve atomic optimistic concurrency, owner scoping, foreign-key/delete semantics, deterministic ordering, and atomic snapshot-plus-history persistence.
+4. Add deterministic, idempotent, transactional, version-tracked PostgreSQL schema initialization that fails clearly instead of resetting production data.
+5. Provide a one-time read-only SQLite → PostgreSQL migration capability supporting deployed historical SQLite generations, including databases with and without `procedure_origin_json`. Missing origin is valid and must remain missing.
+6. Preserve IDs, owners, versions, timestamps, world/source-map metadata, every crawl-session snapshot field, every retained event and sequence, AutomaticRoll/provenance records, and all existing relationships.
+7. Verify migration semantically: row counts, IDs, versions, event order/uniqueness, relationships, snapshot equality, and real application-path deserialization/read behavior.
+8. Keep raster/source-map binaries filesystem-backed through `IMapAssetStore` at `/data/assets`; the existing data volume remains required and the legacy SQLite database remains a rollback artifact during cutover.
+9. Make `/ready` verify PostgreSQL connectivity/schema readiness while `/health` remains process health.
+10. Make normal CI, container restart tests, deployment smoke tests, Compose configuration, and deployment use PostgreSQL rather than SQLite.
+11. Re-prove every Phase 0A preset-origin invariant on the combined branch.
+12. Document the operator-controlled backup, migration, verification, cutover, and rollback sequence.
+
+### Phase 0 non-goals
 
 - Do not rewrite `CrawlRuntimeEngine`.
-- Do not introduce the full module/mechanic dependency graph yet.
-- Do not implement new published-system presets yet.
-- Do not remove Rules Core travel/environment support.
-- Do not implement the generalized effect engine.
+- Do not introduce the full module/mechanic dependency graph.
+- Do not implement new published-system presets.
+- Do not remove optional Rules Core travel/environment support.
+- Do not implement the generalized effect/resource engine.
 - Do not change battle-map ownership.
 - Do not modify raster/grid alignment algorithms.
 - Do not merge to `main` without explicit authorization.
 
-### Why Phase 0 comes first
-
-Today `CrawlProcedureProfile` already persists complete procedure behavior, which gives the repository most of the desired apply-once semantics. However, the same record still carries `Key` and `Name`, Domain factory methods such as `AlexandrianAdvancedBaseline()`, and application validation requiring a customized snapshot to retain the selected preset key.
-
-Phase 0 removes this identity coupling while deliberately keeping the proven runtime contract intact.
+Phase 1 begins only after the combined Phase 0A + Phase 0B result is reviewed and explicitly authorized for merge.
 
 ## Phase 1 — generic procedure and preset foundation
 
