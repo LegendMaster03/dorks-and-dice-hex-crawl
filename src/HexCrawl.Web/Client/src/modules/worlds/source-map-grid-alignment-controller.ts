@@ -1,6 +1,10 @@
 import type { HexCrawlApi } from "../../api";
 import { detectHexLattice, type HexLatticeDetection, type HexLatticeFit } from "../../grid-lattice-detector";
-import { buildRasterGridAlignmentProposal, type RasterGridAlignmentProposal } from "../../raster-grid-alignment";
+import {
+    buildRasterGridAlignmentProposal,
+    selectPhysicalDistancePerHex,
+    type RasterGridAlignmentProposal
+} from "../../raster-grid-alignment";
 import type { MapSurface } from "../../map-surface";
 import type { GridDefinition, Overworld, SourceMapDetail } from "../../types";
 import { required } from "../../ui/dom";
@@ -231,6 +235,7 @@ type PhysicalScaleContext = {
 type WonderdraftGridCrossCheck = {
     summary: string | null;
     warning: string | null;
+    trustedCenterSpacingPixels: number | null;
 };
 
 type PhysicalScaleChange = {
@@ -349,16 +354,33 @@ async function loadPhysicalScaleContext(
 
     const unitsPerRasterPixel = physicalScale.unitsPerPixel / context.uniformScale;
     const distanceMeters = fit.centerSpacingPixels * unitsPerRasterPixel * sourceMetersPerUnit;
-    const distancePerHex = distanceMeters / targetMetersPerUnit;
-    if (!Number.isFinite(distancePerHex) || distancePerHex <= 0) {
+    const directDistancePerHex = distanceMeters / targetMetersPerUnit;
+    if (!Number.isFinite(directDistancePerHex) || directDistancePerHex <= 0) {
         return {
             distancePerHex: null,
             summary: summaries.length > 0 ? summaries.join(" · ") : null,
             warnings: [...warnings, "Wonderdraft physical scale produced an invalid distance and was ignored."]
         };
     }
-    summaries.push(
-        `physical scale ${distancePerHex.toFixed(3)} ${grid.neighborCenterDistance.unit.symbol}/hex from retained Wonderdraft scale-bar metadata (${context.rasterRelationship})`);
+
+    const crossCheckDistancePerHex = gridCrossCheck.trustedCenterSpacingPixels == null
+        ? null
+        : (gridCrossCheck.trustedCenterSpacingPixels
+            * unitsPerRasterPixel
+            * sourceMetersPerUnit) / targetMetersPerUnit;
+    const selection = selectPhysicalDistancePerHex({
+        directDistancePerHex,
+        crossCheckDistancePerHex,
+        considerWholeUnits: grid.neighborCenterDistance.unit.kind === "Mile"
+    });
+    const distancePerHex = selection.distancePerHex;
+    if (selection.usedWholeUnitCandidate && selection.crossCheckDistancePerHex != null) {
+        summaries.push(
+            `physical scale ${distancePerHex.toFixed(3)} ${grid.neighborCenterDistance.unit.symbol}/hex; whole-mile candidate selected because it better reconciles the direct scale-bar/raster estimate ${selection.directDistancePerHex.toFixed(3)} ${grid.neighborCenterDistance.unit.symbol}/hex with the Wonderdraft grid.size estimate ${selection.crossCheckDistancePerHex.toFixed(3)} ${grid.neighborCenterDistance.unit.symbol}/hex (${context.rasterRelationship})`);
+    } else {
+        summaries.push(
+            `physical scale ${distancePerHex.toFixed(3)} ${grid.neighborCenterDistance.unit.symbol}/hex from retained Wonderdraft scale-bar metadata (${context.rasterRelationship})`);
+    }
     return {
         distancePerHex,
         summary: summaries.join(" · "),
@@ -371,15 +393,16 @@ function compareWonderdraftGridMetadata(
     fit: HexLatticeFit,
     projectToRasterScale: number): WonderdraftGridCrossCheck {
     if (metadata["grid.type"]?.trim().toLocaleLowerCase() !== "hex") {
-        return { summary: null, warning: null };
+        return { summary: null, warning: null, trustedCenterSpacingPixels: null };
     }
     const rawSize = metadata["grid.size"];
-    if (!rawSize) return { summary: null, warning: null };
+    if (!rawSize) return { summary: null, warning: null, trustedCenterSpacingPixels: null };
     const projectGridSize = Number(rawSize);
     if (!Number.isFinite(projectGridSize) || projectGridSize <= 0) {
         return {
             summary: null,
-            warning: `Wonderdraft grid.size metadata '${rawSize}' is not a usable positive number and was ignored.`
+            warning: `Wonderdraft grid.size metadata '${rawSize}' is not a usable positive number and was ignored.`,
+            trustedCenterSpacingPixels: null
         };
     }
 
@@ -393,11 +416,16 @@ function compareWonderdraftGridMetadata(
     // 80-pixel center spacing, but raster detection remains authoritative so other
     // Wonderdraft versions/patterns do not inherit an unverified semantic assumption.
     if (relativeDifference <= 0.03) {
-        return { summary: `${comparison} (agreement)`, warning: null };
+        return {
+            summary: `${comparison} (agreement)`,
+            warning: null,
+            trustedCenterSpacingPixels: scaledMetadataSize
+        };
     }
     return {
         summary: null,
-        warning: `${comparison}. The metadata is retained only as a cross-check; raster geometry is not overridden.`
+        warning: `${comparison}. The metadata is retained only as a cross-check; raster geometry is not overridden.`,
+        trustedCenterSpacingPixels: null
     };
 }
 
