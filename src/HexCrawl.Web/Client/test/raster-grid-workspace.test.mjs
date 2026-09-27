@@ -63,10 +63,21 @@ test("Wonderdraft grid metadata and scale-bar metadata remain independent cross-
 
     assert.match(controller, /gridMetadata: Record<string, string>/);
     assert.match(controller, /metadata\["grid\.size"\]/);
-    assert.match(controller, /grid\.size .* detected spacing differs/);
+    assert.match(controller, /grid\.size=/);
+    assert.match(controller, /raster detector/);
+    assert.match(controller, /difference/);
     assert.match(controller, /raster geometry is not overridden/);
     assert.match(controller, /scale-bar metadata/);
     assert.match(controller, /physicalScale\.unitsPerPixel \/ context\.uniformScale/);
+});
+
+test("preview reports final worst distant-region behavior", () => {
+    const controller = fs.readFileSync(
+        path.join(sourceRoot, "modules/worlds/source-map-grid-alignment-controller.ts"),
+        "utf8");
+
+    assert.match(controller, /worst distant residual/);
+    assert.match(controller, /fit\.residualPixels/);
 });
 
 test("verified physical-scale conflicts require explicit confirmation before apply", () => {
