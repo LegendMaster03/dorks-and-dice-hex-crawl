@@ -20,6 +20,17 @@ public sealed record OverworldSummary(
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
 
+public sealed record StoredCampaignProcedureRevision(
+    CampaignProcedure Procedure,
+    string OwnerUserId,
+    Guid? CampaignId,
+    ProcedureOriginMetadata? ProcedureOrigin,
+    DateTimeOffset CreatedAt)
+{
+    public Guid ProcedureId => Procedure.ProcedureId;
+    public int Revision => Procedure.Revision;
+}
+
 public sealed record StoredExpedition(
     string Name,
     CrawlSessionRuntimeState Runtime,
@@ -37,6 +48,7 @@ public sealed record StoredExpedition(
     public IReadOnlyList<GeneratedProcedureResolution> GeneratedProcedureResolutions { get; init; } = [];
     public Guid? CampaignId { get; init; }
     public ProcedureOriginMetadata? ProcedureOrigin { get; init; }
+    public CampaignProcedure? CampaignProcedure { get; init; }
 
     public Guid Id => Runtime.Id;
 
@@ -113,6 +125,26 @@ public interface IHexCrawlStore
 
     Task<bool> HasExpeditionsAsync(
         Guid overworldId,
+        string ownerUserId,
+        CancellationToken cancellationToken = default);
+
+    Task<StoredCampaignProcedureRevision> CreateCampaignProcedureRevisionAsync(
+        StoredCampaignProcedureRevision revision,
+        CancellationToken cancellationToken = default);
+
+    Task<StoredCampaignProcedureRevision?> GetCampaignProcedureRevisionAsync(
+        Guid procedureId,
+        int revision,
+        string ownerUserId,
+        CancellationToken cancellationToken = default);
+
+    Task<StoredCampaignProcedureRevision?> GetLatestCampaignProcedureRevisionAsync(
+        Guid procedureId,
+        string ownerUserId,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<StoredCampaignProcedureRevision>> ListCampaignProcedureRevisionsAsync(
+        Guid procedureId,
         string ownerUserId,
         CancellationToken cancellationToken = default);
 

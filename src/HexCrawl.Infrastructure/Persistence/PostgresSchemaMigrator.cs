@@ -5,7 +5,7 @@ namespace HexCrawl.Infrastructure.Persistence;
 
 public sealed class PostgresSchemaMigrator(string connectionString)
 {
-    public const int CurrentVersion = 1;
+    public const int CurrentVersion = 2;
     private const long MigrationLockKey = 0x484558435241574C;
 
     public async Task MigrateAsync(CancellationToken cancellationToken = default)
@@ -46,6 +46,11 @@ public sealed class PostgresSchemaMigrator(string connectionString)
             {
                 await ApplyVersion1Async(connection, transaction, cancellationToken);
                 current = 1;
+            }
+            if (current < 2)
+            {
+                await ApplyVersion2Async(connection, transaction, cancellationToken);
+                current = 2;
             }
 
             if (current != CurrentVersion)
@@ -133,6 +138,37 @@ public sealed class PostgresSchemaMigrator(string connectionString)
 
             INSERT INTO hex_crawl_schema_migrations(version, applied_at)
             VALUES (1, @appliedAt);
+            """;
+        command.Parameters.AddWithValue("appliedAt", NpgsqlDbType.TimestampTz, DateTime.UtcNow);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static async Task ApplyVersion2Async(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            ALTER TABLE expeditions
+                ADD COLUMN campaign_procedure_json jsonb NULL;
+
+            CREATE TABLE campaign_procedure_revisions (
+                procedure_id uuid NOT NULL,
+                revision integer NOT NULL CHECK (revision > 0),
+                owner_user_id text NOT NULL,
+                campaign_id uuid NULL,
+                procedure_json jsonb NOT NULL,
+                origin_json jsonb NULL,
+                created_at timestamptz NOT NULL,
+                PRIMARY KEY(procedure_id, revision)
+            );
+            CREATE INDEX ix_campaign_procedure_revisions_owner_campaign
+                ON campaign_procedure_revisions(owner_user_id, campaign_id, procedure_id, revision DESC);
+
+            INSERT INTO hex_crawl_schema_migrations(version, applied_at)
+            VALUES (2, @appliedAt);
             """;
         command.Parameters.AddWithValue("appliedAt", NpgsqlDbType.TimestampTz, DateTime.UtcNow);
         await command.ExecuteNonQueryAsync(cancellationToken);

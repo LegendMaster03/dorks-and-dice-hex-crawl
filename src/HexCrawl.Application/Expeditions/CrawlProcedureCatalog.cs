@@ -7,30 +7,30 @@ public static class CrawlProcedureCatalog
     public static IReadOnlyList<CrawlProcedurePresetDefinition> All { get; } =
     [
         new(
-  "alexandrian-advanced",
-  "Alexandrian Advanced",
-  "Four-hour continuous-distance travel with navigation, persistent veer, per-watch encounters, and procedure helpers.",
-  1,
-  AlexandrianAdvancedTemplate()),
+            "alexandrian-advanced",
+            "Alexandrian Advanced",
+            "Four-hour continuous-distance travel with navigation, persistent veer, per-watch encounters, and procedure helpers.",
+            1,
+            CampaignProcedureCompatibilityProjector.ToRecipe(AlexandrianAdvancedTemplate())),
         new(
-  "simple-fixed-distance",
-  "Simple Fixed Distance",
-  "Four-hour continuous-distance travel using fixed resolved distance without navigation or encounter checks.",
-  1,
-  SimplifiedFixedDistanceTemplate()),
+            "simple-fixed-distance",
+            "Simple Fixed Distance",
+            "Four-hour continuous-distance travel using fixed resolved distance without navigation or encounter checks.",
+            1,
+            CampaignProcedureCompatibilityProjector.ToRecipe(SimplifiedFixedDistanceTemplate())),
         new(
-  "simple-hex-step",
-  "Simple Hex Step",
-  "Four-hour travel resolved as whole hex steps without intra-hex progress, navigation, or encounter checks.",
-  1,
-  SimplifiedHexStepTemplate())
+            "simple-hex-step",
+            "Simple Hex Step",
+            "Four-hour travel resolved as whole hex steps without intra-hex progress, navigation, or encounter checks.",
+            1,
+            CampaignProcedureCompatibilityProjector.ToRecipe(SimplifiedHexStepTemplate()))
     ];
 
     public static CrawlProcedurePresetDefinition Resolve(string? key)
     {
         var resolved = string.IsNullOrWhiteSpace(key)
-  ? All[0]
-  : All.FirstOrDefault(item => string.Equals(item.PresetKey, key.Trim(), StringComparison.OrdinalIgnoreCase));
+            ? All[0]
+            : All.FirstOrDefault(item => string.Equals(item.PresetKey, key.Trim(), StringComparison.OrdinalIgnoreCase));
         return resolved ?? throw new ArgumentException($"Unknown crawl procedure preset '{key}'.", nameof(key));
     }
 
@@ -53,13 +53,13 @@ public static class CrawlProcedureCatalog
         BackExitProgressFactor = 0.5d,
         DirectionChangeProgressCostFactor = 1d / 6d,
         ResolutionHelpers = new ProcedureResolutionHelperProfile(
-  Travel: new TravelResolutionHelperProfile(new DiceRollFormula(2, 6, 3), 0.1d),
-  Navigation: new NavigationResolutionHelperProfile(new DiceRollFormula(1, 20)),
-  Encounter: new EncounterResolutionHelperProfile(
-      new DiceRollFormula(1, 8),
-      DiceRollResultSet.From(new[] { 1 }),
-      DiceRollResultSet.From(new[] { 8 }),
-      8))
+            Travel: new TravelResolutionHelperProfile(new DiceRollFormula(2, 6, 3), 0.1d),
+            Navigation: new NavigationResolutionHelperProfile(new DiceRollFormula(1, 20)),
+            Encounter: new EncounterResolutionHelperProfile(
+                new DiceRollFormula(1, 8),
+                DiceRollResultSet.From(new[] { 1 }),
+                DiceRollResultSet.From(new[] { 8 }),
+                8))
     };
 
     private static CrawlProcedureProfile SimplifiedFixedDistanceTemplate() => new()

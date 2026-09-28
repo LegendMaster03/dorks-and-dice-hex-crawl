@@ -42,7 +42,8 @@ public sealed partial class HexCrawlService
     {
         var world = await GetOverworldAsync(overworldId, ownerUserId, cancellationToken);
         var preset = CrawlProcedureCatalog.Resolve(command.ProcedureKey);
-        var profile = preset.Materialize();
+        var materialized = preset.MaterializeGeneric();
+        var profile = materialized.CompatibilityProfile;
         var expeditionId = Guid.NewGuid();
         var state = new ExpeditionState
         {
@@ -72,7 +73,8 @@ public sealed partial class HexCrawlService
             now,
             now)
         {
-            ProcedureOrigin = preset.Origin
+            ProcedureOrigin = materialized.Origin,
+            CampaignProcedure = materialized.Procedure
         }, cancellationToken);
     }
 
