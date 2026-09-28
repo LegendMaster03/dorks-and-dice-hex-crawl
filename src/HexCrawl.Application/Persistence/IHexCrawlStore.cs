@@ -36,7 +36,7 @@ public sealed record StoredExpedition(
     CrawlSessionRuntimeState Runtime,
     CrawlSessionContext Context,
     PlayerKnowledgeState? Knowledge,
-    CrawlProcedureProfile Procedure,
+    CrawlProcedureProfile? Procedure,
     RuntimePauseReason? PauseReason,
     TimeSpan RemainingWatchTime,
     string OwnerUserId,
