@@ -14,7 +14,7 @@ Dorks & Dice Hex Crawl provides continuous-overworld authoring, mathematical hex
 
 ## Local development
 
-Hex Crawl requires PostgreSQL for structured runtime persistence. Copy `.env.example` values into your local environment and change the development password as appropriate. The normal application does not fall back to SQLite.
+Hex Crawl requires PostgreSQL for structured runtime persistence. Copy `.env.example` values into your local environment and change the development password as appropriate.
 
 ```bash
 export ConnectionStrings__HexCrawl='Host=localhost;Port=5432;Database=hex_crawl;Username=hex_crawl;Password=change-me'
@@ -38,4 +38,4 @@ dotnet test dorks-and-dice-hex-crawl.slnx -p:BuildClient=false
 docker build -t dorks-and-dice-hex-crawl:test -f src/HexCrawl.Web/Dockerfile .
 ```
 
-For the one-time production SQLite → PostgreSQL migration and rollback procedure, see `docs/postgresql-persistence.md`. See `docs/architecture.md`, `docs/design-references.md`, and `docs/tool-hosting.md` for broader architecture and hosting decisions.
+See `docs/postgresql-persistence.md`, `docs/architecture.md`, `docs/design-references.md`, and `docs/tool-hosting.md` for persistence, architecture, design references, and hosting decisions.
