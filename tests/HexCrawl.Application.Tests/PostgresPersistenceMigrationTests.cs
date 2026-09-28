@@ -87,7 +87,11 @@ public sealed class PostgresPersistenceMigrationTests
 
             // Re-running the controlled migration is safe only when the target is an exact match.
             var repeated = await migrator.MigrateAndVerifyAsync();
-            Assert.Equal(report, repeated);
+            Assert.Equal(report.SourceSchemaVersion, repeated.SourceSchemaVersion);
+            Assert.Equal(report.OverworldCount, repeated.OverworldCount);
+            Assert.Equal(report.ExpeditionCount, repeated.ExpeditionCount);
+            Assert.Equal(report.EventCount, repeated.EventCount);
+            Assert.Equal(report.ContextKinds.ToArray(), repeated.ContextKinds.ToArray());
         }
         finally
         {

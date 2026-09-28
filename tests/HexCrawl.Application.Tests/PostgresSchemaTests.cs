@@ -83,7 +83,14 @@ public sealed class PostgresSchemaTests
         Assert.NotNull(loaded);
         Assert.Equal(37, loaded!.Version);
         Assert.Equal(1000, loaded.World.Locations.Count);
-        Assert.Equal(locations[937], loaded.World.Locations[937]);
+        var expectedLocation = locations[937];
+        var actualLocation = loaded.World.Locations[937];
+        Assert.Equal(expectedLocation.Id, actualLocation.Id);
+        Assert.Equal(expectedLocation.Name, actualLocation.Name);
+        Assert.Equal(expectedLocation.Category, actualLocation.Category);
+        Assert.Equal(expectedLocation.Position, actualLocation.Position);
+        Assert.Equal(expectedLocation.Discoverability, actualLocation.Discoverability);
+        Assert.Equal(expectedLocation.DetailMaps.ToArray(), actualLocation.DetailMaps.ToArray());
     }
 
     [Fact]
