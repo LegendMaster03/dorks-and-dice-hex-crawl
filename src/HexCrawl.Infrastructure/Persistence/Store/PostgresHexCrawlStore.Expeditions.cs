@@ -14,6 +14,8 @@ public sealed partial class PostgresHexCrawlStore
         StoredExpedition expedition,
         CancellationToken cancellationToken = default)
     {
+        ExpeditionProcedureConsistency.ValidateForPersistence(expedition);
+
         await using var connection = await OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
         await using var command = connection.CreateCommand();
@@ -135,7 +137,6 @@ public sealed partial class PostgresHexCrawlStore
         var campaignProcedure = reader.IsDBNull(8)
             ? null
             : Deserialize<CampaignProcedure>(reader.GetString(8));
-        campaignProcedure?.Validate();
         RuntimePauseReason? pauseReason = reader.IsDBNull(9)
             ? null
             : Enum.Parse<RuntimePauseReason>(reader.GetString(9), true);
@@ -151,7 +152,7 @@ public sealed partial class PostgresHexCrawlStore
             NonSpatialSessionState nonSpatial => nonSpatial with { History = events },
             _ => throw new InvalidDataException("Persisted crawl session runtime kind is not supported.")
         };
-        return new StoredExpedition(
+        var stored = new StoredExpedition(
             name,
             runtime,
             context,
@@ -170,6 +171,8 @@ public sealed partial class PostgresHexCrawlStore
             ProcedureOrigin = procedureOrigin,
             CampaignProcedure = campaignProcedure
         };
+        ExpeditionProcedureConsistency.ValidateLoaded(stored);
+        return stored;
     }
 
     public async Task<SaveResult<StoredExpedition>> SaveExpeditionAsync(
@@ -177,6 +180,8 @@ public sealed partial class PostgresHexCrawlStore
         long expectedVersion,
         CancellationToken cancellationToken = default)
     {
+        ExpeditionProcedureConsistency.ValidateForPersistence(expedition);
+
         await using var connection = await OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
         var updated = expedition with

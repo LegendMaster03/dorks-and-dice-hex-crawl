@@ -48,9 +48,9 @@ public static class CampaignProcedureMaterializer
                 var module = GenericProcedureCatalog.ResolveModule(selection.ModuleKey);
                 var mechanic = GenericProcedureCatalog.ResolveMechanic(selection.MechanicKey, selection.MechanicVersion);
                 return new MaterializedProcedureModule(
-                    module with { },
-                    mechanic with { },
-                    Copy(selection.Parameters));
+                    CampaignProcedureSnapshot.Copy(module),
+                    CampaignProcedureSnapshot.Copy(mechanic),
+                    CampaignProcedureSnapshot.CopyStrings(selection.Parameters));
             }).ToArray();
             procedure = new CampaignProcedure
             {
@@ -76,12 +76,7 @@ public static class CampaignProcedureMaterializer
         ArgumentNullException.ThrowIfNull(overrides);
         current.Validate();
         var modules = current.Modules
-            .Select(module => module with
-            {
-                Module = module.Module with { },
-                Mechanic = module.Mechanic with { },
-                Parameters = Copy(module.Parameters)
-            })
+            .Select(CampaignProcedureSnapshot.Copy)
             .ToDictionary(module => module.Module.Key, StringComparer.Ordinal);
 
         foreach (var value in overrides)
@@ -95,30 +90,34 @@ public static class CampaignProcedureMaterializer
             var mechanic = selected.Mechanic;
             if (!string.IsNullOrWhiteSpace(value.ReplacementMechanicKey))
             {
-                mechanic = GenericProcedureCatalog.ResolveMechanic(value.ReplacementMechanicKey, value.ReplacementMechanicVersion);
+                mechanic = CampaignProcedureSnapshot.Copy(
+                    GenericProcedureCatalog.ResolveMechanic(value.ReplacementMechanicKey, value.ReplacementMechanicVersion));
             }
 
-            var parameters = Copy(selected.Parameters);
+            var parameters = CampaignProcedureSnapshot.CopyStrings(selected.Parameters);
             foreach (var parameter in value.Parameters)
             {
                 parameters[parameter.Key] = parameter.Value;
             }
-            modules[value.ModuleKey] = new MaterializedProcedureModule(selected.Module with { }, mechanic with { }, parameters);
+            modules[value.ModuleKey] = new MaterializedProcedureModule(
+                CampaignProcedureSnapshot.Copy(selected.Module),
+                CampaignProcedureSnapshot.Copy(mechanic),
+                parameters);
         }
 
         var revision = current with
         {
             Revision = checked(current.Revision + 1),
             Modules = current.Modules.Select(module => modules[module.Module.Key]).ToArray(),
-            Overrides = current.Overrides.Concat(overrides).ToArray()
+            Overrides = current.Overrides
+                .Select(CampaignProcedureSnapshot.Copy)
+                .Concat(overrides.Select(CampaignProcedureSnapshot.Copy))
+                .ToArray()
         };
         revision.Validate();
-        _ = CampaignProcedureCompatibilityProjector.Project(revision);
+        _ = CampaignProcedureCompatibilityProjector.TryProject(revision, out _);
         return revision;
     }
-
-    private static Dictionary<string, string> Copy(IReadOnlyDictionary<string, string> values) =>
-        values.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
 }
 
 public static class CampaignProcedureCompatibilityProjector
@@ -177,7 +176,21 @@ public static class CampaignProcedureCompatibilityProjector
                 module.Module.Key,
                 module.Mechanic.Key,
                 module.Mechanic.Version,
-                module.Parameters.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal))).ToArray());
+                CampaignProcedureSnapshot.CopyStrings(module.Parameters))).ToArray());
+    }
+
+    public static bool TryProject(CampaignProcedure procedure, out CrawlProcedureProfile profile)
+    {
+        try
+        {
+            profile = Project(procedure);
+            return true;
+        }
+        catch (CampaignProcedureProjectionNotSupportedException)
+        {
+            profile = null!;
+            return false;
+        }
     }
 
     public static CrawlProcedureProfile Project(CampaignProcedure procedure)
@@ -227,19 +240,20 @@ public static class CampaignProcedureCompatibilityProjector
         string mechanicKey,
         IReadOnlyDictionary<string, string> parameters) =>
         new(
-            GenericProcedureCatalog.ResolveModule(moduleKey) with { },
-            GenericProcedureCatalog.ResolveMechanic(mechanicKey) with { },
-            parameters);
+            CampaignProcedureSnapshot.Copy(GenericProcedureCatalog.ResolveModule(moduleKey)),
+            CampaignProcedureSnapshot.Copy(GenericProcedureCatalog.ResolveMechanic(mechanicKey)),
+            CampaignProcedureSnapshot.CopyStrings(parameters));
 
     private static MaterializedProcedureModule Module(CampaignProcedure procedure, string key) =>
         procedure.Modules.SingleOrDefault(value => string.Equals(value.Module.Key, key, StringComparison.Ordinal))
-        ?? throw new InvalidOperationException($"Campaign procedure does not contain required compatibility module '{key}'.");
+        ?? throw new CampaignProcedureProjectionNotSupportedException(
+            $"Campaign procedure does not contain required compatibility module '{key}'. The materialized data remains preserved but can not be projected by this runtime version.");
 
     private static void RequireHandler(MaterializedProcedureModule module, string handler)
     {
         if (!string.Equals(module.Mechanic.ExecutionHandler, handler, StringComparison.Ordinal))
         {
-            throw new InvalidOperationException(
+            throw new CampaignProcedureProjectionNotSupportedException(
                 $"Module '{module.Module.Key}' uses unsupported compatibility handler '{module.Mechanic.ExecutionHandler}'. The materialized data remains preserved but can not be projected by this runtime version.");
         }
     }
@@ -341,3 +355,5 @@ public static class CampaignProcedureCompatibilityProjector
             ? value
             : throw new InvalidOperationException($"Procedure parameter '{key}' is not a supported {typeof(T).Name} value.");
 }
+
+public sealed class CampaignProcedureProjectionNotSupportedException(string message) : InvalidOperationException(message);
