@@ -44,7 +44,8 @@ public sealed partial class PostgresHexCrawlStore
         await using var connection = await OpenAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT id, context_json::text, name, procedure_json::text, version, created_at, updated_at
+            SELECT id, context_json::text, name, procedure_json::text, campaign_procedure_json::text,
+                   version, created_at, updated_at
             FROM expeditions
             WHERE owner_user_id = @owner
             ORDER BY updated_at DESC, name;
@@ -55,15 +56,16 @@ public sealed partial class PostgresHexCrawlStore
         while (await reader.ReadAsync(cancellationToken))
         {
             var context = Deserialize<CrawlSessionContextSnapshot>(reader.GetString(1)).ToDomain();
-            var procedure = Deserialize<CrawlProcedureProfile>(reader.GetString(3));
+            var procedure = reader.IsDBNull(3) ? null : Deserialize<CrawlProcedureProfile>(reader.GetString(3));
+            var campaignProcedure = reader.IsDBNull(4) ? null : Deserialize<CampaignProcedure>(reader.GetString(4));
             result.Add(new ExpeditionSummary(
                 reader.GetGuid(0),
                 context,
                 reader.GetString(2),
-                procedure.Name,
-                reader.GetInt64(4),
-                ReadTimestamp(reader, 5),
-                ReadTimestamp(reader, 6)));
+                ProcedureName(procedure, campaignProcedure),
+                reader.GetInt64(5),
+                ReadTimestamp(reader, 6),
+                ReadTimestamp(reader, 7)));
         }
         return result;
     }
@@ -76,7 +78,7 @@ public sealed partial class PostgresHexCrawlStore
         await using var connection = await OpenAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT id, name, procedure_json::text, version, created_at, updated_at
+            SELECT id, name, procedure_json::text, campaign_procedure_json::text, version, created_at, updated_at
             FROM expeditions
             WHERE overworld_id = @world AND owner_user_id = @owner
             ORDER BY updated_at DESC, name;
@@ -87,15 +89,16 @@ public sealed partial class PostgresHexCrawlStore
         var result = new List<ExpeditionSummary>();
         while (await reader.ReadAsync(cancellationToken))
         {
-            var procedure = Deserialize<CrawlProcedureProfile>(reader.GetString(2));
+            var procedure = reader.IsDBNull(2) ? null : Deserialize<CrawlProcedureProfile>(reader.GetString(2));
+            var campaignProcedure = reader.IsDBNull(3) ? null : Deserialize<CampaignProcedure>(reader.GetString(3));
             result.Add(new ExpeditionSummary(
                 reader.GetGuid(0),
                 new WorldBoundCrawlSessionContext(overworldId),
                 reader.GetString(1),
-                procedure.Name,
-                reader.GetInt64(3),
-                ReadTimestamp(reader, 4),
-                ReadTimestamp(reader, 5)));
+                ProcedureName(procedure, campaignProcedure),
+                reader.GetInt64(4),
+                ReadTimestamp(reader, 5),
+                ReadTimestamp(reader, 6)));
         }
         return result;
     }
@@ -130,7 +133,7 @@ public sealed partial class PostgresHexCrawlStore
         var party = Deserialize<CrawlPartySheet>(reader.GetString(4));
         party.Validate();
         var generatedResolutions = Deserialize<IReadOnlyList<GeneratedProcedureResolution>>(reader.GetString(5));
-        var procedure = Deserialize<CrawlProcedureProfile>(reader.GetString(6));
+        var procedure = reader.IsDBNull(6) ? null : Deserialize<CrawlProcedureProfile>(reader.GetString(6));
         var procedureOrigin = reader.IsDBNull(7)
             ? null
             : Deserialize<ProcedureOriginMetadata>(reader.GetString(7));
@@ -317,7 +320,7 @@ public sealed partial class PostgresHexCrawlStore
         expedition.Party.Validate();
         AddJsonb(command, "party", Serialize(expedition.Party));
         AddJsonb(command, "generatedResolutions", Serialize(expedition.GeneratedProcedureResolutions));
-        AddJsonb(command, "procedure", Serialize(expedition.Procedure));
+        AddJsonb(command, "procedure", expedition.Procedure is null ? null : Serialize(expedition.Procedure));
         AddJsonb(command, "procedureOrigin", expedition.ProcedureOrigin is null ? null : Serialize(expedition.ProcedureOrigin));
         AddJsonb(command, "campaignProcedure", expedition.CampaignProcedure is null ? null : Serialize(expedition.CampaignProcedure));
         command.Parameters.AddWithValue("pause", NpgsqlDbType.Text, expedition.PauseReason?.ToString() is { } pause ? pause : DBNull.Value);
@@ -325,4 +328,9 @@ public sealed partial class PostgresHexCrawlStore
         command.Parameters.AddWithValue("version", NpgsqlDbType.Bigint, expedition.Version);
         AddTimestamp(command, "updated", expedition.UpdatedAt);
     }
+
+    private static string ProcedureName(CrawlProcedureProfile? procedure, CampaignProcedure? campaignProcedure) =>
+        procedure?.Name
+        ?? campaignProcedure?.Name
+        ?? throw new InvalidDataException("Persisted expedition does not contain a procedure snapshot.");
 }
