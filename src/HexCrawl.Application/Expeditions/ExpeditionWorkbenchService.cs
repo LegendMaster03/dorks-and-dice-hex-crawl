@@ -283,32 +283,15 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
         GenericProcedureRuntime procedure,
         DistanceUnit unit,
         AdvanceExpeditionWorkbenchCommand command,
-        ResolutionProvenance provenance)
-    {
-        if (procedure.Movement.TravelResolution == TravelResolutionMode.HexSteps)
-        {
-            return command.HexSteps.HasValue
-                ? ResolvedTravelAmount.Steps(command.HexSteps.Value, provenance)
-                : throw new InvalidOperationException("The selected procedure requires a resolved hex-step count.");
-        }
-
-        if (procedure.Movement.ActualDistanceResolution == ActualDistanceResolutionMode.Fixed)
-        {
-            var effective = command.EffectiveDistance ?? command.ActualDistance ?? command.ExpectedDistance
-                ?? throw new InvalidOperationException("The selected fixed-distance procedure requires an effective travel distance.");
-            var distance = new DistanceMeasure(effective, unit);
-            return ResolvedTravelAmount.Distance(distance, distance, provenance);
-        }
-
-        if (!command.ExpectedDistance.HasValue || !command.ActualDistance.HasValue)
-        {
-            throw new InvalidOperationException("The selected variable-distance procedure requires expected and actual travel distance.");
-        }
-        return ResolvedTravelAmount.Distance(
-            new DistanceMeasure(command.ExpectedDistance.Value, unit),
-            new DistanceMeasure(command.ActualDistance.Value, unit),
+        ResolutionProvenance provenance) =>
+        ProcedureTravelInputPolicy.Build(
+            procedure,
+            unit,
+            command.EffectiveDistance,
+            command.ExpectedDistance,
+            command.ActualDistance,
+            command.HexSteps,
             provenance);
-    }
 
     private static ResolvedNavigation? BuildNavigation(
         GenericProcedureRuntime procedure,
@@ -497,7 +480,6 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
                     "The submitted encounter location does not match the persisted generated result.");
             }
         }
-
         return generated;
     }
 
