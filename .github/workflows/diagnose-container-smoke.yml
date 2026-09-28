@@ -1,0 +1,149 @@
+name: Diagnose Container Persistence Smoke
+
+on:
+  push:
+    branches: [ "feature/postgres-persistence" ]
+
+env:
+  CONNECTION_STRING: "Host=hex-crawl-diag-postgres;Port=5432;Database=postgres;Username=hex_crawl_test;Password=hex_crawl_test"
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build application container
+        run: docker build -t dorks-and-dice-hex-crawl:diag .
+
+      - name: Create diagnostic network and PostgreSQL
+        run: |
+          set -euo pipefail
+          docker network create hex-crawl-diag >/dev/null
+          docker run -d --name hex-crawl-diag-postgres \
+            --network hex-crawl-diag \
+            -e POSTGRES_DB=postgres \
+            -e POSTGRES_USER=hex_crawl_test \
+            -e POSTGRES_PASSWORD=hex_crawl_test \
+            postgres:18 >/dev/null
+          for i in {1..30}; do
+            if [ "$(docker exec hex-crawl-diag-postgres psql -U hex_crawl_test -d postgres -tAc 'SELECT 1' 2>/dev/null | tr -d '[:space:]')" = "1" ]; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+
+      - name: Create persistent asset directory
+        run: |
+          set -euo pipefail
+          rm -rf "${RUNNER_TEMP}/hex-crawl-diag-assets"
+          mkdir -p "${RUNNER_TEMP}/hex-crawl-diag-assets"
+
+      - name: Start first application container
+        run: |
+          set -euo pipefail
+          docker run -d --name hex-crawl-diag \
+            --network hex-crawl-diag \
+            -p 127.0.0.1:5000:8080 \
+            -v "${RUNNER_TEMP}/hex-crawl-diag-assets:/data/assets" \
+            -e ASPNETCORE_URLS=http://+:8080 \
+            -e ConnectionStrings__HexCrawl="$CONNECTION_STRING" \
+            -e MapAssets__RootPath=/data/assets \
+            dorks-and-dice-hex-crawl:diag >/dev/null
+
+      - name: Wait for first health and readiness
+        run: |
+          set -euo pipefail
+          for i in {1..60}; do
+            if curl --silent --fail http://127.0.0.1:5000/health >/dev/null && \
+               curl --silent --fail http://127.0.0.1:5000/ready >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          exit 1
+
+      - name: Create world
+        run: |
+          set -euo pipefail
+          cat > "${RUNNER_TEMP}/hex-crawl-diag-create.json" <<'JSON'
+          {
+            "ownerId": "ci-owner",
+            "name": "CI World",
+            "widthHexes": 8,
+            "heightHexes": 6,
+            "columns": "pointy",
+            "rows": "odd",
+            "procedurePreset": "system.default"
+          }
+          JSON
+          response=$(curl --silent --fail \
+            -X POST \
+            -H 'Content-Type: application/json' \
+            --data @"${RUNNER_TEMP}/hex-crawl-diag-create.json" \
+            http://127.0.0.1:5000/api/overworlds)
+          world_id=$(printf '%s' "$response" | python -c 'import json,sys; print(json.load(sys.stdin)["worldId"])')
+          test -n "$world_id"
+          printf 'WORLD_ID=%s\n' "$world_id" >> "$GITHUB_ENV"
+
+      - name: Write persistent asset marker
+        run: |
+          set -euo pipefail
+          printf 'persist-through-restart\n' > "${RUNNER_TEMP}/hex-crawl-diag-assets/ci-marker.txt"
+          test -f "${RUNNER_TEMP}/hex-crawl-diag-assets/ci-marker.txt"
+
+      - name: Stop first application container
+        run: docker rm -f hex-crawl-diag >/dev/null
+
+      - name: Start second application container
+        run: |
+          set -euo pipefail
+          docker run -d --name hex-crawl-diag \
+            --network hex-crawl-diag \
+            -p 127.0.0.1:5000:8080 \
+            -v "${RUNNER_TEMP}/hex-crawl-diag-assets:/data/assets" \
+            -e ASPNETCORE_URLS=http://+:8080 \
+            -e ConnectionStrings__HexCrawl="$CONNECTION_STRING" \
+            -e MapAssets__RootPath=/data/assets \
+            dorks-and-dice-hex-crawl:diag >/dev/null
+
+      - name: Wait for second health and readiness
+        run: |
+          set -euo pipefail
+          for i in {1..60}; do
+            if curl --silent --fail http://127.0.0.1:5000/health >/dev/null && \
+               curl --silent --fail http://127.0.0.1:5000/ready >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          exit 1
+
+      - name: Fetch persisted world
+        run: |
+          set -euo pipefail
+          curl --silent --fail \
+            http://127.0.0.1:5000/api/overworlds/"$WORLD_ID" \
+            > "${RUNNER_TEMP}/hex-crawl-diag-world.json"
+
+      - name: Verify persistent asset marker
+        run: test -f "${RUNNER_TEMP}/hex-crawl-diag-assets/ci-marker.txt"
+
+      - name: Verify persisted world owner
+        run: grep -F '"ownerId":"ci-owner"' "${RUNNER_TEMP}/hex-crawl-diag-world.json" >/dev/null
+
+      - name: Verify persisted world name
+        run: grep -F '"name":"CI World"' "${RUNNER_TEMP}/hex-crawl-diag-world.json" >/dev/null
+
+      - name: Dump diagnostic logs on failure
+        if: failure()
+        run: |
+          docker logs hex-crawl-diag 2>&1 || true
+          docker logs hex-crawl-diag-postgres 2>&1 || true
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker rm -f hex-crawl-diag 2>/dev/null || true
+          docker rm -f hex-crawl-diag-postgres 2>/dev/null || true
+          docker network rm hex-crawl-diag 2>/dev/null || true
