@@ -145,7 +145,24 @@ public sealed class NativeGenericProcedureExecutionTests
         var state = Assert.IsType<ExpeditionState>(advanced.Runtime);
         Assert.Equal(1, state.CompletedWatches);
         Assert.Equal(TimeSpan.FromHours(4), state.ElapsedTravelTime);
-        Assert.Equal(started.CampaignProcedure, advanced.CampaignProcedure);
+        var expectedProcedure = Assert.IsType<CampaignProcedure>(started.CampaignProcedure);
+        var actualProcedure = Assert.IsType<CampaignProcedure>(advanced.CampaignProcedure);
+        Assert.Equal(expectedProcedure.ProcedureId, actualProcedure.ProcedureId);
+        Assert.Equal(expectedProcedure.Revision, actualProcedure.Revision);
+        Assert.Equal(expectedProcedure.Key, actualProcedure.Key);
+        Assert.Equal(expectedProcedure.Name, actualProcedure.Name);
+        Assert.Equal(
+            expectedProcedure.Modules.Select(module =>
+                (module.Module.Key, module.Mechanic.Key, module.Mechanic.Version, module.Mechanic.ExecutionHandler)),
+            actualProcedure.Modules.Select(module =>
+                (module.Module.Key, module.Mechanic.Key, module.Mechanic.Version, module.Mechanic.ExecutionHandler)));
+        foreach (var expectedModule in expectedProcedure.Modules)
+        {
+            var actualModule = actualProcedure.Modules.Single(module => module.Module.Key == expectedModule.Module.Key);
+            Assert.Equal(
+                expectedModule.Parameters.OrderBy(pair => pair.Key, StringComparer.Ordinal),
+                actualModule.Parameters.OrderBy(pair => pair.Key, StringComparer.Ordinal));
+        }
     }
 
     [Fact]
