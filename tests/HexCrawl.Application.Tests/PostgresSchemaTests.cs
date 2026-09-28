@@ -58,25 +58,30 @@ public sealed class PostgresSchemaTests
                 $"Location {index:D4} {new string('x', 80)}",
                 "migration-volume-test",
                 new WorldPoint(index / 10d, -(index / 20d)),
-                LocationDiscoverability.Hidden))
+                LocationDiscoverability.Hidden,
+                []))
             .ToArray();
         var world = new OverworldDefinition
         {
             Id = worldId,
             Name = "Large representative PostgreSQL snapshot",
-            Grid = new HexGridDefinition(
-                HexOrientation.PointyTop,
-                new WorldPoint(0, 0),
-                0,
-                1,
-                new DistanceMeasure(12, DistanceUnit.Miles)),
+            Grid = new HexGridDefinition
+            {
+                Id = Guid.NewGuid(),
+                Orientation = HexOrientation.PointyTop,
+                Origin = new WorldPoint(0, 0),
+                RotationDegrees = 0,
+                HexRadiusWorldUnits = 1,
+                NeighborCenterDistance = new DistanceMeasure(12, DistanceUnit.Miles)
+            },
             Locations = locations
         };
         var now = DateTimeOffset.UtcNow;
         _ = await store.CreateOverworldAsync(new StoredOverworld(world, "large-owner", 37, now, now));
 
-        var loaded = Assert.NotNull(await store.GetOverworldAsync(worldId, "large-owner"));
-        Assert.Equal(37, loaded.Version);
+        var loaded = await store.GetOverworldAsync(worldId, "large-owner");
+        Assert.NotNull(loaded);
+        Assert.Equal(37, loaded!.Version);
         Assert.Equal(1000, loaded.World.Locations.Count);
         Assert.Equal(locations[937], loaded.World.Locations[937]);
     }
