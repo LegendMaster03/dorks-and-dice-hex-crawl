@@ -88,8 +88,16 @@ public sealed record RuntimeProfileContract(
     public static RuntimeProfileContract From(CrawlProcedurePresetDefinition preset) =>
         From(preset.ExecutableProcedureTemplate, preset.PresetKey, preset.DisplayName);
 
-    public static RuntimeProfileContract From(CrawlProcedureProfile profile) =>
-        From(profile, profile.Key, profile.Name);
+    public static RuntimeProfileContract From(CrawlProcedureProfile? profile)
+    {
+        if (profile is null)
+        {
+            throw new InvalidOperationException(
+                "This legacy runtime-profile API requires a CrawlProcedureProfile compatibility projection. The pinned generic CampaignProcedure remains authoritative and persisted, but this API can not represent it.");
+        }
+
+        return From(profile, profile.Key, profile.Name);
+    }
 
     private static RuntimeProfileContract From(CrawlProcedureProfile profile, string key, string name) => new(
         key,
@@ -131,4 +139,3 @@ public sealed record RuntimeProfileContract(
         ResolutionHelpers = ResolutionHelpers?.ToDomain()
     };
 }
-
