@@ -7,45 +7,49 @@ namespace HexCrawl.Domain.Runtime;
 
 public sealed partial class CrawlRuntimeEngine
 {
-    private static void ValidateTravelAmount(
+    private static void ValidateTravelAmountShape(
         ProcedureMovementRuntime movementPolicy,
         ResolvedTravelAmount travel)
     {
         if (movementPolicy.TravelResolution == TravelResolutionMode.ContinuousDistance)
         {
-            if (travel.HexSteps is not null)
+            if (travel.ExpectedDistance is null || travel.ActualDistance is null || travel.HexSteps is not null)
             {
-                throw new InvalidOperationException("Continuous-distance travel does not accept a resolved hex-step count.");
+                throw new InvalidOperationException("Continuous-distance travel requires expected and actual distance values only.");
             }
-
-            switch (movementPolicy.ActualDistanceResolution)
-            {
-                case ActualDistanceResolutionMode.Fixed:
-                    if (travel.ExpectedDistance is null || travel.ActualDistance is null)
-                    {
-                        throw new InvalidOperationException("Fixed continuous-distance travel requires one effective distance represented consistently as both expected and actual distance.");
-                    }
-                    if (!EquivalentDistance(travel.ExpectedDistance.Value, travel.ActualDistance.Value))
-                    {
-                        throw new InvalidOperationException("Fixed continuous-distance travel requires expected and actual distance to represent the same effective distance.");
-                    }
-                    return;
-
-                case ActualDistanceResolutionMode.VariableResolved:
-                    if (travel.ExpectedDistance is null || travel.ActualDistance is null)
-                    {
-                        throw new InvalidOperationException("Variable-resolved continuous-distance travel requires both expected and actual distance values.");
-                    }
-                    return;
-
-                default:
-                    throw new InvalidOperationException($"Unsupported actual-distance resolution mode '{movementPolicy.ActualDistanceResolution}'.");
-            }
+            return;
         }
 
         if (travel.HexSteps is null || travel.HexSteps < 0 || travel.ExpectedDistance is not null || travel.ActualDistance is not null)
         {
             throw new InvalidOperationException("Hex-step travel requires a non-negative resolved step count only.");
+        }
+    }
+
+    private static void ValidateNativeTravelAmountPolicy(
+        ProcedureMovementRuntime movementPolicy,
+        ResolvedTravelAmount travel)
+    {
+        ValidateTravelAmountShape(movementPolicy, travel);
+        if (movementPolicy.TravelResolution != TravelResolutionMode.ContinuousDistance)
+        {
+            return;
+        }
+
+        switch (movementPolicy.ActualDistanceResolution)
+        {
+            case ActualDistanceResolutionMode.Fixed:
+                if (!EquivalentDistance(travel.ExpectedDistance!.Value, travel.ActualDistance!.Value))
+                {
+                    throw new InvalidOperationException("Fixed continuous-distance travel requires expected and actual distance to represent the same effective distance.");
+                }
+                return;
+
+            case ActualDistanceResolutionMode.VariableResolved:
+                return;
+
+            default:
+                throw new InvalidOperationException($"Unsupported actual-distance resolution mode '{movementPolicy.ActualDistanceResolution}'.");
         }
     }
 
