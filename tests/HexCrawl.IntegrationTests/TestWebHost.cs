@@ -1,3 +1,4 @@
+using HexCrawl.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Npgsql;
@@ -18,10 +19,14 @@ internal static class TestWebHost
             command.ExecuteNonQuery();
         }
 
-        return new NpgsqlConnectionStringBuilder(adminConnectionString)
+        var connectionString = new NpgsqlConnectionStringBuilder(adminConnectionString)
         {
             SearchPath = schema
         }.ConnectionString;
+
+        var store = new PostgresHexCrawlStore(connectionString);
+        store.InitializeAsync().GetAwaiter().GetResult();
+        return connectionString;
     }
 
     public static WebApplicationFactory<Program> Create(
