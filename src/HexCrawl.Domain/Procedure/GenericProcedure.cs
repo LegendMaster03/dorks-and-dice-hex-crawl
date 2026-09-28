@@ -7,6 +7,39 @@ public enum ProcedureAutomationLevel
     Manual
 }
 
+[Flags]
+public enum ProcedureInputSource
+{
+    None = 0,
+    SelectedModule = 1,
+    Dm = 2,
+    OptionalProvider = 4,
+    ExternalState = 8
+}
+
+public sealed record ProcedureInputRequirement(
+    string InputKey,
+    ProcedureInputSource AllowedSources)
+{
+    public void Validate(string mechanicKey, IReadOnlyList<string> inputContract)
+    {
+        if (string.IsNullOrWhiteSpace(InputKey))
+        {
+            throw new InvalidOperationException($"Mechanic '{mechanicKey}' input requirement key can not be blank.");
+        }
+        if (!inputContract.Contains(InputKey, StringComparer.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"Mechanic '{mechanicKey}' declares an input-source policy for '{InputKey}', but that value is not in its input contract.");
+        }
+        if (AllowedSources == ProcedureInputSource.None)
+        {
+            throw new InvalidOperationException(
+                $"Mechanic '{mechanicKey}' input '{InputKey}' must allow at least one input source.");
+        }
+    }
+}
+
 public sealed record ProcedureParameterDefinition(
     string Type,
     bool Required = false,
@@ -36,7 +69,8 @@ public sealed record MechanicDefinition(
     string ExecutionHandler,
     IReadOnlyList<string> CompatibilityTags,
     ProcedureAutomationLevel AutomationLevel,
-    int Version)
+    int Version,
+    IReadOnlyList<ProcedureInputRequirement>? InputRequirements = null)
 {
     public void Validate()
     {
@@ -51,10 +85,26 @@ public sealed record MechanicDefinition(
         ValidateDistinct(InputContract, $"Mechanic '{Key}' input contract");
         ValidateDistinct(OutputContract, $"Mechanic '{Key}' output contract");
         ValidateDistinct(CompatibilityTags, $"Mechanic '{Key}' compatibility tags");
+        var inputRequirements = InputRequirements ?? [];
+        if (inputRequirements.Select(value => value.InputKey).Distinct(StringComparer.Ordinal).Count() != inputRequirements.Count)
+        {
+            throw new InvalidOperationException($"Mechanic '{Key}' input-source policies can not contain duplicate input keys.");
+        }
+        foreach (var requirement in inputRequirements)
+        {
+            requirement.Validate(Key, InputContract);
+        }
         foreach (var parameter in ParameterSchema)
         {
             parameter.Value.Validate(parameter.Key);
         }
+    }
+
+    public ProcedureInputSource AllowedSourcesFor(string inputKey)
+    {
+        var explicitRequirement = (InputRequirements ?? []).SingleOrDefault(value =>
+            string.Equals(value.InputKey, inputKey, StringComparison.Ordinal));
+        return explicitRequirement?.AllowedSources ?? ProcedureInputSource.SelectedModule;
     }
 
     private static void ValidateDistinct(IReadOnlyList<string> values, string label)
@@ -192,6 +242,10 @@ public sealed record MaterializedProcedureModule(
 public enum ProcedureDependencyIssueKind
 {
     MissingRequiredModule,
+    MissingRequiredProducer,
+    ManualInputRequired,
+    OptionalProviderInputRequired,
+    ExternalInputRequired,
     ProducedButUnused,
     IncompatibleMechanic
 }
@@ -203,7 +257,10 @@ public sealed record ProcedureDependencyIssue(
 
 public sealed record ProcedureDependencyReport(IReadOnlyList<ProcedureDependencyIssue> Issues)
 {
-    public bool HasErrors => Issues.Any(issue => issue.Kind is ProcedureDependencyIssueKind.MissingRequiredModule or ProcedureDependencyIssueKind.IncompatibleMechanic);
+    public bool HasErrors => Issues.Any(issue => issue.Kind is
+        ProcedureDependencyIssueKind.MissingRequiredModule
+        or ProcedureDependencyIssueKind.MissingRequiredProducer
+        or ProcedureDependencyIssueKind.IncompatibleMechanic);
 }
 
 public sealed record CampaignProcedure
@@ -250,7 +307,7 @@ public sealed record CampaignProcedure
         var report = EvaluateDependencies();
         if (report.HasErrors)
         {
-            throw new InvalidOperationException(string.Join(" ", report.Issues.Where(issue => issue.Kind != ProcedureDependencyIssueKind.ProducedButUnused).Select(issue => issue.Message)));
+            throw new InvalidOperationException(string.Join(" ", report.Issues.Where(IsError).Select(issue => issue.Message)));
         }
     }
 
@@ -258,6 +315,10 @@ public sealed record CampaignProcedure
     {
         var issues = new List<ProcedureDependencyIssue>();
         var moduleKeys = Modules.Select(module => module.Module.Key).ToHashSet(StringComparer.Ordinal);
+        var producedValues = Modules
+            .SelectMany(module => module.Module.Produces)
+            .ToHashSet(StringComparer.Ordinal);
+
         foreach (var selected in Modules)
         {
             foreach (var dependency in selected.Module.RequiredDependencies)
@@ -278,6 +339,45 @@ public sealed record CampaignProcedure
                     selected.Module.Key,
                     $"Mechanic '{selected.Mechanic.Key}' is not compatible with module '{selected.Module.Key}'."));
             }
+
+            foreach (var input in selected.Module.Reads)
+            {
+                if (producedValues.Contains(input))
+                {
+                    continue;
+                }
+
+                var allowedSources = selected.Mechanic.AllowedSourcesFor(input);
+                if ((allowedSources & ProcedureInputSource.Dm) != 0)
+                {
+                    issues.Add(new ProcedureDependencyIssue(
+                        ProcedureDependencyIssueKind.ManualInputRequired,
+                        selected.Module.Key,
+                        $"Module '{selected.Module.Key}' requires input '{input}' from the DM because no selected module produces it."));
+                    continue;
+                }
+                if ((allowedSources & ProcedureInputSource.ExternalState) != 0)
+                {
+                    issues.Add(new ProcedureDependencyIssue(
+                        ProcedureDependencyIssueKind.ExternalInputRequired,
+                        selected.Module.Key,
+                        $"Module '{selected.Module.Key}' requires external campaign/runtime input '{input}' because no selected module produces it."));
+                    continue;
+                }
+                if ((allowedSources & ProcedureInputSource.OptionalProvider) != 0)
+                {
+                    issues.Add(new ProcedureDependencyIssue(
+                        ProcedureDependencyIssueKind.OptionalProviderInputRequired,
+                        selected.Module.Key,
+                        $"Module '{selected.Module.Key}' can receive input '{input}' from an optional provider; no selected module currently produces it."));
+                    continue;
+                }
+
+                issues.Add(new ProcedureDependencyIssue(
+                    ProcedureDependencyIssueKind.MissingRequiredProducer,
+                    selected.Module.Key,
+                    $"Module '{selected.Module.Key}' requires input '{input}', but no selected module produces it and no manual, optional-provider, or external source is allowed."));
+            }
         }
 
         var consumed = Modules.SelectMany(module => module.Module.Reads).ToHashSet(StringComparer.Ordinal);
@@ -296,4 +396,9 @@ public sealed record CampaignProcedure
         }
         return new ProcedureDependencyReport(issues);
     }
+
+    private static bool IsError(ProcedureDependencyIssue issue) => issue.Kind is
+        ProcedureDependencyIssueKind.MissingRequiredModule
+        or ProcedureDependencyIssueKind.MissingRequiredProducer
+        or ProcedureDependencyIssueKind.IncompatibleMechanic;
 }
