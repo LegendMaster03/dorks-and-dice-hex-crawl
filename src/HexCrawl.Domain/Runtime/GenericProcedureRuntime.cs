@@ -17,6 +17,13 @@ public static class GenericProcedureExecutionHandlers
     public const string EncounterCheckCadence = "crawl-profile.encounter-cadence";
     public const string DeterministicResolutionHelpers = "crawl-profile.resolution-helpers";
 
+    /// <summary>
+    /// Versioned marker for intentionally non-executable Manual/Assisted procedure contracts.
+    /// Recognizing this handler means the runtime preserves and accepts the contract while executing
+    /// other supported modules; it does not synthesize a result for the declarative mechanic.
+    /// </summary>
+    public const string DeclarativeContract = "procedure.declarative-contract";
+
     private static IReadOnlyDictionary<string, IReadOnlySet<int>> SupportedVersions { get; } =
         new Dictionary<string, IReadOnlySet<int>>(StringComparer.Ordinal)
         {
@@ -25,7 +32,8 @@ public static class GenericProcedureExecutionHandlers
             [HexProgressPolicy] = new HashSet<int> { 1 },
             [NavigationCheckPolicy] = new HashSet<int> { 1 },
             [EncounterCheckCadence] = new HashSet<int> { 1 },
-            [DeterministicResolutionHelpers] = new HashSet<int> { 1 }
+            [DeterministicResolutionHelpers] = new HashSet<int> { 1 },
+            [DeclarativeContract] = new HashSet<int> { 1 }
         };
 
     internal static bool Supports(MechanicDefinition mechanic) =>
