@@ -42,48 +42,37 @@ public sealed class ProcedurePresetIdentityTests
     [Fact]
     public async Task RemovingOriginMetadataDoesNotChangePersistedProcedureExecutionState()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"hex-crawl-preset-origin-{Guid.NewGuid():N}.db");
-        try
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var store = new PostgresHexCrawlStore(database.ConnectionString);
+        await store.InitializeAsync();
+        var service = new CrawlSessionService(store);
+        var preset = CrawlProcedureCatalog.Resolve("simple-fixed-distance");
+        var customized = preset.ExecutableProcedureTemplate with
         {
-            var store = new SqliteHexCrawlStore($"Data Source={path}");
-            await store.InitializeAsync();
-            var service = new CrawlSessionService(store);
-            var preset = CrawlProcedureCatalog.Resolve("simple-fixed-distance");
-            var customized = preset.ExecutableProcedureTemplate with
-            {
-                Key = "campaign-owned-procedure",
-                Name = "Campaign-owned procedure",
-                WatchLength = TimeSpan.FromHours(6)
-            };
+            Key = "campaign-owned-procedure",
+            Name = "Campaign-owned procedure",
+            WatchLength = TimeSpan.FromHours(6)
+        };
 
-            var started = await service.StartAsync(
-                "alice",
-                new StartStandaloneCrawlSessionCommand(
-                    "Origin independence",
-                    "simple-fixed-distance",
-                    new NonSpatialCrawlSessionContext("Procedure clock"),
-                    ProcedureSnapshot: customized));
+        var started = await service.StartAsync(
+            "alice",
+            new StartStandaloneCrawlSessionCommand(
+                "Origin independence",
+                "simple-fixed-distance",
+                new NonSpatialCrawlSessionContext("Procedure clock"),
+                ProcedureSnapshot: customized));
 
-            Assert.Equal("simple-fixed-distance", started.ProcedureOrigin?.PresetKey);
-            Assert.Equal(customized, started.Procedure);
+        Assert.Equal("simple-fixed-distance", started.ProcedureOrigin?.PresetKey);
+        Assert.Equal(customized, started.Procedure);
 
-            var save = await store.SaveExpeditionAsync(
-                started with { ProcedureOrigin = null },
-                started.Version);
-            Assert.Equal(SaveOutcome.Saved, save.Outcome);
+        var save = await store.SaveExpeditionAsync(
+            started with { ProcedureOrigin = null },
+            started.Version);
+        Assert.Equal(SaveOutcome.Saved, save.Outcome);
 
-            var loaded = await store.GetExpeditionAsync(started.Id, "alice");
-            Assert.NotNull(loaded);
-            Assert.Null(loaded!.ProcedureOrigin);
-            Assert.Equal(customized, loaded.Procedure);
-        }
-        finally
-        {
-            foreach (var suffix in new[] { "", "-wal", "-shm" })
-            {
-                var file = path + suffix;
-                if (File.Exists(file)) File.Delete(file);
-            }
-        }
+        var loaded = await store.GetExpeditionAsync(started.Id, "alice");
+        Assert.NotNull(loaded);
+        Assert.Null(loaded!.ProcedureOrigin);
+        Assert.Equal(customized, loaded.Procedure);
     }
 }
