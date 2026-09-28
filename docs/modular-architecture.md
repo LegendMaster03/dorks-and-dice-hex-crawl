@@ -133,7 +133,7 @@ This first slice deliberately preserves behavior and public routes. The next str
 2. Evaluate whether the now physically separated `CrawlRuntimeEngine` responsibilities should remain one deterministic partial-class boundary or graduate into collaborators. Do not introduce collaborator interfaces until they provide a concrete testing, substitution, or dependency benefit.
 3. Continue retiring compatibility-only Web contracts when no active route or test requires them. Keep genuinely shared spatial contracts under `Web/Contracts/` rather than duplicating them across modules.
 4. Keep browser feature code under its owning client module and decompose further only when a concrete lifecycle boundary appears. Expedition read-only presentation and watch submission already have focused files; avoid fragmenting the route view merely to reduce file size.
-5. Evaluate whether the physically separated PostgreSQL aggregate operations should eventually become independent stores. Keep `IHexCrawlStore` as the compatibility boundary until a narrower contract provides a concrete benefit; do not change storage semantics merely for type count.
+5. Evaluate whether the now physically separated PostgreSQL aggregate operations should eventually become independent stores. Keep `IHexCrawlStore` as the compatibility boundary until a narrower contract provides a concrete benefit; do not change storage semantics merely for type count.
 6. Keep import formats such as Wonderdraft as adapters. They should produce reviewed semantic inputs rather than become core world types.
 
 ## Browser-client locality
@@ -176,7 +176,7 @@ Binary and image import code remains implementation-oriented infrastructure rath
 
 ## Persistence locality
 
-`SqliteHexCrawlStore` still implements the existing `IHexCrawlStore` contract and uses the same schema and serialized shapes. Its implementation is now separated into world persistence, expedition/event persistence, shared connection/serialization mechanics, runtime snapshots, and world snapshots. Snapshot types remain private implementation details, which keeps persisted compatibility concerns close to the SQLite adapter rather than leaking them into Domain.
+`PostgresHexCrawlStore` implements `IHexCrawlStore` through Npgsql and hand-written SQL. Aggregate operations remain split by world/session/event concerns, while serialization snapshots remain private Infrastructure implementation details so persistence compatibility concerns do not leak into Domain.
 
 ## Guardrails
 
