@@ -46,6 +46,12 @@ public static class GenericProcedureCatalog
 
     private const string DeclarativeContractHandler = "procedure.declarative-contract";
 
+    private const ProcedureInputSource ManualOrExternal =
+        ProcedureInputSource.SelectedModule | ProcedureInputSource.Dm | ProcedureInputSource.ExternalState;
+
+    private const ProcedureInputSource ManualProviderOrExternal =
+        ProcedureInputSource.SelectedModule | ProcedureInputSource.Dm | ProcedureInputSource.OptionalProvider | ProcedureInputSource.ExternalState;
+
     public static IReadOnlyList<ProcedureModuleDefinition> Modules { get; } =
     [
         Module(
@@ -116,7 +122,7 @@ public static class GenericProcedureCatalog
             "Movement budget",
             "Represents a generic travel budget measured in distance, activities, points, or another explicit unit.",
             "movement-planning",
-            ["time.interval-duration"], ["movement.budget"], [TimeIntervalModule], [], [MovementBudgetMechanic],
+            ["time.interval-duration"], ["movement.budget"], [], [TimeIntervalModule], [MovementBudgetMechanic],
             RequiredMany(
                 ("budgetModel", "enum", "How the travel budget is calculated."),
                 ("baseBudget", "number", "Base amount of travel budget."),
@@ -142,7 +148,7 @@ public static class GenericProcedureCatalog
             "Participant activities",
             "Represents party-wide, per-participant, or role-based activities during a travel interval or journey stage.",
             "activity-assignment",
-            ["time.interval-duration", "movement.budget"], ["participant.activity-state"], [TimeIntervalModule], [MovementBudgetModule],
+            ["time.interval-duration", "movement.budget"], ["participant.activity-state"], [], [TimeIntervalModule, MovementBudgetModule],
             [ParticipantActivityPolicyMechanic],
             RequiredMany(
                 ("assignmentScope", "enum", "Party, participant, or role assignment scope."),
@@ -156,7 +162,7 @@ public static class GenericProcedureCatalog
             "Navigation outcome",
             "Represents failure state, directional error, recognition, and reorientation behavior independently of the check itself.",
             "navigation",
-            ["navigation.policy", "participant.activity-state"], ["navigation.outcome-state"], [NavigationModule], [PartyActivitiesModule],
+            ["navigation.policy", "participant.activity-state"], ["navigation.outcome-state"], [], [NavigationModule, PartyActivitiesModule],
             [NavigationOutcomePolicyMechanic],
             RequiredMany(
                 ("checkTriggerModel", "enum", "When navigation resolution is required."),
@@ -171,7 +177,7 @@ public static class GenericProcedureCatalog
             "Encounter schedule",
             "Represents encounter timing beyond the core none/per-watch/per-day cadence, including camp and terrain-sensitive schedules.",
             "encounter",
-            ["time.interval-duration", "encounter.check-cadence"], ["encounter.schedule"], [TimeIntervalModule, EncounterCadenceModule], [],
+            ["time.interval-duration", "encounter.check-cadence"], ["encounter.schedule"], [], [TimeIntervalModule, EncounterCadenceModule],
             [EncounterSchedulePolicyMechanic],
             RequiredMany(
                 ("scheduleModel", "enum", "Functional encounter schedule model."),
@@ -185,7 +191,7 @@ public static class GenericProcedureCatalog
             "Resource consumption",
             "Represents expedition resource kinds, inventory style, and consumption cadence without owning a full resource inventory.",
             "interval-completion",
-            ["time.interval-duration", "participant.activity-state"], ["resource.consumed"], [TimeIntervalModule], [PartyActivitiesModule],
+            ["time.interval-duration", "participant.activity-state"], ["resource.consumed"], [], [TimeIntervalModule, PartyActivitiesModule],
             [ResourceConsumptionPolicyMechanic],
             RequiredMany(
                 ("resourceKinds", "key-list", "Generic expedition resources consumed by the procedure."),
@@ -213,7 +219,7 @@ public static class GenericProcedureCatalog
             "Camping",
             "Represents camp setup, time cost, and watch requirements without implementing a complete camp subsystem.",
             "rest",
-            ["time.interval-duration", "participant.activity-state"], ["camp.state"], [TimeIntervalModule], [PartyActivitiesModule],
+            ["time.interval-duration", "participant.activity-state"], ["camp.state"], [], [TimeIntervalModule, PartyActivitiesModule],
             [CampingPolicyMechanic],
             RequiredMany(
                 ("resolutionModel", "enum", "How camp setup is resolved."),
@@ -227,7 +233,7 @@ public static class GenericProcedureCatalog
             "Forced travel",
             "Represents the threshold, check model, and consequence of traveling beyond a normal limit.",
             "interval-completion",
-            ["time.interval-duration", "movement.budget"], ["effects.transient"], [TimeIntervalModule], [MovementBudgetModule],
+            ["time.interval-duration", "movement.budget"], ["effects.transient"], [], [TimeIntervalModule, MovementBudgetModule],
             [ForcedTravelPolicyMechanic],
             RequiredMany(
                 ("normalTravelLimit", "number", "Travel amount before forced-travel resolution begins."),
@@ -288,18 +294,18 @@ public static class GenericProcedureCatalog
         Mechanic(EncounterCheckCadenceMechanic, "Encounter check cadence", "Configures when encounter checks are due.", ["time.interval-duration"], ["encounter.check-cadence"], Required("cadence", "enum", "Encounter cadence."), "crawl-profile.encounter-cadence", ProcedureAutomationLevel.Assisted),
         Mechanic(DeterministicResolutionHelpersMechanic, "Deterministic resolution helpers", "Configures optional dice helpers that resolve runtime inputs without becoming runtime dependencies.", ["movement.resolution-mode", "navigation.policy", "encounter.check-cadence"], ["procedure.helper-configuration"], new Dictionary<string, ProcedureParameterDefinition>(), "crawl-profile.resolution-helpers", ProcedureAutomationLevel.Assisted),
 
-        Mechanic(MovementBudgetMechanic, "Movement budget", "Represents a procedure-defined travel budget without assuming a game system's unit or source.", ["time.interval-duration"], ["movement.budget"], RequiredMany(("budgetModel", "enum", "Travel budget calculation model."), ("baseBudget", "number", "Base travel budget."), ("budgetUnit", "enum", "Travel budget unit."), ("limitingScope", "enum", "Scope that limits the budget.")), DeclarativeContractHandler, ProcedureAutomationLevel.Assisted, ["movement", "phase-3"]),
+        Mechanic(MovementBudgetMechanic, "Movement budget", "Represents a procedure-defined travel budget without assuming a game system's unit or source.", ["time.interval-duration"], ["movement.budget"], RequiredMany(("budgetModel", "enum", "Travel budget calculation model."), ("baseBudget", "number", "Base travel budget."), ("budgetUnit", "enum", "Travel budget unit."), ("limitingScope", "enum", "Scope that limits the budget.")), DeclarativeContractHandler, ProcedureAutomationLevel.Assisted, ["movement", "phase-3"], inputRequirements: Sources(("time.interval-duration", ManualOrExternal))),
         Mechanic(TerrainMovementPolicyMechanic, "Terrain movement policy", "Represents terrain, route, and weather adjustments to a generic movement budget.", ["movement.budget"], ["movement.terrain-adjustment"], RequiredMany(("costModel", "enum", "Terrain cost model."), ("terrainCosts", "map<number>", "Terrain tag cost map."), ("routeAdjustmentModel", "enum", "Route adjustment model."), ("weatherAdjustmentModel", "enum", "Weather adjustment model.")), DeclarativeContractHandler, ProcedureAutomationLevel.Assisted, ["movement", "environment", "phase-3"]),
-        Mechanic(ParticipantActivityPolicyMechanic, "Participant activity policy", "Represents participant or role assignments and their generic capacity model.", ["time.interval-duration", "movement.budget"], ["participant.activity-state"], RequiredMany(("assignmentScope", "enum", "Assignment scope."), ("activityBudgetModel", "enum", "Activity capacity model."), ("activityKeys", "key-list", "Available generic activity keys."), ("roleKeys", "key-list", "Available generic role keys.")), DeclarativeContractHandler, ProcedureAutomationLevel.Manual, ["party", "activity", "phase-3"]),
-        Mechanic(NavigationOutcomePolicyMechanic, "Navigation outcome policy", "Represents lost, directional-error, recognition, and reorientation behavior separately from the navigation check.", ["navigation.policy", "participant.activity-state"], ["navigation.outcome-state"], RequiredMany(("checkTriggerModel", "enum", "Navigation check trigger model."), ("failureStateModel", "enum", "Failure state model."), ("directionalErrorModel", "enum", "Directional error model."), ("recognitionModel", "enum", "Recognition model."), ("reorientationModel", "enum", "Reorientation model.")), DeclarativeContractHandler, ProcedureAutomationLevel.Assisted, ["navigation", "phase-3"]),
-        Mechanic(EncounterSchedulePolicyMechanic, "Encounter schedule policy", "Represents travel, camp, event-driven, or terrain-sensitive encounter schedules beyond the core cadence.", ["time.interval-duration", "encounter.check-cadence"], ["encounter.schedule"], RequiredMany(("scheduleModel", "enum", "Encounter schedule model."), ("travelChecksPerInterval", "number", "Travel checks represented per interval."), ("campCheck", "boolean", "Separate camp check."), ("terrainProbabilityModel", "enum", "Environment-dependent probability model.")), DeclarativeContractHandler, ProcedureAutomationLevel.Assisted, ["encounter", "phase-3"]),
-        Mechanic(ResourceConsumptionPolicyMechanic, "Resource consumption policy", "Represents resource kinds, inventory style, and consumption timing while the full resource engine remains deferred.", ["time.interval-duration", "participant.activity-state"], ["resource.consumed"], RequiredMany(("resourceKinds", "key-list", "Resource kinds."), ("inventoryModel", "enum", "Inventory model."), ("consumptionModel", "enum", "Consumption model."), ("consumptionInterval", "enum", "Consumption interval.")), DeclarativeContractHandler, ProcedureAutomationLevel.Manual, ["resource", "survival", "phase-3"]),
-        Mechanic(ForagingPolicyMechanic, "Foraging policy", "Represents forage resolution, time cost, and travel tradeoff.", ["participant.activity-state", "movement.terrain-adjustment"], ["resource.gathered"], RequiredMany(("resolutionModel", "enum", "Forage resolution model."), ("timeCost", "number", "Forage time cost."), ("timeUnit", "enum", "Forage time unit."), ("movementTradeoff", "enum", "Travel tradeoff.")), DeclarativeContractHandler, ProcedureAutomationLevel.Assisted, ["exploration", "resource", "phase-3"]),
-        Mechanic(CampingPolicyMechanic, "Camping policy", "Represents camp setup, time cost, and watch policy.", ["time.interval-duration", "participant.activity-state"], ["camp.state"], RequiredMany(("resolutionModel", "enum", "Camp resolution model."), ("timeCost", "number", "Camp time cost."), ("timeUnit", "enum", "Camp time unit."), ("watchModel", "enum", "Camp watch model.")), DeclarativeContractHandler, ProcedureAutomationLevel.Assisted, ["survival", "rest", "phase-3"]),
-        Mechanic(ForcedTravelPolicyMechanic, "Forced travel policy", "Represents travel beyond a normal limit and the generic consequence of failure.", ["time.interval-duration", "movement.budget"], ["effects.transient"], RequiredMany(("normalTravelLimit", "number", "Normal travel limit."), ("limitUnit", "enum", "Travel limit unit."), ("checkModel", "enum", "Forced-travel check model."), ("failureConsequence", "enum", "Generic failure consequence.")), DeclarativeContractHandler, ProcedureAutomationLevel.Assisted, ["time", "effect", "phase-3"]),
-        Mechanic(ProgressiveExpeditionEffectMechanic, "Progressive expedition effect", "Represents persistent effect families, accumulation, recovery, and scope without implementing the later generalized effect engine.", ["effects.transient", "resource.consumed"], ["effects.persistent"], RequiredMany(("effectKinds", "key-list", "Effect families."), ("accumulationModel", "enum", "Accumulation model."), ("recoveryModel", "enum", "Recovery model."), ("scope", "enum", "Effect scope.")), DeclarativeContractHandler, ProcedureAutomationLevel.Manual, ["effect", "phase-3"]),
-        Mechanic(JourneyEventPolicyMechanic, "Journey event policy", "Represents event placement, role targeting, environmental influence, and consequence shape.", ["participant.activity-state", "movement.terrain-adjustment", "effects.persistent"], ["journey.event"], RequiredMany(("triggerModel", "enum", "Journey event trigger model."), ("targetingModel", "enum", "Journey event target model."), ("terrainInfluence", "enum", "Terrain influence model."), ("consequenceModel", "enum", "Event consequence model.")), DeclarativeContractHandler, ProcedureAutomationLevel.Manual, ["journey", "event", "phase-3"]),
-        Mechanic(MultiStageExpeditionProcessMechanic, "Multi-stage expedition process", "Represents journey stages, progress, completion, and role-driven behavior while the later process engine remains deferred.", ["journey.event", "effects.persistent"], ["journey.progress"], RequiredMany(("stageModel", "enum", "Journey stage model."), ("progressModel", "enum", "Journey progress model."), ("completionModel", "enum", "Journey completion model."), ("roleDriven", "boolean", "Whether roles drive journey resolution.")), DeclarativeContractHandler, ProcedureAutomationLevel.Manual, ["journey", "process", "phase-3"])
+        Mechanic(ParticipantActivityPolicyMechanic, "Participant activity policy", "Represents participant or role assignments and their generic capacity model.", ["time.interval-duration", "movement.budget"], ["participant.activity-state"], RequiredMany(("assignmentScope", "enum", "Assignment scope."), ("activityBudgetModel", "enum", "Activity capacity model."), ("activityKeys", "key-list", "Available generic activity keys."), ("roleKeys", "key-list", "Available generic role keys.")), DeclarativeContractHandler, ProcedureAutomationLevel.Manual, ["party", "activity", "phase-3"], inputRequirements: Sources(("time.interval-duration", ManualOrExternal), ("movement.budget", ManualOrExternal))),
+        Mechanic(NavigationOutcomePolicyMechanic, "Navigation outcome policy", "Represents lost, directional-error, recognition, and reorientation behavior separately from the navigation check.", ["navigation.policy", "participant.activity-state"], ["navigation.outcome-state"], RequiredMany(("checkTriggerModel", "enum", "Navigation check trigger model."), ("failureStateModel", "enum", "Failure state model."), ("directionalErrorModel", "enum", "Directional error model."), ("recognitionModel", "enum", "Recognition model."), ("reorientationModel", "enum", "Reorientation model.")), DeclarativeContractHandler, ProcedureAutomationLevel.Assisted, ["navigation", "phase-3"], inputRequirements: Sources(("navigation.policy", ManualOrExternal), ("participant.activity-state", ManualOrExternal))),
+        Mechanic(EncounterSchedulePolicyMechanic, "Encounter schedule policy", "Represents travel, camp, event-driven, or terrain-sensitive encounter schedules beyond the core cadence.", ["time.interval-duration", "encounter.check-cadence"], ["encounter.schedule"], RequiredMany(("scheduleModel", "enum", "Encounter schedule model."), ("travelChecksPerInterval", "number", "Travel checks represented per interval."), ("campCheck", "boolean", "Separate camp check."), ("terrainProbabilityModel", "enum", "Environment-dependent probability model.")), DeclarativeContractHandler, ProcedureAutomationLevel.Assisted, ["encounter", "phase-3"], inputRequirements: Sources(("time.interval-duration", ManualOrExternal), ("encounter.check-cadence", ManualOrExternal))),
+        Mechanic(ResourceConsumptionPolicyMechanic, "Resource consumption policy", "Represents resource kinds, inventory style, and consumption timing while the full resource engine remains deferred.", ["time.interval-duration", "participant.activity-state"], ["resource.consumed"], RequiredMany(("resourceKinds", "key-list", "Resource kinds."), ("inventoryModel", "enum", "Inventory model."), ("consumptionModel", "enum", "Consumption model."), ("consumptionInterval", "enum", "Consumption interval.")), DeclarativeContractHandler, ProcedureAutomationLevel.Manual, ["resource", "survival", "phase-3"], inputRequirements: Sources(("time.interval-duration", ManualOrExternal), ("participant.activity-state", ManualOrExternal))),
+        Mechanic(ForagingPolicyMechanic, "Foraging policy", "Represents forage resolution, time cost, and travel tradeoff.", ["participant.activity-state", "movement.terrain-adjustment"], ["resource.gathered"], RequiredMany(("resolutionModel", "enum", "Forage resolution model."), ("timeCost", "number", "Forage time cost."), ("timeUnit", "enum", "Forage time unit."), ("movementTradeoff", "enum", "Travel tradeoff.")), DeclarativeContractHandler, ProcedureAutomationLevel.Assisted, ["exploration", "resource", "phase-3"], inputRequirements: Sources(("participant.activity-state", ManualProviderOrExternal), ("movement.terrain-adjustment", ManualProviderOrExternal))),
+        Mechanic(CampingPolicyMechanic, "Camping policy", "Represents camp setup, time cost, and watch policy.", ["time.interval-duration", "participant.activity-state"], ["camp.state"], RequiredMany(("resolutionModel", "enum", "Camp resolution model."), ("timeCost", "number", "Camp time cost."), ("timeUnit", "enum", "Camp time unit."), ("watchModel", "enum", "Camp watch model.")), DeclarativeContractHandler, ProcedureAutomationLevel.Assisted, ["survival", "rest", "phase-3"], inputRequirements: Sources(("time.interval-duration", ManualOrExternal), ("participant.activity-state", ManualOrExternal))),
+        Mechanic(ForcedTravelPolicyMechanic, "Forced travel policy", "Represents travel beyond a normal limit and the generic consequence of failure.", ["time.interval-duration", "movement.budget"], ["effects.transient"], RequiredMany(("normalTravelLimit", "number", "Normal travel limit."), ("limitUnit", "enum", "Travel limit unit."), ("checkModel", "enum", "Forced-travel check model."), ("failureConsequence", "enum", "Generic failure consequence.")), DeclarativeContractHandler, ProcedureAutomationLevel.Assisted, ["time", "effect", "phase-3"], inputRequirements: Sources(("time.interval-duration", ManualOrExternal), ("movement.budget", ManualOrExternal))),
+        Mechanic(ProgressiveExpeditionEffectMechanic, "Progressive expedition effect", "Represents persistent effect families, accumulation, recovery, and scope without implementing the later generalized effect engine.", ["effects.transient", "resource.consumed"], ["effects.persistent"], RequiredMany(("effectKinds", "key-list", "Effect families."), ("accumulationModel", "enum", "Accumulation model."), ("recoveryModel", "enum", "Recovery model."), ("scope", "enum", "Effect scope.")), DeclarativeContractHandler, ProcedureAutomationLevel.Manual, ["effect", "phase-3"], inputRequirements: Sources(("effects.transient", ManualProviderOrExternal), ("resource.consumed", ManualProviderOrExternal))),
+        Mechanic(JourneyEventPolicyMechanic, "Journey event policy", "Represents event placement, role targeting, environmental influence, and consequence shape.", ["participant.activity-state", "movement.terrain-adjustment", "effects.persistent"], ["journey.event"], RequiredMany(("triggerModel", "enum", "Journey event trigger model."), ("targetingModel", "enum", "Journey event target model."), ("terrainInfluence", "enum", "Terrain influence model."), ("consequenceModel", "enum", "Event consequence model.")), DeclarativeContractHandler, ProcedureAutomationLevel.Manual, ["journey", "event", "phase-3"], inputRequirements: Sources(("participant.activity-state", ManualProviderOrExternal), ("movement.terrain-adjustment", ManualProviderOrExternal), ("effects.persistent", ManualProviderOrExternal))),
+        Mechanic(MultiStageExpeditionProcessMechanic, "Multi-stage expedition process", "Represents journey stages, progress, completion, and role-driven behavior while the later process engine remains deferred.", ["journey.event", "effects.persistent"], ["journey.progress"], RequiredMany(("stageModel", "enum", "Journey stage model."), ("progressModel", "enum", "Journey progress model."), ("completionModel", "enum", "Journey completion model."), ("roleDriven", "boolean", "Whether roles drive journey resolution.")), DeclarativeContractHandler, ProcedureAutomationLevel.Manual, ["journey", "process", "phase-3"], inputRequirements: Sources(("journey.event", ManualProviderOrExternal), ("effects.persistent", ManualProviderOrExternal)))
     ];
 
     public static ProcedureModuleDefinition ResolveModule(string key) =>
@@ -343,8 +349,13 @@ public static class GenericProcedureCatalog
         string handler,
         ProcedureAutomationLevel automation,
         IReadOnlyList<string>? compatibilityTags = null,
-        int version = 1) =>
-        new(key, displayName, description, inputs, outputs, schema, handler, compatibilityTags ?? [], automation, version);
+        int version = 1,
+        IReadOnlyList<ProcedureInputRequirement>? inputRequirements = null) =>
+        new(key, displayName, description, inputs, outputs, schema, handler, compatibilityTags ?? [], automation, version, inputRequirements);
+
+    private static IReadOnlyList<ProcedureInputRequirement> Sources(
+        params (string Input, ProcedureInputSource Sources)[] values) =>
+        values.Select(value => new ProcedureInputRequirement(value.Input, value.Sources)).ToArray();
 
     private static IReadOnlyDictionary<string, ProcedureParameterDefinition> Required(
         string key,
