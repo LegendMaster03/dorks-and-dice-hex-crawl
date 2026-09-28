@@ -404,8 +404,14 @@ public sealed class SqliteToPostgresMigrator(
         return JsonNode.DeepEquals(JsonNode.Parse(left), JsonNode.Parse(right));
     }
 
-    private static bool SameInstant(DateTimeOffset left, DateTimeOffset right) =>
-        left.ToUniversalTime() == right.ToUniversalTime();
+    private static bool SameInstant(DateTimeOffset left, DateTimeOffset right)
+    {
+        // PostgreSQL timestamptz stores microsecond precision while .NET/SQLite can retain 100 ns ticks.
+        // Treat sub-microsecond differences as equivalent during migration verification.
+        const long ticksPerMicrosecond = TimeSpan.TicksPerMillisecond / 1000;
+        var deltaTicks = left.ToUniversalTime().Ticks - right.ToUniversalTime().Ticks;
+        return Math.Abs(deltaTicks) < ticksPerMicrosecond;
+    }
 
     private static void Require(bool condition, string message)
     {
