@@ -181,16 +181,16 @@ public static class CampaignProcedureCompatibilityProjector
 
     public static bool TryProject(CampaignProcedure procedure, out CrawlProcedureProfile profile)
     {
-        try
-        {
-            profile = Project(procedure);
-            return true;
-        }
-        catch (CampaignProcedureProjectionNotSupportedException)
+        ArgumentNullException.ThrowIfNull(procedure);
+        procedure.Validate();
+        if (!HasCompatibilityShape(procedure))
         {
             profile = null!;
             return false;
         }
+
+        profile = Project(procedure);
+        return true;
     }
 
     public static CrawlProcedureProfile Project(CampaignProcedure procedure)
@@ -235,6 +235,22 @@ public static class CampaignProcedureCompatibilityProjector
         return profile;
     }
 
+    private static bool HasCompatibilityShape(CampaignProcedure procedure) =>
+        HasHandler(procedure, GenericProcedureCatalog.TimeIntervalModule, "crawl-profile.watch-length")
+        && HasHandler(procedure, GenericProcedureCatalog.MovementResolutionModule, "crawl-profile.movement-resolution")
+        && HasHandler(procedure, GenericProcedureCatalog.HexProgressModule, "crawl-profile.hex-progress")
+        && HasHandler(procedure, GenericProcedureCatalog.NavigationModule, "crawl-profile.navigation")
+        && HasHandler(procedure, GenericProcedureCatalog.EncounterCadenceModule, "crawl-profile.encounter-cadence")
+        && HasHandler(procedure, GenericProcedureCatalog.ResolutionHelpersModule, "crawl-profile.resolution-helpers");
+
+    private static bool HasHandler(CampaignProcedure procedure, string moduleKey, string handler)
+    {
+        var module = procedure.Modules.SingleOrDefault(value =>
+            string.Equals(value.Module.Key, moduleKey, StringComparison.Ordinal));
+        return module is not null
+            && string.Equals(module.Mechanic.ExecutionHandler, handler, StringComparison.Ordinal);
+    }
+
     private static MaterializedProcedureModule Selection(
         string moduleKey,
         string mechanicKey,
@@ -246,14 +262,14 @@ public static class CampaignProcedureCompatibilityProjector
 
     private static MaterializedProcedureModule Module(CampaignProcedure procedure, string key) =>
         procedure.Modules.SingleOrDefault(value => string.Equals(value.Module.Key, key, StringComparison.Ordinal))
-        ?? throw new CampaignProcedureProjectionNotSupportedException(
+        ?? throw new InvalidOperationException(
             $"Campaign procedure does not contain required compatibility module '{key}'. The materialized data remains preserved but can not be projected by this runtime version.");
 
     private static void RequireHandler(MaterializedProcedureModule module, string handler)
     {
         if (!string.Equals(module.Mechanic.ExecutionHandler, handler, StringComparison.Ordinal))
         {
-            throw new CampaignProcedureProjectionNotSupportedException(
+            throw new InvalidOperationException(
                 $"Module '{module.Module.Key}' uses unsupported compatibility handler '{module.Mechanic.ExecutionHandler}'. The materialized data remains preserved but can not be projected by this runtime version.");
         }
     }
@@ -355,5 +371,3 @@ public static class CampaignProcedureCompatibilityProjector
             ? value
             : throw new InvalidOperationException($"Procedure parameter '{key}' is not a supported {typeof(T).Name} value.");
 }
-
-public sealed class CampaignProcedureProjectionNotSupportedException(string message) : InvalidOperationException(message);
