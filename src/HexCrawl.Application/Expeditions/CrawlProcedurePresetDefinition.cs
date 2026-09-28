@@ -25,7 +25,7 @@ public sealed record CrawlProcedurePresetDefinition(
 {
     public ProcedureOriginMetadata Origin => new(PresetKey, DisplayName, PresetRevision);
 
-    // Compatibility surface retained for existing callers while generic procedures become the creation-time authority.
+    // Compatibility surface retained for existing callers. Only genuinely projectable presets can use it.
     public CrawlProcedureProfile ExecutableProcedureTemplate => Materialize();
 
     public MaterializedCampaignProcedure MaterializeGeneric(
@@ -33,8 +33,13 @@ public sealed record CrawlProcedurePresetDefinition(
         Guid? procedureId = null) =>
         CampaignProcedureMaterializer.Materialize(this, customizedProcedure, procedureId);
 
-    public CrawlProcedureProfile Materialize(CrawlProcedureProfile? customizedProcedure = null) =>
-        MaterializeGeneric(customizedProcedure).CompatibilityProfile;
+    public CrawlProcedureProfile Materialize(CrawlProcedureProfile? customizedProcedure = null)
+    {
+        var materialized = MaterializeGeneric(customizedProcedure);
+        return materialized.CompatibilityProfile
+            ?? throw new InvalidOperationException(
+                $"Crawl procedure preset '{PresetKey}' materializes a valid generic CampaignProcedure but is not representable by the legacy CrawlProcedureProfile compatibility model. Use MaterializeGeneric() for this preset.");
+    }
 
     public void Validate()
     {
@@ -64,6 +69,6 @@ public sealed record CrawlProcedurePresetDefinition(
         }
         var materialized = CampaignProcedureMaterializer.Materialize(this);
         materialized.Procedure.Validate();
-        materialized.CompatibilityProfile.Validate();
+        materialized.CompatibilityProfile?.Validate();
     }
 }
