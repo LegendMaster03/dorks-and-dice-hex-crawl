@@ -57,9 +57,10 @@ public sealed class ExpeditionWorkbenchTests
 
         var (restartedCore, _) = await database.ServicesAsync();
         var loaded = await restartedCore.GetExpeditionAsync(started.State.Id, "alice");
-        Assert.Equal(customized, loaded.Procedure);
-        Assert.Equal(TimeSpan.FromHours(6), loaded.Procedure.WatchLength);
-        Assert.Equal(EncounterCheckCadence.PerDay, loaded.Procedure.EncounterCadence);
+        var loadedProcedure = Assert.IsType<CrawlProcedureProfile>(loaded.Procedure);
+        Assert.Equal(customized, loadedProcedure);
+        Assert.Equal(TimeSpan.FromHours(6), loadedProcedure.WatchLength);
+        Assert.Equal(EncounterCheckCadence.PerDay, loadedProcedure.EncounterCadence);
         Assert.Equal("exploration-map", loaded.RequireKnowledge().PresentationPolicy?.Key);
         Assert.Contains(startHex, loaded.RequireKnowledge().KnownHexes);
     }
@@ -409,7 +410,8 @@ public sealed class ExpeditionWorkbenchTests
 
         var (restartedCore, restartedWorkbench) = await database.ServicesAsync();
         var loaded = await restartedCore.GetExpeditionAsync(expedition.State.Id, "alice");
-        Assert.Equal(EncounterCheckCadence.Custom, loaded.Procedure.EncounterCadence);
+        var loadedProcedure = Assert.IsType<CrawlProcedureProfile>(loaded.Procedure);
+        Assert.Equal(EncounterCheckCadence.Custom, loadedProcedure.EncounterCadence);
 
         var resumed = await restartedWorkbench.AdvanceAsync(loaded.State.Id, "alice", new AdvanceExpeditionWorkbenchCommand
         {
