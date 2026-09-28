@@ -14,15 +14,45 @@ PostgreSQL-native `uuid`, `bigint`, `timestamptz`, and `jsonb` types are used. `
 
 Schema generation is tracked in `hex_crawl_schema_migrations`. Startup migrations run transactionally and use a PostgreSQL transaction advisory lock so concurrent service starts can not race schema creation. A database newer than the running service is treated as an error; production data is never recreated or reset automatically.
 
-## Configuration
+## Production PostgreSQL model
 
-The application requires:
+Hex Crawl does **not** provision a production PostgreSQL server. Production uses the existing shared PostgreSQL container and application network:
 
 ```text
-ConnectionStrings__HexCrawl=Host=...;Port=5432;Database=...;Username=...;Password=...
+PostgreSQL container: ix-dorks-and-dice-postgres-postgres-1
+Application network: dorks-and-dice-backend
+Application database: hex_crawl
+Application login role: hex_crawl
+Application database host name on the shared network: postgres
 ```
 
-There is no production SQLite fallback. `.env.example` contains development-only placeholder values.
+The application expects the database and login role to exist before deployment. Schema initialization inside the `hex_crawl` database is owned by Hex Crawl; PostgreSQL service/database-server provisioning is not.
+
+No runtime SQLite fallback, startup import, or SQLite/PostgreSQL dual-write mode exists.
+
+## Deployment configuration
+
+Before Phase 0B, Hex Crawl did not use a persistent production `.env`; the SQLite connection string was hard-coded in `docker-compose.yml`.
+
+Phase 0B intentionally adopts the already established Character Sheet deployment convention. The deployment workflow now requires:
+
+```text
+/mnt/HDDs/www/dorks-and-dice-hex-crawl/.env
+```
+
+This file does **not** already exist on the production server and must be created as an explicit cutover prerequisite. The deployment workflow checks for the file before removing the existing application container, and `docker-compose.yml` requires `ConnectionStrings__HexCrawl` from that file.
+
+Production value:
+
+```text
+ConnectionStrings__HexCrawl=Host=postgres;Port=5432;Database=hex_crawl;Username=hex_crawl;Password=<retained-production-password>
+```
+
+Recommended file permissions:
+
+```bash
+chmod 600 /mnt/HDDs/www/dorks-and-dice-hex-crawl/.env
+```
 
 Map binaries remain outside PostgreSQL:
 
@@ -30,7 +60,7 @@ Map binaries remain outside PostgreSQL:
 MapAssets__RootPath=/data/assets
 ```
 
-The `hex-crawl-data` Docker volume remains required. It holds raster/source-map assets and should also retain the old `/data/hex-crawl.db` as a rollback artifact after cutover.
+The `hex-crawl-data` Docker volume remains required. It holds raster/source-map assets and retains the legacy `/data/hex-crawl.db` rollback artifact. Phase 0B does not remove or replace that volume.
 
 ## Readiness
 
@@ -48,7 +78,9 @@ If PostgreSQL becomes unavailable after startup, `/ready` returns HTTP 503 rathe
 
 ## One-time SQLite migration utility
 
-The migration utility is intentionally separate from runtime Infrastructure so `Microsoft.Data.Sqlite` is not a production runtime dependency:
+The migration utility is intentionally separate from the normal application runtime. The web image does not need `Microsoft.Data.Sqlite` for normal production operation.
+
+For local development, the utility can be run with the .NET SDK:
 
 ```bash
 dotnet run --project tools/HexCrawl.PersistenceMigration -- \
@@ -56,16 +88,20 @@ dotnet run --project tools/HexCrawl.PersistenceMigration -- \
   --postgres 'Host=...;Database=...;Username=...;Password=...'
 ```
 
-Verification can be repeated without writing data:
+Production TrueNAS does **not** need the .NET SDK installed directly. Phase 0B includes a dedicated migration container image:
 
 ```bash
-dotnet run --project tools/HexCrawl.PersistenceMigration -- \
-  --sqlite /path/to/hex-crawl.db \
-  --postgres 'Host=...;Database=...;Username=...;Password=...' \
-  --verify-only
+docker build \
+  -t dorks-and-dice-hex-crawl-migration:cutover \
+  -f tools/HexCrawl.PersistenceMigration/Dockerfile \
+  .
 ```
 
-The source SQLite database is opened read-only when a path is supplied. Schema generations 1 through 5 are supported. The reader inspects the actual `expeditions` columns rather than requiring the SQLite database to be upgraded in place. Historical migration semantics are applied in memory:
+The migration CLI accepts PostgreSQL through either `--postgres` or the normal `ConnectionStrings__HexCrawl` environment variable. The production commands below use the environment variable from the deployment `.env`, so the database password does not have to be placed in the migration command line.
+
+The source SQLite connection is forced to `ReadOnly` by the migration implementation even if a caller supplies a writable SQLite connection string. The production container also mounts the backup read-only.
+
+Schema generations 1 through 5 are supported. The reader inspects the actual `expeditions` columns rather than upgrading the SQLite database in place. Historical migration semantics are applied in memory:
 
 - schema v1 world-bound rows receive their deterministic `WorldBound(overworldId)` context;
 - schemas before v3 receive the historical empty party sheet;
@@ -74,7 +110,9 @@ The source SQLite database is opened read-only when a path is supplied. Schema g
 
 No preset origin is invented. IDs, aggregate versions, timestamps, event sequences, event subjects, event payloads, and available snapshot data are retained.
 
-The importer requires an empty PostgreSQL target unless that target is already an exact migrated copy. A non-empty mismatched target is rejected rather than merged or overwritten. Initial import is one PostgreSQL transaction across overworlds, expeditions, and events.
+The importer requires an empty PostgreSQL target unless that target is already an exact migrated copy. A non-empty mismatched target is rejected rather than merged or overwritten. Initial data import is one PostgreSQL transaction across overworlds, expeditions, and events. A failed command exits nonzero.
+
+`--verify-only` performs no schema initialization or data rewrite. The target must already be initialized by a successful migration; verification against an uninitialized target fails nonzero rather than modifying it.
 
 ## Verification performed by the utility
 
@@ -88,27 +126,155 @@ A migration is not accepted merely because inserts completed. The utility verifi
 - absence of orphan expedition → overworld and event → expedition relationships;
 - actual production deserialization of every migrated world and crawl session through `PostgresHexCrawlStore` and `HexCrawlService`, including retained event history and all available session context kinds.
 
-Any mismatch causes the command to fail nonzero. `--verify-only` can be run again after deployment or before deciding to discard any rollback artifact.
+Any mismatch causes the command to fail nonzero.
 
-## Production cutover
+## Exact TrueNAS production cutover
 
-The cutover is intentionally operator-controlled because the production service and shared PostgreSQL credentials are external to the repository.
+### Preconditions
 
-1. Stop Hex Crawl or otherwise block all writes.
-2. Copy `/data/hex-crawl.db` to a separate timestamped backup. Do not edit the backup.
-3. Confirm the `hex-crawl-data` volume and `/data/assets` remain intact.
-4. Provision the PostgreSQL database/user and grant only the required database privileges.
-5. Run the migration utility against the SQLite backup and the target PostgreSQL connection string.
-6. Require a successful migration verification report.
-7. Run the utility again with `--verify-only` if an independent verification pass is desired.
-8. Put the PostgreSQL connection string in the server-side Hex Crawl `.env` file used by deployment.
-9. Deploy/start Hex Crawl.
-10. Require `/health` and `/ready`, including `"persistence":"postgresql-ready"`.
-11. Load representative world-bound, abstract-hex, and non-spatial sessions that exist in production. Confirm map assets still resolve from `/data/assets` and perform a safe deterministic application read/transition where appropriate.
-12. Retain both the original SQLite backup and the existing Docker volume until the PostgreSQL deployment has been accepted and rollback is no longer required.
+Do not run the data migration from `feature/postgres-persistence`. Wait until Phase 0B has been merged to `main`, the merged `main` commit is green, and the production migration is pinned to that exact SHA.
+
+The following production resources already exist and must be reused rather than recreated:
+
+```text
+Existing application container: dorks-and-dice-hex-crawl
+Existing PostgreSQL container: ix-dorks-and-dice-postgres-postgres-1
+Shared network: dorks-and-dice-backend
+PostgreSQL login role: hex_crawl
+PostgreSQL database: hex_crawl
+```
+
+The production SQLite backup prepared for this cutover is:
+
+```text
+/mnt/HDDs/backups/postgres-migrations/hex-crawl.20260927-220512.db
+SHA-256: d1f30ef920f9f40507fec363a41cf07adc5410ac45fe4cb08884fbb54abc62cb
+```
+
+Verify that exact backup before migration:
+
+```bash
+printf '%s  %s\n' \
+  'd1f30ef920f9f40507fec363a41cf07adc5410ac45fe4cb08884fbb54abc62cb' \
+  '/mnt/HDDs/backups/postgres-migrations/hex-crawl.20260927-220512.db' \
+  | sha256sum -c -
+```
+
+### 1. Stop Hex Crawl
+
+Stop the existing application before the migration so SQLite can no longer change:
+
+```bash
+docker stop dorks-and-dice-hex-crawl
+```
+
+Do not delete `/data/hex-crawl.db`, the prepared backup, or `/data/assets`.
+
+### 2. Create the Phase 0B deployment `.env`
+
+Phase 0B intentionally introduces the same persistent `.env` pattern already used by Character Sheet. Create it now; do not assume it existed before this migration.
+
+```bash
+install -d -m 700 /mnt/HDDs/www/dorks-and-dice-hex-crawl
+umask 077
+cat > /mnt/HDDs/www/dorks-and-dice-hex-crawl/.env <<'EOF'
+ConnectionStrings__HexCrawl=Host=postgres;Port=5432;Database=hex_crawl;Username=hex_crawl;Password=REPLACE_WITH_RETAINED_PRODUCTION_PASSWORD
+EOF
+chmod 600 /mnt/HDDs/www/dorks-and-dice-hex-crawl/.env
+```
+
+Replace only `REPLACE_WITH_RETAINED_PRODUCTION_PASSWORD` with the password already retained on the server. Do not commit this file.
+
+### 3. Build the migration image from merged `main`
+
+From the repository root of a checkout pinned to the green merged `main` SHA:
+
+```bash
+git fetch origin main
+git checkout main
+git pull --ff-only origin main
+git rev-parse HEAD
+
+docker build \
+  -t dorks-and-dice-hex-crawl-migration:cutover \
+  -f tools/HexCrawl.PersistenceMigration/Dockerfile \
+  .
+```
+
+Confirm `git rev-parse HEAD` is the exact approved Phase 0B SHA before proceeding.
+
+### 4. Import SQLite into the existing shared PostgreSQL instance
+
+Run the migration container on the existing shared application network. The SQLite backup is mounted read-only. The PostgreSQL connection string is read from the production `.env` and resolves `Host=postgres` through `dorks-and-dice-backend`.
+
+```bash
+docker run --rm \
+  --network dorks-and-dice-backend \
+  --env-file /mnt/HDDs/www/dorks-and-dice-hex-crawl/.env \
+  --mount type=bind,src=/mnt/HDDs/backups/postgres-migrations/hex-crawl.20260927-220512.db,dst=/migration/hex-crawl.db,readonly \
+  dorks-and-dice-hex-crawl-migration:cutover \
+  --sqlite /migration/hex-crawl.db
+```
+
+This command initializes the Hex Crawl schema inside the already-created `hex_crawl` database, imports the structured data transactionally, verifies it, and exits nonzero on failure. It does not provision another PostgreSQL container, recreate the role/database, modify the SQLite source, or touch `/data/assets`.
+
+### 5. Run an independent verification-only pass
+
+Run verification separately after the import:
+
+```bash
+docker run --rm \
+  --network dorks-and-dice-backend \
+  --env-file /mnt/HDDs/www/dorks-and-dice-hex-crawl/.env \
+  --mount type=bind,src=/mnt/HDDs/backups/postgres-migrations/hex-crawl.20260927-220512.db,dst=/migration/hex-crawl.db,readonly \
+  dorks-and-dice-hex-crawl-migration:cutover \
+  --sqlite /migration/hex-crawl.db \
+  --verify-only
+```
+
+`--verify-only` does not apply schema migrations and does not rewrite PostgreSQL data.
+
+### 6. Deploy through the normal Compose workflow
+
+After import and independent verification succeed, deploy the same merged `main` SHA through the normal `Deploy Hex Crawl` workflow. The workflow uses:
+
+```bash
+docker compose \
+  --project-name dorks-and-dice-hex-crawl \
+  --env-file /mnt/HDDs/www/dorks-and-dice-hex-crawl/.env \
+  -f docker-compose.yml \
+  up -d --force-recreate --remove-orphans
+```
+
+This is the Phase 0B production configuration path. The workflow does not provision PostgreSQL; it only recreates the Hex Crawl application against the existing shared service.
+
+### 7. Verify production
+
+Verify the application through the shared network:
+
+```bash
+docker run --rm --network dorks-and-dice-backend curlimages/curl:8.12.1 \
+  -fsS http://dorks-and-dice-hex-crawl:8080/health
+
+docker run --rm --network dorks-and-dice-backend curlimages/curl:8.12.1 \
+  -fsS http://dorks-and-dice-hex-crawl:8080/ready
+
+docker logs --tail 200 dorks-and-dice-hex-crawl
+```
+
+`/health` must report healthy. `/ready` must report `"status":"ready"`, `"persistence":"postgresql-ready"`, and `"mapAssets":"filesystem"`.
+
+Then load representative existing overworlds and running sheets, confirm persisted event history and procedure state, and confirm existing source-map/raster assets still load from `/data/assets`.
 
 ## Rollback
 
-If cutover validation fails, stop the PostgreSQL-backed service before any further writes. Restore the prior application version/configuration, point it at the untouched SQLite database/backup, and restart against the same `hex-crawl-data` volume. PostgreSQL migration does not delete or rewrite the SQLite source or filesystem map assets, so this rollback remains available until operators intentionally retire the old database.
+Retain the original SQLite datastore and the timestamped backup intact until the PostgreSQL cutover is accepted.
 
-Do not delete `hex-crawl.db` or the `hex-crawl-data` volume as part of the migration.
+If validation fails after deployment:
+
+1. stop the PostgreSQL-backed Hex Crawl container before further writes;
+2. restore the prior SQLite-capable application version/configuration;
+3. point that prior version at the untouched SQLite datastore or backup;
+4. reuse the same `hex-crawl-data` volume so `/data/assets` remains available.
+
+The Phase 0B migration does not delete, replace, or modify the SQLite source or filesystem assets. Do not delete `hex-crawl.db`, the prepared backup, or the `hex-crawl-data` volume as part of this migration.
