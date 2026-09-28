@@ -35,6 +35,7 @@ public sealed class GenericProcedureArchitectureTests
     public void RuntimeProjectionDoesNotRequirePresetOriginIdentity()
     {
         var materialized = CrawlProcedureCatalog.Resolve("alexandrian-advanced").MaterializeGeneric();
+        var compatibility = Assert.IsType<CrawlProcedureProfile>(materialized.CompatibilityProfile);
         var snapshot = materialized.Procedure with
         {
             Key = "campaign-owned-procedure",
@@ -45,9 +46,9 @@ public sealed class GenericProcedureArchitectureTests
 
         Assert.Equal("campaign-owned-procedure", projected.Key);
         Assert.Equal("Campaign owned procedure", projected.Name);
-        Assert.Equal(materialized.CompatibilityProfile.WatchLength, projected.WatchLength);
-        Assert.Equal(materialized.CompatibilityProfile.TravelResolution, projected.TravelResolution);
-        Assert.Equal(materialized.CompatibilityProfile.ResolutionHelpers, projected.ResolutionHelpers);
+        Assert.Equal(compatibility.WatchLength, projected.WatchLength);
+        Assert.Equal(compatibility.TravelResolution, projected.TravelResolution);
+        Assert.Equal(compatibility.ResolutionHelpers, projected.ResolutionHelpers);
         Assert.Null(typeof(CampaignProcedure).GetProperty("PresetKey"));
     }
 
