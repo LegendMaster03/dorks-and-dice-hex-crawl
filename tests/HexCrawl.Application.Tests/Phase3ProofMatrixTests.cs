@@ -24,27 +24,122 @@ public sealed class Phase3ProofMatrixTests
         CrawlProcedureCatalog.MixedHouseRulePresetKey
     ];
 
+    private static readonly string[] FullyNativeProofPresetKeys =
+    [
+        "alexandrian-advanced",
+        CrawlProcedureCatalog.MixedHouseRulePresetKey
+    ];
+
+    private static readonly IReadOnlyDictionary<string, string[]> ExpectedPhase2Modules =
+        new Dictionary<string, string[]>(StringComparer.Ordinal)
+        {
+            [CrawlProcedureCatalog.BxPresetKey] =
+                [GenericProcedureCatalog.TimeIntervalModule, GenericProcedureCatalog.EncounterCadenceModule],
+            [CrawlProcedureCatalog.Adnd2ePresetKey] = [GenericProcedureCatalog.TimeIntervalModule],
+            [CrawlProcedureCatalog.Dnd35PresetKey] = [GenericProcedureCatalog.TimeIntervalModule],
+            [CrawlProcedureCatalog.Dnd2024PresetKey] = [GenericProcedureCatalog.TimeIntervalModule],
+            [CrawlProcedureCatalog.Pathfinder2eHexplorationPresetKey] = [GenericProcedureCatalog.TimeIntervalModule],
+            [CrawlProcedureCatalog.ForbiddenLandsPresetKey] = [GenericProcedureCatalog.TimeIntervalModule],
+            [CrawlProcedureCatalog.WorldsWithoutNumberPresetKey] = [GenericProcedureCatalog.TimeIntervalModule],
+            [CrawlProcedureCatalog.OneRing2ePresetKey] = [],
+            ["alexandrian-advanced"] = CompatibilityModuleKeys,
+            [CrawlProcedureCatalog.MixedHouseRulePresetKey] = CompatibilityModuleKeys
+        };
+
+    private static readonly string[] CompatibilityModuleKeys =
+    [
+        GenericProcedureCatalog.TimeIntervalModule,
+        GenericProcedureCatalog.MovementResolutionModule,
+        GenericProcedureCatalog.HexProgressModule,
+        GenericProcedureCatalog.NavigationModule,
+        GenericProcedureCatalog.EncounterCadenceModule,
+        GenericProcedureCatalog.ResolutionHelpersModule
+    ];
+
     public static IEnumerable<object[]> RequiredProofPresets() =>
         RequiredProofPresetKeys.Select(key => new object[] { key });
 
     [Theory]
     [MemberData(nameof(RequiredProofPresets))]
-    public void RequiredProofPresetResolvesMaterializesValidatesAndBindsNatively(string presetKey)
+    public void RequiredProofPresetResolvesMaterializesAndHasNoDependencyErrors(string presetKey)
     {
         var preset = CrawlProcedureCatalog.Resolve(presetKey);
         var materialized = preset.MaterializeGeneric();
 
         preset.Validate();
         materialized.Procedure.Validate();
-        materialized.CompatibilityProfile.Validate();
+        materialized.CompatibilityProfile?.Validate();
 
-        var runtime = GenericProcedureRuntime.Bind(materialized.Procedure);
-
+        var report = materialized.Procedure.EvaluateDependencies();
+        Assert.False(report.HasErrors, string.Join(Environment.NewLine, report.Issues.Select(issue => issue.Message)));
         Assert.Equal(preset.PresetKey, materialized.Origin?.PresetKey);
         Assert.Equal(preset.PresetRevision, materialized.Origin?.PresetRevision);
-        Assert.True(runtime.Time.IntervalDuration > TimeSpan.Zero);
         Assert.DoesNotContain(materialized.Procedure.Modules, module =>
             module.Mechanic.ExecutionHandler.Contains(preset.PresetKey, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Theory]
+    [MemberData(nameof(RequiredProofPresets))]
+    public void ProofPresetContainsOnlyAuditedPhase2NativeModules(string presetKey)
+    {
+        var procedure = CrawlProcedureCatalog.Resolve(presetKey).MaterializeGeneric().Procedure;
+        var actual = procedure.Modules
+            .Where(module => module.Mechanic.ExecutionHandler.StartsWith("crawl-profile.", StringComparison.Ordinal))
+            .Select(module => module.Module.Key)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+        var expected = ExpectedPhase2Modules[presetKey]
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(expected, actual);
+    }
+
+    [Fact]
+    public void OnlyAuditedFullyNativeProofPresetsProjectAndBindCompleteRuntime()
+    {
+        foreach (var presetKey in RequiredProofPresetKeys)
+        {
+            var materialized = CrawlProcedureCatalog.Resolve(presetKey).MaterializeGeneric();
+            var shouldBind = FullyNativeProofPresetKeys.Contains(presetKey, StringComparer.Ordinal);
+
+            Assert.Equal(shouldBind, materialized.CompatibilityProfile is not null);
+            Assert.Equal(
+                shouldBind,
+                CampaignProcedureCompatibilityProjector.TryProject(materialized.Procedure, out _));
+
+            if (shouldBind)
+            {
+                _ = GenericProcedureRuntime.Bind(materialized.Procedure);
+            }
+            else
+            {
+                var exception = Assert.Throws<InvalidOperationException>(() =>
+                    GenericProcedureRuntime.Bind(materialized.Procedure));
+                Assert.Contains("missing required execution handler", exception.Message, StringComparison.OrdinalIgnoreCase);
+            }
+        }
+    }
+
+    [Fact]
+    public void OneRingProofHasNoFabricatedPhase2CoreOrCompatibilityProfile()
+    {
+        var materialized = CrawlProcedureCatalog.Resolve(CrawlProcedureCatalog.OneRing2ePresetKey)
+            .MaterializeGeneric();
+
+        Assert.Null(materialized.CompatibilityProfile);
+        Assert.DoesNotContain(materialized.Procedure.Modules, module =>
+            module.Mechanic.ExecutionHandler.StartsWith("crawl-profile.", StringComparison.Ordinal));
+        Assert.Contains(materialized.Procedure.Modules, module =>
+            module.Module.Key == GenericProcedureCatalog.JourneyProcessModule);
+        Assert.Contains(materialized.Procedure.Modules, module =>
+            module.Module.Key == GenericProcedureCatalog.JourneyEventsModule);
+
+        var report = materialized.Procedure.EvaluateDependencies();
+        Assert.False(report.HasErrors);
+        Assert.Contains(report.Issues, issue =>
+            issue.Kind == ProcedureDependencyIssueKind.ManualInputRequired
+            && issue.Message.Contains("time.interval-duration", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -96,6 +191,71 @@ public sealed class Phase3ProofMatrixTests
             .MaterializeGeneric()
             .Procedure;
         _ = GenericProcedureRuntime.Bind(mixed);
+    }
+
+    [Fact]
+    public void AutomaticMechanicCanNotUseDeclarativeContractHandler()
+    {
+        var procedure = CrawlProcedureCatalog.Resolve(CrawlProcedureCatalog.MixedHouseRulePresetKey)
+            .MaterializeGeneric()
+            .Procedure;
+        var invalidModules = procedure.Modules.Select(module =>
+            module.Module.Key == GenericProcedureCatalog.MovementBudgetModule
+                ? module with
+                {
+                    Mechanic = module.Mechanic with { AutomationLevel = ProcedureAutomationLevel.Automatic }
+                }
+                : module).ToArray();
+        var invalid = procedure with { Modules = invalidModules };
+
+        var exception = Assert.Throws<InvalidOperationException>(invalid.Validate);
+        Assert.Contains("declarative", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Automatic", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MissingRequiredProducerIsAnErrorUnlessSnapshotExplicitlyAllowsAnotherSource()
+    {
+        var procedure = CrawlProcedureCatalog.Resolve(CrawlProcedureCatalog.OneRing2ePresetKey)
+            .MaterializeGeneric()
+            .Procedure;
+        var constrainedModules = procedure.Modules.Select(module =>
+            module.Module.Key == GenericProcedureCatalog.MovementBudgetModule
+                ? module with
+                {
+                    Mechanic = module.Mechanic with
+                    {
+                        InputRequirements =
+                        [
+                            new ProcedureInputRequirement(
+                                "time.interval-duration",
+                                ProcedureInputSource.SelectedModule)
+                        ]
+                    }
+                }
+                : module).ToArray();
+        var constrained = procedure with { Modules = constrainedModules };
+
+        var report = constrained.EvaluateDependencies();
+        Assert.True(report.HasErrors);
+        Assert.Contains(report.Issues, issue =>
+            issue.Kind == ProcedureDependencyIssueKind.MissingRequiredProducer
+            && issue.ModuleKey == GenericProcedureCatalog.MovementBudgetModule);
+        Assert.Throws<InvalidOperationException>(constrained.Validate);
+    }
+
+    [Fact]
+    public void ExplicitManualInputIsDiagnosticRatherThanDependencyError()
+    {
+        var procedure = CrawlProcedureCatalog.Resolve(CrawlProcedureCatalog.OneRing2ePresetKey)
+            .MaterializeGeneric()
+            .Procedure;
+
+        var report = procedure.EvaluateDependencies();
+
+        Assert.False(report.HasErrors);
+        Assert.Contains(report.Issues, issue =>
+            issue.Kind == ProcedureDependencyIssueKind.ManualInputRequired);
     }
 
     [Fact]
@@ -197,28 +357,32 @@ public sealed class Phase3ProofMatrixTests
     }
 
     [Fact]
-    public async Task RequiredProofSnapshotsRoundTripPostgresAndRestartWithDeclarativeContractsIntact()
+    public async Task RequiredProofSnapshotsRoundTripPostgresAndRestartWithoutInventingCompatibilityProfiles()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = new PostgresHexCrawlStore(database.ConnectionString);
         await store.InitializeAsync();
         var sessions = new CrawlSessionService(store);
-        var created = new List<StoredExpedition>();
+        var created = new List<(string PresetKey, StoredExpedition Expedition)>();
 
         foreach (var presetKey in RequiredProofPresetKeys)
         {
-            created.Add(await sessions.StartAsync(
+            var expedition = await sessions.StartAsync(
                 "phase3",
                 new StartStandaloneCrawlSessionCommand(
                     $"Phase 3 {presetKey}",
                     presetKey,
-                    new NonSpatialCrawlSessionContext("Phase 3 persistence proof"))));
+                    new NonSpatialCrawlSessionContext("Phase 3 persistence proof")));
+            created.Add((presetKey, expedition));
+
+            var shouldProject = FullyNativeProofPresetKeys.Contains(presetKey, StringComparer.Ordinal);
+            Assert.Equal(shouldProject, expedition.Procedure is not null);
         }
 
         var restarted = new PostgresHexCrawlStore(database.ConnectionString);
         await restarted.InitializeAsync();
 
-        foreach (var expected in created)
+        foreach (var (presetKey, expected) in created)
         {
             var loaded = await restarted.GetExpeditionAsync(expected.Id, "phase3");
             Assert.NotNull(loaded);
@@ -226,6 +390,9 @@ public sealed class Phase3ProofMatrixTests
             Assert.Equal(
                 SnapshotSignature(expected.CampaignProcedure!),
                 SnapshotSignature(loaded.CampaignProcedure!));
+
+            var shouldProject = FullyNativeProofPresetKeys.Contains(presetKey, StringComparer.Ordinal);
+            Assert.Equal(shouldProject, loaded.Procedure is not null);
 
             foreach (var selected in expected.CampaignProcedure!.Modules.Where(module =>
                          module.Mechanic.ExecutionHandler == GenericProcedureExecutionHandlers.DeclarativeContract))
@@ -235,11 +402,12 @@ public sealed class Phase3ProofMatrixTests
                 Assert.Equal(selected.Mechanic.AutomationLevel, reloaded.Mechanic.AutomationLevel);
                 Assert.Equal(selected.Mechanic.Version, reloaded.Mechanic.Version);
                 Assert.Equal(
+                    selected.Mechanic.InputRequirements ?? [],
+                    reloaded.Mechanic.InputRequirements ?? []);
+                Assert.Equal(
                     selected.Parameters.OrderBy(pair => pair.Key, StringComparer.Ordinal),
                     reloaded.Parameters.OrderBy(pair => pair.Key, StringComparer.Ordinal));
             }
-
-            _ = GenericProcedureRuntime.Bind(loaded.CampaignProcedure!);
         }
     }
 
@@ -283,7 +451,7 @@ public sealed class Phase3ProofMatrixTests
     }
 
     [Fact]
-    public void MaterializedSnapshotExecutesAfterOriginPresetIsUnavailable()
+    public void MaterializedSnapshotExecutesAfterOriginPresetIsUnavailableWhenItHasACompleteNativeCore()
     {
         var ephemeralPreset = CrawlProcedureCatalog.Resolve(CrawlProcedureCatalog.MixedHouseRulePresetKey) with
         {
@@ -306,7 +474,7 @@ public sealed class Phase3ProofMatrixTests
         procedure.Modules
             .OrderBy(module => module.Module.Key, StringComparer.Ordinal)
             .Select(module =>
-                $"{module.Module.Key}|{module.Mechanic.Key}|{module.Mechanic.Version}|{module.Mechanic.ExecutionHandler}|{module.Mechanic.AutomationLevel}|{string.Join(";", module.Parameters.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => $"{pair.Key}={pair.Value}"))}")
+                $"{module.Module.Key}|{module.Mechanic.Key}|{module.Mechanic.Version}|{module.Mechanic.ExecutionHandler}|{module.Mechanic.AutomationLevel}|inputs={string.Join(",", (module.Mechanic.InputRequirements ?? []).OrderBy(value => value.InputKey, StringComparer.Ordinal).Select(value => $"{value.InputKey}:{value.AllowedSources}"))}|{string.Join(";", module.Parameters.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => $"{pair.Key}={pair.Value}"))}")
             .ToArray();
 
     private static ExpeditionState SpatialState() => new()
