@@ -38,7 +38,7 @@ public static class ExpeditionProcedureExecutionResolver
     }
 
     private static CrawlProcedureProfile RequireLegacyProfile(StoredExpedition expedition) =>
-        expedition.Procedure
+        expedition.CompatibilityProfile
         ?? throw new InvalidOperationException(
             "This expedition has no generic CampaignProcedure and no historical CrawlProcedureProfile compatibility snapshot to execute.");
 }
