@@ -9,6 +9,20 @@ public sealed partial class CrawlRuntimeEngine
 {
     private const double Epsilon = 0.0000001d;
 
+    /// <summary>
+    /// Native generic execution path. The pinned CampaignProcedure is the runtime authority.
+    /// </summary>
+    public WatchAdvanceResult Advance(
+        CrawlRuntimeContext context,
+        CampaignProcedure procedure,
+        ExpeditionState expedition,
+        WatchTravelPlan plan,
+        WatchAdvanceInputs inputs) =>
+        AdvanceCore(context, GenericProcedureRuntime.Bind(procedure), expedition, plan, inputs);
+
+    /// <summary>
+    /// Historical compatibility path for profile-only persisted sessions.
+    /// </summary>
     public WatchAdvanceResult Advance(
         CrawlRuntimeContext context,
         CrawlProcedureProfile profile,
@@ -16,13 +30,23 @@ public sealed partial class CrawlRuntimeEngine
         WatchTravelPlan plan,
         WatchAdvanceInputs inputs)
     {
-        ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(profile);
+        return AdvanceCore(context, GenericProcedureRuntime.FromLegacyProfile(profile), expedition, plan, inputs);
+    }
+
+    private static WatchAdvanceResult AdvanceCore(
+        CrawlRuntimeContext context,
+        GenericProcedureRuntime procedure,
+        ExpeditionState expedition,
+        WatchTravelPlan plan,
+        WatchAdvanceInputs inputs)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(procedure);
         ArgumentNullException.ThrowIfNull(expedition);
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(inputs);
 
-        profile.Validate();
         context.Validate();
 
         var events = new EventCollector(expedition.History);
@@ -36,7 +60,7 @@ public sealed partial class CrawlRuntimeEngine
 
         if (active is null)
         {
-            (state, active) = StartWatch(profile, state, plan, inputs, events);
+            (state, active) = StartWatch(procedure, state, plan, inputs, events);
         }
 
         active = active with { Plan = plan };
@@ -49,7 +73,7 @@ public sealed partial class CrawlRuntimeEngine
 
         if (plan.DeliberateDoubleBack)
         {
-            ValidateDoubleBack(profile, state, plan);
+            ValidateDoubleBack(procedure.HexProgress, state, plan);
             state = state with
             {
                 Navigation = new NavigationRuntimeState(false, 0),
@@ -67,7 +91,8 @@ public sealed partial class CrawlRuntimeEngine
         var actualDirection = state.ActualDirection
             ?? throw new InvalidOperationException("Travel requires an actual hex direction.");
         state = ApplyDirectionContext(
-            profile,
+            procedure.Movement,
+            procedure.HexProgress,
             context.HexCenterDistance,
             state,
             actualDirection,
@@ -75,7 +100,7 @@ public sealed partial class CrawlRuntimeEngine
             active.WatchNumber,
             events);
 
-        ValidateTravelAmount(profile, inputs.Travel);
+        ValidateTravelAmount(procedure.Movement, inputs.Travel);
         EmitTravelResolution(state, active.WatchNumber, inputs.Travel, events);
 
         if (!active.EncounterHandled && active.Encounter.Kind != EncounterOutcomeKind.None)
@@ -105,11 +130,12 @@ public sealed partial class CrawlRuntimeEngine
             }
         }
 
-        var movement = profile.TravelResolution switch
+        var movement = procedure.Movement.TravelResolution switch
         {
             TravelResolutionMode.ContinuousDistance => MoveContinuous(
                 context,
-                profile,
+                procedure.Movement,
+                procedure.HexProgress,
                 state,
                 active,
                 plan,
@@ -126,7 +152,7 @@ public sealed partial class CrawlRuntimeEngine
                 callRemaining,
                 segmentDuration,
                 events),
-            _ => throw new ArgumentOutOfRangeException(nameof(profile.TravelResolution))
+            _ => throw new ArgumentOutOfRangeException(nameof(procedure.Movement.TravelResolution))
         };
 
         state = movement.State;

@@ -8,14 +8,14 @@ namespace HexCrawl.Domain.Runtime;
 public sealed partial class CrawlRuntimeEngine
 {
     private static ExpeditionState ResolveNavigationAtWatchStart(
-        CrawlProcedureProfile profile,
+        ProcedureNavigationRuntime navigationPolicy,
         ExpeditionState state,
         WatchTravelPlan plan,
         ResolvedNavigation? resolved,
         EventCollector events,
         int watchNumber)
     {
-        var checkRequired = profile.UsesNavigationChecks
+        var checkRequired = navigationPolicy.UsesNavigationChecks
             && !plan.NavigationAid.SuppressesNavigationCheck
             && !plan.DeliberateDoubleBack;
         if (!checkRequired)
@@ -67,7 +67,7 @@ public sealed partial class CrawlRuntimeEngine
             {
                 next = new NavigationRuntimeState(true, candidate);
             }
-            else if (!profile.UsesPersistentVeer || Math.Abs(candidate) > Math.Abs(previous.VeerSteps))
+            else if (!navigationPolicy.UsesPersistentVeer || Math.Abs(candidate) > Math.Abs(previous.VeerSteps))
             {
                 next = new NavigationRuntimeState(true, candidate);
             }
@@ -107,11 +107,11 @@ public sealed partial class CrawlRuntimeEngine
         navigation.IsLost ? intended.Rotate(navigation.VeerSteps) : intended;
 
     private static void ValidateDoubleBack(
-        CrawlProcedureProfile profile,
+        ProcedureHexProgressRuntime progressPolicy,
         ExpeditionState state,
         WatchTravelPlan plan)
     {
-        if (!profile.SupportsDeliberateDoubleBack)
+        if (!progressPolicy.SupportsDeliberateDoubleBack)
         {
             throw new InvalidOperationException("The active procedure does not enable deliberate double-back handling.");
         }
@@ -125,7 +125,8 @@ public sealed partial class CrawlRuntimeEngine
     }
 
     private static ExpeditionState ApplyDirectionContext(
-        CrawlProcedureProfile profile,
+        ProcedureMovementRuntime movementPolicy,
+        ProcedureHexProgressRuntime progressPolicy,
         DistanceMeasure hexCenterDistance,
         ExpeditionState state,
         HexDirection actualDirection,
@@ -137,9 +138,12 @@ public sealed partial class CrawlRuntimeEngine
         var changed = traversal.LastTravelDirection is { } previous && previous != actualDirection;
         var progress = Convert(traversal.Progress, hexCenterDistance.Unit);
 
-        if (changed && profile.DirectionChangesCostProgress && !deliberateDoubleBack && profile.TracksIntraHexProgress)
+        if (changed
+            && progressPolicy.DirectionChangesCostProgress
+            && !deliberateDoubleBack
+            && movementPolicy.TracksIntraHexProgress)
         {
-            var cost = hexCenterDistance.Value * profile.DirectionChangeProgressCostFactor;
+            var cost = hexCenterDistance.Value * progressPolicy.DirectionChangeProgressCostFactor;
             progress = new DistanceMeasure(Math.Max(0d, progress.Value - cost), progress.Unit);
         }
 
@@ -150,8 +154,8 @@ public sealed partial class CrawlRuntimeEngine
         };
         updated = updated with
         {
-            CurrentExitRequirement = profile.TracksIntraHexProgress
-                ? DetermineExitRequirement(profile, hexCenterDistance, updated, actualDirection, deliberateDoubleBack)
+            CurrentExitRequirement = movementPolicy.TracksIntraHexProgress
+                ? DetermineExitRequirement(progressPolicy, hexCenterDistance, updated, actualDirection, deliberateDoubleBack)
                 : null
         };
 
@@ -169,7 +173,7 @@ public sealed partial class CrawlRuntimeEngine
     }
 
     private static DistanceMeasure DetermineExitRequirement(
-        CrawlProcedureProfile profile,
+        ProcedureHexProgressRuntime progressPolicy,
         DistanceMeasure hexCenterDistance,
         HexTraversalState traversal,
         HexDirection direction,
@@ -182,20 +186,18 @@ public sealed partial class CrawlRuntimeEngine
             return new DistanceMeasure(progress.Value, unit);
         }
 
-        var factor = profile.StartingExitProgressFactor;
+        var factor = progressPolicy.StartingExitProgressFactor;
         if (traversal.EntryDirection is { } entry)
         {
             factor = direction.SeparationFrom(entry) switch
             {
-                0 or 1 => profile.FarExitProgressFactor,
-                2 => profile.NearExitProgressFactor,
-                3 => profile.BackExitProgressFactor,
+                0 or 1 => progressPolicy.FarExitProgressFactor,
+                2 => progressPolicy.NearExitProgressFactor,
+                3 => progressPolicy.BackExitProgressFactor,
                 _ => throw new InvalidOperationException("Unexpected hex direction separation.")
             };
         }
 
         return new DistanceMeasure(hexCenterDistance.Value * factor, unit);
     }
-
-
 }
