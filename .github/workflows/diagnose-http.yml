@@ -1,0 +1,52 @@
+name: Diagnose HTTP Integration
+
+on:
+  push:
+    branches: [ "feature/postgres-persistence" ]
+
+env:
+  HEXCRAWL_TEST_POSTGRES: "Host=127.0.0.1;Port=55432;Database=postgres;Username=hex_crawl_test;Password=hex_crawl_test"
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Start PostgreSQL test service
+        run: |
+          set -euo pipefail
+          docker run -d --name hex-crawl-ci-postgres \
+            -p 127.0.0.1:55432:5432 \
+            -e POSTGRES_DB=postgres \
+            -e POSTGRES_USER=hex_crawl_test \
+            -e POSTGRES_PASSWORD=hex_crawl_test \
+            postgres:18 >/dev/null
+          for i in {1..30}; do
+            if [ "$(docker exec hex-crawl-ci-postgres psql -U hex_crawl_test -d postgres -tAc 'SELECT 1' 2>/dev/null | tr -d '[:space:]')" = "1" ]; then exit 0; fi
+            sleep 1
+          done
+          docker logs hex-crawl-ci-postgres || true
+          exit 1
+      - name: Build integration tests
+        run: dotnet build tests/HexCrawl.IntegrationTests/HexCrawl.IntegrationTests.csproj --configuration Release -p:BuildClient=false
+      - name: DelegatedRulesCoreTravelGatewayTests
+        run: dotnet test tests/HexCrawl.IntegrationTests/HexCrawl.IntegrationTests.csproj --configuration Release --no-restore --no-build -p:BuildClient=false --filter 'FullyQualifiedName~DelegatedRulesCoreTravelGatewayTests'
+      - name: ExpeditionPartyEndpointsTests
+        if: always()
+        run: dotnet test tests/HexCrawl.IntegrationTests/HexCrawl.IntegrationTests.csproj --configuration Release --no-restore --no-build -p:BuildClient=false --filter 'FullyQualifiedName~ExpeditionPartyEndpointsTests'
+      - name: ExpeditionWorkbenchEndpointsTests
+        if: always()
+        run: dotnet test tests/HexCrawl.IntegrationTests/HexCrawl.IntegrationTests.csproj --configuration Release --no-restore --no-build -p:BuildClient=false --filter 'FullyQualifiedName~ExpeditionWorkbenchEndpointsTests'
+      - name: ModuleArchitectureTests
+        if: always()
+        run: dotnet test tests/HexCrawl.IntegrationTests/HexCrawl.IntegrationTests.csproj --configuration Release --no-restore --no-build -p:BuildClient=false --filter 'FullyQualifiedName~ModuleArchitectureTests'
+      - name: OverworldDeletionEndpointsTests
+        if: always()
+        run: dotnet test tests/HexCrawl.IntegrationTests/HexCrawl.IntegrationTests.csproj --configuration Release --no-restore --no-build -p:BuildClient=false --filter 'FullyQualifiedName~OverworldDeletionEndpointsTests'
+      - name: Cleanup
+        if: always()
+        run: docker rm -f hex-crawl-ci-postgres 2>/dev/null || true
