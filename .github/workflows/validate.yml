@@ -95,9 +95,6 @@ jobs:
       - name: Build container
         run: docker build -t dorks-and-dice-hex-crawl:test -f src/HexCrawl.Web/Dockerfile .
 
-      - name: Build persistence migration container
-        run: docker build -t dorks-and-dice-hex-crawl-migration:test -f tools/HexCrawl.PersistenceMigration/Dockerfile .
-
       - name: Smoke test PostgreSQL, filesystem assets, and restart persistence
         run: |
           set -euo pipefail

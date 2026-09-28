@@ -4,7 +4,6 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="Npgsql" Version="10.0.3" />
     <PackageReference Include="xunit" Version="2.9.3" />
@@ -17,6 +16,5 @@
     <ProjectReference Include="../../src/HexCrawl.Application/HexCrawl.Application.csproj" />
     <ProjectReference Include="../../src/HexCrawl.Domain/HexCrawl.Domain.csproj" />
     <ProjectReference Include="../../src/HexCrawl.Infrastructure/HexCrawl.Infrastructure.csproj" />
-    <ProjectReference Include="../../tools/HexCrawl.PersistenceMigration/HexCrawl.PersistenceMigration.csproj" />
   </ItemGroup>
 </Project>

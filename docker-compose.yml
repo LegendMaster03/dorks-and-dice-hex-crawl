@@ -16,7 +16,7 @@ services:
       - dorks-and-dice-backend
 
 volumes:
-  # Retained for /data/assets and the legacy hex-crawl.db rollback artifact.
+  # Durable filesystem-backed map assets live under /data/assets.
   hex-crawl-data:
 
 networks:

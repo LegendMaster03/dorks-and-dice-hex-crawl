@@ -220,11 +220,7 @@ GM source-map rasters remain DM evidence. The knowledge preview does not reinter
 
 Production persistence is PostgreSQL through `PostgresHexCrawlStore`; `IHexCrawlStore` remains the application boundary. The PostgreSQL `expeditions` table stores required context, nullable world reference and world-only knowledge, party state, generated procedure resolutions, the complete executable procedure snapshot, nullable procedure-origin metadata, discriminated runtime state, pause reason, remaining watch time, aggregate version, and timestamps. Ordered runtime history remains in `expedition_events`.
 
-The one-time SQLite importer accepts legacy schema generations 1 through 5. Schema-v1 rows are deterministically projected to `WorldBound` from their existing Overworld IDs; pre-v3 rows receive the historical empty party state; pre-v4 rows receive an empty generated-resolution list; and databases without `procedure_origin_json` import `NULL` origin metadata. The source SQLite database is read as-is and is not upgraded or deleted.
-
 Validation uses PostgreSQL for application persistence tests, HTTP integration tests, and container restart smokes. The mapped smoke persists a world, source-map asset, expedition, procedure snapshot/origin, and runtime advancement; then restarts PostgreSQL and the application before reloading the same state and binary asset. A separate mapless smoke persists and reloads a true `NonSpatial` session through PostgreSQL without creating an Overworld. `/ready` must report `postgresql-ready`; process health alone is not sufficient.
-
-The production cutover remains operator-controlled: stop writes, back up `hex-crawl.db`, initialize PostgreSQL, run the migration and semantic verification utility, switch the server-side connection string, verify `/health` and `/ready`, perform deployed read/behavior checks, and retain both the SQLite backup and `hex-crawl-data` volume for rollback. See `docs/postgresql-persistence.md`.
 
 ## Explicitly deferred work
 

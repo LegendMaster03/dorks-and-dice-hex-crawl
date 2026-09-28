@@ -19,7 +19,6 @@ Production config sets `MapAssets:RootPath=/data/assets`. The existing `hex-craw
 ```text
 /data/assets/maps/...
 /data/assets/.tmp/...
-/data/hex-crawl.db  # retained only as the legacy rollback artifact during PostgreSQL cutover
 ```
 
 The filesystem provider is an infrastructure choice, not a domain contract. A future object-store, NAS, or other blob provider can implement `IMapAssetStore` without changing semantic world truth. Raster assets and opaque import source archives are stored through this boundary and are never stored as PostgreSQL blobs.
