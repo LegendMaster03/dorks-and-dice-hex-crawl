@@ -17,18 +17,18 @@ The domain and persisted source-map record know only an opaque provider-relative
 Production config sets `MapAssets:RootPath=/data/assets`. The existing `hex-crawl-data` volume is mounted at `/data`, so the production layout is:
 
 ```text
-/data/hex-crawl.db
 /data/assets/maps/...
 /data/assets/.tmp/...
+/data/hex-crawl.db  # retained only as the legacy rollback artifact during PostgreSQL cutover
 ```
 
-The filesystem provider is an infrastructure choice, not a domain contract. A future object-store, NAS, or other blob provider can implement `IMapAssetStore` without changing semantic world truth. Raster assets and opaque import source archives are stored through this boundary and are never stored as SQLite blobs.
+The filesystem provider is an infrastructure choice, not a domain contract. A future object-store, NAS, or other blob provider can implement `IMapAssetStore` without changing semantic world truth. Raster assets and opaque import source archives are stored through this boundary and are never stored as PostgreSQL blobs.
 
 Writes use a temporary file in the asset root, flush successfully, and then rename into the final generated key. A failed write never creates a final asset. Startup creates missing asset directories but performs no destructive cleanup.
 
 ## Upload consistency
 
-Binary storage and SQLite metadata are not treated as a distributed transaction.
+Filesystem binary storage and PostgreSQL metadata are not treated as a distributed transaction.
 
 The upload sequence is:
 

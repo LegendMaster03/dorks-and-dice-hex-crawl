@@ -25,12 +25,7 @@ public sealed class CrawlSessionService(IHexCrawlStore store)
         }
 
         var preset = CrawlProcedureCatalog.Resolve(command.ProcedureKey);
-        var profile = command.ProcedureSnapshot ?? preset;
-        if (!string.Equals(profile.Key, preset.Key, StringComparison.OrdinalIgnoreCase))
-        {
-            throw new ArgumentException("A customized procedure snapshot must retain the selected preset key as provenance.", nameof(command));
-        }
-        profile.Validate();
+        var profile = preset.Materialize(command.ProcedureSnapshot);
 
         var id = Guid.NewGuid();
         CrawlSessionRuntimeState runtime = command.Context switch
@@ -58,7 +53,10 @@ public sealed class CrawlSessionService(IHexCrawlStore store)
             ownerUserId.Trim(),
             1,
             now,
-            now), cancellationToken);
+            now)
+        {
+            ProcedureOrigin = preset.Origin
+        }, cancellationToken);
     }
 
     private static ExpeditionState CreateAbstractState(

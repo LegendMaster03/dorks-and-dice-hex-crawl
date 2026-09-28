@@ -18,7 +18,7 @@ Database and binary-storage concerns do not enter the core spatial/runtime recor
 
 - `HexCrawl.Domain` owns spatial, world, knowledge, presentation policy/projection, source-map registration math, and deterministic runtime rules.
 - `HexCrawl.Application` owns authenticated use cases, cross-aggregate validation, persistence/blob ports, optimistic concurrency, procedure/presentation selection, world/knowledge composition around the map-independent runtime, the full expedition workbench, and focused assistant orchestration.
-- `HexCrawl.Infrastructure` implements SQLite persistence, filesystem map assets, and Tool Host authentication redemption.
+- `HexCrawl.Infrastructure` implements PostgreSQL persistence through Npgsql and hand-written SQL, filesystem map assets, and Tool Host authentication redemption.
 - `HexCrawl.Web` owns HTTP contracts, authentication middleware, route hosting, and the TypeScript application.
 
 ## Continuous overworld and semantic geometry
@@ -33,24 +33,25 @@ Point, line, and region features are stored as real world-space geometry. Catego
 
 ## Persistence and asset architecture
 
-SQLite remains behind `IHexCrawlStore`. Production uses `Data Source=/data/hex-crawl.db` on the existing `hex-crawl-data` volume. Forward schema migrations are tracked in `schema_migrations`; startup does not destructively recreate production data.
+PostgreSQL remains behind `IHexCrawlStore`; application/domain code has no Npgsql dependency. Production requires `ConnectionStrings__HexCrawl` and does not fall back to SQLite. `PostgresSchemaMigrator` tracks deterministic schema generations in `hex_crawl_schema_migrations`, applies migrations transactionally under a PostgreSQL advisory lock, and fails startup/readiness rather than recreating data when schema initialization can not complete.
 
-`overworlds` stores owner identity, stable ID, aggregate version/timestamps, and a serialized world snapshot containing grid, semantic geometry, locations, and source-map metadata. Binary raster data is not stored in SQLite.
+`overworlds` stores owner identity, stable UUID, aggregate version/timestamps, and a `jsonb` world snapshot containing grid, semantic geometry, locations, and source-map metadata. `expeditions` and `expedition_events` retain the same aggregate-snapshot plus ordered-history semantics using PostgreSQL-native UUID, bigint, timestamptz, and jsonb columns. Binary raster data is not stored in PostgreSQL.
 
 Map assets are behind `IMapAssetStore`. The initial production implementation is filesystem-backed at `/data/assets` on the same durable volume. `SourceMapRepresentation` stores only a provider-relative opaque `AssetKey`, so replacing filesystem storage with object storage, NAS storage, or another provider does not change domain/world truth. Generated keys do not depend on user filenames, writes use temporary-file-plus-rename semantics, and asset paths are never exposed through HTTP contracts.
 
-The production layout is conceptually:
+The production storage layout is conceptually:
 
 ```text
-/data/hex-crawl.db
-/data/assets/maps/...
+PostgreSQL: structured Hex Crawl aggregate state and ordered event history
+/data/assets/maps/...: filesystem-backed raster/source-map assets
+/data/hex-crawl.db: retained legacy SQLite rollback artifact during cutover
 ```
 
 See `docs/source-map-import.md` for upload compensation, limits, format validation, and deletion behavior.
 
 ### Crawl-session storage
 
-The existing `expeditions` table remains the persistence envelope for compatibility, but its aggregate is now a crawl session rather than an inherently world-bound expedition. Schema version 2 adds required `context_json`, makes `overworld_id` nullable, and makes `knowledge_json` nullable.
+The PostgreSQL `expeditions` table remains the persistence envelope for compatibility, but its aggregate is a crawl session rather than an inherently world-bound expedition. The PostgreSQL schema starts from the fully materialized current shape: required `context_json`, nullable `overworld_id`, nullable world-only `knowledge_json`, party state, generated resolutions, executable procedure snapshot, nullable procedure-origin metadata, pause state, and remaining-watch state.
 
 The three context forms are intentionally distinct:
 
@@ -58,7 +59,7 @@ The three context forms are intentionally distinct:
 - `AbstractHex` stores its own context name, orientation, and `CrawlRuntimeContext` scale/unit. It has no Overworld row, no Overworld foreign key, and no player-knowledge snapshot.
 - `NonSpatial` stores only non-spatial session context plus procedure/runtime/history state. It has no hex coordinates, distance scale, world position, Overworld, or player-knowledge snapshot.
 
-Existing schema-v1 expedition rows migrate to explicit `WorldBound` contexts; no placeholder worlds or magic IDs are introduced. Runtime history remains in `expedition_events`; persistence is snapshot + retained history, not event sourcing.
+The one-time SQLite importer supports legacy SQLite schema generations 1 through 5 without upgrading the source database in place. Schema-v1 expedition rows are projected to explicit `WorldBound` contexts from their existing real Overworld IDs; schemas before party/generated-resolution/procedure-origin columns receive only the same deterministic defaults introduced by those historical migrations. Missing procedure-origin metadata remains `NULL`. Runtime history remains in `expedition_events`; persistence is snapshot + retained history, not event sourcing.
 
 Procedure and presentation catalogs are creation-time presets. Ongoing sessions reload their persisted snapshots rather than reconstructing behavior from current catalog definitions.
 
@@ -97,7 +98,7 @@ The Web layer exposes resource DTOs rather than persistence rows:
 - world-scoped expedition start/list for `WorldBound` sessions plus session load/advance/discovery routes;
 - independent focused mutations at `/api/expeditions/{expeditionId}/assistants/travel`, `/watch`, `/navigation`, and `/encounters`.
 
-World-bound creation accepts a procedure preset key, a presentation preset key, and an optional complete procedure snapshot. Standalone creation accepts either an `AbstractHex` context (name, orientation, physical center distance/unit, starting hex) or a `NonSpatial` context (name only). The procedure snapshot must retain the selected preset key as provenance and passes the same domain validation as built-in profiles.
+World-bound creation accepts a procedure preset key, a presentation preset key, and an optional complete procedure snapshot. Standalone creation accepts either an `AbstractHex` context (name, orientation, physical center distance/unit, starting hex) or a `NonSpatial` context (name only). The executable procedure snapshot may use its own compatibility key/name and passes the same domain validation as built-in profiles; selected-preset provenance is stored separately as optional `ProcedureOriginMetadata`.
 
 Only multipart source-map upload creates new asset keys. Clients can not bind an arbitrary provider key through an HTTP metadata contract.
 
@@ -134,3 +135,13 @@ Still deferred are campaign sharing, real-time collaborative editing, a dedicate
 Rules Core/Characters integration remains optional future resolved-input plumbing; those systems do not become owners of Hex Crawl spatial/runtime state.
 
 The filesystem map provider is intentionally replaceable infrastructure. The source-map domain, continuous-overworld model, procedure snapshots, and presentation snapshots do not require redesign when storage or later analysis/integration implementations change.
+
+## Procedure preset identity boundary (Phase 0)
+
+Named crawl procedures are creation-time catalog presets. `CrawlProcedurePresetDefinition` owns preset identity, display metadata, revision, and the executable template used when a DM creates a crawl session. Applying a preset materializes a complete `CrawlProcedureProfile`; after that point the stored profile is the authoritative executable state.
+
+`CrawlProcedureProfile.Key` and `Name` remain in the compatibility projection so existing serialized procedure snapshots continue to deserialize, but they are not required to match the originating preset key or display name. Runtime services execute `StoredExpedition.Procedure` directly and do not re-resolve `CrawlProcedureCatalog` during reload or advancement.
+
+`StoredExpedition.ProcedureOrigin` is nullable informational provenance (`presetKey`, display name, and revision). PostgreSQL stores it separately in nullable `procedure_origin_json`. The legacy SQLite importer reads that column when present and imports `NULL` when it is absent; it does not invent provenance. Removing the metadata or removing the corresponding preset from the catalog does not change executable behavior.
+
+Rules Core remains optional enrichment. The deterministic crawl runtime still consumes the materialized profile and resolved inputs rather than requiring Rules Core or any originating preset.

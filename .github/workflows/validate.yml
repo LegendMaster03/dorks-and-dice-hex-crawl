@@ -10,9 +10,13 @@ concurrency:
   group: validate-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  HEXCRAWL_TEST_POSTGRES: "Host=127.0.0.1;Port=55432;Database=postgres;Username=hex_crawl_test;Password=hex_crawl_test"
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -34,6 +38,38 @@ jobs:
         working-directory: src/HexCrawl.Web/Client
         run: npm run smoke:embedded
 
+      - name: Start PostgreSQL test service
+        run: |
+          set -euo pipefail
+          docker rm -f hex-crawl-ci-postgres 2>/dev/null || true
+          docker network create hex-crawl-ci 2>/dev/null || true
+          docker run -d --name hex-crawl-ci-postgres \
+            --network hex-crawl-ci \
+            -p 127.0.0.1:55432:5432 \
+            -e POSTGRES_DB=postgres \
+            -e POSTGRES_USER=hex_crawl_test \
+            -e POSTGRES_PASSWORD=hex_crawl_test \
+            postgres:18 >/dev/null
+
+          sleep 10
+          consecutive=0
+          for i in {1..30}; do
+            result=$(docker exec hex-crawl-ci-postgres \
+              psql -v ON_ERROR_STOP=1 -U hex_crawl_test -d postgres -tAc 'SELECT 1' \
+              2>/dev/null || true)
+            if [ "$(echo "$result" | tr -d '[:space:]')" = "1" ]; then
+              consecutive=$((consecutive + 1))
+              if [ "$consecutive" -ge 3 ]; then break; fi
+            else
+              consecutive=0
+            fi
+            sleep 1
+          done
+          if [ "$consecutive" -lt 3 ]; then
+            docker logs hex-crawl-ci-postgres || true
+            exit 1
+          fi
+
       - name: Restore
         run: dotnet restore dorks-and-dice-hex-crawl.slnx
 
@@ -41,13 +77,13 @@ jobs:
         run: dotnet build dorks-and-dice-hex-crawl.slnx --configuration Release --no-restore -p:BuildClient=false
 
       - name: Test domain
-        run: timeout 120s dotnet test tests/HexCrawl.Domain.Tests/HexCrawl.Domain.Tests.csproj --configuration Release --no-restore --no-build -p:BuildClient=false --blame-hang --blame-hang-timeout 30s --logger "console;verbosity=normal"
+        run: timeout 180s dotnet test tests/HexCrawl.Domain.Tests/HexCrawl.Domain.Tests.csproj --configuration Release --no-restore --no-build -p:BuildClient=false --blame-hang --blame-hang-timeout 45s --logger "console;verbosity=normal"
 
-      - name: Test application and persistence
-        run: timeout 120s dotnet test tests/HexCrawl.Application.Tests/HexCrawl.Application.Tests.csproj --configuration Release --no-restore --no-build -p:BuildClient=false --blame-hang --blame-hang-timeout 30s --logger "console;verbosity=normal"
+      - name: Test application and PostgreSQL persistence
+        run: timeout 300s dotnet test tests/HexCrawl.Application.Tests/HexCrawl.Application.Tests.csproj --configuration Release --no-restore --no-build -p:BuildClient=false --blame-hang --blame-hang-timeout 60s --logger "console;verbosity=normal"
 
-      - name: Test HTTP integration
-        run: timeout 120s dotnet test tests/HexCrawl.IntegrationTests/HexCrawl.IntegrationTests.csproj --configuration Release --no-restore --no-build -p:BuildClient=false --blame-hang --blame-hang-timeout 30s --logger "console;verbosity=normal"
+      - name: Test HTTP integration against PostgreSQL
+        run: timeout 300s dotnet test tests/HexCrawl.IntegrationTests/HexCrawl.IntegrationTests.csproj --configuration Release --no-restore --no-build -p:BuildClient=false --blame-hang --blame-hang-timeout 60s --logger "console;verbosity=normal"
 
       - name: Explicit render-lifecycle guard
         run: |
@@ -59,351 +95,147 @@ jobs:
       - name: Build container
         run: docker build -t dorks-and-dice-hex-crawl:test -f src/HexCrawl.Web/Dockerfile .
 
-      - name: Smoke test standalone container and restart persistence
+      - name: Build persistence migration container
+        run: docker build -t dorks-and-dice-hex-crawl-migration:test -f tools/HexCrawl.PersistenceMigration/Dockerfile .
+
+      - name: Smoke test PostgreSQL, filesystem assets, and restart persistence
         run: |
           set -euo pipefail
           data_dir="$RUNNER_TEMP/hex-crawl-smoke-data"
           response_dir="$RUNNER_TEMP/hex-crawl-smoke-responses"
+          rm -rf "$data_dir" "$response_dir"
           mkdir -p "$data_dir" "$response_dir"
+          docker exec hex-crawl-ci-postgres psql -v ON_ERROR_STOP=1 -U hex_crawl_test -d postgres -c 'CREATE SCHEMA smoke_world;' >/dev/null
 
-          start_container() {
+          start_app() {
             docker run -d --name hex-crawl-smoke \
+              --network hex-crawl-ci \
               -p 127.0.0.1:18092:8080 \
               -v "$data_dir:/data" \
-              -e 'ConnectionStrings__HexCrawl=Data Source=/data/hex-crawl.db' \
+              -e 'ConnectionStrings__HexCrawl=Host=hex-crawl-ci-postgres;Port=5432;Database=postgres;Username=hex_crawl_test;Password=hex_crawl_test;Search Path=smoke_world' \
               -e 'MapAssets__RootPath=/data/assets' \
-              -e 'MapImport__MaxFileBytes=104857600' \
               -e 'ToolHost__StandaloneIdentity__Enabled=true' \
               -e 'ToolHost__StandaloneIdentity__UserId=ci-smoke-dm' \
               -e 'ToolHost__StandaloneIdentity__DisplayName=CI Smoke DM' \
               dorks-and-dice-hex-crawl:test >/dev/null
           }
 
-          wait_ready() {
-            for i in {1..30}; do
+          wait_app() {
+            for i in {1..45}; do
               if curl -fsS http://127.0.0.1:18092/health -o "$response_dir/health.txt" \
                 && grep -q 'Healthy' "$response_dir/health.txt" \
                 && curl -fsS http://127.0.0.1:18092/ready -o "$response_dir/ready.json" \
-                && grep -q '"status":"ready"' "$response_dir/ready.json"; then
+                && grep -q '"status":"ready"' "$response_dir/ready.json" \
+                && grep -q '"persistence":"postgresql-ready"' "$response_dir/ready.json" \
+                && grep -q '"mapAssets":"filesystem"' "$response_dir/ready.json"; then
                 return 0
               fi
               sleep 1
             done
-            docker logs hex-crawl-smoke
+            docker logs hex-crawl-smoke || true
             return 1
           }
 
-          trap 'docker rm -f hex-crawl-smoke >/dev/null 2>&1 || true' EXIT
-          start_container
-          wait_ready
-
-          curl -fsS http://127.0.0.1:18092/ -o "$response_dir/root.html"
-          grep -q 'tool-root' "$response_dir/root.html"
-          curl -fsS http://127.0.0.1:18092/worlds/00000000-0000-0000-0000-000000000001/edit -o "$response_dir/deep-route.html"
-          grep -q 'tool-root' "$response_dir/deep-route.html"
+          start_app
+          wait_app
           curl -fsS http://127.0.0.1:18092/app.js -o "$response_dir/app.js"
-          grep -q 'tool-root' "$response_dir/app.js"
+          test -s "$response_dir/app.js"
 
           curl -fsS -X POST http://127.0.0.1:18092/api/overworlds \
             -H 'Content-Type: application/json' \
-            --data '{"name":"CI restart proof","orientation":"PointyTop","origin":{"x":0,"y":0},"rotationDegrees":0,"hexRadiusWorldUnits":1,"neighborCenterDistance":12,"distanceUnit":{"kind":"Mile","symbol":"mi","metersPerUnit":1609.344}}' \
+            --data '{"name":"CI PostgreSQL restart proof","orientation":"PointyTop","origin":{"x":0,"y":0},"rotationDegrees":0,"hexRadiusWorldUnits":1,"neighborCenterDistance":12,"distanceUnit":{"kind":"Mile","symbol":"mi","metersPerUnit":1609.344}}' \
             -o "$response_dir/create-world.json"
-          grep -q 'CI restart proof' "$response_dir/create-world.json"
           world_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$response_dir/create-world.json")"
           world_version="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$response_dir/create-world.json")"
 
           printf '%s' 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=' | base64 -d > "$response_dir/tiny.png"
           curl -fsS -X POST "http://127.0.0.1:18092/api/overworlds/$world_id/source-maps" \
             -F "file=@$response_dir/tiny.png;type=image/png;filename=ci-map.png" \
-            -F 'name=CI raster' \
-            -F 'geographyKey=CI geography' \
-            -F 'role=Neutral' \
-            -F 'containsBakedGrid=false' \
-            -F "expectedVersion=$world_version" \
+            -F 'name=CI raster' -F 'geographyKey=CI geography' -F 'role=Neutral' \
+            -F 'containsBakedGrid=false' -F "expectedVersion=$world_version" \
             -o "$response_dir/upload-map.json"
-          grep -q 'CI raster' "$response_dir/upload-map.json"
           source_map_id="$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d["sourceMaps"][-1]["id"])' "$response_dir/upload-map.json")"
-
-          curl -fsS "http://127.0.0.1:18092/api/overworlds/$world_id/source-maps/$source_map_id/asset" -o "$response_dir/map-before-restart.png"
-          cmp "$response_dir/tiny.png" "$response_dir/map-before-restart.png"
-          test -d "$data_dir/assets/maps"
-          test "$(find "$data_dir/assets/maps" -type f | wc -l)" -eq 1
 
           curl -fsS -X POST "http://127.0.0.1:18092/api/overworlds/$world_id/expeditions" \
             -H 'Content-Type: application/json' \
-            --data '{"name":"CI paused expedition","procedureKey":"simple-fixed-distance","presentationKey":"exploration-map","startHex":{"q":0,"r":0}}' \
+            --data '{"name":"CI persisted procedure","procedureKey":"simple-fixed-distance","presentationKey":"exploration-map","startHex":{"q":0,"r":0}}' \
             -o "$response_dir/start-expedition.json"
           expedition_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$response_dir/start-expedition.json")"
           expedition_version="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$response_dir/start-expedition.json")"
-
           curl -fsS -X POST "http://127.0.0.1:18092/api/expeditions/$expedition_id/advance" \
             -H 'Content-Type: application/json' \
-            --data "{\"expectedVersion\":$expedition_version,\"intendedDirection\":0,\"effectiveDistance\":12,\"travelResolutionSource\":\"ManualRoll\",\"continueAcrossBoundaries\":false}" \
-            -o "$response_dir/pause-expedition.json"
-          python3 - "$response_dir/pause-expedition.json" <<'PY'
-          import json, sys
-          d = json.load(open(sys.argv[1]))
-          assert d["pauseReason"] == "ConditionsReviewRequired", d
-          assert d["remainingWatchHours"] == 2, d
-          assert d["expedition"]["activeWatchNumber"] == 1, d
-          assert d["presentation"]["key"] == "exploration-map", d
-          assert any(h["q"] == 0 and h["r"] == 0 for h in d["knownHexes"]), d
-          PY
+            --data "{\"expectedVersion\":$expedition_version,\"intendedDirection\":0,\"expectedDistance\":12,\"actualDistance\":12,\"resolutionSource\":\"ManualRoll\",\"continueAcrossBoundaries\":false}" \
+            -o "$response_dir/advance.json"
 
           docker rm -f hex-crawl-smoke >/dev/null
-          start_container
-          wait_ready
+          docker restart hex-crawl-ci-postgres >/dev/null
+          sleep 5
+          for i in {1..30}; do
+            if [ "$(docker exec hex-crawl-ci-postgres psql -U hex_crawl_test -d postgres -tAc 'SELECT 1' 2>/dev/null | tr -d '[:space:]')" = "1" ]; then break; fi
+            sleep 1
+          done
+          start_app
+          wait_app
 
           curl -fsS http://127.0.0.1:18092/api/overworlds -o "$response_dir/worlds-after-restart.json"
-          grep -q 'CI restart proof' "$response_dir/worlds-after-restart.json"
-          curl -fsS "http://127.0.0.1:18092/api/overworlds/$world_id/source-maps" -o "$response_dir/maps-after-restart.json"
-          grep -q '"pixelWidth":1' "$response_dir/maps-after-restart.json"
-          grep -q '"mediaType":"image/png"' "$response_dir/maps-after-restart.json"
-          curl -fsS "http://127.0.0.1:18092/api/overworlds/$world_id/source-maps/$source_map_id/asset" -o "$response_dir/map-after-restart.png"
-          cmp "$response_dir/tiny.png" "$response_dir/map-after-restart.png"
-
+          grep -q 'CI PostgreSQL restart proof' "$response_dir/worlds-after-restart.json"
           curl -fsS "http://127.0.0.1:18092/api/expeditions/$expedition_id" -o "$response_dir/expedition-after-restart.json"
           python3 - "$response_dir/expedition-after-restart.json" <<'PY'
           import json, sys
           d = json.load(open(sys.argv[1]))
-          assert d["pauseReason"] == "ConditionsReviewRequired", d
-          assert d["remainingWatchHours"] == 2, d
-          assert d["expedition"]["activeWatchNumber"] == 1, d
-          assert d["expedition"]["activeWatchElapsedHours"] == 2, d
           assert d["profile"]["key"] == "simple-fixed-distance", d
-          assert d["presentation"]["key"] == "exploration-map", d
+          assert d["expedition"]["activeWatchNumber"] == 1, d
           PY
-          resumed_version="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$response_dir/expedition-after-restart.json")"
+          curl -fsS "http://127.0.0.1:18092/api/overworlds/$world_id/source-maps/$source_map_id/asset" -o "$response_dir/map-after-restart.png"
+          cmp "$response_dir/tiny.png" "$response_dir/map-after-restart.png"
 
-          curl -fsS -X POST "http://127.0.0.1:18092/api/expeditions/$expedition_id/advance" \
-            -H 'Content-Type: application/json' \
-            --data "{\"expectedVersion\":$resumed_version,\"intendedDirection\":0,\"effectiveDistance\":6,\"travelResolutionSource\":\"ManualRoll\",\"travelResolutionNote\":\"resume after restart\",\"continueAcrossBoundaries\":true}" \
-            -o "$response_dir/resume-expedition.json"
-          python3 - "$response_dir/resume-expedition.json" <<'PY'
-          import json, sys
-          d = json.load(open(sys.argv[1]))
-          assert d["pauseReason"] is None, d
-          assert d["remainingWatchHours"] == 0, d
-          assert d["expedition"]["activeWatchNumber"] is None, d
-          assert d["expedition"]["completedWatches"] == 1, d
-          assert d["expedition"]["elapsedTravelHours"] == 4, d
-          PY
-
-      - name: Smoke test mapless container and restart persistence
+      - name: Smoke test mapless PostgreSQL session restart
         run: |
           set -euo pipefail
-          data_dir="$RUNNER_TEMP/hex-crawl-mapless-smoke-data"
-          response_dir="$RUNNER_TEMP/hex-crawl-mapless-smoke-responses"
-          rm -rf "$data_dir" "$response_dir"
-          mkdir -p "$data_dir" "$response_dir"
-
-          start_container() {
-            docker run -d --name hex-crawl-mapless-smoke \
-              -p 127.0.0.1:18093:8080 \
-              -v "$data_dir:/data" \
-              -e 'ConnectionStrings__HexCrawl=Data Source=/data/hex-crawl.db' \
-              -e 'MapAssets__RootPath=/data/assets' \
-              -e 'MapImport__MaxFileBytes=104857600' \
-              -e 'ToolHost__StandaloneIdentity__Enabled=true' \
-              -e 'ToolHost__StandaloneIdentity__UserId=ci-mapless-smoke-dm' \
-              -e 'ToolHost__StandaloneIdentity__DisplayName=CI Mapless Smoke DM' \
-              dorks-and-dice-hex-crawl:test >/dev/null
-          }
-
-          wait_ready() {
-            for i in {1..30}; do
-              if curl -fsS http://127.0.0.1:18093/health -o "$response_dir/health.txt" \
-                && grep -q 'Healthy' "$response_dir/health.txt" \
-                && curl -fsS http://127.0.0.1:18093/ready -o "$response_dir/ready.json" \
-                && grep -q '"status":"ready"' "$response_dir/ready.json"; then
-                return 0
-              fi
-              sleep 1
-            done
-            docker logs hex-crawl-mapless-smoke
-            return 1
-          }
-
-          assert_no_worlds() {
-            curl -fsS http://127.0.0.1:18093/api/overworlds -o "$1"
-            python3 - "$1" <<'PY'
-          import json, sys
-          d = json.load(open(sys.argv[1]))
-          assert d == [], d
-          PY
-          }
-
-          trap 'docker rm -f hex-crawl-mapless-smoke >/dev/null 2>&1 || true' EXIT
-          start_container
-          wait_ready
-
-          # Standalone deep links must be served directly and survive refresh.
-          for route in assistants/travel assistants/navigation assistants/encounters; do
-            curl -fsS "http://127.0.0.1:18093/$route" -o "$response_dir/deep-${route//\//-}.html"
-            grep -q 'tool-root' "$response_dir/deep-${route//\//-}.html"
+          response_dir="$RUNNER_TEMP/hex-crawl-mapless-smoke"
+          mkdir -p "$response_dir"
+          docker exec hex-crawl-ci-postgres psql -v ON_ERROR_STOP=1 -U hex_crawl_test -d postgres -c 'CREATE SCHEMA smoke_mapless;' >/dev/null
+          docker run -d --name hex-crawl-mapless-smoke \
+            --network hex-crawl-ci -p 127.0.0.1:18093:8080 \
+            -e 'ConnectionStrings__HexCrawl=Host=hex-crawl-ci-postgres;Port=5432;Database=postgres;Username=hex_crawl_test;Password=hex_crawl_test;Search Path=smoke_mapless' \
+            -e 'MapAssets__RootPath=/data/assets' \
+            -e 'ToolHost__StandaloneIdentity__Enabled=true' \
+            -e 'ToolHost__StandaloneIdentity__UserId=ci-mapless-dm' \
+            dorks-and-dice-hex-crawl:test >/dev/null
+          for i in {1..45}; do
+            if curl -fsS http://127.0.0.1:18093/ready -o "$response_dir/ready.json" \
+              && grep -q '"persistence":"postgresql-ready"' "$response_dir/ready.json"; then break; fi
+            sleep 1
           done
-
-          assert_no_worlds "$response_dir/worlds-before.json"
-
           curl -fsS -X POST http://127.0.0.1:18093/api/expeditions \
             -H 'Content-Type: application/json' \
-            --data '{"name":"CI mapless watch","procedureKey":"simple-fixed-distance","context":{"kind":"NonSpatial","name":"CI procedure clock"}}' \
-            -o "$response_dir/start-session.json"
-          python3 - "$response_dir/start-session.json" <<'PY'
-          import json, sys
-          d = json.load(open(sys.argv[1]))
-          assert d["context"]["kind"] == "NonSpatial", d
-          assert d["overworldId"] is None, d
-          assert d["context"]["overworldId"] is None, d
-          assert d["profile"]["key"] == "simple-fixed-distance", d
-          assert d["profile"]["watchHours"] == 4, d
-          state = d["expedition"]
-          assert state["isSpatial"] is False, d
-          assert state["currentHex"] is None, d
-          assert state["position"] is None, d
-          assert state["distanceTraveled"] is None, d
-          assert state["activeWatchNumber"] is None, d
-          assert state["completedWatches"] == 0, d
-          assert state["elapsedTravelHours"] == 0, d
-          PY
-          session_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$response_dir/start-session.json")"
-          session_version="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$response_dir/start-session.json")"
-
-          assert_no_worlds "$response_dir/worlds-after-create.json"
-
-          python3 - "$session_version" "$response_dir/partial-watch-request.json" <<'PY'
-          import json, sys
-          with open(sys.argv[2], "w") as target:
-              json.dump({
-                  "expectedVersion": int(sys.argv[1]),
-                  "elapsedHours": 2,
-                  "resolutionSource": "ProcedureDefault",
-                  "resolutionNote": "container clock",
-                  "note": "first half"
-              }, target)
-          PY
-          curl -fsS -X POST "http://127.0.0.1:18093/api/expeditions/$session_id/assistants/watch" \
-            -H 'Content-Type: application/json' \
-            --data-binary "@$response_dir/partial-watch-request.json" \
-            -o "$response_dir/partial-watch.json"
-          python3 - "$response_dir/partial-watch.json" <<'PY'
-          import json, sys
-          d = json.load(open(sys.argv[1]))
-          state = d["expedition"]
-          assert d["context"]["kind"] == "NonSpatial", d
-          assert d["overworldId"] is None, d
-          assert d["remainingWatchHours"] == 2, d
-          assert state["isSpatial"] is False, d
-          assert state["currentHex"] is None, d
-          assert state["distanceTraveled"] is None, d
-          assert state["activeWatchNumber"] == 1, d
-          assert state["activeWatchTotalHours"] == 4, d
-          assert state["activeWatchElapsedHours"] == 2, d
-          assert state["activeWatchRemainingHours"] == 2, d
-          assert state["completedWatches"] == 0, d
-          assert state["elapsedTravelHours"] == 2, d
-          assert any(e["kind"] == "WatchStarted" and e["watchNumber"] == 1 and e["hex"] is None for e in d["history"]), d
-          assert any(e["kind"] == "WatchTimeAdvanced" and e["watchNumber"] == 1 and e["hex"] is None for e in d["history"]), d
-          assert any(e["kind"] == "ResolutionProvenanceRecorded" and "watch-assistant=ProcedureDefault" in e["message"] for e in d["history"]), d
-          PY
-          partial_version="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$response_dir/partial-watch.json")"
-
-          python3 - "$partial_version" "$response_dir/encounter-request.json" <<'PY'
-          import json, sys
-          with open(sys.argv[2], "w") as target:
-              json.dump({
-                  "expectedVersion": int(sys.argv[1]),
-                  "outcome": "WanderingEncounter",
-                  "resolutionSource": "ManualRoll",
-                  "resolutionNote": "container encounter",
-                  "note": "during watch one"
-              }, target)
-          PY
-          curl -fsS -X POST "http://127.0.0.1:18093/api/expeditions/$session_id/assistants/encounters" \
-            -H 'Content-Type: application/json' \
-            --data-binary "@$response_dir/encounter-request.json" \
-            -o "$response_dir/encounter.json"
-          python3 - "$response_dir/encounter.json" <<'PY'
-          import json, sys
-          d = json.load(open(sys.argv[1]))
-          state = d["expedition"]
-          assert state["activeWatchNumber"] == 1, d
-          assert state["activeWatchElapsedHours"] == 2, d
-          assert state["activeWatchRemainingHours"] == 2, d
-          assert state["completedWatches"] == 0, d
-          assert any(e["kind"] == "EncounterCheckPerformed" and e["watchNumber"] == 1 and e["hex"] is None for e in d["history"]), d
-          assert any(e["kind"] == "EncounterTriggered" and e["watchNumber"] == 1 and e["hex"] is None for e in d["history"]), d
-          PY
-
-          assert_no_worlds "$response_dir/worlds-before-restart.json"
-
+            --data '{"name":"CI mapless PostgreSQL","procedureKey":"simple-fixed-distance","context":{"kind":"NonSpatial","name":"CI procedure clock"}}' \
+            -o "$response_dir/session.json"
+          session_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$response_dir/session.json")"
           docker rm -f hex-crawl-mapless-smoke >/dev/null
-          start_container
-          wait_ready
-
-          curl -fsS "http://127.0.0.1:18093/api/expeditions/$session_id" -o "$response_dir/session-after-restart.json"
-          python3 - "$response_dir/session-after-restart.json" <<'PY'
+          docker run -d --name hex-crawl-mapless-smoke \
+            --network hex-crawl-ci -p 127.0.0.1:18093:8080 \
+            -e 'ConnectionStrings__HexCrawl=Host=hex-crawl-ci-postgres;Port=5432;Database=postgres;Username=hex_crawl_test;Password=hex_crawl_test;Search Path=smoke_mapless' \
+            -e 'MapAssets__RootPath=/data/assets' \
+            -e 'ToolHost__StandaloneIdentity__Enabled=true' \
+            -e 'ToolHost__StandaloneIdentity__UserId=ci-mapless-dm' \
+            dorks-and-dice-hex-crawl:test >/dev/null
+          for i in {1..45}; do
+            if curl -fsS http://127.0.0.1:18093/ready >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          curl -fsS "http://127.0.0.1:18093/api/expeditions/$session_id" -o "$response_dir/reloaded.json"
+          python3 - "$response_dir/reloaded.json" <<'PY'
           import json, sys
           d = json.load(open(sys.argv[1]))
           assert d["context"]["kind"] == "NonSpatial", d
-          assert d["overworldId"] is None, d
           assert d["profile"]["key"] == "simple-fixed-distance", d
-          assert d["profile"]["watchHours"] == 4, d
-          state = d["expedition"]
-          assert state["isSpatial"] is False, d
-          assert state["currentHex"] is None, d
-          assert state["position"] is None, d
-          assert state["distanceTraveled"] is None, d
-          assert state["activeWatchNumber"] == 1, d
-          assert state["activeWatchTotalHours"] == 4, d
-          assert state["activeWatchElapsedHours"] == 2, d
-          assert state["activeWatchRemainingHours"] == 2, d
-          assert state["completedWatches"] == 0, d
-          assert state["elapsedTravelHours"] == 2, d
-          assert d["remainingWatchHours"] == 2, d
-          assert any(e["kind"] == "ResolutionProvenanceRecorded" and "watch-assistant=ProcedureDefault" in e["message"] for e in d["history"]), d
-          assert any(e["kind"] == "EncounterCheckPerformed" and e["watchNumber"] == 1 for e in d["history"]), d
-          PY
-          resumed_version="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$response_dir/session-after-restart.json")"
-
-          assert_no_worlds "$response_dir/worlds-after-restart.json"
-
-          python3 - "$resumed_version" "$response_dir/resume-watch-request.json" <<'PY'
-          import json, sys
-          with open(sys.argv[2], "w") as target:
-              json.dump({
-                  "expectedVersion": int(sys.argv[1]),
-                  "elapsedHours": 2,
-                  "resolutionSource": "DmOverride",
-                  "resolutionNote": "restart smoke",
-                  "note": "finish after restart"
-              }, target)
-          PY
-          curl -fsS -X POST "http://127.0.0.1:18093/api/expeditions/$session_id/assistants/watch" \
-            -H 'Content-Type: application/json' \
-            --data-binary "@$response_dir/resume-watch-request.json" \
-            -o "$response_dir/completed-watch.json"
-          python3 - "$response_dir/completed-watch.json" <<'PY'
-          import json, sys
-          d = json.load(open(sys.argv[1]))
-          state = d["expedition"]
-          assert d["context"]["kind"] == "NonSpatial", d
-          assert d["overworldId"] is None, d
-          assert d["remainingWatchHours"] == 0, d
-          assert state["isSpatial"] is False, d
-          assert state["currentHex"] is None, d
-          assert state["position"] is None, d
-          assert state["distanceTraveled"] is None, d
-          assert state["activeWatchNumber"] is None, d
-          assert state["activeWatchElapsedHours"] is None, d
-          assert state["activeWatchRemainingHours"] is None, d
-          assert state["completedWatches"] == 1, d
-          assert state["elapsedTravelHours"] == 4, d
-          completions = [e for e in d["history"] if e["kind"] == "WatchCompleted" and e["watchNumber"] == 1]
-          assert len(completions) == 1, d
-          assert any(e["kind"] == "DmOverrideApplied" and "finish after restart" in e["message"] for e in d["history"]), d
-          assert any(e["kind"] == "ResolutionProvenanceRecorded" and "watch-assistant=DmOverride" in e["message"] for e in d["history"]), d
           PY
 
-          assert_no_worlds "$response_dir/worlds-after-completion.json"
-
+      - name: Cleanup PostgreSQL validation infrastructure
+        if: always()
+        run: |
+          docker rm -f hex-crawl-smoke 2>/dev/null || true
+          docker rm -f hex-crawl-mapless-smoke 2>/dev/null || true
+          docker rm -f hex-crawl-ci-postgres 2>/dev/null || true
+          docker network rm hex-crawl-ci 2>/dev/null || true

@@ -11,7 +11,7 @@ public sealed class RasterGridAlignmentRecordPreservationTests
     [Fact]
     public async Task SameProjectReimportDoesNotDuplicateOrRepairAndExplicitRepairPreservesAll2616Records()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"hex-crawl-grid-records-{Guid.NewGuid():N}.db");
+        var path = PostgresTestDatabase.CreateConnectionString();
         try
         {
             var store = await OpenStoreAsync(path);
@@ -161,18 +161,12 @@ public sealed class RasterGridAlignmentRecordPreservationTests
         Assert.Equal(expectedArchive, map.SourceArchive);
     }
 
-    private static async Task<SqliteHexCrawlStore> OpenStoreAsync(string path)
+    private static async Task<PostgresHexCrawlStore> OpenStoreAsync(string path)
     {
-        var store = new SqliteHexCrawlStore($"Data Source={path}");
+        var store = new PostgresHexCrawlStore(path);
         await store.InitializeAsync();
         return store;
     }
 
-    private static void DeleteDatabase(string path)
-    {
-        foreach (var candidate in new[] { path, path + "-wal", path + "-shm" })
-        {
-            if (File.Exists(candidate)) File.Delete(candidate);
-        }
-    }
+    private static void DeleteDatabase(string path) => PostgresTestDatabase.Delete(path);
 }

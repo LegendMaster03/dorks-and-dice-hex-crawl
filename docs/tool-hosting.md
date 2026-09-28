@@ -66,7 +66,7 @@ CI validates both hosting paths.
 
 The Embedded Module smoke test exercises **Embedded Module integration contract v2** while supplying the Site's current **Tool Host context payload v1**. It proves persistent GET/POST calls use `${apiBaseUrl}/upstream` instead of bypassing the host gateway.
 
-The standalone container smoke test uses an explicit development identity and deployment-owned SQLite volume. It verifies health/readiness, direct deep-route shell refresh, creates a persisted overworld, destroys/restarts the application container against the same volume, and confirms that the overworld is still present.
+The standalone container smoke test uses an explicit development identity, an isolated ephemeral PostgreSQL instance, and a filesystem asset directory. It requires `/health`, PostgreSQL-aware `/ready`, and frontend availability; creates persisted world/session data and a raster asset; restarts both the application and PostgreSQL; and confirms structured state and the filesystem asset survive the restart sequence.
 
 The .NET integration suite separately verifies that persistent APIs are unauthorized when neither a Tool Host ticket nor the explicit standalone-development identity is present.
 
@@ -78,4 +78,4 @@ The deployment runs on the dedicated `dorks-and-dice-hex-crawl` self-hosted runn
 
 Production Compose uses the service/container identity `dorks-and-dice-hex-crawl`, joins the external `dorks-and-dice-backend` network, and configures `ToolHost__BaseUrl=http://dorks-and-dice-site:8080`. It does not expose the development-only `8092:8080` host port and does not enable the standalone development identity.
 
-Persistent SQLite state is deployment-owned. Production Compose mounts the named `hex-crawl-data` volume at `/data` and sets `ConnectionStrings__HexCrawl=Data Source=/data/hex-crawl.db`. Replacing the application container during deployment does not remove that named volume, so application state survives normal redeployment. Credentials and machine-specific source-map paths remain outside the repository; future large map assets continue to use logical `AssetKey` references until a separate asset-storage provider is selected.
+Structured Hex Crawl state is PostgreSQL-backed. Production Compose requires `ConnectionStrings__HexCrawl` from the server-side environment file and does not define a permanent PostgreSQL container because production uses the platform/shared database arrangement. The named `hex-crawl-data` volume remains mounted at `/data` for `/data/assets` and for retaining the legacy `hex-crawl.db` rollback artifact during cutover. Replacing the application container therefore does not remove raster/source-map assets. Database credentials and machine-specific configuration remain outside the repository.

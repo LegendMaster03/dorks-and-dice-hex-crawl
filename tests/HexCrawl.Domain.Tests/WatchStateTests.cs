@@ -26,7 +26,7 @@ public sealed class WatchStateTests
 
         var result = new CrawlRuntimeEngine().Advance(
             context,
-            CrawlProcedureProfile.SimplifiedFixedDistance(),
+            TestProcedureProfiles.FixedDistance(),
             expedition,
             plan,
             new WatchAdvanceInputs(TravelDistanceResolver.Fixed(new DistanceMeasure(12, DistanceUnit.Miles))));

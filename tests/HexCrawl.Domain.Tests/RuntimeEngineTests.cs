@@ -12,7 +12,7 @@ public sealed class RuntimeEngineTests
     public void FixedDistanceWatchUsesResolvedDistance()
     {
         var setup = CreateSetup();
-        var profile = CrawlProcedureProfile.SimplifiedFixedDistance();
+        var profile = TestProcedureProfiles.FixedDistance();
 
         var result = Advance(setup, profile, 4, continueAcrossBoundaries: true);
 
@@ -28,7 +28,7 @@ public sealed class RuntimeEngineTests
         var setup = CreateSetup();
         var result = Advance(
             setup,
-            CrawlProcedureProfile.AlexandrianAdvancedBaseline(),
+            TestProcedureProfiles.AdvancedContinuous(),
             2,
             navigation: NavigationCheckOutcome.Succeeded,
             encounter: ResolvedEncounter.None);
@@ -44,7 +44,7 @@ public sealed class RuntimeEngineTests
         var setup = CreateSetup();
         var result = Advance(
             setup,
-            CrawlProcedureProfile.AlexandrianAdvancedBaseline(),
+            TestProcedureProfiles.AdvancedContinuous(),
             2,
             navigation: NavigationCheckOutcome.Failed,
             veerSteps: 1,
@@ -62,7 +62,7 @@ public sealed class RuntimeEngineTests
         var setup = CreateSetup(expedition: CreateExpedition(navigation: new NavigationRuntimeState(true, 2)));
         var result = Advance(
             setup,
-            CrawlProcedureProfile.AlexandrianAdvancedBaseline(),
+            TestProcedureProfiles.AdvancedContinuous(),
             1,
             navigation: NavigationCheckOutcome.Failed,
             veerSteps: 1,
@@ -78,7 +78,7 @@ public sealed class RuntimeEngineTests
         var setup = CreateSetup();
         var first = Advance(
             setup,
-            CrawlProcedureProfile.AlexandrianAdvancedBaseline(),
+            TestProcedureProfiles.AdvancedContinuous(),
             6,
             navigation: NavigationCheckOutcome.Failed,
             veerSteps: 1,
@@ -88,7 +88,7 @@ public sealed class RuntimeEngineTests
         Assert.Equal(RuntimePauseReason.LostRecognitionRequired, first.PauseReason);
         var resumed = _engine.Advance(
             setup.Context,
-            CrawlProcedureProfile.AlexandrianAdvancedBaseline(),
+            TestProcedureProfiles.AdvancedContinuous(),
             first.Expedition,
             Plan(0, true),
             new WatchAdvanceInputs(
@@ -119,7 +119,7 @@ public sealed class RuntimeEngineTests
 
         var result = Advance(
             setup,
-            CrawlProcedureProfile.SimplifiedFixedDistance() with { SupportsDeliberateDoubleBack = true },
+            TestProcedureProfiles.FixedDistance() with { SupportsDeliberateDoubleBack = true },
             0,
             direction: direction,
             continueAcrossBoundaries: true);
@@ -138,7 +138,7 @@ public sealed class RuntimeEngineTests
             Progress = Miles(5)
         };
         var setup = CreateSetup(expedition: CreateExpedition(traversal: traversal));
-        var profile = CrawlProcedureProfile.AlexandrianAdvancedBaseline() with
+        var profile = TestProcedureProfiles.AdvancedContinuous() with
         {
             UsesNavigationChecks = false,
             EncounterCadence = EncounterCheckCadence.None
@@ -161,7 +161,7 @@ public sealed class RuntimeEngineTests
             Progress = Miles(4)
         };
         var setup = CreateSetup(expedition: CreateExpedition(traversal: traversal));
-        var profile = CrawlProcedureProfile.AlexandrianAdvancedBaseline() with
+        var profile = TestProcedureProfiles.AdvancedContinuous() with
         {
             UsesNavigationChecks = false,
             EncounterCadence = EncounterCheckCadence.None
@@ -183,7 +183,7 @@ public sealed class RuntimeEngineTests
     public void SingleBoundaryCrossingCarriesRemainingProgressIntoNextHex()
     {
         var setup = CreateSetup();
-        var result = Advance(setup, CrawlProcedureProfile.SimplifiedFixedDistance(), 8, continueAcrossBoundaries: true);
+        var result = Advance(setup, TestProcedureProfiles.FixedDistance(), 8, continueAcrossBoundaries: true);
 
         Assert.Equal(new HexCoordinate(1, 0), result.Expedition.CurrentHex);
         Assert.Equal(2, result.Expedition.Traversal.Progress.Value, 6);
@@ -194,7 +194,7 @@ public sealed class RuntimeEngineTests
     public void OneWatchCanCrossMultipleHexes()
     {
         var setup = CreateSetup();
-        var result = Advance(setup, CrawlProcedureProfile.SimplifiedFixedDistance(), 30, continueAcrossBoundaries: true);
+        var result = Advance(setup, TestProcedureProfiles.FixedDistance(), 30, continueAcrossBoundaries: true);
 
         Assert.Equal(new HexCoordinate(3, 0), result.Expedition.CurrentHex);
         Assert.Equal(3, result.Events.Count(item => item.Kind == CrawlRuntimeEventKind.HexEntered));
@@ -205,7 +205,7 @@ public sealed class RuntimeEngineTests
     public void BoundaryPausePreservesWatchRemainderForConditionReview()
     {
         var setup = CreateSetup();
-        var result = Advance(setup, CrawlProcedureProfile.SimplifiedFixedDistance(), 12, continueAcrossBoundaries: false);
+        var result = Advance(setup, TestProcedureProfiles.FixedDistance(), 12, continueAcrossBoundaries: false);
 
         Assert.Equal(RuntimePauseReason.ConditionsReviewRequired, result.PauseReason);
         Assert.Equal(TimeSpan.FromHours(2), result.RemainingWatchTime);
@@ -219,7 +219,7 @@ public sealed class RuntimeEngineTests
         var setup = CreateSetup();
         var result = Advance(
             setup,
-            CrawlProcedureProfile.SimplifiedFixedDistance(),
+            TestProcedureProfiles.FixedDistance(),
             6,
             continueAcrossBoundaries: false);
 
@@ -240,7 +240,7 @@ public sealed class RuntimeEngineTests
     public void FinalHexStepAtWatchEndCompletesWithoutConditionReviewPause()
     {
         var setup = CreateSetup();
-        var profile = CrawlProcedureProfile.SimplifiedHexStep();
+        var profile = TestProcedureProfiles.HexStep();
         var result = _engine.Advance(
             setup.Context,
             profile,
@@ -267,7 +267,7 @@ public sealed class RuntimeEngineTests
         var setup = CreateSetup();
         var result = Advance(
             setup,
-            CrawlProcedureProfile.AlexandrianAdvancedBaseline(),
+            TestProcedureProfiles.AdvancedContinuous(),
             0,
             navigation: NavigationCheckOutcome.Succeeded,
             encounter: ResolvedEncounter.None);
@@ -290,7 +290,7 @@ public sealed class RuntimeEngineTests
 
         var result = Advance(
             setup,
-            CrawlProcedureProfile.AlexandrianAdvancedBaseline(),
+            TestProcedureProfiles.AdvancedContinuous(),
             8,
             navigation: NavigationCheckOutcome.Succeeded,
             encounter: encounter,
@@ -315,7 +315,7 @@ public sealed class RuntimeEngineTests
 
         var result = Advance(
             setup,
-            CrawlProcedureProfile.AlexandrianAdvancedBaseline(),
+            TestProcedureProfiles.AdvancedContinuous(),
             0,
             navigation: NavigationCheckOutcome.Succeeded,
             encounter: encounter);
@@ -332,7 +332,7 @@ public sealed class RuntimeEngineTests
     {
         var setup = CreateSetup();
 
-        var result = Advance(setup, CrawlProcedureProfile.SimplifiedFixedDistance(), 8, continueAcrossBoundaries: true);
+        var result = Advance(setup, TestProcedureProfiles.FixedDistance(), 8, continueAcrossBoundaries: true);
 
         Assert.Equal(new HexCoordinate(1, 0), result.Expedition.CurrentHex);
         Assert.Equal(new WorldPoint(0, 0), result.Expedition.Position);
@@ -342,7 +342,7 @@ public sealed class RuntimeEngineTests
     public void DisabledNavigationIgnoresNavigationRollMechanics()
     {
         var setup = CreateSetup();
-        var result = Advance(setup, CrawlProcedureProfile.SimplifiedFixedDistance(), 1);
+        var result = Advance(setup, TestProcedureProfiles.FixedDistance(), 1);
 
         Assert.False(result.Expedition.Navigation.IsLost);
         Assert.Equal(result.Expedition.IntendedDirection, result.Expedition.ActualDirection);
@@ -352,7 +352,7 @@ public sealed class RuntimeEngineTests
     public void SimplifiedHexStepProfileCanCrossMultipleHexes()
     {
         var setup = CreateSetup();
-        var profile = CrawlProcedureProfile.SimplifiedHexStep();
+        var profile = TestProcedureProfiles.HexStep();
         var result = _engine.Advance(
             setup.Context,
             profile,
@@ -372,7 +372,7 @@ public sealed class RuntimeEngineTests
         var travel = TravelDistanceResolver.Override(Miles(12), Miles(3), "DM set travel to 3 miles");
         var result = _engine.Advance(
             setup.Context,
-            CrawlProcedureProfile.SimplifiedFixedDistance(),
+            TestProcedureProfiles.FixedDistance(),
             setup.Expedition,
             Plan(0, true),
             new WatchAdvanceInputs(travel, DmOverrideNote: "mudslide ruling"));
@@ -385,7 +385,7 @@ public sealed class RuntimeEngineTests
     public void IdenticalInputsReplayDeterministically()
     {
         var setup = CreateSetup();
-        var profile = CrawlProcedureProfile.AlexandrianAdvancedBaseline();
+        var profile = TestProcedureProfiles.AdvancedContinuous();
         var encounter = new ResolvedEncounter(
             EncounterOutcomeKind.WanderingEncounter,
             TimeSpan.FromHours(3),
@@ -411,7 +411,7 @@ public sealed class RuntimeEngineTests
         var setup = CreateSetup();
         var result = Advance(
             setup,
-            CrawlProcedureProfile.AlexandrianAdvancedBaseline(),
+            TestProcedureProfiles.AdvancedContinuous(),
             1,
             NavigationCheckOutcome.Succeeded,
             encounter: ResolvedEncounter.None);

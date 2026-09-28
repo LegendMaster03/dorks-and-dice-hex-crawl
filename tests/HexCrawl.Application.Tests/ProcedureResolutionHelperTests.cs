@@ -9,7 +9,7 @@ public sealed class ProcedureResolutionHelperTests
     [Fact]
     public void AlexandrianHelperGeneratesExplicitResolvedInputsWithAutomaticProvenance()
     {
-        var profile = CrawlProcedureProfile.AlexandrianAdvancedBaseline();
+        var profile = CrawlProcedureCatalog.Resolve("alexandrian-advanced").Materialize();
         var resolver = new ProcedureResolutionResolver(new SequenceRandomSource(4, 5, 13, 1, 6));
         var result = resolver.Resolve(
             profile,
@@ -58,7 +58,7 @@ public sealed class ProcedureResolutionHelperTests
     [Fact]
     public void FailedNavigationUsesDmConfirmedNonZeroVeer()
     {
-        var baseline = CrawlProcedureProfile.AlexandrianAdvancedBaseline();
+        var baseline = CrawlProcedureCatalog.Resolve("alexandrian-advanced").Materialize();
         var profile = baseline with
         {
             EncounterCadence = EncounterCheckCadence.None,

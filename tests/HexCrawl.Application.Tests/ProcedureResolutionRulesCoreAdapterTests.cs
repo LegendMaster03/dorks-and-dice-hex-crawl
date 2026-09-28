@@ -108,7 +108,7 @@ public sealed class ProcedureResolutionRulesCoreAdapterTests
 
         Assert.Equal(15, prepared.NavigationDifficultyClass);
 
-        var baseline = CrawlProcedureProfile.AlexandrianAdvancedBaseline();
+        var baseline = CrawlProcedureCatalog.Resolve("alexandrian-advanced").Materialize();
         var navigationOnly = baseline with
         {
             EncounterCadence = EncounterCheckCadence.None,
@@ -226,32 +226,23 @@ public sealed class ProcedureResolutionRulesCoreAdapterTests
     [Fact]
     public async Task CampaignScopeRoundTripsWithoutDatabaseSchemaMigration()
     {
-        var databasePath = Path.Combine(
-            Path.GetTempPath(),
-            $"hex-crawl-rules-scope-{Guid.NewGuid():N}.db");
-        try
-        {
-            var store = new SqliteHexCrawlStore($"Data Source={databasePath}");
-            await store.InitializeAsync();
-            var campaignId = Guid.NewGuid();
-            var expedition = Expedition(campaignId);
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var store = new PostgresHexCrawlStore(database.ConnectionString);
+        await store.InitializeAsync();
+        var campaignId = Guid.NewGuid();
+        var expedition = Expedition(campaignId);
 
-            await store.CreateExpeditionAsync(expedition);
-            var loaded = await store.GetExpeditionAsync(expedition.Id, expedition.OwnerUserId);
+        await store.CreateExpeditionAsync(expedition);
+        var loaded = await store.GetExpeditionAsync(expedition.Id, expedition.OwnerUserId);
 
-            Assert.NotNull(loaded);
-            Assert.Equal(campaignId, loaded.CampaignId);
-        }
-        finally
-        {
-            if (File.Exists(databasePath)) File.Delete(databasePath);
-        }
+        Assert.NotNull(loaded);
+        Assert.Equal(campaignId, loaded!.CampaignId);
     }
 
     private static StoredExpedition Expedition(Guid? campaignId = null)
     {
         var now = DateTimeOffset.UtcNow;
-        var profile = CrawlProcedureProfile.AlexandrianAdvancedBaseline();
+        var profile = CrawlProcedureCatalog.Resolve("alexandrian-advanced").Materialize();
         return new StoredExpedition(
             "Rules Core test",
             State(),

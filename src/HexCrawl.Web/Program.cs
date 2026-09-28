@@ -22,7 +22,8 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 var connectionString = builder.Configuration.GetConnectionString("HexCrawl");
 if (string.IsNullOrWhiteSpace(connectionString))
 {
-    connectionString = "Data Source=hex-crawl.db";
+    throw new InvalidOperationException(
+        "ConnectionStrings:HexCrawl must contain a PostgreSQL connection string.");
 }
 
 var mapImportOptions = builder.Configuration.GetSection(MapImportOptions.SectionName).Get<MapImportOptions>() ?? new MapImportOptions();
@@ -50,7 +51,8 @@ if (!string.IsNullOrWhiteSpace(toolHostBaseUrl))
     }
 }
 
-builder.Services.AddSingleton<IHexCrawlStore>(_ => new SqliteHexCrawlStore(connectionString));
+builder.Services.AddSingleton(new PostgresHexCrawlStore(connectionString));
+builder.Services.AddSingleton<IHexCrawlStore>(services => services.GetRequiredService<PostgresHexCrawlStore>());
 builder.Services.AddSingleton<IMapAssetStore>(_ => new FilesystemMapAssetStore(assetRoot));
 builder.Services.AddSingleton<IProcedureResolutionRandomSource, CryptographicProcedureResolutionRandomSource>();
 builder.Services.AddHttpContextAccessor();
@@ -91,13 +93,32 @@ app.UseMiddleware<HostedToolAuthenticationMiddleware>();
 app.UseStaticFiles();
 
 app.MapHealthChecks("/health");
-app.MapGet("/ready", () => Results.Ok(new
+app.MapGet("/ready", async (PostgresHexCrawlStore store, CancellationToken cancellationToken) =>
 {
-    status = "ready",
-    database = "sqlite",
-    persistence = "initialized",
-    mapAssets = "filesystem"
-}));
+    try
+    {
+        if (await store.IsReadyAsync(cancellationToken))
+        {
+            return Results.Ok(new
+            {
+                status = "ready",
+                persistence = "postgresql-ready",
+                mapAssets = "filesystem"
+            });
+        }
+    }
+    catch
+    {
+        // Readiness intentionally reports only availability, not connection details.
+    }
+
+    return Results.Json(new
+    {
+        status = "not-ready",
+        persistence = "postgresql-unavailable",
+        mapAssets = "filesystem"
+    }, statusCode: StatusCodes.Status503ServiceUnavailable);
+});
 
 app.MapGet("/api", () => Results.Ok(new
 {

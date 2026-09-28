@@ -22,7 +22,7 @@ public sealed class OverworldDeletionEndpointsTests
             var worldId = world.GetProperty("id").GetGuid();
             var uploaded = await Upload(client, worldId, world.GetProperty("version").GetInt64());
             var version = uploaded.GetProperty("version").GetInt64();
-            var mapsDirectory = Path.Combine(database + ".assets", "maps");
+            var mapsDirectory = Path.Combine(TestWebHost.AssetRoot(database), "maps");
             Assert.Single(Directory.GetFiles(mapsDirectory));
 
             using var response = await client.DeleteAsync($"/api/overworlds/{worldId:D}?expectedVersion={version}");

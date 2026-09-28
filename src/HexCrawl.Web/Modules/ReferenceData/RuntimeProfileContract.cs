@@ -1,3 +1,4 @@
+using HexCrawl.Application;
 using HexCrawl.Domain.Procedure;
 
 namespace HexCrawl.Web.Api;
@@ -84,9 +85,15 @@ public sealed record RuntimeProfileContract(
     double DirectionChangeProgressCostFactor,
     ProcedureResolutionHelperProfileContract? ResolutionHelpers = null)
 {
-    public static RuntimeProfileContract From(CrawlProcedureProfile profile) => new(
-        profile.Key,
-        profile.Name,
+    public static RuntimeProfileContract From(CrawlProcedurePresetDefinition preset) =>
+        From(preset.ExecutableProcedureTemplate, preset.PresetKey, preset.DisplayName);
+
+    public static RuntimeProfileContract From(CrawlProcedureProfile profile) =>
+        From(profile, profile.Key, profile.Name);
+
+    private static RuntimeProfileContract From(CrawlProcedureProfile profile, string key, string name) => new(
+        key,
+        name,
         profile.WatchLength.TotalHours,
         profile.TravelResolution,
         profile.ActualDistanceResolution,

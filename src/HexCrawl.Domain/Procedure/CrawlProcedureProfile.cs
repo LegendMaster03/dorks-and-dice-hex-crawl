@@ -211,68 +211,6 @@ public sealed record CrawlProcedureProfile
         }
     }
 
-    public static CrawlProcedureProfile AlexandrianAdvancedBaseline() => new()
-    {
-        Key = "alexandrian-advanced",
-        Name = "Alexandrian Advanced",
-        WatchLength = TimeSpan.FromHours(4),
-        TravelResolution = TravelResolutionMode.ContinuousDistance,
-        ActualDistanceResolution = ActualDistanceResolutionMode.VariableResolved,
-        EncounterCadence = EncounterCheckCadence.PerWatch,
-        UsesNavigationChecks = true,
-        UsesPersistentVeer = true,
-        TracksIntraHexProgress = true,
-        DirectionChangesCostProgress = true,
-        SupportsDeliberateDoubleBack = true,
-        StartingExitProgressFactor = 0.5d,
-        NearExitProgressFactor = 0.5d,
-        FarExitProgressFactor = 1d,
-        BackExitProgressFactor = 0.5d,
-        DirectionChangeProgressCostFactor = 1d / 6d,
-        ResolutionHelpers = new ProcedureResolutionHelperProfile(
-            Travel: new TravelResolutionHelperProfile(new DiceRollFormula(2, 6, 3), 0.1d),
-            Navigation: new NavigationResolutionHelperProfile(new DiceRollFormula(1, 20)),
-            Encounter: new EncounterResolutionHelperProfile(
-                new DiceRollFormula(1, 8),
-                DiceRollResultSet.From(new[] { 1 }),
-                DiceRollResultSet.From(new[] { 8 }),
-                8))
-    };
-
-    public static CrawlProcedureProfile SimplifiedFixedDistance() => new()
-    {
-        Key = "simple-fixed-distance",
-        Name = "Simple Fixed Distance",
-        WatchLength = TimeSpan.FromHours(4),
-        TravelResolution = TravelResolutionMode.ContinuousDistance,
-        ActualDistanceResolution = ActualDistanceResolutionMode.Fixed,
-        EncounterCadence = EncounterCheckCadence.None,
-        UsesNavigationChecks = false,
-        UsesPersistentVeer = false,
-        TracksIntraHexProgress = true,
-        DirectionChangesCostProgress = false,
-        SupportsDeliberateDoubleBack = false,
-        StartingExitProgressFactor = 0.5d,
-        NearExitProgressFactor = 0.5d,
-        FarExitProgressFactor = 1d,
-        BackExitProgressFactor = 0.5d
-    };
-
-    public static CrawlProcedureProfile SimplifiedHexStep() => new()
-    {
-        Key = "simple-hex-step",
-        Name = "Simple Hex Step",
-        WatchLength = TimeSpan.FromHours(4),
-        TravelResolution = TravelResolutionMode.HexSteps,
-        ActualDistanceResolution = ActualDistanceResolutionMode.Fixed,
-        EncounterCadence = EncounterCheckCadence.None,
-        UsesNavigationChecks = false,
-        UsesPersistentVeer = false,
-        TracksIntraHexProgress = false,
-        DirectionChangesCostProgress = false,
-        SupportsDeliberateDoubleBack = false
-    };
-
     private static void ValidateFactor(double factor, string name, bool allowZero = false)
     {
         var invalidFloor = allowZero ? factor < 0 : factor <= 0;
