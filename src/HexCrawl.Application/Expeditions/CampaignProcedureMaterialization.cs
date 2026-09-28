@@ -16,7 +16,7 @@ public sealed record GenericProcedurePresetRecipe(
 
 public sealed record MaterializedCampaignProcedure(
     CampaignProcedure Procedure,
-    CrawlProcedureProfile CompatibilityProfile,
+    CrawlProcedureProfile? CompatibilityProfile,
     ProcedureOriginMetadata? Origin);
 
 public static class CampaignProcedureMaterializer
@@ -64,7 +64,9 @@ public static class CampaignProcedureMaterializer
             procedure.Validate();
         }
 
-        var profile = CampaignProcedureCompatibilityProjector.Project(procedure);
+        var profile = CampaignProcedureCompatibilityProjector.TryProject(procedure, out var projected)
+            ? projected
+            : null;
         return new MaterializedCampaignProcedure(procedure, profile, preset.Origin);
     }
 
