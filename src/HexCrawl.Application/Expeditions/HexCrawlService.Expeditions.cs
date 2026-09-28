@@ -200,23 +200,15 @@ public sealed partial class HexCrawlService
         GenericProcedureRuntime procedure,
         DistanceUnit unit,
         AdvanceExpeditionCommand command,
-        ResolutionProvenance provenance)
-    {
-        if (procedure.Movement.TravelResolution == TravelResolutionMode.HexSteps)
-        {
-            return command.HexSteps.HasValue
-                ? ResolvedTravelAmount.Steps(command.HexSteps.Value, provenance)
-                : throw new InvalidOperationException("The selected procedure requires a resolved hex-step count.");
-        }
-        if (!command.ExpectedDistance.HasValue || !command.ActualDistance.HasValue)
-        {
-            throw new InvalidOperationException("The selected procedure requires expected and actual travel distance.");
-        }
-        return ResolvedTravelAmount.Distance(
-            new DistanceMeasure(command.ExpectedDistance.Value, unit),
-            new DistanceMeasure(command.ActualDistance.Value, unit),
+        ResolutionProvenance provenance) =>
+        ProcedureTravelInputPolicy.Build(
+            procedure,
+            unit,
+            null,
+            command.ExpectedDistance,
+            command.ActualDistance,
+            command.HexSteps,
             provenance);
-    }
 
     private static ResolvedNavigation? BuildNavigation(
         GenericProcedureRuntime procedure,
