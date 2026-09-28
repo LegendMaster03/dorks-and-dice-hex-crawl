@@ -58,13 +58,17 @@ Travel-mode pace keys, participant activities, marching/party state, provenance,
 
 ## Native generic execution
 
-`GenericProcedureRuntime.Bind` creates an ephemeral execution binding from a pinned `CampaignProcedure`. It dispatches on the embedded mechanic's `ExecutionHandler` and reads that materialized module's parameters directly. It does not resolve the origin preset, call `CrawlProcedureCatalog`, or substitute a current global mechanic definition for the persisted snapshot.
+`GenericProcedureRuntime.Bind` creates an ephemeral execution binding from a pinned `CampaignProcedure`. Runtime support is explicit for the embedded mechanic's execution-handler identifier and mechanic version. The current runtime registers each supported `(ExecutionHandler, Version)` combination directly and then reads that materialized module's parameters. It does not resolve the origin preset, call `CrawlProcedureCatalog`, or substitute a current global mechanic definition for the persisted snapshot.
+
+The runtime support registry is deliberately separate from `GenericProcedureCatalog`: the catalog remains creation-time material, while the execution runtime decides whether it knows how to execute the exact persisted mechanic snapshot.
 
 The binding exposes module-oriented runtime policy (`Time`, `Movement`, `HexProgress`, `Navigation`, `Encounters`, and optional resolution helpers) rather than rebuilding another named or edition-specific profile object.
 
 `CrawlRuntimeEngine` has a native `CampaignProcedure` entry point. Its deterministic movement, navigation, watch lifecycle, encounter timing, pause/resume, and event-transition logic remains reusable, but behavior selection and configuration come from the generic runtime binding. The older profile entry point is retained only as an explicit compatibility adapter for profile-only historical data and existing compatibility tests.
 
-Unsupported or future execution handlers are not discarded or rewritten. Their snapshots remain persisted intact; attempting to execute them raises `UnsupportedProcedureMechanicException` with the module, mechanic, and handler identity that this runtime does not support.
+The native `CampaignProcedure` entry point also enforces the pinned movement policy before shared deterministic movement runs. Fixed continuous-distance mechanics use one effective distance; application services normalize that value into matching expected/actual fields for the existing `ResolvedTravelAmount` shape, and the domain rejects mismatched values. Variable-resolved continuous-distance mechanics require both expected and actual values. Hex-step mechanics accept only a non-negative step count. The historical profile-only compatibility entry point retains its legacy structural behavior rather than redefining persisted historical semantics.
+
+Unsupported execution handlers or unsupported versions of otherwise-known handlers are not discarded, rewritten, or downgraded. Their snapshots remain persisted intact; attempting native execution raises `UnsupportedProcedureMechanicException` with the module, mechanic, handler, and mechanic version that this runtime does not support.
 
 ## Application execution boundary
 
@@ -93,7 +97,7 @@ Native execution centralizes cadence evaluation against persisted runtime histor
 
 Projection uses embedded module and mechanic snapshots. It does not resolve the origin preset. Runtime execution of a new generic expedition no longer requires this projection.
 
-If persisted data contains a future mechanic that this runtime version does not know how to project or execute, persistence still preserves the complete mechanic snapshot. Compatibility projection and native execution report the unsupported handler rather than deleting or rewriting the unknown mechanic.
+If persisted data contains a future mechanic that native execution does not support, persistence still preserves the complete mechanic snapshot. Native execution rejects unsupported handler/version combinations rather than deleting, rewriting, downgrading, or replacing the persisted mechanic. Compatibility projection remains a separate non-runtime boundary.
 
 ## Campaign overrides and revisions
 
