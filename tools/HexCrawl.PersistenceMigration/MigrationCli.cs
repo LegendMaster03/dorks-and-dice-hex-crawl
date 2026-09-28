@@ -51,14 +51,18 @@ public static class MigrationCli
                     break;
                 default:
                     throw new ArgumentException(
-                        "Usage: HexCrawl.PersistenceMigration --sqlite <path-or-connection-string> --postgres <connection-string> [--verify-only]");
+                        "Usage: HexCrawl.PersistenceMigration --sqlite <path-or-connection-string> " +
+                        "[--postgres <connection-string>] [--verify-only]. " +
+                        "When --postgres is omitted, ConnectionStrings__HexCrawl must be set.");
             }
         }
 
+        postgres ??= Environment.GetEnvironmentVariable("ConnectionStrings__HexCrawl");
         if (string.IsNullOrWhiteSpace(sqlite) || string.IsNullOrWhiteSpace(postgres))
         {
             throw new ArgumentException(
-                "Both --sqlite and --postgres are required. PostgreSQL credentials are never written by the migration tool.");
+                "--sqlite is required, and PostgreSQL must be supplied by --postgres or ConnectionStrings__HexCrawl. " +
+                "PostgreSQL credentials are never written by the migration tool.");
         }
 
         var sqliteConnectionString = sqlite.Contains('=', StringComparison.Ordinal)
