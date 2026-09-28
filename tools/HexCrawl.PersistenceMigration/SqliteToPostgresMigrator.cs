@@ -53,7 +53,21 @@ public sealed class SqliteToPostgresMigrator(
         var source = await LegacySqliteSnapshot.ReadAsync(sqliteConnectionString, cancellationToken);
         ValidateSourceRelationships(source);
         var store = new PostgresHexCrawlStore(postgresConnectionString);
-        await store.InitializeAsync(cancellationToken);
+        try
+        {
+            if (!await store.IsReadyAsync(cancellationToken))
+            {
+                throw new InvalidDataException(
+                    "The PostgreSQL target schema is not at the Hex Crawl version required for verification. " +
+                    "Run the migration before using --verify-only.");
+            }
+        }
+        catch (PostgresException exception) when (exception.SqlState == PostgresErrorCodes.UndefinedTable)
+        {
+            throw new InvalidDataException(
+                "The PostgreSQL target schema is not initialized. Run the migration before using --verify-only.",
+                exception);
+        }
         return await VerifyAsync(source, store, cancellationToken);
     }
 
@@ -462,7 +476,11 @@ public sealed class SqliteToPostgresMigrator(
             string connectionString,
             CancellationToken cancellationToken)
         {
-            await using var connection = new SqliteConnection(connectionString);
+            var builder = new SqliteConnectionStringBuilder(connectionString)
+            {
+                Mode = SqliteOpenMode.ReadOnly
+            };
+            await using var connection = new SqliteConnection(builder.ConnectionString);
             await connection.OpenAsync(cancellationToken);
 
             var schemaVersion = await ReadSchemaVersionAsync(connection, cancellationToken);
