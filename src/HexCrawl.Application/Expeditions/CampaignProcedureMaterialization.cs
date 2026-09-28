@@ -290,7 +290,7 @@ public static class CampaignProcedureCompatibilityProjector
 
         var supportedVersions = string.Join(", ", support.SupportedVersions.OrderBy(value => value));
         throw new InvalidOperationException(
-            $"Module '{module.Module.Key}' uses compatibility handler '{module.Mechanic.ExecutionHandler}' version {module.Mechanic.Version}, which is not supported by the current compatibility projector. Supported handler/version combination: '{support.ExecutionHandler}' version(s) {supportedVersions}. The materialized data remains preserved and was not interpreted using an older compatibility schema.");
+            $"Module '{module.Module.Key}' uses compatibility handler '{module.Mechanic.ExecutionHandler}' version {module.Mechanic.Version}, which is not supported by the current compatibility projector and can not be projected by this runtime version. Supported handler/version combination: '{support.ExecutionHandler}' version(s) {supportedVersions}. The materialized data remains preserved and was not interpreted using an older compatibility schema.");
     }
 
     private static ProcedureResolutionHelperProfile? ProjectHelpers(IReadOnlyDictionary<string, string> values)
