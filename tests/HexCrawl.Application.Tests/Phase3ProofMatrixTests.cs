@@ -30,6 +30,16 @@ public sealed class Phase3ProofMatrixTests
         CrawlProcedureCatalog.MixedHouseRulePresetKey
     ];
 
+    private static readonly string[] CompatibilityModuleKeys =
+    [
+        GenericProcedureCatalog.TimeIntervalModule,
+        GenericProcedureCatalog.MovementResolutionModule,
+        GenericProcedureCatalog.HexProgressModule,
+        GenericProcedureCatalog.NavigationModule,
+        GenericProcedureCatalog.EncounterCadenceModule,
+        GenericProcedureCatalog.ResolutionHelpersModule
+    ];
+
     private static readonly IReadOnlyDictionary<string, string[]> ExpectedPhase2Modules =
         new Dictionary<string, string[]>(StringComparer.Ordinal)
         {
@@ -45,16 +55,6 @@ public sealed class Phase3ProofMatrixTests
             ["alexandrian-advanced"] = CompatibilityModuleKeys,
             [CrawlProcedureCatalog.MixedHouseRulePresetKey] = CompatibilityModuleKeys
         };
-
-    private static readonly string[] CompatibilityModuleKeys =
-    [
-        GenericProcedureCatalog.TimeIntervalModule,
-        GenericProcedureCatalog.MovementResolutionModule,
-        GenericProcedureCatalog.HexProgressModule,
-        GenericProcedureCatalog.NavigationModule,
-        GenericProcedureCatalog.EncounterCadenceModule,
-        GenericProcedureCatalog.ResolutionHelpersModule
-    ];
 
     public static IEnumerable<object[]> RequiredProofPresets() =>
         RequiredProofPresetKeys.Select(key => new object[] { key });
@@ -376,7 +376,7 @@ public sealed class Phase3ProofMatrixTests
             created.Add((presetKey, expedition));
 
             var shouldProject = FullyNativeProofPresetKeys.Contains(presetKey, StringComparer.Ordinal);
-            Assert.Equal(shouldProject, expedition.Procedure is not null);
+            Assert.Equal(shouldProject, expedition.CompatibilityProfile is not null);
         }
 
         var restarted = new PostgresHexCrawlStore(database.ConnectionString);
@@ -392,7 +392,7 @@ public sealed class Phase3ProofMatrixTests
                 SnapshotSignature(loaded.CampaignProcedure!));
 
             var shouldProject = FullyNativeProofPresetKeys.Contains(presetKey, StringComparer.Ordinal);
-            Assert.Equal(shouldProject, loaded.Procedure is not null);
+            Assert.Equal(shouldProject, loaded.CompatibilityProfile is not null);
 
             foreach (var selected in expected.CampaignProcedure!.Modules.Where(module =>
                          module.Mechanic.ExecutionHandler == GenericProcedureExecutionHandlers.DeclarativeContract))
@@ -404,6 +404,9 @@ public sealed class Phase3ProofMatrixTests
                 Assert.Equal(
                     selected.Mechanic.InputRequirements ?? [],
                     reloaded.Mechanic.InputRequirements ?? []);
+                Assert.Equal(
+                    selected.Mechanic.ExternalInputSources.OrderBy(pair => pair.Key, StringComparer.Ordinal),
+                    reloaded.Mechanic.ExternalInputSources.OrderBy(pair => pair.Key, StringComparer.Ordinal));
                 Assert.Equal(
                     selected.Parameters.OrderBy(pair => pair.Key, StringComparer.Ordinal),
                     reloaded.Parameters.OrderBy(pair => pair.Key, StringComparer.Ordinal));
@@ -474,7 +477,7 @@ public sealed class Phase3ProofMatrixTests
         procedure.Modules
             .OrderBy(module => module.Module.Key, StringComparer.Ordinal)
             .Select(module =>
-                $"{module.Module.Key}|{module.Mechanic.Key}|{module.Mechanic.Version}|{module.Mechanic.ExecutionHandler}|{module.Mechanic.AutomationLevel}|inputs={string.Join(",", (module.Mechanic.InputRequirements ?? []).OrderBy(value => value.InputKey, StringComparer.Ordinal).Select(value => $"{value.InputKey}:{value.AllowedSources}"))}|{string.Join(";", module.Parameters.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => $"{pair.Key}={pair.Value}"))}")
+                $"{module.Module.Key}|{module.Mechanic.Key}|{module.Mechanic.Version}|{module.Mechanic.ExecutionHandler}|{module.Mechanic.AutomationLevel}|inputs={string.Join(",", (module.Mechanic.InputRequirements ?? []).OrderBy(value => value.InputKey, StringComparer.Ordinal).Select(value => $"{value.InputKey}:{value.AllowedSources}"))}|external={string.Join(",", module.Mechanic.ExternalInputSources.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => $"{pair.Key}:{pair.Value}"))}|{string.Join(";", module.Parameters.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => $"{pair.Key}={pair.Value}"))}")
             .ToArray();
 
     private static ExpeditionState SpatialState() => new()
