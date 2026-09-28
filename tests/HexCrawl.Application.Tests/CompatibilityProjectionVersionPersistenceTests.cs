@@ -7,6 +7,37 @@ namespace HexCrawl.Application.Tests;
 public sealed class CompatibilityProjectionVersionPersistenceTests
 {
     [Fact]
+    public void TryProjectRejectsFutureVersionBeforeParsingCurrentParameterSemantics()
+    {
+        var original = CrawlProcedureCatalog.Resolve("simple-fixed-distance").MaterializeGeneric().Procedure;
+        var movement = original.Modules.Single(module =>
+            module.Module.Key == GenericProcedureCatalog.MovementResolutionModule);
+        var futureMovement = movement with
+        {
+            Mechanic = movement.Mechanic with { Version = 99 },
+            Parameters = movement.Parameters
+                .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal)
+        };
+        Assert.IsType<Dictionary<string, string>>(futureMovement.Parameters)["travelResolution"] = "FutureDistanceMode";
+        var future = original with
+        {
+            Modules = original.Modules
+                .Select(module => module.Module.Key == GenericProcedureCatalog.MovementResolutionModule
+                    ? futureMovement
+                    : module)
+                .ToArray()
+        };
+        future.Validate();
+
+        Assert.False(CampaignProcedureCompatibilityProjector.TryProject(future, out _));
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            CampaignProcedureCompatibilityProjector.Project(future));
+        Assert.Contains("version 99", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("compatibility projector", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("TravelResolutionMode", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task KnownHandlerFutureVersionPersistsWithoutUnsafeCompatibilityProjection()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
