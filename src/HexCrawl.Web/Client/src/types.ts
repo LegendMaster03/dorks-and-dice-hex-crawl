@@ -345,7 +345,7 @@ export type ExpeditionDetail = {
     version: number;
     createdAt: string;
     updatedAt: string;
-    profile: RuntimeProfile | null;
+    profile: RuntimeProfile;
     presentation: PresentationProfile | null;
     pauseReason: RuntimePauseReason | null;
     remainingWatchHours: number;
