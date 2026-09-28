@@ -6,7 +6,7 @@ namespace HexCrawl.Domain.Runtime;
 /// <summary>
 /// Stable native execution-handler identities embedded in materialized generic procedure snapshots.
 /// The persisted values retain their Phase 1 names for snapshot compatibility; runtime dispatch is
-/// based only on the embedded handler identity and never on a preset key or catalog lookup.
+/// based only on the embedded handler identity and mechanic version, never on a preset key or catalog lookup.
 /// </summary>
 public static class GenericProcedureExecutionHandlers
 {
@@ -17,15 +17,20 @@ public static class GenericProcedureExecutionHandlers
     public const string EncounterCheckCadence = "crawl-profile.encounter-cadence";
     public const string DeterministicResolutionHelpers = "crawl-profile.resolution-helpers";
 
-    internal static IReadOnlySet<string> Supported { get; } = new HashSet<string>(StringComparer.Ordinal)
-    {
-        FixedIntervalDuration,
-        MovementResolutionPolicy,
-        HexProgressPolicy,
-        NavigationCheckPolicy,
-        EncounterCheckCadence,
-        DeterministicResolutionHelpers
-    };
+    private static IReadOnlyDictionary<string, IReadOnlySet<int>> SupportedVersions { get; } =
+        new Dictionary<string, IReadOnlySet<int>>(StringComparer.Ordinal)
+        {
+            [FixedIntervalDuration] = new HashSet<int> { 1 },
+            [MovementResolutionPolicy] = new HashSet<int> { 1 },
+            [HexProgressPolicy] = new HashSet<int> { 1 },
+            [NavigationCheckPolicy] = new HashSet<int> { 1 },
+            [EncounterCheckCadence] = new HashSet<int> { 1 },
+            [DeterministicResolutionHelpers] = new HashSet<int> { 1 }
+        };
+
+    internal static bool Supports(MechanicDefinition mechanic) =>
+        SupportedVersions.TryGetValue(mechanic.ExecutionHandler, out var versions)
+        && versions.Contains(mechanic.Version);
 }
 
 public sealed class UnsupportedProcedureMechanicException : InvalidOperationException
@@ -33,17 +38,20 @@ public sealed class UnsupportedProcedureMechanicException : InvalidOperationExce
     public UnsupportedProcedureMechanicException(
         string moduleKey,
         string mechanicKey,
-        string executionHandler)
-        : base($"Module '{moduleKey}' uses mechanic '{mechanicKey}' with unsupported execution handler '{executionHandler}'. The pinned procedure snapshot remains preserved, but this runtime version can not execute it.")
+        string executionHandler,
+        int mechanicVersion)
+        : base($"Module '{moduleKey}' uses mechanic '{mechanicKey}' with unsupported execution handler '{executionHandler}' version {mechanicVersion}. The pinned procedure snapshot remains preserved, but this runtime version can not execute it.")
     {
         ModuleKey = moduleKey;
         MechanicKey = mechanicKey;
         ExecutionHandler = executionHandler;
+        MechanicVersion = mechanicVersion;
     }
 
     public string ModuleKey { get; }
     public string MechanicKey { get; }
     public string ExecutionHandler { get; }
+    public int MechanicVersion { get; }
 }
 
 public sealed record ProcedureTimeRuntime(TimeSpan IntervalDuration);
@@ -108,12 +116,13 @@ public sealed class GenericProcedureRuntime
 
         foreach (var selected in procedure.Modules)
         {
-            if (!GenericProcedureExecutionHandlers.Supported.Contains(selected.Mechanic.ExecutionHandler))
+            if (!GenericProcedureExecutionHandlers.Supports(selected.Mechanic))
             {
                 throw new UnsupportedProcedureMechanicException(
                     selected.Module.Key,
                     selected.Mechanic.Key,
-                    selected.Mechanic.ExecutionHandler);
+                    selected.Mechanic.ExecutionHandler,
+                    selected.Mechanic.Version);
             }
         }
 
