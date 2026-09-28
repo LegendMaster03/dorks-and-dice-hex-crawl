@@ -1,0 +1,33 @@
+name: Apply Phase 0B test fixes
+
+on:
+  push:
+    branches:
+      - feature/postgres-persistence
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/postgres-persistence
+          fetch-depth: 0
+
+      - name: Apply fixes
+        run: python3 scripts/phase0b-fix-tests.py
+
+      - name: Commit fixes and remove one-shot helpers
+        run: |
+          rm -f scripts/phase0b-fix-tests.py
+          rm -f .github/workflows/phase0b-apply-test-fixes.yml
+          rm -f .github/workflows/phase0b-test-compile-fixes-2.yml
+          git diff --check
+          git add -A
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m "Fix remaining PostgreSQL test compilation"
+          git push origin HEAD:feature/postgres-persistence
