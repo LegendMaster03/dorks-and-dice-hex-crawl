@@ -21,11 +21,11 @@ public sealed partial class PostgresHexCrawlStore
         command.CommandText = """
             INSERT INTO expeditions(
                 id, overworld_id, context_json, owner_user_id, name, state_json, knowledge_json,
-                party_json, generated_resolutions_json, procedure_json, procedure_origin_json, pause_reason,
+                party_json, generated_resolutions_json, procedure_json, procedure_origin_json, campaign_procedure_json, pause_reason,
                 remaining_watch_ticks, version, created_at, updated_at)
             VALUES(
                 @id, @world, @context, @owner, @name, @state, @knowledge,
-                @party, @generatedResolutions, @procedure, @procedureOrigin, @pause,
+                @party, @generatedResolutions, @procedure, @procedureOrigin, @campaignProcedure, @pause,
                 @remaining, @version, @created, @updated);
             """;
         BindExpedition(command, expedition);
@@ -108,7 +108,7 @@ public sealed partial class PostgresHexCrawlStore
         command.CommandText = """
             SELECT name, context_json::text, state_json::text, knowledge_json::text, party_json::text,
                    generated_resolutions_json::text, procedure_json::text, procedure_origin_json::text,
-                   pause_reason, remaining_watch_ticks, version, created_at, updated_at
+                   campaign_procedure_json::text, pause_reason, remaining_watch_ticks, version, created_at, updated_at
             FROM expeditions
             WHERE id = @id AND owner_user_id = @owner;
             """;
@@ -132,13 +132,17 @@ public sealed partial class PostgresHexCrawlStore
         var procedureOrigin = reader.IsDBNull(7)
             ? null
             : Deserialize<ProcedureOriginMetadata>(reader.GetString(7));
-        RuntimePauseReason? pauseReason = reader.IsDBNull(8)
+        var campaignProcedure = reader.IsDBNull(8)
             ? null
-            : Enum.Parse<RuntimePauseReason>(reader.GetString(8), true);
-        var remaining = TimeSpan.FromTicks(reader.GetInt64(9));
-        var version = reader.GetInt64(10);
-        var created = ReadTimestamp(reader, 11);
-        var updated = ReadTimestamp(reader, 12);
+            : Deserialize<CampaignProcedure>(reader.GetString(8));
+        campaignProcedure?.Validate();
+        RuntimePauseReason? pauseReason = reader.IsDBNull(9)
+            ? null
+            : Enum.Parse<RuntimePauseReason>(reader.GetString(9), true);
+        var remaining = TimeSpan.FromTicks(reader.GetInt64(10));
+        var version = reader.GetInt64(11);
+        var created = ReadTimestamp(reader, 12);
+        var updated = ReadTimestamp(reader, 13);
         await reader.CloseAsync();
         var events = await ReadEventsAsync(connection, expeditionId, cancellationToken);
         runtime = runtime switch
@@ -163,7 +167,8 @@ public sealed partial class PostgresHexCrawlStore
             Party = party,
             GeneratedProcedureResolutions = generatedResolutions,
             CampaignId = contextSnapshot.CampaignId,
-            ProcedureOrigin = procedureOrigin
+            ProcedureOrigin = procedureOrigin,
+            CampaignProcedure = campaignProcedure
         };
     }
 
@@ -192,6 +197,7 @@ public sealed partial class PostgresHexCrawlStore
                 generated_resolutions_json = @generatedResolutions,
                 procedure_json = @procedure,
                 procedure_origin_json = @procedureOrigin,
+                campaign_procedure_json = @campaignProcedure,
                 pause_reason = @pause,
                 remaining_watch_ticks = @remaining,
                 version = @version,
@@ -308,6 +314,7 @@ public sealed partial class PostgresHexCrawlStore
         AddJsonb(command, "generatedResolutions", Serialize(expedition.GeneratedProcedureResolutions));
         AddJsonb(command, "procedure", Serialize(expedition.Procedure));
         AddJsonb(command, "procedureOrigin", expedition.ProcedureOrigin is null ? null : Serialize(expedition.ProcedureOrigin));
+        AddJsonb(command, "campaignProcedure", expedition.CampaignProcedure is null ? null : Serialize(expedition.CampaignProcedure));
         command.Parameters.AddWithValue("pause", NpgsqlDbType.Text, expedition.PauseReason?.ToString() is { } pause ? pause : DBNull.Value);
         command.Parameters.AddWithValue("remaining", NpgsqlDbType.Bigint, expedition.RemainingWatchTime.Ticks);
         command.Parameters.AddWithValue("version", NpgsqlDbType.Bigint, expedition.Version);
