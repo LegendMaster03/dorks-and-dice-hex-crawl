@@ -289,9 +289,7 @@ After Phase 0, introduce the real generic composition model.
 
 ### Compatibility projection
 
-Do not replace the deterministic runtime immediately.
-
-Initially use:
+Phase 1 deliberately retained the deterministic pre-generic runtime as a temporary compatibility path:
 
 ```text
 Generic CampaignProcedure
@@ -304,9 +302,7 @@ CrawlProcedureProfile
 existing CrawlRuntimeEngine
 ```
 
-This allows the new architecture to mature while preserving current runtime semantics and regression coverage.
-
-As generic modules become more expressive than `CrawlProcedureProfile`, individual runtime responsibilities can later migrate to module-native execution deliberately.
+That path is a migration/reference mechanism, not a normative oracle for the generic architecture. Phase 2 moves currently supported expedition behavior onto native generic execution. Existing behavior and tests may be used as regression evidence and implementation reference, but differences must be evaluated against intended product behavior and the generic architecture rather than automatically forcing the generic runtime to reproduce every legacy detail.
 
 ## Rules Core boundary
 
@@ -680,17 +676,36 @@ Compatibility migration described above. No runtime rewrite.
 
 Create generic module/mechanic contracts, preset recipes, campaign procedure revisions, materialization, dependencies, persistence, and `CrawlProcedureProfile` compatibility projection.
 
-### Phase 2 — preset catalog and proof matrix
+### Phase 2 — native generic execution of current behavior
 
-Implement enough generic primitives to represent the proof systems without system-specific runtime classes.
+Make the materialized generic `CampaignProcedure` the runtime authority for expedition behavior that Hex Crawl already supports. The implementation should execute generic module/mechanic snapshots directly rather than requiring `CampaignProcedure -> CrawlProcedureProfile -> CrawlRuntimeEngine` projection for new expeditions.
 
-### Phase 3 — Procedure Composer UI
+Phase 2 covers the currently implemented behavior set, including:
 
-Add preset picker, module review, generic behavior selection, parameter editing, modification count, provenance display, and dependency warnings.
+- interval/watch duration;
+- movement resolution mode and actual-distance policy;
+- pace/travel-mode behavior that is already part of the current product;
+- intra-hex progress and direction-change behavior;
+- navigation checks and currently supported navigation inputs;
+- persistent veer/lost/reorientation state already implemented by Hex Crawl;
+- encounter-check cadence and existing encounter timing behavior;
+- marching-order and party-procedure state already used by expedition execution;
+- participant activities already represented by the current runtime/application model;
+- automatic deterministic helper configuration and provenance.
 
-### Phase 4 — migrate current runtime behavior onto generic modules
+The pre-generic `CrawlProcedureProfile` / `CrawlRuntimeEngine` path may be retained as a compatibility and regression reference while this migration is completed, but it is **not a normative oracle**. When native generic behavior differs from the old development implementation, investigate the intended game/product behavior and architectural contract rather than automatically changing the new engine to reproduce the old result.
 
-Map current watch length, movement, pace, navigation, persistent veer/lost state, encounter cadence, marching order, participant activities, and automatic helper configuration onto generic modules while preserving outcomes.
+Phase 2 should preserve historical persisted data and old-profile compatibility where practical, but newly materialized procedures must be executable from their pinned generic snapshot without consulting the preset catalog and without requiring `CrawlProcedureProfile` as runtime authority.
+
+Do not expand Phase 2 into proof-matrix mechanics that are not already implemented, the Procedure Composer, generalized resource/effect systems, or later roadmap features.
+
+### Phase 3 — preset catalog and proof matrix
+
+Implement enough generic primitives to represent the proof systems without system-specific runtime classes. Exercise those primitives through the native generic execution architecture established in Phase 2 wherever executable behavior exists.
+
+### Phase 4 — Procedure Composer UI
+
+Add preset picker, module review, generic behavior selection, parameter editing, modification count, provenance display, and dependency warnings. The Composer edits the same campaign-owned generic procedure model that runtime execution consumes.
 
 ### Phase 5 — generated procedure documentation
 
