@@ -93,15 +93,22 @@ public sealed class ProcedureResolutionResolver(IProcedureResolutionRandomSource
         CrawlSessionContext context,
         CrawlSessionRuntimeState runtime,
         long expeditionVersion,
+        ProcedureResolutionHelperCommand command) =>
+        Resolve(GenericProcedureRuntime.FromLegacyProfile(profile), context, runtime, expeditionVersion, command);
+
+    public ProcedureResolutionHelperResult Resolve(
+        GenericProcedureRuntime procedure,
+        CrawlSessionContext context,
+        CrawlSessionRuntimeState runtime,
+        long expeditionVersion,
         ProcedureResolutionHelperCommand command)
     {
-        ArgumentNullException.ThrowIfNull(profile);
+        ArgumentNullException.ThrowIfNull(procedure);
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(command);
 
-        profile.Validate();
-        var configured = profile.ResolutionHelpers;
+        var configured = procedure.ResolutionHelpers;
         var rolls = new List<ProcedureResolutionRoll>();
         var notes = new List<string>();
         ProcedureResolvedTravel? travel = null;
@@ -116,8 +123,8 @@ public sealed class ProcedureResolutionResolver(IProcedureResolutionRandomSource
 
         if (runtime is ExpeditionState spatial)
         {
-            travel = ResolveTravel(profile, configured.Travel, command, rolls, notes);
-            navigation = ResolveNavigation(profile, spatial, configured.Navigation, command, rolls, notes);
+            travel = ResolveTravel(procedure, configured.Travel, command, rolls, notes);
+            navigation = ResolveNavigation(procedure, spatial, configured.Navigation, command, rolls, notes);
         }
         else
         {
@@ -131,7 +138,7 @@ public sealed class ProcedureResolutionResolver(IProcedureResolutionRandomSource
             }
         }
 
-        encounter = ResolveEncounter(profile, context, runtime, configured.Encounter, command, rolls, notes);
+        encounter = ResolveEncounter(procedure, context, runtime, configured.Encounter, command, rolls, notes);
 
         return new ProcedureResolutionHelperResult(
             expeditionVersion,
@@ -145,7 +152,7 @@ public sealed class ProcedureResolutionResolver(IProcedureResolutionRandomSource
     }
 
     private ProcedureResolvedTravel? ResolveTravel(
-        CrawlProcedureProfile profile,
+        GenericProcedureRuntime procedure,
         TravelResolutionHelperProfile? helper,
         ProcedureResolutionHelperCommand command,
         List<ProcedureResolutionRoll> rolls,
@@ -155,8 +162,8 @@ public sealed class ProcedureResolutionResolver(IProcedureResolutionRandomSource
         {
             return null;
         }
-        if (profile.TravelResolution != TravelResolutionMode.ContinuousDistance
-            || profile.ActualDistanceResolution != ActualDistanceResolutionMode.VariableResolved)
+        if (procedure.Movement.TravelResolution != TravelResolutionMode.ContinuousDistance
+            || procedure.Movement.ActualDistanceResolution != ActualDistanceResolutionMode.VariableResolved)
         {
             notes.Add("The configured travel helper is not applicable to the active travel-resolution mode.");
             return null;
@@ -191,7 +198,7 @@ public sealed class ProcedureResolutionResolver(IProcedureResolutionRandomSource
     }
 
     private ProcedureResolvedNavigation? ResolveNavigation(
-        CrawlProcedureProfile profile,
+        GenericProcedureRuntime procedure,
         ExpeditionState state,
         NavigationResolutionHelperProfile? helper,
         ProcedureResolutionHelperCommand command,
@@ -199,7 +206,7 @@ public sealed class ProcedureResolutionResolver(IProcedureResolutionRandomSource
         List<string> notes)
     {
         if (helper is null
-            || !ExpeditionProcedureRequirements.IsNavigationResolutionPotentiallyRequired(profile, state)
+            || !ExpeditionProcedureRequirements.IsNavigationResolutionPotentiallyRequired(procedure, state)
             || command.SuppressesNavigationCheck
             || command.DeliberateDoubleBack)
         {
@@ -241,7 +248,7 @@ public sealed class ProcedureResolutionResolver(IProcedureResolutionRandomSource
     }
 
     private ProcedureResolvedEncounter? ResolveEncounter(
-        CrawlProcedureProfile profile,
+        GenericProcedureRuntime procedure,
         CrawlSessionContext context,
         CrawlSessionRuntimeState runtime,
         EncounterResolutionHelperProfile? helper,
@@ -249,7 +256,7 @@ public sealed class ProcedureResolutionResolver(IProcedureResolutionRandomSource
         List<ProcedureResolutionRoll> rolls,
         List<string> notes)
     {
-        if (helper is null || !ExpeditionProcedureRequirements.IsEncounterCheckDue(profile, runtime))
+        if (helper is null || !ExpeditionProcedureRequirements.IsEncounterCheckDue(procedure, runtime))
         {
             return null;
         }
@@ -292,7 +299,7 @@ public sealed class ProcedureResolutionResolver(IProcedureResolutionRandomSource
                 0,
                 slot);
             rolls.Add(timing);
-            occursAtHours = profile.WatchLength.TotalHours * slot / helper.TimingSlots;
+            occursAtHours = procedure.Time.IntervalDuration.TotalHours * slot / helper.TimingSlots;
         }
 
         var provenanceNote = $"Automatic encounter helper: {Describe(check)}.";
@@ -365,7 +372,7 @@ public sealed class ProcedureResolutionHelperService(
 
         command = await rulesCore.PrepareAsync(expedition, command, cancellationToken);
         var generated = resolver.Resolve(
-            expedition.Procedure,
+            ExpeditionProcedureExecutionResolver.Resolve(expedition),
             expedition.Context,
             expedition.Runtime,
             expedition.Version,

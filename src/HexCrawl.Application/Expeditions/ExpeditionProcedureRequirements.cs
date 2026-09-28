@@ -5,71 +5,28 @@ namespace HexCrawl.Application;
 
 public static class ExpeditionProcedureRequirements
 {
+    public static bool IsEncounterCheckDue(GenericProcedureRuntime procedure, CrawlSessionRuntimeState state) =>
+        GenericProcedureRuntimeRequirements.IsEncounterCheckDue(procedure, state);
+
+    public static bool IsEncounterCheckDue(GenericProcedureRuntime procedure, ExpeditionState state) =>
+        GenericProcedureRuntimeRequirements.IsEncounterCheckDue(procedure, state);
+
+    public static bool IsEncounterCheckDue(GenericProcedureRuntime procedure, NonSpatialSessionState state) =>
+        GenericProcedureRuntimeRequirements.IsEncounterCheckDue(procedure, state);
+
+    public static bool IsNavigationResolutionPotentiallyRequired(GenericProcedureRuntime procedure, ExpeditionState state) =>
+        GenericProcedureRuntimeRequirements.IsNavigationResolutionPotentiallyRequired(procedure, state);
+
+    // Compatibility overloads retained for historical profile-only callers and tests.
     public static bool IsEncounterCheckDue(CrawlProcedureProfile profile, CrawlSessionRuntimeState state) =>
-        state switch
-        {
-            ExpeditionState spatial => IsEncounterCheckDue(profile, spatial),
-            NonSpatialSessionState nonSpatial => IsEncounterCheckDue(profile, nonSpatial),
-            _ => throw new ArgumentOutOfRangeException(nameof(state))
-        };
+        IsEncounterCheckDue(GenericProcedureRuntime.FromLegacyProfile(profile), state);
 
-    public static bool IsEncounterCheckDue(CrawlProcedureProfile profile, ExpeditionState state)
-    {
-        if (state.ActiveWatch is not null)
-        {
-            return false;
-        }
-
-        return IsEncounterCheckDue(
-            profile,
-            state.History,
-            Math.Max(1, state.CompletedWatches + 1),
-            state.ElapsedTravelTime);
-    }
+    public static bool IsEncounterCheckDue(CrawlProcedureProfile profile, ExpeditionState state) =>
+        IsEncounterCheckDue(GenericProcedureRuntime.FromLegacyProfile(profile), state);
 
     public static bool IsEncounterCheckDue(CrawlProcedureProfile profile, NonSpatialSessionState state) =>
-        IsEncounterCheckDue(
-            profile,
-            state.History,
-            state.ActiveWatch?.WatchNumber ?? Math.Max(1, state.CompletedWatches + 1),
-            state.ElapsedTime);
+        IsEncounterCheckDue(GenericProcedureRuntime.FromLegacyProfile(profile), state);
 
-    public static bool IsNavigationResolutionPotentiallyRequired(CrawlProcedureProfile profile, ExpeditionState state)
-    {
-        if (state.ActiveWatch is not null || !profile.UsesNavigationChecks)
-        {
-            return false;
-        }
-
-        var watchNumber = Math.Max(1, state.CompletedWatches + 1);
-        return !state.History.Any(runtimeEvent =>
-            runtimeEvent.Kind == CrawlRuntimeEventKind.NavigationCheckResolved
-            && runtimeEvent.WatchNumber == watchNumber);
-    }
-
-    private static bool IsEncounterCheckDue(
-        CrawlProcedureProfile profile,
-        IReadOnlyList<CrawlRuntimeEvent> history,
-        int watchNumber,
-        TimeSpan elapsed)
-    {
-        if (profile.EncounterCadence == EncounterCheckCadence.None)
-        {
-            return false;
-        }
-
-        if (profile.EncounterCadence is EncounterCheckCadence.PerWatch or EncounterCheckCadence.Custom)
-        {
-            return !history.Any(runtimeEvent =>
-                runtimeEvent.Kind == CrawlRuntimeEventKind.EncounterCheckPerformed
-                && runtimeEvent.WatchNumber == watchNumber);
-        }
-
-        var day = DayIndex(elapsed);
-        return !history.Any(runtimeEvent =>
-            runtimeEvent.Kind == CrawlRuntimeEventKind.EncounterCheckPerformed
-            && DayIndex(runtimeEvent.ExpeditionElapsedTime) == day);
-    }
-
-    private static int DayIndex(TimeSpan elapsed) => (int)Math.Floor(elapsed.TotalDays);
+    public static bool IsNavigationResolutionPotentiallyRequired(CrawlProcedureProfile profile, ExpeditionState state) =>
+        IsNavigationResolutionPotentiallyRequired(GenericProcedureRuntime.FromLegacyProfile(profile), state);
 }

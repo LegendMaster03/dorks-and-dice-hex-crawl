@@ -71,9 +71,10 @@ public sealed class ExpeditionAssistantService(
             ?? throw new InvalidOperationException("Travel/watch bookkeeping requires a spatial crawl session.");
         var unit = context.HexCenterDistance.Unit;
         var provenance = ClientSuppliedProvenance(command.ResolutionSource, command.ResolutionNote);
+        var procedure = ExpeditionProcedureExecutionResolver.Resolve(expedition);
 
         ResolvedTravelAmount travel;
-        if (expedition.Procedure.TravelResolution == TravelResolutionMode.HexSteps)
+        if (procedure.Movement.TravelResolution == TravelResolutionMode.HexSteps)
         {
             travel = command.HexSteps.HasValue
                 ? ResolvedTravelAmount.Steps(command.HexSteps.Value, provenance)
@@ -93,7 +94,7 @@ public sealed class ExpeditionAssistantService(
 
         var state = CrawlAssistantActions.RecordTravelWatch(
             context,
-            expedition.Procedure,
+            procedure,
             stateBefore,
             new TravelWatchAssistantInput(
                 TimeSpan.FromHours(command.ElapsedHours),
@@ -136,9 +137,10 @@ public sealed class ExpeditionAssistantService(
 
         var stateBefore = expedition.Runtime as NonSpatialSessionState
             ?? throw new InvalidOperationException("Non-spatial watch bookkeeping requires non-spatial session state.");
+        var procedure = ExpeditionProcedureExecutionResolver.Resolve(expedition);
 
         var state = CrawlAssistantActions.RecordWatch(
-            expedition.Procedure,
+            procedure,
             stateBefore,
             new NonSpatialWatchAssistantInput(
                 TimeSpan.FromHours(command.ElapsedHours),
