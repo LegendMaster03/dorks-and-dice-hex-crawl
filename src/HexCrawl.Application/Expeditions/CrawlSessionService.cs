@@ -25,7 +25,8 @@ public sealed class CrawlSessionService(IHexCrawlStore store)
         }
 
         var preset = CrawlProcedureCatalog.Resolve(command.ProcedureKey);
-        var profile = preset.Materialize(command.ProcedureSnapshot);
+        var materialized = preset.MaterializeGeneric(command.ProcedureSnapshot);
+        var profile = materialized.CompatibilityProfile;
 
         var id = Guid.NewGuid();
         CrawlSessionRuntimeState runtime = command.Context switch
@@ -55,7 +56,8 @@ public sealed class CrawlSessionService(IHexCrawlStore store)
             now,
             now)
         {
-            ProcedureOrigin = preset.Origin
+            ProcedureOrigin = materialized.Origin,
+            CampaignProcedure = materialized.Procedure
         }, cancellationToken);
     }
 
