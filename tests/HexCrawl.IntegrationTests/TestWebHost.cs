@@ -71,7 +71,7 @@ internal static class TestWebHost
         Environment.GetEnvironmentVariable("HEXCRAWL_TEST_POSTGRES")
         ?? "Host=127.0.0.1;Port=5432;Database=postgres;Username=postgres;Password=postgres";
 
-    private static string AssetRoot(string connectionString)
+    internal static string AssetRoot(string connectionString)
     {
         var schema = new NpgsqlConnectionStringBuilder(connectionString).SearchPath ?? "unknown";
         return Path.Combine(Path.GetTempPath(), $"hex-crawl-assets-{schema}");
