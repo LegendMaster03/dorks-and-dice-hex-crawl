@@ -4,9 +4,6 @@ on:
   push:
     branches: [ "feature/postgres-persistence" ]
 
-env:
-  CONNECTION_STRING: "Host=hex-crawl-diag-postgres;Port=5432;Database=postgres;Username=hex_crawl_test;Password=hex_crawl_test"
-
 jobs:
   diagnose:
     runs-on: ubuntu-latest
@@ -14,10 +11,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build application container
-        run: docker build -t dorks-and-dice-hex-crawl:diag .
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.x"
 
-      - name: Create diagnostic network and PostgreSQL
+      - name: Build frontend
+        working-directory: src/HexCrawl.Web/Client
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+
+      - name: Build application container
+        run: docker build -t dorks-and-dice-hex-crawl:diag -f src/HexCrawl.Web/Dockerfile .
+
+      - name: Start PostgreSQL
         run: |
           set -euo pipefail
           docker network create hex-crawl-diag >/dev/null
@@ -33,107 +40,154 @@ jobs:
           done
           exit 1
 
-      - name: Create persistent asset directory
+      - name: Prepare smoke schema and directories
         run: |
           set -euo pipefail
-          rm -rf "${RUNNER_TEMP}/hex-crawl-diag-assets"
-          mkdir -p "${RUNNER_TEMP}/hex-crawl-diag-assets"
+          rm -rf "$RUNNER_TEMP/hex-crawl-diag-data" "$RUNNER_TEMP/hex-crawl-diag-responses"
+          mkdir -p "$RUNNER_TEMP/hex-crawl-diag-data" "$RUNNER_TEMP/hex-crawl-diag-responses"
+          docker exec hex-crawl-diag-postgres psql -v ON_ERROR_STOP=1 -U hex_crawl_test -d postgres -c 'CREATE SCHEMA smoke_world;' >/dev/null
 
       - name: Start first application container
         run: |
           set -euo pipefail
           docker run -d --name hex-crawl-diag \
             --network hex-crawl-diag \
-            -p 127.0.0.1:5000:8080 \
-            -v "${RUNNER_TEMP}/hex-crawl-diag-assets:/data/assets" \
-            -e ASPNETCORE_URLS=http://+:8080 \
-            -e ConnectionStrings__HexCrawl="$CONNECTION_STRING" \
-            -e MapAssets__RootPath=/data/assets \
+            -p 127.0.0.1:18092:8080 \
+            -v "$RUNNER_TEMP/hex-crawl-diag-data:/data" \
+            -e 'ConnectionStrings__HexCrawl=Host=hex-crawl-diag-postgres;Port=5432;Database=postgres;Username=hex_crawl_test;Password=hex_crawl_test;Search Path=smoke_world' \
+            -e 'MapAssets__RootPath=/data/assets' \
+            -e 'ToolHost__StandaloneIdentity__Enabled=true' \
+            -e 'ToolHost__StandaloneIdentity__UserId=ci-smoke-dm' \
+            -e 'ToolHost__StandaloneIdentity__DisplayName=CI Smoke DM' \
             dorks-and-dice-hex-crawl:diag >/dev/null
 
-      - name: Wait for first health and readiness
+      - name: Verify first health and readiness
         run: |
           set -euo pipefail
-          for i in {1..60}; do
-            if curl --silent --fail http://127.0.0.1:5000/health >/dev/null && \
-               curl --silent --fail http://127.0.0.1:5000/ready >/dev/null; then
+          for i in {1..45}; do
+            if curl -fsS http://127.0.0.1:18092/health -o "$RUNNER_TEMP/hex-crawl-diag-responses/health.txt" \
+              && grep -q 'Healthy' "$RUNNER_TEMP/hex-crawl-diag-responses/health.txt" \
+              && curl -fsS http://127.0.0.1:18092/ready -o "$RUNNER_TEMP/hex-crawl-diag-responses/ready.json" \
+              && grep -q '"status":"ready"' "$RUNNER_TEMP/hex-crawl-diag-responses/ready.json" \
+              && grep -q '"persistence":"postgresql-ready"' "$RUNNER_TEMP/hex-crawl-diag-responses/ready.json" \
+              && grep -q '"mapAssets":"filesystem"' "$RUNNER_TEMP/hex-crawl-diag-responses/ready.json"; then
               exit 0
             fi
             sleep 1
           done
           exit 1
 
+      - name: Verify application asset
+        run: |
+          curl -fsS http://127.0.0.1:18092/app.js -o "$RUNNER_TEMP/hex-crawl-diag-responses/app.js"
+          test -s "$RUNNER_TEMP/hex-crawl-diag-responses/app.js"
+
       - name: Create world
         run: |
           set -euo pipefail
-          cat > "${RUNNER_TEMP}/hex-crawl-diag-create.json" <<'JSON'
-          {
-            "ownerId": "ci-owner",
-            "name": "CI World",
-            "widthHexes": 8,
-            "heightHexes": 6,
-            "columns": "pointy",
-            "rows": "odd",
-            "procedurePreset": "system.default"
-          }
-          JSON
-          response=$(curl --silent --fail \
-            -X POST \
+          curl -fsS -X POST http://127.0.0.1:18092/api/overworlds \
             -H 'Content-Type: application/json' \
-            --data @"${RUNNER_TEMP}/hex-crawl-diag-create.json" \
-            http://127.0.0.1:5000/api/overworlds)
-          world_id=$(printf '%s' "$response" | python -c 'import json,sys; print(json.load(sys.stdin)["worldId"])')
-          test -n "$world_id"
-          printf 'WORLD_ID=%s\n' "$world_id" >> "$GITHUB_ENV"
+            --data '{"name":"CI PostgreSQL restart proof","orientation":"PointyTop","origin":{"x":0,"y":0},"rotationDegrees":0,"hexRadiusWorldUnits":1,"neighborCenterDistance":12,"distanceUnit":{"kind":"Mile","symbol":"mi","metersPerUnit":1609.344}}' \
+            -o "$RUNNER_TEMP/hex-crawl-diag-responses/create-world.json"
+          world_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$RUNNER_TEMP/hex-crawl-diag-responses/create-world.json")"
+          world_version="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$RUNNER_TEMP/hex-crawl-diag-responses/create-world.json")"
+          printf 'WORLD_ID=%s\nWORLD_VERSION=%s\n' "$world_id" "$world_version" >> "$GITHUB_ENV"
 
-      - name: Write persistent asset marker
+      - name: Upload raster source map
         run: |
           set -euo pipefail
-          printf 'persist-through-restart\n' > "${RUNNER_TEMP}/hex-crawl-diag-assets/ci-marker.txt"
-          test -f "${RUNNER_TEMP}/hex-crawl-diag-assets/ci-marker.txt"
+          printf '%s' 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=' | base64 -d > "$RUNNER_TEMP/hex-crawl-diag-responses/tiny.png"
+          curl -fsS -X POST "http://127.0.0.1:18092/api/overworlds/$WORLD_ID/source-maps" \
+            -F "file=@$RUNNER_TEMP/hex-crawl-diag-responses/tiny.png;type=image/png;filename=ci-map.png" \
+            -F 'name=CI raster' -F 'geographyKey=CI geography' -F 'role=Neutral' \
+            -F 'containsBakedGrid=false' -F "expectedVersion=$WORLD_VERSION" \
+            -o "$RUNNER_TEMP/hex-crawl-diag-responses/upload-map.json"
+          source_map_id="$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d["sourceMaps"][-1]["id"])' "$RUNNER_TEMP/hex-crawl-diag-responses/upload-map.json")"
+          printf 'SOURCE_MAP_ID=%s\n' "$source_map_id" >> "$GITHUB_ENV"
 
-      - name: Stop first application container
-        run: docker rm -f hex-crawl-diag >/dev/null
+      - name: Start persisted expedition
+        run: |
+          set -euo pipefail
+          curl -fsS -X POST "http://127.0.0.1:18092/api/overworlds/$WORLD_ID/expeditions" \
+            -H 'Content-Type: application/json' \
+            --data '{"name":"CI persisted procedure","procedureKey":"simple-fixed-distance","presentationKey":"exploration-map","startHex":{"q":0,"r":0}}' \
+            -o "$RUNNER_TEMP/hex-crawl-diag-responses/start-expedition.json"
+          expedition_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$RUNNER_TEMP/hex-crawl-diag-responses/start-expedition.json")"
+          expedition_version="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$RUNNER_TEMP/hex-crawl-diag-responses/start-expedition.json")"
+          printf 'EXPEDITION_ID=%s\nEXPEDITION_VERSION=%s\n' "$expedition_id" "$expedition_version" >> "$GITHUB_ENV"
+
+      - name: Advance persisted expedition
+        run: |
+          set -euo pipefail
+          curl -fsS -X POST "http://127.0.0.1:18092/api/expeditions/$EXPEDITION_ID/advance" \
+            -H 'Content-Type: application/json' \
+            --data "{\"expectedVersion\":$EXPEDITION_VERSION,\"intendedDirection\":0,\"expectedDistance\":12,\"actualDistance\":12,\"resolutionSource\":\"ManualRoll\",\"continueAcrossBoundaries\":false}" \
+            -o "$RUNNER_TEMP/hex-crawl-diag-responses/advance.json"
+
+      - name: Stop application and restart PostgreSQL
+        run: |
+          set -euo pipefail
+          docker rm -f hex-crawl-diag >/dev/null
+          docker restart hex-crawl-diag-postgres >/dev/null
+          sleep 5
+          for i in {1..30}; do
+            if [ "$(docker exec hex-crawl-diag-postgres psql -U hex_crawl_test -d postgres -tAc 'SELECT 1' 2>/dev/null | tr -d '[:space:]')" = "1" ]; then exit 0; fi
+            sleep 1
+          done
+          exit 1
 
       - name: Start second application container
         run: |
           set -euo pipefail
           docker run -d --name hex-crawl-diag \
             --network hex-crawl-diag \
-            -p 127.0.0.1:5000:8080 \
-            -v "${RUNNER_TEMP}/hex-crawl-diag-assets:/data/assets" \
-            -e ASPNETCORE_URLS=http://+:8080 \
-            -e ConnectionStrings__HexCrawl="$CONNECTION_STRING" \
-            -e MapAssets__RootPath=/data/assets \
+            -p 127.0.0.1:18092:8080 \
+            -v "$RUNNER_TEMP/hex-crawl-diag-data:/data" \
+            -e 'ConnectionStrings__HexCrawl=Host=hex-crawl-diag-postgres;Port=5432;Database=postgres;Username=hex_crawl_test;Password=hex_crawl_test;Search Path=smoke_world' \
+            -e 'MapAssets__RootPath=/data/assets' \
+            -e 'ToolHost__StandaloneIdentity__Enabled=true' \
+            -e 'ToolHost__StandaloneIdentity__UserId=ci-smoke-dm' \
+            -e 'ToolHost__StandaloneIdentity__DisplayName=CI Smoke DM' \
             dorks-and-dice-hex-crawl:diag >/dev/null
 
-      - name: Wait for second health and readiness
+      - name: Verify second health and readiness
         run: |
           set -euo pipefail
-          for i in {1..60}; do
-            if curl --silent --fail http://127.0.0.1:5000/health >/dev/null && \
-               curl --silent --fail http://127.0.0.1:5000/ready >/dev/null; then
+          for i in {1..45}; do
+            if curl -fsS http://127.0.0.1:18092/health -o "$RUNNER_TEMP/hex-crawl-diag-responses/health-2.txt" \
+              && grep -q 'Healthy' "$RUNNER_TEMP/hex-crawl-diag-responses/health-2.txt" \
+              && curl -fsS http://127.0.0.1:18092/ready -o "$RUNNER_TEMP/hex-crawl-diag-responses/ready-2.json" \
+              && grep -q '"status":"ready"' "$RUNNER_TEMP/hex-crawl-diag-responses/ready-2.json" \
+              && grep -q '"persistence":"postgresql-ready"' "$RUNNER_TEMP/hex-crawl-diag-responses/ready-2.json" \
+              && grep -q '"mapAssets":"filesystem"' "$RUNNER_TEMP/hex-crawl-diag-responses/ready-2.json"; then
               exit 0
             fi
             sleep 1
           done
           exit 1
 
-      - name: Fetch persisted world
+      - name: Verify world persists after restart
+        run: |
+          curl -fsS http://127.0.0.1:18092/api/overworlds -o "$RUNNER_TEMP/hex-crawl-diag-responses/worlds-after-restart.json"
+          grep -q 'CI PostgreSQL restart proof' "$RUNNER_TEMP/hex-crawl-diag-responses/worlds-after-restart.json"
+
+      - name: Verify expedition persists after restart
         run: |
           set -euo pipefail
-          curl --silent --fail \
-            http://127.0.0.1:5000/api/overworlds/"$WORLD_ID" \
-            > "${RUNNER_TEMP}/hex-crawl-diag-world.json"
+          curl -fsS "http://127.0.0.1:18092/api/expeditions/$EXPEDITION_ID" -o "$RUNNER_TEMP/hex-crawl-diag-responses/expedition-after-restart.json"
+          python3 - "$RUNNER_TEMP/hex-crawl-diag-responses/expedition-after-restart.json" <<'PY'
+          import json, sys
+          d = json.load(open(sys.argv[1]))
+          assert d["profile"]["key"] == "simple-fixed-distance", d
+          assert d["procedureOrigin"]["presetKey"] == "simple-fixed-distance", d
+          assert d["expedition"]["activeWatchNumber"] == 1, d
+          PY
 
-      - name: Verify persistent asset marker
-        run: test -f "${RUNNER_TEMP}/hex-crawl-diag-assets/ci-marker.txt"
-
-      - name: Verify persisted world owner
-        run: grep -F '"ownerId":"ci-owner"' "${RUNNER_TEMP}/hex-crawl-diag-world.json" >/dev/null
-
-      - name: Verify persisted world name
-        run: grep -F '"name":"CI World"' "${RUNNER_TEMP}/hex-crawl-diag-world.json" >/dev/null
+      - name: Verify raster asset persists after restart
+        run: |
+          set -euo pipefail
+          curl -fsS "http://127.0.0.1:18092/api/overworlds/$WORLD_ID/source-maps/$SOURCE_MAP_ID/asset" -o "$RUNNER_TEMP/hex-crawl-diag-responses/map-after-restart.png"
+          cmp "$RUNNER_TEMP/hex-crawl-diag-responses/tiny.png" "$RUNNER_TEMP/hex-crawl-diag-responses/map-after-restart.png"
 
       - name: Dump diagnostic logs on failure
         if: failure()
