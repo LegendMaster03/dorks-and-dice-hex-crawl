@@ -1,5 +1,6 @@
 import { HexCrawlApi } from "./api";
 import { findClientModule } from "./client-module-catalog";
+import { ensurePartyResponsiveStyles } from "./party-responsive-styles";
 import { ensureStyles } from "./styles";
 import { deriveToolRoute, navigateTool, parseToolRoute } from "./tool-route";
 import { describeUiError } from "./ui-error";
@@ -9,6 +10,7 @@ if (!(root instanceof HTMLElement)) throw new Error("Hex Crawl requires #tool-ro
 
 root.classList.add("hex-crawl-app");
 ensureStyles();
+ensurePartyResponsiveStyles();
 void boot(root);
 
 async function boot(rootElement: HTMLElement): Promise<void> {
