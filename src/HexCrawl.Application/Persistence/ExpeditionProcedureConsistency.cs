@@ -7,19 +7,30 @@ public static class ExpeditionProcedureConsistency
     public static void ValidateForPersistence(StoredExpedition expedition)
     {
         ArgumentNullException.ThrowIfNull(expedition);
-        expedition.Procedure.Validate();
+        expedition.Procedure?.Validate();
 
         if (expedition.CampaignProcedure is null)
         {
+            if (expedition.Procedure is null)
+            {
+                throw new InvalidOperationException(
+                    "An expedition requires either a generic CampaignProcedure snapshot or a historical CrawlProcedureProfile compatibility snapshot.");
+            }
             return;
         }
 
         expedition.CampaignProcedure.Validate();
         if (!CampaignProcedureCompatibilityProjector.TryProject(expedition.CampaignProcedure, out var projected))
         {
-            // Forward-compatible generic snapshots remain authoritative data even when this
-            // runtime version can not project them into the retained CrawlProcedureProfile compatibility representation.
+            // A non-projectable generic snapshot is authoritative. A retained compatibility profile may
+            // still exist on historical/forward-compatible data, but new materialization does not invent one.
             return;
+        }
+
+        if (expedition.Procedure is null)
+        {
+            throw new InvalidOperationException(
+                "A compatibility-projectable campaign procedure must retain its CrawlProcedureProfile compatibility representation.");
         }
 
         if (projected != expedition.Procedure)
