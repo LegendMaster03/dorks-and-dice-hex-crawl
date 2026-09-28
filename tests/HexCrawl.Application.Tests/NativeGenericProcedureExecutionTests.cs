@@ -241,15 +241,17 @@ public sealed class NativeGenericProcedureExecutionTests
                 "Generic authority",
                 "simple-fixed-distance",
                 new NonSpatialCrawlSessionContext("Authority")));
+        var startedProcedure = Assert.IsType<CrawlProcedureProfile>(started.Procedure);
         var contradictoryCompatibilityData = started with
         {
-            Procedure = started.Procedure with { WatchLength = TimeSpan.FromHours(99) }
+            Procedure = startedProcedure with { WatchLength = TimeSpan.FromHours(99) }
         };
 
         var runtime = ExpeditionProcedureExecutionResolver.Resolve(contradictoryCompatibilityData);
+        var contradictoryProcedure = Assert.IsType<CrawlProcedureProfile>(contradictoryCompatibilityData.Procedure);
 
         Assert.Equal(TimeSpan.FromHours(4), runtime.Time.IntervalDuration);
-        Assert.Equal(TimeSpan.FromHours(99), contradictoryCompatibilityData.Procedure.WatchLength);
+        Assert.Equal(TimeSpan.FromHours(99), contradictoryProcedure.WatchLength);
     }
 
     [Fact]
