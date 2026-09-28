@@ -71,38 +71,29 @@ public sealed class OverworldDeletionTests
 
     private sealed class TestDatabase : IAsyncDisposable
     {
-        private readonly string _path;
-        private string ConnectionString { get; }
+        private readonly PostgresTestDatabase _database;
+        private string ConnectionString => _database.ConnectionString;
 
-        private TestDatabase(string path)
+        private TestDatabase(PostgresTestDatabase database)
         {
-            _path = path;
-            ConnectionString = $"Data Source={path}";
+            _database = database;
         }
 
         public static async Task<TestDatabase> CreateAsync()
         {
-            var database = new TestDatabase(Path.Combine(Path.GetTempPath(), $"hex-crawl-delete-{Guid.NewGuid():N}.db"));
-            var store = new SqliteHexCrawlStore(database.ConnectionString);
+            var database = await PostgresTestDatabase.CreateAsync();
+            var store = new PostgresHexCrawlStore(database.ConnectionString);
             await store.InitializeAsync();
-            return database;
+            return new TestDatabase(database);
         }
 
         public async Task<HexCrawlService> ServiceAsync()
         {
-            var store = new SqliteHexCrawlStore(ConnectionString);
+            var store = new PostgresHexCrawlStore(ConnectionString);
             await store.InitializeAsync();
             return new HexCrawlService(store);
         }
 
-        public ValueTask DisposeAsync()
-        {
-            foreach (var suffix in new[] { "", "-wal", "-shm" })
-            {
-                var file = _path + suffix;
-                if (File.Exists(file)) File.Delete(file);
-            }
-            return ValueTask.CompletedTask;
-        }
+        public ValueTask DisposeAsync() => _database.DisposeAsync();
     }
 }
