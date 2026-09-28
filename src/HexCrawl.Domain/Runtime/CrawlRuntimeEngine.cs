@@ -17,8 +17,13 @@ public sealed partial class CrawlRuntimeEngine
         CampaignProcedure procedure,
         ExpeditionState expedition,
         WatchTravelPlan plan,
-        WatchAdvanceInputs inputs) =>
-        AdvanceCore(context, GenericProcedureRuntime.Bind(procedure), expedition, plan, inputs);
+        WatchAdvanceInputs inputs)
+    {
+        ArgumentNullException.ThrowIfNull(inputs);
+        var runtime = GenericProcedureRuntime.Bind(procedure);
+        ValidateNativeTravelAmountPolicy(runtime.Movement, inputs.Travel);
+        return AdvanceCore(context, runtime, expedition, plan, inputs);
+    }
 
     /// <summary>
     /// Historical compatibility path for profile-only persisted sessions.
@@ -100,7 +105,7 @@ public sealed partial class CrawlRuntimeEngine
             active.WatchNumber,
             events);
 
-        ValidateTravelAmount(procedure.Movement, inputs.Travel);
+        ValidateTravelAmountShape(procedure.Movement, inputs.Travel);
         EmitTravelResolution(state, active.WatchNumber, inputs.Travel, events);
 
         if (!active.EncounterHandled && active.Encounter.Kind != EncounterOutcomeKind.None)
