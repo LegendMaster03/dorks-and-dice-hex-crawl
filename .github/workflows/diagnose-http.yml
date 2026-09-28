@@ -35,18 +35,39 @@ jobs:
         run: dotnet build tests/HexCrawl.IntegrationTests/HexCrawl.IntegrationTests.csproj --configuration Release -p:BuildClient=false
       - name: DelegatedRulesCoreTravelGatewayTests
         run: dotnet test tests/HexCrawl.IntegrationTests/HexCrawl.IntegrationTests.csproj --configuration Release --no-restore --no-build -p:BuildClient=false --filter 'FullyQualifiedName~DelegatedRulesCoreTravelGatewayTests'
+      - name: ExpeditionDeletionEndpointsTests
+        if: always()
+        run: dotnet test tests/HexCrawl.IntegrationTests/HexCrawl.IntegrationTests.csproj --configuration Release --no-restore --no-build -p:BuildClient=false --filter 'FullyQualifiedName~ExpeditionDeletionEndpointsTests'
       - name: ExpeditionPartyEndpointsTests
         if: always()
         run: dotnet test tests/HexCrawl.IntegrationTests/HexCrawl.IntegrationTests.csproj --configuration Release --no-restore --no-build -p:BuildClient=false --filter 'FullyQualifiedName~ExpeditionPartyEndpointsTests'
       - name: ExpeditionWorkbenchEndpointsTests
         if: always()
         run: dotnet test tests/HexCrawl.IntegrationTests/HexCrawl.IntegrationTests.csproj --configuration Release --no-restore --no-build -p:BuildClient=false --filter 'FullyQualifiedName~ExpeditionWorkbenchEndpointsTests'
+      - name: HostEndpointsTests
+        if: always()
+        run: dotnet test tests/HexCrawl.IntegrationTests/HexCrawl.IntegrationTests.csproj --configuration Release --no-restore --no-build -p:BuildClient=false --filter 'FullyQualifiedName~HostEndpointsTests'
       - name: ModuleArchitectureTests
         if: always()
         run: dotnet test tests/HexCrawl.IntegrationTests/HexCrawl.IntegrationTests.csproj --configuration Release --no-restore --no-build -p:BuildClient=false --filter 'FullyQualifiedName~ModuleArchitectureTests'
       - name: OverworldDeletionEndpointsTests
         if: always()
         run: dotnet test tests/HexCrawl.IntegrationTests/HexCrawl.IntegrationTests.csproj --configuration Release --no-restore --no-build -p:BuildClient=false --filter 'FullyQualifiedName~OverworldDeletionEndpointsTests'
+      - name: ProcedureResolutionHelperEndpointsTests
+        if: always()
+        run: dotnet test tests/HexCrawl.IntegrationTests/HexCrawl.IntegrationTests.csproj --configuration Release --no-restore --no-build -p:BuildClient=false --filter 'FullyQualifiedName~ProcedureResolutionHelperEndpointsTests'
+      - name: RasterGridAlignmentEndpointsTests
+        if: always()
+        run: dotnet test tests/HexCrawl.IntegrationTests/HexCrawl.IntegrationTests.csproj --configuration Release --no-restore --no-build -p:BuildClient=false --filter 'FullyQualifiedName~RasterGridAlignmentEndpointsTests'
+      - name: RulesCoreTravelContractCoverageTests
+        if: always()
+        run: dotnet test tests/HexCrawl.IntegrationTests/HexCrawl.IntegrationTests.csproj --configuration Release --no-restore --no-build -p:BuildClient=false --filter 'FullyQualifiedName~RulesCoreTravelContractCoverageTests'
+      - name: RuntimeEndpointsTests
+        if: always()
+        run: dotnet test tests/HexCrawl.IntegrationTests/HexCrawl.IntegrationTests.csproj --configuration Release --no-restore --no-build -p:BuildClient=false --filter 'FullyQualifiedName~RuntimeEndpointsTests'
+      - name: SourceMapEndpointsTests
+        if: always()
+        run: dotnet test tests/HexCrawl.IntegrationTests/HexCrawl.IntegrationTests.csproj --configuration Release --no-restore --no-build -p:BuildClient=false --filter 'FullyQualifiedName~SourceMapEndpointsTests'
       - name: Cleanup
         if: always()
         run: docker rm -f hex-crawl-ci-postgres 2>/dev/null || true
