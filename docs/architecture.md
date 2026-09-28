@@ -33,7 +33,7 @@ Point, line, and region features are stored as real world-space geometry. Catego
 
 ## Persistence and asset architecture
 
-PostgreSQL remains behind `IHexCrawlStore`; application/domain code has no Npgsql dependency. Production requires `ConnectionStrings__HexCrawl` and does not fall back to SQLite. `PostgresSchemaMigrator` tracks deterministic schema generations in `hex_crawl_schema_migrations`, applies migrations transactionally under a PostgreSQL advisory lock, and fails startup/readiness rather than recreating data when schema initialization can not complete.
+PostgreSQL remains behind `IHexCrawlStore`; application/domain code has no Npgsql dependency. Production requires `ConnectionStrings__HexCrawl`. `PostgresSchemaMigrator` tracks deterministic schema generations in `hex_crawl_schema_migrations`, applies migrations transactionally under a PostgreSQL advisory lock, and fails startup/readiness rather than recreating data when schema initialization can not complete.
 
 `overworlds` stores owner identity, stable UUID, aggregate version/timestamps, and a `jsonb` world snapshot containing grid, semantic geometry, locations, and source-map metadata. `expeditions` and `expedition_events` retain the same aggregate-snapshot plus ordered-history semantics using PostgreSQL-native UUID, bigint, timestamptz, and jsonb columns. Binary raster data is not stored in PostgreSQL.
 
@@ -44,7 +44,7 @@ The production storage layout is conceptually:
 ```text
 PostgreSQL: structured Hex Crawl aggregate state and ordered event history
 /data/assets/maps/...: filesystem-backed raster/source-map assets
-/data/hex-crawl.db: retained legacy SQLite rollback artifact during cutover
+/data/assets/.tmp/...: temporary asset writes/import staging
 ```
 
 See `docs/source-map-import.md` for upload compensation, limits, format validation, and deletion behavior.
@@ -59,7 +59,7 @@ The three context forms are intentionally distinct:
 - `AbstractHex` stores its own context name, orientation, and `CrawlRuntimeContext` scale/unit. It has no Overworld row, no Overworld foreign key, and no player-knowledge snapshot.
 - `NonSpatial` stores only non-spatial session context plus procedure/runtime/history state. It has no hex coordinates, distance scale, world position, Overworld, or player-knowledge snapshot.
 
-The one-time SQLite importer supports legacy SQLite schema generations 1 through 5 without upgrading the source database in place. Schema-v1 expedition rows are projected to explicit `WorldBound` contexts from their existing real Overworld IDs; schemas before party/generated-resolution/procedure-origin columns receive only the same deterministic defaults introduced by those historical migrations. Missing procedure-origin metadata remains `NULL`. Runtime history remains in `expedition_events`; persistence is snapshot + retained history, not event sourcing.
+Runtime history remains in `expedition_events`; persistence is snapshot + retained history, not event sourcing.
 
 Procedure and presentation catalogs are creation-time presets. Ongoing sessions reload their persisted snapshots rather than reconstructing behavior from current catalog definitions.
 
