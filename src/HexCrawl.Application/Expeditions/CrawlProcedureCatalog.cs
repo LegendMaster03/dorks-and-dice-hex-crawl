@@ -44,8 +44,9 @@ public static class CrawlProcedureCatalog
             "Daily wilderness travel with terrain-sensitive movement, getting-lost procedure, encounter scheduling, foraging, and ration/resource concepts.",
             "daily-wilderness-travel",
             "Daily wilderness travel",
-            CoreProfile("daily-wilderness-travel", "Daily wilderness travel", TimeSpan.FromDays(1), TravelResolutionMode.ContinuousDistance, EncounterCheckCadence.PerDay, navigation: false),
             [
+                NativeTime(TimeSpan.FromDays(1)),
+                NativeEncounterCadence(EncounterCheckCadence.PerDay),
                 Structural(GenericProcedureCatalog.MovementBudgetModule, GenericProcedureCatalog.MovementBudgetMechanic,
                     ("budgetModel", "fixed-per-day"), ("baseBudget", "1"), ("budgetUnit", "travel-day"), ("limitingScope", "party-limiting")),
                 Structural(GenericProcedureCatalog.TerrainMovementModule, GenericProcedureCatalog.TerrainMovementPolicyMechanic,
@@ -100,8 +101,8 @@ public static class CrawlProcedureCatalog
                 "Daily overland travel represented with terrain movement costs and an explicit getting-lost outcome contract. Exact encounter scheduling remains intentionally manual where Phase 3 evidence was incomplete.",
                 "daily-movement-point-travel",
                 "Daily movement-point travel",
-                CoreProfile("daily-movement-point-travel", "Daily movement-point travel", TimeSpan.FromDays(1), TravelResolutionMode.ContinuousDistance, EncounterCheckCadence.None, navigation: false),
                 [
+                    NativeTime(TimeSpan.FromDays(1)),
                     Structural(GenericProcedureCatalog.MovementBudgetModule, GenericProcedureCatalog.MovementBudgetMechanic,
                         ("budgetModel", "movement-points"), ("baseBudget", "1"), ("budgetUnit", "daily-movement-budget"), ("limitingScope", "party-limiting")),
                     Structural(GenericProcedureCatalog.TerrainMovementModule, GenericProcedureCatalog.TerrainMovementPolicyMechanic,
@@ -119,8 +120,8 @@ public static class CrawlProcedureCatalog
                 "Hourly overland travel with difficult-terrain effects, getting lost, foraging, forced-march checks, and persistent fatigue consequences represented generically.",
                 "hourly-overland-travel",
                 "Hourly overland travel",
-                CoreProfile("hourly-overland-travel", "Hourly overland travel", TimeSpan.FromHours(1), TravelResolutionMode.ContinuousDistance, EncounterCheckCadence.None, navigation: false),
                 [
+                    NativeTime(TimeSpan.FromHours(1)),
                     Structural(GenericProcedureCatalog.MovementBudgetModule, GenericProcedureCatalog.MovementBudgetMechanic,
                         ("budgetModel", "speed-derived-distance"), ("baseBudget", "1"), ("budgetUnit", "hour"), ("limitingScope", "party-limiting")),
                     Structural(GenericProcedureCatalog.TerrainMovementModule, GenericProcedureCatalog.TerrainMovementPolicyMechanic,
@@ -142,8 +143,8 @@ public static class CrawlProcedureCatalog
                 "Hourly travel with pace and terrain limits plus extended-travel exhaustion represented as generic movement, terrain, forced-travel, and persistent-effect contracts.",
                 "hourly-pace-travel",
                 "Hourly pace travel",
-                CoreProfile("hourly-pace-travel", "Hourly pace travel", TimeSpan.FromHours(1), TravelResolutionMode.ContinuousDistance, EncounterCheckCadence.None, navigation: false),
                 [
+                    NativeTime(TimeSpan.FromHours(1)),
                     Structural(GenericProcedureCatalog.MovementBudgetModule, GenericProcedureCatalog.MovementBudgetMechanic,
                         ("budgetModel", "speed-and-pace"), ("baseBudget", "1"), ("budgetUnit", "hour"), ("limitingScope", "slowest-traveler")),
                     Structural(GenericProcedureCatalog.TerrainMovementModule, GenericProcedureCatalog.TerrainMovementPolicyMechanic,
@@ -163,8 +164,8 @@ public static class CrawlProcedureCatalog
                 "Daily hexploration with a speed-derived activity budget, group and individual activities, terrain activity costs, reconnoitering, camping, and subsistence represented generically.",
                 "activity-budget-hexploration",
                 "Activity-budget hexploration",
-                CoreProfile("activity-budget-hexploration", "Activity-budget hexploration", TimeSpan.FromDays(1), TravelResolutionMode.HexSteps, EncounterCheckCadence.PerDay, navigation: false),
                 [
+                    NativeTime(TimeSpan.FromDays(1)),
                     Structural(GenericProcedureCatalog.MovementBudgetModule, GenericProcedureCatalog.MovementBudgetMechanic,
                         ("budgetModel", "speed-derived-activities"), ("baseBudget", "1"), ("budgetUnit", "hexploration-activity"), ("limitingScope", "party-limiting")),
                     Structural(GenericProcedureCatalog.TerrainMovementModule, GenericProcedureCatalog.TerrainMovementPolicyMechanic,
@@ -186,8 +187,8 @@ public static class CrawlProcedureCatalog
                 "Quarter-day journey structure with participant activities, leading the way, keeping watch, resource dice, foraging, camping, forced travel, and mishap/effect concepts represented generically.",
                 "quarter-day-expedition",
                 "Quarter-day expedition",
-                CoreProfile("quarter-day-expedition", "Quarter-day expedition", TimeSpan.FromHours(6), TravelResolutionMode.HexSteps, EncounterCheckCadence.PerWatch, navigation: true),
                 [
+                    NativeTime(TimeSpan.FromHours(6)),
                     Structural(GenericProcedureCatalog.MovementBudgetModule, GenericProcedureCatalog.MovementBudgetMechanic,
                         ("budgetModel", "quarter-day-activities"), ("baseBudget", "1"), ("budgetUnit", "quarter-day"), ("limitingScope", "party")),
                     Structural(GenericProcedureCatalog.TerrainMovementModule, GenericProcedureCatalog.TerrainMovementPolicyMechanic,
@@ -216,8 +217,8 @@ public static class CrawlProcedureCatalog
                 "Ten-hour overland travel day with terrain speed, separate travel/camp encounter opportunities, supplies, foraging, camping, and expedition-day concepts represented generically.",
                 "ten-hour-expedition-day",
                 "Ten-hour expedition day",
-                CoreProfile("ten-hour-expedition-day", "Ten-hour expedition day", TimeSpan.FromHours(10), TravelResolutionMode.ContinuousDistance, EncounterCheckCadence.PerWatch, navigation: false),
                 [
+                    NativeTime(TimeSpan.FromHours(10)),
                     Structural(GenericProcedureCatalog.MovementBudgetModule, GenericProcedureCatalog.MovementBudgetMechanic,
                         ("budgetModel", "distance-per-hour"), ("baseBudget", "10"), ("budgetUnit", "travel-hours"), ("limitingScope", "party-limiting")),
                     Structural(GenericProcedureCatalog.TerrainMovementModule, GenericProcedureCatalog.TerrainMovementPolicyMechanic,
@@ -239,7 +240,6 @@ public static class CrawlProcedureCatalog
                 "Role-driven journey process with route planning, Guide progress tests, targeted journey events, terrain influence, and persistent fatigue represented as manual/assisted generic contracts.",
                 "role-driven-journey",
                 "Role-driven journey",
-                CoreProfile("role-driven-journey", "Role-driven journey", TimeSpan.FromDays(1), TravelResolutionMode.ContinuousDistance, EncounterCheckCadence.None, navigation: false),
                 [
                     Structural(GenericProcedureCatalog.MovementBudgetModule, GenericProcedureCatalog.MovementBudgetMechanic,
                         ("budgetModel", "journey-progress"), ("baseBudget", "1"), ("budgetUnit", "journey-leg"), ("limitingScope", "guide")),
@@ -263,29 +263,30 @@ public static class CrawlProcedureCatalog
                 "Deliberately mixes a four-hour native travel core with participant activity budgeting, supply-die resources, forced travel, assisted navigation outcomes, and role-targeted journey events.",
                 "mixed-modular-expedition",
                 "Mixed modular expedition",
-                CoreProfile("mixed-modular-expedition", "Mixed modular expedition", TimeSpan.FromHours(4), TravelResolutionMode.ContinuousDistance, EncounterCheckCadence.None, navigation: false),
-                [
-                    Structural(GenericProcedureCatalog.MovementBudgetModule, GenericProcedureCatalog.MovementBudgetMechanic,
-                        ("budgetModel", "activity-and-distance"), ("baseBudget", "1"), ("budgetUnit", "watch"), ("limitingScope", "party-limiting")),
-                    Structural(GenericProcedureCatalog.TerrainMovementModule, GenericProcedureCatalog.TerrainMovementPolicyMechanic,
-                        ("costModel", "activity-cost"), ("terrainCosts", "open=1;difficult=2;severe=3"), ("routeAdjustmentModel", "road-improves-one-step"), ("weatherAdjustmentModel", "manual")),
-                    Structural(GenericProcedureCatalog.PartyActivitiesModule, GenericProcedureCatalog.ParticipantActivityPolicyMechanic,
-                        ("assignmentScope", "participant"), ("activityBudgetModel", "per-watch"), ("activityKeys", "travel;reconnoiter;forage;make-camp;lookout"), ("roleKeys", "navigator;lookout;forager;scout")),
-                    Structural(GenericProcedureCatalog.NavigationOutcomeModule, GenericProcedureCatalog.NavigationOutcomePolicyMechanic,
-                        ("checkTriggerModel", "per-watch-when-navigation-required"), ("failureStateModel", "lost-until-recognized"), ("directionalErrorModel", "persistent-veer"), ("recognitionModel", "boundary-check"), ("reorientationModel", "procedure-check")),
-                    Structural(GenericProcedureCatalog.ResourceConsumptionModule, GenericProcedureCatalog.ResourceConsumptionPolicyMechanic,
-                        ("resourceKinds", "food;water;light"), ("inventoryModel", "supply-die"), ("consumptionModel", "usage-roll"), ("consumptionInterval", "watch")),
-                    Structural(GenericProcedureCatalog.ForagingModule, GenericProcedureCatalog.ForagingPolicyMechanic,
-                        ("resolutionModel", "activity-check"), ("timeCost", "1"), ("timeUnit", "watch-activity"), ("movementTradeoff", "replaces-activity")),
-                    Structural(GenericProcedureCatalog.CampingModule, GenericProcedureCatalog.CampingPolicyMechanic,
-                        ("resolutionModel", "activity-check"), ("timeCost", "1"), ("timeUnit", "watch"), ("watchModel", "assigned-lookout")),
-                    Structural(GenericProcedureCatalog.ForcedTravelModule, GenericProcedureCatalog.ForcedTravelPolicyMechanic,
-                        ("normalTravelLimit", "2"), ("limitUnit", "watches"), ("checkModel", "escalating-check"), ("failureConsequence", "fatigue")),
-                    Structural(GenericProcedureCatalog.PersistentEffectsModule, GenericProcedureCatalog.ProgressiveExpeditionEffectMechanic,
-                        ("effectKinds", "fatigue"), ("accumulationModel", "levels"), ("recoveryModel", "safe-rest"), ("scope", "participant")),
-                    Structural(GenericProcedureCatalog.JourneyEventsModule, GenericProcedureCatalog.JourneyEventPolicyMechanic,
-                        ("triggerModel", "per-watch-or-landmark"), ("targetingModel", "travel-role"), ("terrainInfluence", "difficulty"), ("consequenceModel", "event-and-fatigue"))
-                ],
+                WithCompatibilityCore(
+                    MixedNativeCoreTemplate(),
+                    [
+                        Structural(GenericProcedureCatalog.MovementBudgetModule, GenericProcedureCatalog.MovementBudgetMechanic,
+                            ("budgetModel", "activity-and-distance"), ("baseBudget", "1"), ("budgetUnit", "watch"), ("limitingScope", "party-limiting")),
+                        Structural(GenericProcedureCatalog.TerrainMovementModule, GenericProcedureCatalog.TerrainMovementPolicyMechanic,
+                            ("costModel", "activity-cost"), ("terrainCosts", "open=1;difficult=2;severe=3"), ("routeAdjustmentModel", "road-improves-one-step"), ("weatherAdjustmentModel", "manual")),
+                        Structural(GenericProcedureCatalog.PartyActivitiesModule, GenericProcedureCatalog.ParticipantActivityPolicyMechanic,
+                            ("assignmentScope", "participant"), ("activityBudgetModel", "per-watch"), ("activityKeys", "travel;reconnoiter;forage;make-camp;lookout"), ("roleKeys", "navigator;lookout;forager;scout")),
+                        Structural(GenericProcedureCatalog.NavigationOutcomeModule, GenericProcedureCatalog.NavigationOutcomePolicyMechanic,
+                            ("checkTriggerModel", "per-watch-when-navigation-required"), ("failureStateModel", "lost-until-recognized"), ("directionalErrorModel", "persistent-veer"), ("recognitionModel", "boundary-check"), ("reorientationModel", "procedure-check")),
+                        Structural(GenericProcedureCatalog.ResourceConsumptionModule, GenericProcedureCatalog.ResourceConsumptionPolicyMechanic,
+                            ("resourceKinds", "food;water;light"), ("inventoryModel", "supply-die"), ("consumptionModel", "usage-roll"), ("consumptionInterval", "watch")),
+                        Structural(GenericProcedureCatalog.ForagingModule, GenericProcedureCatalog.ForagingPolicyMechanic,
+                            ("resolutionModel", "activity-check"), ("timeCost", "1"), ("timeUnit", "watch-activity"), ("movementTradeoff", "replaces-activity")),
+                        Structural(GenericProcedureCatalog.CampingModule, GenericProcedureCatalog.CampingPolicyMechanic,
+                            ("resolutionModel", "activity-check"), ("timeCost", "1"), ("timeUnit", "watch"), ("watchModel", "assigned-lookout")),
+                        Structural(GenericProcedureCatalog.ForcedTravelModule, GenericProcedureCatalog.ForcedTravelPolicyMechanic,
+                            ("normalTravelLimit", "2"), ("limitUnit", "watches"), ("checkModel", "escalating-check"), ("failureConsequence", "fatigue")),
+                        Structural(GenericProcedureCatalog.PersistentEffectsModule, GenericProcedureCatalog.ProgressiveExpeditionEffectMechanic,
+                            ("effectKinds", "fatigue"), ("accumulationModel", "levels"), ("recoveryModel", "safe-rest"), ("scope", "participant")),
+                        Structural(GenericProcedureCatalog.JourneyEventsModule, GenericProcedureCatalog.JourneyEventPolicyMechanic,
+                            ("triggerModel", "per-watch-or-landmark"), ("targetingModel", "travel-role"), ("terrainInfluence", "difficulty"), ("consequenceModel", "event-and-fatigue"))
+                    ]),
                 attribution: "Original Dorks & Dice house-rule composition used to prove cross-preset generic composition.")
         ];
     }
@@ -296,26 +297,37 @@ public static class CrawlProcedureCatalog
         string description,
         string procedureKey,
         string procedureName,
-        CrawlProcedureProfile compatibilityTemplate,
-        IReadOnlyList<ProcedureModuleRecipe> structuralModules,
+        IReadOnlyList<ProcedureModuleRecipe> modules,
         string? attribution = null,
-        string? disclaimer = null)
-    {
-        var captured = CampaignProcedureCompatibilityProjector.ToRecipe(compatibilityTemplate);
-        return new CrawlProcedurePresetDefinition(
+        string? disclaimer = null) =>
+        new(
             presetKey,
             displayName,
             description,
             1,
-            captured with
-            {
-                DefaultProcedureKey = procedureKey,
-                DefaultProcedureName = procedureName,
-                ModuleSelections = captured.ModuleSelections.Concat(structuralModules).ToArray()
-            },
+            new GenericProcedurePresetRecipe(procedureKey, procedureName, modules.ToArray()),
             attribution,
             disclaimer);
+
+    private static IReadOnlyList<ProcedureModuleRecipe> WithCompatibilityCore(
+        CrawlProcedureProfile compatibilityTemplate,
+        IReadOnlyList<ProcedureModuleRecipe> structuralModules)
+    {
+        var core = CampaignProcedureCompatibilityProjector.ToRecipe(compatibilityTemplate);
+        return core.ModuleSelections.Concat(structuralModules).ToArray();
     }
+
+    private static ProcedureModuleRecipe NativeTime(TimeSpan interval) =>
+        Structural(
+            GenericProcedureCatalog.TimeIntervalModule,
+            GenericProcedureCatalog.FixedIntervalDurationMechanic,
+            ("durationTicks", interval.Ticks.ToString(CultureInfo.InvariantCulture)));
+
+    private static ProcedureModuleRecipe NativeEncounterCadence(EncounterCheckCadence cadence) =>
+        Structural(
+            GenericProcedureCatalog.EncounterCadenceModule,
+            GenericProcedureCatalog.EncounterCheckCadenceMechanic,
+            ("cadence", cadence.ToString()));
 
     private static ProcedureModuleRecipe Structural(
         string moduleKey,
@@ -327,34 +339,24 @@ public static class CrawlProcedureCatalog
             1,
             parameters.ToDictionary(value => value.Key, value => value.Value, StringComparer.Ordinal));
 
-    private static CrawlProcedureProfile CoreProfile(
-        string key,
-        string name,
-        TimeSpan interval,
-        TravelResolutionMode travelResolution,
-        EncounterCheckCadence encounterCadence,
-        bool navigation)
+    private static CrawlProcedureProfile MixedNativeCoreTemplate() => new()
     {
-        var hexSteps = travelResolution == TravelResolutionMode.HexSteps;
-        return new CrawlProcedureProfile
-        {
-            Key = key,
-            Name = name,
-            WatchLength = interval,
-            TravelResolution = travelResolution,
-            ActualDistanceResolution = ActualDistanceResolutionMode.Fixed,
-            EncounterCadence = encounterCadence,
-            UsesNavigationChecks = navigation,
-            UsesPersistentVeer = false,
-            TracksIntraHexProgress = !hexSteps,
-            DirectionChangesCostProgress = false,
-            SupportsDeliberateDoubleBack = false,
-            StartingExitProgressFactor = 0.5d,
-            NearExitProgressFactor = 0.5d,
-            FarExitProgressFactor = 1d,
-            BackExitProgressFactor = 0.5d
-        };
-    }
+        Key = "mixed-modular-expedition",
+        Name = "Mixed modular expedition",
+        WatchLength = TimeSpan.FromHours(4),
+        TravelResolution = TravelResolutionMode.ContinuousDistance,
+        ActualDistanceResolution = ActualDistanceResolutionMode.Fixed,
+        EncounterCadence = EncounterCheckCadence.None,
+        UsesNavigationChecks = false,
+        UsesPersistentVeer = false,
+        TracksIntraHexProgress = true,
+        DirectionChangesCostProgress = false,
+        SupportsDeliberateDoubleBack = false,
+        StartingExitProgressFactor = 0.5d,
+        NearExitProgressFactor = 0.5d,
+        FarExitProgressFactor = 1d,
+        BackExitProgressFactor = 0.5d
+    };
 
     private static CrawlProcedureProfile AlexandrianAdvancedTemplate() => new()
     {
