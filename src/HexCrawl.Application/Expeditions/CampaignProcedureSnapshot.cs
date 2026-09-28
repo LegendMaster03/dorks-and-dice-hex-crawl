@@ -27,7 +27,8 @@ internal static class CampaignProcedureSnapshot
             InputContract = value.InputContract.ToArray(),
             OutputContract = value.OutputContract.ToArray(),
             ParameterSchema = CopySchema(value.ParameterSchema),
-            CompatibilityTags = value.CompatibilityTags.ToArray()
+            CompatibilityTags = value.CompatibilityTags.ToArray(),
+            InputRequirements = value.InputRequirements?.Select(item => item with { }).ToArray()
         };
     }
 
