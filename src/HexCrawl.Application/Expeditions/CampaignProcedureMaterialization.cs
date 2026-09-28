@@ -27,7 +27,13 @@ public static class CampaignProcedureMaterializer
         Guid? procedureId = null)
     {
         ArgumentNullException.ThrowIfNull(preset);
-        preset.Validate();
+        if (string.IsNullOrWhiteSpace(preset.PresetKey)
+            || string.IsNullOrWhiteSpace(preset.DisplayName)
+            || preset.PresetRevision <= 0)
+        {
+            throw new InvalidOperationException("A crawl procedure preset requires valid identity metadata before materialization.");
+        }
+        ArgumentNullException.ThrowIfNull(preset.Recipe);
 
         CampaignProcedure procedure;
         if (customizedProcedure is not null)
@@ -44,7 +50,7 @@ public static class CampaignProcedureMaterializer
                 return new MaterializedProcedureModule(
                     module with { },
                     mechanic with { },
-                    new Dictionary<string, string>(selection.Parameters, StringComparer.Ordinal));
+                    Copy(selection.Parameters));
             }).ToArray();
             procedure = new CampaignProcedure
             {
@@ -74,7 +80,7 @@ public static class CampaignProcedureMaterializer
             {
                 Module = module.Module with { },
                 Mechanic = module.Mechanic with { },
-                Parameters = new Dictionary<string, string>(module.Parameters, StringComparer.Ordinal)
+                Parameters = Copy(module.Parameters)
             })
             .ToDictionary(module => module.Module.Key, StringComparer.Ordinal);
 
@@ -85,12 +91,14 @@ public static class CampaignProcedureMaterializer
             {
                 throw new InvalidOperationException($"Campaign override '{value.OverrideId}' targets unknown module '{value.ModuleKey}'.");
             }
+
             var mechanic = selected.Mechanic;
             if (!string.IsNullOrWhiteSpace(value.ReplacementMechanicKey))
             {
                 mechanic = GenericProcedureCatalog.ResolveMechanic(value.ReplacementMechanicKey, value.ReplacementMechanicVersion);
             }
-            var parameters = new Dictionary<string, string>(selected.Parameters, StringComparer.Ordinal);
+
+            var parameters = Copy(selected.Parameters);
             foreach (var parameter in value.Parameters)
             {
                 parameters[parameter.Key] = parameter.Value;
@@ -108,6 +116,9 @@ public static class CampaignProcedureMaterializer
         _ = CampaignProcedureCompatibilityProjector.Project(revision);
         return revision;
     }
+
+    private static Dictionary<string, string> Copy(IReadOnlyDictionary<string, string> values) =>
+        values.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
 }
 
 public static class CampaignProcedureCompatibilityProjector
@@ -166,7 +177,7 @@ public static class CampaignProcedureCompatibilityProjector
                 module.Module.Key,
                 module.Mechanic.Key,
                 module.Mechanic.Version,
-                new Dictionary<string, string>(module.Parameters, StringComparer.Ordinal))).ToArray());
+                module.Parameters.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal))).ToArray());
     }
 
     public static CrawlProcedureProfile Project(CampaignProcedure procedure)
