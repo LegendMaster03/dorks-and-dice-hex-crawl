@@ -62,7 +62,8 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
     {
         var world = await coreService.GetOverworldAsync(overworldId, ownerUserId, cancellationToken);
         var preset = CrawlProcedureCatalog.Resolve(command.ProcedureKey);
-        var profile = preset.Materialize(command.ProcedureSnapshot);
+        var materialized = preset.MaterializeGeneric(command.ProcedureSnapshot);
+        var profile = materialized.CompatibilityProfile;
 
         var presentation = MapPresentationPolicyCatalog.Resolve(command.PresentationKey);
         presentation.Validate();
@@ -99,7 +100,8 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
             now,
             now)
         {
-            ProcedureOrigin = preset.Origin
+            ProcedureOrigin = materialized.Origin,
+            CampaignProcedure = materialized.Procedure
         }, cancellationToken);
     }
 
@@ -117,8 +119,7 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
         var runtimeContext = resolvedContext.RuntimeContext
             ?? throw new InvalidOperationException("The full crawl workbench requires a spatial crawl session.");
         var world = resolvedContext.World;
-        var profile = expedition.Procedure;
-        profile.Validate();
+        var procedure = ExpeditionProcedureExecutionResolver.Resolve(expedition);
 
         MapPresentationPolicy? presentation = null;
         var knowledge = expedition.Knowledge;
@@ -136,12 +137,8 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
             }
         }
 
-        var encounterDue = ExpeditionProcedureRequirements.IsEncounterCheckDue(profile, state);
-        var runtimeProfile = state.ActiveWatch is null && !encounterDue
-            ? profile with { EncounterCadence = EncounterCheckCadence.None }
-            : profile;
-
-        var automaticResolution = ValidateAutomaticResolution(expedition, state, runtimeProfile, command);
+        var encounterDue = ExpeditionProcedureRequirements.IsEncounterCheckDue(procedure, state);
+        var automaticResolution = ValidateAutomaticResolution(expedition, state, procedure, encounterDue, command);
         var travelProvenance = Provenance(
             command.TravelResolutionSource,
             command.ResolutionSource,
@@ -166,9 +163,9 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
             command.BoundaryResolutionNote,
             command.DmOverrideNote);
 
-        var travel = BuildTravel(profile, runtimeContext.HexCenterDistance.Unit, command, travelProvenance);
-        var navigation = BuildNavigation(profile, state, command, navigationProvenance);
-        var encounter = BuildEncounter(runtimeProfile, state, command, encounterProvenance);
+        var travel = BuildTravel(procedure, runtimeContext.HexCenterDistance.Unit, command, travelProvenance);
+        var navigation = BuildNavigation(procedure, state, command, navigationProvenance);
+        var encounter = BuildEncounter(encounterDue, state, command, encounterProvenance);
         if (world is null && encounter?.Kind == EncounterOutcomeKind.KeyedLocationDiscovery)
         {
             throw new InvalidOperationException("Keyed-location discovery requires a world-bound crawl session.");
@@ -186,9 +183,10 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
             command.DeliberateDoubleBack,
             command.ContinueAcrossBoundaries);
 
-        var result = _runtime.Advance(
+        var result = ExpeditionProcedureExecutionResolver.Advance(
+            _runtime,
+            expedition,
             runtimeContext,
-            runtimeProfile,
             state,
             plan,
             new WatchAdvanceInputs(travel, navigation, encounter, boundaryDecision, command.DmOverrideNote));
@@ -282,50 +280,33 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
     }
 
     private static ResolvedTravelAmount BuildTravel(
-        CrawlProcedureProfile profile,
+        GenericProcedureRuntime procedure,
         DistanceUnit unit,
         AdvanceExpeditionWorkbenchCommand command,
-        ResolutionProvenance provenance)
-    {
-        if (profile.TravelResolution == TravelResolutionMode.HexSteps)
-        {
-            return command.HexSteps.HasValue
-                ? ResolvedTravelAmount.Steps(command.HexSteps.Value, provenance)
-                : throw new InvalidOperationException("The selected procedure requires a resolved hex-step count.");
-        }
-
-        if (profile.ActualDistanceResolution == ActualDistanceResolutionMode.Fixed)
-        {
-            var effective = command.EffectiveDistance ?? command.ActualDistance ?? command.ExpectedDistance
-                ?? throw new InvalidOperationException("The selected fixed-distance procedure requires an effective travel distance.");
-            var distance = new DistanceMeasure(effective, unit);
-            return ResolvedTravelAmount.Distance(distance, distance, provenance);
-        }
-
-        if (!command.ExpectedDistance.HasValue || !command.ActualDistance.HasValue)
-        {
-            throw new InvalidOperationException("The selected variable-distance procedure requires expected and actual travel distance.");
-        }
-        return ResolvedTravelAmount.Distance(
-            new DistanceMeasure(command.ExpectedDistance.Value, unit),
-            new DistanceMeasure(command.ActualDistance.Value, unit),
+        ResolutionProvenance provenance) =>
+        ProcedureTravelInputPolicy.Build(
+            procedure,
+            unit,
+            command.EffectiveDistance,
+            command.ExpectedDistance,
+            command.ActualDistance,
+            command.HexSteps,
             provenance);
-    }
 
     private static ResolvedNavigation? BuildNavigation(
-        CrawlProcedureProfile profile,
+        GenericProcedureRuntime procedure,
         ExpeditionState state,
         AdvanceExpeditionWorkbenchCommand command,
         ResolutionProvenance provenance)
     {
         if (state.ActiveWatch is not null
-            || !profile.UsesNavigationChecks
+            || !procedure.Navigation.UsesNavigationChecks
             || command.SuppressesNavigationCheck
             || command.DeliberateDoubleBack)
         {
             return null;
         }
-        if (!ExpeditionProcedureRequirements.IsNavigationResolutionPotentiallyRequired(profile, state)
+        if (!ExpeditionProcedureRequirements.IsNavigationResolutionPotentiallyRequired(procedure, state)
             && command.NavigationOutcome is null)
         {
             return null;
@@ -343,12 +324,12 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
     }
 
     private static ResolvedEncounter? BuildEncounter(
-        CrawlProcedureProfile profile,
+        bool encounterDue,
         ExpeditionState state,
         AdvanceExpeditionWorkbenchCommand command,
         ResolutionProvenance provenance)
     {
-        if (state.ActiveWatch is not null || profile.EncounterCadence == EncounterCheckCadence.None)
+        if (state.ActiveWatch is not null || !encounterDue)
         {
             return null;
         }
@@ -381,7 +362,8 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
     private static GeneratedProcedureResolution? ValidateAutomaticResolution(
         StoredExpedition expedition,
         ExpeditionState state,
-        CrawlProcedureProfile runtimeProfile,
+        GenericProcedureRuntime procedure,
+        bool encounterDue,
         AdvanceExpeditionWorkbenchCommand command)
     {
         if (command.ResolutionSource == ResolutionSource.AutomaticRoll)
@@ -453,7 +435,7 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
         if (navigationAutomatic)
         {
             if (state.ActiveWatch is not null
-                || !runtimeProfile.UsesNavigationChecks
+                || !procedure.Navigation.UsesNavigationChecks
                 || command.SuppressesNavigationCheck
                 || command.DeliberateDoubleBack)
             {
@@ -472,7 +454,7 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
 
         if (encounterAutomatic)
         {
-            if (state.ActiveWatch is not null || runtimeProfile.EncounterCadence == EncounterCheckCadence.None)
+            if (state.ActiveWatch is not null || !encounterDue)
             {
                 throw new InvalidOperationException("Automatic encounter resolution is not applicable to this watch.");
             }
@@ -498,7 +480,6 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
                     "The submitted encounter location does not match the persisted generated result.");
             }
         }
-
         return generated;
     }
 

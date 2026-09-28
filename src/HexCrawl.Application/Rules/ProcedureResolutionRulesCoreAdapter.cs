@@ -86,7 +86,8 @@ public sealed class ProcedureResolutionRulesCoreAdapter(IRulesCoreTravelGateway 
                 exception);
         }
 
-        var watchHours = spatial.ActiveWatch?.Remaining.TotalHours ?? expedition.Procedure.WatchLength.TotalHours;
+        var procedure = ExpeditionProcedureExecutionResolver.Resolve(expedition);
+        var watchHours = spatial.ActiveWatch?.Remaining.TotalHours ?? procedure.Time.IntervalDuration.TotalHours;
         var expected = converted.Value * watchHours;
         var provenanceParts = new List<string>
         {

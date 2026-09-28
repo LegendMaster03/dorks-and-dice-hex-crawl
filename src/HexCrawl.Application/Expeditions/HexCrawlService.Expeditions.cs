@@ -95,10 +95,14 @@ public sealed partial class HexCrawlService
                 "AutomaticRoll is reserved for server-verified procedure-helper results and can not be supplied to the legacy manual advance path.");
         }
         var provenance = new ResolutionProvenance(command.ResolutionSource, command.DmOverrideNote);
-        var profile = expedition.Procedure;
-        var travel = BuildTravel(profile, runtimeContext.HexCenterDistance.Unit, command, provenance);
-        var navigation = BuildNavigation(profile, state, command, provenance);
-        var encounter = BuildEncounter(profile, state, command, provenance);
+        var procedure = ExpeditionProcedureExecutionResolver.Resolve(expedition);
+        var travel = BuildTravel(procedure, runtimeContext.HexCenterDistance.Unit, command, provenance);
+        var navigation = BuildNavigation(procedure, state, command, provenance);
+        var encounter = BuildEncounter(
+            ExpeditionProcedureRequirements.IsEncounterCheckDue(procedure, state),
+            state,
+            command,
+            provenance);
         if (world is null && encounter?.Kind == EncounterOutcomeKind.KeyedLocationDiscovery)
         {
             throw new InvalidOperationException("Keyed-location discovery requires a world-bound crawl session.");
@@ -115,9 +119,10 @@ public sealed partial class HexCrawlService
                 command.ResetsVeerAtBoundary),
             command.DeliberateDoubleBack,
             command.ContinueAcrossBoundaries);
-        var result = _runtime.Advance(
+        var result = ExpeditionProcedureExecutionResolver.Advance(
+            _runtime,
+            expedition,
             runtimeContext,
-            profile,
             state,
             plan,
             new WatchAdvanceInputs(travel, navigation, encounter, boundaryDecision, command.DmOverrideNote));
@@ -192,35 +197,27 @@ public sealed partial class HexCrawlService
     }
 
     private static ResolvedTravelAmount BuildTravel(
-        CrawlProcedureProfile profile,
+        GenericProcedureRuntime procedure,
         DistanceUnit unit,
         AdvanceExpeditionCommand command,
-        ResolutionProvenance provenance)
-    {
-        if (profile.TravelResolution == TravelResolutionMode.HexSteps)
-        {
-            return command.HexSteps.HasValue
-                ? ResolvedTravelAmount.Steps(command.HexSteps.Value, provenance)
-                : throw new InvalidOperationException("The selected procedure requires a resolved hex-step count.");
-        }
-        if (!command.ExpectedDistance.HasValue || !command.ActualDistance.HasValue)
-        {
-            throw new InvalidOperationException("The selected procedure requires expected and actual travel distance.");
-        }
-        return ResolvedTravelAmount.Distance(
-            new DistanceMeasure(command.ExpectedDistance.Value, unit),
-            new DistanceMeasure(command.ActualDistance.Value, unit),
+        ResolutionProvenance provenance) =>
+        ProcedureTravelInputPolicy.Build(
+            procedure,
+            unit,
+            null,
+            command.ExpectedDistance,
+            command.ActualDistance,
+            command.HexSteps,
             provenance);
-    }
 
     private static ResolvedNavigation? BuildNavigation(
-        CrawlProcedureProfile profile,
+        GenericProcedureRuntime procedure,
         ExpeditionState state,
         AdvanceExpeditionCommand command,
         ResolutionProvenance provenance)
     {
         if (state.ActiveWatch is not null
-            || !profile.UsesNavigationChecks
+            || !procedure.Navigation.UsesNavigationChecks
             || command.SuppressesNavigationCheck
             || command.DeliberateDoubleBack)
         {
@@ -239,12 +236,12 @@ public sealed partial class HexCrawlService
     }
 
     private static ResolvedEncounter? BuildEncounter(
-        CrawlProcedureProfile profile,
+        bool encounterDue,
         ExpeditionState state,
         AdvanceExpeditionCommand command,
         ResolutionProvenance provenance)
     {
-        if (state.ActiveWatch is not null || profile.EncounterCadence == EncounterCheckCadence.None)
+        if (state.ActiveWatch is not null || !encounterDue)
         {
             return null;
         }
@@ -255,6 +252,4 @@ public sealed partial class HexCrawlService
                 ?? throw new InvalidOperationException("A triggered encounter requires an encounter hour."));
         return new ResolvedEncounter(kind, occursAt, command.LocationId, command.EncounterNote, provenance);
     }
-
-
 }

@@ -15,10 +15,10 @@ public static partial class CrawlAssistantActions
 
     private static DistanceMeasure ResolvePhysicalDistance(
         CrawlRuntimeContext context,
-        CrawlProcedureProfile profile,
+        ProcedureMovementRuntime movementPolicy,
         ResolvedTravelAmount travel)
     {
-        if (profile.TravelResolution == TravelResolutionMode.HexSteps)
+        if (movementPolicy.TravelResolution == TravelResolutionMode.HexSteps)
         {
             if (travel.HexSteps is null || travel.ExpectedDistance is not null || travel.ActualDistance is not null)
             {

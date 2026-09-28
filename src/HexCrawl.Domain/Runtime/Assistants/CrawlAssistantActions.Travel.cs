@@ -9,14 +9,20 @@ public static partial class CrawlAssistantActions
         CrawlRuntimeContext context,
         CrawlProcedureProfile profile,
         ExpeditionState state,
+        TravelWatchAssistantInput input) =>
+        RecordTravelWatch(context, GenericProcedureRuntime.FromLegacyProfile(profile), state, input);
+
+    public static ExpeditionState RecordTravelWatch(
+        CrawlRuntimeContext context,
+        GenericProcedureRuntime procedure,
+        ExpeditionState state,
         TravelWatchAssistantInput input)
     {
         ArgumentNullException.ThrowIfNull(context);
-        ArgumentNullException.ThrowIfNull(profile);
+        ArgumentNullException.ThrowIfNull(procedure);
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(input);
         context.Validate();
-        profile.Validate();
         RequireStandaloneState(state);
 
         if (input.ElapsedTime < TimeSpan.Zero)
@@ -24,7 +30,7 @@ public static partial class CrawlAssistantActions
             throw new InvalidOperationException("Elapsed travel time can not be negative.");
         }
 
-        var physicalDistance = ResolvePhysicalDistance(context, profile, input.Travel);
+        var physicalDistance = ResolvePhysicalDistance(context, procedure.Movement, input.Travel);
         var progress = input.HexProgress is null
             ? state.Traversal.Progress
             : Convert(input.HexProgress.Value, context.HexCenterDistance.Unit);
@@ -119,12 +125,17 @@ public static partial class CrawlAssistantActions
     public static NonSpatialSessionState RecordWatch(
         CrawlProcedureProfile profile,
         NonSpatialSessionState state,
+        NonSpatialWatchAssistantInput input) =>
+        RecordWatch(GenericProcedureRuntime.FromLegacyProfile(profile), state, input);
+
+    public static NonSpatialSessionState RecordWatch(
+        GenericProcedureRuntime procedure,
+        NonSpatialSessionState state,
         NonSpatialWatchAssistantInput input)
     {
-        ArgumentNullException.ThrowIfNull(profile);
+        ArgumentNullException.ThrowIfNull(procedure);
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(input);
-        profile.Validate();
 
         if (input.ElapsedTime <= TimeSpan.Zero)
         {
@@ -137,7 +148,7 @@ public static partial class CrawlAssistantActions
         {
             active = new NonSpatialActiveWatchState(
                 state.CompletedWatches + 1,
-                profile.WatchLength,
+                procedure.Time.IntervalDuration,
                 TimeSpan.Zero);
             events.Add(Event(
                 state,
@@ -216,6 +227,4 @@ public static partial class CrawlAssistantActions
             History = [.. state.History, .. events]
         };
     }
-
-
 }

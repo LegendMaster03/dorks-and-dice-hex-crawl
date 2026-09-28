@@ -8,16 +8,20 @@ namespace HexCrawl.Domain.Runtime;
 public sealed partial class CrawlRuntimeEngine
 {
     private static (ExpeditionState State, ActiveWatchState Active) StartWatch(
-        CrawlProcedureProfile profile,
+        GenericProcedureRuntime procedure,
         ExpeditionState state,
         WatchTravelPlan plan,
         WatchAdvanceInputs inputs,
         EventCollector events)
     {
-        var encounter = ResolveEncounterForNewWatch(profile, inputs.Encounter);
+        var encounterCheckDue = GenericProcedureRuntimeRequirements.IsEncounterCheckDue(procedure, state);
+        var encounter = ResolveEncounterForNewWatch(
+            procedure.Time.IntervalDuration,
+            encounterCheckDue,
+            inputs.Encounter);
         var active = new ActiveWatchState(
             state.CompletedWatches + 1,
-            profile.WatchLength,
+            procedure.Time.IntervalDuration,
             TimeSpan.Zero,
             plan,
             encounter,
@@ -32,18 +36,18 @@ public sealed partial class CrawlRuntimeEngine
             CrawlRuntimeEventKind.WatchStarted,
             state.ElapsedTravelTime,
             state.CurrentHex,
-            $"Watch {active.WatchNumber} started ({profile.Name}); pace {plan.Mode.PaceKey}; activities {activities}.");
+            $"Watch {active.WatchNumber} started ({procedure.Name}); pace {plan.Mode.PaceKey}; activities {activities}.");
 
         state = state with { ActiveWatch = active };
         state = ResolveNavigationAtWatchStart(
-            profile,
+            procedure.Navigation,
             state,
             plan,
             inputs.Navigation,
             events,
             active.WatchNumber);
 
-        if (profile.EncounterCadence != EncounterCheckCadence.None)
+        if (encounterCheckDue)
         {
             events.Add(
                 active.WatchNumber,
@@ -84,10 +88,11 @@ public sealed partial class CrawlRuntimeEngine
     }
 
     private static ResolvedEncounter ResolveEncounterForNewWatch(
-        CrawlProcedureProfile profile,
+        TimeSpan intervalDuration,
+        bool encounterCheckDue,
         ResolvedEncounter? supplied)
     {
-        if (profile.EncounterCadence == EncounterCheckCadence.None)
+        if (!encounterCheckDue)
         {
             return ResolvedEncounter.None;
         }
@@ -99,7 +104,7 @@ public sealed partial class CrawlRuntimeEngine
             return encounter;
         }
 
-        if (encounter.OccursAt is null || encounter.OccursAt < TimeSpan.Zero || encounter.OccursAt > profile.WatchLength)
+        if (encounter.OccursAt is null || encounter.OccursAt < TimeSpan.Zero || encounter.OccursAt > intervalDuration)
         {
             throw new InvalidOperationException("Triggered encounter time must fall within the watch.");
         }
@@ -199,6 +204,4 @@ public sealed partial class CrawlRuntimeEngine
         }
         return new WatchAdvanceResult(state, pause, remaining, newEvents);
     }
-
-
 }

@@ -7,11 +7,11 @@ namespace HexCrawl.Domain.Runtime;
 
 public sealed partial class CrawlRuntimeEngine
 {
-    private static void ValidateTravelAmount(
-        CrawlProcedureProfile profile,
+    private static void ValidateTravelAmountShape(
+        ProcedureMovementRuntime movementPolicy,
         ResolvedTravelAmount travel)
     {
-        if (profile.TravelResolution == TravelResolutionMode.ContinuousDistance)
+        if (movementPolicy.TravelResolution == TravelResolutionMode.ContinuousDistance)
         {
             if (travel.ExpectedDistance is null || travel.ActualDistance is null || travel.HexSteps is not null)
             {
@@ -23,6 +23,61 @@ public sealed partial class CrawlRuntimeEngine
         if (travel.HexSteps is null || travel.HexSteps < 0 || travel.ExpectedDistance is not null || travel.ActualDistance is not null)
         {
             throw new InvalidOperationException("Hex-step travel requires a non-negative resolved step count only.");
+        }
+    }
+
+    private static void ValidateNativeTravelAmountPolicy(
+        ProcedureMovementRuntime movementPolicy,
+        ResolvedTravelAmount travel)
+    {
+        if (movementPolicy.TravelResolution == TravelResolutionMode.HexSteps)
+        {
+            ValidateTravelAmountShape(movementPolicy, travel);
+            return;
+        }
+
+        if (travel.HexSteps is not null)
+        {
+            throw new InvalidOperationException("Continuous-distance travel does not accept a resolved hex-step count.");
+        }
+
+        switch (movementPolicy.ActualDistanceResolution)
+        {
+            case ActualDistanceResolutionMode.Fixed:
+                if (travel.ExpectedDistance is null || travel.ActualDistance is null)
+                {
+                    throw new InvalidOperationException("Fixed continuous-distance travel requires one effective distance represented consistently as both expected and actual distance.");
+                }
+                if (!EquivalentDistance(travel.ExpectedDistance.Value, travel.ActualDistance.Value))
+                {
+                    throw new InvalidOperationException("Fixed continuous-distance travel requires expected and actual distance to represent the same effective distance.");
+                }
+                return;
+
+            case ActualDistanceResolutionMode.VariableResolved:
+                if (travel.ExpectedDistance is null || travel.ActualDistance is null)
+                {
+                    throw new InvalidOperationException("Variable-resolved continuous-distance travel requires both expected and actual distance values.");
+                }
+                return;
+
+            default:
+                throw new InvalidOperationException($"Unsupported actual-distance resolution mode '{movementPolicy.ActualDistanceResolution}'.");
+        }
+    }
+
+    private static bool EquivalentDistance(DistanceMeasure expected, DistanceMeasure actual)
+    {
+        try
+        {
+            var convertedActual = Convert(actual, expected.Unit);
+            return Math.Abs(expected.Value - convertedActual.Value) <= Epsilon;
+        }
+        catch (InvalidOperationException exception)
+        {
+            throw new InvalidOperationException(
+                "Fixed continuous-distance travel requires expected and actual distance to use compatible units.",
+                exception);
         }
     }
 
@@ -47,7 +102,8 @@ public sealed partial class CrawlRuntimeEngine
 
     private static MovementOutcome MoveContinuous(
         CrawlRuntimeContext context,
-        CrawlProcedureProfile profile,
+        ProcedureMovementRuntime movementPolicy,
+        ProcedureHexProgressRuntime progressPolicy,
         ExpeditionState state,
         ActiveWatchState active,
         WatchTravelPlan plan,
@@ -56,7 +112,7 @@ public sealed partial class CrawlRuntimeEngine
         TimeSpan segmentDuration,
         EventCollector events)
     {
-        if (!profile.TracksIntraHexProgress)
+        if (!movementPolicy.TracksIntraHexProgress)
         {
             throw new InvalidOperationException("Continuous-distance travel requires intra-hex progress tracking in this runtime engine.");
         }
@@ -75,7 +131,7 @@ public sealed partial class CrawlRuntimeEngine
 
         while (remainingDistance > Epsilon)
         {
-            var requirement = DetermineExitRequirement(profile, context.HexCenterDistance, traversal, direction, plan.DeliberateDoubleBack);
+            var requirement = DetermineExitRequirement(progressPolicy, context.HexCenterDistance, traversal, direction, plan.DeliberateDoubleBack);
             var progress = Convert(traversal.Progress, unit);
             var needed = plan.DeliberateDoubleBack
                 ? progress.Value
@@ -133,7 +189,7 @@ public sealed partial class CrawlRuntimeEngine
                 LastTravelDirection = direction,
                 Progress = new DistanceMeasure(0, unit),
                 CurrentExitRequirement = new DistanceMeasure(
-                    context.HexCenterDistance.Value * profile.FarExitProgressFactor,
+                    context.HexCenterDistance.Value * progressPolicy.FarExitProgressFactor,
                     unit)
             };
             state = state with { Traversal = traversal };
@@ -325,6 +381,4 @@ public sealed partial class CrawlRuntimeEngine
 
         return new MovementOutcome(state, active, pause);
     }
-
-
 }
