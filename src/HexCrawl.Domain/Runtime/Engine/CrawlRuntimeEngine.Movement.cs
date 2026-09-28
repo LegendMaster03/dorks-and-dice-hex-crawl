@@ -30,22 +30,35 @@ public sealed partial class CrawlRuntimeEngine
         ProcedureMovementRuntime movementPolicy,
         ResolvedTravelAmount travel)
     {
-        ValidateTravelAmountShape(movementPolicy, travel);
-        if (movementPolicy.TravelResolution != TravelResolutionMode.ContinuousDistance)
+        if (movementPolicy.TravelResolution == TravelResolutionMode.HexSteps)
         {
+            ValidateTravelAmountShape(movementPolicy, travel);
             return;
+        }
+
+        if (travel.HexSteps is not null)
+        {
+            throw new InvalidOperationException("Continuous-distance travel does not accept a resolved hex-step count.");
         }
 
         switch (movementPolicy.ActualDistanceResolution)
         {
             case ActualDistanceResolutionMode.Fixed:
-                if (!EquivalentDistance(travel.ExpectedDistance!.Value, travel.ActualDistance!.Value))
+                if (travel.ExpectedDistance is null || travel.ActualDistance is null)
+                {
+                    throw new InvalidOperationException("Fixed continuous-distance travel requires one effective distance represented consistently as both expected and actual distance.");
+                }
+                if (!EquivalentDistance(travel.ExpectedDistance.Value, travel.ActualDistance.Value))
                 {
                     throw new InvalidOperationException("Fixed continuous-distance travel requires expected and actual distance to represent the same effective distance.");
                 }
                 return;
 
             case ActualDistanceResolutionMode.VariableResolved:
+                if (travel.ExpectedDistance is null || travel.ActualDistance is null)
+                {
+                    throw new InvalidOperationException("Variable-resolved continuous-distance travel requires both expected and actual distance values.");
+                }
                 return;
 
             default:
