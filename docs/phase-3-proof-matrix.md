@@ -2,278 +2,164 @@
 
 ## Purpose
 
-Phase 3 stress-tests the campaign-owned generic procedure architecture against materially different wilderness, travel, and journey procedures. This document records the research basis and the architectural mapping. It is a proof artifact only; executable truth remains the versioned preset recipe and the `CampaignProcedure` snapshot produced from it.
+Phase 3 stress-tests the campaign-owned generic procedure architecture against materially different wilderness, travel, and journey procedures. Named systems exist only as creation-time preset metadata and research references. Runtime behavior is defined by the materialized `CampaignProcedure` snapshot and must not depend on preset identity.
 
-Named systems appear here and in preset metadata so a DM can select a familiar starting point. Generic module keys, mechanic keys, handler identities, dependencies, parameters, and runtime dispatch remain system-neutral.
+The implementation uses original Hex Crawl descriptions and structured behavior. It does not import or reproduce proprietary rulebook text, tables, art, or layout. Where exact primary material was not legally/indexably available, only corroborated behavior is represented and uncertain details remain Manual/Assisted.
 
-## Evidence policy
+## Architectural result
 
-The implementation uses original Hex Crawl descriptions and structured behavior. It does not import, scrape, mirror, or reproduce rulebook prose, tables, art, or layout.
+Phase 3 proved that a preset does **not** need to fabricate the six-module legacy `CrawlProcedureProfile` shape. A preset materializes only the generic modules supported by the research and intended implementation.
 
-Where an official SRD, free rule, or publisher page was available, it was preferred. Where exact primary material was not legally/indexably available, the preset encodes only behavior that could be corroborated and marks uncertain details as Manual or Assisted rather than inventing rules.
+`CampaignProcedure` is authoritative. `CrawlProcedureProfile` is a nullable compatibility projection retained only when the pinned generic snapshot contains the complete supported legacy-compatible shape. PostgreSQL therefore permits `procedure_json` to be null while preserving `campaign_procedure_json` as the authoritative snapshot.
 
-## Generic Phase 3 primitives
+The six Phase 2 compatibility modules remain:
 
-Phase 2's executable primitives remain unchanged:
+- `time.interval`;
+- `movement.resolution`;
+- `movement.hex-progress`;
+- `navigation.check`;
+- `encounters.cadence`;
+- `procedure.helpers`.
 
-- fixed interval duration;
-- movement resolution and actual-distance policy;
-- intra-hex progress;
-- navigation-check policy and the existing persistent-veer behavior;
-- encounter cadence;
-- deterministic resolution helpers.
+Phase 3 adds these system-neutral structural contracts:
 
-Phase 3 adds the following system-neutral contracts:
+| Module | Mechanic | Phase 3 automation |
+| --- | --- | --- |
+| `movement.budget` | `movement-budget` | Assisted |
+| `movement.terrain` | `terrain-movement-policy` | Assisted |
+| `party.activities` | `participant-activity-policy` | Manual |
+| `navigation.outcome` | `navigation-outcome-policy` | Assisted |
+| `encounters.schedule` | `encounter-schedule-policy` | Assisted |
+| `survival.resources` | `resource-consumption-policy` | Manual |
+| `exploration.foraging` | `foraging-policy` | Assisted |
+| `survival.camping` | `camping-policy` | Assisted |
+| `time.forced-travel` | `forced-travel-policy` | Assisted |
+| `effects.expedition` | `progressive-expedition-effect` | Manual |
+| `journey.events` | `journey-event-policy` | Manual |
+| `journey.process` | `multi-stage-expedition-process` | Manual |
 
-| Module | Mechanic | Purpose | Automation in Phase 3 |
-| --- | --- | --- | --- |
-| `movement.budget` | `movement-budget` | Distance/activity/point budget and limiting scope | Assisted |
-| `movement.terrain` | `terrain-movement-policy` | Terrain, route, and weather movement adjustment | Assisted |
-| `party.activities` | `participant-activity-policy` | Party, participant, or role activity assignment | Manual |
-| `navigation.outcome` | `navigation-outcome-policy` | Check trigger, lost state, directional error, recognition, reorientation | Assisted |
-| `encounters.schedule` | `encounter-schedule-policy` | Travel/camp/terrain/event encounter schedules beyond the core cadence | Assisted |
-| `survival.resources` | `resource-consumption-policy` | Resource kinds, inventory style, and consumption cadence | Manual |
-| `exploration.foraging` | `foraging-policy` | Forage resolution, time cost, and movement tradeoff | Assisted |
-| `survival.camping` | `camping-policy` | Camp setup, time cost, and watch model | Assisted |
-| `time.forced-travel` | `forced-travel-policy` | Normal limit, check model, and failure consequence | Assisted |
-| `effects.expedition` | `progressive-expedition-effect` | Persistent effect families, accumulation, scope, recovery | Manual |
-| `journey.events` | `journey-event-policy` | Event placement, target selection, terrain influence, consequences | Manual |
-| `journey.process` | `multi-stage-expedition-process` | Stage/progress/completion model for higher-level journeys | Manual |
+All twelve use `procedure.declarative-contract` version 1. That handler means the snapshot contains an intentionally non-executable contract that this runtime version recognizes and preserves. It does not synthesize behavior. A declarative mechanic can not be `Automatic`.
 
-All twelve use the versioned generic handler `procedure.declarative-contract` version 1. The handler means the current runtime understands the snapshot as an intentionally non-executable Manual/Assisted contract and may continue executing other supported modules. It does not fabricate results. Unknown handlers or unsupported future versions still fail native binding and remain preserved.
+A partial procedure can validate and persist without being a complete `GenericProcedureRuntime`. Native binding still requires every execution handler needed by the current runtime engine. Unknown handlers and unsupported versions remain hard failures rather than being silently reinterpreted.
 
-## Required proof matrix
+## Dependency-source model
 
-### B/X
+Dependency validation now checks both module reads and mechanic input contracts. A missing selected-module producer is an error unless the mechanic explicitly permits another source in the pinned snapshot.
 
-- **Preset:** `bx` / B/X.
-- **Evidence:** Old-School Essentials SRD wilderness procedure as a legally accessible B/X-compatible reference where available, plus cross-checking against secondary B/X procedure summaries. OSE SRD reference: `https://oldschoolessentials.necroticgnome.com/srd/index.php/Wilderness_Adventuring`.
-- **Time structure:** day-scale wilderness travel.
-- **Movement:** party-limited daily movement modified by terrain.
-- **Party organization / activities:** the verified Phase 3 slice does not require a role engine.
-- **Navigation / lost behavior:** navigation may create a lost state with a random/off-course direction; recognition and reorientation are represented separately from the check.
-- **Terrain/environment:** multiplier-style generic terrain cost.
-- **Encounters:** daily, terrain-sensitive scheduling is represented; exact table probabilities remain data/manual input rather than copied tables.
-- **Resources / survival:** food and water consumption concepts; counted inventory.
-- **Foraging / camping:** foraging is represented; no separate camp subsystem is asserted by this preset.
-- **Forced travel / persistent effects:** not asserted by the verified preset slice.
-- **Journey events / process:** not applicable.
-- **Generic modules:** Phase 2 core plus movement budget, terrain movement, navigation outcome, encounter schedule, resources, foraging.
-- **Native execution:** day interval, core movement, and core per-day cadence. Conditional lost checks and random-direction resolution remain Assisted.
-- **Deferred:** generalized environment, resources, and richer lost-state execution.
+Supported source classifications are:
 
-### Old-School Essentials Classic Fantasy alias
+- `SelectedModule` — another selected generic module produces the value;
+- `Dm` / `Manual` — the DM supplies or adjudicates the value;
+- `OptionalProvider` — a later or optional provider can supply the value;
+- `ExternalState` / `RuntimeState` — campaign/runtime state supplies the value.
 
-- **Preset:** `ose-classic-fantasy`.
-- **Behavior:** exactly reuses the B/X generic recipe.
-- **Reason:** Phase 3 found no verified Hex Crawl-relevant procedural difference that justified an artificial second implementation.
-- **Architectural proof:** two named catalog identities can materialize the same system-neutral recipe.
+Materialization converts catalog source declarations into explicit `ProcedureInputRequirement` entries in the pinned mechanic snapshot. This makes the fallback contract part of persisted procedure data rather than an implicit catalog convention.
+
+Diagnostics distinguish missing required producers from manual, optional-provider, and external-state inputs. Only unresolved inputs with no permitted source are dependency errors.
+
+## Native-module proof matrix
+
+The following table is the authoritative Phase 3 statement of which Phase 2 executable modules are actually selected by each proof preset. Structural Phase 3 modules are listed separately in each preset recipe.
+
+| Preset | Phase 2 native modules selected | Complete compatibility profile? |
+| --- | --- | --- |
+| B/X | `time.interval`, `encounters.cadence` | No |
+| AD&D 2e | `time.interval` | No |
+| D&D 3.5e | `time.interval` | No |
+| D&D 5.5e / 2024 | `time.interval` | No |
+| Pathfinder 2e Hexploration | `time.interval` | No |
+| Forbidden Lands | `time.interval` | No |
+| Worlds Without Number | `time.interval` | No |
+| The One Ring 2e | none | No |
+| The Alexandrian | all six compatibility modules | Yes |
+| Mixed House Rule | all six compatibility modules | Yes |
+
+This matrix is enforced by automated tests. It prevents a familiar ruleset name from causing unverified movement, navigation, progress, encounter, helper, or time behavior to be invented merely to satisfy the old profile shape.
+
+## Preset evidence and mappings
+
+### B/X and Old-School Essentials
+
+The `bx` preset represents day-scale wilderness travel, terrain-sensitive movement budgeting, lost/navigation outcomes, daily encounter cadence, resources, and foraging. The native Phase 2 portion is limited to the verified day interval and per-day encounter cadence; movement budgeting, terrain, navigation outcome, resources, and foraging remain structural contracts.
+
+The `ose-classic-fantasy` preset intentionally reuses the exact B/X `GenericProcedurePresetRecipe`. OSE remains a separate catalog identity only. No duplicate generic implementation exists.
+
+Evidence basis: Old-School Essentials SRD wilderness material as a legally accessible B/X-compatible reference, with secondary B/X cross-checking.
 
 ### AD&D 2e
 
-- **Preset:** `adnd-2e`.
-- **Evidence:** legally accessible secondary transcription/reference material for AD&D 2e DMG overland movement and getting-lost concepts, including `https://adnd2e.fandom.com/wiki/Movement_(DMG)` and related getting-lost references.
-- **Time structure:** day-scale overland travel.
-- **Movement:** movement-point/distance style with terrain cost.
-- **Party organization / activities:** no participant activity engine is required for the verified slice.
-- **Navigation / lost behavior:** explicit lost/off-course state with recognition/reorientation contract.
-- **Terrain/environment:** movement-point-per-distance representation.
-- **Encounters:** exact wilderness encounter cadence was not responsibly verified from a primary open source. The preset therefore uses a contextual/manual schedule contract and does not claim a copied cadence.
-- **Resources / foraging / camping / forced travel / effects / journey process:** intentionally not asserted by the verified Phase 3 slice.
-- **Generic modules:** Phase 2 core plus movement budget, terrain movement, navigation outcome, encounter schedule.
-- **Native execution:** day interval and continuous movement policy. Conditional navigation triggering, movement points, and lost outcomes remain Assisted.
-- **Uncertainty:** encounter scheduling and exact terrain values remain manual/configurable until stronger evidence is available.
+The preset represents a day-scale interval plus movement-budget, terrain-cost, navigation-outcome, and encounter-schedule contracts. Only the time interval is native. Exact wilderness encounter cadence and other insufficiently verified details remain manual/configurable rather than being encoded as a fabricated core profile.
+
+Evidence basis: legally accessible secondary AD&D 2e reference material for overland movement and getting-lost concepts. Exact primary-source details that could not be responsibly verified were not asserted.
 
 ### D&D 3.5e
 
-- **Preset:** `dnd-3-5e`.
-- **Evidence:** D&D 3.5 SRD movement, Survival, and wilderness rules: `https://www.d20srd.org/srd/movement.htm`, `https://www.d20srd.org/srd/skills/survival.htm`, and `https://www.d20srd.org/srd/wilderness.htm`.
-- **Time structure:** hourly travel, with an eight-hour ordinary daily limit before forced travel.
-- **Movement:** speed-derived distance with difficult-terrain multipliers.
-- **Party organization / activities:** foraging can trade movement rate for resource gathering.
-- **Navigation / lost behavior:** checks can create a lost state; off-course direction, recognition, and reorientation are separate concepts.
-- **Terrain/environment:** generic normal/difficult multiplier model.
-- **Encounters:** no exact copied encounter tables or schedule are encoded.
-- **Resources:** foraging produces food/water conceptually; a complete inventory engine is deferred.
-- **Foraging:** Assisted skill/check contract with half-speed tradeoff.
-- **Camping:** not asserted as a distinct procedure.
-- **Forced travel:** escalating checks after the normal travel limit.
-- **Persistent effects:** fatigue/nonlethal consequences represented structurally.
-- **Journey events / process:** not applicable.
-- **Native execution:** hourly interval and fixed continuous movement. Conditional navigation triggering remains Assisted.
-- **Deferred:** skill resolution, effect engine, inventory/resource state.
+The preset represents an hourly interval plus speed-derived movement budget, terrain effects, getting-lost outcome, foraging, forced travel, and persistent fatigue/nonlethal consequences. Only the hourly interval is native in Phase 3.
+
+Evidence basis: D&D 3.5 SRD movement, Survival, and wilderness rules from d20srd.org.
 
 ### D&D 5.5e / 2024
 
-- **Preset:** `dnd-2024`.
-- **Evidence:** official D&D Free Rules (2024), DM's Toolbox / Travel Pace: `https://www.dndbeyond.com/sources/dnd/br-2024/dms-toolbox` and the SRD 5.2 Gameplay Toolbox.
-- **Time structure:** hourly travel; ordinary travel is eight hours before extended-travel checks.
-- **Movement:** speed/pace-derived, with slowest-traveler limitation.
-- **Party organization / activities:** participant travel activities are represented as a generic activity contract.
-- **Navigation:** environment supplies navigation difficulty; the check and detailed outcome remain Assisted.
-- **Terrain/environment:** maximum pace by terrain, roads improving the effective limit, environment-specific adjustments.
-- **Encounters:** no copied encounter table or encounter-generation subsystem.
-- **Resources / foraging / camping:** full resource/camp systems are not part of this preset proof.
-- **Forced travel:** escalating Constitution-save model after eight hours.
-- **Persistent effects:** Exhaustion is represented as a generic persistent effect family, not as a D&D-specific runtime class.
-- **Journey events / process:** not required.
-- **Native execution:** hourly interval and continuous-distance movement. Navigation/activity detail remains Assisted.
-- **Deferred:** movement capability composition, environment engine, effect engine.
+The preset represents an hourly interval plus pace/speed budgeting, terrain limits, participant travel activities, forced travel after the ordinary limit, and exhaustion as a generic persistent effect family. Only the hourly interval is native in Phase 3.
+
+Evidence basis: official D&D Free Rules 2024 / SRD 5.2 travel material.
 
 ### Pathfinder 2e Hexploration
 
-- **Preset:** `pathfinder-2e-hexploration`.
-- **Evidence:** Archives of Nethys, GM Core Hexploration: `https://2e.aonprd.com/Rules.aspx?ID=3103`.
-- **Time structure:** day-scale Hexploration activities.
-- **Movement:** speed-derived activity budget; Travel cost varies by open/difficult/greater difficult terrain.
-- **Party organization / activities:** group Travel/Reconnoiter and individual Hexploration activities.
-- **Navigation / lost behavior:** mapping and getting-lost concepts are represented structurally; exact resolution remains Assisted.
-- **Terrain/environment:** activity-cost model; roads improve travel terrain one step.
-- **Encounters:** daily random-encounter cadence is represented at the core level; terrain probability remains structural.
-- **Resources / survival:** Subsist is represented through foraging rather than a full inventory.
-- **Foraging:** Subsist-style activity replacing other Hexploration activity capacity.
-- **Camping:** Fortify Camp-style activity contract.
-- **Forced travel / persistent effects / journey process:** not required by the verified Hexploration proof.
-- **Native execution:** daily interval, whole-hex movement, and per-day core encounter cadence. Contextual getting-lost behavior remains Assisted.
-- **Deferred:** speed-to-activity calculation, typed activity state, environment/context engine.
+The preset represents a day-scale interval plus speed-derived Hexploration activity budgeting, terrain activity cost, participant/group activities, contextual getting-lost outcomes, Subsist/foraging, and Fortify Camp-style camping. Only the time interval is native in Phase 3; the activity and movement behavior remains structural.
+
+Evidence basis: Archives of Nethys GM Core Hexploration rules.
 
 ### Forbidden Lands
 
-- **Preset:** `forbidden-lands`.
-- **Evidence:** Free League product/quickstart availability plus independent procedure summaries. Publisher entry: `https://freeleaguepublishing.com/games/forbidden-lands/`. Exact journey/mishap tables are not reproduced.
-- **Time structure:** four quarter-days per day; the preset uses a six-hour interval.
-- **Movement:** hex travel measured in quarter-day activities with terrain affecting effort.
-- **Party organization / activities:** participant activities including travel, leading the way, keeping watch, foraging, hunting/fishing, camp, rest, and sleep are represented as generic keys.
-- **Navigation / lost behavior:** leading-the-way failure can produce mishap/off-course state; exact mishap results remain manual.
-- **Terrain/environment:** generic activity/hex-cost model.
-- **Encounters:** per-quarter-day travel cadence is represented by the native per-watch cadence.
-- **Resources:** food, water, ammunition/light concepts use a generic supply-die inventory model.
-- **Foraging / camping:** explicit activity contracts.
-- **Forced travel:** travel beyond the ordinary quarter-day limit has a generic Endurance/check contract.
-- **Persistent effects:** fatigue/mishap consequences are structural.
-- **Journey events / process:** no separate higher-level journey process is required.
-- **Native execution:** six-hour interval, whole-hex movement, navigation requirement, per-interval encounter cadence.
-- **Uncertainty:** exact mishap tables, roll modifiers, and some numerical terrain values remain manual because a fully accessible primary rules source was not available during this phase.
+The preset represents a six-hour quarter-day interval plus activity budgeting, terrain travel cost, participant journey activities, navigation/mishap outcomes, supply-die resources, foraging, camping, forced travel, and persistent effects. Only the interval is native in Phase 3. Exact mishap tables, numerical modifiers, and other details not established from a fully accessible primary source remain manual.
+
+Evidence basis: Free League publisher material plus independent procedure summaries, without reproducing proprietary tables.
 
 ### Worlds Without Number
 
-- **Preset:** `worlds-without-number`.
-- **Evidence:** Worlds Without Number SRD wilderness exploration and overland travel, including `https://wwn.quadrifons.com/2.0%20The%20Rules%20of%20the%20Game/2.12.0%20Wilderness%20Exploration%20and%20Expeditions.html` and the adjacent Overland Travel section.
-- **Time structure:** ordinary overland travel is modeled as a ten-hour expedition day.
-- **Movement:** terrain-dependent distance per hour, with route/weather adjustments.
-- **Party organization / activities:** no mandatory role system is asserted.
-- **Navigation / lost behavior:** no navigation mechanic is asserted beyond verified source evidence used in this phase.
-- **Terrain/environment:** distance-per-hour terrain model.
-- **Encounters:** separate travel and camp opportunities are represented by a generic schedule contract; the native core check handles the travel-interval portion.
-- **Resources:** food, water, shelter/fire concepts with counted supplies.
-- **Foraging:** half/full-day tradeoff represented structurally.
-- **Camping:** separate night/camp state and encounter opportunity.
-- **Forced travel / persistent effects:** not asserted by the verified slice.
-- **Journey events / process:** not required.
-- **Native execution:** ten-hour interval, continuous movement, per-interval travel encounter check.
-- **Deferred:** separate camp encounter execution, resource engine, terrain/environment provider.
+The preset represents a ten-hour expedition-day interval plus terrain-adjusted movement budgeting, travel/camp encounter scheduling, supplies, foraging, and camping. Only the interval is native in Phase 3. Separate camp encounter execution and resource state remain deferred.
+
+Evidence basis: Worlds Without Number SRD wilderness exploration and overland travel material.
 
 ### The One Ring 2e
 
-- **Preset:** `the-one-ring-2e`.
-- **Evidence:** Free League publisher material (`https://freeleaguepublishing.com/shop/the-one-ring/core-rules-2/`) plus a secondary procedural summary explicitly scoped to Chapter 6 of the Third Printing (`https://theroleplayersguild.com/articles/the-one-ring-rpg/journeys-travel/journey-rules`).
-- **Time structure:** higher-level journey legs and events rather than a simple repeating hexcrawl watch. A one-day core interval exists only as a compatibility/native fallback.
-- **Movement:** route/journey progress.
-- **Party organization / activities:** role-based Guide, Hunter, Look-out, and Scout assignments.
-- **Navigation:** route decisions are role/journey-process concerns rather than a Phase 2 persistent-veer model.
-- **Terrain/environment:** terrain/roads influence event and journey difficulty.
-- **Encounters:** journey events are not treated as ordinary random encounter checks.
-- **Resources / foraging / camping:** role responsibilities are represented, but detailed resource/camp subsystems are not claimed.
-- **Forced travel:** not encoded without stronger exact evidence.
-- **Persistent effects:** Fatigue is represented as a persistent generic effect family.
-- **Journey events:** Guide-driven progress places events; events target travel roles and can add fatigue.
-- **Higher-level process:** route -> repeated progress/events -> arrival.
-- **Native execution:** only the generic fallback interval/movement can execute in Phase 3.
-- **Manual/Assisted:** role assignments, marching progress, event placement/targeting, fatigue accumulation.
-- **Deferred:** the full multi-stage journey engine and generalized effects.
-- **Uncertainty:** exact distances, modifiers, event tables, and fatigue values are intentionally not encoded or claimed complete.
+The preset is intentionally **not** forced through the legacy hexcrawl runtime profile. It contains no Phase 2 native modules and therefore has no compatibility profile.
+
+It represents role-driven participant activity, journey-progress movement budgeting, terrain influence, fatigue, journey events, and a multi-stage route/events/arrival process entirely through Manual/Assisted structural contracts. Missing interval/activity/effect inputs are explicit dependency-source diagnostics rather than fabricated one-day movement or navigation behavior.
+
+Evidence basis: Free League publisher material plus a secondary Chapter 6 journey summary. Exact event tables, distances, modifiers, and fatigue values are not encoded.
 
 ### The Alexandrian
 
-- **Preset:** `alexandrian-advanced`.
-- **Evidence:** The Alexandrian, "Hexcrawl – Part 6: Watch Checklist" (`https://thealexandrian.net/wordpress/17349/roleplaying-games/hexcrawl-part-6-watch-checklist`) and the later 5E watch checklist (`https://thealexandrian.net/wordpress/46229/roleplaying-games/5e-hexcrawl-part-6-watch-checklists`).
-- **Time structure:** four-hour watches.
-- **Movement:** continuous distance with variable actual distance.
-- **Party organization / activities:** navigator/watch actions exist in the source procedure; typed participant activity ownership is deferred.
-- **Navigation / lost behavior:** navigation checks, persistent veer, recognition, and reorientation.
-- **Terrain/environment:** average distance can vary by terrain/conditions; generalized environment composition is deferred.
-- **Encounters:** per-watch checks with timing helper.
-- **Resources / foraging / camping / forced travel / persistent effects / journey process:** not required by the existing advanced preset.
-- **Generic modules:** Phase 2 native core.
-- **Native execution:** all currently encoded Alexandrian behavior remains native through pinned generic mechanics.
-- **Deferred:** typed activity and generalized environment layers.
+`alexandrian-advanced` remains the fully native Phase 2 proof. It contains all six supported compatibility modules and continues to execute its four-hour interval, continuous variable-distance movement, intra-hex progress, navigation/persistent veer, per-watch encounter cadence, and deterministic helpers from the pinned generic snapshot.
+
+Evidence basis: The Alexandrian hexcrawl watch checklist and later 5E watch checklist.
 
 ### Mixed House Rule
 
-- **Preset:** `mixed-house-rule`.
-- **Source:** original Dorks & Dice proof composition; it is intentionally not a published ruleset.
-- **Time structure:** four-hour native travel intervals.
-- **Movement:** continuous fixed-distance native core plus an activity/distance budget and activity-cost terrain contract.
-- **Party organization / activities:** per-participant watch activities with navigator/lookout/forager/scout-style generic roles.
-- **Navigation:** native core navigation is disabled; a separate Assisted contract supplies watch-triggered lost/veer, recognition, and reorientation behavior without changing runtime dispatch.
-- **Terrain/environment:** activity-cost terrain with route improvement.
-- **Encounters:** no native random encounter cadence, proving structural modules do not require encounter generation.
-- **Resources:** supply-die food/water/light contract.
-- **Foraging / camping:** activity-based contracts.
-- **Forced travel:** escalating check after a watch limit.
-- **Persistent effects:** level-like fatigue family with safe-rest recovery.
-- **Journey events:** role-targeted watch/landmark events.
-- **Higher-level process:** no full journey-process module is selected; this deliberately shows individual primitives can compose without taking an entire named procedure family.
-- **Native execution:** four-hour interval and fixed continuous movement execute directly from the pinned snapshot.
-- **Architectural proof:** the procedure combines activity budgeting, terrain costs, supply-die resources, activity-based camp/forage, forced travel, persistent effects, assisted navigation outcomes, and role-targeted events in a combination no named proof preset uses.
+The original Dorks & Dice mixed preset intentionally combines a complete existing native core with Phase 3 structural contracts from otherwise independent families: activity budgeting, terrain costs, participant activities, navigation outcomes, supply-die resources, foraging, camping, forced travel, persistent effects, and journey events.
 
-## Preset revision and snapshot guarantees
+It proves that a complete executable core can coexist with recognized non-executable structural contracts without runtime dispatch depending on preset identity.
 
-Phase 3 retains the lifecycle:
+## Compatibility and persistence behavior
 
-`Preset revision -> materialize -> CampaignProcedure revision -> DM revision -> expedition-pinned snapshot`.
+`CampaignProcedureCompatibilityProjector` remains deliberately narrow. It projects only a complete supported six-module legacy shape. Extra structural modules do not expand the legacy profile.
 
-Tests cover:
+For projectable procedures, persistence stores both the authoritative generic snapshot and the retained compatibility profile and verifies that they agree. For non-projectable generic procedures, `procedure_json` is null and `campaign_procedure_json` remains authoritative. Historical profile-only rows remain supported through the explicit legacy compatibility boundary.
 
-- preset revision changes producing a new materialization without mutating the prior procedure;
-- campaign procedure revisions retaining the same `ProcedureId` while incrementing revision;
-- expeditions retaining their exact pinned revision;
-- origin metadata remaining informational;
-- execution after the originating preset is absent;
-- PostgreSQL/restart round trips preserving all module/mechanic definitions, versions, automation levels, and parameters.
+Pinned snapshots survive PostgreSQL restart with mechanic version, automation level, parameters, input-source requirements, module definitions, and origin metadata intact. A later preset revision or removal of the originating preset does not mutate an existing campaign-owned procedure revision.
 
-No preset revision is looked up at runtime.
-
-## Dependency and execution conclusions
-
-The proof matrix exposed one Phase 2 gap: native binding previously rejected every selected mechanic whose execution handler was not executable, even when the mechanic was intentionally Manual/Assisted. That made it impossible to pin a structurally complete future-facing procedure while still executing supported portions.
-
-Phase 3 resolves this with one explicit versioned declarative handler. It is not a wildcard and it does not execute or synthesize results. Only mechanics deliberately authored with `procedure.declarative-contract` version 1 are accepted as non-executable contracts. Unknown handlers and future versions continue to raise `UnsupportedProcedureMechanicException`.
-
-The existing compatibility projector is not expanded for Phase 3 structural mechanics. It still projects only the six legacy-compatible core modules. Extra Phase 3 modules remain authoritative in `CampaignProcedure` and survive persistence independently.
-
-The existing `CrawlProcedureCatalog.All` collection remains the three-profile legacy runtime compatibility view so Phase 3 does not broaden the old runtime-profile UI/API surface. `CrawlProcedureCatalog.Catalog` is the authoritative creation-time preset catalog and `Resolve` uses it. Phase 4 owns replacement of that compatibility presentation surface with the Procedure Composer/preset UX.
+The legacy web/client `RuntimeProfileContract` remains non-null because Phase 4 owns replacement of that UI/API surface. If a legacy contract is asked to represent an expedition that has no compatibility projection, it fails explicitly rather than inventing a profile.
 
 ## Runtime leakage audit
 
-Phase 3 generic module keys, mechanic keys, execution handlers, Domain type names, and Application implementation type names are covered by tests against proof-system identity tokens. The only named-system identities introduced by Phase 3 are preset/catalog metadata, research documentation, attribution/disclaimer text, and tests that intentionally select a preset by key.
+Generic module keys, mechanic keys, handler identities, and implementation type names are tested against proof-system identity tokens. Named-system identity is limited to preset/catalog metadata, research documentation, attribution/disclaimer text, and tests that intentionally select presets.
 
-Runtime binding dispatches exclusively on embedded generic execution-handler identity plus mechanic version. It does not switch on preset key, publisher, product, or edition.
+Runtime dispatch uses only embedded generic handler identity and mechanic version. It does not branch on preset key, edition, publisher, or product name.
 
 ## Later-phase deferrals
 
-Phase 3 intentionally does not implement:
+Phase 3 intentionally does not implement the Procedure Composer, typed participant-activity UX/state, full movement-capability composition, generalized environment context, resource inventory/consumption execution, generalized effects, complete camp/forage/forced-travel engines, the full multi-stage journey engine, expanded encounter handoff, or battle-map ownership changes.
 
-- the Procedure Composer;
-- typed participant-activity UX/state;
-- full movement capability composition;
-- generalized environment context;
-- generalized resource inventory/consumption execution;
-- generalized effect/consequence execution;
-- complete camp/forage engines;
-- complete forced-travel execution;
-- the multi-stage journey engine;
-- expanded encounter handoff;
-- battle-map ownership changes.
-
-The Phase 3 contracts are structured so those phases can add execution without changing named preset identity into a runtime dependency.
+Those later subsystems can add execution behind generic contracts without turning named preset identity into a runtime dependency.
