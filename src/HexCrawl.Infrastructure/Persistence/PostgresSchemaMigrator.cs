@@ -5,7 +5,7 @@ namespace HexCrawl.Infrastructure.Persistence;
 
 public sealed class PostgresSchemaMigrator(string connectionString)
 {
-    public const int CurrentVersion = 2;
+    public const int CurrentVersion = 3;
     private const long MigrationLockKey = 0x484558435241574C;
 
     public async Task MigrateAsync(CancellationToken cancellationToken = default)
@@ -51,6 +51,11 @@ public sealed class PostgresSchemaMigrator(string connectionString)
             {
                 await ApplyVersion2Async(connection, transaction, cancellationToken);
                 current = 2;
+            }
+            if (current < 3)
+            {
+                await ApplyVersion3Async(connection, transaction, cancellationToken);
+                current = 3;
             }
 
             if (current != CurrentVersion)
@@ -169,6 +174,24 @@ public sealed class PostgresSchemaMigrator(string connectionString)
 
             INSERT INTO hex_crawl_schema_migrations(version, applied_at)
             VALUES (2, @appliedAt);
+            """;
+        command.Parameters.AddWithValue("appliedAt", NpgsqlDbType.TimestampTz, DateTime.UtcNow);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static async Task ApplyVersion3Async(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            ALTER TABLE expeditions
+                ALTER COLUMN procedure_json DROP NOT NULL;
+
+            INSERT INTO hex_crawl_schema_migrations(version, applied_at)
+            VALUES (3, @appliedAt);
             """;
         command.Parameters.AddWithValue("appliedAt", NpgsqlDbType.TimestampTz, DateTime.UtcNow);
         await command.ExecuteNonQueryAsync(cancellationToken);
