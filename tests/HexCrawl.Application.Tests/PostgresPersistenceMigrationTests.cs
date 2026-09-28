@@ -48,7 +48,6 @@ public sealed class PostgresPersistenceMigrationTests
             await store.InitializeAsync();
             var worldBound = await store.GetExpeditionAsync(seeded.WorldBoundId, Owner);
             Assert.NotNull(worldBound);
-            worldBound = worldBound!;
             Assert.Equal(seeded.WorldBoundVersion, worldBound.Version);
             Assert.NotEmpty(worldBound.Runtime.History);
 
@@ -80,8 +79,6 @@ public sealed class PostgresPersistenceMigrationTests
                 var nonSpatial = await store.GetExpeditionAsync(seeded.NonSpatialId, Owner);
                 Assert.NotNull(abstractHex);
                 Assert.NotNull(nonSpatial);
-                abstractHex = abstractHex!;
-                nonSpatial = nonSpatial!;
                 Assert.IsType<AbstractHexCrawlSessionContext>(abstractHex.Context);
                 Assert.IsType<NonSpatialCrawlSessionContext>(nonSpatial.Context);
                 Assert.Equal(schemaVersion >= 5 ? "simple-fixed-distance" : null, abstractHex.ProcedureOrigin?.PresetKey);
