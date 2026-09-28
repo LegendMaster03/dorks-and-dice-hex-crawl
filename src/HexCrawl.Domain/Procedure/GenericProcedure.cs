@@ -82,6 +82,12 @@ public sealed record MechanicDefinition(
         {
             throw new InvalidOperationException($"Mechanic '{Key}' requires a positive version.");
         }
+        if (string.Equals(ExecutionHandler, "procedure.declarative-contract", StringComparison.Ordinal)
+            && AutomationLevel == ProcedureAutomationLevel.Automatic)
+        {
+            throw new InvalidOperationException(
+                $"Mechanic '{Key}' can not use the non-executable declarative contract handler with Automatic automation. Declarative contracts must be Manual or Assisted.");
+        }
         ValidateDistinct(InputContract, $"Mechanic '{Key}' input contract");
         ValidateDistinct(OutputContract, $"Mechanic '{Key}' output contract");
         ValidateDistinct(CompatibilityTags, $"Mechanic '{Key}' compatibility tags");
