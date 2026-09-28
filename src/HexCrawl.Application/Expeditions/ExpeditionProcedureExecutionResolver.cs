@@ -13,9 +13,12 @@ public static class ExpeditionProcedureExecutionResolver
     public static GenericProcedureRuntime Resolve(StoredExpedition expedition)
     {
         ArgumentNullException.ThrowIfNull(expedition);
-        return expedition.CampaignProcedure is { } procedure
-            ? GenericProcedureRuntime.Bind(procedure)
-            : GenericProcedureRuntime.FromLegacyProfile(expedition.Procedure);
+        if (expedition.CampaignProcedure is { } procedure)
+        {
+            return GenericProcedureRuntime.Bind(procedure);
+        }
+
+        return GenericProcedureRuntime.FromLegacyProfile(RequireLegacyProfile(expedition));
     }
 
     public static WatchAdvanceResult Advance(
@@ -30,6 +33,11 @@ public static class ExpeditionProcedureExecutionResolver
         ArgumentNullException.ThrowIfNull(expedition);
         return expedition.CampaignProcedure is { } procedure
             ? engine.Advance(context, procedure, state, plan, inputs)
-            : engine.Advance(context, expedition.Procedure, state, plan, inputs);
+            : engine.Advance(context, RequireLegacyProfile(expedition), state, plan, inputs);
     }
+
+    private static CrawlProcedureProfile RequireLegacyProfile(StoredExpedition expedition) =>
+        expedition.Procedure
+        ?? throw new InvalidOperationException(
+            "This expedition has no generic CampaignProcedure and no historical CrawlProcedureProfile compatibility snapshot to execute.");
 }
