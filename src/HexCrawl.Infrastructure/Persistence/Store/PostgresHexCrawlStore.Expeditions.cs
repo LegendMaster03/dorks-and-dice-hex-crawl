@@ -320,7 +320,7 @@ public sealed partial class PostgresHexCrawlStore
         expedition.Party.Validate();
         AddJsonb(command, "party", Serialize(expedition.Party));
         AddJsonb(command, "generatedResolutions", Serialize(expedition.GeneratedProcedureResolutions));
-        AddJsonb(command, "procedure", expedition.Procedure is null ? null : Serialize(expedition.Procedure));
+        AddJsonb(command, "procedure", expedition.CompatibilityProfile is null ? null : Serialize(expedition.CompatibilityProfile));
         AddJsonb(command, "procedureOrigin", expedition.ProcedureOrigin is null ? null : Serialize(expedition.ProcedureOrigin));
         AddJsonb(command, "campaignProcedure", expedition.CampaignProcedure is null ? null : Serialize(expedition.CampaignProcedure));
         command.Parameters.AddWithValue("pause", NpgsqlDbType.Text, expedition.PauseReason?.ToString() is { } pause ? pause : DBNull.Value);
