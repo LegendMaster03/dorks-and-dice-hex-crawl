@@ -376,7 +376,7 @@ public sealed class SourceMapEndpointsTests
     public async Task NativeWonderdraftSourceArchiveRoundTripsAndDoesNotLeakOnReimportOrDelete()
     {
         var database = TestWebHost.NewDatabasePath();
-        var assetDirectory = Path.Combine(database + ".assets", "maps");
+        var assetDirectory = Path.Combine(TestWebHost.AssetRoot(database), "maps");
         try
         {
             Guid worldId;
@@ -764,7 +764,7 @@ public sealed class SourceMapEndpointsTests
             Assert.Equal(version, reopened.GetProperty("version").GetInt64());
             Assert.Empty(reopened.GetProperty("sourceMaps").EnumerateArray());
 
-            var assetRoot = database + ".assets";
+            var assetRoot = TestWebHost.AssetRoot(database);
             Assert.True(Directory.Exists(assetRoot));
             Assert.Empty(Directory.EnumerateFiles(assetRoot, "*", SearchOption.AllDirectories));
         }
