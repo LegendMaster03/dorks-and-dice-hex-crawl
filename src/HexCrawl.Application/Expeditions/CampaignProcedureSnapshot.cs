@@ -22,13 +22,23 @@ internal static class CampaignProcedureSnapshot
     public static MechanicDefinition Copy(MechanicDefinition value)
     {
         ArgumentNullException.ThrowIfNull(value);
+        var externalSources = value.ExternalInputSources.ToDictionary(
+            item => item.Key,
+            item => item.Value,
+            StringComparer.Ordinal);
+        var inputRequirements = value.InputRequirements?.Select(item => item with { }).ToArray()
+            ?? externalSources.Select(item =>
+                new ProcedureInputRequirement(
+                    item.Key,
+                    ProcedureInputSource.SelectedModule | item.Value)).ToArray();
         return value with
         {
             InputContract = value.InputContract.ToArray(),
             OutputContract = value.OutputContract.ToArray(),
             ParameterSchema = CopySchema(value.ParameterSchema),
             CompatibilityTags = value.CompatibilityTags.ToArray(),
-            InputRequirements = value.InputRequirements?.Select(item => item with { }).ToArray()
+            InputRequirements = inputRequirements,
+            ExternalInputSources = externalSources
         };
     }
 
