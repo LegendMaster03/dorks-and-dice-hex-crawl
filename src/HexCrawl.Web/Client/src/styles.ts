@@ -370,6 +370,8 @@ export function ensureStyles(): void {
             .hc-sidebar { max-height: none; overflow: visible; }
             .hc-world-editor .hc-map-panel { position: static; }
             .hc-map-host, .hc-map-canvas { min-height: 400px; height: 55vh; }
+            .hc-party-member-row { grid-template-columns: 1fr; }
+            .hc-party-member-row > .hc-danger-action { justify-self: start; }
         }
         @media (max-width: 560px) {
             .hc-page { padding: .75rem; }
