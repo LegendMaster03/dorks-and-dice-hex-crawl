@@ -107,7 +107,7 @@ public sealed record ExpeditionContract(
         expedition.Version,
         expedition.CreatedAt,
         expedition.UpdatedAt,
-        RuntimeProfileContract.From(RequireCompatibilityProfile(expedition)),
+        RuntimeProfileContract.From(expedition.Procedure),
         expedition.PauseReason,
         expedition.RemainingWatchTime.TotalHours,
         expedition.Runtime is ExpeditionState spatial ? ExpeditionStateContract.From(spatial) : null,
@@ -117,11 +117,6 @@ public sealed record ExpeditionContract(
             .Select(KnowledgeEntryContract.From)
             .ToArray() ?? [],
         expedition.Runtime.History.Select(RuntimeEventContract.From).ToArray());
-
-    private static CrawlProcedureProfile RequireCompatibilityProfile(StoredExpedition expedition) =>
-        expedition.Procedure
-        ?? throw new InvalidOperationException(
-            "This legacy expedition API requires a CrawlProcedureProfile compatibility projection. The pinned generic procedure remains persisted, but this API can not represent it.");
 }
 
 public sealed record StartExpeditionRequest(string Name, string ProcedureKey, HexCoordinate StartHex)
