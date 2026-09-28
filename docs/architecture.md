@@ -10,7 +10,7 @@ Hex Crawl maintains independent state axes rather than turning a rendered hex in
 2. **Crawl/session state** — every persisted crawl is a session with an explicit `CrawlSessionContext`: `WorldBound(overworldId)`, `AbstractHex(name, orientation, runtime scale)`, or `NonSpatial(name)`. Spatial sessions use `ExpeditionState`; non-spatial sessions use `NonSpatialSessionState`. The deterministic crawl engine needs physical hex scale and procedure/runtime state but no `OverworldDefinition` or renderer.
 3. **Player knowledge** — `PlayerKnowledgeState` records subject-specific knowledge, known/explored hexes, annotations, and the party-specific presentation-policy snapshot. There is deliberately no `Hex.IsRevealed` flag.
 4. **Presentation policy** — `MapPresentationPolicy` and presentation projections decide what knowledge changes may happen automatically and how authoritative data is presented.
-5. **Procedure configuration** — `CrawlProcedureProfile` defines crawl procedure behavior independently of world geometry.
+5. **Procedure configuration** — a materialized `CampaignProcedure` is the executable procedure authority for new sessions. `CrawlProcedureProfile` remains a compatibility projection for historical data and compatibility surfaces.
 
 Database and binary-storage concerns do not enter the core spatial/runtime records.
 
@@ -51,7 +51,7 @@ See `docs/source-map-import.md` for upload compensation, limits, format validati
 
 ### Crawl-session storage
 
-The PostgreSQL `expeditions` table remains the persistence envelope for compatibility, but its aggregate is a crawl session rather than an inherently world-bound expedition. The PostgreSQL schema starts from the fully materialized current shape: required `context_json`, nullable `overworld_id`, nullable world-only `knowledge_json`, party state, generated resolutions, executable procedure snapshot, nullable procedure-origin metadata, pause state, and remaining-watch state.
+The PostgreSQL `expeditions` table remains the persistence envelope for compatibility, but its aggregate is a crawl session rather than an inherently world-bound expedition. The PostgreSQL schema starts from the fully materialized current shape: required `context_json`, nullable `overworld_id`, nullable world-only `knowledge_json`, party state, generated resolutions, generic procedure snapshot, compatibility procedure snapshot, nullable procedure-origin metadata, pause state, and remaining-watch state.
 
 The three context forms are intentionally distinct:
 
@@ -98,7 +98,7 @@ The Web layer exposes resource DTOs rather than persistence rows:
 - world-scoped expedition start/list for `WorldBound` sessions plus session load/advance/discovery routes;
 - independent focused mutations at `/api/expeditions/{expeditionId}/assistants/travel`, `/watch`, `/navigation`, and `/encounters`.
 
-World-bound creation accepts a procedure preset key, a presentation preset key, and an optional complete procedure snapshot. Standalone creation accepts either an `AbstractHex` context (name, orientation, physical center distance/unit, starting hex) or a `NonSpatial` context (name only). The executable procedure snapshot may use its own compatibility key/name and passes the same domain validation as built-in profiles; selected-preset provenance is stored separately as optional `ProcedureOriginMetadata`.
+World-bound creation accepts a procedure preset key, a presentation preset key, and an optional complete compatibility procedure snapshot that is captured into the campaign-owned generic materialization. Standalone creation accepts either an `AbstractHex` context (name, orientation, physical center distance/unit, starting hex) or a `NonSpatial` context (name only). The compatibility procedure snapshot may use its own compatibility key/name and passes the same domain validation as built-in profiles; selected-preset provenance is stored separately as optional `ProcedureOriginMetadata`.
 
 Only multipart source-map upload creates new asset keys. Clients can not bind an arbitrary provider key through an HTTP metadata contract.
 
@@ -132,16 +132,16 @@ Automatic grid detection, image feature matching, overlapping-map registration, 
 
 Still deferred are campaign sharing, real-time collaborative editing, a dedicated player delivery/session surface for the persisted presentation state, automatic map analysis, four-point projective registration UI, arbitrary-bearing runtime travel, multi-hex automatic backtracking, a general campaign calendar/rest clock, battle maps, Journey Challenge / Complex Hazard state, progressive expedition effects, and structured encounter handoff to combat tools.
 
-Rules Core/Characters integration remains optional future resolved-input plumbing; those systems do not become owners of Hex Crawl spatial/runtime state.
+Rules Core remains optional resolved-input plumbing; Characters integration remains future work. Neither system becomes an owner of Hex Crawl spatial/runtime state.
 
 The filesystem map provider is intentionally replaceable infrastructure. The source-map domain, continuous-overworld model, procedure snapshots, and presentation snapshots do not require redesign when storage or later analysis/integration implementations change.
 
-## Procedure preset identity boundary (Phase 0)
+## Procedure preset and runtime authority boundary (Phases 0-2)
 
-Named crawl procedures are creation-time catalog presets. `CrawlProcedurePresetDefinition` owns preset identity, display metadata, revision, and the executable template used when a DM creates a crawl session. Applying a preset materializes a complete `CrawlProcedureProfile`; after that point the stored profile is the authoritative executable state.
+Named crawl procedures are creation-time catalog presets. `CrawlProcedurePresetDefinition` owns preset identity, display metadata, revision, and the generic recipe used when a DM creates a crawl session. Applying a preset materializes a complete campaign-owned `CampaignProcedure` containing embedded module/mechanic snapshots and resolved parameters. That pinned generic procedure is the runtime authority for newly materialized sessions.
 
-`CrawlProcedureProfile.Key` and `Name` remain in the compatibility projection so existing serialized procedure snapshots continue to deserialize, but they are not required to match the originating preset key or display name. Runtime services execute `StoredExpedition.Procedure` directly and do not re-resolve `CrawlProcedureCatalog` during reload or advancement.
+`CrawlProcedureProfile.Key` and `Name` remain in the compatibility projection so existing serialized procedure snapshots and compatibility-facing contracts continue to deserialize, but they are not required to match the originating preset key or display name. `ExpeditionProcedureExecutionResolver` uses `StoredExpedition.CampaignProcedure` whenever it is present and falls back to `StoredExpedition.Procedure` only for historical profile-only rows. Neither native path re-resolves `CrawlProcedureCatalog` during reload or advancement.
 
-`StoredExpedition.ProcedureOrigin` is nullable informational provenance (`presetKey`, display name, and revision). PostgreSQL stores it separately in nullable `procedure_origin_json`. The legacy SQLite importer reads that column when present and imports `NULL` when it is absent; it does not invent provenance. Removing the metadata or removing the corresponding preset from the catalog does not change executable behavior.
+`StoredExpedition.ProcedureOrigin` is nullable informational provenance (`presetKey`, display name, and revision). PostgreSQL stores it separately in nullable `procedure_origin_json`. Historical import/load paths do not invent provenance. Removing or renaming that metadata or the corresponding creation-time preset does not change executable behavior because the expedition pins its complete generic snapshot.
 
-Rules Core remains optional enrichment. The deterministic crawl runtime still consumes the materialized profile and resolved inputs rather than requiring Rules Core or any originating preset.
+Rules Core remains optional enrichment. Native generic execution consumes the pinned `CampaignProcedure` and resolved inputs rather than requiring Rules Core, any origin preset, or the current global mechanic catalog. Unsupported future execution handlers remain persisted and fail explicitly when this runtime version can not execute them.
