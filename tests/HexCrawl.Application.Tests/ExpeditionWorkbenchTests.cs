@@ -550,26 +550,25 @@ public sealed class ExpeditionWorkbenchTests
 
     private sealed class TestDatabase : IAsyncDisposable
     {
-        private readonly string _path;
-        public string ConnectionString { get; }
+        private readonly PostgresTestDatabase _database;
+        public string ConnectionString => _database.ConnectionString;
 
-        private TestDatabase(string path)
+        private TestDatabase(PostgresTestDatabase database)
         {
-            _path = path;
-            ConnectionString = $"Data Source={path}";
+            _database = database;
         }
 
         public static async Task<TestDatabase> CreateAsync()
         {
-            var database = new TestDatabase(Path.Combine(Path.GetTempPath(), $"hex-crawl-workbench-{Guid.NewGuid():N}.db"));
-            var store = new SqliteHexCrawlStore(database.ConnectionString);
+            var database = await PostgresTestDatabase.CreateAsync();
+            var store = new PostgresHexCrawlStore(database.ConnectionString);
             await store.InitializeAsync();
-            return database;
+            return new TestDatabase(database);
         }
 
         public async Task<ExpeditionAssistantService> AssistantServiceAsync()
         {
-            var store = new SqliteHexCrawlStore(ConnectionString);
+            var store = new PostgresHexCrawlStore(ConnectionString);
             await store.InitializeAsync();
             var core = new HexCrawlService(store);
             var resolver = new CrawlSessionContextResolver(core);
@@ -578,21 +577,13 @@ public sealed class ExpeditionWorkbenchTests
 
         public async Task<(HexCrawlService Core, ExpeditionWorkbenchService Workbench)> ServicesAsync()
         {
-            var store = new SqliteHexCrawlStore(ConnectionString);
+            var store = new PostgresHexCrawlStore(ConnectionString);
             await store.InitializeAsync();
             var core = new HexCrawlService(store);
             var resolver = new CrawlSessionContextResolver(core);
             return (core, new ExpeditionWorkbenchService(store, core, resolver));
         }
 
-        public ValueTask DisposeAsync()
-        {
-            foreach (var suffix in new[] { "", "-wal", "-shm" })
-            {
-                var file = _path + suffix;
-                if (File.Exists(file)) File.Delete(file);
-            }
-            return ValueTask.CompletedTask;
-        }
+        public ValueTask DisposeAsync() => _database.DisposeAsync();
     }
 }

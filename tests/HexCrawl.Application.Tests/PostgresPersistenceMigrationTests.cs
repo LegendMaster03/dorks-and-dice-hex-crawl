@@ -46,7 +46,9 @@ public sealed class PostgresPersistenceMigrationTests
 
             var store = new PostgresHexCrawlStore(target.ConnectionString);
             await store.InitializeAsync();
-            var worldBound = Assert.NotNull(await store.GetExpeditionAsync(seeded.WorldBoundId, Owner));
+            var worldBound = await store.GetExpeditionAsync(seeded.WorldBoundId, Owner);
+            Assert.NotNull(worldBound);
+            worldBound = worldBound!;
             Assert.Equal(seeded.WorldBoundVersion, worldBound.Version);
             Assert.NotEmpty(worldBound.Runtime.History);
 
@@ -74,8 +76,12 @@ public sealed class PostgresPersistenceMigrationTests
 
             if (schemaVersion >= 2)
             {
-                var abstractHex = Assert.NotNull(await store.GetExpeditionAsync(seeded.AbstractHexId, Owner));
-                var nonSpatial = Assert.NotNull(await store.GetExpeditionAsync(seeded.NonSpatialId, Owner));
+                var abstractHex = await store.GetExpeditionAsync(seeded.AbstractHexId, Owner);
+                var nonSpatial = await store.GetExpeditionAsync(seeded.NonSpatialId, Owner);
+                Assert.NotNull(abstractHex);
+                Assert.NotNull(nonSpatial);
+                abstractHex = abstractHex!;
+                nonSpatial = nonSpatial!;
                 Assert.IsType<AbstractHexCrawlSessionContext>(abstractHex.Context);
                 Assert.IsType<NonSpatialCrawlSessionContext>(nonSpatial.Context);
                 Assert.Equal(schemaVersion >= 5 ? "simple-fixed-distance" : null, abstractHex.ProcedureOrigin?.PresetKey);
@@ -162,6 +168,7 @@ public sealed class PostgresPersistenceMigrationTests
                 ContinueAcrossBoundaries = false
             });
 
+        var spatialRuntime = (ExpeditionState)worldBound.Runtime;
         var generatedId = Guid.NewGuid();
         var generated = new GeneratedProcedureResolution(
             generatedId,
@@ -169,7 +176,7 @@ public sealed class PostgresPersistenceMigrationTests
             worldBound.Version,
             worldBound.Version,
             worldBound.Runtime.History.Max(item => item.Sequence) + 1,
-            worldBound.Runtime.CompletedWatches + 1,
+            spatialRuntime.CompletedWatches + 1,
             [new ProcedureResolutionRoll("migration", "1d20+2", [17], 2, 19)],
             new ProcedureResolvedTravel(
                 12,
@@ -184,7 +191,8 @@ public sealed class PostgresPersistenceMigrationTests
             worldBound with { GeneratedProcedureResolutions = [generated] },
             worldBound.Version);
         Assert.Equal(SaveOutcome.Saved, save.Outcome);
-        worldBound = Assert.NotNull(save.Value);
+        Assert.NotNull(save.Value);
+        worldBound = save.Value!;
 
         var sessions = new CrawlSessionService(store);
         var abstractHex = await sessions.StartAsync(
