@@ -56,7 +56,8 @@ public sealed class GenericProcedureReviewRegressionTests
                 "Consistent",
                 "simple-fixed-distance",
                 new NonSpatialCrawlSessionContext("Travel clock")));
-        var mismatch = started.Procedure with { WatchLength = TimeSpan.FromHours(5) };
+        var startedProcedure = Assert.IsType<CrawlProcedureProfile>(started.Procedure);
+        var mismatch = startedProcedure with { WatchLength = TimeSpan.FromHours(5) };
 
         var createMismatch = DuplicateStandalone(started, "Create mismatch") with { Procedure = mismatch };
         await Assert.ThrowsAsync<InvalidOperationException>(() => store.CreateExpeditionAsync(createMismatch));
@@ -78,7 +79,8 @@ public sealed class GenericProcedureReviewRegressionTests
                 "Persisted mismatch",
                 "simple-fixed-distance",
                 new NonSpatialCrawlSessionContext("Travel clock")));
-        var mismatch = started.Procedure with { WatchLength = TimeSpan.FromHours(5) };
+        var startedProcedure = Assert.IsType<CrawlProcedureProfile>(started.Procedure);
+        var mismatch = startedProcedure with { WatchLength = TimeSpan.FromHours(5) };
 
         await UpdateJsonAsync(database.ConnectionString, started.Id, "procedure_json", mismatch);
 
