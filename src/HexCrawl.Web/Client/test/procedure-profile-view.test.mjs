@@ -7,10 +7,8 @@ import {
     procedureProfileSummary
 } from "../.test-dist/procedure-profile-view.js";
 
-const advanced = {
-    key: "alexandrian-advanced",
-    name: "Alexandrian Advanced",
-    watchHours: 4,
+const advancedRuntime = {
+    intervalHours: 4,
     travelResolution: "ContinuousDistance",
     actualDistanceResolution: "VariableResolved",
     encounterCadence: "PerWatch",
@@ -41,6 +39,16 @@ const advanced = {
     }
 };
 
+const advanced = {
+    procedureId: "00000000-0000-0000-0000-000000000001",
+    revision: 1,
+    key: "alexandrian-advanced",
+    name: "Alexandrian Advanced",
+    isExecutable: true,
+    runtime: advancedRuntime,
+    modules: []
+};
+
 test("procedure summary uses human-readable cadence labels", () => {
     assert.equal(
         procedureProfileSummary(advanced),
@@ -69,12 +77,15 @@ test("procedure mechanics describe the configured travel, navigation, progress, 
 test("procedure mechanics do not advertise incompatible retained helper components", () => {
     const hexSteps = {
         ...advanced,
-        travelResolution: "HexSteps",
-        actualDistanceResolution: "Fixed",
-        usesNavigationChecks: false,
-        encounterCadence: "None",
-        tracksIntraHexProgress: false,
-        directionChangesCostProgress: false
+        runtime: {
+            ...advancedRuntime,
+            travelResolution: "HexSteps",
+            actualDistanceResolution: "Fixed",
+            usesNavigationChecks: false,
+            encounterCadence: "None",
+            tracksIntraHexProgress: false,
+            directionChangesCostProgress: false
+        }
     };
 
     const lines = procedureMechanicLines(hexSteps);
@@ -87,10 +98,35 @@ test("procedure mechanics do not advertise incompatible retained helper componen
     assert.doesNotMatch(lines.join("\n"), /Encounter helper:/);
 });
 
-
 test("helper mechanics expose component-specific formulas for inline controls", () => {
     const mechanics = procedureHelperMechanics(advanced);
     assert.equal(mechanics.travel, "actual distance = expected distance × 2d6+3 total × 0.1.");
     assert.equal(mechanics.navigation, "1d20 + the entered situational modifier vs. the DM-confirmed DC; a failed check uses the DM-confirmed non-zero veer.");
     assert.equal(mechanics.encounter, "1d8; wandering on 1, keyed location on 8; encounter time uses 1d8 equal watch slots.");
+});
+
+test("structural procedures remain presentable without an executable runtime projection", () => {
+    const structural = {
+        procedureId: "00000000-0000-0000-0000-000000000002",
+        revision: 1,
+        key: "structural-proof",
+        name: "Structural Proof",
+        isExecutable: false,
+        runtime: null,
+        modules: [{
+            moduleKey: "journey.process",
+            moduleName: "Journey Process",
+            mechanicKey: "multi-stage-expedition-process",
+            mechanicVersion: 1,
+            executionHandler: "procedure.declarative-contract",
+            automationLevel: "Manual",
+            parameters: {}
+        }]
+    };
+
+    assert.equal(
+        procedureProfileSummary(structural),
+        "1 materialized modules · structural procedure · not executable by the current runtime");
+    assert.deepEqual(procedureHelperMechanics(structural), { travel: null, navigation: null, encounter: null });
+    assert.match(procedureMechanicLines(structural)[0], /multi-stage-expedition-process v1/);
 });
