@@ -5,8 +5,7 @@ namespace HexCrawl.Domain.Runtime;
 
 /// <summary>
 /// Stable native execution-handler identities embedded in materialized generic procedure snapshots.
-/// The persisted values retain their Phase 1 names for snapshot compatibility; runtime dispatch is
-/// based only on the embedded handler identity and mechanic version, never on a preset key or catalog lookup.
+/// Runtime dispatch is based only on embedded handler identity and mechanic version, never on a preset key or catalog lookup.
 /// </summary>
 public static class GenericProcedureExecutionHandlers
 {
@@ -16,12 +15,6 @@ public static class GenericProcedureExecutionHandlers
     public const string NavigationCheckPolicy = "crawl-profile.navigation";
     public const string EncounterCheckCadence = "crawl-profile.encounter-cadence";
     public const string DeterministicResolutionHelpers = "crawl-profile.resolution-helpers";
-
-    /// <summary>
-    /// Versioned marker for intentionally non-executable Manual/Assisted procedure contracts.
-    /// Recognizing this handler means the runtime preserves and accepts the contract while executing
-    /// other supported modules; it does not synthesize a result for the declarative mechanic.
-    /// </summary>
     public const string DeclarativeContract = "procedure.declarative-contract";
 
     private static IReadOnlyDictionary<string, IReadOnlySet<int>> SupportedVersions { get; } =
@@ -85,8 +78,7 @@ public sealed record ProcedureNavigationRuntime(
 public sealed record ProcedureEncounterRuntime(EncounterCheckCadence Cadence);
 
 /// <summary>
-/// Ephemeral native runtime binding of one pinned generic procedure. This is not persisted and is
-/// intentionally organized by generic procedure modules rather than recreating CrawlProcedureProfile.
+/// Ephemeral native runtime binding of one pinned generic procedure. This is not persisted.
 /// </summary>
 public sealed class GenericProcedureRuntime
 {
@@ -161,34 +153,6 @@ public sealed class GenericProcedureRuntime
                 Boolean(navigation, "usesPersistentVeer")),
             new ProcedureEncounterRuntime(EnumValue<EncounterCheckCadence>(encounters, "cadence")),
             helpers is null ? null : ReadHelpers(helpers));
-    }
-
-    /// <summary>
-    /// Deliberate compatibility adapter for historical profile-only persisted sessions.
-    /// New materialized sessions should bind their CampaignProcedure instead.
-    /// </summary>
-    public static GenericProcedureRuntime FromLegacyProfile(CrawlProcedureProfile profile)
-    {
-        ArgumentNullException.ThrowIfNull(profile);
-        profile.Validate();
-        return new GenericProcedureRuntime(
-            profile.Name,
-            new ProcedureTimeRuntime(profile.WatchLength),
-            new ProcedureMovementRuntime(
-                profile.TravelResolution,
-                profile.ActualDistanceResolution,
-                profile.TracksIntraHexProgress),
-            new ProcedureHexProgressRuntime(
-                profile.StartingExitProgressFactor,
-                profile.NearExitProgressFactor,
-                profile.FarExitProgressFactor,
-                profile.BackExitProgressFactor,
-                profile.DirectionChangesCostProgress,
-                profile.DirectionChangeProgressCostFactor,
-                profile.SupportsDeliberateDoubleBack),
-            new ProcedureNavigationRuntime(profile.UsesNavigationChecks, profile.UsesPersistentVeer),
-            new ProcedureEncounterRuntime(profile.EncounterCadence),
-            profile.ResolutionHelpers);
     }
 
     private void Validate()

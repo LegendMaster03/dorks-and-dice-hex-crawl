@@ -1,7 +1,4 @@
-using System.Globalization;
-using HexCrawl.Domain.Knowledge;
 using HexCrawl.Domain.Procedure;
-using HexCrawl.Domain.Spatial;
 
 namespace HexCrawl.Domain.Runtime;
 
@@ -9,9 +6,6 @@ public sealed partial class CrawlRuntimeEngine
 {
     private const double Epsilon = 0.0000001d;
 
-    /// <summary>
-    /// Native generic execution path. The pinned CampaignProcedure is the runtime authority.
-    /// </summary>
     public WatchAdvanceResult Advance(
         CrawlRuntimeContext context,
         CampaignProcedure procedure,
@@ -23,20 +17,6 @@ public sealed partial class CrawlRuntimeEngine
         var runtime = GenericProcedureRuntime.Bind(procedure);
         ValidateNativeTravelAmountPolicy(runtime.Movement, inputs.Travel);
         return AdvanceCore(context, runtime, expedition, plan, inputs);
-    }
-
-    /// <summary>
-    /// Historical compatibility path for profile-only persisted sessions.
-    /// </summary>
-    public WatchAdvanceResult Advance(
-        CrawlRuntimeContext context,
-        CrawlProcedureProfile profile,
-        ExpeditionState expedition,
-        WatchTravelPlan plan,
-        WatchAdvanceInputs inputs)
-    {
-        ArgumentNullException.ThrowIfNull(profile);
-        return AdvanceCore(context, GenericProcedureRuntime.FromLegacyProfile(profile), expedition, plan, inputs);
     }
 
     private static WatchAdvanceResult AdvanceCore(
