@@ -86,6 +86,8 @@ internal sealed record TestProcedureFixture
     }
 
     public static implicit operator CampaignProcedure(TestProcedureFixture fixture) => fixture.Materialize();
+    public static implicit operator GenericProcedureRuntime(TestProcedureFixture fixture) =>
+        GenericProcedureRuntime.Bind(fixture.Materialize());
 
     private static MaterializedProcedureModule Module(
         string moduleKey,
