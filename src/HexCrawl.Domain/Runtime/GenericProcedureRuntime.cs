@@ -352,7 +352,7 @@ public static class GenericProcedureRuntimeRequirements
         {
             return false;
         }
-        if (cadence is EncounterCheckCadence.PerWatch or EncounterCheckCadence.Custom)
+        if (cadence == EncounterCheckCadence.PerWatch)
         {
             return !history.Any(runtimeEvent =>
                 runtimeEvent.Kind == CrawlRuntimeEventKind.EncounterCheckPerformed
