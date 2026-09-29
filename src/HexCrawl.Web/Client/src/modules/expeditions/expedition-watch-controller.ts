@@ -9,6 +9,7 @@ import type {
     ExpeditionDetail,
     Overworld,
     ProcedureResolutionHelperResult,
+    ProcedureRuntime,
     ResolutionSource,
     RuntimeAdvanceRequest,
     SpatialRuntimeExpedition
@@ -122,6 +123,7 @@ export class ExpeditionWatchController {
     }
 
     public sync(runtime: ExpeditionDetail): void {
+        const execution = requireProcedureRuntime(runtime);
         this.expireGeneratedResolutionIfVersionChanged(runtime.version);
         const state = spatialState(runtime);
         this.syncSegmentState(runtime, state);
@@ -137,37 +139,37 @@ export class ExpeditionWatchController {
                 `Resolve pending ${prettyEnum(runtime.pauseReason)} before the watch can continue.`);
         } else if (newWatch) {
             requirementLines.push(
-                `Plan watch ${state.completedWatches + 1} (${formatHours(runtime.profile.watchHours)}).`);
+                `Plan watch ${state.completedWatches + 1} (${formatHours(execution.intervalHours)}).`);
         } else {
             requirementLines.push(
                 `Continue watch ${state.activeWatchNumber} with ${formatHours(state.activeWatchRemainingHours ?? runtime.remainingWatchHours)} remaining.`);
         }
 
-        if (runtime.profile.actualDistanceResolution === "VariableResolved"
-            && runtime.profile.travelResolution === "ContinuousDistance") {
+        if (execution.actualDistanceResolution === "VariableResolved"
+            && execution.travelResolution === "ContinuousDistance") {
             requirementLines.push(
                 "A resolved expected and actual distance are required for this segment.");
-        } else if (runtime.profile.travelResolution === "ContinuousDistance") {
+        } else if (execution.travelResolution === "ContinuousDistance") {
             requirementLines.push("An effective travel distance is required for this segment.");
         } else {
             requirementLines.push("A resolved hex-step count is required for this segment.");
         }
 
-        if (newWatch && runtime.profile.usesNavigationChecks) {
+        if (newWatch && execution.usesNavigationChecks) {
             requirementLines.push(
                 "Navigation resolution is required unless the selected aid suppresses it or this is a deliberate double-back.");
         }
         if (encounterCheckDue(runtime)) {
             requirementLines.push(
-                `An encounter check is due (${prettyEnum(runtime.profile.encounterCadence)} cadence).`);
+                `An encounter check is due (${prettyEnum(execution.encounterCadence)} cadence).`);
         }
         requirements.replaceChildren(...requirementLines.map(text => paragraph(text)));
 
-        const continuous = runtime.profile.travelResolution === "ContinuousDistance";
+        const continuous = execution.travelResolution === "ContinuousDistance";
         required<HTMLElement>(this.form, "[data-fixed-distance]").hidden =
-            !(continuous && runtime.profile.actualDistanceResolution === "Fixed");
+            !(continuous && execution.actualDistanceResolution === "Fixed");
         required<HTMLElement>(this.form, "[data-variable-distance]").hidden =
-            !(continuous && runtime.profile.actualDistanceResolution === "VariableResolved");
+            !(continuous && execution.actualDistanceResolution === "VariableResolved");
         required<HTMLElement>(this.form, "[data-step-distance]").hidden = continuous;
 
         required<HTMLElement>(this.form, "[data-encounter-resolution]").hidden =
@@ -175,11 +177,11 @@ export class ExpeditionWatchController {
         required<HTMLElement>(this.form, "[data-boundary-resolution]").hidden =
             runtime.pauseReason !== "LostRecognitionRequired";
         required<HTMLElement>(this.form, "[data-double-back-row]").hidden =
-            !runtime.profile.supportsDeliberateDoubleBack;
+            !execution.supportsDeliberateDoubleBack;
         required<HTMLElement>(this.form, "[data-suppress-nav-row]").hidden =
-            !runtime.profile.usesNavigationChecks;
+            !execution.usesNavigationChecks;
         required<HTMLElement>(this.form, "[data-reset-veer-row]").hidden =
-            !runtime.profile.usesPersistentVeer;
+            !execution.usesPersistentVeer;
 
         const direction = select(this.form, "direction");
         if (state.activeWatchNumber !== null) {
@@ -213,7 +215,7 @@ export class ExpeditionWatchController {
         this.syncEncounterFields();
         this.syncResolutionHelperVisibility(runtime);
 
-        const directionHelp = runtime.profile.directionChangesCostProgress
+        const directionHelp = execution.directionChangesCostProgress
             ? "Changing course can consume intra-hex progress under this procedure. The runtime applies the configured cost."
             : "Direction changes do not consume additional progress under this procedure.";
         required<HTMLElement>(this.form, "[data-direction-hint]").textContent =
@@ -298,13 +300,14 @@ export class ExpeditionWatchController {
         navigation: boolean;
         encounter: boolean;
     } {
-        const configured = runtime.profile.resolutionHelpers;
+        const execution = requireProcedureRuntime(runtime);
+        const configured = execution.resolutionHelpers;
         if (!configured) return { travel: false, navigation: false, encounter: false };
 
         return {
             travel: configured.travel !== null
-                && runtime.profile.travelResolution === "ContinuousDistance"
-                && runtime.profile.actualDistanceResolution === "VariableResolved",
+                && execution.travelResolution === "ContinuousDistance"
+                && execution.actualDistanceResolution === "VariableResolved",
             navigation: configured.navigation !== null
                 && navigationResolutionDue(
                     runtime,
@@ -322,7 +325,7 @@ export class ExpeditionWatchController {
         required<HTMLElement>(this.root, "[data-helper-navigation]").hidden = !applicability.navigation;
         required<HTMLElement>(this.root, "[data-helper-encounter]").hidden = !applicability.encounter;
 
-        const mechanics = procedureHelperMechanics(runtime.profile);
+        const mechanics = procedureHelperMechanics(runtime.procedure);
         required<HTMLElement>(this.root, "[data-helper-travel-mechanic]").textContent =
             mechanics.travel ?? "";
         required<HTMLElement>(this.root, "[data-helper-navigation-mechanic]").textContent =
@@ -348,6 +351,7 @@ export class ExpeditionWatchController {
         void this.runMutation(async () => {
             try {
                 const runtime = this.getRuntime();
+                const execution = requireProcedureRuntime(runtime);
                 const applicability = this.helperApplicability(runtime);
                 if (!applicability.travel && !applicability.navigation && !applicability.encounter) {
                     throw new Error("No automatic procedure helper is applicable to the current watch state.");
@@ -357,7 +361,7 @@ export class ExpeditionWatchController {
                     expectedVersion: runtime.version,
                     suppressesNavigationCheck: checkbox(this.form, "suppressNav").checked,
                     deliberateDoubleBack:
-                        runtime.profile.supportsDeliberateDoubleBack
+                        execution.supportsDeliberateDoubleBack
                         && checkbox(this.form, "doubleBack").checked,
                     navigationModifier: applicability.navigation
                         ? integer(input(this.form, "helperNavigationModifier"))
@@ -571,7 +575,8 @@ export class ExpeditionWatchController {
         void this.runMutation(async () => {
             try {
                 const runtime = this.getRuntime();
-                const continuous = runtime.profile.travelResolution === "ContinuousDistance";
+                const execution = requireProcedureRuntime(runtime);
+                const continuous = execution.travelResolution === "ContinuousDistance";
                 const navRequired = navigationResolutionDue(
                     runtime,
                     checkbox(this.form, "suppressNav").checked,
@@ -593,12 +598,12 @@ export class ExpeditionWatchController {
                         this.readResolutionSource("travelSource", "travel"),
                     travelResolutionNote: optionalText(input(this.form, "travelNote")),
                     deliberateDoubleBack:
-                        runtime.profile.supportsDeliberateDoubleBack
+                        execution.supportsDeliberateDoubleBack
                         && checkbox(this.form, "doubleBack").checked,
                     continueAcrossBoundaries: checkbox(this.form, "continueAcross").checked
                 };
 
-                if (continuous && runtime.profile.actualDistanceResolution === "Fixed") {
+                if (continuous && execution.actualDistanceResolution === "Fixed") {
                     request.effectiveDistance = numeric(input(this.form, "effectiveDistance"));
                 } else if (continuous) {
                     request.expectedDistance = numeric(input(this.form, "expectedDistance"));
@@ -686,6 +691,14 @@ export class ExpeditionWatchController {
             }
         });
     }
+}
+
+function requireProcedureRuntime(runtime: ExpeditionDetail): ProcedureRuntime {
+    const execution = runtime.procedure.runtime;
+    if (!execution) {
+        throw new Error(`Procedure ${runtime.procedure.name} is structural and is not executable by the current runtime.`);
+    }
+    return execution;
 }
 
 function spatialState(runtime: ExpeditionDetail): SpatialRuntimeExpedition {
