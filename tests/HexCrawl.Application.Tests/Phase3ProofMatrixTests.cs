@@ -179,7 +179,8 @@ public sealed class Phase3ProofMatrixTests
 
         Assert.Equal("maximum-pace", terrain.Parameters["adjustmentModel"]);
         var mapping = terrain.Parameters["terrainAdjustments"];
-        Assert.Contains("arctic=fast", mapping, StringComparison.Ordinal);
+        Assert.Contains("arctic=fast-if-appropriately-equipped", mapping, StringComparison.Ordinal);
+        Assert.DoesNotContain("arctic=fast;", mapping, StringComparison.Ordinal);
         Assert.Contains("grassland=fast", mapping, StringComparison.Ordinal);
         Assert.Contains("mountain=slow", mapping, StringComparison.Ordinal);
         Assert.Contains("swamp=slow", mapping, StringComparison.Ordinal);
