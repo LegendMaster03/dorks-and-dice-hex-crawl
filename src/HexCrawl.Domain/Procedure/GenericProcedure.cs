@@ -248,6 +248,21 @@ public sealed record MaterializedProcedureModule(
     MechanicDefinition Mechanic,
     IReadOnlyDictionary<string, string> Parameters)
 {
+    public bool Equals(MaterializedProcedureModule? other) =>
+        other is not null
+        && ProcedureStructuralEquality.ModuleEquals(Module, other.Module)
+        && ProcedureStructuralEquality.MechanicEquals(Mechanic, other.Mechanic)
+        && ProcedureStructuralEquality.DictionaryEquals(Parameters, other.Parameters);
+
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        hash.Add(ProcedureStructuralEquality.ModuleHash(Module));
+        hash.Add(ProcedureStructuralEquality.MechanicHash(Mechanic));
+        hash.Add(ProcedureStructuralEquality.DictionaryHash(Parameters));
+        return hash.ToHashCode();
+    }
+
     public void Validate()
     {
         Module.Validate();
@@ -313,6 +328,27 @@ public sealed record CampaignProcedure
     public required string Name { get; init; }
     public required IReadOnlyList<MaterializedProcedureModule> Modules { get; init; }
     public IReadOnlyList<CampaignProcedureOverride> Overrides { get; init; } = [];
+
+    public bool Equals(CampaignProcedure? other) =>
+        other is not null
+        && ProcedureId == other.ProcedureId
+        && Revision == other.Revision
+        && string.Equals(Key, other.Key, StringComparison.Ordinal)
+        && string.Equals(Name, other.Name, StringComparison.Ordinal)
+        && ProcedureStructuralEquality.SequenceEquals(Modules, other.Modules)
+        && ProcedureStructuralEquality.OverrideSequenceEquals(Overrides, other.Overrides);
+
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        hash.Add(ProcedureId);
+        hash.Add(Revision);
+        hash.Add(Key, StringComparer.Ordinal);
+        hash.Add(Name, StringComparer.Ordinal);
+        hash.Add(ProcedureStructuralEquality.SequenceHash(Modules));
+        hash.Add(ProcedureStructuralEquality.OverrideSequenceHash(Overrides));
+        return hash.ToHashCode();
+    }
 
     public void Validate()
     {
@@ -461,4 +497,162 @@ public sealed record CampaignProcedure
         ProcedureDependencyIssueKind.MissingRequiredModule
         or ProcedureDependencyIssueKind.MissingRequiredProducer
         or ProcedureDependencyIssueKind.IncompatibleMechanic;
+}
+
+internal static class ProcedureStructuralEquality
+{
+    public static bool ModuleEquals(ProcedureModuleDefinition left, ProcedureModuleDefinition right) =>
+        string.Equals(left.Key, right.Key, StringComparison.Ordinal)
+        && string.Equals(left.Category, right.Category, StringComparison.Ordinal)
+        && string.Equals(left.DisplayName, right.DisplayName, StringComparison.Ordinal)
+        && string.Equals(left.Purpose, right.Purpose, StringComparison.Ordinal)
+        && string.Equals(left.ExecutionStage, right.ExecutionStage, StringComparison.Ordinal)
+        && SequenceEquals(left.Reads, right.Reads)
+        && SequenceEquals(left.Produces, right.Produces)
+        && SequenceEquals(left.RequiredDependencies, right.RequiredDependencies)
+        && SequenceEquals(left.OptionalDependencies, right.OptionalDependencies)
+        && SequenceEquals(left.CompatibleMechanicTypes, right.CompatibleMechanicTypes)
+        && DictionaryEquals(left.ConfigurationSchema, right.ConfigurationSchema)
+        && DictionaryEquals(left.PresentationMetadata, right.PresentationMetadata);
+
+    public static bool MechanicEquals(MechanicDefinition left, MechanicDefinition right) =>
+        string.Equals(left.Key, right.Key, StringComparison.Ordinal)
+        && string.Equals(left.DisplayName, right.DisplayName, StringComparison.Ordinal)
+        && string.Equals(left.Description, right.Description, StringComparison.Ordinal)
+        && SequenceEquals(left.InputContract, right.InputContract)
+        && SequenceEquals(left.OutputContract, right.OutputContract)
+        && DictionaryEquals(left.ParameterSchema, right.ParameterSchema)
+        && string.Equals(left.ExecutionHandler, right.ExecutionHandler, StringComparison.Ordinal)
+        && SequenceEquals(left.CompatibilityTags, right.CompatibilityTags)
+        && left.AutomationLevel == right.AutomationLevel
+        && left.Version == right.Version
+        && SequenceEquals(left.InputRequirements ?? [], right.InputRequirements ?? [])
+        && DictionaryEquals(left.ExternalInputSources, right.ExternalInputSources);
+
+    public static bool DictionaryEquals<T>(
+        IReadOnlyDictionary<string, T> left,
+        IReadOnlyDictionary<string, T> right)
+    {
+        if (ReferenceEquals(left, right)) return true;
+        if (left.Count != right.Count) return false;
+        var comparer = EqualityComparer<T>.Default;
+        foreach (var item in left)
+        {
+            if (!right.TryGetValue(item.Key, out var value) || !comparer.Equals(item.Value, value))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public static bool SequenceEquals<T>(IReadOnlyList<T> left, IReadOnlyList<T> right)
+    {
+        if (ReferenceEquals(left, right)) return true;
+        if (left.Count != right.Count) return false;
+        var comparer = EqualityComparer<T>.Default;
+        for (var index = 0; index < left.Count; index++)
+        {
+            if (!comparer.Equals(left[index], right[index])) return false;
+        }
+        return true;
+    }
+
+    public static bool OverrideSequenceEquals(
+        IReadOnlyList<CampaignProcedureOverride> left,
+        IReadOnlyList<CampaignProcedureOverride> right)
+    {
+        if (ReferenceEquals(left, right)) return true;
+        if (left.Count != right.Count) return false;
+        for (var index = 0; index < left.Count; index++)
+        {
+            var x = left[index];
+            var y = right[index];
+            if (!string.Equals(x.OverrideId, y.OverrideId, StringComparison.Ordinal)
+                || !string.Equals(x.ModuleKey, y.ModuleKey, StringComparison.Ordinal)
+                || !string.Equals(x.ReplacementMechanicKey, y.ReplacementMechanicKey, StringComparison.Ordinal)
+                || x.ReplacementMechanicVersion != y.ReplacementMechanicVersion
+                || !DictionaryEquals(x.Parameters, y.Parameters)
+                || !string.Equals(x.Note, y.Note, StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public static int ModuleHash(ProcedureModuleDefinition value)
+    {
+        var hash = new HashCode();
+        hash.Add(value.Key, StringComparer.Ordinal);
+        hash.Add(value.Category, StringComparer.Ordinal);
+        hash.Add(value.DisplayName, StringComparer.Ordinal);
+        hash.Add(value.Purpose, StringComparer.Ordinal);
+        hash.Add(value.ExecutionStage, StringComparer.Ordinal);
+        hash.Add(SequenceHash(value.Reads));
+        hash.Add(SequenceHash(value.Produces));
+        hash.Add(SequenceHash(value.RequiredDependencies));
+        hash.Add(SequenceHash(value.OptionalDependencies));
+        hash.Add(SequenceHash(value.CompatibleMechanicTypes));
+        hash.Add(DictionaryHash(value.ConfigurationSchema));
+        hash.Add(DictionaryHash(value.PresentationMetadata));
+        return hash.ToHashCode();
+    }
+
+    public static int MechanicHash(MechanicDefinition value)
+    {
+        var hash = new HashCode();
+        hash.Add(value.Key, StringComparer.Ordinal);
+        hash.Add(value.DisplayName, StringComparer.Ordinal);
+        hash.Add(value.Description, StringComparer.Ordinal);
+        hash.Add(SequenceHash(value.InputContract));
+        hash.Add(SequenceHash(value.OutputContract));
+        hash.Add(DictionaryHash(value.ParameterSchema));
+        hash.Add(value.ExecutionHandler, StringComparer.Ordinal);
+        hash.Add(SequenceHash(value.CompatibilityTags));
+        hash.Add(value.AutomationLevel);
+        hash.Add(value.Version);
+        hash.Add(SequenceHash(value.InputRequirements ?? []));
+        hash.Add(DictionaryHash(value.ExternalInputSources));
+        return hash.ToHashCode();
+    }
+
+    public static int DictionaryHash<T>(IReadOnlyDictionary<string, T> values)
+    {
+        var hash = new HashCode();
+        hash.Add(values.Count);
+        foreach (var item in values.OrderBy(item => item.Key, StringComparer.Ordinal))
+        {
+            hash.Add(item.Key, StringComparer.Ordinal);
+            hash.Add(item.Value);
+        }
+        return hash.ToHashCode();
+    }
+
+    public static int SequenceHash<T>(IReadOnlyList<T> values)
+    {
+        var hash = new HashCode();
+        hash.Add(values.Count);
+        foreach (var value in values)
+        {
+            hash.Add(value);
+        }
+        return hash.ToHashCode();
+    }
+
+    public static int OverrideSequenceHash(IReadOnlyList<CampaignProcedureOverride> values)
+    {
+        var hash = new HashCode();
+        hash.Add(values.Count);
+        foreach (var value in values)
+        {
+            hash.Add(value.OverrideId, StringComparer.Ordinal);
+            hash.Add(value.ModuleKey, StringComparer.Ordinal);
+            hash.Add(value.ReplacementMechanicKey, StringComparer.Ordinal);
+            hash.Add(value.ReplacementMechanicVersion);
+            hash.Add(DictionaryHash(value.Parameters));
+            hash.Add(value.Note, StringComparer.Ordinal);
+        }
+        return hash.ToHashCode();
+    }
 }
