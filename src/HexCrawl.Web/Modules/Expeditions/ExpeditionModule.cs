@@ -148,6 +148,11 @@ public sealed class ExpeditionModule : IHexCrawlModule
         CancellationToken cancellationToken)
     {
         var owner = UserId(context);
+        if (await LegacyMutationConflictAsync(expeditionId, owner, service, cancellationToken) is { } conflict)
+        {
+            return conflict;
+        }
+
         var expedition = await workbench.AdvanceAsync(
             expeditionId,
             owner,
@@ -179,6 +184,11 @@ public sealed class ExpeditionModule : IHexCrawlModule
         CancellationToken cancellationToken)
     {
         var owner = UserId(context);
+        if (await LegacyMutationConflictAsync(expeditionId, owner, service, cancellationToken) is { } conflict)
+        {
+            return conflict;
+        }
+
         var expedition = await service.DiscoverAsync(
             expeditionId,
             owner,
@@ -196,6 +206,11 @@ public sealed class ExpeditionModule : IHexCrawlModule
         CancellationToken cancellationToken)
     {
         var owner = UserId(context);
+        if (await LegacyMutationConflictAsync(expeditionId, owner, service, cancellationToken) is { } conflict)
+        {
+            return conflict;
+        }
+
         var expedition = await parties.UpdateAsync(
             expeditionId,
             owner,
@@ -213,6 +228,11 @@ public sealed class ExpeditionModule : IHexCrawlModule
         CancellationToken cancellationToken)
     {
         var owner = UserId(context);
+        if (await LegacyMutationConflictAsync(expeditionId, owner, service, cancellationToken) is { } conflict)
+        {
+            return conflict;
+        }
+
         var expedition = await assistants.RecordTravelWatchAsync(
             expeditionId,
             owner,
@@ -230,6 +250,11 @@ public sealed class ExpeditionModule : IHexCrawlModule
         CancellationToken cancellationToken)
     {
         var owner = UserId(context);
+        if (await LegacyMutationConflictAsync(expeditionId, owner, service, cancellationToken) is { } conflict)
+        {
+            return conflict;
+        }
+
         var expedition = await assistants.RecordNonSpatialWatchAsync(
             expeditionId,
             owner,
@@ -247,6 +272,11 @@ public sealed class ExpeditionModule : IHexCrawlModule
         CancellationToken cancellationToken)
     {
         var owner = UserId(context);
+        if (await LegacyMutationConflictAsync(expeditionId, owner, service, cancellationToken) is { } conflict)
+        {
+            return conflict;
+        }
+
         var expedition = await assistants.RecordNavigationAsync(
             expeditionId,
             owner,
@@ -264,6 +294,11 @@ public sealed class ExpeditionModule : IHexCrawlModule
         CancellationToken cancellationToken)
     {
         var owner = UserId(context);
+        if (await LegacyMutationConflictAsync(expeditionId, owner, service, cancellationToken) is { } conflict)
+        {
+            return conflict;
+        }
+
         var expedition = await assistants.RecordEncounterCadenceAsync(
             expeditionId,
             owner,
@@ -299,6 +334,16 @@ public sealed class ExpeditionModule : IHexCrawlModule
                 error = $"Procedure preset '{procedureKey}' is generic-only and can not be represented by the current legacy HTTP workbench contract. Use an application-level generic procedure workflow until the Phase 4 procedure surface is available."
             })
             : null;
+    }
+
+    private static async Task<IResult?> LegacyMutationConflictAsync(
+        Guid expeditionId,
+        string ownerUserId,
+        HexCrawlService service,
+        CancellationToken cancellationToken)
+    {
+        var expedition = await service.GetExpeditionAsync(expeditionId, ownerUserId, cancellationToken);
+        return LegacyRepresentationConflict(expedition);
     }
 
     private static IResult? LegacyRepresentationConflict(StoredExpedition expedition) =>
