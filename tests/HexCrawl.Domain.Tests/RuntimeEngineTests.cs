@@ -415,7 +415,7 @@ public sealed class RuntimeEngineTests
 
         return _engine.Advance(
             setup.Context,
-            procedure.ToCampaignProcedure(),
+            procedure.Materialize(),
             setup.Expedition,
             Plan(direction, continueAcrossBoundaries),
             new WatchAdvanceInputs(
