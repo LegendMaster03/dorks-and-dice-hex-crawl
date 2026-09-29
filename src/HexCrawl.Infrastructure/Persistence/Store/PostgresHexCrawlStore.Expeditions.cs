@@ -14,7 +14,7 @@ public sealed partial class PostgresHexCrawlStore
         StoredExpedition expedition,
         CancellationToken cancellationToken = default)
     {
-        ExpeditionProcedureConsistency.ValidateForPersistence(expedition);
+        expedition.CampaignProcedure.Validate();
 
         await using var connection = await OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
@@ -23,11 +23,11 @@ public sealed partial class PostgresHexCrawlStore
         command.CommandText = """
             INSERT INTO expeditions(
                 id, overworld_id, context_json, owner_user_id, name, state_json, knowledge_json,
-                party_json, generated_resolutions_json, procedure_json, procedure_origin_json, campaign_procedure_json, pause_reason,
+                party_json, generated_resolutions_json, procedure_json, procedure_origin_json, pause_reason,
                 remaining_watch_ticks, version, created_at, updated_at)
             VALUES(
                 @id, @world, @context, @owner, @name, @state, @knowledge,
-                @party, @generatedResolutions, @procedure, @procedureOrigin, @campaignProcedure, @pause,
+                @party, @generatedResolutions, @procedure, @procedureOrigin, @pause,
                 @remaining, @version, @created, @updated);
             """;
         BindExpedition(command, expedition);
@@ -44,7 +44,7 @@ public sealed partial class PostgresHexCrawlStore
         await using var connection = await OpenAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT id, context_json::text, name, procedure_json::text, campaign_procedure_json::text,
+            SELECT id, context_json::text, name, procedure_json::text,
                    version, created_at, updated_at
             FROM expeditions
             WHERE owner_user_id = @owner
@@ -56,16 +56,16 @@ public sealed partial class PostgresHexCrawlStore
         while (await reader.ReadAsync(cancellationToken))
         {
             var context = Deserialize<CrawlSessionContextSnapshot>(reader.GetString(1)).ToDomain();
-            var procedure = reader.IsDBNull(3) ? null : Deserialize<CrawlProcedureProfile>(reader.GetString(3));
-            var campaignProcedure = reader.IsDBNull(4) ? null : Deserialize<CampaignProcedure>(reader.GetString(4));
+            var procedure = Deserialize<CampaignProcedure>(reader.GetString(3));
+            procedure.Validate();
             result.Add(new ExpeditionSummary(
                 reader.GetGuid(0),
                 context,
                 reader.GetString(2),
-                ProcedureName(procedure, campaignProcedure),
-                reader.GetInt64(5),
-                ReadTimestamp(reader, 6),
-                ReadTimestamp(reader, 7)));
+                procedure.Name,
+                reader.GetInt64(4),
+                ReadTimestamp(reader, 5),
+                ReadTimestamp(reader, 6)));
         }
         return result;
     }
@@ -78,7 +78,7 @@ public sealed partial class PostgresHexCrawlStore
         await using var connection = await OpenAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT id, name, procedure_json::text, campaign_procedure_json::text, version, created_at, updated_at
+            SELECT id, name, procedure_json::text, version, created_at, updated_at
             FROM expeditions
             WHERE overworld_id = @world AND owner_user_id = @owner
             ORDER BY updated_at DESC, name;
@@ -89,16 +89,16 @@ public sealed partial class PostgresHexCrawlStore
         var result = new List<ExpeditionSummary>();
         while (await reader.ReadAsync(cancellationToken))
         {
-            var procedure = reader.IsDBNull(2) ? null : Deserialize<CrawlProcedureProfile>(reader.GetString(2));
-            var campaignProcedure = reader.IsDBNull(3) ? null : Deserialize<CampaignProcedure>(reader.GetString(3));
+            var procedure = Deserialize<CampaignProcedure>(reader.GetString(2));
+            procedure.Validate();
             result.Add(new ExpeditionSummary(
                 reader.GetGuid(0),
                 new WorldBoundCrawlSessionContext(overworldId),
                 reader.GetString(1),
-                ProcedureName(procedure, campaignProcedure),
-                reader.GetInt64(4),
-                ReadTimestamp(reader, 5),
-                ReadTimestamp(reader, 6)));
+                procedure.Name,
+                reader.GetInt64(3),
+                ReadTimestamp(reader, 4),
+                ReadTimestamp(reader, 5)));
         }
         return result;
     }
@@ -113,7 +113,7 @@ public sealed partial class PostgresHexCrawlStore
         command.CommandText = """
             SELECT name, context_json::text, state_json::text, knowledge_json::text, party_json::text,
                    generated_resolutions_json::text, procedure_json::text, procedure_origin_json::text,
-                   campaign_procedure_json::text, pause_reason, remaining_watch_ticks, version, created_at, updated_at
+                   pause_reason, remaining_watch_ticks, version, created_at, updated_at
             FROM expeditions
             WHERE id = @id AND owner_user_id = @owner;
             """;
@@ -133,20 +133,18 @@ public sealed partial class PostgresHexCrawlStore
         var party = Deserialize<CrawlPartySheet>(reader.GetString(4));
         party.Validate();
         var generatedResolutions = Deserialize<IReadOnlyList<GeneratedProcedureResolution>>(reader.GetString(5));
-        var procedure = reader.IsDBNull(6) ? null : Deserialize<CrawlProcedureProfile>(reader.GetString(6));
+        var procedure = Deserialize<CampaignProcedure>(reader.GetString(6));
+        procedure.Validate();
         var procedureOrigin = reader.IsDBNull(7)
             ? null
             : Deserialize<ProcedureOriginMetadata>(reader.GetString(7));
-        var campaignProcedure = reader.IsDBNull(8)
+        RuntimePauseReason? pauseReason = reader.IsDBNull(8)
             ? null
-            : Deserialize<CampaignProcedure>(reader.GetString(8));
-        RuntimePauseReason? pauseReason = reader.IsDBNull(9)
-            ? null
-            : Enum.Parse<RuntimePauseReason>(reader.GetString(9), true);
-        var remaining = TimeSpan.FromTicks(reader.GetInt64(10));
-        var version = reader.GetInt64(11);
-        var created = ReadTimestamp(reader, 12);
-        var updated = ReadTimestamp(reader, 13);
+            : Enum.Parse<RuntimePauseReason>(reader.GetString(8), true);
+        var remaining = TimeSpan.FromTicks(reader.GetInt64(9));
+        var version = reader.GetInt64(10);
+        var created = ReadTimestamp(reader, 11);
+        var updated = ReadTimestamp(reader, 12);
         await reader.CloseAsync();
         var events = await ReadEventsAsync(connection, expeditionId, cancellationToken);
         runtime = runtime switch
@@ -155,7 +153,7 @@ public sealed partial class PostgresHexCrawlStore
             NonSpatialSessionState nonSpatial => nonSpatial with { History = events },
             _ => throw new InvalidDataException("Persisted crawl session runtime kind is not supported.")
         };
-        var stored = new StoredExpedition(
+        return new StoredExpedition(
             name,
             runtime,
             context,
@@ -171,11 +169,8 @@ public sealed partial class PostgresHexCrawlStore
             Party = party,
             GeneratedProcedureResolutions = generatedResolutions,
             CampaignId = contextSnapshot.CampaignId,
-            ProcedureOrigin = procedureOrigin,
-            CampaignProcedure = campaignProcedure
+            ProcedureOrigin = procedureOrigin
         };
-        ExpeditionProcedureConsistency.ValidateLoaded(stored);
-        return stored;
     }
 
     public async Task<SaveResult<StoredExpedition>> SaveExpeditionAsync(
@@ -183,7 +178,7 @@ public sealed partial class PostgresHexCrawlStore
         long expectedVersion,
         CancellationToken cancellationToken = default)
     {
-        ExpeditionProcedureConsistency.ValidateForPersistence(expedition);
+        expedition.CampaignProcedure.Validate();
 
         await using var connection = await OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
@@ -205,7 +200,6 @@ public sealed partial class PostgresHexCrawlStore
                 generated_resolutions_json = @generatedResolutions,
                 procedure_json = @procedure,
                 procedure_origin_json = @procedureOrigin,
-                campaign_procedure_json = @campaignProcedure,
                 pause_reason = @pause,
                 remaining_watch_ticks = @remaining,
                 version = @version,
@@ -320,17 +314,12 @@ public sealed partial class PostgresHexCrawlStore
         expedition.Party.Validate();
         AddJsonb(command, "party", Serialize(expedition.Party));
         AddJsonb(command, "generatedResolutions", Serialize(expedition.GeneratedProcedureResolutions));
-        AddJsonb(command, "procedure", expedition.CompatibilityProfile is null ? null : Serialize(expedition.CompatibilityProfile));
+        expedition.CampaignProcedure.Validate();
+        AddJsonb(command, "procedure", Serialize(expedition.CampaignProcedure));
         AddJsonb(command, "procedureOrigin", expedition.ProcedureOrigin is null ? null : Serialize(expedition.ProcedureOrigin));
-        AddJsonb(command, "campaignProcedure", expedition.CampaignProcedure is null ? null : Serialize(expedition.CampaignProcedure));
         command.Parameters.AddWithValue("pause", NpgsqlDbType.Text, expedition.PauseReason?.ToString() is { } pause ? pause : DBNull.Value);
         command.Parameters.AddWithValue("remaining", NpgsqlDbType.Bigint, expedition.RemainingWatchTime.Ticks);
         command.Parameters.AddWithValue("version", NpgsqlDbType.Bigint, expedition.Version);
         AddTimestamp(command, "updated", expedition.UpdatedAt);
     }
-
-    private static string ProcedureName(CrawlProcedureProfile? procedure, CampaignProcedure? campaignProcedure) =>
-        procedure?.Name
-        ?? campaignProcedure?.Name
-        ?? throw new InvalidDataException("Persisted expedition does not contain a procedure snapshot.");
 }

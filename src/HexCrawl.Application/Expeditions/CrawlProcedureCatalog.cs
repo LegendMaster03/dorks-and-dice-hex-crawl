@@ -18,21 +18,14 @@ public static class CrawlProcedureCatalog
 
     private static IReadOnlyList<CrawlProcedurePresetDefinition> FullCatalog { get; } = BuildCatalog();
 
-    /// <summary>
-    /// Legacy runtime-profile compatibility view retained until the Phase 4 preset/composer surface replaces it.
-    /// </summary>
-    public static IReadOnlyList<CrawlProcedurePresetDefinition> All { get; } = FullCatalog.Take(3).ToArray();
-
-    /// <summary>
-    /// Authoritative creation-time preset catalog, including the Phase 3 architecture proof matrix.
-    /// </summary>
+    public static IReadOnlyList<CrawlProcedurePresetDefinition> All => FullCatalog;
     public static IReadOnlyList<CrawlProcedurePresetDefinition> Catalog => FullCatalog;
 
     public static CrawlProcedurePresetDefinition Resolve(string? key)
     {
         var resolved = string.IsNullOrWhiteSpace(key)
-            ? All[0]
-            : Catalog.FirstOrDefault(item => string.Equals(item.PresetKey, key.Trim(), StringComparison.OrdinalIgnoreCase));
+            ? FullCatalog[0]
+            : FullCatalog.FirstOrDefault(item => string.Equals(item.PresetKey, key.Trim(), StringComparison.OrdinalIgnoreCase));
         return resolved ?? throw new ArgumentException($"Unknown crawl procedure preset '{key}'.", nameof(key));
     }
 
@@ -72,25 +65,64 @@ public static class CrawlProcedureCatalog
 
         return
         [
-            new(
+            Preset(
                 "alexandrian-advanced",
                 "Alexandrian Advanced",
                 "Four-hour continuous-distance travel with navigation, persistent veer, per-watch encounters, and procedure helpers.",
-                1,
-                CampaignProcedureCompatibilityProjector.ToRecipe(AlexandrianAdvancedTemplate()),
-                "Procedure research based on The Alexandrian hexcrawl watch checklist."),
-            new(
+                "alexandrian-advanced",
+                "Alexandrian Advanced",
+                ExecutableCore(
+                    TimeSpan.FromHours(4),
+                    TravelResolutionMode.ContinuousDistance,
+                    ActualDistanceResolutionMode.VariableResolved,
+                    EncounterCheckCadence.PerWatch,
+                    usesNavigationChecks: true,
+                    usesPersistentVeer: true,
+                    tracksIntraHexProgress: true,
+                    directionChangesCostProgress: true,
+                    supportsDeliberateDoubleBack: true,
+                    directionChangeProgressCostFactor: 1d / 6d,
+                    resolutionHelpers: new ProcedureResolutionHelperProfile(
+                        Travel: new TravelResolutionHelperProfile(new DiceRollFormula(2, 6, 3), 0.1d),
+                        Navigation: new NavigationResolutionHelperProfile(new DiceRollFormula(1, 20)),
+                        Encounter: new EncounterResolutionHelperProfile(
+                            new DiceRollFormula(1, 8),
+                            DiceRollResultSet.From([1]),
+                            DiceRollResultSet.From([8]),
+                            8))),
+                attribution: "Procedure research based on The Alexandrian hexcrawl watch checklist."),
+            Preset(
                 "simple-fixed-distance",
                 "Simple Fixed Distance",
                 "Four-hour continuous-distance travel using fixed resolved distance without navigation or encounter checks.",
-                1,
-                CampaignProcedureCompatibilityProjector.ToRecipe(SimplifiedFixedDistanceTemplate())),
-            new(
+                "simple-fixed-distance",
+                "Simple Fixed Distance",
+                ExecutableCore(
+                    TimeSpan.FromHours(4),
+                    TravelResolutionMode.ContinuousDistance,
+                    ActualDistanceResolutionMode.Fixed,
+                    EncounterCheckCadence.None,
+                    usesNavigationChecks: false,
+                    usesPersistentVeer: false,
+                    tracksIntraHexProgress: true,
+                    directionChangesCostProgress: false,
+                    supportsDeliberateDoubleBack: false)),
+            Preset(
                 "simple-hex-step",
                 "Simple Hex Step",
                 "Four-hour travel resolved as whole hex steps without intra-hex progress, navigation, or encounter checks.",
-                1,
-                CampaignProcedureCompatibilityProjector.ToRecipe(SimplifiedHexStepTemplate())),
+                "simple-hex-step",
+                "Simple Hex Step",
+                ExecutableCore(
+                    TimeSpan.FromHours(4),
+                    TravelResolutionMode.HexSteps,
+                    ActualDistanceResolutionMode.Fixed,
+                    EncounterCheckCadence.None,
+                    usesNavigationChecks: false,
+                    usesPersistentVeer: false,
+                    tracksIntraHexProgress: false,
+                    directionChangesCostProgress: false,
+                    supportsDeliberateDoubleBack: false)),
 
             bx,
             ose,
@@ -266,30 +298,38 @@ public static class CrawlProcedureCatalog
                 "Deliberately mixes a four-hour native travel core with participant activity budgeting, supply-die resources, forced travel, assisted navigation outcomes, and role-targeted journey events.",
                 "mixed-modular-expedition",
                 "Mixed modular expedition",
-                WithCompatibilityCore(
-                    MixedNativeCoreTemplate(),
-                    [
-                        Structural(GenericProcedureCatalog.MovementBudgetModule, GenericProcedureCatalog.MovementBudgetMechanic,
-                            ("budgetModel", "activity-and-distance"), ("baseBudget", "1"), ("budgetUnit", "watch"), ("limitingScope", "party-limiting")),
-                        Structural(GenericProcedureCatalog.TerrainMovementModule, GenericProcedureCatalog.TerrainMovementPolicyMechanic,
-                            ("adjustmentModel", "activity-cost"), ("terrainAdjustments", "open=1;difficult=2;severe=3"), ("routeAdjustmentModel", "road-improves-one-step"), ("weatherAdjustmentModel", "manual")),
-                        Structural(GenericProcedureCatalog.PartyActivitiesModule, GenericProcedureCatalog.ParticipantActivityPolicyMechanic,
-                            ("assignmentScope", "participant"), ("activityBudgetModel", "per-watch"), ("activityKeys", "travel;reconnoiter;forage;make-camp;lookout"), ("roleKeys", "navigator;lookout;forager;scout")),
-                        Structural(GenericProcedureCatalog.NavigationOutcomeModule, GenericProcedureCatalog.NavigationOutcomePolicyMechanic,
-                            ("checkTriggerModel", "per-watch-when-navigation-required"), ("failureStateModel", "lost-until-recognized"), ("directionalErrorModel", "persistent-veer"), ("recognitionModel", "boundary-check"), ("reorientationModel", "procedure-check")),
-                        Structural(GenericProcedureCatalog.ResourceConsumptionModule, GenericProcedureCatalog.ResourceConsumptionPolicyMechanic,
-                            ("resourceKinds", "food;water;light"), ("inventoryModel", "supply-die"), ("consumptionModel", "usage-roll"), ("consumptionInterval", "watch")),
-                        Structural(GenericProcedureCatalog.ForagingModule, GenericProcedureCatalog.ActivityForagingPolicyMechanic,
-                            ("resolutionModel", "activity-check"), ("timeCost", "1"), ("timeUnit", "watch-activity"), ("movementTradeoff", "replaces-activity")),
-                        Structural(GenericProcedureCatalog.CampingModule, GenericProcedureCatalog.ActivityCampingPolicyMechanic,
-                            ("resolutionModel", "activity-check"), ("timeCost", "1"), ("timeUnit", "watch"), ("watchModel", "assigned-lookout")),
-                        Structural(GenericProcedureCatalog.ForcedTravelModule, GenericProcedureCatalog.ForcedTravelPolicyMechanic,
-                            ("normalTravelLimit", "2"), ("limitUnit", "watches"), ("checkModel", "escalating-check"), ("failureConsequence", "fatigue")),
-                        Structural(GenericProcedureCatalog.PersistentEffectsModule, GenericProcedureCatalog.ProgressiveExpeditionEffectMechanic,
-                            ("effectKinds", "fatigue"), ("accumulationModel", "levels"), ("recoveryModel", "safe-rest"), ("scope", "participant")),
-                        Structural(GenericProcedureCatalog.JourneyEventsModule, GenericProcedureCatalog.JourneyEventPolicyMechanic,
-                            ("triggerModel", "per-watch-or-landmark"), ("targetingModel", "travel-role"), ("terrainInfluence", "difficulty"), ("consequenceModel", "event-and-fatigue"))
-                    ]),
+                [
+                    .. ExecutableCore(
+                        TimeSpan.FromHours(4),
+                        TravelResolutionMode.ContinuousDistance,
+                        ActualDistanceResolutionMode.Fixed,
+                        EncounterCheckCadence.None,
+                        usesNavigationChecks: false,
+                        usesPersistentVeer: false,
+                        tracksIntraHexProgress: true,
+                        directionChangesCostProgress: false,
+                        supportsDeliberateDoubleBack: false),
+                    Structural(GenericProcedureCatalog.MovementBudgetModule, GenericProcedureCatalog.MovementBudgetMechanic,
+                        ("budgetModel", "activity-and-distance"), ("baseBudget", "1"), ("budgetUnit", "watch"), ("limitingScope", "party-limiting")),
+                    Structural(GenericProcedureCatalog.TerrainMovementModule, GenericProcedureCatalog.TerrainMovementPolicyMechanic,
+                        ("adjustmentModel", "activity-cost"), ("terrainAdjustments", "open=1;difficult=2;severe=3"), ("routeAdjustmentModel", "road-improves-one-step"), ("weatherAdjustmentModel", "manual")),
+                    Structural(GenericProcedureCatalog.PartyActivitiesModule, GenericProcedureCatalog.ParticipantActivityPolicyMechanic,
+                        ("assignmentScope", "participant"), ("activityBudgetModel", "per-watch"), ("activityKeys", "travel;reconnoiter;forage;make-camp;lookout"), ("roleKeys", "navigator;lookout;forager;scout")),
+                    Structural(GenericProcedureCatalog.NavigationOutcomeModule, GenericProcedureCatalog.NavigationOutcomePolicyMechanic,
+                        ("checkTriggerModel", "per-watch-when-navigation-required"), ("failureStateModel", "lost-until-recognized"), ("directionalErrorModel", "persistent-veer"), ("recognitionModel", "boundary-check"), ("reorientationModel", "procedure-check")),
+                    Structural(GenericProcedureCatalog.ResourceConsumptionModule, GenericProcedureCatalog.ResourceConsumptionPolicyMechanic,
+                        ("resourceKinds", "food;water;light"), ("inventoryModel", "supply-die"), ("consumptionModel", "usage-roll"), ("consumptionInterval", "watch")),
+                    Structural(GenericProcedureCatalog.ForagingModule, GenericProcedureCatalog.ActivityForagingPolicyMechanic,
+                        ("resolutionModel", "activity-check"), ("timeCost", "1"), ("timeUnit", "watch-activity"), ("movementTradeoff", "replaces-activity")),
+                    Structural(GenericProcedureCatalog.CampingModule, GenericProcedureCatalog.ActivityCampingPolicyMechanic,
+                        ("resolutionModel", "activity-check"), ("timeCost", "1"), ("timeUnit", "watch"), ("watchModel", "assigned-lookout")),
+                    Structural(GenericProcedureCatalog.ForcedTravelModule, GenericProcedureCatalog.ForcedTravelPolicyMechanic,
+                        ("normalTravelLimit", "2"), ("limitUnit", "watches"), ("checkModel", "escalating-check"), ("failureConsequence", "fatigue")),
+                    Structural(GenericProcedureCatalog.PersistentEffectsModule, GenericProcedureCatalog.ProgressiveExpeditionEffectMechanic,
+                        ("effectKinds", "fatigue"), ("accumulationModel", "levels"), ("recoveryModel", "safe-rest"), ("scope", "participant")),
+                    Structural(GenericProcedureCatalog.JourneyEventsModule, GenericProcedureCatalog.JourneyEventPolicyMechanic,
+                        ("triggerModel", "per-watch-or-landmark"), ("targetingModel", "travel-role"), ("terrainInfluence", "difficulty"), ("consequenceModel", "event-and-fatigue"))
+                ],
                 attribution: "Original Dorks & Dice house-rule composition used to prove cross-preset generic composition.")
         ];
     }
@@ -312,13 +352,46 @@ public static class CrawlProcedureCatalog
             attribution,
             disclaimer);
 
-    private static IReadOnlyList<ProcedureModuleRecipe> WithCompatibilityCore(
-        CrawlProcedureProfile compatibilityTemplate,
-        IReadOnlyList<ProcedureModuleRecipe> structuralModules)
-    {
-        var core = CampaignProcedureCompatibilityProjector.ToRecipe(compatibilityTemplate);
-        return core.ModuleSelections.Concat(structuralModules).ToArray();
-    }
+    private static IReadOnlyList<ProcedureModuleRecipe> ExecutableCore(
+        TimeSpan interval,
+        TravelResolutionMode travelResolution,
+        ActualDistanceResolutionMode actualDistanceResolution,
+        EncounterCheckCadence encounterCadence,
+        bool usesNavigationChecks,
+        bool usesPersistentVeer,
+        bool tracksIntraHexProgress,
+        bool directionChangesCostProgress,
+        bool supportsDeliberateDoubleBack,
+        double startingExitProgressFactor = 0.5d,
+        double nearExitProgressFactor = 0.5d,
+        double farExitProgressFactor = 1d,
+        double backExitProgressFactor = 0.5d,
+        double directionChangeProgressCostFactor = 0d,
+        ProcedureResolutionHelperProfile? resolutionHelpers = null) =>
+    [
+        NativeTime(interval),
+        Structural(GenericProcedureCatalog.MovementResolutionModule, GenericProcedureCatalog.MovementResolutionPolicyMechanic,
+            ("travelResolution", travelResolution.ToString()),
+            ("actualDistanceResolution", actualDistanceResolution.ToString()),
+            ("tracksIntraHexProgress", Bool(tracksIntraHexProgress))),
+        Structural(GenericProcedureCatalog.HexProgressModule, GenericProcedureCatalog.HexProgressPolicyMechanic,
+            ("startingExitProgressFactor", Number(startingExitProgressFactor)),
+            ("nearExitProgressFactor", Number(nearExitProgressFactor)),
+            ("farExitProgressFactor", Number(farExitProgressFactor)),
+            ("backExitProgressFactor", Number(backExitProgressFactor)),
+            ("directionChangesCostProgress", Bool(directionChangesCostProgress)),
+            ("directionChangeProgressCostFactor", Number(directionChangeProgressCostFactor)),
+            ("supportsDeliberateDoubleBack", Bool(supportsDeliberateDoubleBack))),
+        Structural(GenericProcedureCatalog.NavigationModule, GenericProcedureCatalog.NavigationCheckPolicyMechanic,
+            ("usesNavigationChecks", Bool(usesNavigationChecks)),
+            ("usesPersistentVeer", Bool(usesPersistentVeer))),
+        NativeEncounterCadence(encounterCadence),
+        new ProcedureModuleRecipe(
+            GenericProcedureCatalog.ResolutionHelpersModule,
+            GenericProcedureCatalog.DeterministicResolutionHelpersMechanic,
+            1,
+            HelperValues(resolutionHelpers))
+    ];
 
     private static ProcedureModuleRecipe NativeTime(TimeSpan interval) =>
         Structural(
@@ -342,84 +415,40 @@ public static class CrawlProcedureCatalog
             1,
             parameters.ToDictionary(value => value.Key, value => value.Value, StringComparer.Ordinal));
 
-    private static CrawlProcedureProfile MixedNativeCoreTemplate() => new()
+    private static IReadOnlyDictionary<string, string> HelperValues(ProcedureResolutionHelperProfile? helpers)
     {
-        Key = "mixed-modular-expedition",
-        Name = "Mixed modular expedition",
-        WatchLength = TimeSpan.FromHours(4),
-        TravelResolution = TravelResolutionMode.ContinuousDistance,
-        ActualDistanceResolution = ActualDistanceResolutionMode.Fixed,
-        EncounterCadence = EncounterCheckCadence.None,
-        UsesNavigationChecks = false,
-        UsesPersistentVeer = false,
-        TracksIntraHexProgress = true,
-        DirectionChangesCostProgress = false,
-        SupportsDeliberateDoubleBack = false,
-        StartingExitProgressFactor = 0.5d,
-        NearExitProgressFactor = 0.5d,
-        FarExitProgressFactor = 1d,
-        BackExitProgressFactor = 0.5d
-    };
+        var values = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["travel.enabled"] = Bool(helpers?.Travel is not null),
+            ["navigation.enabled"] = Bool(helpers?.Navigation is not null),
+            ["encounter.enabled"] = Bool(helpers?.Encounter is not null)
+        };
+        if (helpers?.Travel is { } travel)
+        {
+            AddRoll(values, "travel", travel.Roll);
+            values["travel.distanceFactor"] = Number(travel.DistanceFactorPerRollPoint);
+        }
+        if (helpers?.Navigation is { } navigation)
+        {
+            AddRoll(values, "navigation", navigation.CheckRoll);
+        }
+        if (helpers?.Encounter is { } encounter)
+        {
+            AddRoll(values, "encounter", encounter.CheckRoll);
+            values["encounter.wanderingResults"] = encounter.WanderingResults.Canonical;
+            values["encounter.keyedLocationResults"] = encounter.KeyedLocationResults.Canonical;
+            values["encounter.timingSlots"] = encounter.TimingSlots.ToString(CultureInfo.InvariantCulture);
+        }
+        return values;
+    }
 
-    private static CrawlProcedureProfile AlexandrianAdvancedTemplate() => new()
+    private static void AddRoll(IDictionary<string, string> values, string prefix, DiceRollFormula roll)
     {
-        Key = "alexandrian-advanced",
-        Name = "Alexandrian Advanced",
-        WatchLength = TimeSpan.FromHours(4),
-        TravelResolution = TravelResolutionMode.ContinuousDistance,
-        ActualDistanceResolution = ActualDistanceResolutionMode.VariableResolved,
-        EncounterCadence = EncounterCheckCadence.PerWatch,
-        UsesNavigationChecks = true,
-        UsesPersistentVeer = true,
-        TracksIntraHexProgress = true,
-        DirectionChangesCostProgress = true,
-        SupportsDeliberateDoubleBack = true,
-        StartingExitProgressFactor = 0.5d,
-        NearExitProgressFactor = 0.5d,
-        FarExitProgressFactor = 1d,
-        BackExitProgressFactor = 0.5d,
-        DirectionChangeProgressCostFactor = 1d / 6d,
-        ResolutionHelpers = new ProcedureResolutionHelperProfile(
-            Travel: new TravelResolutionHelperProfile(new DiceRollFormula(2, 6, 3), 0.1d),
-            Navigation: new NavigationResolutionHelperProfile(new DiceRollFormula(1, 20)),
-            Encounter: new EncounterResolutionHelperProfile(
-                new DiceRollFormula(1, 8),
-                DiceRollResultSet.From(new[] { 1 }),
-                DiceRollResultSet.From(new[] { 8 }),
-                8))
-    };
+        values[$"{prefix}.diceCount"] = roll.DiceCount.ToString(CultureInfo.InvariantCulture);
+        values[$"{prefix}.dieSides"] = roll.DieSides.ToString(CultureInfo.InvariantCulture);
+        values[$"{prefix}.modifier"] = roll.Modifier.ToString(CultureInfo.InvariantCulture);
+    }
 
-    private static CrawlProcedureProfile SimplifiedFixedDistanceTemplate() => new()
-    {
-        Key = "simple-fixed-distance",
-        Name = "Simple Fixed Distance",
-        WatchLength = TimeSpan.FromHours(4),
-        TravelResolution = TravelResolutionMode.ContinuousDistance,
-        ActualDistanceResolution = ActualDistanceResolutionMode.Fixed,
-        EncounterCadence = EncounterCheckCadence.None,
-        UsesNavigationChecks = false,
-        UsesPersistentVeer = false,
-        TracksIntraHexProgress = true,
-        DirectionChangesCostProgress = false,
-        SupportsDeliberateDoubleBack = false,
-        StartingExitProgressFactor = 0.5d,
-        NearExitProgressFactor = 0.5d,
-        FarExitProgressFactor = 1d,
-        BackExitProgressFactor = 0.5d
-    };
-
-    private static CrawlProcedureProfile SimplifiedHexStepTemplate() => new()
-    {
-        Key = "simple-hex-step",
-        Name = "Simple Hex Step",
-        WatchLength = TimeSpan.FromHours(4),
-        TravelResolution = TravelResolutionMode.HexSteps,
-        ActualDistanceResolution = ActualDistanceResolutionMode.Fixed,
-        EncounterCadence = EncounterCheckCadence.None,
-        UsesNavigationChecks = false,
-        UsesPersistentVeer = false,
-        TracksIntraHexProgress = false,
-        DirectionChangesCostProgress = false,
-        SupportsDeliberateDoubleBack = false
-    };
+    private static string Bool(bool value) => value ? "true" : "false";
+    private static string Number(double value) => value.ToString("R", CultureInfo.InvariantCulture);
 }

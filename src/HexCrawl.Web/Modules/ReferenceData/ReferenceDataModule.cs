@@ -18,8 +18,8 @@ public sealed class ReferenceDataModule : IHexCrawlModule
 
     public void MapEndpoints(RouteGroupBuilder api)
     {
-        api.MapGet("/runtime/profiles", () => Results.Ok(
-            CrawlProcedureCatalog.All.Select(RuntimeProfileContract.From).ToArray()));
+        api.MapGet("/procedures/presets", () => Results.Ok(
+            CrawlProcedureCatalog.Catalog.Select(ProcedurePresetContract.From).ToArray()));
 
         api.MapGet("/presentation/presets", () => Results.Ok(
             MapPresentationPolicyCatalog.All.Select(PresentationProfileContract.From).ToArray()));

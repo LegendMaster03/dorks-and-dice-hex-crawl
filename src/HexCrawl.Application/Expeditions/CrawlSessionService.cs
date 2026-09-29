@@ -1,5 +1,4 @@
 using HexCrawl.Application.Persistence;
-using HexCrawl.Domain.Procedure;
 using HexCrawl.Domain.Runtime;
 using HexCrawl.Domain.Spatial;
 
@@ -9,8 +8,7 @@ public sealed record StartStandaloneCrawlSessionCommand(
     string Name,
     string ProcedureKey,
     CrawlSessionContext Context,
-    HexCoordinate? StartHex = null,
-    CrawlProcedureProfile? ProcedureSnapshot = null);
+    HexCoordinate? StartHex = null);
 
 public sealed class CrawlSessionService(IHexCrawlStore store)
 {
@@ -24,9 +22,7 @@ public sealed class CrawlSessionService(IHexCrawlStore store)
             throw new ArgumentException("Owner user id is required.", nameof(ownerUserId));
         }
 
-        var preset = CrawlProcedureCatalog.Resolve(command.ProcedureKey);
-        var materialized = preset.MaterializeGeneric(command.ProcedureSnapshot);
-        var profile = materialized.CompatibilityProfile;
+        var materialized = CrawlProcedureCatalog.Resolve(command.ProcedureKey).MaterializeGeneric();
 
         var id = Guid.NewGuid();
         CrawlSessionRuntimeState runtime = command.Context switch
@@ -48,7 +44,7 @@ public sealed class CrawlSessionService(IHexCrawlStore store)
             runtime,
             command.Context,
             null,
-            profile,
+            materialized.Procedure,
             null,
             TimeSpan.Zero,
             ownerUserId.Trim(),
@@ -56,8 +52,7 @@ public sealed class CrawlSessionService(IHexCrawlStore store)
             now,
             now)
         {
-            ProcedureOrigin = materialized.Origin,
-            CampaignProcedure = materialized.Procedure
+            ProcedureOrigin = materialized.Origin
         }, cancellationToken);
     }
 

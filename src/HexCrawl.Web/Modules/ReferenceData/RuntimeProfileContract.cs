@@ -1,5 +1,6 @@
 using HexCrawl.Application;
 using HexCrawl.Domain.Procedure;
+using HexCrawl.Domain.Runtime;
 
 namespace HexCrawl.Web.Api;
 
@@ -7,8 +8,6 @@ public sealed record DiceRollFormulaContract(int DiceCount, int DieSides, int Mo
 {
     public static DiceRollFormulaContract From(DiceRollFormula formula) =>
         new(formula.DiceCount, formula.DieSides, formula.Modifier);
-
-    public DiceRollFormula ToDomain() => new(DiceCount, DieSides, Modifier);
 }
 
 public sealed record TravelResolutionHelperProfileContract(
@@ -17,17 +16,12 @@ public sealed record TravelResolutionHelperProfileContract(
 {
     public static TravelResolutionHelperProfileContract From(TravelResolutionHelperProfile profile) =>
         new(DiceRollFormulaContract.From(profile.Roll), profile.DistanceFactorPerRollPoint);
-
-    public TravelResolutionHelperProfile ToDomain() =>
-        new(Roll.ToDomain(), DistanceFactorPerRollPoint);
 }
 
 public sealed record NavigationResolutionHelperProfileContract(DiceRollFormulaContract CheckRoll)
 {
     public static NavigationResolutionHelperProfileContract From(NavigationResolutionHelperProfile profile) =>
         new(DiceRollFormulaContract.From(profile.CheckRoll));
-
-    public NavigationResolutionHelperProfile ToDomain() => new(CheckRoll.ToDomain());
 }
 
 public sealed record EncounterResolutionHelperProfileContract(
@@ -42,13 +36,6 @@ public sealed record EncounterResolutionHelperProfileContract(
             profile.WanderingResults.Values,
             profile.KeyedLocationResults.Values,
             profile.TimingSlots);
-
-    public EncounterResolutionHelperProfile ToDomain() =>
-        new(
-            CheckRoll.ToDomain(),
-            DiceRollResultSet.From(WanderingResults),
-            DiceRollResultSet.From(KeyedLocationResults),
-            TimingSlots);
 }
 
 public sealed record ProcedureResolutionHelperProfileContract(
@@ -61,15 +48,10 @@ public sealed record ProcedureResolutionHelperProfileContract(
             profile.Travel is null ? null : TravelResolutionHelperProfileContract.From(profile.Travel),
             profile.Navigation is null ? null : NavigationResolutionHelperProfileContract.From(profile.Navigation),
             profile.Encounter is null ? null : EncounterResolutionHelperProfileContract.From(profile.Encounter));
-
-    public ProcedureResolutionHelperProfile ToDomain() =>
-        new(Travel?.ToDomain(), Navigation?.ToDomain(), Encounter?.ToDomain());
 }
 
-public sealed record RuntimeProfileContract(
-    string Key,
-    string Name,
-    double WatchHours,
+public sealed record ProcedureRuntimeContract(
+    double IntervalHours,
     TravelResolutionMode TravelResolution,
     ActualDistanceResolutionMode ActualDistanceResolution,
     EncounterCheckCadence EncounterCadence,
@@ -83,59 +65,94 @@ public sealed record RuntimeProfileContract(
     double FarExitProgressFactor,
     double BackExitProgressFactor,
     double DirectionChangeProgressCostFactor,
-    ProcedureResolutionHelperProfileContract? ResolutionHelpers = null)
+    ProcedureResolutionHelperProfileContract? ResolutionHelpers)
 {
-    public static RuntimeProfileContract From(CrawlProcedurePresetDefinition preset) =>
-        From(preset.ExecutableProcedureTemplate, preset.PresetKey, preset.DisplayName);
+    public static ProcedureRuntimeContract From(GenericProcedureRuntime runtime) => new(
+        runtime.Time.IntervalDuration.TotalHours,
+        runtime.Movement.TravelResolution,
+        runtime.Movement.ActualDistanceResolution,
+        runtime.Encounters.Cadence,
+        runtime.Navigation.UsesNavigationChecks,
+        runtime.Navigation.UsesPersistentVeer,
+        runtime.Movement.TracksIntraHexProgress,
+        runtime.HexProgress.DirectionChangesCostProgress,
+        runtime.HexProgress.SupportsDeliberateDoubleBack,
+        runtime.HexProgress.StartingExitProgressFactor,
+        runtime.HexProgress.NearExitProgressFactor,
+        runtime.HexProgress.FarExitProgressFactor,
+        runtime.HexProgress.BackExitProgressFactor,
+        runtime.HexProgress.DirectionChangeProgressCostFactor,
+        runtime.ResolutionHelpers is null ? null : ProcedureResolutionHelperProfileContract.From(runtime.ResolutionHelpers));
+}
 
-    public static RuntimeProfileContract From(CrawlProcedureProfile? profile)
+public sealed record ProcedureModuleContract(
+    string ModuleKey,
+    string ModuleName,
+    string MechanicKey,
+    int MechanicVersion,
+    string ExecutionHandler,
+    ProcedureAutomationLevel AutomationLevel,
+    IReadOnlyDictionary<string, string> Parameters)
+{
+    public static ProcedureModuleContract From(MaterializedProcedureModule module) => new(
+        module.Module.Key,
+        module.Module.DisplayName,
+        module.Mechanic.Key,
+        module.Mechanic.Version,
+        module.Mechanic.ExecutionHandler,
+        module.Mechanic.AutomationLevel,
+        module.Parameters);
+}
+
+public sealed record CampaignProcedureContract(
+    Guid ProcedureId,
+    int Revision,
+    string Key,
+    string Name,
+    bool IsExecutable,
+    ProcedureRuntimeContract? Runtime,
+    IReadOnlyList<ProcedureModuleContract> Modules)
+{
+    public static CampaignProcedureContract From(CampaignProcedure procedure)
     {
-        if (profile is null)
+        procedure.Validate();
+        GenericProcedureRuntime? runtime = null;
+        try
         {
-            throw new InvalidOperationException(
-                "This legacy runtime-profile API requires a CrawlProcedureProfile compatibility projection. The pinned generic CampaignProcedure remains authoritative and persisted, but this API can not represent it.");
+            runtime = GenericProcedureRuntime.Bind(procedure);
+        }
+        catch (InvalidOperationException)
+        {
+            // Representation remains available for recognized declarative/incomplete/future snapshots.
+            // Runtime execution will still fail through the authoritative binding path when attempted.
         }
 
-        return From(profile, profile.Key, profile.Name);
+        return new CampaignProcedureContract(
+            procedure.ProcedureId,
+            procedure.Revision,
+            procedure.Key,
+            procedure.Name,
+            runtime is not null,
+            runtime is null ? null : ProcedureRuntimeContract.From(runtime),
+            procedure.Modules.Select(ProcedureModuleContract.From).ToArray());
     }
+}
 
-    private static RuntimeProfileContract From(CrawlProcedureProfile profile, string key, string name) => new(
-        key,
-        name,
-        profile.WatchLength.TotalHours,
-        profile.TravelResolution,
-        profile.ActualDistanceResolution,
-        profile.EncounterCadence,
-        profile.UsesNavigationChecks,
-        profile.UsesPersistentVeer,
-        profile.TracksIntraHexProgress,
-        profile.DirectionChangesCostProgress,
-        profile.SupportsDeliberateDoubleBack,
-        profile.StartingExitProgressFactor,
-        profile.NearExitProgressFactor,
-        profile.FarExitProgressFactor,
-        profile.BackExitProgressFactor,
-        profile.DirectionChangeProgressCostFactor,
-        profile.ResolutionHelpers is null ? null : ProcedureResolutionHelperProfileContract.From(profile.ResolutionHelpers));
-
-    public CrawlProcedureProfile ToDomain() => new()
-    {
-        Key = Key,
-        Name = Name,
-        WatchLength = TimeSpan.FromHours(WatchHours),
-        TravelResolution = TravelResolution,
-        ActualDistanceResolution = ActualDistanceResolution,
-        EncounterCadence = EncounterCadence,
-        UsesNavigationChecks = UsesNavigationChecks,
-        UsesPersistentVeer = UsesPersistentVeer,
-        TracksIntraHexProgress = TracksIntraHexProgress,
-        DirectionChangesCostProgress = DirectionChangesCostProgress,
-        SupportsDeliberateDoubleBack = SupportsDeliberateDoubleBack,
-        StartingExitProgressFactor = StartingExitProgressFactor,
-        NearExitProgressFactor = NearExitProgressFactor,
-        FarExitProgressFactor = FarExitProgressFactor,
-        BackExitProgressFactor = BackExitProgressFactor,
-        DirectionChangeProgressCostFactor = DirectionChangeProgressCostFactor,
-        ResolutionHelpers = ResolutionHelpers?.ToDomain()
-    };
+public sealed record ProcedurePresetContract(
+    string PresetKey,
+    string DisplayName,
+    string Description,
+    int PresetRevision,
+    CampaignProcedureContract Procedure,
+    string? Attribution,
+    string? Disclaimer)
+{
+    public static ProcedurePresetContract From(CrawlProcedurePresetDefinition preset) => new(
+        preset.PresetKey,
+        preset.DisplayName,
+        preset.Description,
+        preset.PresetRevision,
+        CampaignProcedureContract.From(preset.MaterializeGeneric().Procedure),
+        preset.Attribution,
+        preset.Disclaimer);
 }

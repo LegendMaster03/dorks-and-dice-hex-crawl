@@ -1,6 +1,5 @@
 using HexCrawl.Application.Persistence;
 using HexCrawl.Domain.Knowledge;
-using HexCrawl.Domain.Procedure;
 using HexCrawl.Domain.Runtime;
 using HexCrawl.Domain.Spatial;
 
@@ -41,9 +40,7 @@ public sealed partial class HexCrawlService
         CancellationToken cancellationToken = default)
     {
         var world = await GetOverworldAsync(overworldId, ownerUserId, cancellationToken);
-        var preset = CrawlProcedureCatalog.Resolve(command.ProcedureKey);
-        var materialized = preset.MaterializeGeneric();
-        var profile = materialized.CompatibilityProfile;
+        var materialized = CrawlProcedureCatalog.Resolve(command.ProcedureKey).MaterializeGeneric();
         var expeditionId = Guid.NewGuid();
         var state = new ExpeditionState
         {
@@ -65,7 +62,7 @@ public sealed partial class HexCrawlService
             state,
             new WorldBoundCrawlSessionContext(world.World.Id),
             knowledge,
-            profile,
+            materialized.Procedure,
             null,
             TimeSpan.Zero,
             world.OwnerUserId,
@@ -73,8 +70,7 @@ public sealed partial class HexCrawlService
             now,
             now)
         {
-            ProcedureOrigin = materialized.Origin,
-            CampaignProcedure = materialized.Procedure
+            ProcedureOrigin = materialized.Origin
         }, cancellationToken);
     }
 
@@ -92,7 +88,7 @@ public sealed partial class HexCrawlService
         if (command.ResolutionSource == ResolutionSource.AutomaticRoll)
         {
             throw new InvalidOperationException(
-                "AutomaticRoll is reserved for server-verified procedure-helper results and can not be supplied to the legacy manual advance path.");
+                "AutomaticRoll is reserved for server-verified procedure-helper results and can not be supplied to the manual advance path.");
         }
         var provenance = new ResolutionProvenance(command.ResolutionSource, command.DmOverrideNote);
         var procedure = ExpeditionProcedureExecutionResolver.Resolve(expedition);

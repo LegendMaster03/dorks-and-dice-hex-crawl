@@ -1,7 +1,6 @@
 using HexCrawl.Application.Persistence;
 using HexCrawl.Domain.Knowledge;
 using HexCrawl.Domain.Presentation;
-using HexCrawl.Domain.Procedure;
 using HexCrawl.Domain.Runtime;
 using HexCrawl.Domain.Spatial;
 
@@ -11,8 +10,7 @@ public sealed record StartExpeditionWorkbenchCommand(
     string Name,
     string ProcedureKey,
     string PresentationKey,
-    HexCoordinate StartHex,
-    CrawlProcedureProfile? ProcedureSnapshot = null);
+    HexCoordinate StartHex);
 
 public sealed record AdvanceExpeditionWorkbenchCommand
 {
@@ -61,9 +59,7 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
         CancellationToken cancellationToken = default)
     {
         var world = await coreService.GetOverworldAsync(overworldId, ownerUserId, cancellationToken);
-        var preset = CrawlProcedureCatalog.Resolve(command.ProcedureKey);
-        var materialized = preset.MaterializeGeneric(command.ProcedureSnapshot);
-        var profile = materialized.CompatibilityProfile;
+        var materialized = CrawlProcedureCatalog.Resolve(command.ProcedureKey).MaterializeGeneric();
 
         var presentation = MapPresentationPolicyCatalog.Resolve(command.PresentationKey);
         presentation.Validate();
@@ -92,7 +88,7 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
             state,
             new WorldBoundCrawlSessionContext(world.World.Id),
             knowledge,
-            profile,
+            materialized.Procedure,
             null,
             TimeSpan.Zero,
             world.OwnerUserId,
@@ -100,8 +96,7 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
             now,
             now)
         {
-            ProcedureOrigin = materialized.Origin,
-            CampaignProcedure = materialized.Procedure
+            ProcedureOrigin = materialized.Origin
         }, cancellationToken);
     }
 

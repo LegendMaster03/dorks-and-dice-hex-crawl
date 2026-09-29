@@ -36,7 +36,7 @@ public sealed record StoredExpedition(
     CrawlSessionRuntimeState Runtime,
     CrawlSessionContext Context,
     PlayerKnowledgeState? Knowledge,
-    CrawlProcedureProfile? CompatibilityProfile,
+    CampaignProcedure CampaignProcedure,
     RuntimePauseReason? PauseReason,
     TimeSpan RemainingWatchTime,
     string OwnerUserId,
@@ -48,20 +48,6 @@ public sealed record StoredExpedition(
     public IReadOnlyList<GeneratedProcedureResolution> GeneratedProcedureResolutions { get; init; } = [];
     public Guid? CampaignId { get; init; }
     public ProcedureOriginMetadata? ProcedureOrigin { get; init; }
-    public CampaignProcedure? CampaignProcedure { get; init; }
-
-    /// <summary>
-    /// Legacy compatibility accessor. Generic-only procedures intentionally have no compatibility
-    /// profile; callers that still require CrawlProcedureProfile fail explicitly instead of receiving
-    /// fabricated data. New persistence and generic-procedure code should use CompatibilityProfile.
-    /// </summary>
-    public CrawlProcedureProfile Procedure
-    {
-        get => CompatibilityProfile
-            ?? throw new InvalidOperationException(
-                "This expedition's pinned CampaignProcedure is not representable by the legacy CrawlProcedureProfile compatibility model.");
-        init => CompatibilityProfile = value;
-    }
 
     public Guid Id => Runtime.Id;
 

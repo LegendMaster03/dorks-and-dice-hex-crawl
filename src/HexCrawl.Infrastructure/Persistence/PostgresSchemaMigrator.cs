@@ -5,7 +5,7 @@ namespace HexCrawl.Infrastructure.Persistence;
 
 public sealed class PostgresSchemaMigrator(string connectionString)
 {
-    public const int CurrentVersion = 3;
+    public const int CurrentVersion = 4;
     private const long MigrationLockKey = 0x484558435241574C;
 
     public async Task MigrateAsync(CancellationToken cancellationToken = default)
@@ -36,32 +36,15 @@ public sealed class PostgresSchemaMigrator(string connectionString)
             }
 
             var current = await CurrentAsync(connection, transaction, cancellationToken);
-            if (current > CurrentVersion)
+            if (current == 0)
+            {
+                await ApplyCurrentSchemaAsync(connection, transaction, cancellationToken);
+                current = CurrentVersion;
+            }
+            else if (current != CurrentVersion)
             {
                 throw new InvalidOperationException(
-                    $"Hex Crawl PostgreSQL schema version {current} is newer than supported version {CurrentVersion}.");
-            }
-
-            if (current < 1)
-            {
-                await ApplyVersion1Async(connection, transaction, cancellationToken);
-                current = 1;
-            }
-            if (current < 2)
-            {
-                await ApplyVersion2Async(connection, transaction, cancellationToken);
-                current = 2;
-            }
-            if (current < 3)
-            {
-                await ApplyVersion3Async(connection, transaction, cancellationToken);
-                current = 3;
-            }
-
-            if (current != CurrentVersion)
-            {
-                throw new InvalidOperationException(
-                    $"Hex Crawl PostgreSQL schema initialization stopped at version {current}; expected {CurrentVersion}.");
+                    $"Hex Crawl PostgreSQL schema version {current} predates the current pre-release procedure architecture. Reset the development database and initialize schema version {CurrentVersion}.");
             }
 
             await transaction.CommitAsync(cancellationToken);
@@ -84,7 +67,7 @@ public sealed class PostgresSchemaMigrator(string connectionString)
         return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken));
     }
 
-    private static async Task ApplyVersion1Async(
+    private static async Task ApplyCurrentSchemaAsync(
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,
         CancellationToken cancellationToken)
@@ -103,6 +86,19 @@ public sealed class PostgresSchemaMigrator(string connectionString)
             );
             CREATE INDEX ix_overworlds_owner_updated
                 ON overworlds(owner_user_id, updated_at DESC, name);
+
+            CREATE TABLE campaign_procedure_revisions (
+                procedure_id uuid NOT NULL,
+                revision integer NOT NULL CHECK (revision > 0),
+                owner_user_id text NOT NULL,
+                campaign_id uuid NULL,
+                procedure_json jsonb NOT NULL,
+                origin_json jsonb NULL,
+                created_at timestamptz NOT NULL,
+                PRIMARY KEY(procedure_id, revision)
+            );
+            CREATE INDEX ix_campaign_procedure_revisions_owner_campaign
+                ON campaign_procedure_revisions(owner_user_id, campaign_id, procedure_id, revision DESC);
 
             CREATE TABLE expeditions (
                 id uuid PRIMARY KEY,
@@ -142,57 +138,9 @@ public sealed class PostgresSchemaMigrator(string connectionString)
             );
 
             INSERT INTO hex_crawl_schema_migrations(version, applied_at)
-            VALUES (1, @appliedAt);
+            VALUES (@version, @appliedAt);
             """;
-        command.Parameters.AddWithValue("appliedAt", NpgsqlDbType.TimestampTz, DateTime.UtcNow);
-        await command.ExecuteNonQueryAsync(cancellationToken);
-    }
-
-    private static async Task ApplyVersion2Async(
-        NpgsqlConnection connection,
-        NpgsqlTransaction transaction,
-        CancellationToken cancellationToken)
-    {
-        await using var command = connection.CreateCommand();
-        command.Transaction = transaction;
-        command.CommandText = """
-            ALTER TABLE expeditions
-                ADD COLUMN campaign_procedure_json jsonb NULL;
-
-            CREATE TABLE campaign_procedure_revisions (
-                procedure_id uuid NOT NULL,
-                revision integer NOT NULL CHECK (revision > 0),
-                owner_user_id text NOT NULL,
-                campaign_id uuid NULL,
-                procedure_json jsonb NOT NULL,
-                origin_json jsonb NULL,
-                created_at timestamptz NOT NULL,
-                PRIMARY KEY(procedure_id, revision)
-            );
-            CREATE INDEX ix_campaign_procedure_revisions_owner_campaign
-                ON campaign_procedure_revisions(owner_user_id, campaign_id, procedure_id, revision DESC);
-
-            INSERT INTO hex_crawl_schema_migrations(version, applied_at)
-            VALUES (2, @appliedAt);
-            """;
-        command.Parameters.AddWithValue("appliedAt", NpgsqlDbType.TimestampTz, DateTime.UtcNow);
-        await command.ExecuteNonQueryAsync(cancellationToken);
-    }
-
-    private static async Task ApplyVersion3Async(
-        NpgsqlConnection connection,
-        NpgsqlTransaction transaction,
-        CancellationToken cancellationToken)
-    {
-        await using var command = connection.CreateCommand();
-        command.Transaction = transaction;
-        command.CommandText = """
-            ALTER TABLE expeditions
-                ALTER COLUMN procedure_json DROP NOT NULL;
-
-            INSERT INTO hex_crawl_schema_migrations(version, applied_at)
-            VALUES (3, @appliedAt);
-            """;
+        command.Parameters.AddWithValue("version", NpgsqlDbType.Bigint, CurrentVersion);
         command.Parameters.AddWithValue("appliedAt", NpgsqlDbType.TimestampTz, DateTime.UtcNow);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
