@@ -2,250 +2,173 @@
 
 ## Purpose
 
-The expedition workbench is the persistent DM-facing layer over the existing deterministic crawl runtime. It does not replace `CrawlRuntimeEngine`, reinterpret semantic world truth, or make the browser authoritative for movement. Its job is to collect the resolved choices and inputs required by the configured procedure, call the runtime, persist the resulting snapshot/history, and present the state needed to continue play.
+The expedition workbench is the persistent DM-facing layer over Hex Crawl's deterministic runtime. It collects procedure-relevant choices and resolved inputs, invokes the application/runtime boundary, persists the resulting snapshot/history, and presents the state needed to continue play.
 
-The persisted aggregate is a crawl session whose context is explicit rather than inferred from an Overworld:
+The persisted aggregate is a crawl session with explicit context:
 
-`persisted procedure snapshot + session runtime/history + session context + resolved inputs -> transition -> persisted session`
+`CampaignProcedure + session runtime/history + session context + resolved inputs -> transition -> persisted session`
 
 `CrawlSessionContext` has three concrete forms:
 
-- `WorldBound(overworldId)` — spatial runtime plus real authored world/map/knowledge composition.
-- `AbstractHex(name, orientation, CrawlRuntimeContext)` — spatial runtime with its own persisted hex scale, but no Overworld record.
-- `NonSpatial(name)` — procedure/session runtime with no hex coordinates, distance scale, world position, or Overworld.
+- `WorldBound(overworldId)` — spatial runtime plus authored world/map/knowledge composition.
+- `AbstractHex(name, orientation, CrawlRuntimeContext)` — spatial runtime with persisted hex scale but no Overworld record.
+- `NonSpatial(name)` — procedure/time/history state without hex coordinates, world position, or Overworld.
 
-The full map workbench exists only for `WorldBound`. The abstract-hex tracker runs the same deterministic spatial crawl engine without constructing or loading an Overworld. Non-spatial sessions use `NonSpatialSessionState` and only expose procedure tools that do not require invented spatial state.
+The full map workbench exists only for `WorldBound`. Abstract-hex and non-spatial sessions use the same persisted procedure model without fabricating world state.
 
-The deterministic `CrawlRuntimeEngine` receives only `CrawlRuntimeContext` physical scale plus spatial procedure/runtime inputs. World-coordinate projection, keyed-location validation, and player-knowledge effects are application-level composition performed only for a real `WorldBound` session.
+## Procedure authority
+
+Each crawl session stores exactly one authoritative `CampaignProcedure` snapshot. It contains the materialized generic modules, mechanic handler/version metadata, parameters, and campaign overrides used by that session.
+
+Named presets are creation-time recipes only. `ProcedureOriginMetadata` may record the selected preset key/display name/revision as optional provenance, but reload, runtime binding, procedure helpers, automatic-resolution verification, and advancement never require a live preset or origin identity.
+
+A later preset correction therefore affects new materializations only. Existing sessions remain pinned until explicitly revised.
+
+## Pre-release API policy
+
+Hex Crawl is pre-release. Current HTTP contracts are development surfaces, not compatibility commitments. When the procedure architecture changes, current API contracts should represent `CampaignProcedure` directly rather than adding adapters around a retired representation.
+
+Current expedition detail/workbench responses therefore carry `CampaignProcedureContract`. It exposes procedure ID, revision, generic identity, materialized modules, handler/version/automation metadata, parameters, and an optional derived executable runtime projection.
+
+Structural or currently non-executable generic procedures remain valid API data. They are not rejected merely because the deterministic runtime can not bind every selected mechanic. Runtime binding fails only when an execution operation actually requires unsupported behavior.
 
 ## Product composition
 
-- **DM tools home** lists crawl sessions across all context kinds and prominently links directly to Travel / Watch, Navigation, and Encounter Cadence assistant entry routes. It can still start a `WorldBound` session from an existing Overworld, an `AbstractHex` session directly, or a `NonSpatial` session directly.
-- **Abstract-hex tracker** runs watch/travel/navigation/encounter bookkeeping and history from persisted hex scale without creating or loading an Overworld and without constructing `MapSurface`.
-- **Non-spatial tracker** presents procedure/time/history state without fabricating coordinates or distance state. Its Watch / time assistant can start a configured watch, record a partial segment, persist remaining time, resume after reload, and complete the same watch.
-- **Full crawl workbench** is available only for `WorldBound` and composes the same spatial crawl state with authored world data, map rendering, discovery controls, and player-knowledge preview.
-- **Travel / watch, Navigation, and Encounter cadence assistants** are independent manual bookkeeping surfaces over the same persisted expedition. Their top-level entry routes are `/assistants/travel`, `/assistants/navigation`, and `/assistants/encounters`; the existing `/expeditions/{id}/...` routes remain the canonical attached forms. Each has its own API mutation and updates only its owned state/history; it does not submit hidden inputs for the other assistants. They are disabled while a partial full-workbench watch is active, because that watch must resume atomically in the tracker.
+- **DM tools home** lists crawl sessions across all context kinds and links directly to Travel / Watch, Navigation, and Encounter Cadence assistants.
+- **Abstract-hex tracker** runs spatial bookkeeping from persisted hex scale without constructing an Overworld.
+- **Non-spatial tracker** presents procedure/time/history state without invented spatial fields.
+- **Full crawl workbench** is world-bound only and composes crawl state with authored world data, map rendering, discovery controls, and knowledge preview.
+- **Focused assistants** operate on the same persisted session and mutate only their owned state/history.
 
-## Direct focused-assistant entry
-
-Top-level assistant routes are setup-and-entry surfaces over the same persisted session/application capabilities. They do not implement runtime calculations in the browser and they do not require world authoring.
-
-- **Travel / Watch** lists every compatible saved session. New inline setup defaults to `NonSpatial`, requiring only a session name and procedure profile for generic watch/time bookkeeping. The DM can explicitly switch to spatial travel, which creates an `AbstractHex` session with only orientation, physical hex-center scale/unit, and starting axial coordinate.
-- **Navigation** lists only spatial saved sessions (`WorldBound` or `AbstractHex`). Inline creation always creates `AbstractHex`, because navigation needs direction/spatial context but does not need an Overworld.
-- **Encounter Cadence** lists compatible saved sessions and creates `NonSpatial` inline by default because encounter cadence itself requires no map, grid, coordinate, or distance scale. It remains a manual bookkeeping surface. A configured automatic encounter helper also resolves watch timing, so this focused assistant does not consume that helper until its contract can preserve the generated timing result rather than discard it.
-
-After selection or inline creation, each entry route navigates to the existing session-attached assistant route. Persistence is preferred here because it reuses optimistic concurrency, restart behavior, procedure snapshots, and runtime history instead of introducing a second unsaved assistant state model.
+Top-level assistant routes remain setup-and-entry surfaces. They do not own a second procedure model and do not calculate authoritative runtime behavior in the browser.
 
 ## State ownership
 
-Bookkeeping remains split across the established state axes.
-
 ### World truth
 
-`OverworldDefinition` owns the continuous world coordinate space, mathematical hex grid, semantic features, locations, and source-map representations. Terrain, roads, rivers, locations, and similar authored facts remain world data. A procedure or presentation preset does not mutate them.
+`OverworldDefinition` owns the continuous world coordinate space, mathematical grid, semantic features, locations, and source-map representations. Procedure presets do not mutate world truth.
 
 ### Procedure configuration
 
-`CrawlProcedureProfile` owns crawl-mechanics configuration. Each expedition stores the complete selected profile snapshot, including:
+`CampaignProcedure` owns procedure configuration for the session. Executable policy is obtained through generic handler/version-aware binding.
 
-- watch length;
+The currently executable core can describe:
+
+- watch/interval duration;
 - continuous-distance versus hex-step travel;
-- fixed versus externally resolved variable distance;
+- fixed versus variable resolved travel distance;
 - encounter cadence;
-- navigation checks and persistent veer;
+- navigation/lost/veer behavior;
 - intra-hex progress;
 - direction-change progress cost;
 - deliberate double-back support;
-- start/near/far/back exit factors and direction-change cost factor;
-- optional automatic-resolution helper configuration for travel roll/factor, navigation roll, encounter trigger results, and encounter timing slots.
+- exit-progress factors;
+- optional deterministic travel/navigation/encounter helper configuration.
 
-Built-in procedure keys are presets, not reload-time authorities. A customized expedition retains the selected preset key as provenance but persists the full customized snapshot. Later changes to a catalog preset therefore do not silently alter an ongoing expedition.
-
-Domain `CrawlProcedureProfile.Validate()` remains the validity boundary. The setup UI derives field visibility and strips inherited automatic-helper components that can no longer apply after a customization, but it does not maintain a separate competing validity matrix.
+Phase 3 also permits structural declarative modules that are persisted and presented even when their later execution engine has not been implemented.
 
 ### Session context and runtime state
 
-Spatial contexts (`WorldBound` and `AbstractHex`) use `ExpeditionState` and `ActiveWatchState` for current travel state, including:
+Spatial contexts use `ExpeditionState` and `ActiveWatchState` for current travel state, including current hex, position, direction, navigation state, distance, abstract progress, elapsed time, completed watches, active-watch timing, and pending decisions.
 
-- current hex and world position;
-- entry and last-travel directions;
-- intended versus actual direction;
-- lost state and veer;
-- physical distance traveled;
-- abstract intra-hex progress and current exit requirement;
-- elapsed travel time;
-- completed watches;
-- active-watch total, elapsed, and remaining duration;
-- selected pace, activities, navigation aid, encounter result, and pending decision.
-
-Boundary interruptions remain the same watch. A reload therefore restores the active watch rather than approximating a new one.
-
-`NonSpatial` instead uses `NonSpatialSessionState`, which owns total elapsed procedure time, completed watches, retained history, and an optional `NonSpatialActiveWatchState`. That lightweight active watch stores only watch number, configured total duration, elapsed duration, and derived remaining duration. It deliberately has no dummy `HexCoordinate`, `DistanceMeasure`, `WorldPoint`, direction, navigation state, or Overworld ID.
-
-The DM-facing `CurrentDay` value is currently derived from elapsed session/travel time in 24-hour bands. This is intentionally travel-time semantics, not yet a general campaign calendar. A future rest/calendar system should introduce explicit world-time state rather than silently changing the meaning of `ElapsedTravelTime`.
+`NonSpatialSessionState` owns elapsed procedure time, completed watches, history, and an optional lightweight active watch. It contains no dummy spatial values.
 
 ### Party running sheet
 
-`CrawlPartySheet` is optional persistent expedition-owned reference data. It currently stores party members, a flexible rank/file marching order, watch rotation, standing orders, a default navigator, and optional Hour / Watch / March movement references with explicit distance units.
+`CrawlPartySheet` remains optional expedition-owned reference data for members, marching order, watch rotation, standing orders, default navigator, and explicit movement references.
 
-This state is deliberately adjacent to the deterministic crawl runtime rather than embedded in `ActiveWatchState`. It can later accept richer travel-role or movement derivation without making party composition a prerequisite for ordinary watch advancement. The current active-watch activities remain open strings/keys; a future Rules Core integration that needs character-to-duty assignments should add typed mechanic and assignment references rather than hard-code a Hex Crawl skill list.
+It is adjacent to runtime state rather than embedded in the active-watch object. Later participant-role/activity execution can build on this without making rich party integration mandatory for basic runtime use.
 
-### Player knowledge and presentation policy
+### Player knowledge and presentation
 
-`PlayerKnowledgeState` exists only for `WorldBound` sessions, because disclosure refers to actual authored world subjects. `AbstractHex` and `NonSpatial` sessions persist no synthetic knowledge snapshot.
+`PlayerKnowledgeState` exists only for world-bound sessions because disclosure refers to authored world subjects. Presentation policy controls automatic knowledge projection after mechanical runtime transitions.
 
-For a world-bound session, `PlayerKnowledgeState` owns party-specific disclosure state. It now includes:
-
-- subject-specific knowledge entries;
-- known/explored hex coordinates;
-- annotations;
-- the expedition's complete `MapPresentationPolicy` snapshot.
-
-The presentation snapshot is stored with player knowledge because it governs what this party knows and how that knowledge is presented; it is not world truth and it is not crawl mechanics.
-
-`PresentationKnowledgeProjection` is the automatic disclosure boundary. The runtime may produce a mechanical keyed-location discovery event, but `DM-Controlled` presentation removes automatic runtime knowledge mutations before persistence. Mechanical history is retained, so suppressing player disclosure does not erase what happened in the crawl.
-
-Manual subject discovery remains an explicit DM action through the existing discovery endpoint.
-
-## Presentation presets
-
-Four built-in policies are exposed by `/api/presentation/presets` and are selected when an expedition starts.
-
-### Traditional Hidden Hexcrawl
-
-- player grid hidden;
-- terrain presentation manual;
-- entering a hex does not automatically mark it known;
-- no broad initial feature/location reveal;
-- keyed or explicitly detected subjects can still become known individually.
-
-### Exploration Map
-
-- player grid visible;
-- entering a hex marks that hex known;
-- terrain can be presented as explored knowledge;
-- configured ordinary roads and obvious settlement categories can begin known;
-- hidden/conditional locations remain subject-specific and are not exposed by merely entering a hex.
-
-### Open Regional Map
-
-- player grid visible;
-- regional terrain is presentation-visible;
-- entered hexes are known;
-- configured ordinary route/river/border/landmark categories and obvious settlement categories can begin known;
-- hidden and conditional locations remain hidden until separately disclosed.
-
-### DM-Controlled
-
-- grid/terrain presentation is manual;
-- no initial automatic knowledge changes;
-- entering hexes does not automatically reveal them;
-- runtime keyed-discovery mechanics are recorded in history but do not automatically modify persisted player knowledge.
+Manual discovery remains an explicit DM action.
 
 ## Guided watch workflow
 
-The full expedition tracker asks only for inputs relevant to the persisted procedure and current runtime state. Focused assistants are separate from this atomic workflow. Spatial travel/navigation assistants remain blocked while a spatial full-workbench `ActiveWatchState` is in progress. A non-spatial active watch is different: it is itself the authoritative lightweight procedure watch and is resumed through the Watch / time assistant.
+The full tracker asks only for inputs relevant to the executable runtime policy and current session state.
 
-At a new watch it can request:
+At a new spatial watch it can request:
 
-- direction;
+- intended direction;
 - pace and optional activities;
-- navigation aid/suppression choices;
-- resolved travel amount in the profile's configured model;
-- navigation outcome and veer only when navigation is required;
-- encounter outcome only when the configured cadence says a check is due.
+- navigation-aid/suppression choices;
+- resolved travel amount in the selected movement model;
+- navigation outcome and veer when required;
+- encounter outcome when cadence requires a check.
 
-For a paused active watch, the workbench exposes the pending decision and remaining watch time. A conditions-review pause can resume with changed travel inputs without creating a new watch. Lost-recognition/reorientation decisions are supplied explicitly when required.
+For a paused watch, the workbench exposes the pending decision and remaining time. A conditions-review pause resumes the same watch rather than creating a new one.
 
-Fixed continuous-distance procedures accept one effective distance. Variable-distance procedures accept expected and actual resolved distance. Hex-step procedures accept a step count. The workbench does not interpret a semantic `forest`, `road`, or other category into a movement multiplier.
+Fixed continuous-distance mechanics accept one effective distance. Variable-distance mechanics require expected and actual resolved distance. Hex-step mechanics accept a non-negative step count.
 
-## Encounter cadence
-
-New-expedition procedure customization currently offers only the cadence modes with implemented configuration semantics:
-
-- `None` — no encounter check;
-- `PerWatch` — one encounter check at each new watch;
-- `PerDay` — one encounter check in each derived 24-hour travel-time day.
-
-`EncounterCheckCadence.Custom` remains a valid domain value for backward compatibility with already persisted expedition profiles. It is not offered for newly customized expeditions because this slice has no typed custom-cadence parameters. A persisted legacy `Custom` profile retains its historical deterministic behavior: it requests a resolved encounter result at each new watch, equivalent to the old per-watch handling, until a real custom-cadence model is introduced.
-
-`PerDay` is orchestrated without changing `CrawlRuntimeEngine`: only the first new watch in each 24-hour travel-time day is passed to the engine with encounter cadence enabled. Subsequent watches in that same derived day use an ephemeral runtime profile with encounter cadence `None`. The persisted procedure snapshot remains `PerDay`.
-
-Encounter content, tables, monster selection, and edition-specific encounter mechanics remain external.
+The workbench does not infer terrain semantics into movement mechanics unless the active generic runtime actually implements that behavior.
 
 ## Resolved-input provenance
 
-The domain and application contracts support independent provenance for travel, navigation, encounter, and boundary decisions using:
+The application supports independent provenance for travel, navigation, encounter, and boundary decisions:
 
-- `ProcedureDefault`;
-- `AutomaticRoll`;
-- `ManualRoll`;
-- `ExternalSystem`;
-- `DmOverride`.
+- procedure default;
+- server-generated automatic resolution;
+- manual roll/input;
+- external system;
+- DM override.
 
-`AutomaticRoll` means that the server-side procedure-resolution helper actually generated the corresponding resolved value. Ordinary manual DM entry still offers only `ProcedureDefault`, `ManualRoll`, `ExternalSystem`, and `DmOverride`; it can not label a manually typed value `AutomaticRoll`.
+Server-generated helper results are persisted with a generated-resolution ID, audit sequence, watch number, exact resolved values, and aggregate version. Applying automatic provenance requires the matching persisted generated result.
 
-Generated helper results are persisted with a server-generated resolution ID, audit sequence, watch number, exact generated values, and aggregate version. Applying `AutomaticRoll` values requires the matching persisted generated result; forged provenance text, stale generations, cross-session identifiers, tampered values, and reused consumed results are rejected.
-
-Optional notes can describe physical dice, an external system result, an override context, a table clock, or a future trusted helper result. Non-spatial watch bookkeeping records the provenance of each elapsed-time segment; `DmOverride` additionally produces `DmOverrideApplied` history. The workbench appends compact `ResolutionProvenanceRecorded` entries for auditability.
-
-This keeps future integrations subordinate to the Hex Crawl runtime state. Rules Core or Characters may provide resolved values later, but they do not become the owner of expedition movement or spatial state.
+External tools can supply resolved inputs without becoming authoritative owners of expedition state.
 
 ## UI projections
 
-The expedition page derives DM-facing status from authoritative persisted state. It exposes:
+The expedition UI derives its display from authoritative persisted state. Depending on context and executable policy it may show:
 
-- current day/watch;
-- watch elapsed and remaining time;
-- current hex;
-- entry/last-travel relationship;
-- intended and actual course;
+- day/watch and elapsed/remaining time;
+- current hex and course;
 - lost/veer state;
-- total travel distance;
-- intra-hex progress only for profiles that use it;
+- total distance and intra-hex progress;
 - current pause/pending decision;
-- encounter resolution state;
-- recent runtime history and the condensed watch ledger;
-- the persisted party register, marching order, watch rotation, standing orders, and movement reference;
-- the complete persisted procedure-mechanics reference, including applicable automatic-helper formulas;
-- procedure mechanics preview before session creation, including customized profile changes;
-- inline automatic-helper formulas next to the situational inputs they consume;
-- generated helper rolls, resolved results, notes, and server-verified provenance before watch application;
-- manual subject discovery controls;
-- a player-knowledge preview using the persisted presentation policy.
+- encounter state;
+- recent history and watch ledger;
+- party register and movement references;
+- the complete persisted generic procedure/module reference;
+- executable helper formulas where available;
+- generated helper results and provenance;
+- discovery controls and knowledge preview for world-bound sessions.
 
-GM source-map rasters remain DM evidence. The knowledge preview does not reinterpret a GM raster as player knowledge.
+Current frontend filenames may still use the word "profile" as presentation vocabulary, but the API data feeding those views is the generic `CampaignProcedureContract`; there is no second persisted procedure model behind the UI.
 
 ## Persistence and restart behavior
 
-Production persistence is PostgreSQL through `PostgresHexCrawlStore`; `IHexCrawlStore` remains the application boundary. The PostgreSQL `expeditions` table stores required context, nullable world reference and world-only knowledge, party state, generated procedure resolutions, the complete executable procedure snapshot, nullable procedure-origin metadata, discriminated runtime state, pause reason, remaining watch time, aggregate version, and timestamps. Ordered runtime history remains in `expedition_events`.
+Production persistence is PostgreSQL through `PostgresHexCrawlStore`. `IHexCrawlStore` remains the application boundary.
 
-Validation uses PostgreSQL for application persistence tests, HTTP integration tests, and container restart smokes. The mapped smoke persists a world, source-map asset, expedition, procedure snapshot/origin, and runtime advancement; then restarts PostgreSQL and the application before reloading the same state and binary asset. A separate mapless smoke persists and reloads a true `NonSpatial` session through PostgreSQL without creating an Overworld. `/ready` must report `postgresql-ready`; process health alone is not sufficient.
+The `expeditions` table stores:
 
-## Explicitly deferred work
+- explicit session context;
+- nullable world reference and world-only knowledge;
+- party state;
+- generated procedure resolutions;
+- required `procedure_json` containing the authoritative `CampaignProcedure`;
+- optional procedure-origin metadata;
+- discriminated runtime state;
+- pause/remaining-watch state;
+- aggregate version and timestamps.
 
-The workbench does not add:
+Ordered runtime history remains in `expedition_events`.
 
-- Rules Core or Characters coupling;
-- edition-specific navigation skill/DC formulas;
-- encounter-table or monster content;
-- semantic terrain-to-mechanics interpretation;
-- Journey Challenge / Complex Hazard state;
-- progressive expedition condition/effect state;
-- richer Block Initiative handoff composition beyond the current versioned encounter-context contract, especially source-backed combatant rosters;
-- typed Rules Core mechanic references for challenge approaches/travel duties;
-- typed custom encounter-cadence parameters or a scheduling DSL;
-- machine vision, OCR, or raster analysis;
-- arbitrary-bearing procedure travel;
-- full multi-hex automatic route unwinding/backtracking;
-- battle maps;
-- real-time multiplayer synchronization;
-- a general campaign calendar/rest clock.
+The current pre-release schema intentionally does not support older development procedure rows. A development database using an earlier procedure schema must be reset rather than upgraded through compatibility scaffolding.
 
-Those systems can consume or extend the existing boundaries later without moving authoritative crawl state into the browser or an integration service. See `docs/design-references.md` for the edition reference hierarchy and the explicit rule that 4e-style Journey Challenges remain an optional layer over, not a replacement for, Travel -> Watch -> Navigation -> Encounter.
+Container/restart validation proves that mapped and mapless sessions reload their exact generic procedure and runtime state after PostgreSQL/application restart.
 
-## Preset materialization and procedure ownership
+## Optimistic concurrency
 
-The procedure selector exposes creation-time presets from `CrawlProcedureCatalog`. A selected `CrawlProcedurePresetDefinition` materializes the executable `CrawlProcedureProfile` stored on the expedition. Customized snapshots may use their own compatibility `Key` and `Name`; those fields no longer have to equal the selected preset identity.
+Every runtime mutation carries an expected aggregate version. Concurrent stale callers receive a conflict rather than silently overwriting newer state.
 
-The selected preset is recorded separately as nullable `ProcedureOriginMetadata`. Reload, resume, procedure helpers, AutomaticRoll verification, and runtime advancement use the persisted procedure snapshot and never require the origin metadata or a live catalog entry. Deleting the metadata or removing the preset therefore leaves existing expeditions unchanged.
+This protection is independent of procedure representation.
+
+## Phase 3 scope boundary
+
+The workbench does not implement the full Procedure Composer, typed participant-activity execution, generalized movement capability composition, environment execution, generalized effects/consequences, survival/resource execution, journey-process execution, expanded encounter runtime, battle maps, or real-time multiplayer synchronization.
+
+Phase 3 may expose the structural generic modules needed to prove those future capabilities. Their presence does not imply current runtime execution support.
+
+See `docs/generic-procedure-architecture.md` and `docs/phase-3-proof-matrix.md` for the authoritative procedure and proof-model details.
