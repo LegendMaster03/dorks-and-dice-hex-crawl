@@ -69,6 +69,17 @@ public sealed class ProcedurePresetIdentityTests
         Assert.NotNull(loaded);
         Assert.Null(loaded!.ProcedureOrigin);
         Assert.Equal(pinned, loaded.CampaignProcedure);
-        Assert.Equal(runtimeBefore, GenericProcedureRuntime.Bind(loaded.CampaignProcedure));
+        AssertRuntimeEquivalent(runtimeBefore, GenericProcedureRuntime.Bind(loaded.CampaignProcedure));
+    }
+
+    private static void AssertRuntimeEquivalent(GenericProcedureRuntime expected, GenericProcedureRuntime actual)
+    {
+        Assert.Equal(expected.Name, actual.Name);
+        Assert.Equal(expected.Time, actual.Time);
+        Assert.Equal(expected.Movement, actual.Movement);
+        Assert.Equal(expected.HexProgress, actual.HexProgress);
+        Assert.Equal(expected.Navigation, actual.Navigation);
+        Assert.Equal(expected.Encounters, actual.Encounters);
+        Assert.Equal(expected.ResolutionHelpers, actual.ResolutionHelpers);
     }
 }
