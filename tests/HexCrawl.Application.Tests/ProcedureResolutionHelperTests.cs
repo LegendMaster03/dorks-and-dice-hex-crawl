@@ -9,10 +9,11 @@ public sealed class ProcedureResolutionHelperTests
     [Fact]
     public void AlexandrianHelperGeneratesExplicitResolvedInputsWithAutomaticProvenance()
     {
-        var profile = CrawlProcedureCatalog.Resolve("alexandrian-advanced").Materialize();
+        var procedure = CrawlProcedureCatalog.Resolve("alexandrian-advanced").MaterializeGeneric().Procedure;
+        var runtime = GenericProcedureRuntime.Bind(procedure);
         var resolver = new ProcedureResolutionResolver(new SequenceRandomSource(4, 5, 13, 1, 6));
         var result = resolver.Resolve(
-            profile,
+            runtime,
             Context(),
             State(),
             7,
@@ -58,17 +59,36 @@ public sealed class ProcedureResolutionHelperTests
     [Fact]
     public void FailedNavigationUsesDmConfirmedNonZeroVeer()
     {
-        var baseline = CrawlProcedureCatalog.Resolve("alexandrian-advanced").Materialize();
-        var profile = baseline with
+        var baseline = CrawlProcedureCatalog.Resolve("alexandrian-advanced").MaterializeGeneric().Procedure;
+        var modules = baseline.Modules.Select(module =>
         {
-            EncounterCadence = EncounterCheckCadence.None,
-            ResolutionHelpers = new ProcedureResolutionHelperProfile(
-                Navigation: baseline.ResolutionHelpers!.Navigation)
-        };
+            if (module.Module.Key == GenericProcedureCatalog.EncounterCadenceModule)
+            {
+                return module with
+                {
+                    Parameters = new Dictionary<string, string>(module.Parameters, StringComparer.Ordinal)
+                    {
+                        ["cadence"] = EncounterCheckCadence.None.ToString()
+                    }
+                };
+            }
+            if (module.Module.Key == GenericProcedureCatalog.ResolutionHelpersModule)
+            {
+                var parameters = new Dictionary<string, string>(module.Parameters, StringComparer.Ordinal)
+                {
+                    ["travel.enabled"] = "false",
+                    ["encounter.enabled"] = "false",
+                    ["navigation.enabled"] = "true"
+                };
+                return module with { Parameters = parameters };
+            }
+            return module;
+        }).ToArray();
+        var runtime = GenericProcedureRuntime.Bind(baseline with { Modules = modules });
         var resolver = new ProcedureResolutionResolver(new SequenceRandomSource(5));
 
         var result = resolver.Resolve(
-            profile,
+            runtime,
             Context(),
             State(),
             3,
