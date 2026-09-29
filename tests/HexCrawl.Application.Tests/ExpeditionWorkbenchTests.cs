@@ -118,7 +118,7 @@ public sealed class ExpeditionWorkbenchTests
             "alice",
             new StartExpeditionWorkbenchCommand(
                 "Shared cadence state",
-                "simple-fixed-distance",
+                "alexandrian-advanced",
                 "exploration-map",
                 new HexCoordinate(0, 0)));
         var runtime = GenericProcedureRuntime.Bind(expedition.CampaignProcedure);
@@ -198,7 +198,7 @@ public sealed class ExpeditionWorkbenchTests
             "alice",
             new StartExpeditionWorkbenchCommand(
                 "DM reveal control",
-                "simple-fixed-distance",
+                "alexandrian-advanced",
                 "dm-controlled",
                 new HexCoordinate(0, 0)));
 
@@ -206,10 +206,14 @@ public sealed class ExpeditionWorkbenchTests
         {
             ExpectedVersion = expedition.Version,
             IntendedDirection = 0,
-            EffectiveDistance = 1,
+            ExpectedDistance = 1,
+            ActualDistance = 1,
+            NavigationOutcome = NavigationCheckOutcome.Succeeded,
             EncounterOutcome = EncounterOutcomeKind.KeyedLocationDiscovery,
             EncounterHour = 0,
             LocationId = location.Id,
+            TravelResolutionSource = ResolutionSource.ManualRoll,
+            NavigationResolutionSource = ResolutionSource.ManualRoll,
             EncounterResolutionSource = ResolutionSource.ManualRoll
         });
 
