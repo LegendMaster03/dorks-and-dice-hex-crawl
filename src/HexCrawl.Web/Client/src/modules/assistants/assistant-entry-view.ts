@@ -4,7 +4,7 @@ import type { DistanceUnitKind } from "../worlds/world-form";
 import type { ExpeditionAssistant } from "../../tool-route";
 import type {
     ExpeditionSummary,
-    RuntimeProfile,
+    ProcedurePreset,
     StartStandaloneCrawlSessionInput
 } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
@@ -48,7 +48,7 @@ export async function renderAssistantEntry(
                         <label>Session name <input name="name" required autocomplete="off"></label>
                         <label>Procedure preset <select name="procedure"></select></label>
                         <p class="hc-hint" data-procedure-summary></p>
-                        <details class="hc-optional-reference"><summary>Procedure mechanics</summary><ul data-procedure-mechanics></ul></details>
+                        <details class="hc-optional-reference"><summary>Materialized procedure</summary><ul data-procedure-mechanics></ul></details>
                         ${assistant === "travel" ? `
                             <label>Bookkeeping mode
                                 <select name="mode">
@@ -106,9 +106,9 @@ export async function renderAssistantEntry(
     const submit = required<HTMLButtonElement>(form, "[data-submit]");
     input(form, "name").value = defaultSessionName(assistant);
 
-    const [sessions, profiles] = await Promise.all([
+    const [sessions, presets] = await Promise.all([
         api.listExpeditions(),
-        api.getRuntimeProfiles()
+        api.getProcedurePresets()
     ]);
     if (disposed) return () => {};
 
@@ -116,8 +116,8 @@ export async function renderAssistantEntry(
     renderSessions(list, compatible, assistant, navigate);
     count.textContent = compatible.length === 1 ? "1 compatible session" : `${compatible.length} compatible sessions`;
 
-    for (const profile of profiles) procedure.append(option(profile.key, profile.name));
-    chooseDefaultProcedure(procedure, profiles, assistant);
+    for (const preset of presets) procedure.append(option(preset.presetKey, preset.displayName));
+    chooseDefaultProcedure(procedure, presets, assistant);
 
     const mode = form.querySelector<HTMLSelectElement>('select[name="mode"]');
     const unit = select(form, "unit");
@@ -146,12 +146,12 @@ export async function renderAssistantEntry(
     };
 
     const syncProcedure = (): void => {
-        const profile = profiles.find(candidate => candidate.key === procedure.value);
-        required<HTMLElement>(form, "[data-procedure-summary]").textContent = profile
-            ? procedureProfileSummary(profile)
+        const preset = presets.find(candidate => candidate.presetKey === procedure.value);
+        required<HTMLElement>(form, "[data-procedure-summary]").textContent = preset
+            ? `${preset.description} · ${procedureProfileSummary(preset.procedure)}`
             : "";
         const mechanics = required<HTMLElement>(form, "[data-procedure-mechanics]");
-        if (profile) renderProcedureMechanicList(mechanics, profile);
+        if (preset) renderProcedureMechanicList(mechanics, preset.procedure);
         else mechanics.replaceChildren();
     };
 
@@ -283,12 +283,11 @@ function distanceUnit(kind: DistanceUnitKind, form: HTMLFormElement) {
 
 function chooseDefaultProcedure(
     selectElement: HTMLSelectElement,
-    profiles: RuntimeProfile[],
+    presets: ProcedurePreset[],
     assistant: ExpeditionAssistant): void {
     const preferred = assistant === "travel" ? "simple-fixed-distance" : "alexandrian-advanced";
-    if (profiles.some(profile => profile.key === preferred)) selectElement.value = preferred;
+    if (presets.some(preset => preset.presetKey === preferred)) selectElement.value = preferred;
 }
-
 
 function title(assistant: ExpeditionAssistant): string {
     if (assistant === "travel") return "Travel / Watch Assistant";
@@ -306,12 +305,6 @@ function existingHint(assistant: ExpeditionAssistant): string {
     return assistant === "navigation"
         ? "World-bound and abstract-hex sessions are compatible. Non-spatial sessions are excluded because navigation needs direction."
         : "Open a compatible saved session directly; no world-editor navigation is required.";
-}
-
-function createHeading(assistant: ExpeditionAssistant): string {
-    if (assistant === "navigation") return "Create abstract navigation context";
-    if (assistant === "encounters") return "Create encounter procedure session";
-    return "Create watch / travel session";
 }
 
 function createButton(assistant: ExpeditionAssistant): string {
@@ -355,4 +348,3 @@ function positive(element: HTMLInputElement): number {
     if (value <= 0) throw new Error(`${element.name} must be positive.`);
     return value;
 }
-
