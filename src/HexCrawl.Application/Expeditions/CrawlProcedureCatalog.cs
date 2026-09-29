@@ -149,7 +149,7 @@ public static class CrawlProcedureCatalog
                         ("budgetModel", "speed-and-pace"), ("baseBudget", "1"), ("budgetUnit", "hour"), ("limitingScope", "slowest-traveler")),
                     Structural(GenericProcedureCatalog.TerrainMovementModule, GenericProcedureCatalog.TerrainMovementPolicyMechanic,
                         ("adjustmentModel", "maximum-pace"),
-                        ("terrainAdjustments", "arctic=fast;coastal=normal;desert=normal;forest=normal;grassland=fast;hill=normal;mountain=slow;swamp=slow;underdark=normal;urban=normal;waterborne=special"),
+                        ("terrainAdjustments", "arctic=fast-if-appropriately-equipped;coastal=normal;desert=normal;forest=normal;grassland=fast;hill=normal;mountain=slow;swamp=slow;underdark=normal;urban=normal;waterborne=special"),
                         ("routeAdjustmentModel", "good-road-improves-one-step"),
                         ("weatherAdjustmentModel", "environment-specific")),
                     Structural(GenericProcedureCatalog.PartyActivitiesModule, GenericProcedureCatalog.ParticipantActivityPolicyMechanic,
