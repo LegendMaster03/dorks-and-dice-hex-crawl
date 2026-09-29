@@ -8,13 +8,15 @@ export function watchPhase(runtime: ExpeditionDetail): WatchPhase {
 }
 
 export function encounterCheckDue(runtime: ExpeditionDetail): boolean {
-    if (runtime.expedition.activeWatchNumber !== null) return false;
+    if (runtime.expedition.activeWatchNumber !== null || runtime.procedure.runtime === null) return false;
     return encounterCheckDueForWatch(runtime, runtime.expedition.completedWatches + 1);
 }
 
 export function navigationResolutionDue(runtime: ExpeditionDetail, suppressesNavigationCheck: boolean, deliberateDoubleBack: boolean): boolean {
+    const procedureRuntime = runtime.procedure.runtime;
     if (runtime.expedition.activeWatchNumber !== null
-        || !runtime.profile.usesNavigationChecks
+        || procedureRuntime === null
+        || !procedureRuntime.usesNavigationChecks
         || suppressesNavigationCheck
         || deliberateDoubleBack) {
         return false;
@@ -27,6 +29,7 @@ export function navigationResolutionDue(runtime: ExpeditionDetail, suppressesNav
 }
 
 export function watchActionLabel(runtime: ExpeditionDetail): string {
+    if (runtime.procedure.runtime === null) return "Procedure not executable";
     if (runtime.expedition.activeWatchNumber === null) return "Run watch";
     return `Resume watch ${runtime.expedition.activeWatchNumber}`;
 }
@@ -46,17 +49,17 @@ export function pauseInstruction(runtime: ExpeditionDetail): string | null {
     }
 }
 
-
 export function assistantEncounterCheckDue(runtime: ExpeditionDetail): boolean {
+    if (runtime.procedure.runtime === null) return false;
     if (runtime.expedition.isSpatial && runtime.expedition.activeWatchNumber !== null) return false;
     const watchNumber = runtime.expedition.activeWatchNumber ?? runtime.expedition.completedWatches + 1;
     return encounterCheckDueForWatch(runtime, watchNumber);
 }
 
 function encounterCheckDueForWatch(runtime: ExpeditionDetail, watchNumber: number): boolean {
-    const cadence = runtime.profile.encounterCadence;
-    if (cadence === "None") return false;
-    if (cadence === "PerWatch" || cadence === "Custom") {
+    const cadence = runtime.procedure.runtime?.encounterCadence;
+    if (!cadence || cadence === "None") return false;
+    if (cadence === "PerWatch") {
         return !runtime.history.some(event =>
             event.kind === "EncounterCheckPerformed"
             && event.watchNumber === watchNumber);
