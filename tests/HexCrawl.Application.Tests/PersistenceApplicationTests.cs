@@ -320,11 +320,11 @@ public sealed class PersistenceApplicationTests
 
         var restarted = await database.ServiceAsync();
         var loaded = await restarted.GetExpeditionAsync(expedition.State.Id, "alice");
-        var loadedProcedure = Assert.IsType<CrawlProcedureProfile>(loaded.Procedure);
+        var loadedRuntime = GenericProcedureRuntime.Bind(loaded.CampaignProcedure);
         Assert.Equal(new HexCoordinate(2, -1), loaded.State.CurrentHex);
-        Assert.Equal("alexandrian-advanced", loadedProcedure.Key);
-        Assert.True(loadedProcedure.UsesPersistentVeer);
-        Assert.Equal(expedition.Procedure, loadedProcedure);
+        Assert.Equal("alexandrian-advanced", loaded.CampaignProcedure.Key);
+        Assert.True(loadedRuntime.Navigation.UsesPersistentVeer);
+        Assert.Equal(expedition.CampaignProcedure, loaded.CampaignProcedure);
     }
 
     [Fact]
@@ -428,11 +428,10 @@ public sealed class PersistenceApplicationTests
         var engine = new CrawlRuntimeEngine();
         var plan = new WatchTravelPlan(new HexDirection(0), TravelModeSelection.Normal, NavigationAidSelection.None, false, true);
         var inputs = new WatchAdvanceInputs(TravelDistanceResolver.Fixed(new DistanceMeasure(3, DistanceUnit.Miles)));
-        var loadedProcedure = Assert.IsType<CrawlProcedureProfile>(loaded.Procedure);
 
         var context = ExpeditionWorldComposition.RuntimeContext(loadedWorld.World);
-        var first = engine.Advance(context, loadedProcedure, loaded.State, plan, inputs);
-        var second = engine.Advance(context, loadedProcedure, loaded.State, plan, inputs);
+        var first = engine.Advance(context, loaded.CampaignProcedure, loaded.State, plan, inputs);
+        var second = engine.Advance(context, loaded.CampaignProcedure, loaded.State, plan, inputs);
         var sharedEmptyHistory = Array.Empty<CrawlRuntimeEvent>();
         Assert.Equal(
             first.Expedition with { History = sharedEmptyHistory },

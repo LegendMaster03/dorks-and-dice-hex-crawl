@@ -102,7 +102,6 @@ public sealed class NativeGenericProcedureExecutionTests
                 "exploration-map",
                 new HexCoordinate(0, 0)));
 
-        Assert.NotNull(started.CampaignProcedure);
         var advanced = await workbench.AdvanceAsync(
             started.Id,
             Owner,
@@ -111,7 +110,7 @@ public sealed class NativeGenericProcedureExecutionTests
         var state = Assert.IsType<ExpeditionState>(advanced.Runtime);
         Assert.Equal(1, state.CompletedWatches);
         Assert.Equal(TimeSpan.FromHours(4), state.ElapsedTravelTime);
-        Assert.NotNull(advanced.CampaignProcedure);
+        Assert.Equal(started.CampaignProcedure, advanced.CampaignProcedure);
     }
 
     [Fact]
@@ -127,7 +126,6 @@ public sealed class NativeGenericProcedureExecutionTests
                 "simple-fixed-distance",
                 new AbstractHexCrawlSessionContext("Abstract region", HexOrientation.PointyTop, Context()),
                 new HexCoordinate(0, 0)));
-        Assert.NotNull(started.CampaignProcedure);
 
         var restartedStore = await StoreAsync(database.ConnectionString);
         var restartedCore = new HexCrawlService(restartedStore);
@@ -145,24 +143,7 @@ public sealed class NativeGenericProcedureExecutionTests
         var state = Assert.IsType<ExpeditionState>(advanced.Runtime);
         Assert.Equal(1, state.CompletedWatches);
         Assert.Equal(TimeSpan.FromHours(4), state.ElapsedTravelTime);
-        var expectedProcedure = Assert.IsType<CampaignProcedure>(started.CampaignProcedure);
-        var actualProcedure = Assert.IsType<CampaignProcedure>(advanced.CampaignProcedure);
-        Assert.Equal(expectedProcedure.ProcedureId, actualProcedure.ProcedureId);
-        Assert.Equal(expectedProcedure.Revision, actualProcedure.Revision);
-        Assert.Equal(expectedProcedure.Key, actualProcedure.Key);
-        Assert.Equal(expectedProcedure.Name, actualProcedure.Name);
-        Assert.Equal(
-            expectedProcedure.Modules.Select(module =>
-                (module.Module.Key, module.Mechanic.Key, module.Mechanic.Version, module.Mechanic.ExecutionHandler)),
-            actualProcedure.Modules.Select(module =>
-                (module.Module.Key, module.Mechanic.Key, module.Mechanic.Version, module.Mechanic.ExecutionHandler)));
-        foreach (var expectedModule in expectedProcedure.Modules)
-        {
-            var actualModule = actualProcedure.Modules.Single(module => module.Module.Key == expectedModule.Module.Key);
-            Assert.Equal(
-                expectedModule.Parameters.OrderBy(pair => pair.Key, StringComparer.Ordinal),
-                actualModule.Parameters.OrderBy(pair => pair.Key, StringComparer.Ordinal));
-        }
+        Assert.Equal(started.CampaignProcedure, advanced.CampaignProcedure);
     }
 
     [Fact]
@@ -194,7 +175,7 @@ public sealed class NativeGenericProcedureExecutionTests
         Assert.Equal(1, state.CompletedWatches);
         Assert.Equal(TimeSpan.FromHours(4), state.ElapsedTime);
         Assert.Null(state.ActiveWatch);
-        Assert.NotNull(advanced.CampaignProcedure);
+        Assert.Equal(started.CampaignProcedure, advanced.CampaignProcedure);
     }
 
     [Fact]
@@ -226,67 +207,8 @@ public sealed class NativeGenericProcedureExecutionTests
             FixedAdvance(persisted.Version, 1));
 
         Assert.Equal("removed-or-renamed-preset", advanced.ProcedureOrigin?.PresetKey);
+        Assert.Equal(started.CampaignProcedure, advanced.CampaignProcedure);
         Assert.Equal(1, Assert.IsType<ExpeditionState>(advanced.Runtime).CompletedWatches);
-    }
-
-    [Fact]
-    public async Task GenericSnapshotIsRuntimeAuthorityEvenIfCompatibilityProfileDiffersInMemory()
-    {
-        await using var database = await PostgresTestDatabase.CreateAsync();
-        var store = await StoreAsync(database.ConnectionString);
-        var sessions = new CrawlSessionService(store);
-        var started = await sessions.StartAsync(
-            Owner,
-            new StartStandaloneCrawlSessionCommand(
-                "Generic authority",
-                "simple-fixed-distance",
-                new NonSpatialCrawlSessionContext("Authority")));
-        var startedProcedure = Assert.IsType<CrawlProcedureProfile>(started.Procedure);
-        var contradictoryCompatibilityData = started with
-        {
-            Procedure = startedProcedure with { WatchLength = TimeSpan.FromHours(99) }
-        };
-
-        var runtime = ExpeditionProcedureExecutionResolver.Resolve(contradictoryCompatibilityData);
-        var contradictoryProcedure = Assert.IsType<CrawlProcedureProfile>(contradictoryCompatibilityData.Procedure);
-
-        Assert.Equal(TimeSpan.FromHours(4), runtime.Time.IntervalDuration);
-        Assert.Equal(TimeSpan.FromHours(99), contradictoryProcedure.WatchLength);
-    }
-
-    [Fact]
-    public async Task HistoricalProfileOnlySessionRemainsExecutableThroughCompatibilityBoundary()
-    {
-        await using var database = await PostgresTestDatabase.CreateAsync();
-        var store = await StoreAsync(database.ConnectionString);
-        var sessions = new CrawlSessionService(store);
-        var started = await sessions.StartAsync(
-            Owner,
-            new StartStandaloneCrawlSessionCommand(
-                "Legacy profile only",
-                "simple-fixed-distance",
-                new NonSpatialCrawlSessionContext("Legacy clock")));
-        var profileOnlySave = await store.SaveExpeditionAsync(
-            started with { CampaignProcedure = null },
-            started.Version);
-        Assert.Equal(SaveOutcome.Saved, profileOnlySave.Outcome);
-        var profileOnly = Assert.IsType<StoredExpedition>(profileOnlySave.Value);
-        Assert.Null(profileOnly.CampaignProcedure);
-
-        var core = new HexCrawlService(store);
-        var assistants = new ExpeditionAssistantService(store, core, new CrawlSessionContextResolver(core));
-        var advanced = await assistants.RecordNonSpatialWatchAsync(
-            profileOnly.Id,
-            Owner,
-            new NonSpatialWatchAssistantCommand
-            {
-                ExpectedVersion = profileOnly.Version,
-                ElapsedHours = 4,
-                ResolutionSource = ResolutionSource.ProcedureDefault
-            });
-
-        Assert.Null(advanced.CampaignProcedure);
-        Assert.Equal(1, Assert.IsType<NonSpatialSessionState>(advanced.Runtime).CompletedWatches);
     }
 
     private static async Task<PostgresHexCrawlStore> StoreAsync(string connectionString)
