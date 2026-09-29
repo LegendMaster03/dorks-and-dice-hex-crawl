@@ -6,8 +6,7 @@ public enum EncounterCheckCadence
 {
     None,
     PerWatch,
-    PerDay,
-    Custom
+    PerDay
 }
 
 public enum TravelResolutionMode
