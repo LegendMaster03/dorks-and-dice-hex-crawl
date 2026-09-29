@@ -85,7 +85,7 @@ Explicit `ProcedureInputRequirement` data is copied into the pinned mechanic sna
 - `routeAdjustmentModel`;
 - `weatherAdjustmentModel`.
 
-Numeric models remain valid by storing numeric values as the map values. Symbolic models can instead use values such as `fast`, `normal`, `slow`, or `special`. Phase 3 records this relationship only; generalized environment lookup and execution remain deferred to the later environment phase.
+Numeric models remain valid by storing numeric values as the map values. Symbolic models can instead use values such as `fast`, `normal`, `slow`, `special`, or a generic conditional state such as `fast-if-appropriately-equipped`. Phase 3 records this relationship only; generalized environment lookup and execution remain deferred to the later environment phase.
 
 ## Native-module proof matrix
 
@@ -141,25 +141,25 @@ The preset represents an hourly interval plus pace/speed budgeting, terrain-limi
 SRD 5.2 / the official 2024 travel material models predominant terrain as determining the maximum travel pace. The preset therefore uses:
 
 - `adjustmentModel = maximum-pace`;
-- terrain tags mapped directly to `fast`, `normal`, `slow`, or `special` states;
+- terrain tags mapped directly to symbolic maximum-pace states rather than numeric terrain costs;
 - good roads represented as improving the maximum pace by one step;
 - environment-specific weather behavior left structural.
 
 The represented terrain mapping is:
 
-- Arctic → Fast;
-- Coastal → Normal;
-- Desert → Normal;
-- Forest → Normal;
-- Grassland → Fast;
-- Hill → Normal;
-- Mountain → Slow;
-- Swamp → Slow;
-- Underdark → Normal;
-- Urban → Normal;
-- Waterborne → Special.
+- Arctic → `fast-if-appropriately-equipped`; the official rule requires appropriate equipment such as skis to maintain Fast pace;
+- Coastal → `normal`;
+- Desert → `normal`;
+- Forest → `normal`;
+- Grassland → `fast`;
+- Hill → `normal`;
+- Mountain → `slow`;
+- Swamp → `slow`;
+- Underdark → `normal`;
+- Urban → `normal`;
+- Waterborne → `special`.
 
-This is deliberately **not** encoded as `fast=1;normal=2;slow=3`, because pace states are outputs of the terrain relationship, not terrain tags or numeric terrain costs.
+This is deliberately **not** encoded as `fast=1;normal=2;slow=3`, because pace states are outputs of the terrain relationship, not terrain tags or numeric terrain costs. The conditional Arctic state is also deliberately not collapsed to unconditional `fast`; Phase 9 environment execution can later interpret generic conditional states without changing this materialized proof contract.
 
 Evidence basis: official D&D Free Rules 2024 / SRD 5.2 travel material, including `https://www.dndbeyond.com/sources/dnd/br-2024/dms-toolbox`.
 
@@ -232,19 +232,23 @@ The current web/client workbench contract still requires a legacy `RuntimeProfil
 - a non-projectable preset is rejected with HTTP `409 Conflict` before an expedition row is created;
 - projectable preset creation continues unchanged;
 - if a generic-only expedition already exists because it was created through the supported application/persistence path, the legacy detail `GET /api/expeditions/{id}` returns an explicit `409 Conflict` explaining that the generic `CampaignProcedure` can not be represented by the legacy workbench contract;
-- collection summaries remain safe because they do not require `RuntimeProfileContract` conversion.
+- every legacy mutation that returns `ExpeditionWorkbenchContract` first loads the expedition and performs the same compatibility check **before invoking any mutating service**; this covers advance, discover, party update, travel/watch assistants, navigation assistant, and encounter assistant;
+- rejected generic-only mutations therefore leave the persisted version, party, knowledge/runtime state, history, generated resolutions, and update timestamp unchanged;
+- collection summaries remain safe and list generic-only expeditions because they do not require `RuntimeProfileContract` conversion.
 
-This guarantees that the HTTP creation request can not successfully persist a generic-only expedition and then fail while serializing a nonexistent compatibility profile.
+This guarantees that neither creation nor a state-changing legacy workbench request can successfully persist generic-only state and then fail while serializing a nonexistent compatibility profile.
 
 ## Re-audit guarantees
 
 The Phase 3 automated proof suite re-checks the following after the contract refinements:
 
 - The One Ring has no fabricated interval/core requirement and no compatibility profile;
-- D&D 2024 terrain tags map honestly to maximum-pace states;
+- D&D 2024 terrain tags map honestly to maximum-pace states, including the Arctic equipment condition;
 - selected structural mechanics declare only inputs their behavior actually consumes;
 - broad external-source allowances do not mask false dependencies;
 - unresolved multi-source inputs expose their full permitted source set;
+- Phase 3 module shells do not introduce broad false `Reads`;
+- legacy workbench mutations reject generic-only expeditions before persistence;
 - no named-system identity appears in generic module keys, mechanic keys, handler identities, or implementation type names;
 - non-projectable snapshots round-trip PostgreSQL without fabricated profiles;
 - projectable snapshots enforce generic/compatibility consistency;
