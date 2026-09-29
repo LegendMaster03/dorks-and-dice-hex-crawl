@@ -122,24 +122,87 @@ public sealed class Phase3ProofMatrixTests
     }
 
     [Fact]
-    public void OneRingProofHasNoFabricatedPhase2CoreOrCompatibilityProfile()
+    public void OneRingProofHasNoFabricatedIntervalCoreOrCompatibilityProfile()
     {
         var materialized = CrawlProcedureCatalog.Resolve(CrawlProcedureCatalog.OneRing2ePresetKey)
             .MaterializeGeneric();
+        var procedure = materialized.Procedure;
 
         Assert.Null(materialized.CompatibilityProfile);
-        Assert.DoesNotContain(materialized.Procedure.Modules, module =>
+        Assert.DoesNotContain(procedure.Modules, module =>
             module.Mechanic.ExecutionHandler.StartsWith("crawl-profile.", StringComparison.Ordinal));
-        Assert.Contains(materialized.Procedure.Modules, module =>
-            module.Module.Key == GenericProcedureCatalog.JourneyProcessModule);
-        Assert.Contains(materialized.Procedure.Modules, module =>
-            module.Module.Key == GenericProcedureCatalog.JourneyEventsModule);
+        Assert.DoesNotContain(procedure.Modules, module =>
+            module.Module.Key == GenericProcedureCatalog.TimeIntervalModule);
 
-        var report = materialized.Procedure.EvaluateDependencies();
+        var movement = procedure.Modules.Single(module =>
+            module.Module.Key == GenericProcedureCatalog.MovementBudgetModule);
+        Assert.Equal(GenericProcedureCatalog.JourneyProgressBudgetMechanic, movement.Mechanic.Key);
+        Assert.DoesNotContain("time.interval-duration", movement.Mechanic.InputContract);
+
+        var activities = procedure.Modules.Single(module =>
+            module.Module.Key == GenericProcedureCatalog.PartyActivitiesModule);
+        Assert.Equal(GenericProcedureCatalog.JourneyRoleActivityPolicyMechanic, activities.Mechanic.Key);
+        Assert.DoesNotContain("time.interval-duration", activities.Mechanic.InputContract);
+        Assert.DoesNotContain("movement.budget", activities.Mechanic.InputContract);
+
+        var process = procedure.Modules.Single(module =>
+            module.Module.Key == GenericProcedureCatalog.JourneyProcessModule);
+        Assert.Contains("participant.activity-state", process.Mechanic.InputContract);
+        Assert.Contains("movement.terrain-adjustment", process.Mechanic.InputContract);
+        Assert.Contains("journey.progress", process.Mechanic.OutputContract);
+
+        var events = procedure.Modules.Single(module =>
+            module.Module.Key == GenericProcedureCatalog.JourneyEventsModule);
+        Assert.Equal(GenericProcedureCatalog.ProgressTriggeredJourneyEventPolicyMechanic, events.Mechanic.Key);
+        Assert.Contains("journey.progress", events.Mechanic.InputContract);
+        Assert.Contains("effects.transient", events.Mechanic.OutputContract);
+
+        var effects = procedure.Modules.Single(module =>
+            module.Module.Key == GenericProcedureCatalog.PersistentEffectsModule);
+        Assert.Equal(["effects.transient"], effects.Mechanic.InputContract);
+        Assert.DoesNotContain("resource.consumed", effects.Mechanic.InputContract);
+
+        var report = procedure.EvaluateDependencies();
         Assert.False(report.HasErrors);
-        Assert.Contains(report.Issues, issue =>
-            issue.Kind == ProcedureDependencyIssueKind.ManualInputRequired
-            && issue.Message.Contains("time.interval-duration", StringComparison.Ordinal));
+        Assert.DoesNotContain(report.Issues, issue =>
+            string.Equals(issue.InputKey, "time.interval-duration", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Dnd2024TerrainMapsTerrainTagsToMaximumPaceStates()
+    {
+        var procedure = CrawlProcedureCatalog.Resolve(CrawlProcedureCatalog.Dnd2024PresetKey)
+            .MaterializeGeneric()
+            .Procedure;
+        var terrain = procedure.Modules.Single(module =>
+            module.Module.Key == GenericProcedureCatalog.TerrainMovementModule);
+
+        Assert.Equal("maximum-pace", terrain.Parameters["adjustmentModel"]);
+        var mapping = terrain.Parameters["terrainAdjustments"];
+        Assert.Contains("arctic=fast", mapping, StringComparison.Ordinal);
+        Assert.Contains("grassland=fast", mapping, StringComparison.Ordinal);
+        Assert.Contains("mountain=slow", mapping, StringComparison.Ordinal);
+        Assert.Contains("swamp=slow", mapping, StringComparison.Ordinal);
+        Assert.Contains("forest=normal", mapping, StringComparison.Ordinal);
+        Assert.Contains("waterborne=special", mapping, StringComparison.Ordinal);
+        Assert.DoesNotContain("fast=1", mapping, StringComparison.Ordinal);
+        Assert.Equal("map<string>", terrain.Module.ConfigurationSchema["terrainAdjustments"].Type);
+        Assert.Equal("map<string>", terrain.Mechanic.ParameterSchema["terrainAdjustments"].Type);
+    }
+
+    [Fact]
+    public void Phase3ModuleShellsDoNotCreateBehaviorReadsOutsideSelectedMechanicContracts()
+    {
+        var phase3Modules = GenericProcedureCatalog.Modules
+            .Where(module => module.PresentationMetadata.TryGetValue("phase", out var phase) && phase == "3")
+            .ToArray();
+
+        Assert.NotEmpty(phase3Modules);
+        Assert.All(phase3Modules, module => Assert.Empty(module.Reads));
+        Assert.All(
+            GenericProcedureCatalog.Mechanics.Where(mechanic =>
+                mechanic.CompatibilityTags.Contains("phase-3", StringComparer.Ordinal)),
+            mechanic => Assert.Empty(mechanic.ExternalInputSources));
     }
 
     [Fact]
@@ -214,13 +277,13 @@ public sealed class Phase3ProofMatrixTests
     }
 
     [Fact]
-    public void MissingRequiredProducerIsAnErrorUnlessSnapshotExplicitlyAllowsAnotherSource()
+    public void MissingRequiredProducerIsAnErrorWhenOnlySelectedModuleSourceIsPermitted()
     {
-        var procedure = CrawlProcedureCatalog.Resolve(CrawlProcedureCatalog.OneRing2ePresetKey)
+        var procedure = CrawlProcedureCatalog.Resolve(CrawlProcedureCatalog.BxPresetKey)
             .MaterializeGeneric()
             .Procedure;
         var constrainedModules = procedure.Modules.Select(module =>
-            module.Module.Key == GenericProcedureCatalog.MovementBudgetModule
+            module.Module.Key == GenericProcedureCatalog.NavigationOutcomeModule
                 ? module with
                 {
                     Mechanic = module.Mechanic with
@@ -228,7 +291,7 @@ public sealed class Phase3ProofMatrixTests
                         InputRequirements =
                         [
                             new ProcedureInputRequirement(
-                                "time.interval-duration",
+                                "navigation.check-result",
                                 ProcedureInputSource.SelectedModule)
                         ]
                     }
@@ -240,22 +303,35 @@ public sealed class Phase3ProofMatrixTests
         Assert.True(report.HasErrors);
         Assert.Contains(report.Issues, issue =>
             issue.Kind == ProcedureDependencyIssueKind.MissingRequiredProducer
-            && issue.ModuleKey == GenericProcedureCatalog.MovementBudgetModule);
+            && issue.ModuleKey == GenericProcedureCatalog.NavigationOutcomeModule
+            && issue.InputKey == "navigation.check-result");
         Assert.Throws<InvalidOperationException>(constrained.Validate);
     }
 
     [Fact]
-    public void ExplicitManualInputIsDiagnosticRatherThanDependencyError()
+    public void UnresolvedInputDiagnosticExposesEveryPermittedResolutionSource()
     {
-        var procedure = CrawlProcedureCatalog.Resolve(CrawlProcedureCatalog.OneRing2ePresetKey)
+        var procedure = CrawlProcedureCatalog.Resolve(CrawlProcedureCatalog.BxPresetKey)
             .MaterializeGeneric()
             .Procedure;
 
         var report = procedure.EvaluateDependencies();
+        var issue = Assert.Single(report.Issues, value =>
+            value.Kind == ProcedureDependencyIssueKind.UnresolvedInput
+            && value.InputKey == "navigation.check-result");
 
         Assert.False(report.HasErrors);
-        Assert.Contains(report.Issues, issue =>
-            issue.Kind == ProcedureDependencyIssueKind.ManualInputRequired);
+        Assert.Equal(
+            ProcedureInputSource.SelectedModule
+            | ProcedureInputSource.Dm
+            | ProcedureInputSource.OptionalProvider
+            | ProcedureInputSource.ExternalState,
+            issue.AllowedInputSources);
+        Assert.Contains("selected-module producer", issue.Message, StringComparison.Ordinal);
+        Assert.Contains("DM/manual input", issue.Message, StringComparison.Ordinal);
+        Assert.Contains("optional provider", issue.Message, StringComparison.Ordinal);
+        Assert.Contains("external/runtime state", issue.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("must be resolved by DM", issue.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
