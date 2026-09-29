@@ -9,7 +9,7 @@ namespace HexCrawl.Application.Tests;
 public sealed class PostgresSchemaTests
 {
     [Fact]
-    public async Task SchemaUsesNativePostgresTypesExpectedForeignKeysAndNullableCompatibilityProfile()
+    public async Task SchemaUsesNativePostgresTypesAndSingleRequiredProcedureSnapshot()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = new PostgresHexCrawlStore(database.ConnectionString);
@@ -41,16 +41,16 @@ public sealed class PostgresSchemaTests
         Assert.Equal("timestamp with time zone", columns[("overworlds", "created_at")].Type);
         Assert.Equal("uuid", columns[("expeditions", "overworld_id")].Type);
         Assert.Equal("jsonb", columns[("expeditions", "procedure_json")].Type);
-        Assert.True(columns[("expeditions", "procedure_json")].Nullable);
+        Assert.False(columns[("expeditions", "procedure_json")].Nullable);
         Assert.Equal("jsonb", columns[("expeditions", "procedure_origin_json")].Type);
-        Assert.Equal("jsonb", columns[("expeditions", "campaign_procedure_json")].Type);
+        Assert.DoesNotContain(("expeditions", "campaign_procedure_json"), columns.Keys);
         Assert.Equal("bigint", columns[("expedition_events", "sequence")].Type);
         Assert.Equal("jsonb", columns[("expedition_events", "event_json")].Type);
 
         await using var versionCommand = connection.CreateCommand();
         versionCommand.CommandText = "SELECT MAX(version) FROM hex_crawl_schema_migrations;";
         Assert.Equal(PostgresSchemaMigrator.CurrentVersion, Convert.ToInt32(await versionCommand.ExecuteScalarAsync()));
-        Assert.Equal(3, PostgresSchemaMigrator.CurrentVersion);
+        Assert.Equal(4, PostgresSchemaMigrator.CurrentVersion);
     }
 
     [Fact]
