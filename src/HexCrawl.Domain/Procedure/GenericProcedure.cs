@@ -282,6 +282,7 @@ public enum ProcedureDependencyIssueKind
 {
     MissingRequiredModule,
     MissingRequiredProducer,
+    UnresolvedInput,
     ManualInputRequired,
     OptionalProviderInputRequired,
     ExternalInputRequired,
@@ -394,32 +395,14 @@ public sealed record CampaignProcedure
                 }
 
                 var allowedSources = selected.Mechanic.AllowedSourcesFor(input);
-                if ((allowedSources & ProcedureInputSource.Dm) != 0)
+                var fallbackSources = allowedSources
+                    & (ProcedureInputSource.Dm | ProcedureInputSource.OptionalProvider | ProcedureInputSource.ExternalState);
+                if (fallbackSources != ProcedureInputSource.None)
                 {
                     issues.Add(new ProcedureDependencyIssue(
-                        ProcedureDependencyIssueKind.ManualInputRequired,
+                        ProcedureDependencyIssueKind.UnresolvedInput,
                         selected.Module.Key,
-                        $"Module '{selected.Module.Key}' input '{input}' has no selected producer and must be resolved by DM/manual input.",
-                        input,
-                        allowedSources));
-                    continue;
-                }
-                if ((allowedSources & ProcedureInputSource.ExternalState) != 0)
-                {
-                    issues.Add(new ProcedureDependencyIssue(
-                        ProcedureDependencyIssueKind.ExternalInputRequired,
-                        selected.Module.Key,
-                        $"Module '{selected.Module.Key}' input '{input}' has no selected producer and must be resolved from campaign/runtime state.",
-                        input,
-                        allowedSources));
-                    continue;
-                }
-                if ((allowedSources & ProcedureInputSource.OptionalProvider) != 0)
-                {
-                    issues.Add(new ProcedureDependencyIssue(
-                        ProcedureDependencyIssueKind.OptionalProviderInputRequired,
-                        selected.Module.Key,
-                        $"Module '{selected.Module.Key}' input '{input}' has no selected producer and must be resolved by an optional provider.",
+                        $"Module '{selected.Module.Key}' input '{input}' has no selected producer. Permitted resolution sources: {DescribeInputSources(allowedSources)}.",
                         input,
                         allowedSources));
                     continue;
@@ -428,7 +411,7 @@ public sealed record CampaignProcedure
                 issues.Add(new ProcedureDependencyIssue(
                     ProcedureDependencyIssueKind.MissingRequiredProducer,
                     selected.Module.Key,
-                    $"Module '{selected.Module.Key}' requires input '{input}', but no selected module produces it and no manual, optional-provider, or external source is allowed.",
+                    $"Module '{selected.Module.Key}' requires input '{input}', but no selected producer or permitted fallback source is available.",
                     input,
                     allowedSources));
             }
@@ -450,6 +433,28 @@ public sealed record CampaignProcedure
             }
         }
         return new ProcedureDependencyReport(issues);
+    }
+
+    private static string DescribeInputSources(ProcedureInputSource sources)
+    {
+        var labels = new List<string>();
+        if ((sources & ProcedureInputSource.SelectedModule) != 0)
+        {
+            labels.Add("selected-module producer");
+        }
+        if ((sources & ProcedureInputSource.Dm) != 0)
+        {
+            labels.Add("DM/manual input");
+        }
+        if ((sources & ProcedureInputSource.OptionalProvider) != 0)
+        {
+            labels.Add("optional provider");
+        }
+        if ((sources & ProcedureInputSource.ExternalState) != 0)
+        {
+            labels.Add("external/runtime state");
+        }
+        return labels.Count == 0 ? "none" : string.Join(", ", labels);
     }
 
     private static bool IsError(ProcedureDependencyIssue issue) => issue.Kind is
