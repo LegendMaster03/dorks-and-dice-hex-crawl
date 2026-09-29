@@ -115,7 +115,7 @@ export type Overworld = {
 
 export type DemoWorld = Overworld;
 
-export type EncounterCadence = "None" | "PerWatch" | "PerDay" | "Custom";
+export type EncounterCadence = "None" | "PerWatch" | "PerDay";
 export type TravelResolutionMode = "ContinuousDistance" | "HexSteps";
 export type ActualDistanceResolutionMode = "Fixed" | "VariableResolved";
 export type ResolutionSource = "ProcedureDefault" | "AutomaticRoll" | "ManualRoll" | "ExternalSystem" | "DmOverride";
@@ -142,10 +142,8 @@ export type ProcedureResolutionHelpers = {
     } | null;
 };
 
-export type RuntimeProfile = {
-    key: string;
-    name: string;
-    watchHours: number;
+export type ProcedureRuntime = {
+    intervalHours: number;
     travelResolution: TravelResolutionMode;
     actualDistanceResolution: ActualDistanceResolutionMode;
     encounterCadence: EncounterCadence;
@@ -160,6 +158,38 @@ export type RuntimeProfile = {
     backExitProgressFactor: number;
     directionChangeProgressCostFactor: number;
     resolutionHelpers: ProcedureResolutionHelpers | null;
+};
+
+export type ProcedureAutomationLevel = "Manual" | "Assisted" | "Automatic";
+
+export type ProcedureModule = {
+    moduleKey: string;
+    moduleName: string;
+    mechanicKey: string;
+    mechanicVersion: number;
+    executionHandler: string;
+    automationLevel: ProcedureAutomationLevel;
+    parameters: Record<string, string>;
+};
+
+export type CampaignProcedure = {
+    procedureId: string;
+    revision: number;
+    key: string;
+    name: string;
+    isExecutable: boolean;
+    runtime: ProcedureRuntime | null;
+    modules: ProcedureModule[];
+};
+
+export type ProcedurePreset = {
+    presetKey: string;
+    displayName: string;
+    description: string;
+    presetRevision: number;
+    procedure: CampaignProcedure;
+    attribution: string | null;
+    disclaimer: string | null;
 };
 
 export type PresentationProfile = {
@@ -345,7 +375,7 @@ export type ExpeditionDetail = {
     version: number;
     createdAt: string;
     updatedAt: string;
-    profile: RuntimeProfile;
+    procedure: CampaignProcedure;
     presentation: PresentationProfile | null;
     pauseReason: RuntimePauseReason | null;
     remainingWatchHours: number;
@@ -363,7 +393,6 @@ export type StartExpeditionInput = {
     procedureKey: string;
     presentationKey: string;
     startHex: HexCoordinate;
-    procedureSnapshot?: RuntimeProfile;
 };
 
 export type StandaloneCrawlContextInput =
@@ -384,7 +413,6 @@ export type StartStandaloneCrawlSessionInput = {
     procedureKey: string;
     context: StandaloneCrawlContextInput;
     startHex?: HexCoordinate;
-    procedureSnapshot?: RuntimeProfile;
 };
 
 export type RuntimeAdvanceRequest = {
