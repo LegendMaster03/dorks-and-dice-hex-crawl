@@ -7,10 +7,14 @@ import { procedureMechanicLines } from "../../procedure-profile-view";
 
 export function renderExpeditionStatus(root: HTMLElement, runtime: ExpeditionDetail): void {
     const state = spatialState(runtime);
+    const procedureRuntime = runtime.procedure.runtime;
     const status = required<HTMLElement>(root, "[data-status]");
+    const watchTotal = state.activeWatchTotalHours ?? procedureRuntime?.intervalHours ?? null;
     const watch = state.activeWatchNumber === null
         ? `Ready for watch ${state.completedWatches + 1}`
-        : `Watch ${state.activeWatchNumber} · ${formatHours(state.activeWatchElapsedHours ?? 0)} / ${formatHours(state.activeWatchTotalHours ?? runtime.profile.watchHours)}`;
+        : watchTotal === null
+            ? `Watch ${state.activeWatchNumber}`
+            : `Watch ${state.activeWatchNumber} · ${formatHours(state.activeWatchElapsedHours ?? 0)} / ${formatHours(watchTotal)}`;
     const navigation = state.isLost
         ? `Lost · veer ${state.veerSteps > 0 ? "+" : ""}${state.veerSteps} (${state.veerDegrees}°)`
         : "Oriented";
@@ -26,11 +30,13 @@ export function renderExpeditionStatus(root: HTMLElement, runtime: ExpeditionDet
         statusCell("Elapsed travel", formatHours(state.elapsedTravelHours)),
         statusCell(
             "State",
-            watchPhase(runtime) === "paused"
-                ? `Paused · ${runtime.pauseReason}`
-                : watchPhase(runtime) === "active"
-                    ? "Watch active"
-                    : "Ready")
+            procedureRuntime === null
+                ? "Structural procedure · execution unavailable"
+                : watchPhase(runtime) === "paused"
+                    ? `Paused · ${runtime.pauseReason}`
+                    : watchPhase(runtime) === "active"
+                        ? "Watch active"
+                        : "Ready")
     ];
     if (state.activePaceKey) {
         cells.push(statusCell("Pace", state.activePaceKey));
@@ -38,7 +44,7 @@ export function renderExpeditionStatus(root: HTMLElement, runtime: ExpeditionDet
     if (state.activeActivities.length > 0) {
         cells.push(statusCell("Travel duties", state.activeActivities.join(", ")));
     }
-    if (runtime.profile.tracksIntraHexProgress) {
+    if (procedureRuntime?.tracksIntraHexProgress) {
         cells.push(statusCell(
             "Intra-hex progress",
             state.exitRequirement
@@ -201,11 +207,11 @@ export function renderExpeditionSnapshots(
 
     const procedure = document.createElement("p");
     procedure.textContent =
-        `${runtime.profile.name} (${runtime.profile.key}) · persisted procedure mechanics`;
+        `${runtime.procedure.name} (${runtime.procedure.key}) · revision ${runtime.procedure.revision} · persisted materialized procedure`;
 
     const mechanics = document.createElement("ul");
     mechanics.className = "hc-procedure-mechanics";
-    for (const line of procedureMechanicLines(runtime.profile)) {
+    for (const line of procedureMechanicLines(runtime.procedure)) {
         const item = document.createElement("li");
         item.textContent = line;
         mechanics.append(item);
@@ -219,11 +225,11 @@ export function renderExpeditionSnapshots(
         presentation.textContent =
             `${runtime.presentation.name} (${runtime.presentation.key}) · grid ${runtime.presentation.playerGrid.toLowerCase()} · terrain ${prettyEnum(runtime.presentation.terrainMode)} · automation ${prettyEnum(runtime.presentation.automationMode)}.`;
         note.textContent =
-            "The procedure mechanics and presentation policy are stored snapshots for this expedition. Catalog changes do not reconstruct active expedition behavior.";
+            "The materialized procedure and presentation policy are stored snapshots for this expedition. Catalog changes do not reconstruct active expedition behavior.";
         host.append(procedure, mechanics, presentation, note);
     } else {
         note.textContent =
-            "The tracker uses the persisted crawl procedure snapshot. Map presentation remains owned by the full map workbench.";
+            "The tracker uses the persisted campaign procedure snapshot. Map presentation remains owned by the full map workbench.";
         host.append(procedure, mechanics, note);
     }
 }
@@ -234,6 +240,7 @@ export function renderNonSpatialTracker(
     navigate: (route: string, replace?: boolean) => void): () => void {
     const state = runtime.expedition;
     if (state.isSpatial) throw new Error("Expected non-spatial crawl session.");
+    const intervalHours = runtime.procedure.runtime?.intervalHours ?? null;
 
     root.innerHTML = `
         <section class="hc-page">
@@ -255,14 +262,16 @@ export function renderNonSpatialTracker(
                     <div class="hc-status-grid hc-sheet-status">
                         <div><strong>Day</strong><span>${state.currentDay}</span></div>
                         <div><strong>Watch</strong><span>${state.activeWatchNumber === null ? `Ready for watch ${state.completedWatches + 1}` : `Watch ${state.activeWatchNumber}`}</span></div>
-                        <div><strong>Watch length</strong><span>${formatHours(state.activeWatchTotalHours ?? runtime.profile.watchHours)}</span></div>
+                        <div><strong>Watch length</strong><span>${state.activeWatchTotalHours !== null ? formatHours(state.activeWatchTotalHours) : intervalHours !== null ? formatHours(intervalHours) : "Not executable"}</span></div>
                         <div><strong>Watch elapsed</strong><span>${formatHours(state.activeWatchElapsedHours ?? 0)}</span></div>
-                        <div><strong>Watch remaining</strong><span>${formatHours(state.activeWatchRemainingHours ?? runtime.profile.watchHours)}</span></div>
+                        <div><strong>Watch remaining</strong><span>${state.activeWatchRemainingHours !== null ? formatHours(state.activeWatchRemainingHours) : intervalHours !== null ? formatHours(intervalHours) : "Not executable"}</span></div>
                         <div><strong>Completed watches</strong><span>${state.completedWatches}</span></div>
                         <div><strong>Total elapsed</strong><span>${formatHours(state.elapsedTravelHours)}</span></div>
                         <div><strong>Context</strong><span>Non-spatial</span></div>
                     </div>
-                    <p class="hc-hint">This running sheet intentionally omits map-only information. Use only the watch/time and encounter tools that apply to your procedure.</p>
+                    <p class="hc-hint">${runtime.procedure.isExecutable
+                        ? "This running sheet intentionally omits map-only information. Use only the watch/time and encounter tools that apply to your procedure."
+                        : "This materialized procedure is structural and is not executable by the current runtime. Its snapshot remains available for reference."}</p>
                     <section class="hc-sheet-ledger" aria-labelledby="hc-nonspatial-watch-log">
                         <div class="hc-sheet-ledger-heading">
                             <h3 id="hc-nonspatial-watch-log">Watch log</h3>
@@ -279,8 +288,8 @@ export function renderNonSpatialTracker(
                     <h2>Optional tools</h2>
                     <p class="hc-muted">Open only the bookkeeping surface you need. The running sheet remains usable without either helper.</p>
                     <div class="hc-button-row">
-                        <button type="button" class="hc-primary-action" data-watch>Watch / time</button>
-                        <button type="button" data-encounters>Encounter cadence</button>
+                        <button type="button" class="hc-primary-action" data-watch ${runtime.procedure.isExecutable ? "" : "disabled"}>Watch / time</button>
+                        <button type="button" data-encounters ${runtime.procedure.isExecutable ? "" : "disabled"}>Encounter cadence</button>
                     </div>
                 </section>
             </div>
@@ -291,10 +300,12 @@ export function renderNonSpatialTracker(
 
     required<HTMLButtonElement>(root, "[data-home]")
         .addEventListener("click", () => navigate("/"));
-    required<HTMLButtonElement>(root, "[data-watch]")
-        .addEventListener("click", () => navigate(`/expeditions/${runtime.id}/travel`));
-    required<HTMLButtonElement>(root, "[data-encounters]")
-        .addEventListener("click", () => navigate(`/expeditions/${runtime.id}/encounters`));
+    if (runtime.procedure.isExecutable) {
+        required<HTMLButtonElement>(root, "[data-watch]")
+            .addEventListener("click", () => navigate(`/expeditions/${runtime.id}/travel`));
+        required<HTMLButtonElement>(root, "[data-encounters]")
+            .addEventListener("click", () => navigate(`/expeditions/${runtime.id}/encounters`));
+    }
     return () => {};
 }
 
