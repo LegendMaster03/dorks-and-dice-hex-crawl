@@ -20,7 +20,7 @@ test("client modules have stable, complete route ownership", async () => {
 
     assert.match(catalog, /homeModule[\s\S]*proceduresModule[\s\S]*worldsModule[\s\S]*expeditionsModule[\s\S]*assistantsModule/);
     assert.match(home, /id:\s*"home"[\s\S]*routeKinds:\s*\["home"\]/);
-    assert.match(procedures, /id:\s*"procedures"[\s\S]*routeKinds:\s*\["procedures",\s*"procedure"\]/);
+    assert.match(procedures, /id:\s*"procedures"[\s\S]*routeKinds:\s*\["procedures",\s*"procedure",\s*"procedure-revision",\s*"procedure-reference"\]/);
     assert.match(worlds, /id:\s*"worlds"[\s\S]*routeKinds:\s*\["worlds",\s*"world",\s*"edit"\]/);
     assert.match(expeditions, /id:\s*"expeditions"[\s\S]*routeKinds:\s*\["expedition",\s*"tracker"\]/);
     assert.match(assistants, /id:\s*"assistants"[\s\S]*routeKinds:\s*\["assistant",\s*"assistant-entry"\]/);
@@ -29,6 +29,8 @@ test("client modules have stable, complete route ownership", async () => {
         "home",
         "procedures",
         "procedure",
+        "procedure-revision",
+        "procedure-reference",
         "worlds",
         "world",
         "edit",
@@ -39,4 +41,16 @@ test("client modules have stable, complete route ownership", async () => {
     ]) {
         assert.match(catalog, new RegExp(`"${kind}"`));
     }
+});
+
+test("procedure module exposes read-only reference navigation for the selected revision", async () => {
+    const procedures = await source("modules/procedures/module.ts");
+    const reference = await source("modules/procedures/procedure-reference-view.ts");
+
+    assert.match(procedures, /View procedure reference/);
+    assert.match(procedures, /button\[data-revision\]:disabled/);
+    assert.match(procedures, /revisions\/\$\{encodeURIComponent\(activeRevision\)\}\/reference/);
+    assert.match(reference, /Print reference/);
+    assert.match(reference, /@media print/);
+    assert.match(reference, /Back to procedure/);
 });
