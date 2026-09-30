@@ -14,15 +14,16 @@ public sealed class TravelRulesModule : IHexCrawlModule
 {
     public HexCrawlModuleManifest Manifest { get; } = new(
         Id: "travel-rules",
-        DisplayName: "Rules Core travel and environment integration")
+        DisplayName: "Travel and environment provider integration")
     {
         Dependencies = ["expeditions"]
     };
 
     public void RegisterServices(IServiceCollection services)
     {
+        services.AddScoped<TravelEnvironmentProviderRegistry>();
         services.AddScoped<ExpeditionTravelRulesService>();
-        services.AddScoped<ProcedureResolutionRulesCoreAdapter>();
+        services.AddScoped<ProcedureResolutionProviderEnricher>();
     }
 
     public void MapEndpoints(RouteGroupBuilder api)
@@ -38,19 +39,12 @@ public sealed class TravelRulesModule : IHexCrawlModule
         ExpeditionTravelRulesService travel,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            var result = await travel.GetCatalogAsync(
-                expeditionId,
-                UserId(context),
-                cancellationToken);
-            context.Response.Headers.CacheControl = "no-store";
-            return Results.Ok(result);
-        }
-        catch (RulesCoreTravelGatewayException exception)
-        {
-            return RulesCoreUnavailable(exception);
-        }
+        var result = await travel.GetCatalogAsync(
+            expeditionId,
+            UserId(context),
+            cancellationToken);
+        context.Response.Headers.CacheControl = "no-store";
+        return Results.Ok(result);
     }
 
     private static async Task<IResult> ResolveAsync(
@@ -61,21 +55,14 @@ public sealed class TravelRulesModule : IHexCrawlModule
         ExpeditionTravelRulesService travel,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            var result = await travel.ResolveAsync(
-                expeditionId,
-                UserId(context),
-                mechanicKey,
-                request,
-                cancellationToken);
-            context.Response.Headers.CacheControl = "no-store";
-            return result is null ? Results.NotFound() : Results.Ok(result);
-        }
-        catch (RulesCoreTravelGatewayException exception)
-        {
-            return RulesCoreUnavailable(exception);
-        }
+        var result = await travel.ResolveAsync(
+            expeditionId,
+            UserId(context),
+            mechanicKey,
+            request,
+            cancellationToken);
+        context.Response.Headers.CacheControl = "no-store";
+        return Results.Ok(result);
     }
 
     private static async Task<IResult> UpdateScopeAsync(
@@ -103,12 +90,6 @@ public sealed class TravelRulesModule : IHexCrawlModule
             cancellationToken);
         return Results.Ok(result);
     }
-
-    private static IResult RulesCoreUnavailable(RulesCoreTravelGatewayException exception) =>
-        Results.Problem(
-            title: "Rules Core travel mechanics unavailable",
-            detail: exception.Message,
-            statusCode: StatusCodes.Status503ServiceUnavailable);
 
     private static string UserId(HttpContext context) =>
         context.User.FindFirstValue(ClaimTypes.NameIdentifier) is { Length: > 0 } value

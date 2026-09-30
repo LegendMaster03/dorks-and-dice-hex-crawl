@@ -23,9 +23,9 @@ public sealed class HexCrawlExceptionMiddleware(RequestDelegate next)
         {
             await WriteAsync(context, StatusCodes.Status409Conflict, exception.Message);
         }
-        catch (RulesCoreTravelGatewayException exception)
+        catch (OptionalProviderResolutionException exception)
         {
-            await WriteAsync(context, StatusCodes.Status503ServiceUnavailable, exception.Message);
+            await WriteProviderAsync(context, exception);
         }
         catch (UnauthorizedAccessException exception)
         {
@@ -39,6 +39,28 @@ public sealed class HexCrawlExceptionMiddleware(RequestDelegate next)
         {
             await WriteAsync(context, StatusCodes.Status400BadRequest, exception.Message);
         }
+    }
+
+    private static async Task WriteProviderAsync(
+        HttpContext context,
+        OptionalProviderResolutionException exception)
+    {
+        if (context.Response.HasStarted)
+        {
+            throw new InvalidOperationException("The response has already started and the Hex Crawl error can not be written.");
+        }
+
+        context.Response.Clear();
+        context.Response.StatusCode = StatusCodes.Status422UnprocessableEntity;
+        context.Response.ContentType = "application/json";
+        await context.Response.WriteAsJsonAsync(new
+        {
+            error = exception.Message,
+            provider = exception.Provider,
+            mechanicKey = exception.MechanicKey,
+            status = exception.Status,
+            missingInputKeys = exception.MissingInputKeys
+        }, context.RequestAborted);
     }
 
     private static async Task WriteAsync(HttpContext context, int statusCode, string message)

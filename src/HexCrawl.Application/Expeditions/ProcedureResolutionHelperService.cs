@@ -9,7 +9,7 @@ public sealed class ProcedureResolutionHelperService(
     IHexCrawlStore store,
     HexCrawlService coreService,
     ProcedureResolutionResolver resolver,
-    ProcedureResolutionRulesCoreAdapter rulesCore)
+    ProcedureResolutionProviderEnricher providerEnricher)
 {
     public async Task<ProcedureResolutionHelperResult> ResolveAsync(
         Guid expeditionId,
@@ -24,7 +24,7 @@ public sealed class ProcedureResolutionHelperService(
                 "The crawl session changed before procedure inputs were resolved. Reload it before generating another helper result.");
         }
 
-        command = await rulesCore.PrepareAsync(expedition, command, cancellationToken);
+        command = await providerEnricher.PrepareAsync(expedition, command, cancellationToken);
         var generated = resolver.Resolve(
             ExpeditionProcedureExecutionResolver.Resolve(expedition),
             expedition.Context,
