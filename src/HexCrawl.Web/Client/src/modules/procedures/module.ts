@@ -49,35 +49,39 @@ function attachReferenceAction(
     root: HTMLElement,
     procedureId: string,
     navigate: (route: string, replace?: boolean) => void): () => void {
-    let disposed = false;
-    const sync = (): void => {
-        if (disposed) return;
-        const actions = root.querySelector<HTMLElement>(".hc-page-header .hc-button-row");
-        if (!actions) return;
+    ensureReferenceActionStyles();
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "hc-procedure-reference-launcher";
+    button.dataset.procedureReference = "";
+    button.textContent = "View procedure reference";
+    button.addEventListener("click", () => {
+        const activeRevision = root.querySelector<HTMLButtonElement>("button[data-revision]:disabled")
+            ?.dataset.revision;
+        const base = `/procedures/${encodeURIComponent(procedureId)}`;
+        navigate(activeRevision
+            ? `${base}/revisions/${encodeURIComponent(activeRevision)}/reference`
+            : `${base}/reference`);
+    });
+    document.body.append(button);
+    return () => button.remove();
+}
 
-        let button = actions.querySelector<HTMLButtonElement>("[data-procedure-reference]");
-        if (!button) {
-            button = document.createElement("button");
-            button.type = "button";
-            button.dataset.procedureReference = "";
-            button.textContent = "View procedure reference";
-            button.addEventListener("click", () => {
-                const activeRevision = root.querySelector<HTMLButtonElement>("button[data-revision]:disabled")
-                    ?.dataset.revision;
-                const base = `/procedures/${encodeURIComponent(procedureId)}`;
-                navigate(activeRevision
-                    ? `${base}/revisions/${encodeURIComponent(activeRevision)}/reference`
-                    : `${base}/reference`);
-            });
-            actions.prepend(button);
+function ensureReferenceActionStyles(): void {
+    if (document.getElementById("hc-procedure-reference-launcher-styles")) return;
+    const style = document.createElement("style");
+    style.id = "hc-procedure-reference-launcher-styles";
+    style.textContent = `
+        .hc-procedure-reference-launcher {
+            position: fixed;
+            right: 1.25rem;
+            bottom: 1.25rem;
+            z-index: 20;
+            box-shadow: 0 .35rem 1rem rgb(0 0 0 / .25);
         }
-    };
-
-    const observer = new MutationObserver(sync);
-    observer.observe(root, { childList: true, subtree: true });
-    sync();
-    return () => {
-        disposed = true;
-        observer.disconnect();
-    };
+        @media print {
+            .hc-procedure-reference-launcher { display: none !important; }
+        }
+    `;
+    document.head.append(style);
 }
