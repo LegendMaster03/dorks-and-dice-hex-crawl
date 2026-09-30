@@ -1,6 +1,6 @@
 using HexCrawl.Application;
 
-namespace HexCrawl.Web;
+namespace HexCrawl.Web.Modules.Procedures;
 
 public sealed record ProcedureReferenceInputSourceContract(string Key, string Label)
 {
@@ -123,7 +123,7 @@ public sealed record ProcedureReferenceModuleContract(
             module.DisplayName,
             module.Purpose,
             module.ExecutionStage,
-            new Dictionary<string, string>(module.PresentationMetadata, StringComparer.Ordinal),
+            module.PresentationMetadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal),
             ProcedureReferenceMechanicContract.From(module.Mechanic),
             module.Parameters.Select(ProcedureReferenceParameterContract.From).ToArray(),
             module.RequiredInputs.Select(ProcedureReferenceInputContract.From).ToArray(),

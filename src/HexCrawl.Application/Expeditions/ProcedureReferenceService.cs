@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using HexCrawl.Application.Persistence;
 using HexCrawl.Domain.Procedure;
 using HexCrawl.Domain.Runtime;
 
@@ -13,9 +14,7 @@ public enum ProcedureReferenceExecutionSupport
 }
 
 public sealed record ProcedureReferenceInputSource(string Key, string Label);
-
 public sealed record ProcedureReferenceNamedValue(string Key, string DisplayName);
-
 public sealed record ProcedureReferenceMapEntry(string Key, string Value);
 
 public sealed record ProcedureReferenceParameter(
@@ -192,7 +191,10 @@ public sealed class ProcedureReferenceService(CampaignProcedureService procedure
             selected.Module.DisplayName,
             selected.Module.Purpose,
             selected.Module.ExecutionStage,
-            new Dictionary<string, string>(selected.Module.PresentationMetadata, StringComparer.Ordinal),
+            selected.Module.PresentationMetadata.ToDictionary(
+                item => item.Key,
+                item => item.Value,
+                StringComparer.Ordinal),
             new ProcedureReferenceMechanic(
                 selected.Mechanic.Key,
                 selected.Mechanic.DisplayName,
@@ -352,8 +354,6 @@ public sealed class ProcedureReferenceService(CampaignProcedureService procedure
             return ProcedureReferenceExecutionSupport.Native;
         }
 
-        // The current declarative contract is intentionally a stored structural contract, not native execution.
-        // Handler/version classification is based only on the materialized definition and current runtime support.
         if (string.Equals(
                 mechanic.ExecutionHandler,
                 GenericProcedureExecutionHandlers.DeclarativeContract,
@@ -410,7 +410,7 @@ public sealed class ProcedureReferenceService(CampaignProcedureService procedure
     }
 
     private static string Unit(long value, string unit) =>
-        $"{value.ToString(CultureInfo.InvariantCulture)} {unit}{(Math.Abs(value) == 1 ? string.Empty : "s")}";
+        $"{value.ToString(CultureInfo.InvariantCulture)} {unit}{(value is 1 or -1 ? string.Empty : "s")}";
 
     private static string Humanize(string value)
     {
@@ -435,7 +435,7 @@ public sealed class ProcedureReferenceService(CampaignProcedureService procedure
 
         var words = builder.ToString()
             .Split(' ', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        return string.Join(' ', words.Select(word =>
+        return string.Join(" ", words.Select(word =>
             word.Length == 0 ? word : char.ToUpperInvariant(word[0]) + word[1..]));
     }
 
