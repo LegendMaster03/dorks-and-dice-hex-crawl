@@ -90,7 +90,7 @@ export function createPendingOverride(
     module: ProcedureModuleComposer,
     existing?: ProcedureComposerOverrideInput): ProcedureComposerOverrideInput {
     return existing ?? {
-        overrideId: `composer-${module.moduleKey.replace(/[^a-zA-Z0-9_.-]/g, "-")}`,
+        overrideId: `composer-${module.moduleKey.replace(/[^a-zA-Z0-9_.-]/g, "-")}-${globalThis.crypto.randomUUID()}`,
         moduleKey: module.moduleKey,
         replacementMechanicKey: null,
         replacementMechanicVersion: null,

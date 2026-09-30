@@ -131,17 +131,33 @@ test("key-list parameters round-trip through the generic list editor", () => {
     assert.equal(serializeKeyListParameter(["travel", " forage ", "", "watch"]), "travel;forage;watch");
 });
 
+test("independent pending overrides for the same module receive different IDs", () => {
+    const module = moduleValue();
+    const first = createPendingOverride(module);
+    const second = createPendingOverride(module);
+
+    assert.notEqual(first.overrideId, second.overrideId);
+    assert.match(first.overrideId, /^composer-movement\.terrain-/);
+    assert.match(second.overrideId, /^composer-movement\.terrain-/);
+});
+
 test("pending behavior and parameter changes coalesce into one module override", () => {
     const module = moduleValue();
     const initial = createPendingOverride(module);
-    const changedBehavior = withBehavior(module, initial, "alternate-terrain-policy", 2);
-    const changedParameter = withParameter(module, changedBehavior, "terrainAdjustments", "desert=slow");
+    const firstParameter = withParameter(module, initial, "terrainAdjustments", "desert=slow");
+    const secondParameter = withParameter(module, firstParameter, "activityKeys", "travel;watch");
+    const changedBehavior = withBehavior(module, secondParameter, "alternate-terrain-policy", 2);
 
-    assert.equal(changedParameter.overrideId, initial.overrideId);
-    assert.equal(changedParameter.moduleKey, module.moduleKey);
-    assert.equal(changedParameter.replacementMechanicKey, "alternate-terrain-policy");
-    assert.equal(changedParameter.replacementMechanicVersion, 2);
-    assert.deepEqual(changedParameter.parameters, { terrainAdjustments: "desert=slow" });
+    assert.equal(firstParameter.overrideId, initial.overrideId);
+    assert.equal(secondParameter.overrideId, initial.overrideId);
+    assert.equal(changedBehavior.overrideId, initial.overrideId);
+    assert.equal(changedBehavior.moduleKey, module.moduleKey);
+    assert.equal(changedBehavior.replacementMechanicKey, "alternate-terrain-policy");
+    assert.equal(changedBehavior.replacementMechanicVersion, 2);
+    assert.deepEqual(changedBehavior.parameters, {
+        terrainAdjustments: "desert=slow",
+        activityKeys: "travel;watch"
+    });
 });
 
 test("dependency source labels preserve the complete generic source set", () => {
