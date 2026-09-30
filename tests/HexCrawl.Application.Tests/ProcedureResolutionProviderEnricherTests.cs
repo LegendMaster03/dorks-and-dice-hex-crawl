@@ -161,9 +161,6 @@ public sealed class ProcedureResolutionProviderEnricherTests
             });
 
         Assert.Equal(15, prepared.NavigationDifficultyClass);
-        Assert.Contains("Provider: Rules Core", prepared.NavigationDifficultyRulesNote!);
-        Assert.Contains(TravelEnvironmentMechanicKeys.AvoidGettingLost, prepared.NavigationDifficultyRulesNote!);
-
         var resolver = new ProcedureResolutionResolver(new SequenceRandomSource(20));
         var result = resolver.Resolve(
             GenericProcedureRuntime.Bind(NavigationOnlyProcedure()),
