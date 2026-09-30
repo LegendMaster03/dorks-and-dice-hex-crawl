@@ -251,11 +251,18 @@ test("running sheet exposes the persisted party register through a dedicated con
     assert.match(party, /runtime\.context\.hexCenterDistance\?\.unit/);
 });
 
-test("watch planning uses travel-duty terminology without changing persisted activity input", () => {
+test("watch planning uses the authoritative typed party assignments instead of a free-form activity input", () => {
     const view = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-view.ts"), "utf8");
-    assert.match(view, /Travel duties \/ activities/);
-    assert.match(view, /name="activities"/);
-    assert.match(view, /navigate, forage, map, scout/);
+    const controller = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-watch-controller.ts"), "utf8");
+    const party = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-party-sheet.ts"), "utf8");
+    assert.match(view, /Participant roles and activities are edited in Party & travel order/);
+    assert.match(view, /current typed assignments are snapshotted when a new watch begins/);
+    assert.doesNotMatch(view, /name="activities"/);
+    assert.doesNotMatch(controller, /activities:/);
+    assert.match(party, /activityAssignments/);
+    assert.match(party, /participantActivityPolicy/);
+    assert.match(party, /The current procedure does not define participant activity assignments/);
+    assert.match(party, /structural or future activity policy/);
 });
 
 
