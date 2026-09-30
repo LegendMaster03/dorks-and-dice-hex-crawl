@@ -260,7 +260,7 @@ public sealed class Phase3ProofMatrixTests
 
         Assert.All(handlers, handler =>
         {
-            Assert.True(handler.StartsWith("procedure.", StringComparison.Ordinal));
+            Assert.StartsWith("procedure.", handler, StringComparison.Ordinal);
             Assert.False(handler.Contains("crawl-profile", StringComparison.Ordinal));
         });
         Assert.DoesNotContain(GenericProcedureCatalog.Mechanics, mechanic =>
