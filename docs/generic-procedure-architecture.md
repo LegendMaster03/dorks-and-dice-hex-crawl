@@ -1,16 +1,16 @@
 # Generic Procedure Architecture
 
-This document describes the current generic procedure architecture through Phase 3 of `docs/generic-procedure-development-plan.md`.
+This document describes the current generic procedure architecture through Phase 7 of `docs/generic-procedure-development-plan.md`.
 
 ## Architectural boundary
 
 Named systems remain creation-time preset metadata in `CrawlProcedureCatalog`. A preset is not a runtime authority. It contains a `GenericProcedurePresetRecipe`, which selects generic modules, versioned mechanics, and parameters.
 
-Applying a preset materializes a campaign-owned `CampaignProcedure`. The materialized procedure embeds complete snapshots of every selected `ProcedureModuleDefinition` and `MechanicDefinition`, resolved parameters, and campaign overrides. `ProcedureOriginMetadata` is optional informational provenance and is never consulted to determine runtime behavior.
+Applying a preset materializes a campaign-owned `CampaignProcedure`. The materialized procedure embeds complete snapshots of every selected `ProcedureModuleDefinition` and `MechanicDefinition`, resolved parameters, and campaign overrides. `ProcedureOriginMetadata` is optional informational provenance and is never consulted to determine runtime or participant-assignment behavior.
 
-The authoritative runtime path is:
+The authoritative procedure path is:
 
-`GenericProcedurePresetRecipe -> CampaignProcedure -> handler/version-aware generic binding -> crawl-session state/results`
+`GenericProcedurePresetRecipe -> CampaignProcedure -> handler/version-aware binding or focused stored-contract projection -> crawl-session state/results`
 
 `CampaignProcedure` is the only supported persisted procedure representation for current-format expeditions.
 
@@ -46,7 +46,7 @@ Meaningful migrations for real user data must be evaluated separately once the p
 
 Neither type contains preset identity or named-system identity.
 
-Phase 3 intentionally keeps module shells narrow. A module family does not claim every input that any possible mechanic might consume. The selected mechanic input contract is authoritative for behavior-specific reads.
+Module shells remain narrow. A module family does not claim every input that any possible mechanic might consume. The selected mechanic input contract is authoritative for behavior-specific reads.
 
 ## Materialized campaign procedures
 
@@ -81,19 +81,23 @@ The current deterministic executable handler identities are behavior-oriented co
 
 These identifiers describe executable behavior. They do not encode a preset, system, edition, or retired procedure representation.
 
-Recognized declarative Phase 3 mechanics use `procedure.declarative-contract` version 1. They may validate and persist as structural proof contracts, but they are intentionally non-executable. A declarative mechanic can not be `Automatic`.
+Recognized declarative mechanics use `procedure.declarative-contract` version 1. They may validate and persist as structural contracts, but they are intentionally non-executable and can not be `Automatic`.
 
-The deterministic `CrawlRuntimeEngine` executes an executable `CampaignProcedure` through the generic binding. Existing movement, navigation, watch lifecycle, encounter timing, pause/resume, and event-transition logic remains reusable, while behavior selection comes from the materialized generic snapshot.
+The deterministic `CrawlRuntimeEngine` executes a fully bindable `CampaignProcedure` through the generic binding. Existing movement, navigation, watch lifecycle, encounter timing, pause/resume, and event-transition logic remains reusable, while behavior selection comes from the materialized generic snapshot.
+
+A focused operation may interpret one supported stored contract without binding unrelated structural mechanics. This is still procedure-snapshot authority, not a second procedure model. Phase 7 uses this boundary for `party.activities` policy projection and for focused non-spatial interval-duration bookkeeping.
 
 ## Runtime authority
 
-`StoredExpedition.CampaignProcedure` is required current-format data. Runtime procedure resolution has one path:
+`StoredExpedition.CampaignProcedure` is required current-format data. Full runtime procedure resolution has one path:
 
 `StoredExpedition.CampaignProcedure -> GenericProcedureRuntime.Bind -> deterministic runtime behavior`
 
+Focused projections likewise begin from `StoredExpedition.CampaignProcedure` and read only the selected stored module/mechanic/parameters required by that operation.
+
 A missing campaign procedure is invalid current data. There is no historical-profile fallback or synthesized compatibility procedure.
 
-Origin metadata remains optional and informational. Runtime execution remains valid when origin metadata is removed and when the source preset no longer exists.
+Origin metadata remains optional and informational. Runtime execution and participant-activity policy remain unchanged when origin metadata is removed and when the source preset no longer exists.
 
 ## Campaign overrides and revisions
 
@@ -101,7 +105,7 @@ Origin metadata remains optional and informational. Runtime execution remains va
 
 Applying overrides creates a new `CampaignProcedure` revision while retaining the same `ProcedureId`. Previous revisions remain unchanged. Existing expeditions keep their pinned snapshot until explicitly updated.
 
-`CampaignProcedureService` provides the application boundary for materializing, revising, and loading procedure revisions. The full visual Procedure Composer remains Phase 4 work.
+`CampaignProcedureService` provides the application boundary for materializing, revising, and loading procedure revisions. The Procedure Composer edits that same `CampaignProcedure` model rather than maintaining a second UI procedure authority.
 
 ## Dependency model
 
@@ -115,15 +119,41 @@ A materialized procedure evaluates selected behavior contracts rather than broad
 
 Produced-but-unused outputs remain diagnostics rather than destructive normalization.
 
-## Phase 3 structural proof mechanics
+## Structural proof mechanics
 
-Phase 3 adds generic structural families for movement budgets, terrain relationships, participant activities, navigation outcomes, encounter scheduling, resources, foraging, camping, forced travel, persistent effects, journey events, and multi-stage journey processes.
+The generic structural families cover movement budgets, terrain relationships, participant activities, navigation outcomes, encounter scheduling, resources, foraging, camping, forced travel, persistent effects, journey events, and multi-stage journey processes.
 
 These contracts prove that materially different systems can be represented without system-specific runtime classes. Later execution engines remain deferred according to the development plan.
 
 The One Ring proof is intentionally independent of a fabricated repeating interval: journey progress feeds progress-triggered events, transient event effects feed persistent effects, and role assignment does not require interval or movement-budget state.
 
 The D&D 2024 terrain proof uses a generic `maximum-pace` relationship. Terrain tags map to symbolic pace states, including `arctic=fast-if-appropriately-equipped`, rather than using pace names as terrain keys or numeric costs.
+
+## Typed participant activity state
+
+Phase 7 turns the structural `participant.activity-state` output into real typed expedition state without changing the activity mechanics to automatic execution.
+
+The exact selected `party.activities` module in the expedition's pinned `CampaignProcedure` defines the policy. A supported policy projection preserves:
+
+- selected mechanic key/version and handler;
+- `assignmentScope`;
+- `activityBudgetModel`;
+- `activityKeys`;
+- `roleKeys`.
+
+The projection does not consult origin preset identity or current catalog parameter values. A future/unsupported mechanic remains distinguishable from no policy and from the two currently supported generic activity-policy mechanics.
+
+`CrawlPartySheet` owns current mutable assignment state. `ParticipantActivityAssignment` uses a stable ID, generic `Party`/`Participant`/`Role` scope, an optional real participant reference where structurally appropriate, generic string activity/role keys, and optional context note. The domain does not encode named role enums or infer role-to-activity mappings, exclusivity, required roles, or activity capacity.
+
+A party-wide assignment requires no synthetic participant. Participant and role assignments reference existing party members. Member removal can cascade through the UI, while domain validation independently rejects dangling references.
+
+The former separately persisted `DefaultNavigatorMemberId` is removed. A navigator is an ordinary role assignment when the pinned procedure exposes that key.
+
+The free-form watch activity list is also removed. Spatial watches and real non-spatial intervals snapshot the current typed assignments when the interval begins. Later edits to the party sheet do not mutate that active snapshot.
+
+Journey-role state remains party/session state and does not require an interval. The One Ring guide/hunter/lookout/scout roles can therefore be edited without fabricating `time.interval`, requiring `movement.budget`, or binding the complete structural procedure.
+
+Phase 7 does not execute downstream movement penalties, foraging, camping, resources, fatigue/effects, or journey events. Later mechanics may consume `participant.activity-state` only through explicit generic contracts.
 
 ## Persistence and restart reproducibility
 
@@ -133,11 +163,11 @@ PostgreSQL stores one authoritative procedure representation for expeditions:
 
 Campaign procedure revisions also store their `CampaignProcedure` snapshot in `campaign_procedure_revisions.procedure_json`.
 
-There is no dual generic/retired procedure storage, consistency projection, or profile-only recovery path.
+Current typed participant assignments remain inside the existing expedition party state. Active spatial/non-spatial interval assignment snapshots remain inside runtime state. There is no second activity persistence service or dual generic/retired procedure storage.
 
-The pre-release schema is version 4. Databases from earlier development procedure schemas are intentionally rejected with a reset instruction instead of carrying obsolete migration complexity forward.
+The pre-release schema may reject earlier development shapes and require a reset rather than carrying retired navigator or free-form activity compatibility infrastructure.
 
-Restarting the application reloads the exact persisted generic module/mechanic snapshots. Mechanic versions, handlers, automation levels, parameters, source requirements, overrides, and origin metadata remain pinned.
+Restarting the application reloads the exact persisted generic module/mechanic snapshots, party assignments, and active interval snapshots. Mechanic versions, handlers, automation levels, parameters, source requirements, overrides, and origin metadata remain pinned.
 
 ## HTTP representation
 
@@ -145,12 +175,16 @@ Current HTTP surfaces represent procedure state with `CampaignProcedureContract`
 
 When the snapshot can bind to the currently supported deterministic runtime, the API may additionally expose a derived `ProcedureRuntimeContract`. Structural, declarative, incomplete, and future snapshots remain representable even when runtime binding is unavailable.
 
-An API contract does not fabricate a second procedure representation merely because a generic snapshot is not currently executable.
+Expedition detail also exposes `ParticipantActivityPolicyContract` as a derived projection of the exact pinned `CampaignProcedure`, plus typed current party assignments and typed active-interval assignment snapshots. These are not alternate procedure definitions.
 
-## Rules Core
+## Rules Core and Character Sheet
 
-Rules Core remains optional enrichment. Generic procedure execution does not depend on Rules Core. The existing travel/navigation adapter can resolve optional external inputs, but procedure policy is read from the pinned `CampaignProcedure`, and missing external results are never invented by the runtime.
+Rules Core remains optional enrichment. Generic procedure execution and participant activity state do not depend on Rules Core. The travel/environment provider boundary can resolve optional external inputs, but procedure policy is read from the pinned `CampaignProcedure`, and missing external results are never invented by the runtime.
 
-## Scope boundary
+Character Sheet remains optional. `ExternalCharacterId` may link a party member to external character state, but Phase 7 does not require that service, copy character statistics into Hex Crawl, or perform Phase 8 movement capability composition.
 
-Phase 3 proves the architecture and supplies structural mechanics. It does not implement the full Procedure Composer, typed participant-activity execution, generalized movement capability composition, environment execution, generalized consequence/effect execution, survival/resource execution, journey-process execution, expanded encounter runtime, or battle-map ownership.
+## Current scope boundary
+
+Implemented through Phase 7 are the generic procedure/preset foundation, native current-core execution, proof catalog, Procedure Composer, generated procedure reference, optional provider boundary, and typed participant activity/role state with active-interval snapshots.
+
+Still deferred are generalized movement capability composition, environment execution, generalized consequence/effect execution, survival/resource execution, activity-driven foraging/camping effects, multi-stage journey execution, expanded encounter runtime, and battle-map ownership.
