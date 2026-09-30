@@ -3,7 +3,8 @@ import {
     travelEnvironmentMechanicKeys,
     type SourceBackedProcedureResolutionHelperRequest,
     type TravelEnvironmentCatalog,
-    type TravelEnvironmentMechanicView
+    type TravelEnvironmentMechanicView,
+    type TravelEnvironmentProviderCatalog
 } from "../../travel-rules";
 
 export type ProcedureHelperApplicability = {
@@ -12,7 +13,7 @@ export type ProcedureHelperApplicability = {
     encounter: boolean;
 };
 
-export class RulesCoreTravelUi {
+export class TravelEnvironmentProviderUi {
     private readonly status: HTMLParagraphElement;
     private readonly travelRule: HTMLSelectElement;
     private readonly baseSpeed: HTMLInputElement;
@@ -29,7 +30,7 @@ export class RulesCoreTravelUi {
         this.status = document.createElement("p");
         this.status.className = "hc-hint";
         this.status.dataset.helperRulesStatus = "";
-        this.status.textContent = "Loading source-backed travel and navigation rules…";
+        this.status.textContent = "Loading external travel and navigation provider capabilities…";
         helper.querySelector("legend")?.after(this.status);
 
         const travelHost = requiredElement<HTMLElement>(root, "[data-helper-travel]");
@@ -41,8 +42,8 @@ export class RulesCoreTravelUi {
         this.travelRule.name = "helperTravelRule";
         this.travelRule.append(
             createOption("", "Use explicit expected distance"),
-            createOption("walk", "Source-backed walking distance"),
-            createOption("hustle", "Source-backed hustle distance"));
+            createOption("walk", "Provider-backed walking distance"),
+            createOption("hustle", "Provider-backed hustle distance"));
         this.travelRule.disabled = true;
         travelControls.append(labelled("Travel rule", this.travelRule));
 
@@ -57,19 +58,19 @@ export class RulesCoreTravelUi {
 
         this.terrain = document.createElement("select");
         this.terrain.name = "helperTerrain";
-        this.terrain.append(createOption("", "No source-backed terrain factor"));
+        this.terrain.append(createOption("", "No provider terrain factor"));
         this.terrain.disabled = true;
         travelControls.append(labelled("Terrain", this.terrain));
 
         this.route = document.createElement("select");
         this.route.name = "helperRoute";
-        this.route.append(createOption("", "No source-backed route factor"));
+        this.route.append(createOption("", "No provider route factor"));
         this.route.disabled = true;
         travelControls.append(labelled("Route", this.route));
 
         const travelHint = document.createElement("p");
         travelHint.className = "hc-hint";
-        travelHint.textContent = "An explicit expected distance remains a DM override. Clear it to derive this segment from the selected source-backed rule; terrain and route are applied only when both are selected.";
+        travelHint.textContent = "An explicit expected distance remains a DM override. Clear it to derive this segment from the available external rule provider; terrain and route are applied only when both are selected.";
         travelControls.append(travelHint);
         travelHost.append(travelControls);
 
@@ -79,10 +80,10 @@ export class RulesCoreTravelUi {
         this.navigationRisks.multiple = true;
         this.navigationRisks.size = 4;
         this.navigationRisks.disabled = true;
-        navigationHost.append(labelled("Source-backed navigation risks", this.navigationRisks));
+        navigationHost.append(labelled("Provider-backed navigation risks", this.navigationRisks));
         const navigationHint = document.createElement("p");
         navigationHint.className = "hc-hint";
-        navigationHint.textContent = "The highest applicable source-backed risk DC can supply the navigation DC. An explicit Navigation DC remains a DM override, and the situational modifier and failure veer remain explicit.";
+        navigationHint.textContent = "The available provider can supply the navigation DC for selected risks. An explicit Navigation DC remains a DM override, and the situational modifier and failure veer remain explicit.";
         navigationHost.append(navigationHint);
 
         this.travelRule.addEventListener("change", () => this.syncTravelInputs());
@@ -90,13 +91,13 @@ export class RulesCoreTravelUi {
 
     public async load(expeditionId: string): Promise<void> {
         try {
-            const catalog = await this.api.getTravelEnvironmentCatalog(expeditionId);
+            const result = await this.api.getTravelEnvironmentCatalog(expeditionId);
             if (this.disposed) return;
-            this.applyCatalog(catalog);
+            this.applyCatalogResult(result);
         } catch {
             if (this.disposed) return;
-            this.disableSourceControls();
-            this.status.textContent = "Rules Core travel mechanics are unavailable. Explicit DM distance and navigation inputs remain usable.";
+            this.disableProviderControls();
+            this.status.textContent = "The external travel rule provider could not be queried. Explicit DM distance and navigation inputs remain usable.";
         }
     }
 
@@ -106,14 +107,13 @@ export class RulesCoreTravelUi {
         if (applicability.travel && request.expectedDistance === undefined) {
             const rule = this.travelRule.value;
             if (rule === "walk" || rule === "hustle") {
-                const baseSpeed = positiveInteger(this.baseSpeed, "Base speed");
                 request.travelDistanceRule = rule;
-                request.baseSpeedFeet = baseSpeed;
+                request.baseSpeedFeet = positiveInteger(this.baseSpeed, "Base speed");
 
                 const terrain = this.terrain.value;
                 const route = this.route.value;
                 if (Boolean(terrain) !== Boolean(route)) {
-                    throw new Error("Select both terrain and route to apply a source-backed terrain factor, or leave both blank.");
+                    throw new Error("Select both terrain and route to apply a provider terrain factor, or leave both blank.");
                 }
                 if (terrain && route) {
                     request.terrain = terrain;
@@ -134,7 +134,19 @@ export class RulesCoreTravelUi {
         this.disposed = true;
     }
 
-    private applyCatalog(catalog: TravelEnvironmentCatalog): void {
+    private applyCatalogResult(result: TravelEnvironmentCatalog): void {
+        const providerName = result.provider?.displayName ?? "External provider";
+        if (result.availability !== "available" || !result.catalog) {
+            this.disableProviderControls();
+            const detail = result.detail?.trim();
+            this.status.textContent = `${providerName} is ${humanize(result.availability)}. Explicit DM distance and navigation inputs remain usable.${detail ? ` ${detail}` : ""}`;
+            return;
+        }
+
+        this.applyCatalog(result.catalog, providerName);
+    }
+
+    private applyCatalog(catalog: TravelEnvironmentProviderCatalog, providerName: string): void {
         const walk = effectiveMechanic(catalog, travelEnvironmentMechanicKeys.walkDistance);
         const hustle = effectiveMechanic(catalog, travelEnvironmentMechanicKeys.hustleDistance);
         const terrain = effectiveMechanic(catalog, travelEnvironmentMechanicKeys.terrainDistanceFactor);
@@ -150,11 +162,11 @@ export class RulesCoreTravelUi {
             terrain?.definition
             && terrain.definition.factorSemantic === "distance-multiplier");
         if (this.terrainAvailable && terrain?.definition) {
-            populateAllowedValues(this.terrain, terrain.definition.inputs, "terrain", "No source-backed terrain factor");
-            populateAllowedValues(this.route, terrain.definition.inputs, "route", "No source-backed route factor");
+            populateAllowedValues(this.terrain, terrain.definition.inputs, "terrain", "No provider terrain factor");
+            populateAllowedValues(this.route, terrain.definition.inputs, "route", "No provider route factor");
         } else {
-            resetSelect(this.terrain, "No source-backed terrain factor");
-            resetSelect(this.route, "No source-backed route factor");
+            resetSelect(this.terrain, "No provider terrain factor");
+            resetSelect(this.route, "No provider route factor");
         }
 
         if (navigation?.definition) {
@@ -175,19 +187,19 @@ export class RulesCoreTravelUi {
             ? "effective campaign rules"
             : "global effective rules";
         this.status.textContent = unavailable.length === 0
-            ? `Source-backed ${scope} are available. Explicit DM values still take precedence.`
-            : `Source-backed ${scope} loaded. Unavailable or unresolved: ${unavailable.join(", ")}. Explicit DM values remain usable.`;
+            ? `Available provider: ${providerName}. Provider-backed ${scope} are available. Explicit DM values still take precedence.`
+            : `Available provider: ${providerName}. Provider-backed ${scope} loaded. Unavailable or unresolved: ${unavailable.join(", ")}. Explicit DM values remain usable.`;
         this.syncTravelInputs();
     }
 
     private syncTravelInputs(): void {
-        const usesSourceDistance = !this.travelRule.disabled && this.travelRule.value !== "";
-        this.baseSpeed.disabled = !usesSourceDistance;
-        this.terrain.disabled = !usesSourceDistance || !this.terrainAvailable || this.terrain.options.length <= 1;
-        this.route.disabled = !usesSourceDistance || !this.terrainAvailable || this.route.options.length <= 1;
+        const usesProviderDistance = !this.travelRule.disabled && this.travelRule.value !== "";
+        this.baseSpeed.disabled = !usesProviderDistance;
+        this.terrain.disabled = !usesProviderDistance || !this.terrainAvailable || this.terrain.options.length <= 1;
+        this.route.disabled = !usesProviderDistance || !this.terrainAvailable || this.route.options.length <= 1;
     }
 
-    private disableSourceControls(): void {
+    private disableProviderControls(): void {
         this.travelRule.disabled = true;
         this.baseSpeed.disabled = true;
         this.terrain.disabled = true;
@@ -196,14 +208,14 @@ export class RulesCoreTravelUi {
     }
 }
 
-function effectiveMechanic(catalog: TravelEnvironmentCatalog, key: string): TravelEnvironmentMechanicView | null {
+function effectiveMechanic(catalog: TravelEnvironmentProviderCatalog, key: string): TravelEnvironmentMechanicView | null {
     const mechanic = catalog.mechanics.find(value => value.mechanicKey === key) ?? null;
     return mechanic?.state === "resolved" && mechanic.canResolve && mechanic.definition
         ? mechanic
         : null;
 }
 
-function stateLabel(catalog: TravelEnvironmentCatalog, key: string, label: string): string {
+function stateLabel(catalog: TravelEnvironmentProviderCatalog, key: string, label: string): string {
     const mechanic = catalog.mechanics.find(value => value.mechanicKey === key);
     return mechanic ? `${label} (${humanize(mechanic.state)})` : `${label} (not present)`;
 }
@@ -247,7 +259,7 @@ function requiredElement<T extends Element>(root: ParentNode, selector: string):
 
 function positiveInteger(input: HTMLInputElement, label: string): number {
     const raw = input.value.trim();
-    if (!raw) throw new Error(`${label} is required for source-backed walking or hustling distance.`);
+    if (!raw) throw new Error(`${label} is required for provider-backed walking or hustling distance.`);
     const value = Number(raw);
     if (!Number.isInteger(value) || value <= 0) {
         throw new Error(`${label} must be a positive whole number.`);
