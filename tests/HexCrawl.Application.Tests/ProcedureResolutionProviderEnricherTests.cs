@@ -260,6 +260,43 @@ public sealed class ProcedureResolutionProviderEnricherTests
         Assert.Contains("hourly", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Theory]
+    [InlineData(TravelEnvironmentMechanicStates.RequiresAdjudication)]
+    [InlineData(TravelEnvironmentMechanicStates.Conflicted)]
+    public async Task TerrainCatalogAdjudicationStatesRemainDistinctFromUnsupported(string state)
+    {
+        var provider = FakeProvider.WithResolved(
+            TravelEnvironmentMechanicKeys.WalkDistance,
+            Evaluation(
+                TravelEnvironmentMechanicKeys.WalkDistance,
+                quantity: new TravelEnvironmentQuantity(3, "miles", "hour")));
+        provider.Catalog = CatalogResult(
+            null,
+            new TravelEnvironmentMechanicView(
+                TravelEnvironmentMechanicKeys.TerrainDistanceFactor,
+                state,
+                false,
+                null,
+                []));
+
+        var exception = await Assert.ThrowsAsync<OptionalProviderResolutionException>(() =>
+            Enricher(provider).PrepareAsync(
+                Expedition(),
+                new ProcedureResolutionHelperCommand
+                {
+                    ExpectedVersion = 3,
+                    TravelDistanceRule = "walk",
+                    BaseSpeedFeet = 30,
+                    Terrain = "forest",
+                    Route = "trackless"
+                }));
+
+        Assert.Equal(TravelEnvironmentProviderResolutionStates.RequiresAdjudication, exception.Status);
+        Assert.Equal(TravelEnvironmentMechanicKeys.TerrainDistanceFactor, exception.MechanicKey);
+        Assert.DoesNotContain(provider.ResolveCalls, call =>
+            call.MechanicKey == TravelEnvironmentMechanicKeys.TerrainDistanceFactor);
+    }
+
     [Fact]
     public async Task TerrainFactorMustRetainDistanceMultiplierSemantic()
     {

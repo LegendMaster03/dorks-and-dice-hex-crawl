@@ -133,7 +133,7 @@ public sealed class ProcedureResolutionProviderEnricher(TravelEnvironmentProvide
                     value.MechanicKey,
                     TravelEnvironmentMechanicKeys.TerrainDistanceFactor,
                     StringComparison.Ordinal));
-            if (mechanic is null || !mechanic.CanResolve || mechanic.Definition is null)
+            if (mechanic is null)
             {
                 throw ProviderProblem(
                     provider.Metadata,
@@ -149,6 +149,14 @@ public sealed class ProcedureResolutionProviderEnricher(TravelEnvironmentProvide
                     mechanic.MechanicKey,
                     TravelEnvironmentProviderResolutionStates.RequiresAdjudication,
                     "The provider reports an unresolved conflict for the terrain-distance capability.");
+            }
+            if (!mechanic.CanResolve || mechanic.Definition is null)
+            {
+                throw ProviderProblem(
+                    provider.Metadata,
+                    TravelEnvironmentMechanicKeys.TerrainDistanceFactor,
+                    TravelEnvironmentProviderResolutionStates.Unsupported,
+                    "The provider does not expose a resolvable terrain-distance capability.");
             }
             var semantic = mechanic.Definition.FactorSemantic;
             if (!string.Equals(semantic, "distance-multiplier", StringComparison.Ordinal))
