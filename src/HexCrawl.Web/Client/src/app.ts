@@ -50,6 +50,7 @@ async function boot(rootElement: HTMLElement): Promise<void> {
                     api,
                     navigate
                 });
+                injectProcedureComposerShortcut(rootElement, route.kind, navigate);
             } catch (value) {
                 const error = describeUiError(value);
                 const panel = document.createElement("section");
@@ -94,6 +95,29 @@ async function boot(rootElement: HTMLElement): Promise<void> {
         const paragraph = rootElement.querySelector("p");
         if (paragraph) paragraph.textContent = error.message;
     }
+}
+
+function injectProcedureComposerShortcut(
+    rootElement: HTMLElement,
+    routeKind: string,
+    navigate: (route: string, replace?: boolean) => void): void {
+    if (routeKind === "procedures" || routeKind === "procedure") return;
+    const header = rootElement.querySelector<HTMLElement>(".hc-page-header");
+    if (!header || header.querySelector("[data-procedure-composer-shortcut]")) return;
+
+    let nav = header.querySelector<HTMLElement>("nav");
+    if (!nav) {
+        nav = document.createElement("nav");
+        nav.className = "hc-button-row";
+        header.append(nav);
+    }
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.dataset.procedureComposerShortcut = "";
+    button.textContent = "Procedure Composer";
+    button.addEventListener("click", () => navigate("/procedures"));
+    nav.append(button);
 }
 
 function renderLoading(rootElement: HTMLElement, message: string): void {

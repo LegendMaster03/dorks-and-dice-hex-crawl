@@ -1,6 +1,7 @@
 using System.Globalization;
 using HexCrawl.Application.Persistence;
 using HexCrawl.Domain.Procedure;
+using HexCrawl.Domain.Runtime;
 using HexCrawl.Infrastructure.Persistence;
 
 namespace HexCrawl.Application.Tests;
@@ -46,9 +47,9 @@ public sealed class ProcedureComposerServiceTests
         Assert.Contains(draft.Procedure.Modules, module => module.Module.Category == "Survival/resources");
         Assert.Contains(draft.Procedure.Modules, module => module.Module.Category == "Journey processes");
 
-        var unresolved = Assert.Single(draft.Dependencies.Issues.Where(issue =>
+        var unresolved = Assert.Single(draft.Dependencies.Issues, issue =>
             issue.Kind == ProcedureDependencyIssueKind.UnresolvedInput
-            && issue.InputKey == "navigation.check-result"));
+            && issue.InputKey == "navigation.check-result");
         Assert.True((unresolved.AllowedInputSources & ProcedureInputSource.SelectedModule) != 0);
         Assert.True((unresolved.AllowedInputSources & ProcedureInputSource.Dm) != 0);
         Assert.True((unresolved.AllowedInputSources & ProcedureInputSource.OptionalProvider) != 0);

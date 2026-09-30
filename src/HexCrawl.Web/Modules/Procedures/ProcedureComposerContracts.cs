@@ -73,7 +73,7 @@ public sealed record ProcedureMechanicComposerContract(
         mechanic.Version,
         mechanic.ExecutionHandler,
         mechanic.AutomationLevel,
-        ExecutionSupport(mechanic),
+        ClassifyExecutionSupport(mechanic),
         mechanic.InputContract
             .Select(input => new ProcedureInputContract(input, InputSources(mechanic.AllowedSourcesFor(input))))
             .ToArray(),
@@ -84,7 +84,7 @@ public sealed record ProcedureMechanicComposerContract(
             StringComparer.Ordinal),
         mechanic.CompatibilityTags.ToArray());
 
-    private static string ExecutionSupport(MechanicDefinition mechanic)
+    private static string ClassifyExecutionSupport(MechanicDefinition mechanic)
     {
         if (GenericProcedureExecutionHandlers.SupportsNativeExecution(mechanic))
         {
