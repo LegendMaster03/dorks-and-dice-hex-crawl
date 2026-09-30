@@ -65,6 +65,54 @@ public sealed record StandingOrderContract(
     public StandingOrder ToDomain() => new(Id, Text.Trim(), Enabled);
 }
 
+public sealed record ParticipantActivityAssignmentContract(
+    Guid Id,
+    ParticipantActivityAssignmentScope Scope,
+    Guid? ParticipantId,
+    string? ActivityKey,
+    string? RoleKey,
+    string? Note)
+{
+    public static ParticipantActivityAssignmentContract From(ParticipantActivityAssignment assignment) => new(
+        assignment.Id,
+        assignment.Scope,
+        assignment.ParticipantId,
+        assignment.ActivityKey,
+        assignment.RoleKey,
+        assignment.Note);
+
+    public ParticipantActivityAssignment ToDomain() => new(
+        Id,
+        Scope,
+        ParticipantId,
+        string.IsNullOrWhiteSpace(ActivityKey) ? null : ActivityKey.Trim(),
+        string.IsNullOrWhiteSpace(RoleKey) ? null : RoleKey.Trim(),
+        string.IsNullOrWhiteSpace(Note) ? null : Note.Trim());
+}
+
+public sealed record ParticipantActivityPolicyContract(
+    ParticipantActivityPolicySupport Support,
+    ParticipantActivityAssignmentScope? AssignmentScope,
+    string? ActivityBudgetModel,
+    IReadOnlyList<string> ActivityKeys,
+    IReadOnlyList<string> RoleKeys,
+    string? MechanicKey,
+    int? MechanicVersion,
+    string? ExecutionHandler,
+    string? UnsupportedReason)
+{
+    public static ParticipantActivityPolicyContract From(ParticipantActivityPolicy policy) => new(
+        policy.Support,
+        policy.AssignmentScope,
+        policy.ActivityBudgetModel,
+        policy.ActivityKeys,
+        policy.RoleKeys,
+        policy.MechanicKey,
+        policy.MechanicVersion,
+        policy.ExecutionHandler,
+        policy.UnsupportedReason);
+}
+
 public sealed record PartyMovementReferenceContract(
     DistanceContract? PerHour,
     DistanceContract? PerWatch,
@@ -97,7 +145,7 @@ public sealed record ExpeditionPartyContract(
     IReadOnlyList<MarchingOrderPositionContract> MarchingOrder,
     IReadOnlyList<WatchRotationEntryContract> WatchList,
     IReadOnlyList<StandingOrderContract> StandingOrders,
-    Guid? DefaultNavigatorMemberId,
+    IReadOnlyList<ParticipantActivityAssignmentContract> ActivityAssignments,
     PartyMovementReferenceContract? BaseMovement)
 {
     public static ExpeditionPartyContract From(CrawlPartySheet party) => new(
@@ -105,7 +153,7 @@ public sealed record ExpeditionPartyContract(
         party.MarchingOrder.Select(MarchingOrderPositionContract.From).ToArray(),
         party.WatchList.Select(WatchRotationEntryContract.From).ToArray(),
         party.StandingOrders.Select(StandingOrderContract.From).ToArray(),
-        party.DefaultNavigatorMemberId,
+        party.ActivityAssignments.Select(ParticipantActivityAssignmentContract.From).ToArray(),
         party.BaseMovement is null ? null : PartyMovementReferenceContract.From(party.BaseMovement));
 
     public CrawlPartySheet ToDomain()
@@ -116,7 +164,7 @@ public sealed record ExpeditionPartyContract(
             MarchingOrder = MarchingOrder.Select(item => item.ToDomain()).ToArray(),
             WatchList = WatchList.Select(item => item.ToDomain()).ToArray(),
             StandingOrders = StandingOrders.Select(item => item.ToDomain()).ToArray(),
-            DefaultNavigatorMemberId = DefaultNavigatorMemberId,
+            ActivityAssignments = ActivityAssignments.Select(item => item.ToDomain()).ToArray(),
             BaseMovement = BaseMovement?.ToDomain()
         };
         party.Validate();
@@ -130,7 +178,7 @@ public sealed record UpdateExpeditionPartyRequest(
     IReadOnlyList<MarchingOrderPositionContract>? MarchingOrder = null,
     IReadOnlyList<WatchRotationEntryContract>? WatchList = null,
     IReadOnlyList<StandingOrderContract>? StandingOrders = null,
-    Guid? DefaultNavigatorMemberId = null,
+    IReadOnlyList<ParticipantActivityAssignmentContract>? ActivityAssignments = null,
     PartyMovementReferenceContract? BaseMovement = null)
 {
     public UpdateExpeditionPartyCommand ToCommand()
@@ -140,7 +188,7 @@ public sealed record UpdateExpeditionPartyRequest(
             MarchingOrder ?? [],
             WatchList ?? [],
             StandingOrders ?? [],
-            DefaultNavigatorMemberId,
+            ActivityAssignments ?? [],
             BaseMovement);
         return new UpdateExpeditionPartyCommand(ExpectedVersion, contract.ToDomain());
     }

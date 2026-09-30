@@ -188,7 +188,6 @@ export class ExpeditionWatchController {
             direction.value =
                 state.intendedDirection === null ? "" : String(state.intendedDirection);
             input(this.form, "pace").value = state.activePaceKey ?? "normal";
-            input(this.form, "activities").value = state.activeActivities.join(", ");
             input(this.form, "navigationAid").value = state.activeNavigationAidKey ?? "none";
             checkbox(this.form, "suppressNav").checked = state.activeSuppressesNavigationCheck;
             checkbox(this.form, "resetVeer").checked = state.activeResetsVeerAtBoundary;
@@ -586,10 +585,6 @@ export class ExpeditionWatchController {
                     expectedVersion: runtime.version,
                     intendedDirection: integer(select(this.form, "direction")),
                     paceKey: input(this.form, "pace").value.trim() || "normal",
-                    activities: input(this.form, "activities").value
-                        .split(",")
-                        .map(value => value.trim())
-                        .filter(Boolean),
                     navigationAidKey: input(this.form, "navigationAid").value.trim() || "none",
                     suppressesNavigationCheck: checkbox(this.form, "suppressNav").checked,
                     resetsVeerAtBoundary: checkbox(this.form, "resetVeer").checked,

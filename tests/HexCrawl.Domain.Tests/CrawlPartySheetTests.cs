@@ -36,7 +36,15 @@ public sealed class CrawlPartySheetTests
             [
                 new StandingOrder(Guid.NewGuid(), "Wake the navigator if the trail disappears.")
             ],
-            DefaultNavigatorMemberId = scout,
+            ActivityAssignments =
+            [
+                new ParticipantActivityAssignment(
+                    Guid.NewGuid(),
+                    ParticipantActivityAssignmentScope.Participant,
+                    scout,
+                    "navigate",
+                    "navigator")
+            ],
             BaseMovement = new PartyMovementReference
             {
                 PerHour = new DistanceMeasure(3, DistanceUnit.Miles),
@@ -46,6 +54,8 @@ public sealed class CrawlPartySheetTests
         };
 
         sheet.Validate();
+        Assert.Equal("navigate", sheet.ActivityAssignments.Single().ActivityKey);
+        Assert.Equal("navigator", sheet.ActivityAssignments.Single().RoleKey);
     }
 
     [Fact]
@@ -62,6 +72,187 @@ public sealed class CrawlPartySheetTests
         var error = Assert.Throws<InvalidOperationException>(() => sheet.Validate());
 
         Assert.Contains("does not exist", error.Message);
+    }
+
+    [Fact]
+    public void ParticipantAssignmentMustTargetKnownMember()
+    {
+        var known = Guid.NewGuid();
+        var sheet = new CrawlPartySheet
+        {
+            Members = [new CrawlPartyMember(known, "Known")],
+            ActivityAssignments =
+            [
+                new ParticipantActivityAssignment(
+                    Guid.NewGuid(),
+                    ParticipantActivityAssignmentScope.Participant,
+                    Guid.NewGuid(),
+                    "custom-activity",
+                    null)
+            ]
+        };
+
+        var error = Assert.Throws<InvalidOperationException>(() => sheet.Validate());
+
+        Assert.Contains("does not exist", error.Message);
+    }
+
+    [Fact]
+    public void RoleAssignmentMustTargetKnownMember()
+    {
+        var known = Guid.NewGuid();
+        var sheet = new CrawlPartySheet
+        {
+            Members = [new CrawlPartyMember(known, "Known")],
+            ActivityAssignments =
+            [
+                new ParticipantActivityAssignment(
+                    Guid.NewGuid(),
+                    ParticipantActivityAssignmentScope.Role,
+                    Guid.NewGuid(),
+                    null,
+                    "custom-role")
+            ]
+        };
+
+        var error = Assert.Throws<InvalidOperationException>(() => sheet.Validate());
+
+        Assert.Contains("does not exist", error.Message);
+    }
+
+    [Fact]
+    public void PartyWideAssignmentDoesNotRequireSyntheticMember()
+    {
+        var assignment = new ParticipantActivityAssignment(
+            Guid.NewGuid(),
+            ParticipantActivityAssignmentScope.Party,
+            null,
+            "custom-party-activity",
+            null);
+        var sheet = new CrawlPartySheet { ActivityAssignments = [assignment] };
+
+        sheet.Validate();
+
+        Assert.Null(sheet.ActivityAssignments.Single().ParticipantId);
+    }
+
+    [Fact]
+    public void DuplicateActivityAssignmentIdentityFailsValidation()
+    {
+        var member = Guid.NewGuid();
+        var assignmentId = Guid.NewGuid();
+        var sheet = new CrawlPartySheet
+        {
+            Members = [new CrawlPartyMember(member, "Known")],
+            ActivityAssignments =
+            [
+                new ParticipantActivityAssignment(
+                    assignmentId,
+                    ParticipantActivityAssignmentScope.Participant,
+                    member,
+                    "first",
+                    null),
+                new ParticipantActivityAssignment(
+                    assignmentId,
+                    ParticipantActivityAssignmentScope.Participant,
+                    member,
+                    "second",
+                    null)
+            ]
+        };
+
+        var error = Assert.Throws<InvalidOperationException>(() => sheet.Validate());
+
+        Assert.Contains("ids must be unique", error.Message);
+    }
+
+    [Fact]
+    public void ParticipantAssignmentRequiresNonBlankActivityKey()
+    {
+        var member = Guid.NewGuid();
+        var assignment = new ParticipantActivityAssignment(
+            Guid.NewGuid(),
+            ParticipantActivityAssignmentScope.Participant,
+            member,
+            " ",
+            null);
+        var sheet = new CrawlPartySheet
+        {
+            Members = [new CrawlPartyMember(member, "Known")],
+            ActivityAssignments = [assignment]
+        };
+
+        var error = Assert.Throws<InvalidOperationException>(() => sheet.Validate());
+
+        Assert.Contains("Activity key can not be blank", error.Message);
+    }
+
+    [Fact]
+    public void RoleAssignmentRequiresNonBlankRoleKey()
+    {
+        var member = Guid.NewGuid();
+        var assignment = new ParticipantActivityAssignment(
+            Guid.NewGuid(),
+            ParticipantActivityAssignmentScope.Role,
+            member,
+            null,
+            " ");
+        var sheet = new CrawlPartySheet
+        {
+            Members = [new CrawlPartyMember(member, "Known")],
+            ActivityAssignments = [assignment]
+        };
+
+        var error = Assert.Throws<InvalidOperationException>(() => sheet.Validate());
+
+        Assert.Contains("Role key can not be blank", error.Message);
+    }
+
+    [Fact]
+    public void GenericUnknownActivityAndRoleKeysRequireNoDomainChange()
+    {
+        var member = Guid.NewGuid();
+        var sheet = new CrawlPartySheet
+        {
+            Members = [new CrawlPartyMember(member, "Known")],
+            ActivityAssignments =
+            [
+                new ParticipantActivityAssignment(
+                    Guid.NewGuid(),
+                    ParticipantActivityAssignmentScope.Participant,
+                    member,
+                    "future-custom-activity",
+                    "future-custom-role")
+            ]
+        };
+
+        sheet.Validate();
+
+        var assignment = Assert.Single(sheet.ActivityAssignments);
+        Assert.Equal("future-custom-activity", assignment.ActivityKey);
+        Assert.Equal("future-custom-role", assignment.RoleKey);
+    }
+
+    [Fact]
+    public void RoleAndActivityNameSimilarityCreatesNoImplicitMapping()
+    {
+        var member = Guid.NewGuid();
+        var assignment = new ParticipantActivityAssignment(
+            Guid.NewGuid(),
+            ParticipantActivityAssignmentScope.Role,
+            member,
+            "search",
+            "navigator");
+        var sheet = new CrawlPartySheet
+        {
+            Members = [new CrawlPartyMember(member, "Known")],
+            ActivityAssignments = [assignment]
+        };
+
+        sheet.Validate();
+
+        Assert.Equal("search", sheet.ActivityAssignments.Single().ActivityKey);
+        Assert.Equal("navigator", sheet.ActivityAssignments.Single().RoleKey);
     }
 
     [Fact]

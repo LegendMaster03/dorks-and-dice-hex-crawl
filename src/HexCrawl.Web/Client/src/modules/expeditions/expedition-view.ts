@@ -31,7 +31,7 @@ export async function renderExpedition(
     }
 
     if (!runtime.expedition.isSpatial) {
-        return renderNonSpatialTracker(root, runtime, navigate);
+        return bindNonSpatialParty(root, api, runtime, navigate);
     }
     if (showMap && runtime.overworldId === null) {
         navigate(`/expeditions/${runtime.id}`, true);
@@ -120,7 +120,7 @@ export async function renderExpedition(
                                 <legend>Orders for this watch</legend>
                                 <label>Intended direction <select name="direction" required><option value="">Select intended direction</option>${directionOptions()}</select></label>
                                 <label>Pace / travel mode <input name="pace" value="normal"></label>
-                                <label>Travel duties / activities <input name="activities" placeholder="navigate, forage, map, scout"></label>
+                                <p class="hc-hint">Participant roles and activities are edited in Party & travel order. The current typed assignments are snapshotted when a new watch begins.</p>
                                 <label>Navigation aid/context <input name="navigationAid" value="none"></label>
                                 <label data-suppress-nav-row><input name="suppressNav" type="checkbox"> Navigation aid suppresses the check</label>
                                 <label data-reset-veer-row><input name="resetVeer" type="checkbox"> Navigation aid resets veer at a boundary</label>
@@ -373,6 +373,55 @@ export async function renderExpedition(
         disposed = true;
         watchController?.dispose();
         map?.dispose();
+    };
+}
+
+function bindNonSpatialParty(
+    root: HTMLElement,
+    api: HexCrawlApi,
+    initialRuntime: ExpeditionDetail,
+    navigate: (route: string, replace?: boolean) => void): () => void {
+    let runtime = initialRuntime;
+    let disposed = false;
+    const disposeTracker = renderNonSpatialTracker(root, runtime, navigate);
+    const error = required<HTMLElement>(root, "[data-error]");
+    let partyController: ExpeditionPartySheetController;
+
+    const mutate = async (
+        control: HTMLButtonElement | null,
+        action: () => Promise<void>): Promise<void> => {
+        clearUiError(error);
+        if (control?.disabled) return;
+        const idleText = control?.textContent ?? "";
+        if (control) control.disabled = true;
+        try {
+            await action();
+        } catch (value) {
+            if (!disposed) showUiError(error, value);
+        } finally {
+            if (control && !disposed) {
+                control.disabled = false;
+                control.textContent = idleText;
+            }
+        }
+    };
+
+    const apply = (next: ExpeditionDetail): void => {
+        runtime = next;
+        partyController.sync(next);
+    };
+
+    partyController = new ExpeditionPartySheetController(
+        root,
+        api,
+        () => runtime,
+        apply,
+        mutate);
+    partyController.sync(runtime);
+
+    return () => {
+        disposed = true;
+        disposeTracker();
     };
 }
 

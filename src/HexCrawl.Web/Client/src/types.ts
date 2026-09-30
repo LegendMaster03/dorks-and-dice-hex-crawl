@@ -204,6 +204,30 @@ export type PresentationProfile = {
     allowPlayerAnnotations: boolean;
 };
 
+export type ParticipantActivityAssignmentScope = "Party" | "Participant" | "Role";
+export type ParticipantActivityPolicySupport = "None" | "Supported" | "Unsupported";
+
+export type ParticipantActivityAssignment = {
+    id: string;
+    scope: ParticipantActivityAssignmentScope;
+    participantId: string | null;
+    activityKey: string | null;
+    roleKey: string | null;
+    note: string | null;
+};
+
+export type ParticipantActivityPolicy = {
+    support: ParticipantActivityPolicySupport;
+    assignmentScope: ParticipantActivityAssignmentScope | null;
+    activityBudgetModel: string | null;
+    activityKeys: string[];
+    roleKeys: string[];
+    mechanicKey: string | null;
+    mechanicVersion: number | null;
+    executionHandler: string | null;
+    unsupportedReason: string | null;
+};
+
 export type RuntimePauseReason = "ConditionsReviewRequired" | "LostRecognitionRequired" | "EncounterTriggered" | "BacktrackBoundaryReached";
 
 export type SpatialRuntimeExpedition = {
@@ -231,7 +255,7 @@ export type SpatialRuntimeExpedition = {
     activeWatchRemainingHours: number | null;
     activeWatchPendingDecision: RuntimePauseReason | null;
     activePaceKey: string | null;
-    activeActivities: string[];
+    activeActivityAssignments: ParticipantActivityAssignment[];
     activeNavigationAidKey: string | null;
     activeSuppressesNavigationCheck: boolean;
     activeResetsVeerAtBoundary: boolean;
@@ -267,7 +291,7 @@ export type NonSpatialRuntimeExpedition = {
     activeWatchRemainingHours: number | null;
     activeWatchPendingDecision: null;
     activePaceKey: null;
-    activeActivities: [];
+    activeActivityAssignments: ParticipantActivityAssignment[];
     activeNavigationAidKey: null;
     activeSuppressesNavigationCheck: false;
     activeResetsVeerAtBoundary: false;
@@ -359,7 +383,7 @@ export type ExpeditionParty = {
     marchingOrder: MarchingOrderPosition[];
     watchList: WatchRotationEntry[];
     standingOrders: StandingOrder[];
-    defaultNavigatorMemberId: string | null;
+    activityAssignments: ParticipantActivityAssignment[];
     baseMovement: PartyMovementReference | null;
 };
 
@@ -381,6 +405,7 @@ export type ExpeditionDetail = {
     remainingWatchHours: number;
     expedition: RuntimeExpedition;
     party: ExpeditionParty;
+    participantActivityPolicy: ParticipantActivityPolicy;
     knownHexes: HexCoordinate[];
     knowledge: RuntimeKnowledgeEntry[];
     history: RuntimeEvent[];
@@ -419,7 +444,6 @@ export type RuntimeAdvanceRequest = {
     expectedVersion: number;
     intendedDirection: number;
     paceKey: string;
-    activities: string[];
     navigationAidKey: string;
     suppressesNavigationCheck: boolean;
     resetsVeerAtBoundary: boolean;

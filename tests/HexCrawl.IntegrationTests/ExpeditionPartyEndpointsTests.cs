@@ -7,12 +7,13 @@ namespace HexCrawl.IntegrationTests;
 public sealed class ExpeditionPartyEndpointsTests
 {
     [Fact]
-    public async Task PartySheetIsOptionalEditableAndPersistsAcrossRestart()
+    public async Task PartySheetTypedAssignmentsAreEditableAndPersistAcrossRestart()
     {
         var database = TestWebHost.NewDatabasePath();
         var scoutId = Guid.NewGuid();
         var guardId = Guid.NewGuid();
         var orderId = Guid.NewGuid();
+        var assignmentId = Guid.NewGuid();
         Guid expeditionId;
         long savedVersion;
 
@@ -24,7 +25,7 @@ public sealed class ExpeditionPartyEndpointsTests
                 using var startResponse = await client.PostAsJsonAsync("/api/expeditions", new
                 {
                     name = "Worksheet crawl",
-                    procedureKey = "simple-fixed-distance",
+                    procedureKey = "dnd-2024",
                     context = new
                     {
                         kind = "NonSpatial",
@@ -35,6 +36,13 @@ public sealed class ExpeditionPartyEndpointsTests
                 var started = await startResponse.Content.ReadFromJsonAsync<JsonElement>();
                 expeditionId = started.GetProperty("id").GetGuid();
                 Assert.Empty(started.GetProperty("party").GetProperty("members").EnumerateArray());
+
+                var policy = started.GetProperty("participantActivityPolicy");
+                Assert.Equal("Supported", policy.GetProperty("support").GetString());
+                Assert.Equal("Participant", policy.GetProperty("assignmentScope").GetString());
+                Assert.Contains(
+                    policy.GetProperty("activityKeys").EnumerateArray(),
+                    value => value.GetString() == "navigate");
 
                 using var updateResponse = await client.PutAsJsonAsync(
                     $"/api/expeditions/{expeditionId:D}/party",
@@ -59,7 +67,18 @@ public sealed class ExpeditionPartyEndpointsTests
                         {
                             new { id = orderId, text = "Wake the navigator if the trail disappears.", enabled = true }
                         },
-                        defaultNavigatorMemberId = scoutId,
+                        activityAssignments = new[]
+                        {
+                            new
+                            {
+                                id = assignmentId,
+                                scope = "Participant",
+                                participantId = scoutId,
+                                activityKey = "navigate",
+                                roleKey = "navigator",
+                                note = "primary route finder"
+                            }
+                        },
                         baseMovement = new
                         {
                             perHour = new
@@ -83,8 +102,13 @@ public sealed class ExpeditionPartyEndpointsTests
 
                 var party = updated.GetProperty("party");
                 Assert.Equal(2, party.GetProperty("members").GetArrayLength());
-                Assert.Equal(scoutId, party.GetProperty("defaultNavigatorMemberId").GetGuid());
+                Assert.False(party.TryGetProperty("defaultNavigatorMemberId", out _));
                 Assert.Equal(12, party.GetProperty("baseMovement").GetProperty("perWatch").GetProperty("value").GetDouble());
+                var assignment = party.GetProperty("activityAssignments")[0];
+                Assert.Equal(assignmentId, assignment.GetProperty("id").GetGuid());
+                Assert.Equal(scoutId, assignment.GetProperty("participantId").GetGuid());
+                Assert.Equal("navigate", assignment.GetProperty("activityKey").GetString());
+                Assert.Equal("navigator", assignment.GetProperty("roleKey").GetString());
 
                 using var staleResponse = await client.PutAsJsonAsync(
                     $"/api/expeditions/{expeditionId:D}/party",
@@ -105,6 +129,7 @@ public sealed class ExpeditionPartyEndpointsTests
                 Assert.Equal("Scout", party.GetProperty("members")[0].GetProperty("name").GetString());
                 Assert.Equal("First rest watch", party.GetProperty("watchList")[0].GetProperty("label").GetString());
                 Assert.Equal("Wake the navigator if the trail disappears.", party.GetProperty("standingOrders")[0].GetProperty("text").GetString());
+                Assert.Equal("navigate", party.GetProperty("activityAssignments")[0].GetProperty("activityKey").GetString());
             }
         }
         finally

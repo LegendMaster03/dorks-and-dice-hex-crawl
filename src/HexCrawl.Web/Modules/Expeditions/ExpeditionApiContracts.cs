@@ -56,7 +56,7 @@ public sealed record WorkbenchExpeditionStateContract(
     double? ActiveWatchRemainingHours,
     RuntimePauseReason? ActiveWatchPendingDecision,
     string? ActivePaceKey,
-    IReadOnlyList<string> ActiveActivities,
+    IReadOnlyList<ParticipantActivityAssignmentContract> ActiveActivityAssignments,
     string? ActiveNavigationAidKey,
     bool ActiveSuppressesNavigationCheck,
     bool ActiveResetsVeerAtBoundary,
@@ -93,7 +93,9 @@ public sealed record WorkbenchExpeditionStateContract(
             expedition.ActiveWatch?.Remaining.TotalHours,
             expedition.ActiveWatch?.PendingDecision,
             expedition.ActiveWatch?.Plan.Mode.PaceKey,
-            expedition.ActiveWatch?.Plan.Mode.Activities ?? [],
+            expedition.ActiveWatch?.Plan.Mode.ActivityAssignments
+                .Select(ParticipantActivityAssignmentContract.From)
+                .ToArray() ?? [],
             expedition.ActiveWatch?.Plan.NavigationAid.Key,
             expedition.ActiveWatch?.Plan.NavigationAid.SuppressesNavigationCheck ?? false,
             expedition.ActiveWatch?.Plan.NavigationAid.ResetsVeerAtBoundary ?? false,
@@ -127,7 +129,9 @@ public sealed record WorkbenchExpeditionStateContract(
             nonSpatial.ActiveWatch?.Remaining.TotalHours,
             null,
             null,
-            [],
+            nonSpatial.ActiveWatch?.ActivityAssignments
+                .Select(ParticipantActivityAssignmentContract.From)
+                .ToArray() ?? [],
             null,
             false,
             false,
@@ -204,6 +208,7 @@ public sealed record ExpeditionWorkbenchContract(
     double RemainingWatchHours,
     WorkbenchExpeditionStateContract Expedition,
     ExpeditionPartyContract Party,
+    ParticipantActivityPolicyContract ParticipantActivityPolicy,
     IReadOnlyList<HexCoordinate> KnownHexes,
     IReadOnlyList<KnowledgeEntryContract> Knowledge,
     IReadOnlyList<RuntimeEventContract> History)
@@ -230,6 +235,8 @@ public sealed record ExpeditionWorkbenchContract(
             expedition.RemainingWatchTime.TotalHours,
             WorkbenchExpeditionStateContract.From(expedition.Runtime),
             ExpeditionPartyContract.From(expedition.Party),
+            ParticipantActivityPolicyContract.From(
+                ParticipantActivityPolicyResolver.Resolve(expedition.CampaignProcedure)),
             expedition.Knowledge?.KnownHexes ?? [],
             expedition.Knowledge?.Entries.Values
                 .OrderBy(item => item.SubjectType)
@@ -297,7 +304,6 @@ public sealed record AdvanceExpeditionWorkbenchRequest
     public long ExpectedVersion { get; init; }
     public int IntendedDirection { get; init; }
     public string PaceKey { get; init; } = "normal";
-    public IReadOnlyList<string> Activities { get; init; } = [];
     public string NavigationAidKey { get; init; } = "none";
     public bool SuppressesNavigationCheck { get; init; }
     public bool ResetsVeerAtBoundary { get; init; }
@@ -332,7 +338,6 @@ public sealed record AdvanceExpeditionWorkbenchRequest
         ExpectedVersion = ExpectedVersion,
         IntendedDirection = IntendedDirection,
         PaceKey = PaceKey,
-        Activities = Activities,
         NavigationAidKey = NavigationAidKey,
         SuppressesNavigationCheck = SuppressesNavigationCheck,
         ResetsVeerAtBoundary = ResetsVeerAtBoundary,

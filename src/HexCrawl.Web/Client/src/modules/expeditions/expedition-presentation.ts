@@ -1,7 +1,7 @@
 import { pauseInstruction, watchPhase } from "./expedition-workflow";
 import { buildWatchLedger } from "./expedition-watch-ledger";
 import { directionLabel, formatDistance, formatHours } from "../../runtime-view";
-import type { ExpeditionDetail, Overworld, SpatialRuntimeExpedition } from "../../types";
+import type { ExpeditionDetail, Overworld, ParticipantActivityAssignment, SpatialRuntimeExpedition } from "../../types";
 import { prettyEnum, required, statusCell } from "../../ui/dom";
 import { procedureMechanicLines } from "../../campaign-procedure-view";
 
@@ -41,8 +41,10 @@ export function renderExpeditionStatus(root: HTMLElement, runtime: ExpeditionDet
     if (state.activePaceKey) {
         cells.push(statusCell("Pace", state.activePaceKey));
     }
-    if (state.activeActivities.length > 0) {
-        cells.push(statusCell("Travel duties", state.activeActivities.join(", ")));
+    if (state.activeActivityAssignments.length > 0) {
+        cells.push(statusCell(
+            "Participant assignments",
+            assignmentList(runtime, state.activeActivityAssignments)));
     }
     if (procedureRuntime?.tracksIntraHexProgress) {
         cells.push(statusCell(
@@ -241,6 +243,9 @@ export function renderNonSpatialTracker(
     const state = runtime.expedition;
     if (state.isSpatial) throw new Error("Expected non-spatial crawl session.");
     const intervalHours = runtime.procedure.runtime?.intervalHours ?? null;
+    const activeAssignments = state.activeActivityAssignments.length > 0
+        ? `<div><strong>Participant assignments</strong><span>${escapeHtml(assignmentList(runtime, state.activeActivityAssignments))}</span></div>`
+        : "";
 
     root.innerHTML = `
         <section class="hc-page">
@@ -253,6 +258,7 @@ export function renderNonSpatialTracker(
                     <button type="button" data-home>DM tools</button>
                 </nav>
             </header>
+            <div class="hc-error" data-error hidden role="alert"></div>
             <div class="hc-columns">
                 <section class="hc-panel hc-running-sheet">
                     <header class="hc-sheet-heading">
@@ -268,10 +274,18 @@ export function renderNonSpatialTracker(
                         <div><strong>Completed watches</strong><span>${state.completedWatches}</span></div>
                         <div><strong>Total elapsed</strong><span>${formatHours(state.elapsedTravelHours)}</span></div>
                         <div><strong>Context</strong><span>Non-spatial</span></div>
+                        ${activeAssignments}
                     </div>
+                    <section class="hc-party-register" aria-labelledby="hc-nonspatial-party-title">
+                        <div class="hc-sheet-ledger-heading">
+                            <h3 id="hc-nonspatial-party-title">Party & participant assignments</h3>
+                            <span>Persistent expedition reference</span>
+                        </div>
+                        <div data-party-summary></div>
+                    </section>
                     <p class="hc-hint">${runtime.procedure.isExecutable
                         ? "This running sheet intentionally omits map-only information. Use only the watch/time and encounter tools that apply to your procedure."
-                        : "This materialized procedure is structural and is not executable by the current runtime. Its snapshot remains available for reference."}</p>
+                        : "This materialized procedure is structural and is not executable by the current runtime. Its party assignments and procedure snapshot remain editable/readable without fabricating a watch."}</p>
                     <section class="hc-sheet-ledger" aria-labelledby="hc-nonspatial-watch-log">
                         <div class="hc-sheet-ledger-heading">
                             <h3 id="hc-nonspatial-watch-log">Watch log</h3>
@@ -286,7 +300,8 @@ export function renderNonSpatialTracker(
                 </section>
                 <section class="hc-panel">
                     <h2>Optional tools</h2>
-                    <p class="hc-muted">Open only the bookkeeping surface you need. The running sheet remains usable without either helper.</p>
+                    <p class="hc-muted">Open only the bookkeeping surface you need. Participant roles and activities are expedition state and do not require a repeating watch.</p>
+                    <details open class="hc-party-editor-panel"><summary>Party & participant assignments</summary><div data-party-editor></div></details>
                     <div class="hc-button-row">
                         <button type="button" class="hc-primary-action" data-watch ${runtime.procedure.isExecutable ? "" : "disabled"}>Watch / time</button>
                         <button type="button" data-encounters ${runtime.procedure.isExecutable ? "" : "disabled"}>Encounter cadence</button>
@@ -307,6 +322,28 @@ export function renderNonSpatialTracker(
             .addEventListener("click", () => navigate(`/expeditions/${runtime.id}/encounters`));
     }
     return () => {};
+}
+
+function assignmentList(
+    runtime: ExpeditionDetail,
+    assignments: ParticipantActivityAssignment[]): string {
+    const memberById = new Map(runtime.party.members.map(member => [member.id, member.name]));
+    return assignments.map(assignment => {
+        const target = assignment.participantId
+            ? memberById.get(assignment.participantId) ?? "Unknown participant"
+            : "Party";
+        const activity = assignment.activityKey ? humanizeKey(assignment.activityKey) : null;
+        const role = assignment.roleKey ? humanizeKey(assignment.roleKey) : null;
+        if (activity && role) return `${target} — ${activity} (${role})`;
+        if (activity) return `${target} — ${activity}`;
+        if (role) return `${target} — ${role}`;
+        return target;
+    }).join(" · ");
+}
+
+function humanizeKey(value: string): string {
+    const text = value.replace(/[-_.]+/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2").trim();
+    return text ? text[0].toUpperCase() + text.slice(1).toLowerCase() : value;
 }
 
 function spatialState(runtime: ExpeditionDetail): SpatialRuntimeExpedition {
