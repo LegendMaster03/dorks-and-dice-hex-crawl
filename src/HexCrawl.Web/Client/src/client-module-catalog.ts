@@ -2,10 +2,13 @@ import type { ClientRouteKind, HexCrawlClientModule, KnownToolRoute } from "./cl
 import { assistantsModule } from "./modules/assistants/module";
 import { expeditionsModule } from "./modules/expeditions/module";
 import { homeModule } from "./modules/home/module";
+import { proceduresModule } from "./modules/procedures/module";
 import { worldsModule } from "./modules/worlds/module";
 
 const requiredRouteKinds: readonly ClientRouteKind[] = [
     "home",
+    "procedures",
+    "procedure",
     "worlds",
     "world",
     "edit",
@@ -17,6 +20,7 @@ const requiredRouteKinds: readonly ClientRouteKind[] = [
 
 export const clientModules: readonly HexCrawlClientModule[] = validate([
     homeModule,
+    proceduresModule,
     worldsModule,
     expeditionsModule,
     assistantsModule
