@@ -4,8 +4,8 @@ import test from "node:test";
 import {
     procedureHelperMechanics,
     procedureMechanicLines,
-    procedureProfileSummary
-} from "../.test-dist/procedure-profile-view.js";
+    campaignProcedureSummary
+} from "../.test-dist/campaign-procedure-view.js";
 
 const advancedRuntime = {
     intervalHours: 4,
@@ -51,7 +51,7 @@ const advanced = {
 
 test("procedure summary uses human-readable cadence labels", () => {
     assert.equal(
-        procedureProfileSummary(advanced),
+        campaignProcedureSummary(advanced),
         "4 h watches · resolved variable distance · navigation checks · encounters per watch");
 });
 
@@ -125,7 +125,7 @@ test("structural procedures remain presentable without an executable runtime pro
     };
 
     assert.equal(
-        procedureProfileSummary(structural),
+        campaignProcedureSummary(structural),
         "1 materialized modules · structural procedure · not executable by the current runtime");
     assert.deepEqual(procedureHelperMechanics(structural), { travel: null, navigation: null, encounter: null });
     assert.match(procedureMechanicLines(structural)[0], /multi-stage-expedition-process v1/);

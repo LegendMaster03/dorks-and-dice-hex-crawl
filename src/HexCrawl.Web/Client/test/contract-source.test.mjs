@@ -354,20 +354,20 @@ test("procedure selectors expose materialized procedure mechanics before a sessi
 });
 
 test("procedure mechanics use one shared presentation policy across setup, assistants, and running sheet", () => {
-    const profileView = fs.readFileSync(path.join(sourceDir, "procedure-profile-view.ts"), "utf8");
+    const campaignProcedureView = fs.readFileSync(path.join(sourceDir, "campaign-procedure-view.ts"), "utf8");
     const setup = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-setup.ts"), "utf8");
     const assistant = fs.readFileSync(path.join(sourceDir, "modules/assistants/assistant-entry-view.ts"), "utf8");
     const home = fs.readFileSync(path.join(sourceDir, "modules/home/tool-home-view.ts"), "utf8");
     const presentation = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-presentation.ts"), "utf8");
-    assert.match(setup, /procedureProfileSummary/);
-    assert.match(assistant, /procedureProfileSummary/);
-    assert.match(home, /procedureProfileSummary/);
+    assert.match(setup, /campaignProcedureSummary/);
+    assert.match(assistant, /campaignProcedureSummary/);
+    assert.match(home, /campaignProcedureSummary/);
     assert.match(presentation, /procedureMechanicLines/);
-    assert.match(profileView, /exit factors start/);
-    assert.match(profileView, /actual distance = expected distance/);
-    assert.match(profileView, /situational modifier vs\. the DM-confirmed DC/);
-    assert.match(profileView, /encounter time uses 1d/);
-    assert.match(profileView, /configured components are not applicable to the active procedure mechanics/);
+    assert.match(campaignProcedureView, /exit factors start/);
+    assert.match(campaignProcedureView, /actual distance = expected distance/);
+    assert.match(campaignProcedureView, /situational modifier vs\. the DM-confirmed DC/);
+    assert.match(campaignProcedureView, /encounter time uses 1d/);
+    assert.match(campaignProcedureView, /configured components are not applicable to the active procedure mechanics/);
 });
 
 test("automatic helper controls show the persisted procedure formulas at the point of use", () => {

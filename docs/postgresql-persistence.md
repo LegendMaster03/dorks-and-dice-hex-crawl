@@ -10,7 +10,7 @@ The PostgreSQL schema preserves the aggregate-snapshot design:
 - `expeditions` stores session context, runtime state, optional player knowledge, party state, generated procedure resolutions, the complete executable procedure snapshot, optional preset-origin metadata, pause state, remaining-watch state, and aggregate version/timestamps;
 - `expedition_events` stores retained runtime history with the exact sequence, kind, optional subject, and complete payload.
 
-PostgreSQL-native `uuid`, `bigint`, `timestamptz`, and `jsonb` types are used. Persisted JSON remains application-owned; snapshots are not normalized into a competing relational domain model.
+PostgreSQL-native `uuid`, `bigint`, `timestamptz`, and `jsonb` types are used. Persisted JSON remains application-owned; snapshots are not normalized into a competing relational domain model. Generic execution-handler identity and mechanic version are persisted verbatim inside the `CampaignProcedure` JSON; current native handlers use behavior-oriented `procedure.*` identifiers.
 
 ## Schema lifecycle
 

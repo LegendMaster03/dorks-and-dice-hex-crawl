@@ -70,6 +70,17 @@ Runtime support is explicit for the embedded `(ExecutionHandler, Version)` combi
 
 Unsupported handlers and versions remain preserved as procedure data and fail clearly when execution is attempted.
 
+The current deterministic executable handler identities are behavior-oriented contracts persisted exactly with their mechanic versions:
+
+- `procedure.time.fixed-interval`;
+- `procedure.movement.resolution`;
+- `procedure.movement.hex-progress`;
+- `procedure.navigation.check-policy`;
+- `procedure.encounter.cadence`;
+- `procedure.resolution-helpers`.
+
+These identifiers describe executable behavior. They do not encode a preset, system, edition, or retired procedure representation.
+
 Recognized declarative Phase 3 mechanics use `procedure.declarative-contract` version 1. They may validate and persist as structural proof contracts, but they are intentionally non-executable. A declarative mechanic can not be `Automatic`.
 
 The deterministic `CrawlRuntimeEngine` executes an executable `CampaignProcedure` through the generic binding. Existing movement, navigation, watch lifecycle, encounter timing, pause/resume, and event-transition logic remains reusable, while behavior selection comes from the materialized generic snapshot.

@@ -8,7 +8,7 @@ import type {
     StartStandaloneCrawlSessionInput
 } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
-import { procedureProfileSummary, renderProcedureMechanicList } from "../../procedure-profile-view";
+import { campaignProcedureSummary, renderProcedureMechanicList } from "../../campaign-procedure-view";
 import { input, integer, numeric, option, required, select } from "../../ui/dom";
 
 export async function renderAssistantEntry(
@@ -148,7 +148,7 @@ export async function renderAssistantEntry(
     const syncProcedure = (): void => {
         const preset = presets.find(candidate => candidate.presetKey === procedure.value);
         required<HTMLElement>(form, "[data-procedure-summary]").textContent = preset
-            ? `${preset.description} · ${procedureProfileSummary(preset.procedure)}`
+            ? `${preset.description} · ${campaignProcedureSummary(preset.procedure)}`
             : "";
         const mechanics = required<HTMLElement>(form, "[data-procedure-mechanics]");
         if (preset) renderProcedureMechanicList(mechanics, preset.procedure);

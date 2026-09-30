@@ -9,12 +9,12 @@ namespace HexCrawl.Domain.Runtime;
 /// </summary>
 public static class GenericProcedureExecutionHandlers
 {
-    public const string FixedIntervalDuration = "crawl-profile.watch-length";
-    public const string MovementResolutionPolicy = "crawl-profile.movement-resolution";
-    public const string HexProgressPolicy = "crawl-profile.hex-progress";
-    public const string NavigationCheckPolicy = "crawl-profile.navigation";
-    public const string EncounterCheckCadence = "crawl-profile.encounter-cadence";
-    public const string DeterministicResolutionHelpers = "crawl-profile.resolution-helpers";
+    public const string FixedIntervalDuration = "procedure.time.fixed-interval";
+    public const string MovementResolutionPolicy = "procedure.movement.resolution";
+    public const string HexProgressPolicy = "procedure.movement.hex-progress";
+    public const string NavigationCheckPolicy = "procedure.navigation.check-policy";
+    public const string EncounterCheckCadence = "procedure.encounter.cadence";
+    public const string DeterministicResolutionHelpers = "procedure.resolution-helpers";
     public const string DeclarativeContract = "procedure.declarative-contract";
 
     private static IReadOnlyDictionary<string, IReadOnlySet<int>> SupportedVersions { get; } =
@@ -29,7 +29,7 @@ public static class GenericProcedureExecutionHandlers
             [DeclarativeContract] = new HashSet<int> { 1 }
         };
 
-    internal static bool Supports(MechanicDefinition mechanic) =>
+    public static bool Supports(MechanicDefinition mechanic) =>
         SupportedVersions.TryGetValue(mechanic.ExecutionHandler, out var versions)
         && versions.Contains(mechanic.Version);
 }

@@ -3,7 +3,7 @@ import { customUnitFieldsVisible } from "../worlds/world-form";
 import type { DistanceUnitKind } from "../worlds/world-form";
 import type { ExpeditionSummary, OverworldSummary, ProcedurePreset, StartStandaloneCrawlSessionInput } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
-import { procedureProfileSummary, renderProcedureMechanicList } from "../../procedure-profile-view";
+import { campaignProcedureSummary, renderProcedureMechanicList } from "../../campaign-procedure-view";
 import { input, integer, numeric, option, required, select } from "../../ui/dom";
 
 const ABSTRACT_CONTEXT = "__abstract__";
@@ -135,7 +135,7 @@ export async function renderToolHome(
     const syncProcedure = (): void => {
         const preset = presets.find(candidate => candidate.presetKey === procedure.value);
         required<HTMLElement>(form, "[data-procedure-summary]").textContent = preset
-            ? `${preset.description} · ${procedureProfileSummary(preset.procedure)}`
+            ? `${preset.description} · ${campaignProcedureSummary(preset.procedure)}`
             : "";
         const mechanics = required<HTMLElement>(form, "[data-procedure-mechanics]");
         if (preset) renderProcedureMechanicList(mechanics, preset.procedure);

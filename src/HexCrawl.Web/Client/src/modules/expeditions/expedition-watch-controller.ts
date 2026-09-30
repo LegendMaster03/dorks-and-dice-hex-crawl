@@ -3,7 +3,7 @@ import { manualEntryResolutionSources } from "./expedition-input-policy";
 import { suggestedWatchDistance } from "./expedition-party-movement";
 import { encounterCheckDue, navigationResolutionDue, watchActionLabel } from "./expedition-workflow";
 import { formatHours } from "../../runtime-view";
-import { procedureHelperMechanics } from "../../procedure-profile-view";
+import { procedureHelperMechanics } from "../../campaign-procedure-view";
 import type { SourceBackedProcedureResolutionHelperRequest } from "../../travel-rules";
 import type {
     ExpeditionDetail,

@@ -21,6 +21,8 @@ The Phase 2 executable module families remain:
 - `encounters.cadence`;
 - `procedure.helpers`.
 
+Those six executable modules bind through generic behavior-oriented handler identities: `procedure.time.fixed-interval`, `procedure.movement.resolution`, `procedure.movement.hex-progress`, `procedure.navigation.check-policy`, `procedure.encounter.cadence`, and `procedure.resolution-helpers`. The handler/version pair is part of the pinned `CampaignProcedure`; no handler identity carries preset or retired profile terminology.
+
 Phase 3 adds these system-neutral structural module families:
 
 | Module | Representative mechanics | Phase 3 automation |

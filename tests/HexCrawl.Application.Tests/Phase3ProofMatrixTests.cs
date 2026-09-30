@@ -80,7 +80,7 @@ public sealed class Phase3ProofMatrixTests
     {
         var procedure = CrawlProcedureCatalog.Resolve(presetKey).MaterializeGeneric().Procedure;
         var actual = procedure.Modules
-            .Where(module => module.Mechanic.ExecutionHandler.StartsWith("crawl-profile.", StringComparison.Ordinal))
+            .Where(module => GenericProcedureExecutionHandlers.Supports(module.Mechanic))
             .Select(module => module.Module.Key)
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
@@ -118,7 +118,7 @@ public sealed class Phase3ProofMatrixTests
             .MaterializeGeneric().Procedure;
 
         Assert.DoesNotContain(procedure.Modules, module =>
-            module.Mechanic.ExecutionHandler.StartsWith("crawl-profile.", StringComparison.Ordinal));
+            GenericProcedureExecutionHandlers.Supports(module.Mechanic));
         Assert.DoesNotContain(procedure.Modules, module =>
             module.Module.Key == GenericProcedureCatalog.TimeIntervalModule);
 
@@ -243,6 +243,28 @@ public sealed class Phase3ProofMatrixTests
         var mixed = CrawlProcedureCatalog.Resolve(CrawlProcedureCatalog.MixedHouseRulePresetKey)
             .MaterializeGeneric().Procedure;
         _ = GenericProcedureRuntime.Bind(mixed);
+    }
+
+    [Fact]
+    public void ExecutableHandlerIdsAreGenericBehaviorContracts()
+    {
+        string[] handlers =
+        [
+            GenericProcedureExecutionHandlers.FixedIntervalDuration,
+            GenericProcedureExecutionHandlers.MovementResolutionPolicy,
+            GenericProcedureExecutionHandlers.HexProgressPolicy,
+            GenericProcedureExecutionHandlers.NavigationCheckPolicy,
+            GenericProcedureExecutionHandlers.EncounterCheckCadence,
+            GenericProcedureExecutionHandlers.DeterministicResolutionHelpers
+        ];
+
+        Assert.All(handlers, handler =>
+        {
+            Assert.True(handler.StartsWith("procedure.", StringComparison.Ordinal));
+            Assert.False(handler.Contains("crawl-profile", StringComparison.Ordinal));
+        });
+        Assert.DoesNotContain(GenericProcedureCatalog.Mechanics, mechanic =>
+            mechanic.ExecutionHandler.Contains("crawl-profile", StringComparison.Ordinal));
     }
 
     [Fact]

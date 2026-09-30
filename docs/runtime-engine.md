@@ -27,6 +27,8 @@ The runtime path is:
 
 `GenericProcedureRuntime.Bind` recognizes explicit `(ExecutionHandler, Version)` combinations embedded in the materialized snapshot. It does not resolve a current global mechanic or inspect origin preset identity.
 
+The current native executable handlers are `procedure.time.fixed-interval`, `procedure.movement.resolution`, `procedure.movement.hex-progress`, `procedure.navigation.check-policy`, `procedure.encounter.cadence`, and `procedure.resolution-helpers`. Handler identity is behavior-oriented and remains paired with the persisted mechanic version for dispatch.
+
 Unknown execution handlers and unsupported versions are preserved in persistence but fail clearly when runtime execution is attempted. Recognized `procedure.declarative-contract` mechanics remain intentionally non-executable and can not be marked `Automatic`.
 
 A current-format expedition without a `CampaignProcedure` is invalid current data. There is no alternate historical procedure resolution path.

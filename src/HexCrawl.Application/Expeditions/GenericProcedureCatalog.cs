@@ -1,4 +1,5 @@
 using HexCrawl.Domain.Procedure;
+using HexCrawl.Domain.Runtime;
 
 namespace HexCrawl.Application;
 
@@ -49,8 +50,6 @@ public static class GenericProcedureCatalog
     public const string JourneyEventPolicyMechanic = "journey-event-policy";
     public const string ProgressTriggeredJourneyEventPolicyMechanic = "progress-triggered-journey-event-policy";
     public const string MultiStageExpeditionProcessMechanic = "multi-stage-expedition-process";
-
-    private const string DeclarativeContractHandler = "procedure.declarative-contract";
 
     public static IReadOnlyList<ProcedureModuleDefinition> Modules { get; } =
     [
@@ -355,7 +354,7 @@ public static class GenericProcedureCatalog
             [],
             ["time.interval-duration"],
             Required("durationTicks", "integer", "Duration in ticks."),
-            "crawl-profile.watch-length",
+            GenericProcedureExecutionHandlers.FixedIntervalDuration,
             ProcedureAutomationLevel.Automatic),
         Mechanic(
             MovementResolutionPolicyMechanic,
@@ -367,7 +366,7 @@ public static class GenericProcedureCatalog
                 ("travelResolution", "enum", "Travel resolution mode."),
                 ("actualDistanceResolution", "enum", "Actual-distance resolution mode."),
                 ("tracksIntraHexProgress", "boolean", "Track progress within a hex.")),
-            "crawl-profile.movement-resolution",
+            GenericProcedureExecutionHandlers.MovementResolutionPolicy,
             ProcedureAutomationLevel.Automatic),
         Mechanic(
             HexProgressPolicyMechanic,
@@ -383,7 +382,7 @@ public static class GenericProcedureCatalog
                 ("directionChangesCostProgress", "boolean", "Direction changes cost progress."),
                 ("directionChangeProgressCostFactor", "number", "Direction-change cost factor."),
                 ("supportsDeliberateDoubleBack", "boolean", "Deliberate double-back support.")),
-            "crawl-profile.hex-progress",
+            GenericProcedureExecutionHandlers.HexProgressPolicy,
             ProcedureAutomationLevel.Automatic),
         Mechanic(
             NavigationCheckPolicyMechanic,
@@ -394,7 +393,7 @@ public static class GenericProcedureCatalog
             RequiredMany(
                 ("usesNavigationChecks", "boolean", "Navigation checks required."),
                 ("usesPersistentVeer", "boolean", "Navigation failure persists as veer.")),
-            "crawl-profile.navigation",
+            GenericProcedureExecutionHandlers.NavigationCheckPolicy,
             ProcedureAutomationLevel.Assisted),
         Mechanic(
             EncounterCheckCadenceMechanic,
@@ -403,7 +402,7 @@ public static class GenericProcedureCatalog
             ["time.interval-duration"],
             ["encounter.check-cadence"],
             Required("cadence", "enum", "Encounter cadence."),
-            "crawl-profile.encounter-cadence",
+            GenericProcedureExecutionHandlers.EncounterCheckCadence,
             ProcedureAutomationLevel.Assisted),
         Mechanic(
             DeterministicResolutionHelpersMechanic,
@@ -412,7 +411,7 @@ public static class GenericProcedureCatalog
             ["movement.resolution-mode", "navigation.policy", "encounter.check-cadence"],
             ["procedure.helper-configuration"],
             new Dictionary<string, ProcedureParameterDefinition>(),
-            "crawl-profile.resolution-helpers",
+            GenericProcedureExecutionHandlers.DeterministicResolutionHelpers,
             ProcedureAutomationLevel.Assisted),
 
         Mechanic(
@@ -426,7 +425,7 @@ public static class GenericProcedureCatalog
                 ("baseBudget", "number", "Base travel budget."),
                 ("budgetUnit", "enum", "Travel budget unit."),
                 ("limitingScope", "enum", "Scope that limits the budget.")),
-            DeclarativeContractHandler,
+            GenericProcedureExecutionHandlers.DeclarativeContract,
             ProcedureAutomationLevel.Assisted,
             ["movement", "phase-3"]),
         Mechanic(
@@ -440,7 +439,7 @@ public static class GenericProcedureCatalog
                 ("baseBudget", "number", "Base journey progress budget."),
                 ("budgetUnit", "enum", "Journey progress unit."),
                 ("limitingScope", "enum", "Scope or role that limits progress.")),
-            DeclarativeContractHandler,
+            GenericProcedureExecutionHandlers.DeclarativeContract,
             ProcedureAutomationLevel.Assisted,
             ["movement", "journey", "phase-3"]),
         Mechanic(
@@ -454,7 +453,7 @@ public static class GenericProcedureCatalog
                 ("terrainAdjustments", "map<string>", "Terrain-tag to model-specific adjustment value, state, or limit."),
                 ("routeAdjustmentModel", "enum", "Route adjustment model."),
                 ("weatherAdjustmentModel", "enum", "Weather adjustment model.")),
-            DeclarativeContractHandler,
+            GenericProcedureExecutionHandlers.DeclarativeContract,
             ProcedureAutomationLevel.Assisted,
             ["movement", "environment", "phase-3"]),
         Mechanic(
@@ -468,7 +467,7 @@ public static class GenericProcedureCatalog
                 ("activityBudgetModel", "enum", "Activity capacity model."),
                 ("activityKeys", "key-list", "Available generic activity keys."),
                 ("roleKeys", "key-list", "Available generic role keys.")),
-            DeclarativeContractHandler,
+            GenericProcedureExecutionHandlers.DeclarativeContract,
             ProcedureAutomationLevel.Manual,
             ["party", "activity", "phase-3"]),
         Mechanic(
@@ -482,7 +481,7 @@ public static class GenericProcedureCatalog
                 ("activityBudgetModel", "enum", "Role-capacity model."),
                 ("activityKeys", "key-list", "Available generic journey duties."),
                 ("roleKeys", "key-list", "Available generic journey roles.")),
-            DeclarativeContractHandler,
+            GenericProcedureExecutionHandlers.DeclarativeContract,
             ProcedureAutomationLevel.Manual,
             ["party", "activity", "journey", "phase-3"]),
         Mechanic(
@@ -497,7 +496,7 @@ public static class GenericProcedureCatalog
                 ("directionalErrorModel", "enum", "Directional error model."),
                 ("recognitionModel", "enum", "Recognition model."),
                 ("reorientationModel", "enum", "Reorientation model.")),
-            DeclarativeContractHandler,
+            GenericProcedureExecutionHandlers.DeclarativeContract,
             ProcedureAutomationLevel.Assisted,
             ["navigation", "phase-3"],
             inputRequirements:
@@ -520,7 +519,7 @@ public static class GenericProcedureCatalog
                 ("travelChecksPerInterval", "number", "Travel checks represented per interval."),
                 ("campCheck", "boolean", "Separate camp check."),
                 ("terrainProbabilityModel", "enum", "Environment-dependent probability model.")),
-            DeclarativeContractHandler,
+            GenericProcedureExecutionHandlers.DeclarativeContract,
             ProcedureAutomationLevel.Assisted,
             ["encounter", "phase-3"]),
         Mechanic(
@@ -534,7 +533,7 @@ public static class GenericProcedureCatalog
                 ("travelChecksPerInterval", "number", "Travel checks represented per interval."),
                 ("campCheck", "boolean", "Separate camp check."),
                 ("terrainProbabilityModel", "enum", "Environment-dependent probability model.")),
-            DeclarativeContractHandler,
+            GenericProcedureExecutionHandlers.DeclarativeContract,
             ProcedureAutomationLevel.Assisted,
             ["encounter", "phase-3"]),
         Mechanic(
@@ -548,7 +547,7 @@ public static class GenericProcedureCatalog
                 ("inventoryModel", "enum", "Inventory model."),
                 ("consumptionModel", "enum", "Consumption model."),
                 ("consumptionInterval", "enum", "Consumption interval.")),
-            DeclarativeContractHandler,
+            GenericProcedureExecutionHandlers.DeclarativeContract,
             ProcedureAutomationLevel.Manual,
             ["resource", "survival", "phase-3"]),
         Mechanic(
@@ -562,7 +561,7 @@ public static class GenericProcedureCatalog
                 ("timeCost", "number", "Forage time cost."),
                 ("timeUnit", "enum", "Forage time unit."),
                 ("movementTradeoff", "enum", "Travel tradeoff.")),
-            DeclarativeContractHandler,
+            GenericProcedureExecutionHandlers.DeclarativeContract,
             ProcedureAutomationLevel.Assisted,
             ["exploration", "resource", "phase-3"]),
         Mechanic(
@@ -576,7 +575,7 @@ public static class GenericProcedureCatalog
                 ("timeCost", "number", "Forage time or activity cost."),
                 ("timeUnit", "enum", "Forage time or activity unit."),
                 ("movementTradeoff", "enum", "Travel tradeoff.")),
-            DeclarativeContractHandler,
+            GenericProcedureExecutionHandlers.DeclarativeContract,
             ProcedureAutomationLevel.Assisted,
             ["exploration", "resource", "activity", "phase-3"]),
         Mechanic(
@@ -590,7 +589,7 @@ public static class GenericProcedureCatalog
                 ("timeCost", "number", "Camp time cost."),
                 ("timeUnit", "enum", "Camp time unit."),
                 ("watchModel", "enum", "Camp watch model.")),
-            DeclarativeContractHandler,
+            GenericProcedureExecutionHandlers.DeclarativeContract,
             ProcedureAutomationLevel.Assisted,
             ["survival", "rest", "phase-3"]),
         Mechanic(
@@ -604,7 +603,7 @@ public static class GenericProcedureCatalog
                 ("timeCost", "number", "Camp activity cost."),
                 ("timeUnit", "enum", "Camp activity unit."),
                 ("watchModel", "enum", "Camp watch model.")),
-            DeclarativeContractHandler,
+            GenericProcedureExecutionHandlers.DeclarativeContract,
             ProcedureAutomationLevel.Assisted,
             ["survival", "rest", "activity", "phase-3"]),
         Mechanic(
@@ -618,7 +617,7 @@ public static class GenericProcedureCatalog
                 ("limitUnit", "enum", "Travel limit unit."),
                 ("checkModel", "enum", "Forced-travel check model."),
                 ("failureConsequence", "enum", "Generic failure consequence.")),
-            DeclarativeContractHandler,
+            GenericProcedureExecutionHandlers.DeclarativeContract,
             ProcedureAutomationLevel.Assisted,
             ["time", "effect", "phase-3"]),
         Mechanic(
@@ -632,7 +631,7 @@ public static class GenericProcedureCatalog
                 ("accumulationModel", "enum", "Accumulation model."),
                 ("recoveryModel", "enum", "Recovery model."),
                 ("scope", "enum", "Effect scope.")),
-            DeclarativeContractHandler,
+            GenericProcedureExecutionHandlers.DeclarativeContract,
             ProcedureAutomationLevel.Manual,
             ["effect", "phase-3"]),
         Mechanic(
@@ -646,7 +645,7 @@ public static class GenericProcedureCatalog
                 ("targetingModel", "enum", "Journey event target model."),
                 ("terrainInfluence", "enum", "Terrain influence model."),
                 ("consequenceModel", "enum", "Event consequence model.")),
-            DeclarativeContractHandler,
+            GenericProcedureExecutionHandlers.DeclarativeContract,
             ProcedureAutomationLevel.Manual,
             ["journey", "event", "phase-3"]),
         Mechanic(
@@ -660,7 +659,7 @@ public static class GenericProcedureCatalog
                 ("targetingModel", "enum", "Journey event target model."),
                 ("terrainInfluence", "enum", "Terrain influence model."),
                 ("consequenceModel", "enum", "Event consequence model.")),
-            DeclarativeContractHandler,
+            GenericProcedureExecutionHandlers.DeclarativeContract,
             ProcedureAutomationLevel.Manual,
             ["journey", "event", "phase-3"]),
         Mechanic(
@@ -674,7 +673,7 @@ public static class GenericProcedureCatalog
                 ("progressModel", "enum", "Journey progress model."),
                 ("completionModel", "enum", "Journey completion model."),
                 ("roleDriven", "boolean", "Whether roles drive journey resolution.")),
-            DeclarativeContractHandler,
+            GenericProcedureExecutionHandlers.DeclarativeContract,
             ProcedureAutomationLevel.Manual,
             ["journey", "process", "phase-3"])
     ];

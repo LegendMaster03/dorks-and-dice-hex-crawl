@@ -3,7 +3,7 @@ import { buildWatchLedger } from "./expedition-watch-ledger";
 import { directionLabel, formatDistance, formatHours } from "../../runtime-view";
 import type { ExpeditionDetail, Overworld, SpatialRuntimeExpedition } from "../../types";
 import { prettyEnum, required, statusCell } from "../../ui/dom";
-import { procedureMechanicLines } from "../../procedure-profile-view";
+import { procedureMechanicLines } from "../../campaign-procedure-view";
 
 export function renderExpeditionStatus(root: HTMLElement, runtime: ExpeditionDetail): void {
     const state = spatialState(runtime);

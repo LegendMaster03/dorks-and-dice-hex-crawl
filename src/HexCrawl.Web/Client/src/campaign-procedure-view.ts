@@ -1,7 +1,7 @@
 import { formatHours } from "./runtime-view.js";
 import type { CampaignProcedure, DiceRollFormula, ProcedureRuntime } from "./types";
 
-export function procedureProfileSummary(procedure: CampaignProcedure): string {
+export function campaignProcedureSummary(procedure: CampaignProcedure): string {
     const runtime = procedure.runtime;
     if (!runtime) {
         return `${procedure.modules.length} materialized modules · structural procedure · not executable by the current runtime`;

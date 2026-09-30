@@ -184,7 +184,7 @@ The mechanic contract does not contain publisher, game edition, product, or sour
 
 ### Execution handlers and versions
 
-The persisted handler/version pair is authoritative for runtime dispatch.
+The persisted handler/version pair is authoritative for runtime dispatch. Current native executable handlers use generic `procedure.*` behavior-oriented identifiers; identifiers from retired development representations are not compatibility contracts.
 
 - supported handler/version pairs may bind and execute;
 - unknown handlers remain preserved but unsupported;

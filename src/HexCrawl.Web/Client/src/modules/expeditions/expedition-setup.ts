@@ -1,7 +1,7 @@
 import type { HexCrawlApi } from "../../api";
 import type { PresentationProfile, ProcedurePreset } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
-import { procedureProfileSummary, renderProcedureMechanicList } from "../../procedure-profile-view";
+import { campaignProcedureSummary, renderProcedureMechanicList } from "../../campaign-procedure-view";
 
 export async function enhanceExpeditionSetup(
     root: HTMLElement,
@@ -38,7 +38,7 @@ export async function enhanceExpeditionSetup(
 
     const renderProcedureSummary = (preset: ProcedurePreset): void => {
         required<HTMLElement>(form, "[data-procedure-summary]").textContent =
-            `${preset.description} · ${procedureProfileSummary(preset.procedure)}`;
+            `${preset.description} · ${campaignProcedureSummary(preset.procedure)}`;
         renderProcedureMechanicList(
             required<HTMLElement>(form, "[data-procedure-mechanics]"),
             preset.procedure);
