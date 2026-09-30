@@ -9,6 +9,8 @@ const requiredRouteKinds: readonly ClientRouteKind[] = [
     "home",
     "procedures",
     "procedure",
+    "procedure-revision",
+    "procedure-reference",
     "worlds",
     "world",
     "edit",

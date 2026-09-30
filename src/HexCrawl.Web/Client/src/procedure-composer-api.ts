@@ -7,6 +7,7 @@ import type {
     ProcedureComposerRevisionInput,
     ProcedureRevisionSummary
 } from "./procedure-composer-types";
+import type { ProcedureReference } from "./procedure-reference-types";
 
 export class ProcedureComposerApi {
     private constructor(private readonly backendBaseUrl: string) {}
@@ -36,6 +37,14 @@ export class ProcedureComposerApi {
         return this.getJson(
             `/api/procedures/${encodeURIComponent(procedureId)}${suffix}`,
             "Campaign procedure");
+    }
+
+    public getReference(procedureId: string, revision?: number | null): Promise<ProcedureReference> {
+        const encodedId = encodeURIComponent(procedureId);
+        const path = revision == null
+            ? `/api/procedures/${encodedId}/reference`
+            : `/api/procedures/${encodedId}/revisions/${encodeURIComponent(String(revision))}/reference`;
+        return this.getJson(path, "Procedure reference");
     }
 
     public listRevisions(procedureId: string): Promise<ProcedureRevisionSummary[]> {

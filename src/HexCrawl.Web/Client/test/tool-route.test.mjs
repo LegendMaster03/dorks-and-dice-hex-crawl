@@ -15,6 +15,29 @@ test("standalone routing retains the entire nested path", () => {
     assert.equal(deriveToolRoute("/", "/assistants/encounters", "/"), "/assistants/encounters");
 });
 
+test("parses procedure composer and exact-reference routes", () => {
+    assert.deepEqual(parseToolRoute("/procedures"), { kind: "procedures" });
+    assert.deepEqual(parseToolRoute("/procedures/proc-1"), {
+        kind: "procedure",
+        procedureId: "proc-1"
+    });
+    assert.deepEqual(parseToolRoute("/procedures/proc-1/revisions/2"), {
+        kind: "procedure-revision",
+        procedureId: "proc-1",
+        revision: 2
+    });
+    assert.deepEqual(parseToolRoute("/procedures/proc-1/reference"), {
+        kind: "procedure-reference",
+        procedureId: "proc-1",
+        revision: null
+    });
+    assert.deepEqual(parseToolRoute("/procedures/proc-1/revisions/2/reference"), {
+        kind: "procedure-reference",
+        procedureId: "proc-1",
+        revision: 2
+    });
+});
+
 test("parses home, world, full workbench, tracker, and focused assistant routes", () => {
     assert.deepEqual(parseToolRoute("/"), { kind: "home" });
     assert.deepEqual(parseToolRoute("/worlds"), { kind: "worlds" });
@@ -33,6 +56,9 @@ test("builds hosted and standalone hrefs without teaching the site internal rout
     assert.equal(toolRelativeHref("/tools/hex-crawl", "/expeditions/def"), "/tools/hex-crawl/expeditions/def");
     assert.equal(toolRelativeHref("/", "/worlds/abc/edit"), "/worlds/abc/edit");
     assert.equal(toolRelativeHref("/tools/hex-crawl", "/assistants/travel"), "/tools/hex-crawl/assistants/travel");
+    assert.equal(
+        toolRelativeHref("/tools/hex-crawl", "/procedures/proc-1/revisions/2/reference"),
+        "/tools/hex-crawl/procedures/proc-1/revisions/2/reference");
 });
 
 test("canonical expedition route rejects a world/expedition mismatch", () => {
@@ -44,7 +70,6 @@ test("canonical expedition route rejects a world/expedition mismatch", () => {
 test("canonical expedition route leaves a matching route unchanged", () => {
     assert.equal(canonicalExpeditionRoute("actual-world", { id: "exp-1", overworldId: "actual-world" }), null);
 });
-
 
 test("canonical expedition route sends non-world sessions to the tracker", () => {
     assert.equal(

@@ -4,6 +4,8 @@ export type ToolRoute =
     | { kind: "home" }
     | { kind: "procedures" }
     | { kind: "procedure"; procedureId: string }
+    | { kind: "procedure-revision"; procedureId: string; revision: number }
+    | { kind: "procedure-reference"; procedureId: string; revision: number | null }
     | { kind: "worlds" }
     | { kind: "world"; worldId: string }
     | { kind: "edit"; worldId: string }
@@ -27,7 +29,25 @@ export function parseToolRoute(path: string): ToolRoute {
     if (normalized === "/procedures") return { kind: "procedures" };
     if (normalized === "/worlds") return { kind: "worlds" };
 
-    let match = normalized.match(/^\/procedures\/([^/]+)$/);
+    let match = normalized.match(/^\/procedures\/([^/]+)\/revisions\/(\d+)\/reference$/);
+    if (match) return {
+        kind: "procedure-reference",
+        procedureId: decodeURIComponent(match[1]),
+        revision: Number(match[2])
+    };
+    match = normalized.match(/^\/procedures\/([^/]+)\/reference$/);
+    if (match) return {
+        kind: "procedure-reference",
+        procedureId: decodeURIComponent(match[1]),
+        revision: null
+    };
+    match = normalized.match(/^\/procedures\/([^/]+)\/revisions\/(\d+)$/);
+    if (match) return {
+        kind: "procedure-revision",
+        procedureId: decodeURIComponent(match[1]),
+        revision: Number(match[2])
+    };
+    match = normalized.match(/^\/procedures\/([^/]+)$/);
     if (match) return { kind: "procedure", procedureId: decodeURIComponent(match[1]) };
     match = normalized.match(/^\/worlds\/([^/]+)$/);
     if (match) return { kind: "world", worldId: decodeURIComponent(match[1]) };
