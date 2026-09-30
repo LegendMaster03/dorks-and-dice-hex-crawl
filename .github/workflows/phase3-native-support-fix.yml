@@ -1,0 +1,75 @@
+name: Phase 3 native support fix
+
+on:
+  push:
+    branches:
+      - feature/phase-3-preset-proof-matrix
+
+permissions:
+  contents: write
+
+jobs:
+  apply-fix:
+    if: github.event.head_commit.message == 'Add Phase 3 native support fix runner'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/phase-3-preset-proof-matrix
+          fetch-depth: 0
+
+      - name: Separate recognized handlers from native executable handlers
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          runtime = Path('src/HexCrawl.Domain/Runtime/GenericProcedureRuntime.cs')
+          text = runtime.read_text(encoding='utf-8')
+          old = '''    public static bool Supports(MechanicDefinition mechanic) =>
+        SupportedVersions.TryGetValue(mechanic.ExecutionHandler, out var versions)
+        && versions.Contains(mechanic.Version);
+'''
+          new = '''    private static readonly IReadOnlySet<string> NativeExecutableHandlers = new HashSet<string>(StringComparer.Ordinal)
+    {
+        FixedIntervalDuration,
+        MovementResolutionPolicy,
+        HexProgressPolicy,
+        NavigationCheckPolicy,
+        EncounterCheckCadence,
+        DeterministicResolutionHelpers
+    };
+
+    public static bool SupportsNativeExecution(MechanicDefinition mechanic) =>
+        NativeExecutableHandlers.Contains(mechanic.ExecutionHandler)
+        && SupportedVersions.TryGetValue(mechanic.ExecutionHandler, out var versions)
+        && versions.Contains(mechanic.Version);
+
+    internal static bool Supports(MechanicDefinition mechanic) =>
+        SupportedVersions.TryGetValue(mechanic.ExecutionHandler, out var versions)
+        && versions.Contains(mechanic.Version);
+'''
+          if text.count(old) != 1:
+              raise SystemExit(f'Expected one Supports block, found {text.count(old)}')
+          runtime.write_text(text.replace(old, new), encoding='utf-8')
+
+          tests = Path('tests/HexCrawl.Application.Tests/Phase3ProofMatrixTests.cs')
+          text = tests.read_text(encoding='utf-8')
+          old_call = 'GenericProcedureExecutionHandlers.Supports(module.Mechanic)'
+          count = text.count(old_call)
+          if count != 2:
+              raise SystemExit(f'Expected two Phase 3 support classifications, found {count}')
+          tests.write_text(
+              text.replace(old_call, 'GenericProcedureExecutionHandlers.SupportsNativeExecution(module.Mechanic)'),
+              encoding='utf-8')
+          PY
+          git diff --check
+
+      - name: Commit native support distinction
+        shell: bash
+        run: |
+          git config user.name 'LegendMaster03'
+          git config user.email 'kbarnett0306@gmail.com'
+          git add src/HexCrawl.Domain/Runtime/GenericProcedureRuntime.cs tests/HexCrawl.Application.Tests/Phase3ProofMatrixTests.cs
+          git commit -m 'Distinguish native procedure handlers in proof matrix'
+          git push origin HEAD:feature/phase-3-preset-proof-matrix
