@@ -279,24 +279,49 @@ An endpoint may expose:
 
 A generic procedure is not exceptional merely because some mechanics are structural or deferred. Persistence and representation remain valid; execution fails only when unsupported runtime behavior is actually invoked.
 
-## Rules Core boundary
+## Optional provider boundary
 
-Hex Crawl remains fully functional without Rules Core.
+Hex Crawl remains fully functional without Rules Core or another external rules provider.
 
-The runtime accepts resolved values and does not call Rules Core directly. Existing Rules Core travel/environment integration should remain behind optional application/provider boundaries.
+The application owns capability-oriented provider contracts describing what Hex Crawl needs. For travel/environment enrichment, `ITravelEnvironmentProvider` exposes provider metadata, availability, catalog/capability discovery, typed resolution, unresolved states, and provenance. Rules Core is the first concrete adapter for that contract; it is not the contract itself.
+
+Provider identity terminates at the adapter/provenance boundary. Tool Host paths, Rules Core HTTP routes, delegation details, wire failures, and provider-specific transport DTOs do not appear in generic application or runtime contracts.
 
 Conceptually:
 
 ```text
-Hex Crawl Procedure Engine
-    +-- native generic mechanics
-    +-- campaign/custom mechanics
-    +-- optional Rules Core provider
-    +-- optional Character capability provider
-    +-- future providers
+Hex Crawl application / procedure engine
+    |
+    +-- native generic procedure behavior
+    +-- explicit DM/manual inputs
+    +-- optional provider capability interfaces
+            |
+            +-- Rules Core adapter
+            +-- future Character capability adapter
+            +-- future providers
 ```
 
-If an optional provider is unavailable, Hex Crawl continues with materialized/native behavior when possible or requests explicit input. It must not invent a result.
+Provider selection is deterministic rather than vendor-switched. A single provider can be used directly; multiple providers require explicit selection or one unambiguous default. Phase 6 does not invent provider-precedence arbitration.
+
+Provider absence is explicit feature state. The application distinguishes unavailable/not-configured, unsupported capability, input-required, not-applicable, adjudication/conflict, resolved, and provider failure states. A missing or failed provider never causes Hex Crawl to invent a rule.
+
+Explicit DM values retain precedence. Provider enrichment is attempted only for missing values whose workflow requests provider-backed resolution, and provider results become resolved application inputs before deterministic runtime execution.
+
+The runtime boundary remains:
+
+```text
+provider
+    ↓
+resolved external value
+    ↓
+application command/input
+    ↓
+generic deterministic runtime
+```
+
+The runtime does not call providers or HTTP services.
+
+Provider identity remains useful provenance. An audit record may truthfully say `Provider: Rules Core`, but `Rules Core` is not procedure identity, mechanic identity, or runtime dispatch input.
 
 ## No rule-import requirement
 
@@ -408,7 +433,9 @@ The Composer edits the same `CampaignProcedure` model runtime and persistence co
 
 ## Generated procedure documentation
 
-A later phase generates readable DM procedure documentation from the exact materialized snapshot. Do not maintain a second manually authored rules document that can drift from execution configuration.
+Phase 5 generates readable DM procedure documentation from the exact materialized snapshot. Do not maintain a second manually authored rules document that can drift from execution configuration.
+
+Procedure reference generation remains provider-independent and does not fetch external capability data.
 
 ## Party activities and travel roles
 
@@ -496,13 +523,13 @@ Phase 3 definition of done includes:
 
 Add preset picker, module review, generic behavior selection, parameter editing, modification count, provenance display, and dependency warnings.
 
-### Phase 5 — generated procedure documentation — current
+### Phase 5 — generated procedure documentation — complete
 
-Generate readable campaign procedure documentation directly from the materialized snapshot.
+Generate readable campaign procedure documentation directly from the materialized snapshot. Procedure references are derived from the exact immutable `CampaignProcedure` revision and remain independent of optional providers.
 
-### Phase 6 — optional provider adapters
+### Phase 6 — optional provider adapters — complete
 
-Move current Rules Core integrations behind generic optional provider interfaces and add other providers only where valuable.
+External rules/capability sources now sit behind Hex Crawl-owned capability interfaces. Travel/environment resolution uses `ITravelEnvironmentProvider`; Rules Core is the first adapter, provider availability and unresolved states are explicit, DM/manual values bypass providers, provider identity is retained as provenance, and deterministic runtime/domain code remains provider-free.
 
 ### Phase 7 — typed participant activities
 

@@ -69,7 +69,7 @@ builder.Services
         UseCookies = false
     });
 builder.Services
-    .AddHttpClient<IRulesCoreTravelGateway, DelegatedRulesCoreTravelGateway>(client =>
+    .AddHttpClient<RulesCoreTravelEnvironmentProvider>(client =>
     {
         client.Timeout = TimeSpan.FromSeconds(5);
         client.BaseAddress = toolHostBaseUri;
@@ -79,6 +79,8 @@ builder.Services
         AllowAutoRedirect = false,
         UseCookies = false
     });
+builder.Services.AddTransient<ITravelEnvironmentProvider>(services =>
+    services.GetRequiredService<RulesCoreTravelEnvironmentProvider>());
 builder.Services.AddHealthChecks();
 
 var app = builder.Build();

@@ -27,13 +27,13 @@ import {
     select,
     sourceLabel
 } from "../../ui/dom";
-import { RulesCoreTravelUi } from "./rules-core-travel-ui";
+import { TravelEnvironmentProviderUi } from "./provider-travel-ui";
 
 export class ExpeditionWatchController {
     private readonly form: HTMLFormElement;
     private readonly advanceButton: HTMLButtonElement;
     private readonly locationSelect: HTMLSelectElement;
-    private readonly rulesCoreTravelUi: RulesCoreTravelUi;
+    private readonly providerTravelUi: TravelEnvironmentProviderUi;
     private disposed = false;
     private advancePending = false;
     private resolutionPending = false;
@@ -52,8 +52,8 @@ export class ExpeditionWatchController {
         this.form = required<HTMLFormElement>(root, "[data-advance]");
         this.advanceButton = required<HTMLButtonElement>(this.form, "[data-advance-button]");
         this.locationSelect = select(this.form, "locationId");
-        this.rulesCoreTravelUi = new RulesCoreTravelUi(root, api);
-        void this.rulesCoreTravelUi.load(this.getRuntime().id);
+        this.providerTravelUi = new TravelEnvironmentProviderUi(root, api);
+        void this.providerTravelUi.load(this.getRuntime().id);
 
         for (const name of [
             "travelSource",
@@ -224,7 +224,7 @@ export class ExpeditionWatchController {
 
     public dispose(): void {
         this.disposed = true;
-        this.rulesCoreTravelUi.dispose();
+        this.providerTravelUi.dispose();
     }
 
     private syncSegmentState(
@@ -379,7 +379,7 @@ export class ExpeditionWatchController {
                         ? this.locationSelect.value
                         : undefined
                 };
-                this.rulesCoreTravelUi.applySourceInputs(request, applicability);
+                this.providerTravelUi.applySourceInputs(request, applicability);
 
                 const result = await this.api.resolveProcedureInputs(runtime.id, request);
                 if (result.generatedResolutionId !== null) {

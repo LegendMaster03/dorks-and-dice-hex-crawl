@@ -14,6 +14,24 @@ public static class TravelEnvironmentEvaluationStates
     public const string NotApplicable = "not-applicable";
 }
 
+public static class TravelEnvironmentProviderAvailabilityStates
+{
+    public const string Available = "available";
+    public const string Unavailable = "unavailable";
+    public const string Failed = "failed";
+}
+
+public static class TravelEnvironmentProviderResolutionStates
+{
+    public const string Resolved = "resolved";
+    public const string InputRequired = "input-required";
+    public const string NotApplicable = "not-applicable";
+    public const string RequiresAdjudication = "requires-adjudication";
+    public const string Unsupported = "unsupported";
+    public const string Unavailable = "unavailable";
+    public const string Failed = "failed";
+}
+
 public static class TravelEnvironmentMechanicKeys
 {
     public const string WalkDistance = "travel.overland.walk-distance";
@@ -32,9 +50,45 @@ public static class TravelEnvironmentMechanicKeys
     public const string SetNewCourse = "travel.navigation.set-new-course";
 }
 
-public sealed class RulesCoreTravelGatewayException(string message, Exception? innerException = null)
-    : Exception(message, innerException)
+public sealed record TravelEnvironmentProviderMetadata(
+    string ProviderKey,
+    string DisplayName,
+    bool IsDefault = false);
+
+public sealed record TravelEnvironmentProviderCatalogResult(
+    TravelEnvironmentProviderMetadata? Provider,
+    string Availability,
+    TravelEnvironmentCatalogView? Catalog,
+    string? Detail = null);
+
+public sealed record TravelEnvironmentProviderResolutionResult(
+    TravelEnvironmentProviderMetadata? Provider,
+    string MechanicKey,
+    string Status,
+    TravelEnvironmentEvaluationView? Evaluation,
+    IReadOnlyList<string> MissingInputKeys,
+    string? Detail = null);
+
+public sealed class OptionalProviderResolutionException : InvalidOperationException
 {
+    public OptionalProviderResolutionException(
+        string mechanicKey,
+        string status,
+        string message,
+        IReadOnlyList<string>? missingInputKeys = null,
+        TravelEnvironmentProviderMetadata? provider = null)
+        : base(message)
+    {
+        MechanicKey = mechanicKey;
+        Status = status;
+        MissingInputKeys = missingInputKeys ?? [];
+        Provider = provider;
+    }
+
+    public string MechanicKey { get; }
+    public string Status { get; }
+    public IReadOnlyList<string> MissingInputKeys { get; }
+    public TravelEnvironmentProviderMetadata? Provider { get; }
 }
 
 public sealed record TravelEnvironmentResolutionRequest(
@@ -153,13 +207,15 @@ public sealed record TravelEnvironmentSourceAttributionView(
     bool PresentationRequired,
     bool ReferenceLinkRequired);
 
-public interface IRulesCoreTravelGateway
+public interface ITravelEnvironmentProvider
 {
-    Task<TravelEnvironmentCatalogView> GetCatalogAsync(
+    TravelEnvironmentProviderMetadata Metadata { get; }
+
+    Task<TravelEnvironmentProviderCatalogResult> GetCatalogAsync(
         Guid? campaignId,
         CancellationToken cancellationToken = default);
 
-    Task<TravelEnvironmentEvaluationView?> ResolveAsync(
+    Task<TravelEnvironmentProviderResolutionResult> ResolveAsync(
         Guid? campaignId,
         string mechanicKey,
         TravelEnvironmentResolutionRequest request,

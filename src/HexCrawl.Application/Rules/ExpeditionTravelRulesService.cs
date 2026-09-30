@@ -7,32 +7,56 @@ public sealed record ExpeditionRulesScopeView(Guid? CampaignId, long Version);
 public sealed class ExpeditionTravelRulesService(
     IHexCrawlStore store,
     HexCrawlService coreService,
-    IRulesCoreTravelGateway gateway)
+    TravelEnvironmentProviderRegistry providers)
 {
-    public async Task<TravelEnvironmentCatalogView> GetCatalogAsync(
+    public async Task<TravelEnvironmentProviderCatalogResult> GetCatalogAsync(
         Guid expeditionId,
         string ownerUserId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? providerKey = null)
     {
         var expedition = await coreService.GetExpeditionAsync(
             expeditionId,
             ownerUserId,
             cancellationToken);
-        return await gateway.GetCatalogAsync(expedition.CampaignId, cancellationToken);
+        var selection = providers.Select(providerKey);
+        if (selection.Provider is null)
+        {
+            return new TravelEnvironmentProviderCatalogResult(
+                null,
+                TravelEnvironmentProviderAvailabilityStates.Unavailable,
+                null,
+                selection.Detail);
+        }
+
+        return await selection.Provider.GetCatalogAsync(expedition.CampaignId, cancellationToken);
     }
 
-    public async Task<TravelEnvironmentEvaluationView?> ResolveAsync(
+    public async Task<TravelEnvironmentProviderResolutionResult> ResolveAsync(
         Guid expeditionId,
         string ownerUserId,
         string mechanicKey,
         TravelEnvironmentResolutionRequest request,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? providerKey = null)
     {
         var expedition = await coreService.GetExpeditionAsync(
             expeditionId,
             ownerUserId,
             cancellationToken);
-        return await gateway.ResolveAsync(
+        var selection = providers.Select(providerKey);
+        if (selection.Provider is null)
+        {
+            return new TravelEnvironmentProviderResolutionResult(
+                null,
+                mechanicKey,
+                TravelEnvironmentProviderResolutionStates.Unavailable,
+                null,
+                [],
+                selection.Detail);
+        }
+
+        return await selection.Provider.ResolveAsync(
             expedition.CampaignId,
             mechanicKey,
             request,
