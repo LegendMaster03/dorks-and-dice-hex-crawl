@@ -476,7 +476,7 @@ Introduced generic module/mechanic contracts, preset recipes, materialization, c
 
 Made materialized `CampaignProcedure` snapshots the runtime authority for currently executable behavior. Runtime binding now dispatches through persisted handler/version contracts.
 
-### Phase 3 — preset catalog and proof matrix — current
+### Phase 3 — preset catalog and proof matrix — complete
 
 Implement enough generic structural primitives to represent materially different proof systems without system-specific runtime classes. Preserve current executable behavior where supported; later-phase engines remain deferred.
 
@@ -492,11 +492,11 @@ Phase 3 definition of done includes:
 - no runtime identity dependency exists;
 - exact-head CI is green.
 
-### Phase 4 — Procedure Composer UI
+### Phase 4 — Procedure Composer UI — complete
 
 Add preset picker, module review, generic behavior selection, parameter editing, modification count, provenance display, and dependency warnings.
 
-### Phase 5 — generated procedure documentation
+### Phase 5 — generated procedure documentation — current
 
 Generate readable campaign procedure documentation directly from the materialized snapshot.
 
