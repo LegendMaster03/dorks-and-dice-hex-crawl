@@ -11,15 +11,38 @@ public sealed class CampaignProcedureService(IHexCrawlStore store)
         Guid? campaignId = null,
         CancellationToken cancellationToken = default)
     {
-        var owner = RequireOwner(ownerUserId);
         var materialized = CrawlProcedureCatalog.Resolve(presetKey).MaterializeGeneric();
-        var stored = new StoredCampaignProcedureRevision(
+        return await CreateAsync(
+            ownerUserId,
             materialized.Procedure,
-            owner,
-            campaignId,
             materialized.Origin,
-            DateTimeOffset.UtcNow);
-        return await store.CreateCampaignProcedureRevisionAsync(stored, cancellationToken);
+            campaignId,
+            cancellationToken);
+    }
+
+    public async Task<StoredCampaignProcedureRevision> CreateAsync(
+        string ownerUserId,
+        CampaignProcedure procedure,
+        ProcedureOriginMetadata? origin,
+        Guid? campaignId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var owner = RequireOwner(ownerUserId);
+        ArgumentNullException.ThrowIfNull(procedure);
+        if (procedure.Revision != 1)
+        {
+            throw new InvalidOperationException("A newly persisted campaign procedure must begin at revision 1.");
+        }
+        procedure.Validate();
+
+        return await store.CreateCampaignProcedureRevisionAsync(
+            new StoredCampaignProcedureRevision(
+                procedure,
+                owner,
+                campaignId,
+                origin,
+                DateTimeOffset.UtcNow),
+            cancellationToken);
     }
 
     public async Task<StoredCampaignProcedureRevision> CreateRevisionAsync(
@@ -38,6 +61,8 @@ public sealed class CampaignProcedureService(IHexCrawlStore store)
         {
             throw new ArgumentOutOfRangeException(nameof(expectedRevision));
         }
+        ArgumentNullException.ThrowIfNull(overrides);
+
         var current = await store.GetLatestCampaignProcedureRevisionAsync(procedureId, owner, cancellationToken)
             ?? throw new HexCrawlNotFoundException("Campaign procedure was not found.");
         if (current.Revision != expectedRevision)
@@ -63,6 +88,15 @@ public sealed class CampaignProcedureService(IHexCrawlStore store)
         CancellationToken cancellationToken = default)
     {
         var owner = RequireOwner(ownerUserId);
+        if (procedureId == Guid.Empty)
+        {
+            throw new ArgumentException("Procedure id can not be empty.", nameof(procedureId));
+        }
+        if (revision <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(revision));
+        }
+
         return await store.GetCampaignProcedureRevisionAsync(procedureId, revision, owner, cancellationToken)
             ?? throw new HexCrawlNotFoundException("Campaign procedure revision was not found.");
     }
@@ -73,8 +107,27 @@ public sealed class CampaignProcedureService(IHexCrawlStore store)
         CancellationToken cancellationToken = default)
     {
         var owner = RequireOwner(ownerUserId);
+        if (procedureId == Guid.Empty)
+        {
+            throw new ArgumentException("Procedure id can not be empty.", nameof(procedureId));
+        }
+
         return await store.GetLatestCampaignProcedureRevisionAsync(procedureId, owner, cancellationToken)
             ?? throw new HexCrawlNotFoundException("Campaign procedure was not found.");
+    }
+
+    public async Task<IReadOnlyList<StoredCampaignProcedureRevision>> ListRevisionsAsync(
+        string ownerUserId,
+        Guid procedureId,
+        CancellationToken cancellationToken = default)
+    {
+        var owner = RequireOwner(ownerUserId);
+        if (procedureId == Guid.Empty)
+        {
+            throw new ArgumentException("Procedure id can not be empty.", nameof(procedureId));
+        }
+
+        return await store.ListCampaignProcedureRevisionsAsync(procedureId, owner, cancellationToken);
     }
 
     private static string RequireOwner(string? ownerUserId) =>

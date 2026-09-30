@@ -14,6 +14,7 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
 
     public void RegisterServices(IServiceCollection services)
     {
+        services.AddScoped<CampaignProcedureService>();
         services.AddScoped<ProcedureComposerService>();
     }
 

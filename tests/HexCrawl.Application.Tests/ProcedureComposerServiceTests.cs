@@ -14,7 +14,7 @@ public sealed class ProcedureComposerServiceTests
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = new PostgresHexCrawlStore(database.ConnectionString);
         await store.InitializeAsync();
-        var service = new ProcedureComposerService(store);
+        var service = Composer(store);
 
         var draft = await service.CreateDraftAsync("alice", CrawlProcedureCatalog.Dnd2024PresetKey, null, null, []);
 
@@ -33,7 +33,7 @@ public sealed class ProcedureComposerServiceTests
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = new PostgresHexCrawlStore(database.ConnectionString);
         await store.InitializeAsync();
-        var service = new ProcedureComposerService(store);
+        var service = Composer(store);
 
         var draft = await service.CreateDraftAsync("alice", null, null, null, []);
 
@@ -62,7 +62,7 @@ public sealed class ProcedureComposerServiceTests
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = new PostgresHexCrawlStore(database.ConnectionString);
         await store.InitializeAsync();
-        var service = new ProcedureComposerService(store);
+        var service = Composer(store);
         var original = await service.CreateDraftAsync(
             "alice",
             CrawlProcedureCatalog.OneRing2ePresetKey,
@@ -110,7 +110,7 @@ public sealed class ProcedureComposerServiceTests
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = new PostgresHexCrawlStore(database.ConnectionString);
         await store.InitializeAsync();
-        var service = new ProcedureComposerService(store);
+        var service = Composer(store);
 
         var created = await service.CreateAsync(
             "alice",
@@ -144,7 +144,7 @@ public sealed class ProcedureComposerServiceTests
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = new PostgresHexCrawlStore(database.ConnectionString);
         await store.InitializeAsync();
-        var composer = new ProcedureComposerService(store);
+        var composer = Composer(store);
         var sessions = new CrawlSessionService(store);
 
         var pinned = await sessions.StartAsync(
@@ -189,12 +189,38 @@ public sealed class ProcedureComposerServiceTests
     }
 
     [Fact]
+    public async Task NoOpRevisionIsRejectedWithoutCreatingRevisionHistory()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var store = new PostgresHexCrawlStore(database.ConnectionString);
+        await store.InitializeAsync();
+        var composer = Composer(store);
+        var created = await composer.CreateAsync("alice", "simple-fixed-distance", []);
+        var time = created.Procedure.Modules.Single(module =>
+            module.Module.Key == GenericProcedureCatalog.TimeIntervalModule);
+        var noOp = new CampaignProcedureOverride(
+            "same-duration",
+            GenericProcedureCatalog.TimeIntervalModule,
+            null,
+            null,
+            new Dictionary<string, string>
+            {
+                ["durationTicks"] = time.Parameters["durationTicks"]
+            });
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            composer.CreateRevisionAsync("alice", created.ProcedureId, created.Revision, [noOp]));
+
+        Assert.Single(await composer.ListRevisionsAsync("alice", created.ProcedureId));
+    }
+
+    [Fact]
     public async Task UnsupportedStoredMechanicIsPreservedWhenAnotherModuleChanges()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = new PostgresHexCrawlStore(database.ConnectionString);
         await store.InitializeAsync();
-        var composer = new ProcedureComposerService(store);
+        var composer = Composer(store);
         var materialized = CrawlProcedureCatalog.Resolve("simple-fixed-distance").MaterializeGeneric();
         var movement = materialized.Procedure.Modules.Single(module =>
             module.Module.Key == GenericProcedureCatalog.MovementResolutionModule);
@@ -250,4 +276,7 @@ public sealed class ProcedureComposerServiceTests
         Assert.Equal(42, preserved.Mechanic.Version);
         Assert.Equal("future.runtime.handler", preserved.Mechanic.ExecutionHandler);
     }
+
+    private static ProcedureComposerService Composer(IHexCrawlStore store) =>
+        new(new CampaignProcedureService(store));
 }
