@@ -7,6 +7,7 @@ import type {
     ExpeditionDetail,
     NavigationAssistantRequest,
     NonSpatialWatchAssistantRequest,
+    ProcedureRuntime,
     ResolutionSource,
     TravelWatchAssistantRequest,
     SpatialRuntimeExpedition
@@ -95,6 +96,14 @@ export async function renderExpeditionAssistant(
 
     const renderStatus = (): void => {
         const state = runtime.expedition;
+        const execution = runtime.procedure.runtime;
+        if (!execution) {
+            required<HTMLElement>(root, "[data-status]").replaceChildren(
+                statusCell("Procedure", `${runtime.procedure.name} · structural`),
+                statusCell("Execution", "Not supported by the current runtime"));
+            return;
+        }
+
         const cells = mode === "travel"
             ? state.isSpatial
                 ? travelStatus(state)
@@ -102,7 +111,7 @@ export async function renderExpeditionAssistant(
             : mode === "navigation"
                 ? navigationStatus(spatialState(runtime))
                 : [
-                    statusCell("Cadence", prettyEnum(runtime.profile.encounterCadence)),
+                    statusCell("Cadence", prettyEnum(execution.encounterCadence)),
                     statusCell("Current day", String(state.currentDay)),
                     statusCell("Upcoming watch", String(state.completedWatches + 1)),
                     statusCell("Check due", assistantEncounterCheckDue(runtime) ? "Yes" : "No"),
@@ -163,6 +172,11 @@ export async function renderExpeditionAssistant(
 
         required<HTMLElement>(root, "[data-assistant-heading]").textContent = heading(mode, state.isSpatial);
         required<HTMLElement>(root, "[data-assistant-description]").textContent = description(mode, state.isSpatial);
+        if (!runtime.procedure.runtime) {
+            form.innerHTML = '<p class="hc-hint">This materialized procedure is structural and is not executable by the current runtime. Its snapshot remains available on the running sheet for reference.</p>';
+            warning.hidden = true;
+            return;
+        }
         if (!state.isSpatial && mode === "navigation") {
             form.innerHTML = '<p class="hc-hint">Navigation requires a spatial crawl context. This session intentionally has no direction, position, or grid state.</p>';
             warning.hidden = true;
@@ -192,7 +206,7 @@ export async function renderExpeditionAssistant(
 
     form.addEventListener("submit", event => {
         event.preventDefault();
-        if (pending || (runtime.expedition.isSpatial && runtime.expedition.activeWatchNumber !== null)) return;
+        if (pending || !runtime.procedure.runtime || (runtime.expedition.isSpatial && runtime.expedition.activeWatchNumber !== null)) return;
         void (async () => {
             clearUiError(error);
             pending = true;
@@ -233,18 +247,19 @@ export async function renderExpeditionAssistant(
 }
 
 function travelForm(runtime: ExpeditionDetail): string {
+    const execution = requireProcedureRuntime(runtime);
     const state = spatialState(runtime);
     const contextDistance = runtime.context.hexCenterDistance;
     if (!contextDistance) throw new Error("Spatial crawl context is missing its hex-center distance.");
-    const travelInput = runtime.profile.travelResolution === "HexSteps"
+    const travelInput = execution.travelResolution === "HexSteps"
         ? `<label>Resolved hex steps <input name="hexSteps" type="number" min="0" step="1" required></label>`
         : `<label>Distance traveled (${contextDistance.unit.symbol}) <input name="distance" type="number" min="0" step="any" required></label>`;
-    const progress = runtime.profile.tracksIntraHexProgress
+    const progress = execution.tracksIntraHexProgress
         ? `<label>Resulting intra-hex progress (${contextDistance.unit.symbol}) <input name="hexProgress" type="number" min="0" step="any" value="${state.hexProgress.value}"></label>`
         : "";
     return `
         <p class="hc-hint">Enter the movement result you already resolved. This assistant does not infer distance or hex steps from the map scale, procedure name, pace, or terrain.</p>
-        <label>Elapsed travel hours <input name="elapsedHours" type="number" min="0" step="any" value="${runtime.profile.watchHours}"></label>
+        <label>Elapsed travel hours <input name="elapsedHours" type="number" min="0" step="any" value="${execution.intervalHours}"></label>
         ${travelInput}
         <div class="hc-inline">
             <label>Resulting hex q <input name="q" type="number" step="1" value="${state.currentHex.q}"></label>
@@ -259,10 +274,11 @@ function travelForm(runtime: ExpeditionDetail): string {
 }
 
 function nonSpatialWatchForm(runtime: ExpeditionDetail): string {
+    const execution = requireProcedureRuntime(runtime);
     const state = runtime.expedition;
     if (state.isSpatial) throw new Error("Expected a non-spatial crawl session.");
     const watchNumber = state.activeWatchNumber ?? state.completedWatches + 1;
-    const total = state.activeWatchTotalHours ?? runtime.profile.watchHours;
+    const total = state.activeWatchTotalHours ?? execution.intervalHours;
     const elapsed = state.activeWatchElapsedHours ?? 0;
     const remaining = state.activeWatchRemainingHours ?? total;
     return `
@@ -283,7 +299,8 @@ function navigationForm(runtime: ExpeditionDetail): string {
 }
 
 function encounterForm(runtime: ExpeditionDetail): string {
-    const automaticHelperNote = runtime.profile.resolutionHelpers?.encounter
+    const execution = requireProcedureRuntime(runtime);
+    const automaticHelperNote = execution.resolutionHelpers?.encounter
         ? '<p class="hc-hint">This procedure also configures an automatic encounter helper. This focused assistant does not apply it because the helper also resolves encounter timing; use this surface for manual, external, or DM-override bookkeeping.</p>'
         : "";
     return `
@@ -315,6 +332,7 @@ function populateSources(form: HTMLFormElement): void {
 }
 
 function travelRequest(form: HTMLFormElement, runtime: ExpeditionDetail): TravelWatchAssistantRequest {
+    const execution = requireProcedureRuntime(runtime);
     const request: TravelWatchAssistantRequest = {
         expectedVersion: runtime.version,
         elapsedHours: numeric(input(form, "elapsedHours")),
@@ -325,9 +343,9 @@ function travelRequest(form: HTMLFormElement, runtime: ExpeditionDetail): Travel
         resolutionNote: optionalText(input(form, "resolutionNote")),
         note: optionalText(input(form, "note"))
     };
-    if (runtime.profile.travelResolution === "HexSteps") request.hexSteps = integer(input(form, "hexSteps"));
+    if (execution.travelResolution === "HexSteps") request.hexSteps = integer(input(form, "hexSteps"));
     else request.distance = numeric(input(form, "distance"));
-    if (runtime.profile.tracksIntraHexProgress) request.hexProgress = numeric(input(form, "hexProgress"));
+    if (execution.tracksIntraHexProgress) request.hexProgress = numeric(input(form, "hexProgress"));
     const actual = select(form, "actualDirection").value;
     if (actual) request.actualDirection = Number(actual);
     return request;
@@ -395,6 +413,14 @@ function description(mode: ExpeditionAssistantMode, spatial: boolean): string {
     return "Record encounter-cadence checks and non-geographic outcomes without advancing travel. Keyed-location discovery remains part of world/map composition.";
 }
 
+function requireProcedureRuntime(runtime: ExpeditionDetail): ProcedureRuntime {
+    const execution = runtime.procedure.runtime;
+    if (!execution) {
+        throw new Error(`Procedure ${runtime.procedure.name} is structural and is not executable by the current runtime.`);
+    }
+    return execution;
+}
+
 function spatialState(runtime: ExpeditionDetail): SpatialRuntimeExpedition {
     if (!runtime.expedition.isSpatial) {
         throw new Error("This assistant requires a spatial crawl session.");
@@ -412,6 +438,7 @@ function travelStatus(state: SpatialRuntimeExpedition): HTMLElement[] {
 }
 
 function nonSpatialWatchStatus(runtime: ExpeditionDetail): HTMLElement[] {
+    const execution = requireProcedureRuntime(runtime);
     const state = runtime.expedition;
     if (state.isSpatial) throw new Error("Expected a non-spatial crawl session.");
     const watch = state.activeWatchNumber === null
@@ -419,9 +446,9 @@ function nonSpatialWatchStatus(runtime: ExpeditionDetail): HTMLElement[] {
         : `Watch ${state.activeWatchNumber}`;
     return [
         statusCell("Watch", watch),
-        statusCell("Configured length", formatHours(state.activeWatchTotalHours ?? runtime.profile.watchHours)),
+        statusCell("Configured length", formatHours(state.activeWatchTotalHours ?? execution.intervalHours)),
         statusCell("Watch elapsed", formatHours(state.activeWatchElapsedHours ?? 0)),
-        statusCell("Watch remaining", formatHours(state.activeWatchRemainingHours ?? runtime.profile.watchHours)),
+        statusCell("Watch remaining", formatHours(state.activeWatchRemainingHours ?? execution.intervalHours)),
         statusCell("Completed watches", String(state.completedWatches)),
         statusCell("Total elapsed", formatHours(state.elapsedTravelHours))
     ];
@@ -441,4 +468,3 @@ function directionOptions(selected: number | null): string {
         .map(value => `<option value="${value}" ${selected === value ? "selected" : ""}>${directionLabel(value)}</option>`)
         .join("");
 }
-

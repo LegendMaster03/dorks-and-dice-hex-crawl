@@ -7,19 +7,25 @@ namespace HexCrawl.IntegrationTests;
 public sealed class RuntimeEndpointsTests
 {
     [Fact]
-    public async Task RuntimeProfilesExposeAdvancedAndSimplifiedProcedures()
+    public async Task ProcedurePresetsExposeAdvancedAndSimplifiedProcedures()
     {
         var database = TestWebHost.NewDatabasePath();
         try
         {
             using var factory = TestWebHost.Create(database);
             using var client = factory.CreateClient();
-            var profiles = await client.GetFromJsonAsync<JsonElement>("/api/runtime/profiles");
-            Assert.Equal(3, profiles.GetArrayLength());
-            var advanced = Assert.Single(
-                profiles.EnumerateArray(),
-                profile => profile.GetProperty("key").GetString() == "alexandrian-advanced");
-            var helpers = advanced.GetProperty("resolutionHelpers");
+            var presets = await client.GetFromJsonAsync<JsonElement>("/api/procedures/presets");
+
+            var advancedPreset = Assert.Single(
+                presets.EnumerateArray(),
+                preset => preset.GetProperty("presetKey").GetString() == "alexandrian-advanced");
+            var advanced = advancedPreset.GetProperty("procedure");
+            Assert.Equal("alexandrian-advanced", advanced.GetProperty("key").GetString());
+            Assert.True(advanced.GetProperty("isExecutable").GetBoolean());
+            var advancedRuntime = advanced.GetProperty("runtime");
+            Assert.True(advancedRuntime.GetProperty("usesNavigationChecks").GetBoolean());
+            Assert.True(advancedRuntime.GetProperty("usesPersistentVeer").GetBoolean());
+            var helpers = advancedRuntime.GetProperty("resolutionHelpers");
             Assert.Equal(2, helpers.GetProperty("travel").GetProperty("roll").GetProperty("diceCount").GetInt32());
             Assert.Equal(6, helpers.GetProperty("travel").GetProperty("roll").GetProperty("dieSides").GetInt32());
             Assert.Equal(3, helpers.GetProperty("travel").GetProperty("roll").GetProperty("modifier").GetInt32());
@@ -27,8 +33,25 @@ public sealed class RuntimeEndpointsTests
             Assert.Equal(20, helpers.GetProperty("navigation").GetProperty("checkRoll").GetProperty("dieSides").GetInt32());
             Assert.Equal(8, helpers.GetProperty("encounter").GetProperty("checkRoll").GetProperty("dieSides").GetInt32());
             Assert.Equal(8, helpers.GetProperty("encounter").GetProperty("timingSlots").GetInt32());
-            Assert.Contains(profiles.EnumerateArray(), profile => profile.GetProperty("key").GetString() == "simple-fixed-distance");
-            Assert.Contains(profiles.EnumerateArray(), profile => profile.GetProperty("key").GetString() == "simple-hex-step");
+
+            var fixedPreset = Assert.Single(
+                presets.EnumerateArray(),
+                preset => preset.GetProperty("presetKey").GetString() == "simple-fixed-distance");
+            Assert.Equal(
+                "Fixed",
+                fixedPreset.GetProperty("procedure").GetProperty("runtime").GetProperty("actualDistanceResolution").GetString());
+
+            var hexStepPreset = Assert.Single(
+                presets.EnumerateArray(),
+                preset => preset.GetProperty("presetKey").GetString() == "simple-hex-step");
+            Assert.Equal(
+                "HexSteps",
+                hexStepPreset.GetProperty("procedure").GetProperty("runtime").GetProperty("travelResolution").GetString());
+
+            var oneRingPreset = Assert.Single(
+                presets.EnumerateArray(),
+                preset => preset.GetProperty("presetKey").GetString() == "the-one-ring-2e");
+            Assert.Equal("role-driven-journey", oneRingPreset.GetProperty("procedure").GetProperty("key").GetString());
         }
         finally
         {

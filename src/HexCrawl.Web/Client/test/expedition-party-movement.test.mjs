@@ -17,7 +17,7 @@ function runtime({
     targetUnit = mile
 } = {}) {
     return {
-        profile: { watchHours },
+        procedure: { runtime: { intervalHours: watchHours } },
         party: { baseMovement },
         remainingWatchHours: activeWatchRemainingHours ?? watchHours,
         expedition: {

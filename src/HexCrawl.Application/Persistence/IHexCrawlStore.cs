@@ -36,7 +36,7 @@ public sealed record StoredExpedition(
     CrawlSessionRuntimeState Runtime,
     CrawlSessionContext Context,
     PlayerKnowledgeState? Knowledge,
-    CrawlProcedureProfile Procedure,
+    CampaignProcedure CampaignProcedure,
     RuntimePauseReason? PauseReason,
     TimeSpan RemainingWatchTime,
     string OwnerUserId,
@@ -48,7 +48,6 @@ public sealed record StoredExpedition(
     public IReadOnlyList<GeneratedProcedureResolution> GeneratedProcedureResolutions { get; init; } = [];
     public Guid? CampaignId { get; init; }
     public ProcedureOriginMetadata? ProcedureOrigin { get; init; }
-    public CampaignProcedure? CampaignProcedure { get; init; }
 
     public Guid Id => Runtime.Id;
 

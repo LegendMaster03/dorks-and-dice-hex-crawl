@@ -1,9 +1,9 @@
 import type { HexCrawlApi } from "../../api";
 import { customUnitFieldsVisible } from "../worlds/world-form";
 import type { DistanceUnitKind } from "../worlds/world-form";
-import type { ExpeditionSummary, OverworldSummary, RuntimeProfile, StartStandaloneCrawlSessionInput } from "../../types";
+import type { ExpeditionSummary, OverworldSummary, ProcedurePreset, StartStandaloneCrawlSessionInput } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
-import { procedureProfileSummary, renderProcedureMechanicList } from "../../procedure-profile-view";
+import { campaignProcedureSummary, renderProcedureMechanicList } from "../../campaign-procedure-view";
 import { input, integer, numeric, option, required, select } from "../../ui/dom";
 
 const ABSTRACT_CONTEXT = "__abstract__";
@@ -61,7 +61,7 @@ export async function renderToolHome(
                         <label>Session name <input name="name" required value="Expedition" autocomplete="off"></label>
                         <label>Procedure preset <select name="procedure"></select></label>
                         <p class="hc-hint" data-procedure-summary></p>
-                        <details class="hc-optional-reference"><summary>Procedure mechanics</summary><ul data-procedure-mechanics></ul></details>
+                        <details class="hc-optional-reference"><summary>Materialized procedure</summary><ul data-procedure-mechanics></ul></details>
                         <label>Crawl context <select name="context"></select></label>
                         <div class="hc-form" data-abstract-context hidden>
                             <label>Context name <input name="contextName" value="Mapless hex crawl" autocomplete="off"></label>
@@ -111,7 +111,7 @@ export async function renderToolHome(
     const nonSpatialContext = required<HTMLElement>(form, "[data-nonspatial-context]");
     const customUnit = required<HTMLElement>(form, "[data-custom-unit]");
     const startButton = required<HTMLButtonElement>(form, "[data-start-button]");
-    let profiles: RuntimeProfile[] = [];
+    let presets: ProcedurePreset[] = [];
 
     const syncContext = (): void => {
         const abstract = context.value === ABSTRACT_CONTEXT;
@@ -133,25 +133,25 @@ export async function renderToolHome(
         input(form, "meters").required = custom;
     };
     const syncProcedure = (): void => {
-        const profile = profiles.find(candidate => candidate.key === procedure.value);
-        required<HTMLElement>(form, "[data-procedure-summary]").textContent = profile
-            ? procedureProfileSummary(profile)
+        const preset = presets.find(candidate => candidate.presetKey === procedure.value);
+        required<HTMLElement>(form, "[data-procedure-summary]").textContent = preset
+            ? `${preset.description} · ${campaignProcedureSummary(preset.procedure)}`
             : "";
         const mechanics = required<HTMLElement>(form, "[data-procedure-mechanics]");
-        if (profile) renderProcedureMechanicList(mechanics, profile);
+        if (preset) renderProcedureMechanicList(mechanics, preset.procedure);
         else mechanics.replaceChildren();
     };
 
     try {
-        const [expeditions, worlds, runtimeProfiles] = await Promise.all([
+        const [expeditions, worlds, procedurePresets] = await Promise.all([
             api.listExpeditions(),
             api.listOverworlds(),
-            api.getRuntimeProfiles()
+            api.getProcedurePresets()
         ]);
         if (disposed) return () => {};
 
-        profiles = runtimeProfiles;
-        for (const profile of profiles) procedure.append(option(profile.key, profile.name));
+        presets = procedurePresets;
+        for (const preset of presets) procedure.append(option(preset.presetKey, preset.displayName));
         for (const world of worlds) context.append(option(world.id, `World: ${world.name}`));
         context.append(
             option(ABSTRACT_CONTEXT, "Abstract hex (no Overworld)"),

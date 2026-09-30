@@ -65,17 +65,12 @@ public sealed class ProcedureResolutionRulesCoreAdapterTests
                 Route = "trackless"
             });
 
-        // Alexandrian baseline watches are four hours: 3 mi/h * 4h * 0.5.
         Assert.Equal(6d, prepared.ExpectedDistance);
         Assert.All(gateway.ResolveCalls, call => Assert.Equal(campaignId, call.CampaignId));
         Assert.Single(gateway.CatalogCalls);
         Assert.Equal(campaignId, gateway.CatalogCalls[0]);
-        Assert.Contains(
-            gateway.ResolveCalls,
-            call => call.MechanicKey == TravelEnvironmentMechanicKeys.WalkDistance);
-        Assert.Contains(
-            gateway.ResolveCalls,
-            call => call.MechanicKey == TravelEnvironmentMechanicKeys.TerrainDistanceFactor);
+        Assert.Contains(gateway.ResolveCalls, call => call.MechanicKey == TravelEnvironmentMechanicKeys.WalkDistance);
+        Assert.Contains(gateway.ResolveCalls, call => call.MechanicKey == TravelEnvironmentMechanicKeys.TerrainDistanceFactor);
     }
 
     [Fact]
@@ -108,16 +103,10 @@ public sealed class ProcedureResolutionRulesCoreAdapterTests
 
         Assert.Equal(15, prepared.NavigationDifficultyClass);
 
-        var baseline = CrawlProcedureCatalog.Resolve("alexandrian-advanced").Materialize();
-        var navigationOnly = baseline with
-        {
-            EncounterCadence = EncounterCheckCadence.None,
-            ResolutionHelpers = new ProcedureResolutionHelperProfile(
-                Navigation: baseline.ResolutionHelpers!.Navigation)
-        };
+        var procedure = NavigationOnlyProcedure();
         var resolver = new ProcedureResolutionResolver(new SequenceRandomSource(20));
         var result = resolver.Resolve(
-            navigationOnly,
+            GenericProcedureRuntime.Bind(procedure),
             Context(),
             State(),
             3,
@@ -218,13 +207,11 @@ public sealed class ProcedureResolutionRulesCoreAdapterTests
             }));
 
         Assert.Contains("distance-multiplier", exception.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain(
-            gateway.ResolveCalls,
-            call => call.MechanicKey == TravelEnvironmentMechanicKeys.TerrainDistanceFactor);
+        Assert.DoesNotContain(gateway.ResolveCalls, call => call.MechanicKey == TravelEnvironmentMechanicKeys.TerrainDistanceFactor);
     }
 
     [Fact]
-    public async Task CampaignScopeRoundTripsWithoutDatabaseSchemaMigration()
+    public async Task CampaignScopeRoundTripsWithCampaignProcedureSnapshot()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = new PostgresHexCrawlStore(database.ConnectionString);
@@ -237,26 +224,61 @@ public sealed class ProcedureResolutionRulesCoreAdapterTests
 
         Assert.NotNull(loaded);
         Assert.Equal(campaignId, loaded!.CampaignId);
+        Assert.Equal(expedition.CampaignProcedure, loaded.CampaignProcedure);
     }
 
     private static StoredExpedition Expedition(Guid? campaignId = null)
     {
         var now = DateTimeOffset.UtcNow;
-        var profile = CrawlProcedureCatalog.Resolve("alexandrian-advanced").Materialize();
+        var procedure = CrawlProcedureCatalog.Resolve("alexandrian-advanced").MaterializeGeneric().Procedure;
         return new StoredExpedition(
             "Rules Core test",
             State(),
             Context(),
             null,
-            profile,
+            procedure,
             null,
-            profile.WatchLength,
+            GenericProcedureRuntime.Bind(procedure).Time.IntervalDuration,
             "owner",
             3,
             now,
             now)
         {
             CampaignId = campaignId
+        };
+    }
+
+    private static CampaignProcedure NavigationOnlyProcedure()
+    {
+        var baseline = CrawlProcedureCatalog.Resolve("alexandrian-advanced").MaterializeGeneric().Procedure;
+        return baseline with
+        {
+            Modules = baseline.Modules.Select(module =>
+            {
+                if (module.Module.Key == GenericProcedureCatalog.EncounterCadenceModule)
+                {
+                    return module with
+                    {
+                        Parameters = new Dictionary<string, string>(module.Parameters, StringComparer.Ordinal)
+                        {
+                            ["cadence"] = EncounterCheckCadence.None.ToString()
+                        }
+                    };
+                }
+                if (module.Module.Key == GenericProcedureCatalog.ResolutionHelpersModule)
+                {
+                    return module with
+                    {
+                        Parameters = new Dictionary<string, string>(module.Parameters, StringComparer.Ordinal)
+                        {
+                            ["travel.enabled"] = "false",
+                            ["navigation.enabled"] = "true",
+                            ["encounter.enabled"] = "false"
+                        }
+                    };
+                }
+                return module;
+            }).ToArray()
         };
     }
 
@@ -322,9 +344,7 @@ public sealed class ProcedureResolutionRulesCoreAdapterTests
         public List<Guid?> CatalogCalls { get; } = [];
         public List<(Guid? CampaignId, string MechanicKey, TravelEnvironmentResolutionRequest Request)> ResolveCalls { get; } = [];
 
-        public Task<TravelEnvironmentCatalogView> GetCatalogAsync(
-            Guid? campaignId,
-            CancellationToken cancellationToken = default)
+        public Task<TravelEnvironmentCatalogView> GetCatalogAsync(Guid? campaignId, CancellationToken cancellationToken = default)
         {
             CatalogCalls.Add(campaignId);
             return Task.FromResult(Catalog);

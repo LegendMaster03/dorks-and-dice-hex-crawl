@@ -1,17 +1,9 @@
-using HexCrawl.Domain.Procedure;
 using HexCrawl.Domain.Spatial;
 
 namespace HexCrawl.Domain.Runtime;
 
 public static partial class CrawlAssistantActions
 {
-    public static ExpeditionState RecordTravelWatch(
-        CrawlRuntimeContext context,
-        CrawlProcedureProfile profile,
-        ExpeditionState state,
-        TravelWatchAssistantInput input) =>
-        RecordTravelWatch(context, GenericProcedureRuntime.FromLegacyProfile(profile), state, input);
-
     public static ExpeditionState RecordTravelWatch(
         CrawlRuntimeContext context,
         GenericProcedureRuntime procedure,
@@ -121,12 +113,6 @@ public static partial class CrawlAssistantActions
             History = [.. state.History, .. events]
         };
     }
-
-    public static NonSpatialSessionState RecordWatch(
-        CrawlProcedureProfile profile,
-        NonSpatialSessionState state,
-        NonSpatialWatchAssistantInput input) =>
-        RecordWatch(GenericProcedureRuntime.FromLegacyProfile(profile), state, input);
 
     public static NonSpatialSessionState RecordWatch(
         GenericProcedureRuntime procedure,

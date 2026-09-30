@@ -8,11 +8,11 @@ import type {
     Overworld,
     OverworldSummary,
     PresentationProfile,
+    ProcedurePreset,
     ProcedureResolutionHelperRequest,
     ProcedureResolutionHelperResult,
     RegistrationControlPoint,
     RuntimeAdvanceRequest,
-    RuntimeProfile,
     TravelWatchAssistantRequest,
     NonSpatialWatchAssistantRequest,
     NavigationAssistantRequest,
@@ -319,8 +319,8 @@ export class HexCrawlApi {
         return `${this.backendBaseUrl}/api/overworlds/${encodeURIComponent(worldId)}/source-maps/${encodeURIComponent(sourceMapId)}/asset`;
     }
 
-    public getRuntimeProfiles(): Promise<RuntimeProfile[]> {
-        return this.getJson("/api/runtime/profiles", "Runtime profiles");
+    public getProcedurePresets(): Promise<ProcedurePreset[]> {
+        return this.getJson("/api/procedures/presets", "Procedure presets");
     }
 
     public getPresentationProfiles(): Promise<PresentationProfile[]> {

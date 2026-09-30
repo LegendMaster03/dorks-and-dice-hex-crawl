@@ -1,7 +1,6 @@
 using System.Security.Claims;
 using HexCrawl.Application;
 using HexCrawl.Application.Persistence;
-using HexCrawl.Domain.Runtime;
 using HexCrawl.Web.Api;
 using HexCrawl.Web.Framework;
 using Microsoft.AspNetCore.Routing;
@@ -117,11 +116,7 @@ public sealed class ExpeditionModule : IHexCrawlModule
         HexCrawlService service,
         CancellationToken cancellationToken)
     {
-        await service.DeleteExpeditionAsync(
-            expeditionId,
-            UserId(context),
-            expectedVersion,
-            cancellationToken);
+        await service.DeleteExpeditionAsync(expeditionId, UserId(context), expectedVersion, cancellationToken);
         return Results.NoContent();
     }
 
@@ -134,11 +129,7 @@ public sealed class ExpeditionModule : IHexCrawlModule
         CancellationToken cancellationToken)
     {
         var owner = UserId(context);
-        var expedition = await workbench.AdvanceAsync(
-            expeditionId,
-            owner,
-            request.ToCommand(),
-            cancellationToken);
+        var expedition = await workbench.AdvanceAsync(expeditionId, owner, request.ToCommand(), cancellationToken);
         return Results.Ok(await ContractAsync(expedition, owner, service, cancellationToken));
     }
 
@@ -149,11 +140,7 @@ public sealed class ExpeditionModule : IHexCrawlModule
         ProcedureResolutionHelperService helper,
         CancellationToken cancellationToken)
     {
-        var result = await helper.ResolveAsync(
-            expeditionId,
-            UserId(context),
-            request.ToCommand(),
-            cancellationToken);
+        var result = await helper.ResolveAsync(expeditionId, UserId(context), request.ToCommand(), cancellationToken);
         return Results.Ok(result);
     }
 
@@ -165,11 +152,7 @@ public sealed class ExpeditionModule : IHexCrawlModule
         CancellationToken cancellationToken)
     {
         var owner = UserId(context);
-        var expedition = await service.DiscoverAsync(
-            expeditionId,
-            owner,
-            request.ToCommand(),
-            cancellationToken);
+        var expedition = await service.DiscoverAsync(expeditionId, owner, request.ToCommand(), cancellationToken);
         return Results.Ok(await ContractAsync(expedition, owner, service, cancellationToken));
     }
 
@@ -182,11 +165,7 @@ public sealed class ExpeditionModule : IHexCrawlModule
         CancellationToken cancellationToken)
     {
         var owner = UserId(context);
-        var expedition = await parties.UpdateAsync(
-            expeditionId,
-            owner,
-            request.ToCommand(),
-            cancellationToken);
+        var expedition = await parties.UpdateAsync(expeditionId, owner, request.ToCommand(), cancellationToken);
         return Results.Ok(await ContractAsync(expedition, owner, service, cancellationToken));
     }
 
@@ -199,11 +178,7 @@ public sealed class ExpeditionModule : IHexCrawlModule
         CancellationToken cancellationToken)
     {
         var owner = UserId(context);
-        var expedition = await assistants.RecordTravelWatchAsync(
-            expeditionId,
-            owner,
-            request.ToCommand(),
-            cancellationToken);
+        var expedition = await assistants.RecordTravelWatchAsync(expeditionId, owner, request.ToCommand(), cancellationToken);
         return Results.Ok(await ContractAsync(expedition, owner, service, cancellationToken));
     }
 
@@ -216,11 +191,7 @@ public sealed class ExpeditionModule : IHexCrawlModule
         CancellationToken cancellationToken)
     {
         var owner = UserId(context);
-        var expedition = await assistants.RecordNonSpatialWatchAsync(
-            expeditionId,
-            owner,
-            request.ToCommand(),
-            cancellationToken);
+        var expedition = await assistants.RecordNonSpatialWatchAsync(expeditionId, owner, request.ToCommand(), cancellationToken);
         return Results.Ok(await ContractAsync(expedition, owner, service, cancellationToken));
     }
 
@@ -233,11 +204,7 @@ public sealed class ExpeditionModule : IHexCrawlModule
         CancellationToken cancellationToken)
     {
         var owner = UserId(context);
-        var expedition = await assistants.RecordNavigationAsync(
-            expeditionId,
-            owner,
-            request.ToCommand(),
-            cancellationToken);
+        var expedition = await assistants.RecordNavigationAsync(expeditionId, owner, request.ToCommand(), cancellationToken);
         return Results.Ok(await ContractAsync(expedition, owner, service, cancellationToken));
     }
 
@@ -250,11 +217,7 @@ public sealed class ExpeditionModule : IHexCrawlModule
         CancellationToken cancellationToken)
     {
         var owner = UserId(context);
-        var expedition = await assistants.RecordEncounterCadenceAsync(
-            expeditionId,
-            owner,
-            request.ToCommand(),
-            cancellationToken);
+        var expedition = await assistants.RecordEncounterCadenceAsync(expeditionId, owner, request.ToCommand(), cancellationToken);
         return Results.Ok(await ContractAsync(expedition, owner, service, cancellationToken));
     }
 
@@ -266,10 +229,7 @@ public sealed class ExpeditionModule : IHexCrawlModule
     {
         if (expedition.Context is WorldBoundCrawlSessionContext worldContext)
         {
-            var world = await service.GetOverworldAsync(
-                worldContext.WorldId,
-                ownerUserId,
-                cancellationToken);
+            var world = await service.GetOverworldAsync(worldContext.WorldId, ownerUserId, cancellationToken);
             return ExpeditionWorkbenchContract.From(expedition, world.World);
         }
 

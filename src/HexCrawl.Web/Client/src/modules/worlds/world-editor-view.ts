@@ -13,8 +13,8 @@ export async function renderWorldEditor(
     worldId: string,
     navigate: (route: string, replace?: boolean) => void): Promise<() => void> {
     let world = await api.getOverworld(worldId);
-    const [profiles, initialExpeditions] = await Promise.all([
-        api.getRuntimeProfiles(),
+    const [procedurePresets, initialExpeditions] = await Promise.all([
+        api.getProcedurePresets(),
         api.listExpeditions(worldId)
     ]);
     let selectedLocation: Location | null = null;
@@ -352,10 +352,10 @@ export async function renderWorldEditor(
     }));
 
     const procedure = select(expeditionForm, "procedure");
-    for (const profile of profiles) {
+    for (const preset of procedurePresets) {
         const option = document.createElement("option");
-        option.value = profile.key;
-        option.textContent = profile.name;
+        option.value = preset.presetKey;
+        option.textContent = preset.displayName;
         procedure.append(option);
     }
 
@@ -442,4 +442,3 @@ function setFormPending(form: HTMLFormElement, pending: boolean): void {
         delete submit.dataset.idleText;
     }
 }
-

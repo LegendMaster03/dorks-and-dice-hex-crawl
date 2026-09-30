@@ -1,3 +1,4 @@
+using System.Globalization;
 using HexCrawl.Application.Persistence;
 using HexCrawl.Domain.Procedure;
 using HexCrawl.Domain.Runtime;
@@ -8,16 +9,13 @@ namespace HexCrawl.Application.Tests;
 public sealed class GenericProcedureArchitectureTests
 {
     [Fact]
-    public void BuiltInPresetsMaterializeGenericCampaignOwnedSnapshots()
+    public void BuiltInPresetsMaterializeCampaignOwnedSnapshots()
     {
         foreach (var preset in CrawlProcedureCatalog.All)
         {
             preset.Validate();
-
             var materialized = preset.MaterializeGeneric();
-            var compatibility = CampaignProcedureCompatibilityProjector.Project(materialized.Procedure);
 
-            Assert.Equal(preset.Materialize(), compatibility);
             Assert.Equal(1, materialized.Procedure.Revision);
             Assert.NotEqual(Guid.Empty, materialized.Procedure.ProcedureId);
             Assert.Equal(preset.Origin, materialized.Origin);
@@ -27,27 +25,30 @@ public sealed class GenericProcedureArchitectureTests
                 Assert.NotEmpty(module.Module.Key);
                 Assert.NotEmpty(module.Mechanic.Key);
                 Assert.True(module.Mechanic.Version > 0);
+                Assert.NotEmpty(module.Mechanic.ExecutionHandler);
             });
         }
     }
 
     [Fact]
-    public void RuntimeProjectionDoesNotRequirePresetOriginIdentity()
+    public void RuntimeBindingDoesNotDependOnPresetIdentity()
     {
-        var materialized = CrawlProcedureCatalog.Resolve("alexandrian-advanced").MaterializeGeneric();
-        var snapshot = materialized.Procedure with
+        var procedure = CrawlProcedureCatalog.Resolve("alexandrian-advanced").MaterializeGeneric().Procedure;
+        var renamed = procedure with
         {
             Key = "campaign-owned-procedure",
             Name = "Campaign owned procedure"
         };
 
-        var projected = CampaignProcedureCompatibilityProjector.Project(snapshot);
+        var originalRuntime = GenericProcedureRuntime.Bind(procedure);
+        var renamedRuntime = GenericProcedureRuntime.Bind(renamed);
 
-        Assert.Equal("campaign-owned-procedure", projected.Key);
-        Assert.Equal("Campaign owned procedure", projected.Name);
-        Assert.Equal(materialized.CompatibilityProfile.WatchLength, projected.WatchLength);
-        Assert.Equal(materialized.CompatibilityProfile.TravelResolution, projected.TravelResolution);
-        Assert.Equal(materialized.CompatibilityProfile.ResolutionHelpers, projected.ResolutionHelpers);
+        Assert.Equal(originalRuntime.Time, renamedRuntime.Time);
+        Assert.Equal(originalRuntime.Movement, renamedRuntime.Movement);
+        Assert.Equal(originalRuntime.HexProgress, renamedRuntime.HexProgress);
+        Assert.Equal(originalRuntime.Navigation, renamedRuntime.Navigation);
+        Assert.Equal(originalRuntime.Encounters, renamedRuntime.Encounters);
+        Assert.Equal(originalRuntime.ResolutionHelpers, renamedRuntime.ResolutionHelpers);
         Assert.Null(typeof(CampaignProcedure).GetProperty("PresetKey"));
     }
 
@@ -55,16 +56,13 @@ public sealed class GenericProcedureArchitectureTests
     public void GenericOverrideCreatesNewRevisionWithoutMutatingPriorRevision()
     {
         var first = CrawlProcedureCatalog.Resolve("simple-fixed-distance").MaterializeGeneric().Procedure;
-        var sixHours = TimeSpan.FromHours(6).Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var sixHours = TimeSpan.FromHours(6).Ticks.ToString(CultureInfo.InvariantCulture);
         var change = new CampaignProcedureOverride(
             "longer-travel-interval",
             GenericProcedureCatalog.TimeIntervalModule,
             null,
             null,
-            new Dictionary<string, string>
-            {
-                ["durationTicks"] = sixHours
-            },
+            new Dictionary<string, string> { ["durationTicks"] = sixHours },
             "Campaign-specific travel interval.");
 
         var second = CampaignProcedureMaterializer.CreateRevision(first, [change]);
@@ -72,8 +70,8 @@ public sealed class GenericProcedureArchitectureTests
         Assert.Equal(first.ProcedureId, second.ProcedureId);
         Assert.Equal(1, first.Revision);
         Assert.Equal(2, second.Revision);
-        Assert.Equal(TimeSpan.FromHours(4), CampaignProcedureCompatibilityProjector.Project(first).WatchLength);
-        Assert.Equal(TimeSpan.FromHours(6), CampaignProcedureCompatibilityProjector.Project(second).WatchLength);
+        Assert.Equal(TimeSpan.FromHours(4).Ticks.ToString(CultureInfo.InvariantCulture), Parameter(first, GenericProcedureCatalog.TimeIntervalModule, "durationTicks"));
+        Assert.Equal(sixHours, Parameter(second, GenericProcedureCatalog.TimeIntervalModule, "durationTicks"));
         Assert.Single(second.Overrides);
     }
 
@@ -100,7 +98,7 @@ public sealed class GenericProcedureArchitectureTests
     }
 
     [Fact]
-    public async Task CampaignProcedureRevisionsRoundTripIndependentlyOfPresetCatalog()
+    public async Task CampaignProcedureRevisionsRoundTripWithoutPresetCatalogReconstruction()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = new PostgresHexCrawlStore(database.ConnectionString);
@@ -108,15 +106,13 @@ public sealed class GenericProcedureArchitectureTests
         var service = new CampaignProcedureService(store);
 
         var first = await service.CreateFromPresetAsync("alice", "simple-fixed-distance", Guid.NewGuid());
+        var sixHours = TimeSpan.FromHours(6).Ticks.ToString(CultureInfo.InvariantCulture);
         var change = new CampaignProcedureOverride(
             "six-hour-watch",
             GenericProcedureCatalog.TimeIntervalModule,
             null,
             null,
-            new Dictionary<string, string>
-            {
-                ["durationTicks"] = TimeSpan.FromHours(6).Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture)
-            });
+            new Dictionary<string, string> { ["durationTicks"] = sixHours });
         var second = await service.CreateRevisionAsync("alice", first.ProcedureId, 1, [change]);
 
         var storedFirst = await service.GetAsync("alice", first.ProcedureId, 1);
@@ -126,29 +122,26 @@ public sealed class GenericProcedureArchitectureTests
         Assert.Equal(1, storedFirst.Revision);
         Assert.Equal(2, latest.Revision);
         Assert.Equal(2, history.Count);
-        Assert.Equal(TimeSpan.FromHours(4), CampaignProcedureCompatibilityProjector.Project(storedFirst.Procedure).WatchLength);
-        Assert.Equal(TimeSpan.FromHours(6), CampaignProcedureCompatibilityProjector.Project(latest.Procedure).WatchLength);
+        Assert.Equal(TimeSpan.FromHours(4).Ticks.ToString(CultureInfo.InvariantCulture), Parameter(storedFirst.Procedure, GenericProcedureCatalog.TimeIntervalModule, "durationTicks"));
+        Assert.Equal(sixHours, Parameter(latest.Procedure, GenericProcedureCatalog.TimeIntervalModule, "durationTicks"));
         Assert.Equal(first.ProcedureOrigin, storedFirst.ProcedureOrigin);
         Assert.Equal(first.ProcedureOrigin, latest.ProcedureOrigin);
     }
 
     [Fact]
-    public async Task UnknownFutureMechanicSnapshotIsPreservedEvenWhenCurrentRuntimeCanNotProjectIt()
+    public async Task UnknownFutureMechanicSnapshotIsPreservedAndRejectedByRuntimeBinding()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = new PostgresHexCrawlStore(database.ConnectionString);
         await store.InitializeAsync();
         var materialized = CrawlProcedureCatalog.Resolve("simple-fixed-distance").MaterializeGeneric();
-        var movement = materialized.Procedure.Modules.Single(module =>
-            module.Module.Key == GenericProcedureCatalog.MovementResolutionModule);
-        var futureMechanicKey = "future-movement-resolution";
+        var movement = materialized.Procedure.Modules.Single(module => module.Module.Key == GenericProcedureCatalog.MovementResolutionModule);
+        const string futureMechanicKey = "future-movement-resolution";
         var futureMovement = movement with
         {
             Module = movement.Module with
             {
-                CompatibleMechanicTypes = movement.Module.CompatibleMechanicTypes
-                    .Concat([futureMechanicKey])
-                    .ToArray()
+                CompatibleMechanicTypes = movement.Module.CompatibleMechanicTypes.Concat([futureMechanicKey]).ToArray()
             },
             Mechanic = movement.Mechanic with
             {
@@ -162,34 +155,25 @@ public sealed class GenericProcedureArchitectureTests
         {
             ProcedureId = Guid.NewGuid(),
             Modules = materialized.Procedure.Modules
-                .Select(module => module.Module.Key == GenericProcedureCatalog.MovementResolutionModule
-                    ? futureMovement
-                    : module)
+                .Select(module => module.Module.Key == GenericProcedureCatalog.MovementResolutionModule ? futureMovement : module)
                 .ToArray()
         };
         future.Validate();
 
         await store.CreateCampaignProcedureRevisionAsync(new StoredCampaignProcedureRevision(
-            future,
-            "alice",
-            null,
-            null,
-            DateTimeOffset.UtcNow));
+            future, "alice", null, null, DateTimeOffset.UtcNow));
         var loaded = await store.GetCampaignProcedureRevisionAsync(future.ProcedureId, 1, "alice");
 
         Assert.NotNull(loaded);
-        var loadedMovement = loaded!.Procedure.Modules.Single(module =>
-            module.Module.Key == GenericProcedureCatalog.MovementResolutionModule);
+        var loadedMovement = loaded!.Procedure.Modules.Single(module => module.Module.Key == GenericProcedureCatalog.MovementResolutionModule);
         Assert.Equal(futureMechanicKey, loadedMovement.Mechanic.Key);
         Assert.Equal(42, loadedMovement.Mechanic.Version);
         Assert.Equal("future.runtime.handler", loadedMovement.Mechanic.ExecutionHandler);
-        var exception = Assert.Throws<InvalidOperationException>(() =>
-            CampaignProcedureCompatibilityProjector.Project(loaded.Procedure));
-        Assert.Contains("can not be projected", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Throws<UnsupportedProcedureMechanicException>(() => GenericProcedureRuntime.Bind(loaded.Procedure));
     }
 
     [Fact]
-    public async Task NewCrawlSessionPinsFullGenericSnapshotAlongsideCompatibilityProfile()
+    public async Task NewCrawlSessionPinsExactCampaignProcedureSnapshot()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = new PostgresHexCrawlStore(database.ConnectionString);
@@ -204,11 +188,11 @@ public sealed class GenericProcedureArchitectureTests
                 new NonSpatialCrawlSessionContext("Travel clock")));
         var loaded = await store.GetExpeditionAsync(started.Id, "alice");
 
-        Assert.NotNull(started.CampaignProcedure);
         Assert.NotNull(loaded);
-        Assert.NotNull(loaded!.CampaignProcedure);
-        Assert.Equal(started.CampaignProcedure!.ProcedureId, loaded.CampaignProcedure!.ProcedureId);
-        Assert.Equal(started.Procedure, CampaignProcedureCompatibilityProjector.Project(loaded.CampaignProcedure));
+        Assert.Equal(started.CampaignProcedure, loaded!.CampaignProcedure);
         Assert.Equal("simple-fixed-distance", loaded.ProcedureOrigin?.PresetKey);
     }
+
+    private static string Parameter(CampaignProcedure procedure, string moduleKey, string parameterKey) =>
+        procedure.Modules.Single(module => module.Module.Key == moduleKey).Parameters[parameterKey];
 }

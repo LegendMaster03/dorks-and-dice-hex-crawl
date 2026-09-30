@@ -314,21 +314,24 @@ test("wide world-bound workbench places map beside current sheet while ledger re
 });
 
 
-test("custom procedure summary follows active custom mechanics and resets to the preset when customization is disabled", () => {
+test("expedition setup materializes the selected preset and defers editing to the Procedure Composer", () => {
     const setup = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-setup.ts"), "utf8");
-    assert.match(setup, /renderCustomizedProcedureSummary/);
-    assert.match(setup, /customization\.addEventListener\("input", renderCustomizedProcedureSummary\)/);
-    assert.match(setup, /customization\.addEventListener\("change", renderCustomizedProcedureSummary\)/);
-    assert.match(setup, /if \(customize\.checked\)[\s\S]{0,160}fillProcedure\(profile\)[\s\S]{0,120}else[\s\S]{0,120}renderProcedureSummary\(profile\)/);
-    assert.match(setup, /Complete the custom procedure fields to refresh this summary/);
+    assert.match(setup, /api\.getProcedurePresets\(\)/);
+    assert.match(setup, /Procedure customization moves to the Procedure Composer/);
+    assert.match(setup, /procedureKey: preset\.presetKey/);
+    assert.match(setup, /renderProcedureMechanicList/);
+    assert.doesNotMatch(setup, /procedureSnapshot/);
+    assert.doesNotMatch(setup, /name="customize"/);
+    assert.doesNotMatch(setup, /compatibleResolutionHelpers/);
 });
 
-test("custom procedure snapshots drop helper components that no longer match the selected mechanics", () => {
-    const setup = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-setup.ts"), "utf8");
-    assert.match(setup, /compatibleResolutionHelpers/);
-    assert.match(setup, /travelResolution === "ContinuousDistance"[\s\S]{0,120}actualDistanceResolution === "VariableResolved"/);
-    assert.match(setup, /navigation: usesNavigationChecks \? helpers\.navigation : null/);
-    assert.match(setup, /encounter: encounterCadence === "None" \? null : helpers\.encounter/);
+test("spatial structural procedures stay viewable without constructing executable watch controls", () => {
+    const view = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-view.ts"), "utf8");
+    assert.match(view, /runtime\.procedure\.runtime\s*\?\s*new ExpeditionWatchController/);
+    assert.match(view, /Procedure execution unavailable/);
+    assert.match(view, /persisted procedure snapshot remains available for reference/);
+    assert.match(view, /watchController\?\.sync\(next\)/);
+    assert.match(view, /watchController\?\.dispose\(\)/);
 });
 
 test("focused encounter assistant does not imply it can discard automatic helper timing", () => {
@@ -338,32 +341,33 @@ test("focused encounter assistant does not imply it can discard automatic helper
     assert.match(assistant, /manual, external, or DM-override bookkeeping/);
 });
 
-test("procedure selectors expose full persisted mechanics before a session is created", () => {
+test("procedure selectors expose materialized procedure mechanics before a session is created", () => {
     const setup = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-setup.ts"), "utf8");
     const assistant = fs.readFileSync(path.join(sourceDir, "modules/assistants/assistant-entry-view.ts"), "utf8");
     const home = fs.readFileSync(path.join(sourceDir, "modules/home/tool-home-view.ts"), "utf8");
     for (const source of [setup, assistant, home]) {
-        assert.match(source, /<summary>Procedure mechanics<\/summary>/);
         assert.match(source, /data-procedure-mechanics/);
         assert.match(source, /renderProcedureMechanicList/);
+        assert.match(source, /getProcedurePresets/);
     }
+    assert.match(setup, /<summary>Materialized procedure<\/summary>/);
 });
 
 test("procedure mechanics use one shared presentation policy across setup, assistants, and running sheet", () => {
-    const profileView = fs.readFileSync(path.join(sourceDir, "procedure-profile-view.ts"), "utf8");
+    const campaignProcedureView = fs.readFileSync(path.join(sourceDir, "campaign-procedure-view.ts"), "utf8");
     const setup = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-setup.ts"), "utf8");
     const assistant = fs.readFileSync(path.join(sourceDir, "modules/assistants/assistant-entry-view.ts"), "utf8");
     const home = fs.readFileSync(path.join(sourceDir, "modules/home/tool-home-view.ts"), "utf8");
     const presentation = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-presentation.ts"), "utf8");
-    assert.match(setup, /procedureProfileSummary/);
-    assert.match(assistant, /procedureProfileSummary/);
-    assert.match(home, /procedureProfileSummary/);
+    assert.match(setup, /campaignProcedureSummary/);
+    assert.match(assistant, /campaignProcedureSummary/);
+    assert.match(home, /campaignProcedureSummary/);
     assert.match(presentation, /procedureMechanicLines/);
-    assert.match(profileView, /exit factors start/);
-    assert.match(profileView, /actual distance = expected distance/);
-    assert.match(profileView, /situational modifier vs\. the DM-confirmed DC/);
-    assert.match(profileView, /encounter time uses 1d/);
-    assert.match(profileView, /configured components are not applicable to the active procedure mechanics/);
+    assert.match(campaignProcedureView, /exit factors start/);
+    assert.match(campaignProcedureView, /actual distance = expected distance/);
+    assert.match(campaignProcedureView, /situational modifier vs\. the DM-confirmed DC/);
+    assert.match(campaignProcedureView, /encounter time uses 1d/);
+    assert.match(campaignProcedureView, /configured components are not applicable to the active procedure mechanics/);
 });
 
 test("automatic helper controls show the persisted procedure formulas at the point of use", () => {
@@ -372,7 +376,7 @@ test("automatic helper controls show the persisted procedure formulas at the poi
     assert.match(view, /data-helper-travel-mechanic/);
     assert.match(view, /data-helper-navigation-mechanic/);
     assert.match(view, /data-helper-encounter-mechanic/);
-    assert.match(controller, /procedureHelperMechanics\(runtime\.profile\)/);
+    assert.match(controller, /procedureHelperMechanics\(runtime\.procedure\)/);
     assert.match(controller, /mechanics\.travel \?\? ""/);
     assert.match(controller, /mechanics\.navigation \?\? ""/);
     assert.match(controller, /mechanics\.encounter \?\? ""/);

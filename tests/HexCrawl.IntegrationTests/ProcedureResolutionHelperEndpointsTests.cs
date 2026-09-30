@@ -18,7 +18,9 @@ public sealed class ProcedureResolutionHelperEndpointsTests
             var started = await StartAsync(client, "Helper integration");
             var expeditionId = started.GetProperty("id").GetGuid();
             var initialVersion = started.GetProperty("version").GetInt64();
-            Assert.NotEqual(JsonValueKind.Null, started.GetProperty("profile").GetProperty("resolutionHelpers").ValueKind);
+            Assert.NotEqual(
+                JsonValueKind.Null,
+                started.GetProperty("procedure").GetProperty("runtime").GetProperty("resolutionHelpers").ValueKind);
 
             var first = await GenerateAsync(client, expeditionId, initialVersion);
             Assert.Equal(initialVersion + 1, first.GetProperty("expeditionVersion").GetInt64());

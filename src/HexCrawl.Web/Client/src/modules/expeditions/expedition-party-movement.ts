@@ -3,12 +3,15 @@ import type { DistanceUnit, DistanceValue, ExpeditionDetail } from "../../types"
 export function suggestedWatchDistance(runtime: ExpeditionDetail): number | null {
     if (!runtime.expedition.isSpatial) return null;
 
+    const procedureRuntime = runtime.procedure.runtime;
+    if (!procedureRuntime) return null;
+
     const movement = runtime.party.baseMovement;
     if (!movement) return null;
 
     const targetUnit = runtime.expedition.distanceTraveled.unit;
     const remainingHours = runtime.expedition.activeWatchNumber === null
-        ? runtime.profile.watchHours
+        ? procedureRuntime.intervalHours
         : runtime.expedition.activeWatchRemainingHours ?? runtime.remainingWatchHours;
 
     if (runtime.expedition.activeWatchNumber === null && movement.perWatch) {
@@ -24,7 +27,7 @@ export function suggestedWatchDistance(runtime: ExpeditionDetail): number | null
         && movement.perWatch
         && nearlyEqual(
             remainingHours,
-            runtime.expedition.activeWatchTotalHours ?? runtime.profile.watchHours)) {
+            runtime.expedition.activeWatchTotalHours ?? procedureRuntime.intervalHours)) {
         return convertDistanceValue(movement.perWatch, targetUnit);
     }
 

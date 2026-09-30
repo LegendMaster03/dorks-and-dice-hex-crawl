@@ -9,7 +9,7 @@ namespace HexCrawl.Application.Tests;
 public sealed class PostgresSchemaTests
 {
     [Fact]
-    public async Task SchemaUsesNativePostgresTypesAndExpectedForeignKeys()
+    public async Task SchemaUsesNativePostgresTypesAndSingleRequiredProcedureSnapshot()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = new PostgresHexCrawlStore(database.ConnectionString);
@@ -18,11 +18,11 @@ public sealed class PostgresSchemaTests
 
         await using var connection = new NpgsqlConnection(database.ConnectionString);
         await connection.OpenAsync();
-        var columns = new Dictionary<(string Table, string Column), string>();
+        var columns = new Dictionary<(string Table, string Column), (string Type, bool Nullable)>();
         await using (var command = connection.CreateCommand())
         {
             command.CommandText = """
-                SELECT table_name, column_name, data_type
+                SELECT table_name, column_name, data_type, is_nullable
                 FROM information_schema.columns
                 WHERE table_schema = current_schema()
                   AND table_name IN ('overworlds', 'expeditions', 'expedition_events');
@@ -30,19 +30,27 @@ public sealed class PostgresSchemaTests
             await using var reader = await command.ExecuteReaderAsync();
             while (await reader.ReadAsync())
             {
-                columns[(reader.GetString(0), reader.GetString(1))] = reader.GetString(2);
+                columns[(reader.GetString(0), reader.GetString(1))] =
+                    (reader.GetString(2), string.Equals(reader.GetString(3), "YES", StringComparison.Ordinal));
             }
         }
 
-        Assert.Equal("uuid", columns[("overworlds", "id")]);
-        Assert.Equal("jsonb", columns[("overworlds", "world_json")]);
-        Assert.Equal("bigint", columns[("overworlds", "version")]);
-        Assert.Equal("timestamp with time zone", columns[("overworlds", "created_at")]);
-        Assert.Equal("uuid", columns[("expeditions", "overworld_id")]);
-        Assert.Equal("jsonb", columns[("expeditions", "procedure_json")]);
-        Assert.Equal("jsonb", columns[("expeditions", "procedure_origin_json")]);
-        Assert.Equal("bigint", columns[("expedition_events", "sequence")]);
-        Assert.Equal("jsonb", columns[("expedition_events", "event_json")]);
+        Assert.Equal("uuid", columns[("overworlds", "id")].Type);
+        Assert.Equal("jsonb", columns[("overworlds", "world_json")].Type);
+        Assert.Equal("bigint", columns[("overworlds", "version")].Type);
+        Assert.Equal("timestamp with time zone", columns[("overworlds", "created_at")].Type);
+        Assert.Equal("uuid", columns[("expeditions", "overworld_id")].Type);
+        Assert.Equal("jsonb", columns[("expeditions", "procedure_json")].Type);
+        Assert.False(columns[("expeditions", "procedure_json")].Nullable);
+        Assert.Equal("jsonb", columns[("expeditions", "procedure_origin_json")].Type);
+        Assert.DoesNotContain(("expeditions", "campaign_procedure_json"), columns.Keys);
+        Assert.Equal("bigint", columns[("expedition_events", "sequence")].Type);
+        Assert.Equal("jsonb", columns[("expedition_events", "event_json")].Type);
+
+        await using var versionCommand = connection.CreateCommand();
+        versionCommand.CommandText = "SELECT MAX(version) FROM hex_crawl_schema_migrations;";
+        Assert.Equal(PostgresSchemaMigrator.CurrentVersion, Convert.ToInt32(await versionCommand.ExecuteScalarAsync()));
+        Assert.Equal(4, PostgresSchemaMigrator.CurrentVersion);
     }
 
     [Fact]

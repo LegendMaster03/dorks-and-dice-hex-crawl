@@ -2,7 +2,6 @@ using HexCrawl.Application;
 using HexCrawl.Application.Persistence;
 using HexCrawl.Domain.Knowledge;
 using HexCrawl.Domain.Presentation;
-using HexCrawl.Domain.Procedure;
 using HexCrawl.Domain.Runtime;
 using HexCrawl.Domain.Spatial;
 using HexCrawl.Domain.World;
@@ -199,7 +198,7 @@ public sealed record ExpeditionWorkbenchContract(
     long Version,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
-    RuntimeProfileContract Profile,
+    CampaignProcedureContract Procedure,
     PresentationProfileContract? Presentation,
     RuntimePauseReason? PauseReason,
     double RemainingWatchHours,
@@ -225,7 +224,7 @@ public sealed record ExpeditionWorkbenchContract(
             expedition.Version,
             expedition.CreatedAt,
             expedition.UpdatedAt,
-            RuntimeProfileContract.From(expedition.Procedure),
+            CampaignProcedureContract.From(expedition.CampaignProcedure),
             presentation is null ? null : PresentationProfileContract.From(presentation),
             expedition.PauseReason,
             expedition.RemainingWatchTime.TotalHours,
@@ -271,32 +270,26 @@ public sealed record StartStandaloneCrawlSessionRequest(
     string Name,
     string ProcedureKey,
     StandaloneCrawlContextRequest Context,
-    HexCoordinate? StartHex = null,
-    RuntimeProfileContract? ProcedureSnapshot = null)
+    HexCoordinate? StartHex = null)
 {
     public StartStandaloneCrawlSessionCommand ToCommand() => new(
         Name,
         ProcedureKey,
         Context.ToDomain(),
-        StartHex,
-        ProcedureSnapshot?.ToDomain());
-
+        StartHex);
 }
 
 public sealed record StartExpeditionWorkbenchRequest(
     string Name,
     string ProcedureKey,
     HexCoordinate StartHex,
-    string? PresentationKey = null,
-    RuntimeProfileContract? ProcedureSnapshot = null)
+    string? PresentationKey = null)
 {
     public StartExpeditionWorkbenchCommand ToCommand() => new(
         Name,
         ProcedureKey,
         string.IsNullOrWhiteSpace(PresentationKey) ? "exploration-map" : PresentationKey.Trim(),
-        StartHex,
-        ProcedureSnapshot?.ToDomain());
-
+        StartHex);
 }
 
 public sealed record AdvanceExpeditionWorkbenchRequest
@@ -370,7 +363,6 @@ public sealed record AdvanceExpeditionWorkbenchRequest
         GeneratedProcedureResolutionId = GeneratedProcedureResolutionId
     };
 }
-
 
 public sealed record TravelWatchAssistantRequest(
     long ExpectedVersion,

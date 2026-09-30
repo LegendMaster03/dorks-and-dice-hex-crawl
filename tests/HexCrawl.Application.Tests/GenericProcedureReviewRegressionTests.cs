@@ -1,23 +1,17 @@
 using System.Globalization;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using HexCrawl.Application.Persistence;
 using HexCrawl.Domain.Procedure;
 using HexCrawl.Domain.Runtime;
 using HexCrawl.Domain.Spatial;
 using HexCrawl.Domain.World;
 using HexCrawl.Infrastructure.Persistence;
-using Npgsql;
-using NpgsqlTypes;
 
 namespace HexCrawl.Application.Tests;
 
 public sealed class GenericProcedureReviewRegressionTests
 {
-    private static readonly JsonSerializerOptions JsonOptions = CreateJsonOptions();
-
     [Fact]
-    public async Task MatchingGenericAndCompatibilitySnapshotsCanBeCreatedSavedAndLoaded()
+    public async Task ExpeditionCampaignProcedureCanBeCreatedSavedAndLoadedExactly()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = new PostgresHexCrawlStore(database.ConnectionString);
@@ -27,97 +21,21 @@ public sealed class GenericProcedureReviewRegressionTests
         var started = await service.StartAsync(
             "alice",
             new StartStandaloneCrawlSessionCommand(
-                "Consistent",
+                "Pinned",
                 "simple-fixed-distance",
                 new NonSpatialCrawlSessionContext("Travel clock")));
+        var pinned = started.CampaignProcedure;
 
-        Assert.NotNull(started.CampaignProcedure);
-        Assert.Equal(started.Procedure, CampaignProcedureCompatibilityProjector.Project(started.CampaignProcedure!));
-
-        var saved = await store.SaveExpeditionAsync(started with { Name = "Still consistent" }, started.Version);
+        var saved = await store.SaveExpeditionAsync(started with { Name = "Still pinned" }, started.Version);
         Assert.Equal(SaveOutcome.Saved, saved.Outcome);
 
         var loaded = await store.GetExpeditionAsync(started.Id, "alice");
         Assert.NotNull(loaded);
-        Assert.NotNull(loaded!.CampaignProcedure);
-        Assert.Equal(loaded.Procedure, CampaignProcedureCompatibilityProjector.Project(loaded.CampaignProcedure!));
+        Assert.Equal(pinned, loaded!.CampaignProcedure);
     }
 
     [Fact]
-    public async Task MismatchedGenericAndCompatibilitySnapshotsAreRejectedBeforeCreateAndSave()
-    {
-        await using var database = await PostgresTestDatabase.CreateAsync();
-        var store = new PostgresHexCrawlStore(database.ConnectionString);
-        await store.InitializeAsync();
-        var service = new CrawlSessionService(store);
-        var started = await service.StartAsync(
-            "alice",
-            new StartStandaloneCrawlSessionCommand(
-                "Consistent",
-                "simple-fixed-distance",
-                new NonSpatialCrawlSessionContext("Travel clock")));
-        var mismatch = started.Procedure with { WatchLength = TimeSpan.FromHours(5) };
-
-        var createMismatch = DuplicateStandalone(started, "Create mismatch") with { Procedure = mismatch };
-        await Assert.ThrowsAsync<InvalidOperationException>(() => store.CreateExpeditionAsync(createMismatch));
-
-        var saveMismatch = started with { Procedure = mismatch };
-        await Assert.ThrowsAsync<InvalidOperationException>(() => store.SaveExpeditionAsync(saveMismatch, started.Version));
-    }
-
-    [Fact]
-    public async Task ContradictoryPersistedSnapshotsAreRejectedOnLoad()
-    {
-        await using var database = await PostgresTestDatabase.CreateAsync();
-        var store = new PostgresHexCrawlStore(database.ConnectionString);
-        await store.InitializeAsync();
-        var service = new CrawlSessionService(store);
-        var started = await service.StartAsync(
-            "alice",
-            new StartStandaloneCrawlSessionCommand(
-                "Persisted mismatch",
-                "simple-fixed-distance",
-                new NonSpatialCrawlSessionContext("Travel clock")));
-        var mismatch = started.Procedure with { WatchLength = TimeSpan.FromHours(5) };
-
-        await UpdateJsonAsync(database.ConnectionString, started.Id, "procedure_json", mismatch);
-
-        var exception = await Assert.ThrowsAsync<InvalidDataException>(() =>
-            store.GetExpeditionAsync(started.Id, "alice"));
-        Assert.Contains("contradictory", exception.Message, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public async Task LegacyNullGenericSnapshotStillLoads()
-    {
-        await using var database = await PostgresTestDatabase.CreateAsync();
-        var store = new PostgresHexCrawlStore(database.ConnectionString);
-        await store.InitializeAsync();
-        var service = new CrawlSessionService(store);
-        var started = await service.StartAsync(
-            "alice",
-            new StartStandaloneCrawlSessionCommand(
-                "Legacy snapshot",
-                "simple-fixed-distance",
-                new NonSpatialCrawlSessionContext("Travel clock")));
-
-        await using (var connection = new NpgsqlConnection(database.ConnectionString))
-        {
-            await connection.OpenAsync();
-            await using var command = connection.CreateCommand();
-            command.CommandText = "UPDATE expeditions SET campaign_procedure_json = NULL WHERE id = @id;";
-            command.Parameters.AddWithValue("id", NpgsqlDbType.Uuid, started.Id);
-            Assert.Equal(1, await command.ExecuteNonQueryAsync());
-        }
-
-        var loaded = await store.GetExpeditionAsync(started.Id, "alice");
-        Assert.NotNull(loaded);
-        Assert.Null(loaded!.CampaignProcedure);
-        Assert.Equal(started.Procedure, loaded.Procedure);
-    }
-
-    [Fact]
-    public async Task UnknownFutureMechanicExpeditionSnapshotIsPreservedWithoutForcedProjection()
+    public async Task UnknownFutureMechanicExpeditionSnapshotIsPreservedWithoutReinterpretation()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = new PostgresHexCrawlStore(database.ConnectionString);
@@ -129,24 +47,20 @@ public sealed class GenericProcedureReviewRegressionTests
                 "Future source",
                 "simple-fixed-distance",
                 new NonSpatialCrawlSessionContext("Travel clock")));
-        var future = WithFutureMovementMechanic(started.CampaignProcedure!);
-        var futureExpedition = DuplicateStandalone(started, "Future snapshot") with
-        {
-            CampaignProcedure = future
-        };
+        var future = WithFutureMovementMechanic(started.CampaignProcedure);
+        var futureExpedition = DuplicateStandalone(started, "Future snapshot") with { CampaignProcedure = future };
 
         var created = await store.CreateExpeditionAsync(futureExpedition);
         var loaded = await store.GetExpeditionAsync(created.Id, "alice");
 
         Assert.NotNull(loaded);
-        Assert.NotNull(loaded!.CampaignProcedure);
-        var movement = loaded.CampaignProcedure!.Modules.Single(module =>
+        Assert.Equal(future, loaded!.CampaignProcedure);
+        var movement = loaded.CampaignProcedure.Modules.Single(module =>
             module.Module.Key == GenericProcedureCatalog.MovementResolutionModule);
         Assert.Equal("future-movement-resolution", movement.Mechanic.Key);
         Assert.Equal(42, movement.Mechanic.Version);
         Assert.Equal("future.runtime.handler", movement.Mechanic.ExecutionHandler);
-        Assert.False(CampaignProcedureCompatibilityProjector.TryProject(loaded.CampaignProcedure, out _));
-        Assert.Equal(started.Procedure, loaded.Procedure);
+        Assert.Throws<UnsupportedProcedureMechanicException>(() => GenericProcedureRuntime.Bind(loaded.CampaignProcedure));
     }
 
     [Fact]
@@ -207,10 +121,7 @@ public sealed class GenericProcedureReviewRegressionTests
     {
         var first = CrawlProcedureCatalog.Resolve("simple-fixed-distance").MaterializeGeneric().Procedure;
         var sixHours = TimeSpan.FromHours(6).Ticks.ToString(CultureInfo.InvariantCulture);
-        var overrideParameters = new Dictionary<string, string>
-        {
-            ["durationTicks"] = sixHours
-        };
+        var overrideParameters = new Dictionary<string, string> { ["durationTicks"] = sixHours };
         var change = new CampaignProcedureOverride(
             "six-hour-watch",
             GenericProcedureCatalog.TimeIntervalModule,
@@ -232,12 +143,12 @@ public sealed class GenericProcedureReviewRegressionTests
 
         var secondParameters = Assert.IsType<Dictionary<string, string>>(secondTime.Parameters);
         secondParameters["durationTicks"] = TimeSpan.FromHours(8).Ticks.ToString(CultureInfo.InvariantCulture);
-        Assert.Equal(TimeSpan.FromHours(4), CampaignProcedureCompatibilityProjector.Project(first).WatchLength);
-        Assert.Equal(TimeSpan.FromHours(8), CampaignProcedureCompatibilityProjector.Project(second).WatchLength);
+        Assert.Equal(TimeSpan.FromHours(4).Ticks.ToString(CultureInfo.InvariantCulture), firstTime.Parameters["durationTicks"]);
+        Assert.Equal(TimeSpan.FromHours(8).Ticks.ToString(CultureInfo.InvariantCulture), secondTime.Parameters["durationTicks"]);
     }
 
     [Fact]
-    public async Task StandaloneAndWorldBoundCreationBothPinGenericMaterializationWithCompatibilityProjection()
+    public async Task StandaloneAndWorldBoundCreationBothPinGenericMaterialization()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = new PostgresHexCrawlStore(database.ConnectionString);
@@ -264,13 +175,12 @@ public sealed class GenericProcedureReviewRegressionTests
         var reloadedWorldBound = await store.GetExpeditionAsync(worldBound.Id, "alice");
         Assert.NotNull(reloadedWorldBound);
         AssertPinned(reloadedWorldBound!, "simple-fixed-distance");
-        Assert.Equal(worldBound.CampaignProcedure!.ProcedureId, reloadedWorldBound!.CampaignProcedure!.ProcedureId);
+        Assert.Equal(worldBound.CampaignProcedure, reloadedWorldBound!.CampaignProcedure);
     }
 
     private static void AssertPinned(StoredExpedition expedition, string presetKey)
     {
-        Assert.NotNull(expedition.CampaignProcedure);
-        Assert.Equal(expedition.Procedure, CampaignProcedureCompatibilityProjector.Project(expedition.CampaignProcedure!));
+        expedition.CampaignProcedure.Validate();
         Assert.Equal(presetKey, expedition.ProcedureOrigin?.PresetKey);
     }
 
@@ -290,16 +200,13 @@ public sealed class GenericProcedureReviewRegressionTests
 
     private static CampaignProcedure WithFutureMovementMechanic(CampaignProcedure source)
     {
-        var movement = source.Modules.Single(module =>
-            module.Module.Key == GenericProcedureCatalog.MovementResolutionModule);
+        var movement = source.Modules.Single(module => module.Module.Key == GenericProcedureCatalog.MovementResolutionModule);
         const string futureMechanicKey = "future-movement-resolution";
         var futureMovement = movement with
         {
             Module = movement.Module with
             {
-                CompatibleMechanicTypes = movement.Module.CompatibleMechanicTypes
-                    .Concat([futureMechanicKey])
-                    .ToArray()
+                CompatibleMechanicTypes = movement.Module.CompatibleMechanicTypes.Concat([futureMechanicKey]).ToArray()
             },
             Mechanic = movement.Mechanic with
             {
@@ -313,40 +220,11 @@ public sealed class GenericProcedureReviewRegressionTests
         {
             ProcedureId = Guid.NewGuid(),
             Modules = source.Modules
-                .Select(module => module.Module.Key == GenericProcedureCatalog.MovementResolutionModule
-                    ? futureMovement
-                    : module)
+                .Select(module => module.Module.Key == GenericProcedureCatalog.MovementResolutionModule ? futureMovement : module)
                 .ToArray()
         };
         future.Validate();
         return future;
-    }
-
-    private static async Task UpdateJsonAsync<T>(
-        string connectionString,
-        Guid expeditionId,
-        string column,
-        T value)
-    {
-        if (column is not ("procedure_json" or "campaign_procedure_json"))
-        {
-            throw new ArgumentOutOfRangeException(nameof(column));
-        }
-
-        await using var connection = new NpgsqlConnection(connectionString);
-        await connection.OpenAsync();
-        await using var command = connection.CreateCommand();
-        command.CommandText = $"UPDATE expeditions SET {column} = @json WHERE id = @id;";
-        command.Parameters.AddWithValue("json", NpgsqlDbType.Jsonb, JsonSerializer.Serialize(value, JsonOptions));
-        command.Parameters.AddWithValue("id", NpgsqlDbType.Uuid, expeditionId);
-        Assert.Equal(1, await command.ExecuteNonQueryAsync());
-    }
-
-    private static JsonSerializerOptions CreateJsonOptions()
-    {
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
-        options.Converters.Add(new JsonStringEnumConverter());
-        return options;
     }
 
     private static CreateOverworldCommand WorldCommand() => new(

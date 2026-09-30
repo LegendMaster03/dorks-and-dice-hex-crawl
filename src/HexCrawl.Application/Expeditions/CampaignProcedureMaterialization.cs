@@ -1,4 +1,3 @@
-using System.Globalization;
 using HexCrawl.Domain.Procedure;
 
 namespace HexCrawl.Application;
@@ -16,14 +15,12 @@ public sealed record GenericProcedurePresetRecipe(
 
 public sealed record MaterializedCampaignProcedure(
     CampaignProcedure Procedure,
-    CrawlProcedureProfile CompatibilityProfile,
     ProcedureOriginMetadata? Origin);
 
 public static class CampaignProcedureMaterializer
 {
     public static MaterializedCampaignProcedure Materialize(
         CrawlProcedurePresetDefinition preset,
-        CrawlProcedureProfile? customizedProcedure = null,
         Guid? procedureId = null)
     {
         ArgumentNullException.ThrowIfNull(preset);
@@ -35,37 +32,27 @@ public static class CampaignProcedureMaterializer
         }
         ArgumentNullException.ThrowIfNull(preset.Recipe);
 
-        CampaignProcedure procedure;
-        if (customizedProcedure is not null)
+        var modules = preset.Recipe.ModuleSelections.Select(selection =>
         {
-            customizedProcedure.Validate();
-            procedure = CampaignProcedureCompatibilityProjector.Capture(customizedProcedure, procedureId);
-        }
-        else
-        {
-            var modules = preset.Recipe.ModuleSelections.Select(selection =>
-            {
-                var module = GenericProcedureCatalog.ResolveModule(selection.ModuleKey);
-                var mechanic = GenericProcedureCatalog.ResolveMechanic(selection.MechanicKey, selection.MechanicVersion);
-                return new MaterializedProcedureModule(
-                    CampaignProcedureSnapshot.Copy(module),
-                    CampaignProcedureSnapshot.Copy(mechanic),
-                    CampaignProcedureSnapshot.CopyStrings(selection.Parameters));
-            }).ToArray();
-            procedure = new CampaignProcedure
-            {
-                ProcedureId = procedureId ?? Guid.NewGuid(),
-                Revision = 1,
-                Key = preset.Recipe.DefaultProcedureKey,
-                Name = preset.Recipe.DefaultProcedureName,
-                Modules = modules,
-                Overrides = []
-            };
-            procedure.Validate();
-        }
+            var module = GenericProcedureCatalog.ResolveModule(selection.ModuleKey);
+            var mechanic = GenericProcedureCatalog.ResolveMechanic(selection.MechanicKey, selection.MechanicVersion);
+            return new MaterializedProcedureModule(
+                CampaignProcedureSnapshot.Copy(module),
+                CampaignProcedureSnapshot.Copy(mechanic),
+                CampaignProcedureSnapshot.CopyStrings(selection.Parameters));
+        }).ToArray();
 
-        var profile = CampaignProcedureCompatibilityProjector.Project(procedure);
-        return new MaterializedCampaignProcedure(procedure, profile, preset.Origin);
+        var procedure = new CampaignProcedure
+        {
+            ProcedureId = procedureId ?? Guid.NewGuid(),
+            Revision = 1,
+            Key = preset.Recipe.DefaultProcedureKey,
+            Name = preset.Recipe.DefaultProcedureName,
+            Modules = modules,
+            Overrides = []
+        };
+        procedure.Validate();
+        return new MaterializedCampaignProcedure(procedure, preset.Origin);
     }
 
     public static CampaignProcedure CreateRevision(
@@ -115,278 +102,6 @@ public static class CampaignProcedureMaterializer
                 .ToArray()
         };
         revision.Validate();
-        _ = CampaignProcedureCompatibilityProjector.TryProject(revision, out _);
         return revision;
     }
-}
-
-public static class CampaignProcedureCompatibilityProjector
-{
-    private sealed record CompatibilityMechanicSupport(
-        string ModuleKey,
-        string ExecutionHandler,
-        IReadOnlySet<int> SupportedVersions);
-
-    private static IReadOnlyList<CompatibilityMechanicSupport> SupportedMechanics { get; } =
-    [
-        new(GenericProcedureCatalog.TimeIntervalModule, "crawl-profile.watch-length", new HashSet<int> { 1 }),
-        new(GenericProcedureCatalog.MovementResolutionModule, "crawl-profile.movement-resolution", new HashSet<int> { 1 }),
-        new(GenericProcedureCatalog.HexProgressModule, "crawl-profile.hex-progress", new HashSet<int> { 1 }),
-        new(GenericProcedureCatalog.NavigationModule, "crawl-profile.navigation", new HashSet<int> { 1 }),
-        new(GenericProcedureCatalog.EncounterCadenceModule, "crawl-profile.encounter-cadence", new HashSet<int> { 1 }),
-        new(GenericProcedureCatalog.ResolutionHelpersModule, "crawl-profile.resolution-helpers", new HashSet<int> { 1 })
-    ];
-
-    public static CampaignProcedure Capture(CrawlProcedureProfile profile, Guid? procedureId = null)
-    {
-        ArgumentNullException.ThrowIfNull(profile);
-        profile.Validate();
-        var modules = new[]
-        {
-            Selection(GenericProcedureCatalog.TimeIntervalModule, GenericProcedureCatalog.FixedIntervalDurationMechanic,
-                Values(("durationTicks", profile.WatchLength.Ticks.ToString(CultureInfo.InvariantCulture)))),
-            Selection(GenericProcedureCatalog.MovementResolutionModule, GenericProcedureCatalog.MovementResolutionPolicyMechanic,
-                Values(
-                    ("travelResolution", profile.TravelResolution.ToString()),
-                    ("actualDistanceResolution", profile.ActualDistanceResolution.ToString()),
-                    ("tracksIntraHexProgress", Bool(profile.TracksIntraHexProgress)))),
-            Selection(GenericProcedureCatalog.HexProgressModule, GenericProcedureCatalog.HexProgressPolicyMechanic,
-                Values(
-                    ("startingExitProgressFactor", Number(profile.StartingExitProgressFactor)),
-                    ("nearExitProgressFactor", Number(profile.NearExitProgressFactor)),
-                    ("farExitProgressFactor", Number(profile.FarExitProgressFactor)),
-                    ("backExitProgressFactor", Number(profile.BackExitProgressFactor)),
-                    ("directionChangesCostProgress", Bool(profile.DirectionChangesCostProgress)),
-                    ("directionChangeProgressCostFactor", Number(profile.DirectionChangeProgressCostFactor)),
-                    ("supportsDeliberateDoubleBack", Bool(profile.SupportsDeliberateDoubleBack)))),
-            Selection(GenericProcedureCatalog.NavigationModule, GenericProcedureCatalog.NavigationCheckPolicyMechanic,
-                Values(
-                    ("usesNavigationChecks", Bool(profile.UsesNavigationChecks)),
-                    ("usesPersistentVeer", Bool(profile.UsesPersistentVeer)))),
-            Selection(GenericProcedureCatalog.EncounterCadenceModule, GenericProcedureCatalog.EncounterCheckCadenceMechanic,
-                Values(("cadence", profile.EncounterCadence.ToString()))),
-            Selection(GenericProcedureCatalog.ResolutionHelpersModule, GenericProcedureCatalog.DeterministicResolutionHelpersMechanic,
-                HelperValues(profile.ResolutionHelpers))
-        };
-        var procedure = new CampaignProcedure
-        {
-            ProcedureId = procedureId ?? Guid.NewGuid(),
-            Revision = 1,
-            Key = profile.Key,
-            Name = profile.Name,
-            Modules = modules,
-            Overrides = []
-        };
-        procedure.Validate();
-        return procedure;
-    }
-
-    public static GenericProcedurePresetRecipe ToRecipe(CrawlProcedureProfile profile)
-    {
-        var captured = Capture(profile);
-        return new GenericProcedurePresetRecipe(
-            captured.Key,
-            captured.Name,
-            captured.Modules.Select(module => new ProcedureModuleRecipe(
-                module.Module.Key,
-                module.Mechanic.Key,
-                module.Mechanic.Version,
-                CampaignProcedureSnapshot.CopyStrings(module.Parameters))).ToArray());
-    }
-
-    public static bool TryProject(CampaignProcedure procedure, out CrawlProcedureProfile profile)
-    {
-        ArgumentNullException.ThrowIfNull(procedure);
-        procedure.Validate();
-        if (!HasCompatibilityShape(procedure))
-        {
-            profile = null!;
-            return false;
-        }
-
-        profile = Project(procedure);
-        return true;
-    }
-
-    public static CrawlProcedureProfile Project(CampaignProcedure procedure)
-    {
-        ArgumentNullException.ThrowIfNull(procedure);
-        procedure.Validate();
-        var time = Module(procedure, GenericProcedureCatalog.TimeIntervalModule);
-        var movement = Module(procedure, GenericProcedureCatalog.MovementResolutionModule);
-        var progress = Module(procedure, GenericProcedureCatalog.HexProgressModule);
-        var navigation = Module(procedure, GenericProcedureCatalog.NavigationModule);
-        var encounter = Module(procedure, GenericProcedureCatalog.EncounterCadenceModule);
-        var helpers = Module(procedure, GenericProcedureCatalog.ResolutionHelpersModule);
-
-        RequireSupportedMechanic(time);
-        RequireSupportedMechanic(movement);
-        RequireSupportedMechanic(progress);
-        RequireSupportedMechanic(navigation);
-        RequireSupportedMechanic(encounter);
-        RequireSupportedMechanic(helpers);
-
-        var profile = new CrawlProcedureProfile
-        {
-            Key = procedure.Key,
-            Name = procedure.Name,
-            WatchLength = TimeSpan.FromTicks(Long(time, "durationTicks")),
-            TravelResolution = EnumValue<TravelResolutionMode>(movement, "travelResolution"),
-            ActualDistanceResolution = EnumValue<ActualDistanceResolutionMode>(movement, "actualDistanceResolution"),
-            TracksIntraHexProgress = Boolean(movement, "tracksIntraHexProgress"),
-            StartingExitProgressFactor = Double(progress, "startingExitProgressFactor"),
-            NearExitProgressFactor = Double(progress, "nearExitProgressFactor"),
-            FarExitProgressFactor = Double(progress, "farExitProgressFactor"),
-            BackExitProgressFactor = Double(progress, "backExitProgressFactor"),
-            DirectionChangesCostProgress = Boolean(progress, "directionChangesCostProgress"),
-            DirectionChangeProgressCostFactor = Double(progress, "directionChangeProgressCostFactor"),
-            SupportsDeliberateDoubleBack = Boolean(progress, "supportsDeliberateDoubleBack"),
-            UsesNavigationChecks = Boolean(navigation, "usesNavigationChecks"),
-            UsesPersistentVeer = Boolean(navigation, "usesPersistentVeer"),
-            EncounterCadence = EnumValue<EncounterCheckCadence>(encounter, "cadence"),
-            ResolutionHelpers = ProjectHelpers(helpers.Parameters)
-        };
-        profile.Validate();
-        return profile;
-    }
-
-    private static bool HasCompatibilityShape(CampaignProcedure procedure) =>
-        SupportedMechanics.All(support => HasSupportedMechanic(procedure, support));
-
-    private static bool HasSupportedMechanic(
-        CampaignProcedure procedure,
-        CompatibilityMechanicSupport support)
-    {
-        var module = procedure.Modules.SingleOrDefault(value =>
-            string.Equals(value.Module.Key, support.ModuleKey, StringComparison.Ordinal));
-        return module is not null
-            && string.Equals(module.Mechanic.ExecutionHandler, support.ExecutionHandler, StringComparison.Ordinal)
-            && support.SupportedVersions.Contains(module.Mechanic.Version);
-    }
-
-    private static MaterializedProcedureModule Selection(
-        string moduleKey,
-        string mechanicKey,
-        IReadOnlyDictionary<string, string> parameters) =>
-        new(
-            CampaignProcedureSnapshot.Copy(GenericProcedureCatalog.ResolveModule(moduleKey)),
-            CampaignProcedureSnapshot.Copy(GenericProcedureCatalog.ResolveMechanic(mechanicKey)),
-            CampaignProcedureSnapshot.CopyStrings(parameters));
-
-    private static MaterializedProcedureModule Module(CampaignProcedure procedure, string key) =>
-        procedure.Modules.SingleOrDefault(value => string.Equals(value.Module.Key, key, StringComparison.Ordinal))
-        ?? throw new InvalidOperationException(
-            $"Campaign procedure does not contain required compatibility module '{key}'. The materialized data remains preserved but can not be projected by this runtime version.");
-
-    private static void RequireSupportedMechanic(MaterializedProcedureModule module)
-    {
-        var support = SupportedMechanics.Single(value =>
-            string.Equals(value.ModuleKey, module.Module.Key, StringComparison.Ordinal));
-        if (string.Equals(module.Mechanic.ExecutionHandler, support.ExecutionHandler, StringComparison.Ordinal)
-            && support.SupportedVersions.Contains(module.Mechanic.Version))
-        {
-            return;
-        }
-
-        var supportedVersions = string.Join(", ", support.SupportedVersions.OrderBy(value => value));
-        throw new InvalidOperationException(
-            $"Module '{module.Module.Key}' uses compatibility handler '{module.Mechanic.ExecutionHandler}' version {module.Mechanic.Version}, which is not supported by the current compatibility projector and can not be projected by this runtime version. Supported handler/version combination: '{support.ExecutionHandler}' version(s) {supportedVersions}. The materialized data remains preserved and was not interpreted using an older compatibility schema.");
-    }
-
-    private static ProcedureResolutionHelperProfile? ProjectHelpers(IReadOnlyDictionary<string, string> values)
-    {
-        var travel = Boolean(values, "travel.enabled")
-            ? new TravelResolutionHelperProfile(
-                new DiceRollFormula(Int(values, "travel.diceCount"), Int(values, "travel.dieSides"), Int(values, "travel.modifier")),
-                Double(values, "travel.distanceFactor"))
-            : null;
-        var navigation = Boolean(values, "navigation.enabled")
-            ? new NavigationResolutionHelperProfile(
-                new DiceRollFormula(Int(values, "navigation.diceCount"), Int(values, "navigation.dieSides"), Int(values, "navigation.modifier")))
-            : null;
-        var encounter = Boolean(values, "encounter.enabled")
-            ? new EncounterResolutionHelperProfile(
-                new DiceRollFormula(Int(values, "encounter.diceCount"), Int(values, "encounter.dieSides"), Int(values, "encounter.modifier")),
-                new DiceRollResultSet(Value(values, "encounter.wanderingResults")),
-                new DiceRollResultSet(Value(values, "encounter.keyedLocationResults")),
-                Int(values, "encounter.timingSlots"))
-            : null;
-        return travel is null && navigation is null && encounter is null
-            ? null
-            : new ProcedureResolutionHelperProfile(travel, navigation, encounter);
-    }
-
-    private static IReadOnlyDictionary<string, string> HelperValues(ProcedureResolutionHelperProfile? helpers)
-    {
-        var values = new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            ["travel.enabled"] = Bool(helpers?.Travel is not null),
-            ["navigation.enabled"] = Bool(helpers?.Navigation is not null),
-            ["encounter.enabled"] = Bool(helpers?.Encounter is not null)
-        };
-        if (helpers?.Travel is { } travel)
-        {
-            AddRoll(values, "travel", travel.Roll);
-            values["travel.distanceFactor"] = Number(travel.DistanceFactorPerRollPoint);
-        }
-        if (helpers?.Navigation is { } navigation)
-        {
-            AddRoll(values, "navigation", navigation.CheckRoll);
-        }
-        if (helpers?.Encounter is { } encounter)
-        {
-            AddRoll(values, "encounter", encounter.CheckRoll);
-            values["encounter.wanderingResults"] = encounter.WanderingResults.Canonical;
-            values["encounter.keyedLocationResults"] = encounter.KeyedLocationResults.Canonical;
-            values["encounter.timingSlots"] = encounter.TimingSlots.ToString(CultureInfo.InvariantCulture);
-        }
-        return values;
-    }
-
-    private static void AddRoll(IDictionary<string, string> values, string prefix, DiceRollFormula roll)
-    {
-        values[$"{prefix}.diceCount"] = roll.DiceCount.ToString(CultureInfo.InvariantCulture);
-        values[$"{prefix}.dieSides"] = roll.DieSides.ToString(CultureInfo.InvariantCulture);
-        values[$"{prefix}.modifier"] = roll.Modifier.ToString(CultureInfo.InvariantCulture);
-    }
-
-    private static IReadOnlyDictionary<string, string> Values(params (string Key, string Value)[] values) =>
-        values.ToDictionary(value => value.Key, value => value.Value, StringComparer.Ordinal);
-
-    private static string Bool(bool value) => value ? "true" : "false";
-    private static string Number(double value) => value.ToString("R", CultureInfo.InvariantCulture);
-
-    private static string Value(MaterializedProcedureModule module, string key) => Value(module.Parameters, key);
-
-    private static string Value(IReadOnlyDictionary<string, string> values, string key) =>
-        values.TryGetValue(key, out var value)
-            ? value
-            : throw new InvalidOperationException($"Procedure compatibility projection requires parameter '{key}'.");
-
-    private static bool Boolean(MaterializedProcedureModule module, string key) => Boolean(module.Parameters, key);
-    private static bool Boolean(IReadOnlyDictionary<string, string> values, string key) =>
-        bool.TryParse(Value(values, key), out var value)
-            ? value
-            : throw new InvalidOperationException($"Procedure parameter '{key}' is not a valid boolean.");
-
-    private static int Int(IReadOnlyDictionary<string, string> values, string key) =>
-        int.TryParse(Value(values, key), NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
-            ? value
-            : throw new InvalidOperationException($"Procedure parameter '{key}' is not a valid integer.");
-
-    private static long Long(MaterializedProcedureModule module, string key) =>
-        long.TryParse(Value(module, key), NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
-            ? value
-            : throw new InvalidOperationException($"Procedure parameter '{key}' is not a valid long integer.");
-
-    private static double Double(MaterializedProcedureModule module, string key) => Double(module.Parameters, key);
-    private static double Double(IReadOnlyDictionary<string, string> values, string key) =>
-        double.TryParse(Value(values, key), NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
-            ? value
-            : throw new InvalidOperationException($"Procedure parameter '{key}' is not a valid number.");
-
-    private static T EnumValue<T>(MaterializedProcedureModule module, string key) where T : struct, Enum =>
-        Enum.TryParse<T>(Value(module, key), true, out var value)
-            ? value
-            : throw new InvalidOperationException($"Procedure parameter '{key}' is not a supported {typeof(T).Name} value.");
 }

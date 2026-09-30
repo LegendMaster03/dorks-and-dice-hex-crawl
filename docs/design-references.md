@@ -8,174 +8,126 @@ The current reference hierarchy is:
 
 1. **B/X + AD&D** — core wilderness exploration procedure, time/movement cadence, DM-facing bookkeeping, and information-dense running-sheet conventions.
 2. **3e + 3.5e (3.Xe)** — detailed movement, terrain, environment, skills, modifiers, and simulation-oriented mechanics.
-3. **5e + 5.5e (5.Xe)** — modern terminology and compatibility, character-facing travel responsibilities, pace consequences, and terrain-profile concepts.
+3. **5e + 5.5e (5.Xe)** — modern terminology and character-facing travel responsibilities, pace consequences, and terrain concepts.
 4. **The Alexandrian** — procedural organization, watch-based usability, running-sheet layout, and practical synthesis where official rules leave gaps.
 5. **4e** — complex journey resolution, structured hazards, consequential failure, progressive expedition state, and encounter handoff.
 
-This order is not a quality ranking. It describes what each source family is primarily being used to inform.
+This order is not a quality ranking. It describes what each source family primarily informs.
 
-## Reviewed source mechanics currently encoded
+## Reviewed mechanics currently executable
 
-The built-in `alexandrian-advanced` profile is the current concrete source-backed baseline. Its reviewed mechanics are regression-tested so later refactors do not silently change the procedure:
+The materialized `alexandrian-advanced` preset is the current concrete source-backed executable baseline. Its reviewed mechanics remain regression-tested:
 
 - a watch is 4 hours;
 - travel uses continuous distance with separately resolved expected and actual distance;
 - the optional actual-distance helper rolls `2d6+3` and applies each roll point as 10% of expected distance;
 - encounter cadence is once per watch;
-- the automatic advanced encounter check uses `1d8`, with 1 as the wandering-encounter result and 8 as the keyed-location result;
-- encounter timing divides the 4-hour watch into eight equal slots;
-- navigation uses a `1d20` helper while the DC, situational modifier, and failure veer remain explicit DM-confirmed inputs;
-- persistent veer, deliberate double-back, intra-hex progress, and direction-change progress costs remain active;
-- near/far progress and turn costs are stored as scale-independent factors rather than hard-coded miles, so the familiar 6-mile near exit, 12-mile far exit, and 2-mile direction-change cost emerge on a 12-mile center-to-center hex without making 12-mile hexes a global assumption.
+- the automatic encounter helper uses `1d8`, with 1 as the wandering-encounter result and 8 as the keyed-location result;
+- encounter timing divides the watch into eight equal slots;
+- navigation uses a `1d20` helper while DC, situational modifier, and failure veer remain explicit inputs;
+- persistent veer, deliberate double-back, intra-hex progress, and direction-change costs remain active;
+- near/far progress and turn costs are stored as scale-independent factors rather than hard-coded miles.
 
-The source material contains additional mechanics that are **not yet automated** here: movement tables derived from creature speed, pace-specific movement and check consequences, terrain and weather modifiers, foraging/exploration actions, the check for accurately estimating actual distance traveled, mounts/vehicles, and encounter-table content. Those remain DM-resolved inputs or future Rules Core/Character integrations. They should not be copied into Hex Crawl as hidden hard-coded edition tables merely to make the current UI appear more automatic.
+Additional source mechanics such as creature-speed movement tables, pace-specific consequences, terrain/weather modifiers, foraging actions, mounts/vehicles, and encounter-table content are not implicitly invented by Hex Crawl. They remain resolved inputs or later generic/provider work until implemented.
 
 ## Core-procedure rule
 
-The existing Hex Crawl procedure remains:
+The existing deterministic crawl loop remains:
 
 `Travel -> Watch -> Navigation -> Encounter`
 
-4e-style skill challenges do **not** replace this loop.
+4e-style skill challenges do not replace this loop.
 
-The deterministic crawl runtime remains responsible for ordinary watch advancement, navigation/lost state, spatial progress, encounter cadence, and pauses. More complicated journey-scale problems should be modeled as an optional layer that can span ordinary watches without becoming the watch engine itself.
+The deterministic runtime remains responsible for ordinary executable watch advancement, navigation/lost state, spatial progress, encounter cadence, and pauses. More complicated journey-scale problems should be an optional layer that can span ordinary watches.
 
 ## 4e-derived future layer: Journey Challenge / Complex Hazard
 
-The highest-priority 4e-derived future capability is a persistent Journey Challenge / Complex Hazard model for expedition-scale obstacles such as:
+A future generic multi-stage expedition process should represent obstacles such as difficult crossings, severe weather, haunted regions, collapsing routes, or other problems requiring several checks/stages.
 
-- mountain crossings;
-- flooded regions;
-- sandstorms;
-- haunted forests;
-- collapsing underground routes;
-- severe weather;
-- other obstacles that should take several checks, watches, or travel stages to resolve.
+It should be able to:
 
-A Journey Challenge should be capable of:
+- span multiple watches or travel stages;
+- track progress toward a goal;
+- reference skills/competencies/tools through stable external identifiers rather than hard-coded names;
+- accept multiple valid approaches;
+- record successes, failures, complications, and consequences;
+- allow failure to alter circumstances rather than merely stop progress;
+- retain generated/manual/external/DM-override provenance.
 
-- spanning multiple watches or travel stages;
-- tracking progress toward a goal;
-- defining applicable skills, competencies, tools, or other mechanics through Rules Core references instead of hard-coded skill names;
-- accepting multiple valid approaches;
-- recording successes, failures, complications, and consequences;
-- allowing failure to alter circumstances rather than merely preventing progress;
-- producing delayed or downstream effects;
-- retaining generated/manual/external/DM-override provenance through the existing audit/history model.
-
-Likely consequences include resource loss, delay, exposure, altered route, worsened encounter position, surprise state, reinforcements, encounter-composition changes, or other later-state effects.
+Likely consequences include resource loss, delay, exposure, altered route, worsened encounter position, surprise state, reinforcements, or encounter-composition changes.
 
 ### Ownership boundary
 
-A Journey Challenge should be persistent **expedition state adjacent to the ordinary crawl runtime**, not a replacement `CrawlProcedureProfile`, not a special `EncounterOutcomeKind`, and not prose hidden in a runtime-event message.
+A Journey Challenge is persistent expedition state adjacent to the ordinary crawl runtime. It is not a replacement procedure representation, not a special `EncounterOutcomeKind`, and not prose hidden only in an event message.
 
 The expected ownership split is:
 
-- **Rules Core** owns canonical skill/competency/tool/condition definitions and edition-specific resolution mechanics.
-- **Hex Crawl** owns which journey challenge is active, its progress/state, when checks or stages occur in expedition time, and the expedition consequences produced by resolved stages.
-- **Block Initiative** owns combat initiative and tactical encounter execution after a handoff.
-- **Character Sheet / other tools** may supply character capabilities, but they do not own expedition state.
-
-A future challenge definition should therefore refer to external mechanics through stable identifiers/keys plus provenance, not embed a closed list of D&D skills into Hex Crawl.
+- **Rules Core** owns canonical skill/competency/tool/condition definitions and edition-specific mechanics when used.
+- **Hex Crawl** owns active journey-process state, its progress, when stages occur, and expedition consequences.
+- **Block Initiative** owns tactical combat after handoff.
+- **Character Sheet / other tools** may supply capabilities but do not own expedition state.
 
 ## Travel capability
 
-Travel capability should ultimately be derivable from actual party members, creatures, mounts, vehicles, carried constraints, terrain, and procedure/source data.
+Travel capability should ultimately compose actual participants, creatures, mounts, vehicles, carried constraints, terrain, and procedure/source data.
 
-Current and future code should continue to avoid hard-coded assumptions about:
+Current and future code should avoid hard-coded assumptions about miles versus kilometers, fixed physical hex scale, terrain rates, or campaign-specific movement values.
 
-- miles versus kilometers;
-- segment counts or segment distance;
-- terrain rates;
-- fixed party movement values;
-- campaign-specific values such as Humblewood map scale.
-
-The existing party movement reference remains useful as a DM-facing authoritative reference and override. Later automation may derive or propose those values from Rules Core/Character data without changing the meaning of the stored distance units.
+The existing party movement reference remains a valid DM-owned authoritative reference and fallback. Later automation may derive or propose values without changing stored distance semantics.
 
 ## Marching order and travel roles
 
-Hex Crawl already persists a flexible marching order and watch list. This is the correct base for later travel-role context.
+Hex Crawl already persists flexible marching order and watch state. This is the correct base for later typed travel roles.
 
-Future role state may include concepts such as front, middle, rear, scout, navigator, mapper, forager, or source-defined equivalents. These should not introduce tactical-grid requirements into Hex Crawl.
+Future roles may include front, middle, rear, scout, navigator, mapper, forager, or source-defined equivalents without introducing tactical-grid ownership.
 
-The current active-watch `Activities` collection remains intentionally open text/keys. If Rules Core integration needs machine-readable character-to-duty assignments, add a typed travel-duty model rather than converting those strings into a fixed Hex Crawl skill enum.
+Current active-watch activity keys remain intentionally open. Typed participant activity execution belongs to a later phase.
 
 ## Progressive expedition conditions
 
-Environmental hazards may need state that improves, remains stable, or worsens across multiple checks. Examples include:
+Environmental hazards may need state that improves, remains stable, or worsens across checks. Examples include exposure, dehydration, altitude effects, disease, or supernatural corruption.
 
-- exposure;
-- dehydration;
-- altitude effects;
-- disease;
-- supernatural corruption.
+Canonical definitions and edition-specific mechanics can come from Rules Core when available. Hex Crawl owns expedition timing and the structured consequences applied to expedition state.
 
-Canonical condition definitions and edition-specific mechanics belong in Rules Core when available. Hex Crawl should own the expedition timeline and the events that apply, advance, reduce, or clear those effects.
-
-Do not force progressive hazards into `RuntimePauseReason`. Pause reasons answer "why can the current deterministic transition not continue?" They are not a general status/effect model.
+Do not overload `RuntimePauseReason` for persistent effects. Pause reasons explain why a current transition can not continue; effects describe ongoing state.
 
 ## Encounter handoff
 
-Travel and hazard outcomes should be able to influence a later encounter through structured context rather than prose-only notes.
+Travel and hazard outcomes should influence later encounters through structured context rather than prose-only notes.
 
-Potential handoff fields include:
+Potential handoff fields include surprise, advantageous/disadvantaged circumstances, delayed arrival, reinforcements, altered composition, depleted resources, route/location changes, source process identifiers, and provenance.
 
-- surprise / loss of surprise;
-- advantageous or disadvantaged starting circumstances;
-- delayed arrival;
-- reinforcements;
-- altered encounter composition;
-- depleted resources;
-- route or location changes;
-- source challenge/hazard identifier;
-- provenance for the effect.
-
-This context should remain system-neutral enough for Hex Crawl to persist and Block Initiative to consume. Hex Crawl should not acquire tactical initiative, tactical-grid, or combat-round ownership.
+Hex Crawl should not acquire tactical initiative, combat-round, or tactical-grid ownership.
 
 ## Present architecture assessment
 
-The current implementation does not require a core-procedure redesign for these future features.
+The current architecture already supports this direction:
 
-Existing choices that already support the direction:
-
-- `CrawlRuntimeEngine` is deterministic and accepts resolved inputs rather than owning Rules Core.
-- `StoredExpedition` is an aggregate envelope with adjacent party and generated-resolution state, so another persisted expedition-owned capability can be added without making it spatial engine state.
-- runtime events are persisted as complete JSON records in `expedition_events`, allowing event contracts to grow without replacing the event table;
-- independent resolution provenance already distinguishes procedure defaults, automatic rolls, manual rolls, external systems, and DM overrides;
-- party marching order and watch rotation are persisted and do not assume fixed formation dimensions;
+- `CampaignProcedure` is the single materialized procedure representation;
+- `CrawlRuntimeEngine` is deterministic and accepts resolved inputs;
+- `StoredExpedition` is an aggregate envelope with adjacent party and generated-resolution state;
+- runtime events are retained as structured JSON records;
+- independent provenance distinguishes procedure defaults, automatic rolls, manual rolls, external systems, and DM overrides;
+- party marching/watch state does not assume fixed tactical dimensions;
 - distances carry explicit units;
-- semantic world categories do not automatically imply movement multipliers;
-- focused assistants and the full workbench share the same persisted session rather than owning competing state.
+- semantic world categories do not automatically imply procedure mechanics;
+- focused assistants and the full workbench share the same persisted session.
 
-Areas that will require deliberate future design, but not current refactoring:
+Areas that require later design rather than current Phase 3 execution work are:
 
-1. **Persistent challenge/hazard state.** There is no generic long-running expedition complication aggregate today. Add a dedicated typed model rather than bloating `ActiveWatchState`.
-2. **Rules Core mechanic references.** Current travel activities are strings. Journey Challenges will need stable, typed mechanic references for skills/competencies/tools and possibly source/version identity.
-3. **Structured consequences.** `CrawlRuntimeEvent` currently has generic event metadata plus message/subject/distance fields. Rich cross-tool consequences should receive typed payload/context rather than being encoded only in `Message`.
-4. **Encounter handoff contract.** Hex Crawl now emits a versioned Block Initiative handoff for triggered encounters containing expedition/watch/hex/location/outcome/note context plus an optional structured combatant array. Block Initiative owns tactical combat after import. Hex Crawl does not infer combatants from free-text encounter notes; future encounter-table or Rules Core integrations can populate the existing combatant array.
-5. **Progressive conditions/effects.** Current navigation and pause state are purpose-specific. A future expedition-effect model should be introduced instead of repurposing lost state or pause reasons.
-6. **Derived movement integration.** Party movement is currently stored as an optional reference. Deriving it from creatures, mounts, vehicles, and characters requires Rules Core/Character integration but does not require replacing the distance model.
+1. persistent challenge/hazard state;
+2. typed Rules Core mechanic references;
+3. generalized structured consequences;
+4. richer encounter handoff context;
+5. progressive effects;
+6. derived movement integration.
 
-None of these gaps require changing the current Travel -> Watch -> Navigation -> Encounter loop in the present development pass.
+None of these require changing the current deterministic loop in Phase 3.
 
-## Current scope
+## Preset/procedure separation
 
-For the current running-sheet/backend pass:
+Published, community, and otherwise named procedures are creation-time preset metadata. The preset catalog owns name/key/revision and a generic recipe. Applying a preset materializes a campaign-owned `CampaignProcedure`.
 
-- finish and validate existing mechanics and UI;
-- preserve modular source ownership;
-- keep movement values and units data-driven;
-- keep Rules Core integration external and identifier-based;
-- keep marching order/watch data flexible;
-- retain structured provenance and audit history;
-- do not implement Journey Challenges or progressive hazards yet; keep the current Block Initiative handoff limited to encounter context and explicitly supplied structured combatants.
+The persisted expedition stores that snapshot independently from optional `ProcedureOriginMetadata`. Origin metadata is informational and removable. A missing, renamed, or revised catalog preset does not reconstruct or reinterpret an existing expedition.
 
-Journey Challenge / Complex Hazard support is the highest-priority future 4e-derived feature. The remaining 4e concepts are design guidance or backlog items until they naturally intersect scheduled work.
-
-## Phase 0 preset/procedure separation
-
-Published, community, and otherwise named crawl procedures are represented by creation-time preset metadata rather than by named runtime implementations. The preset catalog owns the name/key/revision and produces a generic executable `CrawlProcedureProfile` compatibility snapshot. The runtime owns behavior only.
-
-The persisted expedition stores that executable snapshot independently from nullable `ProcedureOriginMetadata`. Origin metadata is informational and removable. A missing or changed catalog preset does not cause a persisted expedition to be reconstructed or reinterpreted, so catalog changes affect only later applications of the preset unless an explicit future migration/update operation is introduced.
-
-This keeps the current deterministic engine and Rules Core travel integration intact while establishing the boundary required for the later generic module/mechanic architecture.
+This is the architecture used by current Phase 3 proof presets and later Procedure Composer work.

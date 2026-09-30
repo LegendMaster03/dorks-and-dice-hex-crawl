@@ -9,12 +9,10 @@ public sealed class CampaignProcedureService(IHexCrawlStore store)
         string ownerUserId,
         string presetKey,
         Guid? campaignId = null,
-        CrawlProcedureProfile? customizedProcedure = null,
         CancellationToken cancellationToken = default)
     {
         var owner = RequireOwner(ownerUserId);
-        var preset = CrawlProcedureCatalog.Resolve(presetKey);
-        var materialized = preset.MaterializeGeneric(customizedProcedure);
+        var materialized = CrawlProcedureCatalog.Resolve(presetKey).MaterializeGeneric();
         var stored = new StoredCampaignProcedureRevision(
             materialized.Procedure,
             owner,

@@ -141,7 +141,7 @@ export async function renderExpedition(
                                     <label>Navigation DC <input name="helperNavigationDc" type="number" step="1" placeholder="DM-confirmed DC"></label>
                                     <label>Navigation modifier <input name="helperNavigationModifier" type="number" step="1" placeholder="+0 if none"></label>
                                     <label>Failure veer <input name="helperFailureVeer" type="number" step="1" placeholder="+1 or -1"></label>
-                                    <p class="hc-hint">The DC, situational modifier, and failed-check veer stay explicit because they are not inferred by the procedure profile.</p>
+                                    <p class="hc-hint">The DC, situational modifier, and failed-check veer stay explicit because they are not inferred by the materialized procedure runtime.</p>
                                 </div>
                                 <div data-helper-encounter>
                                     <p class="hc-hint" data-helper-encounter-mechanic></p>
@@ -223,13 +223,24 @@ export async function renderExpedition(
         }
     };
 
-    const watchController = new ExpeditionWatchController(
-        root,
-        api,
-        world,
-        () => runtime,
-        next => apply(next),
-        action => mutate(null, action));
+    const watchController = runtime.procedure.runtime
+        ? new ExpeditionWatchController(
+            root,
+            api,
+            world,
+            () => runtime,
+            next => apply(next),
+            action => mutate(null, action))
+        : null;
+    if (!watchController) {
+        required<HTMLElement>(root, "[data-watch-summary]").textContent = "Procedure execution unavailable";
+        const requirements = required<HTMLElement>(root, "[data-requirements]");
+        const notice = document.createElement("p");
+        notice.className = "hc-hint";
+        notice.textContent = "This materialized procedure is structural and is not executable by the current runtime. The persisted procedure snapshot remains available for reference.";
+        requirements.replaceChildren(notice);
+        required<HTMLFormElement>(root, "[data-advance]").hidden = true;
+    }
     let partyController: ExpeditionPartySheetController;
 
     const renderEncounterHandoff = (): void => {
@@ -279,7 +290,7 @@ export async function renderExpedition(
         }
         renderExpeditionSnapshots(root, runtime, showMap);
         partyController.sync(next);
-        watchController.sync(next);
+        watchController?.sync(next);
     };
 
     partyController = new ExpeditionPartySheetController(
@@ -344,18 +355,25 @@ export async function renderExpedition(
     mapButton.addEventListener("click", () => {
         if (runtime.overworldId) navigate(`/worlds/${runtime.overworldId}/expeditions/${runtime.id}`);
     });
-    required<HTMLButtonElement>(root, "[data-view-travel]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}/travel`));
-    required<HTMLButtonElement>(root, "[data-view-navigation]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}/navigation`));
-    required<HTMLButtonElement>(root, "[data-view-encounters]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}/encounters`));
+    const travelButton = required<HTMLButtonElement>(root, "[data-view-travel]");
+    const navigationButton = required<HTMLButtonElement>(root, "[data-view-navigation]");
+    const encountersButton = required<HTMLButtonElement>(root, "[data-view-encounters]");
+    const executionAvailable = runtime.procedure.runtime !== null;
+    travelButton.disabled = !executionAvailable;
+    navigationButton.disabled = !executionAvailable;
+    encountersButton.disabled = !executionAvailable;
+    if (executionAvailable) {
+        travelButton.addEventListener("click", () => navigate(`/expeditions/${runtime.id}/travel`));
+        navigationButton.addEventListener("click", () => navigate(`/expeditions/${runtime.id}/navigation`));
+        encountersButton.addEventListener("click", () => navigate(`/expeditions/${runtime.id}/encounters`));
+    }
 
     apply(runtime);
     return () => {
         disposed = true;
-        watchController.dispose();
+        watchController?.dispose();
         map?.dispose();
     };
-
-
 }
 
 function directionOptions(): string {
@@ -374,4 +392,3 @@ function spatialState(runtime: ExpeditionDetail): SpatialRuntimeExpedition {
 function sameHex(left: { q: number; r: number }, right: { q: number; r: number }): boolean {
     return left.q === right.q && left.r === right.r;
 }
-

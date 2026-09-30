@@ -7,36 +7,38 @@ namespace HexCrawl.Application.Tests;
 public sealed class ProcedurePresetIdentityTests
 {
     [Fact]
-    public void ChoosingPresetMaterializesIndependentExecutableState()
+    public void ChoosingPresetMaterializesIndependentCampaignOwnedSnapshots()
     {
         var preset = CrawlProcedureCatalog.Resolve("simple-fixed-distance");
 
-        var materialized = preset.Materialize();
+        var first = preset.MaterializeGeneric();
+        var second = preset.MaterializeGeneric();
 
-        Assert.Equal(preset.ExecutableProcedureTemplate, materialized);
-        Assert.NotSame(preset.ExecutableProcedureTemplate, materialized);
+        Assert.NotEqual(first.Procedure.ProcedureId, second.Procedure.ProcedureId);
+        Assert.Equal(first.Procedure.Key, second.Procedure.Key);
+        Assert.Equal(first.Procedure.Name, second.Procedure.Name);
+        Assert.Equal(first.Procedure.Modules, second.Procedure.Modules);
         Assert.Equal("simple-fixed-distance", preset.Origin.PresetKey);
         Assert.Equal(preset.DisplayName, preset.Origin.PresetDisplayName);
         Assert.Equal(preset.PresetRevision, preset.Origin.PresetRevision);
     }
 
     [Fact]
-    public void CustomizedProcedureIdentityDoesNotRewritePresetOrigin()
+    public void CampaignOwnedIdentityDoesNotRewritePresetOrigin()
     {
         var preset = CrawlProcedureCatalog.Resolve("simple-fixed-distance");
-        var customized = preset.ExecutableProcedureTemplate with
+        var materialized = preset.MaterializeGeneric();
+        var campaignOwned = materialized.Procedure with
         {
             Key = "campaign-owned-procedure",
-            Name = "Campaign-owned procedure",
-            WatchLength = TimeSpan.FromHours(6)
+            Name = "Campaign-owned procedure"
         };
 
-        var materialized = preset.Materialize(customized);
+        campaignOwned.Validate();
 
-        Assert.Equal("campaign-owned-procedure", materialized.Key);
-        Assert.Equal("Campaign-owned procedure", materialized.Name);
-        Assert.Equal(TimeSpan.FromHours(6), materialized.WatchLength);
-        Assert.Equal("simple-fixed-distance", preset.Origin.PresetKey);
+        Assert.Equal("campaign-owned-procedure", campaignOwned.Key);
+        Assert.Equal("Campaign-owned procedure", campaignOwned.Name);
+        Assert.Equal("simple-fixed-distance", materialized.Origin?.PresetKey);
     }
 
     [Fact]
@@ -46,24 +48,17 @@ public sealed class ProcedurePresetIdentityTests
         var store = new PostgresHexCrawlStore(database.ConnectionString);
         await store.InitializeAsync();
         var service = new CrawlSessionService(store);
-        var preset = CrawlProcedureCatalog.Resolve("simple-fixed-distance");
-        var customized = preset.ExecutableProcedureTemplate with
-        {
-            Key = "campaign-owned-procedure",
-            Name = "Campaign-owned procedure",
-            WatchLength = TimeSpan.FromHours(6)
-        };
 
         var started = await service.StartAsync(
             "alice",
             new StartStandaloneCrawlSessionCommand(
                 "Origin independence",
                 "simple-fixed-distance",
-                new NonSpatialCrawlSessionContext("Procedure clock"),
-                ProcedureSnapshot: customized));
+                new NonSpatialCrawlSessionContext("Procedure clock")));
+        var pinned = started.CampaignProcedure;
+        var runtimeBefore = GenericProcedureRuntime.Bind(pinned);
 
         Assert.Equal("simple-fixed-distance", started.ProcedureOrigin?.PresetKey);
-        Assert.Equal(customized, started.Procedure);
 
         var save = await store.SaveExpeditionAsync(
             started with { ProcedureOrigin = null },
@@ -73,6 +68,18 @@ public sealed class ProcedurePresetIdentityTests
         var loaded = await store.GetExpeditionAsync(started.Id, "alice");
         Assert.NotNull(loaded);
         Assert.Null(loaded!.ProcedureOrigin);
-        Assert.Equal(customized, loaded.Procedure);
+        Assert.Equal(pinned, loaded.CampaignProcedure);
+        AssertRuntimeEquivalent(runtimeBefore, GenericProcedureRuntime.Bind(loaded.CampaignProcedure));
+    }
+
+    private static void AssertRuntimeEquivalent(GenericProcedureRuntime expected, GenericProcedureRuntime actual)
+    {
+        Assert.Equal(expected.Name, actual.Name);
+        Assert.Equal(expected.Time, actual.Time);
+        Assert.Equal(expected.Movement, actual.Movement);
+        Assert.Equal(expected.HexProgress, actual.HexProgress);
+        Assert.Equal(expected.Navigation, actual.Navigation);
+        Assert.Equal(expected.Encounters, actual.Encounters);
+        Assert.Equal(expected.ResolutionHelpers, actual.ResolutionHelpers);
     }
 }

@@ -1,16 +1,24 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { manualEntryResolutionSources, newExpeditionEncounterCadences } from "../.test-dist/modules/expeditions/expedition-input-policy.js";
+import { manualEntryResolutionSources } from "../.test-dist/modules/expeditions/expedition-input-policy.js";
 import { assistantEncounterCheckDue, encounterCheckDue, navigationResolutionDue, pauseInstruction, watchActionLabel, watchPhase } from "../.test-dist/modules/expeditions/expedition-workflow.js";
 
 function runtime(overrides = {}) {
-    return {
-        profile: { encounterCadence: "PerWatch", usesNavigationChecks: true },
+    const base = {
+        procedure: { runtime: { encounterCadence: "PerWatch", usesNavigationChecks: true } },
         pauseReason: null,
         expedition: { isSpatial: true, activeWatchNumber: null, completedWatches: 0, currentDay: 1 },
-        history: [],
-        ...overrides
+        history: []
     };
+    return {
+        ...base,
+        ...overrides,
+        procedure: overrides.procedure ?? base.procedure
+    };
+}
+
+function withExecution(overrides = {}) {
+    return { procedure: { runtime: { encounterCadence: "PerWatch", usesNavigationChecks: true, ...overrides } } };
 }
 
 test("manual provenance choices can not claim an automatic helper roll", () => {
@@ -18,13 +26,8 @@ test("manual provenance choices can not claim an automatic helper roll", () => {
     assert.equal(manualEntryResolutionSources.includes("AutomaticRoll"), false);
 });
 
-test("new expedition customization exposes only implemented encounter cadences", () => {
-    assert.deepEqual(newExpeditionEncounterCadences, ["None", "PerWatch", "PerDay"]);
-    assert.equal(newExpeditionEncounterCadences.includes("Custom"), false);
-});
-
 test("conditional workflow hides resolutions that are not due", () => {
-    const none = runtime({ profile: { encounterCadence: "None", usesNavigationChecks: false } });
+    const none = runtime(withExecution({ encounterCadence: "None", usesNavigationChecks: false }));
     assert.equal(encounterCheckDue(none), false);
     assert.equal(navigationResolutionDue(none, false, false), false);
 
@@ -55,16 +58,19 @@ test("conditional workflow hides resolutions that are not due", () => {
     assert.equal(navigationResolutionDue(watch, false, true), false);
 });
 
-test("legacy custom cadence retains historical per-watch workflow behavior", () => {
-    const legacy = runtime({ profile: { encounterCadence: "Custom", usesNavigationChecks: false } });
-    assert.equal(encounterCheckDue(legacy), true);
-
-    const active = { ...legacy, expedition: { ...legacy.expedition, activeWatchNumber: 1 } };
-    assert.equal(encounterCheckDue(active), false);
+test("structural procedures do not expose executable watch resolutions", () => {
+    const structural = runtime({ procedure: { runtime: null } });
+    assert.equal(encounterCheckDue(structural), false);
+    assert.equal(assistantEncounterCheckDue(structural), false);
+    assert.equal(navigationResolutionDue(structural, false, false), false);
+    assert.equal(watchActionLabel(structural), "Procedure not executable");
 });
 
 test("per-day cadence only requests one encounter resolution per expedition day", () => {
-    const due = runtime({ profile: { encounterCadence: "PerDay", usesNavigationChecks: false }, expedition: { activeWatchNumber: null, completedWatches: 0, currentDay: 2 } });
+    const due = runtime({
+        ...withExecution({ encounterCadence: "PerDay", usesNavigationChecks: false }),
+        expedition: { activeWatchNumber: null, completedWatches: 0, currentDay: 2 }
+    });
     assert.equal(encounterCheckDue(due), true);
 
     const resolved = { ...due, history: [{ kind: "EncounterCheckPerformed", expeditionElapsedHours: 25 }] };
@@ -111,13 +117,12 @@ test("focused encounter assistant does not duplicate a per-watch check", () => {
 
 test("focused encounter assistant respects per-day history", () => {
     const currentDay = runtime({
-        profile: { encounterCadence: "PerDay", usesNavigationChecks: false },
+        ...withExecution({ encounterCadence: "PerDay", usesNavigationChecks: false }),
         expedition: { isSpatial: true, activeWatchNumber: null, completedWatches: 3, currentDay: 2 },
         history: [{ kind: "EncounterCheckPerformed", watchNumber: 3, expeditionElapsedHours: 25 }]
     });
     assert.equal(assistantEncounterCheckDue(currentDay), false);
 });
-
 
 test("non-spatial active watch still permits its encounter-cadence check", () => {
     const active = runtime({
