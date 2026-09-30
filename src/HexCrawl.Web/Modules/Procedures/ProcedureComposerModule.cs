@@ -16,6 +16,7 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
     {
         services.AddScoped<CampaignProcedureService>();
         services.AddScoped<ProcedureComposerService>();
+        services.AddScoped<ProcedureReferenceService>();
     }
 
     public void MapEndpoints(RouteGroupBuilder api)
@@ -23,8 +24,10 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
         api.MapPost("/procedures/composer/draft", ComposeDraftAsync);
         api.MapPost("/procedures", CreateProcedureAsync);
         api.MapGet("/procedures/{procedureId:guid}", GetLatestProcedureAsync);
+        api.MapGet("/procedures/{procedureId:guid}/reference", GetLatestProcedureReferenceAsync);
         api.MapGet("/procedures/{procedureId:guid}/revisions", ListProcedureRevisionsAsync);
         api.MapGet("/procedures/{procedureId:guid}/revisions/{revision:int}", GetProcedureRevisionAsync);
+        api.MapGet("/procedures/{procedureId:guid}/revisions/{revision:int}/reference", GetProcedureRevisionReferenceAsync);
         api.MapPost("/procedures/{procedureId:guid}/revisions", CreateProcedureRevisionAsync);
     }
 
@@ -100,6 +103,35 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
             [],
             cancellationToken);
         return Results.Ok(ProcedureComposerContract.From(draft));
+    }
+
+    private static async Task<IResult> GetLatestProcedureReferenceAsync(
+        Guid procedureId,
+        HttpContext context,
+        ProcedureReferenceService service,
+        CancellationToken cancellationToken)
+    {
+        var reference = await service.GetAsync(
+            UserId(context),
+            procedureId,
+            null,
+            cancellationToken);
+        return Results.Ok(ProcedureReferenceContract.From(reference));
+    }
+
+    private static async Task<IResult> GetProcedureRevisionReferenceAsync(
+        Guid procedureId,
+        int revision,
+        HttpContext context,
+        ProcedureReferenceService service,
+        CancellationToken cancellationToken)
+    {
+        var reference = await service.GetAsync(
+            UserId(context),
+            procedureId,
+            revision,
+            cancellationToken);
+        return Results.Ok(ProcedureReferenceContract.From(reference));
     }
 
     private static async Task<IResult> ListProcedureRevisionsAsync(
