@@ -6,7 +6,7 @@ The expedition workbench is the persistent DM-facing layer over Hex Crawl's dete
 
 The persisted aggregate is a crawl session with explicit context:
 
-`CampaignProcedure + session runtime/history + session context + resolved inputs -> transition -> persisted session`
+`CampaignProcedure + session runtime/history + session context + party state + resolved inputs -> transition -> persisted session`
 
 `CrawlSessionContext` has three concrete forms:
 
@@ -20,7 +20,7 @@ The full map workbench exists only for `WorldBound`. Abstract-hex and non-spatia
 
 Each crawl session stores exactly one authoritative `CampaignProcedure` snapshot. It contains the materialized generic modules, mechanic handler/version metadata, parameters, and campaign overrides used by that session.
 
-Named presets are creation-time recipes only. `ProcedureOriginMetadata` may record the selected preset key/display name/revision as optional provenance, but reload, runtime binding, procedure helpers, automatic-resolution verification, and advancement never require a live preset or origin identity.
+Named presets are creation-time recipes only. `ProcedureOriginMetadata` may record the selected preset key/display name/revision as optional provenance, but reload, runtime binding, procedure helpers, participant-activity policy, automatic-resolution verification, and advancement never require a live preset or origin identity.
 
 A later preset correction therefore affects new materializations only. Existing sessions remain pinned until explicitly revised.
 
@@ -30,13 +30,13 @@ Hex Crawl is pre-release. Current HTTP contracts are development surfaces, not c
 
 Current expedition detail/workbench responses therefore carry `CampaignProcedureContract`. It exposes procedure ID, revision, generic identity, materialized modules, handler/version/automation metadata, parameters, and an optional derived executable runtime projection.
 
-Structural or currently non-executable generic procedures remain valid API data. They are not rejected merely because the deterministic runtime can not bind every selected mechanic. Runtime binding fails only when an execution operation actually requires unsupported behavior.
+Structural or currently non-executable generic procedures remain valid API data. They are not rejected merely because the deterministic runtime can not bind every selected mechanic. Focused projections may interpret a supported stored module independently when the operation does not require the complete procedure to bind. Runtime binding fails only when an execution operation actually requires unsupported behavior.
 
 ## Product composition
 
 - **DM tools home** lists crawl sessions across all context kinds and links directly to Travel / Watch, Navigation, and Encounter Cadence assistants.
 - **Abstract-hex tracker** runs spatial bookkeeping from persisted hex scale without constructing an Overworld.
-- **Non-spatial tracker** presents procedure/time/history state without invented spatial fields.
+- **Non-spatial tracker** presents procedure/time/history and party participant-assignment state without invented spatial fields.
 - **Full crawl workbench** is world-bound only and composes crawl state with authored world data, map rendering, discovery controls, and knowledge preview.
 - **Focused assistants** operate on the same persisted session and mutate only their owned state/history.
 
@@ -50,7 +50,7 @@ Top-level assistant routes remain setup-and-entry surfaces. They do not own a se
 
 ### Procedure configuration
 
-`CampaignProcedure` owns procedure configuration for the session. Executable policy is obtained through generic handler/version-aware binding.
+`CampaignProcedure` owns procedure configuration for the session. Executable policy is obtained through generic handler/version-aware binding. The selected stored `party.activities` module separately defines the exact participant-assignment policy for the session, including assignment scope, activity budget model, activity keys, role keys, and mechanic metadata.
 
 The currently executable core can describe:
 
@@ -65,19 +65,25 @@ The currently executable core can describe:
 - exit-progress factors;
 - optional deterministic travel/navigation/encounter helper configuration.
 
-Phase 3 also permits structural declarative modules that are persisted and presented even when their later execution engine has not been implemented.
+Structural declarative modules remain persisted and presented even when their later effect/execution engine has not been implemented. Phase 7 adds typed participant-assignment state without falsely making the declarative activity mechanic automatic.
 
 ### Session context and runtime state
 
-Spatial contexts use `ExpeditionState` and `ActiveWatchState` for current travel state, including current hex, position, direction, navigation state, distance, abstract progress, elapsed time, completed watches, active-watch timing, and pending decisions.
+Spatial contexts use `ExpeditionState` and `ActiveWatchState` for current travel state, including current hex, position, direction, navigation state, distance, abstract progress, elapsed time, completed watches, active-watch timing, pending decisions, and the immutable participant-assignment snapshot captured when the active watch started.
 
-`NonSpatialSessionState` owns elapsed procedure time, completed watches, history, and an optional lightweight active watch. It contains no dummy spatial values.
+`NonSpatialSessionState` owns elapsed procedure time, completed watches, history, and an optional lightweight active watch. When a real interval exists, that active watch can also snapshot typed participant assignments. It contains no dummy spatial values.
+
+Journey-role state does not require a watch. Structural procedures such as The One Ring can keep current role assignments in the party sheet with no fabricated `time.interval` or active interval.
 
 ### Party running sheet
 
-`CrawlPartySheet` remains optional expedition-owned reference data for members, marching order, watch rotation, standing orders, default navigator, and explicit movement references.
+`CrawlPartySheet` remains optional expedition-owned state for members, marching order, watch rotation, standing orders, typed participant activity/role assignments, and explicit movement references.
 
-It is adjacent to runtime state rather than embedded in the active-watch object. Later participant-role/activity execution can build on this without making rich party integration mandatory for basic runtime use.
+The party sheet is the authoritative current assignment state. It does not duplicate the procedure's activity catalog or policy schema. Activity and role identities are generic string keys supplied by the exact pinned `CampaignProcedure`; party, participant, and role are generic assignment scopes. A navigator, lookout, guide, hunter, forager, mapper, quarter-day duty, or campaign-defined future role is represented as data rather than a named-system enum.
+
+The former independently persisted default-navigator field is removed. If a stored procedure exposes a `navigator` role, that role is represented through the ordinary generalized assignment state. Removing a member must not leave dangling assignment references; the UI intentionally cascades those draft references and the domain independently rejects invalid sheets.
+
+When an interval begins, applicable current assignments are copied into the active interval. Later edits to standing party assignments do not mutate the already-active snapshot.
 
 ### Player knowledge and presentation
 
@@ -92,17 +98,19 @@ The full tracker asks only for inputs relevant to the executable runtime policy 
 At a new spatial watch it can request:
 
 - intended direction;
-- pace and optional activities;
+- pace/travel mode;
 - navigation-aid/suppression choices;
 - resolved travel amount in the selected movement model;
 - navigation outcome and veer when required;
 - encounter outcome when cadence requires a check.
 
+Participant roles and activities are edited once through Party & travel order rather than through a second free-form watch field. Starting a new watch snapshots the current typed assignments into that watch. The active-watch display renders participant/activity/role relationships rather than an unowned comma-separated activity list.
+
 For a paused watch, the workbench exposes the pending decision and remaining time. A conditions-review pause resumes the same watch rather than creating a new one.
 
 Fixed continuous-distance mechanics accept one effective distance. Variable-distance mechanics require expected and actual resolved distance. Hex-step mechanics accept a non-negative step count.
 
-The workbench does not infer terrain semantics into movement mechanics unless the active generic runtime actually implements that behavior.
+The workbench does not infer terrain semantics into movement mechanics or enforce activity capacity unless the exact generic contract supplies enough information. Movement capability composition remains Phase 8 work.
 
 ## Resolved-input provenance
 
@@ -116,7 +124,7 @@ The application supports independent provenance for travel, navigation, encounte
 
 Server-generated helper results are persisted with a generated-resolution ID, audit sequence, watch number, exact resolved values, and aggregate version. Applying automatic provenance requires the matching persisted generated result.
 
-External tools can supply resolved inputs without becoming authoritative owners of expedition state.
+External tools can supply resolved inputs without becoming authoritative owners of expedition state. Participant activity state itself is native Hex Crawl expedition state and does not require Rules Core or Character Sheet.
 
 ## UI projections
 
@@ -128,12 +136,17 @@ The expedition UI derives its display from authoritative persisted state. Depend
 - total distance and intra-hex progress;
 - current pause/pending decision;
 - encounter state;
+- current party participant activity/role assignments;
+- active-interval participant assignment snapshot;
+- participant assignment scope and activity-budget model as secondary policy context;
 - recent history and watch ledger;
 - party register and movement references;
 - the complete persisted generic procedure/module reference;
 - executable helper formulas where available;
 - generated helper results and provenance;
 - discovery controls and knowledge preview for world-bound sessions.
+
+Generic procedure keys may be humanized for display, but their stored identity is preserved. No UI organization depends on source-system branding.
 
 Current frontend filenames may still use the word "profile" as presentation vocabulary, but the API data feeding those views is the generic `CampaignProcedureContract`; there is no second persisted procedure model behind the UI.
 
@@ -145,30 +158,30 @@ The `expeditions` table stores:
 
 - explicit session context;
 - nullable world reference and world-only knowledge;
-- party state;
+- party state, including current typed participant assignments;
 - generated procedure resolutions;
 - required `procedure_json` containing the authoritative `CampaignProcedure`;
 - optional procedure-origin metadata;
-- discriminated runtime state;
+- discriminated runtime state, including typed active-interval assignment snapshots where applicable;
 - pause/remaining-watch state;
 - aggregate version and timestamps.
 
 Ordered runtime history remains in `expedition_events`.
 
-The current pre-release schema intentionally does not support older development procedure rows. A development database using an earlier procedure schema must be reset rather than upgraded through compatibility scaffolding.
+The current pre-release schema intentionally does not support retired development activity/navigator representations. Development data using those shapes may be reset rather than carried through compatibility aliases.
 
-Container/restart validation proves that mapped and mapless sessions reload their exact generic procedure and runtime state after PostgreSQL/application restart.
+Container/restart validation proves that mapped and mapless sessions reload their exact generic procedure, party assignment state, and applicable runtime snapshots after PostgreSQL/application restart.
 
 ## Optimistic concurrency
 
-Every runtime mutation carries an expected aggregate version. Concurrent stale callers receive a conflict rather than silently overwriting newer state.
+Every runtime and party mutation carries an expected aggregate version. Concurrent stale callers receive a conflict rather than silently overwriting newer state.
 
 This protection is independent of procedure representation.
 
-## Phase 3 scope boundary
+## Current scope boundary
 
-The workbench does not implement the full Procedure Composer, typed participant-activity execution, generalized movement capability composition, environment execution, generalized effects/consequences, survival/resource execution, journey-process execution, expanded encounter runtime, battle maps, or real-time multiplayer synchronization.
+Phase 7 implements typed participant activity/role assignment state and active-interval snapshots. It does not execute downstream effects merely because an assignment exists. Assigning forage does not produce food, assigning make-camp does not execute camping, and assigning a journey role does not resolve journey events.
 
-Phase 3 may expose the structural generic modules needed to prove those future capabilities. Their presence does not imply current runtime execution support.
+Still deferred are generalized movement capability composition, environment execution, generalized effects/consequences, survival/resource execution, multi-stage journey execution, expanded encounter runtime, battle maps, and real-time multiplayer synchronization.
 
-See `docs/generic-procedure-architecture.md` and `docs/phase-3-proof-matrix.md` for the authoritative procedure and proof-model details.
+See `docs/generic-procedure-architecture.md` and `docs/phase-3-proof-matrix.md` for the procedure and proof-model details.

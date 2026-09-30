@@ -34,7 +34,8 @@ The current branch establishes these foundations:
 - `CrawlRuntimeEngine` is deterministic and accepts resolved inputs rather than depending directly on Rules Core;
 - runtime procedure binding is handler/version-aware and reads only the materialized generic snapshot;
 - `WorldBound`, `AbstractHex`, and `NonSpatial` contexts separate expedition procedure from map ownership;
-- `CrawlPartySheet` stores party members, marching order, watch rotation, standing orders, navigator reference, and explicit movement references;
+- `CrawlPartySheet` stores party members, marching order, watch rotation, standing orders, typed participant activity/role assignments, and explicit movement references;
+- active intervals snapshot applicable typed participant assignments so later party edits do not rewrite active runtime state;
 - generated/manual/external/DM-override provenance already exists;
 - Block Initiative receives a versioned encounter handoff;
 - `LocationDetailMapReference` provides an early location-to-detail-map relationship;
@@ -439,9 +440,35 @@ Procedure reference generation remains provider-independent and does not fetch e
 
 ## Party activities and travel roles
 
-Do not replace `CrawlPartySheet`. Extend it with a generalized participant-activity model in Phase 7.
+Phase 7 establishes one typed, ruleset-neutral participant-assignment model without replacing `CrawlPartySheet`.
 
-The model should represent navigator, lookout, mapper, forager, scout, quarter-day activities, and other source-defined roles without system-specific enums.
+Ownership is:
+
+```text
+CampaignProcedure
+    owns the exact materialized party.activities policy
+        ↓
+CrawlPartySheet
+    owns current expedition participant activity/role assignments
+        ↓
+Active interval, when one exists
+    owns an immutable snapshot of applicable assignments
+        ↓
+Later mechanics
+    may consume participant.activity-state through explicit generic contracts
+```
+
+The `party.activities` policy projection is derived from the expedition's pinned `CampaignProcedure`, never from preset identity, origin metadata, or current catalog defaults. It preserves assignment scope, activity-budget model, activity keys, role keys, and selected mechanic metadata.
+
+`CrawlPartySheet` stores stable typed assignments using generic `Party`, `Participant`, and `Role` scopes plus source-defined string activity/role keys. It can represent navigator, lookout, mapper, forager, scout, guide, hunter, quarter-day duties, party-wide activities, journey roles, and future campaign-defined keys without system-specific enums or code changes.
+
+The former independently persisted `DefaultNavigatorMemberId` is removed. Navigator is ordinary role data when the stored procedure defines that role. Likewise, the former free-form watch `Activities: string[]` path is removed; a watch snapshots the current typed assignments rather than accepting a second unowned activity list.
+
+A single stored `roleKeys = none` value used as a no-role sentinel is normalized at the generic policy interpretation boundary and is not offered as an assignable role. No exclusivity, mandatory-role, role-to-activity mapping, or activity-capacity rule is inferred unless a future generic contract explicitly encodes it.
+
+Journey-role state is current expedition state and does not require a repeating interval. The One Ring proof therefore remains structural: guide, hunter, lookout, and scout assignments can be edited without adding `time.interval`, requiring `movement.budget`, or binding the complete structural procedure.
+
+Phase 7 does not execute downstream foraging, camping, movement penalties, resources, effects, fatigue, or journey events. Those remain later-phase concerns.
 
 ## Movement capability composition
 
@@ -531,9 +558,9 @@ Generate readable campaign procedure documentation directly from the materialize
 
 External rules/capability sources now sit behind Hex Crawl-owned capability interfaces. Travel/environment resolution uses `ITravelEnvironmentProvider`; Rules Core is the first adapter, provider availability and unresolved states are explicit, DM/manual values bypass providers, provider identity is retained as provenance, and deterministic runtime/domain code remains provider-free.
 
-### Phase 7 — typed participant activities
+### Phase 7 — typed participant activities — complete
 
-Add structured participant roles/activities.
+Added typed party, participant, and role assignment state to `CrawlPartySheet`; exact pinned-procedure activity-policy projection; policy-driven party UI; typed spatial/non-spatial active-interval snapshots; PostgreSQL/API round-trip; removal of the independent default-navigator and free-form watch-activity authorities; and structural journey-role editing without fabricating an interval. Activity mechanics remain declarative/manual and downstream movement/effect/resource/journey execution remains deferred.
 
 ### Phase 8 — movement capability composition
 
