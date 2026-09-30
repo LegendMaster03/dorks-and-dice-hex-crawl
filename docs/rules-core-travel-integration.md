@@ -1,136 +1,243 @@
-# Rules Core travel and environment integration
+# Optional travel/environment providers and Rules Core adapter
 
-Hex Crawl consumes structured travel and environment mechanics from Rules Core while retaining ownership of expedition procedure and state.
+Hex Crawl can consume source-backed travel and environment mechanics without making any external rules service part of its procedure identity or deterministic runtime.
+
+The governing boundary is:
+
+> Hex Crawl owns the capability contract. Rules Core is one adapter that can satisfy it.
 
 ## Ownership boundary
 
-Rules Core owns source-backed mechanic definitions, provenance, required inputs, units, factor semantics, source-specific formulas, effective global/campaign rules, conflicts, and adjudication state.
+Hex Crawl owns expedition procedure, campaign-owned `CampaignProcedure` snapshots, expedition state, routes, watches, time progression, map state, navigation state, encounter cadence/outcomes, DM choices, generated-resolution audit records, and application of resolved values to the active expedition.
 
-Hex Crawl owns expedition state, routes, watches, time progression, current environment, map state, party travel state, navigation state, random direction, encounter cadence/outcomes, DM choices, generated-roll audit events, and application of resolved mechanics to the active expedition.
+External providers may supply capability results that Hex Crawl explicitly requests. They do not own procedure execution and do not mutate Hex Crawl runtime state.
+
+Rules Core remains authoritative for the source-backed mechanic definitions, provenance, required inputs, units, factor semantics, source-specific formulas, effective global/campaign rules, conflicts, and adjudication state that its adapter exposes.
 
 Character Sheet remains authoritative for character state. Block Initiative remains authoritative for combat state.
 
-The dependency therefore remains:
+The runtime boundary is therefore:
 
-`Hex Crawl state/context -> explicit mechanic inputs -> Rules Core resolution -> typed result -> Hex Crawl procedure/state`
+```text
+external provider
+    ↓
+resolved capability value
+    ↓
+Hex Crawl application command/input
+    ↓
+generic deterministic runtime
+```
 
-Rules Core does not advance watches, set lost state, choose random directions, or apply encounter state.
+The runtime never performs provider or HTTP calls.
 
-## Transport and scope
+## Hex Crawl provider contract
 
-Hex Crawl uses the same Tool Host delegation pattern as other Dorks & Dice consumers. The browser calls Hex Crawl; the Hex Crawl server delegates to Rules Core through the Site using the short-lived delegation capability issued during Tool Host authentication. Hex Crawl does not create a second unauthenticated Rules Core channel.
+Travel/environment integration is expressed through the provider-neutral `ITravelEnvironmentProvider` capability interface in the application layer.
 
-An expedition has an optional `CampaignId` rules scope:
+The interface exposes:
 
-- `CampaignId != null`: use campaign-effective Rules Core endpoints.
-- `CampaignId == null`: use global effective Rules Core endpoints.
+- provider identity and display metadata;
+- availability through catalog results;
+- capability/mechanic discovery;
+- typed resolution requests;
+- resolved quantity, factor, or check values;
+- missing input keys;
+- explicit unresolved states;
+- source attribution/provenance.
 
-Campaign scope is explicit. Hex Crawl does not infer an expedition campaign from the authenticated user's campaign memberships. Assigning a campaign is validated against the authenticated Tool Host campaign context.
+`TravelEnvironmentMechanicKeys` remain in the provider-neutral application contract because keys such as `travel.overland.walk-distance` and `travel.navigation.avoid-getting-lost` are semantic capabilities that Hex Crawl requests, not Rules Core transport routes.
 
-The optional campaign ID is stored inside the existing expedition `context_json` snapshot. Existing snapshots that do not contain the field deserialize as `null`, so no database schema migration is required and existing expeditions continue to use global rules until explicitly associated with a campaign.
+The provider contract contains no Tool Host path, Rules Core endpoint, authentication, or HTTP details.
 
-## Current automatic-helper integration
+## Provider selection and multiple-provider readiness
 
-The existing procedure-resolution helper remains the integration point for mechanics that already map cleanly to Hex Crawl state.
+`TravelEnvironmentProviderRegistry` accepts capability providers without branching on vendor identity.
 
-### Travel distance
+Selection is deterministic:
 
-The helper can consume:
+- an explicitly requested provider key selects that provider when registered;
+- a single registered provider is selected automatically;
+- when multiple providers exist, exactly one may be marked as the default;
+- otherwise selection remains unresolved rather than inventing precedence.
 
-- `travel.overland.walk-distance`
-- `travel.overland.hustle-distance`
-- `travel.overland.terrain-distance-factor`
+Rules Core is currently the only production travel/environment provider. No fake production provider exists merely to demonstrate extensibility.
 
-Walking and hustle resolution require an explicit base speed. Hex Crawl requests an hourly source-backed quantity and applies it to the current watch segment duration. Returned units are retained through the Rules Core contract and converted only through Hex Crawl's existing explicit distance-unit conversion model.
+A future provider can implement the same capability without requiring application services or procedure/runtime code to understand Rules Core.
 
-Terrain and route are optional and must be supplied together. Hex Crawl applies the terrain factor only when the effective Rules Core definition explicitly reports `distance-multiplier` semantics. A movement-cost factor is not reinterpreted as expedition distance.
+## Rules Core adapter
 
-### Navigation
+`RulesCoreTravelEnvironmentProvider` is the concrete Rules Core adapter in the web/provider boundary.
 
-The helper can consume:
+Only that adapter knows:
 
-- `travel.navigation.avoid-getting-lost`
+- the `rules-core` Tool Host target slug;
+- Rules Core travel/environment HTTP routes;
+- Tool Host delegation capability handling;
+- Rules Core transport failures and timeouts;
+- Rules Core JSON response shapes;
+- Rules Core provider identity and source attribution.
 
-The UI supplies explicit applicable risk factors. Rules Core resolves the source-backed DC and returns cadence/competency metadata. Hex Crawl continues to own whether a navigation check is due and what failure does to expedition navigation state.
+The adapter translates Rules Core responses into the provider-neutral application model before returning them to application services.
 
-### DM override precedence
+Provider-specific transport failures are not exposed as Rules Core-specific application exceptions.
 
-Existing DM-authored values remain valid.
+## Availability and resolution states
 
-For the automatic helper:
+Provider absence is normal feature state, not application failure detection by exception.
 
-1. An explicit expected distance wins over source-backed walk/hustle/terrain calculation.
-2. An explicit navigation DC wins over source-backed navigation-risk resolution.
-3. Source-backed mechanics are consulted only when the corresponding explicit value is absent.
+Catalog availability distinguishes:
 
-This preserves existing campaign/world configuration and party movement references instead of silently replacing them with Rules Core results.
+- `available`;
+- `unavailable` for missing configuration/delegation;
+- `failed` for transport or unreadable provider responses.
 
-The workbench shows source-backed choices in the existing automatic-resolution context. It does not expose a separate Rules Core configuration page. Conflicted, adjudication-required, or unavailable mechanics are disabled or reported as unresolved; explicit DM inputs remain available.
+Capability resolution distinguishes:
 
-## Conflict and failure behavior
+- `resolved`;
+- `input-required`;
+- `not-applicable`;
+- `requires-adjudication`;
+- `unsupported`;
+- `unavailable`;
+- `failed`.
 
-Hex Crawl does not select a source or edition when Rules Core reports a conflict.
+A missing capability is therefore distinct from a missing provider, and both are distinct from transport failure.
 
-The integration distinguishes:
+When provider-backed enrichment is required but unresolved, the application raises a provider-neutral unresolved condition with the mechanic key, status, provider metadata when available, and missing input keys. The DM can then enter an explicit value, adjudicate the external rule, retry, or use another provider when one exists.
 
-- resolved;
-- input required;
-- not applicable;
-- requires adjudication;
-- conflicted;
-- service/transport failure.
+Hex Crawl never fabricates a replacement rule.
 
-`requires-adjudication` and `conflicted` return a DM-facing error that directs the DM to adjudicate the effective rule or use an explicit override. Missing inputs and not-applicable results are also surfaced rather than silently falling back to another definition.
+## Startup and standalone behavior
 
-A Rules Core transport failure does not invalidate explicit DM-authored values. If the current helper request actually needs Rules Core, the operation fails visibly with service-unavailable behavior instead of fabricating a result.
+PostgreSQL remains a required startup dependency.
 
-## AutomaticRoll integrity
+Rules Core and Tool Host provider configuration do not.
 
-Rules Core resolution does not weaken the existing server-verifiable AutomaticRoll design.
+Hex Crawl can start and native procedures can execute when:
 
-Source-backed inputs are resolved server-side before the procedure helper rolls. The server constructs provenance containing the mechanic key, effective scope, source identifiers when available, resolved quantity/check/factor metadata, and factor semantics where relevant. That provenance becomes part of the generated helper result that is immediately persisted and audited.
+- `ToolHost:BaseUrl` is absent;
+- no delegation capability was issued for Rules Core;
+- Rules Core is unreachable or times out;
+- the requested capability is unsupported;
+- the provider requires more input;
+- the provider returns not-applicable or adjudication-required state.
 
-The client does not supply trusted Rules Core resolution metadata. Existing generated-resolution IDs, version checks, supersession, audit history, exact value verification, and consumption checks remain authoritative when an `AutomaticRoll` result is applied to an expedition.
+In those cases, provider availability is represented honestly and native/manual behavior remains available where the procedure permits it.
+
+## Campaign and global scope
+
+An expedition retains an optional `CampaignId` provider query context:
+
+- `CampaignId != null`: the Rules Core adapter uses campaign-effective endpoints;
+- `CampaignId == null`: the adapter uses global effective endpoints.
+
+Campaign selection is not provider selection. The campaign ID is context supplied to the chosen provider.
+
+Assigning a campaign remains validated against the authenticated Tool Host campaign context. This phase does not change Site campaign ownership or identity architecture.
+
+## Procedure-resolution enrichment
+
+`ProcedureResolutionProviderEnricher` supplements only missing external values before deterministic procedure resolution.
+
+The existing precedence is preserved:
+
+1. An explicit expected distance supplied by the DM bypasses provider distance resolution.
+2. An explicit navigation DC bypasses provider navigation resolution.
+3. Provider enrichment is attempted only when the corresponding value is absent and the helper request includes provider-backed inputs.
+4. A provider result is an input to the procedure helper; it does not overwrite materialized/native procedure behavior.
+
+This preserves the Phase 3 `OptionalProvider` dependency-source model without widening every procedure input to accept a provider.
+
+## Strict semantic interpretation
+
+Provider-neutral integration does not relax semantic validation.
+
+For travel distance:
+
+- walking/hustling must return a quantity;
+- supported distance units are converted only through Hex Crawl's explicit unit model;
+- unsupported units are rejected rather than guessed;
+- the quantity must actually be hourly when the helper expects an hourly rate.
+
+For terrain adjustment:
+
+- terrain and route must be supplied together;
+- the provider capability must be resolvable;
+- conflict/adjudication remains unresolved;
+- the factor definition must use `distance-multiplier` semantics;
+- negative factors are rejected.
+
+For navigation:
+
+- the provider must return a check/DC result;
+- missing input, not-applicable, unsupported, failed, and adjudication states remain distinct.
+
+Provider abstraction is not permission to reinterpret incompatible output.
+
+## Provenance
+
+Provider-generated values retain provider identity and source attribution.
+
+Generic application structures do not hardcode `Rules Core` as a semantic rule. When the Rules Core adapter actually supplied a value, user-facing audit text may correctly contain:
+
+```text
+Provider: Rules Core
+Source: ...
+```
+
+Provider identity is therefore provenance and capability-source information, not procedure identity.
+
+Generated `AutomaticRoll` values remain server-generated, persisted, version-checked, superseded/consumed through the existing generated-resolution flow, and auditable.
+
+The client does not supply trusted provider-resolution metadata.
+
+## Client behavior
+
+The workbench presents travel/environment resolution as an external provider capability rather than as a Rules Core feature.
+
+The UI may display the currently available provider by name, for example `Available provider: Rules Core`, because provider attribution is useful. Controls and workflow terminology remain provider-neutral.
+
+No generic provider-management/settings UI is introduced in this phase.
 
 ## Mechanic keys exposed but not automatically applied
 
-The generic expedition-scoped catalog/resolution endpoints can expose the full Rules Core travel/environment contract. The following mechanics are intentionally not wired into automatic expedition mutation yet because Hex Crawl does not currently have enough explicit state to apply them safely:
+The generic expedition-scoped catalog/resolution endpoints can expose capabilities that Hex Crawl does not yet apply automatically.
 
-- `travel.overland.standard-travel-duration`: the existing Travel -> Watch -> Navigation -> Encounter procedure is not redesigned around a source-specific daily duration.
-- `travel.overland.forced-march-check`: Rules Core can resolve the DC, but Hex Crawl does not yet model the generalized failed-check damage/fatigue consequence pipeline required to apply the result correctly.
-- `travel.overland.mount-vehicle-distance`: mount/vehicle mode, rider/load, crew/passenger, and related travel context are not yet represented coherently enough for automatic use.
-- `travel.environment.hampered-movement`: source definitions use materially different semantics. Automatic application waits for explicit environment applicability/context rather than normalizing them.
-- `travel.environment.difficult-terrain-movement-cost`: this is a movement-space cost rule and is not treated as an expedition-distance multiplier.
-- `travel.environment.high-altitude-travel-time-cost`: automatic use waits for explicit elevation plus subject/applicability state; acclimation/native/exemption state is not guessed.
-- `travel.water.downstream-current-speed-bonus` and `travel.water.guided-downstream-float-duration`: automatic use waits for an explicit water-travel procedure/context including vehicle, guidance, and downstream state.
-- `travel.navigation.recognize-lost` and `travel.navigation.set-new-course`: Rules Core can resolve their DCs from `random-travel-hours`, but Hex Crawl does not currently persist a dedicated random-travel-hours accumulator. The generic resolver remains available for explicit use; the expedition engine does not fabricate that input.
+The following remain intentionally outside automatic expedition mutation until later phases provide sufficient state/effect infrastructure:
 
-These are integration boundaries, not substitute Hex Crawl rules.
+- `travel.overland.standard-travel-duration`;
+- `travel.overland.forced-march-check`;
+- `travel.overland.mount-vehicle-distance`;
+- `travel.environment.hampered-movement`;
+- `travel.environment.difficult-terrain-movement-cost`;
+- `travel.environment.high-altitude-travel-time-cost`;
+- `travel.water.downstream-current-speed-bonus`;
+- `travel.water.guided-downstream-float-duration`;
+- `travel.navigation.recognize-lost`;
+- `travel.navigation.set-new-course`.
 
-## Later cross-cutting requirements
+These are capability boundaries, not substitute Hex Crawl rules. Phase 6 does not implement participant activities, movement composition, generalized environment context, or effect/consequence execution.
 
-This integration reinforces two Rules Core capabilities that should be handled centrally rather than as Hex Crawl one-offs.
+## Generated procedure documentation
 
-### Character capability / mechanic modifier composition
+Phase 5 procedure references remain completely provider-independent.
 
-Future travel resolution needs a general way to compose character-dependent effects such as proficiency/tool effects, skill ranks, class features, species/features, encumbrance, movement exceptions, and other capability modifiers.
+Reference generation continues to derive from the exact immutable `CampaignProcedure` snapshot, including structural/unsupported mechanics, and does not fetch provider data.
 
-Hex Crawl should consume the composed result; it should not learn individual character feature formulas.
+Provider integration supplies optional application/runtime inputs; it does not alter the procedure contract being documented.
 
-### Generalized effect / consequence composition
+## Compatibility and preserved behavior
 
-Forced march and environmental mechanics require a general effect pipeline capable of representing damage, fatigue/exhaustion, saves, conditions, exposure, environment consequences, and mount endurance consequences.
+This phase preserves:
 
-Hex Crawl can decide when a consequence is due in expedition procedure, but the rule definition and cross-character effect composition belong outside the Hex-specific travel engine.
+- campaign-owned `CampaignProcedure` authority;
+- removable preset independence;
+- generic handler/version runtime dispatch;
+- immutable procedure revisions and pinned expedition snapshots;
+- `OptionalProvider` dependency-source semantics;
+- existing map/Wonderdraft behavior;
+- encounter handoff behavior;
+- server-verifiable `AutomaticRoll` behavior;
+- PostgreSQL as the sole structured persistence backend.
 
-## Journey Challenge boundary
-
-4e-style Journey Challenges / Complex Hazards remain a possible layer on top of normal expedition procedure. They do not replace:
-
-`Travel -> Watch -> Navigation -> Encounter`
-
-This integration does not introduce skill-challenge state or redesign the core watch procedure.
-
-## Compatibility
-
-The integration is designed to preserve existing expeditions, world data, Wonderdraft imports, party movement references, navigation state, map handling, encounter handoff behavior, audit history, and server-verifiable AutomaticRoll behavior. No publisher prose is copied into Hex Crawl; Rules Core remains the source-normalization and adjudication boundary.
+The retired `IRulesCoreTravelGateway`, `ProcedureResolutionRulesCoreAdapter`, `RulesCoreTravelGatewayException`, and Rules Core-named client helper are not retained as compatibility paths because Hex Crawl is pre-release.
