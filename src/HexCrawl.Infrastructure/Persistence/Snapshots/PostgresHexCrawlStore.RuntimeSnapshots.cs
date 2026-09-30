@@ -122,19 +122,24 @@ public sealed partial class PostgresHexCrawlStore
     private sealed record NonSpatialActiveWatchSnapshot(
         int WatchNumber,
         long TotalDurationTicks,
-        long ElapsedTicks)
+        long ElapsedTicks,
+        IReadOnlyList<ParticipantActivityAssignment> ActivityAssignments)
     {
         public static NonSpatialActiveWatchSnapshot FromDomain(NonSpatialActiveWatchState active) => new(
             active.WatchNumber,
             active.TotalDuration.Ticks,
-            active.Elapsed.Ticks);
+            active.Elapsed.Ticks,
+            active.ActivityAssignments.Select(value => value with { }).ToArray());
 
         public NonSpatialActiveWatchState ToDomain()
         {
             var state = new NonSpatialActiveWatchState(
                 WatchNumber,
                 TimeSpan.FromTicks(TotalDurationTicks),
-                TimeSpan.FromTicks(ElapsedTicks));
+                TimeSpan.FromTicks(ElapsedTicks))
+            {
+                ActivityAssignments = ActivityAssignments.Select(value => value with { }).ToArray()
+            };
             state.Validate();
             return state;
         }
@@ -214,7 +219,7 @@ public sealed partial class PostgresHexCrawlStore
     private sealed record WatchTravelPlanSnapshot(
         int IntendedDirection,
         string PaceKey,
-        IReadOnlyList<string> Activities,
+        IReadOnlyList<ParticipantActivityAssignment> ActivityAssignments,
         string NavigationAidKey,
         bool SuppressesNavigationCheck,
         bool ResetsVeerAtBoundary,
@@ -224,7 +229,7 @@ public sealed partial class PostgresHexCrawlStore
         public static WatchTravelPlanSnapshot FromDomain(WatchTravelPlan plan) => new(
             plan.IntendedDirection.Value,
             plan.Mode.PaceKey,
-            plan.Mode.Activities.ToArray(),
+            plan.Mode.ActivityAssignments.Select(value => value with { }).ToArray(),
             plan.NavigationAid.Key,
             plan.NavigationAid.SuppressesNavigationCheck,
             plan.NavigationAid.ResetsVeerAtBoundary,
@@ -233,7 +238,7 @@ public sealed partial class PostgresHexCrawlStore
 
         public WatchTravelPlan ToDomain() => new(
             new HexDirection(IntendedDirection),
-            new TravelModeSelection(PaceKey, Activities.ToArray()),
+            new TravelModeSelection(PaceKey, ActivityAssignments.Select(value => value with { }).ToArray()),
             new NavigationAidSelection(NavigationAidKey, SuppressesNavigationCheck, ResetsVeerAtBoundary),
             DeliberateDoubleBack,
             ContinueAcrossBoundaries);

@@ -145,7 +145,8 @@ public sealed class ExpeditionAssistantService(
             new NonSpatialWatchAssistantInput(
                 TimeSpan.FromHours(command.ElapsedHours),
                 ClientSuppliedProvenance(command.ResolutionSource, command.ResolutionNote),
-                command.Note));
+                command.Note),
+            ParticipantActivityPolicyResolver.SnapshotAssignments(expedition.Party));
 
         return await SaveAsync(
             expedition with

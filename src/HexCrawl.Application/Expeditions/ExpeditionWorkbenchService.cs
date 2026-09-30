@@ -17,7 +17,6 @@ public sealed record AdvanceExpeditionWorkbenchCommand
     public long ExpectedVersion { get; init; }
     public int IntendedDirection { get; init; }
     public string PaceKey { get; init; } = "normal";
-    public IReadOnlyList<string> Activities { get; init; } = [];
     public string NavigationAidKey { get; init; } = "none";
     public bool SuppressesNavigationCheck { get; init; }
     public bool ResetsVeerAtBoundary { get; init; }
@@ -168,9 +167,11 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
         var boundaryDecision = command.RecognizedLost.HasValue || command.Reorient.HasValue
             ? new BoundaryNavigationDecision(command.RecognizedLost ?? false, command.Reorient ?? false, boundaryProvenance)
             : null;
+        var activityAssignments = state.ActiveWatch?.Plan.Mode.ActivityAssignments
+            ?? ParticipantActivityPolicyResolver.SnapshotAssignments(expedition.Party);
         var plan = new WatchTravelPlan(
             new HexDirection(command.IntendedDirection),
-            new TravelModeSelection(RequiredText(command.PaceKey, "Pace key"), command.Activities ?? []),
+            new TravelModeSelection(RequiredText(command.PaceKey, "Pace key"), activityAssignments),
             new NavigationAidSelection(
                 string.IsNullOrWhiteSpace(command.NavigationAidKey) ? "none" : command.NavigationAidKey.Trim(),
                 command.SuppressesNavigationCheck,

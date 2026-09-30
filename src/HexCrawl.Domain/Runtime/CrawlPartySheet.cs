@@ -13,7 +13,7 @@ public sealed record CrawlPartySheet
     public IReadOnlyList<MarchingOrderPosition> MarchingOrder { get; init; } = [];
     public IReadOnlyList<WatchRotationEntry> WatchList { get; init; } = [];
     public IReadOnlyList<StandingOrder> StandingOrders { get; init; } = [];
-    public Guid? DefaultNavigatorMemberId { get; init; }
+    public IReadOnlyList<ParticipantActivityAssignment> ActivityAssignments { get; init; } = [];
     public PartyMovementReference? BaseMovement { get; init; }
 
     public static CrawlPartySheet Empty { get; } = new();
@@ -28,11 +28,6 @@ public sealed record CrawlPartySheet
             {
                 throw new InvalidOperationException("Party member ids must be unique.");
             }
-        }
-
-        if (DefaultNavigatorMemberId.HasValue && !memberIds.Contains(DefaultNavigatorMemberId.Value))
-        {
-            throw new InvalidOperationException("The default navigator must reference a party member.");
         }
 
         var occupiedPositions = new HashSet<(int Rank, int File)>();
@@ -72,6 +67,16 @@ public sealed record CrawlPartySheet
             if (!standingOrderIds.Add(order.Id))
             {
                 throw new InvalidOperationException("Standing-order ids must be unique.");
+            }
+        }
+
+        var activityAssignmentIds = new HashSet<Guid>();
+        foreach (var assignment in ActivityAssignments)
+        {
+            assignment.Validate(memberIds);
+            if (!activityAssignmentIds.Add(assignment.Id))
+            {
+                throw new InvalidOperationException("Participant activity assignment ids must be unique.");
             }
         }
 
@@ -172,6 +177,102 @@ public sealed record StandingOrder(
         if (Text.Length > 2000)
         {
             throw new InvalidOperationException("Standing-order text is too long.");
+        }
+    }
+}
+
+public enum ParticipantActivityAssignmentScope
+{
+    Party,
+    Participant,
+    Role
+}
+
+/// <summary>
+/// Expedition-owned current participant activity state. Activity and role identity are generic
+/// procedure-defined keys; this record deliberately contains no named-system role taxonomy.
+/// </summary>
+public sealed record ParticipantActivityAssignment(
+    Guid Id,
+    ParticipantActivityAssignmentScope Scope,
+    Guid? ParticipantId,
+    string? ActivityKey,
+    string? RoleKey,
+    string? Note = null)
+{
+    public void Validate(IReadOnlySet<Guid> memberIds)
+    {
+        ValidateStructure();
+        if (ParticipantId.HasValue && !memberIds.Contains(ParticipantId.Value))
+        {
+            throw new InvalidOperationException("Participant activity assignment references a party member that does not exist.");
+        }
+    }
+
+    public void ValidateStructure()
+    {
+        if (Id == Guid.Empty)
+        {
+            throw new InvalidOperationException("Participant activity assignment id is required.");
+        }
+        if (ParticipantId == Guid.Empty)
+        {
+            throw new InvalidOperationException("Participant activity assignment member id can not be empty.");
+        }
+        ValidateOptionalKey(ActivityKey, "Activity key");
+        ValidateOptionalKey(RoleKey, "Role key");
+        if (Note is { Length: > 1000 })
+        {
+            throw new InvalidOperationException("Participant activity assignment note is too long.");
+        }
+
+        switch (Scope)
+        {
+            case ParticipantActivityAssignmentScope.Party:
+                if (ParticipantId.HasValue)
+                {
+                    throw new InvalidOperationException("A party-wide activity assignment can not target a participant.");
+                }
+                RequireKey(ActivityKey, "A party-wide activity assignment requires an activity key.");
+                if (RoleKey is not null)
+                {
+                    throw new InvalidOperationException("A party-wide activity assignment can not declare a participant role.");
+                }
+                break;
+            case ParticipantActivityAssignmentScope.Participant:
+                RequireParticipant();
+                RequireKey(ActivityKey, "A participant activity assignment requires an activity key.");
+                break;
+            case ParticipantActivityAssignmentScope.Role:
+                RequireParticipant();
+                RequireKey(RoleKey, "A role assignment requires a role key.");
+                break;
+            default:
+                throw new InvalidOperationException("Participant activity assignment scope is not supported.");
+        }
+    }
+
+    private void RequireParticipant()
+    {
+        if (!ParticipantId.HasValue)
+        {
+            throw new InvalidOperationException("Participant activity assignment requires a party member.");
+        }
+    }
+
+    private static void RequireKey(string? value, string message)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            throw new InvalidOperationException(message);
+        }
+    }
+
+    private static void ValidateOptionalKey(string? value, string label)
+    {
+        if (value is not null && string.IsNullOrWhiteSpace(value))
+        {
+            throw new InvalidOperationException($"{label} can not be blank.");
         }
     }
 }

@@ -14,7 +14,6 @@ public sealed record AdvanceExpeditionCommand
     public long ExpectedVersion { get; init; }
     public int IntendedDirection { get; init; }
     public string PaceKey { get; init; } = "normal";
-    public IReadOnlyList<string> Activities { get; init; } = [];
     public string NavigationAidKey { get; init; } = "none";
     public bool SuppressesNavigationCheck { get; init; }
     public bool ResetsVeerAtBoundary { get; init; }

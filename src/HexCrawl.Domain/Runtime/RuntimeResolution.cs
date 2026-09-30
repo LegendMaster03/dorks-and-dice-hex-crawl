@@ -16,7 +16,9 @@ public sealed record ResolutionProvenance(ResolutionSource Source, string? Note 
     public static ResolutionProvenance ProcedureDefault { get; } = new(ResolutionSource.ProcedureDefault);
 }
 
-public sealed record TravelModeSelection(string PaceKey, IReadOnlyList<string> Activities)
+public sealed record TravelModeSelection(
+    string PaceKey,
+    IReadOnlyList<ParticipantActivityAssignment> ActivityAssignments)
 {
     public static TravelModeSelection Normal { get; } = new("normal", []);
 }

@@ -117,7 +117,8 @@ public static partial class CrawlAssistantActions
     public static NonSpatialSessionState RecordWatch(
         GenericProcedureRuntime procedure,
         NonSpatialSessionState state,
-        NonSpatialWatchAssistantInput input)
+        NonSpatialWatchAssistantInput input,
+        IReadOnlyList<ParticipantActivityAssignment>? activityAssignments = null)
     {
         ArgumentNullException.ThrowIfNull(procedure);
         ArgumentNullException.ThrowIfNull(state);
@@ -132,10 +133,20 @@ public static partial class CrawlAssistantActions
         var events = new List<CrawlRuntimeEvent>();
         if (active is null)
         {
+            var snapshot = (activityAssignments ?? [])
+                .Select(value => value with { })
+                .ToArray();
+            foreach (var assignment in snapshot)
+            {
+                assignment.ValidateStructure();
+            }
             active = new NonSpatialActiveWatchState(
                 state.CompletedWatches + 1,
                 procedure.Time.IntervalDuration,
-                TimeSpan.Zero);
+                TimeSpan.Zero)
+            {
+                ActivityAssignments = snapshot
+            };
             events.Add(Event(
                 state,
                 events,
@@ -143,7 +154,7 @@ public static partial class CrawlAssistantActions
                 CrawlRuntimeEventKind.WatchStarted,
                 state.ElapsedTime,
                 null,
-                $"Non-spatial watch {active.WatchNumber} started with configured duration {FormatHours(active.TotalDuration)}."));
+                $"Non-spatial watch {active.WatchNumber} started with configured duration {FormatHours(active.TotalDuration)} and {snapshot.Length} participant assignment(s)."));
         }
         else
         {

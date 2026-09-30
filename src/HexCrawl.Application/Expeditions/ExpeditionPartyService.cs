@@ -28,7 +28,8 @@ public sealed class ExpeditionPartyService(
                 "The resource version is stale. Reload the running sheet before saving party information.");
         }
 
-        command.Party.Validate();
+        var policy = ParticipantActivityPolicyResolver.Resolve(expedition.CampaignProcedure);
+        ParticipantActivityPolicyResolver.ValidateAssignments(command.Party, policy);
         var updated = expedition with { Party = command.Party };
         var result = await store.SaveExpeditionAsync(
             updated,

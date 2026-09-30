@@ -68,6 +68,7 @@ public sealed record NonSpatialActiveWatchState(
     TimeSpan TotalDuration,
     TimeSpan Elapsed)
 {
+    public IReadOnlyList<ParticipantActivityAssignment> ActivityAssignments { get; init; } = [];
     public TimeSpan Remaining => TotalDuration - Elapsed;
 
     public void Validate()
@@ -83,6 +84,14 @@ public sealed record NonSpatialActiveWatchState(
         if (Elapsed < TimeSpan.Zero || Elapsed >= TotalDuration)
         {
             throw new InvalidOperationException("An active non-spatial watch must have elapsed time between zero and its total duration.");
+        }
+        foreach (var assignment in ActivityAssignments)
+        {
+            assignment.ValidateStructure();
+        }
+        if (ActivityAssignments.Select(value => value.Id).Distinct().Count() != ActivityAssignments.Count)
+        {
+            throw new InvalidOperationException("Active non-spatial participant activity assignment ids must be unique.");
         }
     }
 }

@@ -106,9 +106,11 @@ public sealed partial class HexCrawlService
         var boundaryDecision = command.RecognizedLost.HasValue || command.Reorient.HasValue
             ? new BoundaryNavigationDecision(command.RecognizedLost ?? false, command.Reorient ?? false, provenance)
             : null;
+        var activityAssignments = state.ActiveWatch?.Plan.Mode.ActivityAssignments
+            ?? ParticipantActivityPolicyResolver.SnapshotAssignments(expedition.Party);
         var plan = new WatchTravelPlan(
             new HexDirection(command.IntendedDirection),
-            new TravelModeSelection(RequiredText(command.PaceKey, "Pace key"), command.Activities ?? []),
+            new TravelModeSelection(RequiredText(command.PaceKey, "Pace key"), activityAssignments),
             new NavigationAidSelection(
                 string.IsNullOrWhiteSpace(command.NavigationAidKey) ? "none" : command.NavigationAidKey.Trim(),
                 command.SuppressesNavigationCheck,

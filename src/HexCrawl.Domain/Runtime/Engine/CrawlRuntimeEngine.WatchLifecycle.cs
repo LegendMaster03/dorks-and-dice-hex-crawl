@@ -27,16 +27,16 @@ public sealed partial class CrawlRuntimeEngine
             encounter,
             encounter.Kind == EncounterOutcomeKind.None,
             null);
-        var activities = plan.Mode.Activities.Count == 0
+        var assignments = plan.Mode.ActivityAssignments.Count == 0
             ? "none"
-            : string.Join(", ", plan.Mode.Activities);
+            : string.Join(", ", plan.Mode.ActivityAssignments.Select(DescribeAssignment));
 
         events.Add(
             active.WatchNumber,
             CrawlRuntimeEventKind.WatchStarted,
             state.ElapsedTravelTime,
             state.CurrentHex,
-            $"Watch {active.WatchNumber} started ({procedure.Name}); pace {plan.Mode.PaceKey}; activities {activities}.");
+            $"Watch {active.WatchNumber} started ({procedure.Name}); pace {plan.Mode.PaceKey}; participant assignments {assignments}.");
 
         state = state with { ActiveWatch = active };
         state = ResolveNavigationAtWatchStart(
@@ -58,6 +58,15 @@ public sealed partial class CrawlRuntimeEngine
         }
 
         return (state, active);
+    }
+
+    private static string DescribeAssignment(ParticipantActivityAssignment assignment)
+    {
+        var target = assignment.ParticipantId?.ToString() ?? "party";
+        var activity = string.IsNullOrWhiteSpace(assignment.ActivityKey) ? null : $"activity={assignment.ActivityKey}";
+        var role = string.IsNullOrWhiteSpace(assignment.RoleKey) ? null : $"role={assignment.RoleKey}";
+        var details = string.Join("/", new[] { activity, role }.Where(value => value is not null));
+        return string.IsNullOrWhiteSpace(details) ? target : $"{target}:{details}";
     }
 
     private static (ExpeditionState State, ActiveWatchState Active) ResumePendingDecision(
