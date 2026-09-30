@@ -14,7 +14,7 @@ export async function renderProcedureReference(
     revision: number | null,
     navigate: (route: string, replace?: boolean) => void): Promise<() => void> {
     ensureReferenceStyles();
-    root.innerHTML = loadingMarkup("Loading procedure reference…");
+    root.innerHTML = `<section class="hc-page"><p class="hc-muted">Loading procedure reference…</p></section>`;
     const referenceApi = await ProcedureComposerApi.create(root);
     let disposed = false;
 
@@ -23,10 +23,7 @@ export async function renderProcedureReference(
         if (!disposed) render(root, reference, navigate);
     } catch (value) {
         if (!disposed) {
-            root.innerHTML = `
-                <section class="hc-page hc-procedure-reference">
-                    <div class="hc-error" data-error role="alert"></div>
-                </section>`;
+            root.innerHTML = `<section class="hc-page hc-procedure-reference"><div class="hc-error" data-error role="alert"></div></section>`;
             const error = root.querySelector<HTMLElement>("[data-error]");
             if (error) showUiError(error, value);
         }
@@ -49,7 +46,7 @@ function render(
     title.append(
         text("p", "Procedure reference", "hc-reference-kicker"),
         text("h1", reference.name),
-        text("p", `Revision ${reference.revision} · ${reference.sections.reduce((count, section) => count + section.modules.length, 0)} modules`));
+        text("p", `Revision ${reference.revision} · ${moduleCount(reference)} modules`));
     const actions = element("nav", "hc-button-row hc-reference-actions");
     const back = button("Back to procedure");
     back.dataset.referenceBack = "";
@@ -60,9 +57,7 @@ function render(
     print.addEventListener("click", () => window.print());
     actions.append(back, print);
     header.append(title, actions);
-    page.append(header);
-
-    page.append(renderSummary(reference));
+    page.append(header, renderSummary(reference));
 
     const layout = element("div", "hc-reference-layout");
     const index = element("aside", "hc-panel hc-reference-index");
@@ -94,16 +89,13 @@ function render(
 
 function renderSummary(reference: ProcedureReference): HTMLElement {
     const summary = element("section", "hc-reference-summary");
-    const current = element("section", "hc-panel");
-    current.append(
+    const snapshot = element("section", "hc-panel");
+    snapshot.append(
         text("h2", "Procedure snapshot"),
         text("p", reference.isExecutable
             ? "This exact procedure revision currently binds to native execution."
             : "This exact procedure revision includes structural, manual, or unsupported behavior and is not fully native-executable."),
-        text(
-            "p",
-            `${reference.modifiedModuleCount} modified module${reference.modifiedModuleCount === 1 ? "" : "s"} · ${reference.modificationCount} recorded change${reference.modificationCount === 1 ? "" : "s"}.`,
-            "hc-muted"));
+        text("p", `${reference.modifiedModuleCount} modified modules · ${reference.modificationCount} recorded changes.`, "hc-muted"));
 
     const dependency = element("section", "hc-panel");
     dependency.append(text("h2", "Dependency status"));
@@ -116,84 +108,72 @@ function renderSummary(reference: ProcedureReference): HTMLElement {
             || issue.kind === "MissingRequiredModule"
             || issue.kind === "IncompatibleMechanic").length;
         dependency.append(
-            text("p", `${blocking} blocking issue${blocking === 1 ? "" : "s"} · ${unresolved} unresolved input${unresolved === 1 ? "" : "s"} · ${reference.dependencies.issues.length} total diagnostic${reference.dependencies.issues.length === 1 ? "" : "s"}.`),
+            text("p", `${blocking} blocking · ${unresolved} unresolved input · ${reference.dependencies.issues.length} total diagnostics.`),
             text("p", "Unresolved inputs can remain valid when the stored contract permits DM, provider, or runtime-state sources.", "hc-muted"));
     }
 
-    const origin = element("section", "hc-panel hc-reference-origin");
+    const origin = element("section", "hc-panel");
     origin.append(text("h2", "Origin"));
     if (!reference.origin) {
-        origin.append(text("p", "No origin preset is recorded. The materialized procedure snapshot fully defines this reference.", "hc-muted"));
+        origin.append(text("p", "No origin preset is recorded. The materialized snapshot fully defines this reference.", "hc-muted"));
     } else {
         const name = reference.origin.presetDisplayName ?? reference.origin.presetKey ?? "Recorded preset";
         origin.append(
             text("p", `${name}${reference.origin.presetRevision == null ? "" : ` · preset revision ${reference.origin.presetRevision}`}`),
-            text("p", "Origin is provenance only; the procedure sections below are generated from this saved revision.", "hc-muted"));
+            text("p", "Origin is provenance only; the procedure sections below come from this saved revision.", "hc-muted"));
         if (reference.origin.attribution) origin.append(text("p", reference.origin.attribution, "hc-muted"));
         if (reference.origin.disclaimer) origin.append(text("p", reference.origin.disclaimer, "hc-muted"));
     }
-
-    summary.append(current, dependency, origin);
+    summary.append(snapshot, dependency, origin);
     return summary;
 }
 
 function renderModule(module: ProcedureReferenceModule): HTMLElement {
     const card = element("article", `hc-panel hc-reference-module${module.isModified ? " is-modified" : ""}`);
     card.dataset.moduleKey = module.moduleKey;
-
     const heading = element("div", "hc-panel-heading");
     const title = document.createElement("div");
     title.append(text("h3", module.displayName), text("p", module.purpose, "hc-muted"));
     const badges = element("div", "hc-reference-badges");
-    badges.append(
-        badge(module.mechanic.automationLevel),
-        badge(executionSupportLabel(module.mechanic.executionSupport)));
+    badges.append(badge(module.mechanic.automationLevel), badge(executionSupportLabel(module.mechanic.executionSupport)));
     if (module.isModified) badges.append(badge(`Modified ×${module.modificationCount}`));
     heading.append(title, badges);
     card.append(heading);
 
-    const behavior = element("section", "hc-reference-behavior");
+    const behavior = document.createElement("section");
     behavior.append(
         text("h4", "Selected behavior"),
         text("p", module.mechanic.displayName, "hc-reference-behavior-name"),
         text("p", module.mechanic.description),
         text("p", module.mechanic.executionStatus, "hc-reference-execution"));
-    card.append(behavior);
-
-    card.append(renderParameters(module.parameters));
+    card.append(behavior, renderParameters(module.parameters));
 
     const contracts = element("div", "hc-reference-contracts");
-    contracts.append(
-        renderInputs(module.requiredInputs),
-        renderOutputs(module),
-        renderDiagnostics(module.diagnostics));
+    contracts.append(renderInputs(module.requiredInputs), renderOutputs(module), renderDiagnostics(module.diagnostics));
     card.append(contracts);
 
     if (module.isModified) {
-        const modifications = element("section", "hc-reference-modifications");
-        modifications.append(text("h4", "Campaign modifications"));
-        modifications.append(text(
-            "p",
-            `${module.modificationCount} recorded change${module.modificationCount === 1 ? "" : "s"} target this module. The values above are the current effective snapshot.`));
+        const modifications = document.createElement("section");
+        modifications.append(
+            text("h4", "Campaign modifications"),
+            text("p", `${module.modificationCount} recorded changes target this module. The values above are the current effective snapshot.`));
         if (module.modificationNotes.length > 0) {
-            const notes = document.createElement("ul");
-            for (const note of module.modificationNotes) notes.append(listItem(note));
-            modifications.append(notes);
+            const list = document.createElement("ul");
+            for (const note of module.modificationNotes) list.append(listItem(note));
+            modifications.append(list);
         }
         card.append(modifications);
     }
-
     return card;
 }
 
 function renderParameters(parameters: ProcedureReferenceParameter[]): HTMLElement {
-    const section = element("section", "hc-reference-parameters");
+    const section = document.createElement("section");
     section.append(text("h4", "Parameters"));
     if (parameters.length === 0) {
         section.append(text("p", "No stored parameters.", "hc-muted"));
         return section;
     }
-
     const list = element("dl", "hc-reference-definition-list");
     for (const parameter of parameters) {
         const term = document.createElement("dt");
@@ -233,15 +213,12 @@ function renderInputs(inputs: ProcedureReferenceInput[]): HTMLElement {
         section.append(text("p", "No required inputs.", "hc-muted"));
         return section;
     }
-
     const list = document.createElement("dl");
     for (const input of inputs) {
-        const term = text("dt", input.displayName);
         const details: string[] = [];
         if (input.producerModules.length > 0) details.push(`Selected producer: ${input.producerModules.join(", ")}`);
         if (input.allowedSources.length > 0) details.push(`Allowed sources: ${input.allowedSources.map(source => source.label).join(", ")}`);
-        const value = text("dd", details.length > 0 ? details.join(". ") : "Selected module producer only.");
-        list.append(term, value);
+        list.append(text("dt", input.displayName), text("dd", details.length > 0 ? details.join(". ") : "Selected module producer only."));
     }
     section.append(list);
     return section;
@@ -252,11 +229,11 @@ function renderOutputs(module: ProcedureReferenceModule): HTMLElement {
     section.append(text("h4", "Outputs / state"));
     if (module.outputs.length === 0) {
         section.append(text("p", "No declared outputs.", "hc-muted"));
-        return section;
+    } else {
+        const list = document.createElement("ul");
+        for (const output of module.outputs) list.append(listItem(output.displayName));
+        section.append(list);
     }
-    const list = document.createElement("ul");
-    for (const output of module.outputs) list.append(listItem(output.displayName));
-    section.append(list);
     return section;
 }
 
@@ -265,16 +242,16 @@ function renderDiagnostics(diagnostics: ProcedureReferenceDiagnostic[]): HTMLEle
     section.append(text("h4", "Diagnostics"));
     if (diagnostics.length === 0) {
         section.append(text("p", "No dependency diagnostics for this module.", "hc-muted"));
-        return section;
+    } else {
+        const list = document.createElement("ul");
+        for (const diagnostic of diagnostics) {
+            const sources = diagnostic.allowedSources.length > 0
+                ? ` Allowed sources: ${diagnostic.allowedSources.map(source => source.label).join(", ")}.`
+                : "";
+            list.append(listItem(`${diagnosticLabel(diagnostic.kind)} — ${diagnostic.message}${sources}`));
+        }
+        section.append(list);
     }
-    const list = document.createElement("ul");
-    for (const diagnostic of diagnostics) {
-        const sources = diagnostic.allowedSources.length > 0
-            ? ` Allowed sources: ${diagnostic.allowedSources.map(source => source.label).join(", ")}.`
-            : "";
-        list.append(listItem(`${diagnosticLabel(diagnostic.kind)} — ${diagnostic.message}${sources}`));
-    }
-    section.append(list);
     return section;
 }
 
@@ -290,6 +267,10 @@ function executionSupportLabel(value: string): string {
     if (value === "Native") return "Native execution";
     if (value === "Declarative") return "Structural / declarative";
     return "Unsupported handler/version";
+}
+
+function moduleCount(reference: ProcedureReference): number {
+    return reference.sections.reduce((count, section) => count + section.modules.length, 0);
 }
 
 function badge(label: string): HTMLElement {
@@ -320,11 +301,9 @@ function button(label: string): HTMLButtonElement {
     return node;
 }
 
-function loadingMarkup(message: string): string =>
-    `<section class="hc-page"><p class="hc-muted">${message}</p></section>`;
-
-function slug(value: string): string =>
-    value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+function slug(value: string): string {
+    return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
 
 function ensureReferenceStyles(): void {
     if (document.getElementById("hc-procedure-reference-styles")) return;
@@ -336,15 +315,12 @@ function ensureReferenceStyles(): void {
         .hc-reference-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin-bottom: 1rem; }
         .hc-reference-layout { display: grid; grid-template-columns: minmax(190px, 240px) minmax(0, 1fr); gap: 1rem; align-items: start; }
         .hc-reference-index { position: sticky; top: 1rem; }
-        .hc-reference-index ul { margin: .5rem 0 0; padding-left: 1.2rem; }
         .hc-reference-content { min-width: 0; }
         .hc-reference-section { scroll-margin-top: 1rem; }
-        .hc-reference-section > h2 { margin-top: 1.5rem; }
-        .hc-reference-section:first-child > h2 { margin-top: 0; }
         .hc-reference-module { break-inside: avoid; margin-bottom: 1rem; }
         .hc-reference-module.is-modified { border-inline-start-width: 4px; }
         .hc-reference-badges { display: flex; flex-wrap: wrap; gap: .4rem; justify-content: flex-end; }
-        .hc-reference-badge { display: inline-flex; align-items: center; border: 1px solid currentColor; border-radius: 999px; padding: .15rem .5rem; font-size: .78rem; line-height: 1.3; opacity: .82; margin-left: .35rem; }
+        .hc-reference-badge { display: inline-flex; border: 1px solid currentColor; border-radius: 999px; padding: .15rem .5rem; font-size: .78rem; opacity: .82; margin-left: .35rem; }
         .hc-reference-behavior-name { font-weight: 700; }
         .hc-reference-execution { padding: .65rem .8rem; border-inline-start: 3px solid currentColor; }
         .hc-reference-contracts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin-top: 1rem; }
@@ -352,15 +328,13 @@ function ensureReferenceStyles(): void {
         .hc-reference-definition-list dt { font-weight: 700; }
         .hc-reference-definition-list dd { margin: 0; min-width: 0; }
         .hc-reference-map { width: 100%; border-collapse: collapse; }
-        .hc-reference-map th, .hc-reference-map td { padding: .25rem .5rem; border-bottom: 1px solid color-mix(in srgb, currentColor 18%, transparent); text-align: left; vertical-align: top; }
+        .hc-reference-map th, .hc-reference-map td { padding: .25rem .5rem; border-bottom: 1px solid currentColor; text-align: left; vertical-align: top; }
         .hc-reference-map th { width: 40%; font-weight: 600; }
         .hc-reference-technical { font-size: .82rem; opacity: .65; }
         @media (max-width: 820px) {
-            .hc-reference-summary, .hc-reference-contracts { grid-template-columns: 1fr; }
-            .hc-reference-layout { grid-template-columns: 1fr; }
+            .hc-reference-summary, .hc-reference-contracts, .hc-reference-layout { grid-template-columns: 1fr; }
             .hc-reference-index { position: static; }
             .hc-reference-definition-list { grid-template-columns: 1fr; gap: .25rem; }
-            .hc-reference-definition-list dd { margin-bottom: .65rem; }
         }
         @media print {
             .hc-reference-actions, .hc-reference-index, .hc-shell-nav, .hc-shell-header, nav[data-tool-nav] { display: none !important; }
@@ -368,9 +342,7 @@ function ensureReferenceStyles(): void {
             .hc-reference-layout { display: block; }
             .hc-reference-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
             .hc-reference-module { box-shadow: none !important; break-inside: avoid-page; }
-            .hc-reference-section { break-before: auto; }
-            .hc-reference-section > h2 { break-after: avoid; }
-            .hc-panel-heading, .hc-reference-behavior h4, .hc-reference-contracts h4, .hc-reference-parameters h4 { break-after: avoid; }
+            .hc-reference-section > h2, .hc-panel-heading, h4 { break-after: avoid; }
             a { color: inherit; text-decoration: none; }
         }
     `;
