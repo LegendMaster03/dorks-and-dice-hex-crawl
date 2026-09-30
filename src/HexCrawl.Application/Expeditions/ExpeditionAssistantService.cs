@@ -137,10 +137,10 @@ public sealed class ExpeditionAssistantService(
 
         var stateBefore = expedition.Runtime as NonSpatialSessionState
             ?? throw new InvalidOperationException("Non-spatial watch bookkeeping requires non-spatial session state.");
-        var procedure = ExpeditionProcedureExecutionResolver.Resolve(expedition);
+        var intervalDuration = ExpeditionProcedureRequirements.ResolveIntervalDuration(expedition.CampaignProcedure);
 
         var state = CrawlAssistantActions.RecordWatch(
-            procedure,
+            intervalDuration,
             stateBefore,
             new NonSpatialWatchAssistantInput(
                 TimeSpan.FromHours(command.ElapsedHours),

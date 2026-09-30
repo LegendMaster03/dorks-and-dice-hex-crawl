@@ -121,9 +121,26 @@ public static partial class CrawlAssistantActions
         IReadOnlyList<ParticipantActivityAssignment>? activityAssignments = null)
     {
         ArgumentNullException.ThrowIfNull(procedure);
+        return RecordWatch(
+            procedure.Time.IntervalDuration,
+            state,
+            input,
+            activityAssignments);
+    }
+
+    public static NonSpatialSessionState RecordWatch(
+        TimeSpan intervalDuration,
+        NonSpatialSessionState state,
+        NonSpatialWatchAssistantInput input,
+        IReadOnlyList<ParticipantActivityAssignment>? activityAssignments = null)
+    {
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(input);
 
+        if (intervalDuration <= TimeSpan.Zero)
+        {
+            throw new InvalidOperationException("Configured watch duration must be positive.");
+        }
         if (input.ElapsedTime <= TimeSpan.Zero)
         {
             throw new InvalidOperationException("Elapsed watch time must be positive.");
@@ -142,7 +159,7 @@ public static partial class CrawlAssistantActions
             }
             active = new NonSpatialActiveWatchState(
                 state.CompletedWatches + 1,
-                procedure.Time.IntervalDuration,
+                intervalDuration,
                 TimeSpan.Zero)
             {
                 ActivityAssignments = snapshot
