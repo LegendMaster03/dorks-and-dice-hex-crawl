@@ -53,4 +53,6 @@ test("procedure module exposes read-only reference navigation for the selected r
     assert.match(reference, /Print reference/);
     assert.match(reference, /@media print/);
     assert.match(reference, /Back to procedure/);
+    assert.match(reference, /Stored unknown parameter/);
+    assert.doesNotMatch(reference, /createElement\("input"\)|<input/);
 });
