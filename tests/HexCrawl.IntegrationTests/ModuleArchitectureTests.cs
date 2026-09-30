@@ -10,7 +10,7 @@ public sealed class ModuleArchitectureTests
         var manifests = HexCrawlModuleCatalog.All;
 
         Assert.Equal(
-            ["worlds", "expeditions", "travel-rules", "source-maps", "reference-data"],
+            ["worlds", "expeditions", "travel-rules", "source-maps", "reference-data", "procedure-composer"],
             manifests.Select(manifest => manifest.Id).ToArray());
 
         Assert.Equal(

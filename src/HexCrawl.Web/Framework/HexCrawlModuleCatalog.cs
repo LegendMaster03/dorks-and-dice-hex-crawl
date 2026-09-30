@@ -1,4 +1,5 @@
 using HexCrawl.Web.Modules.Expeditions;
+using HexCrawl.Web.Modules.Procedures;
 using HexCrawl.Web.Modules.ReferenceData;
 using HexCrawl.Web.Modules.SourceMaps;
 using HexCrawl.Web.Modules.TravelRules;
@@ -20,7 +21,8 @@ public static class HexCrawlModuleCatalog
         new ExpeditionModule(),
         new TravelRulesModule(),
         new SourceMapModule(),
-        new ReferenceDataModule()
+        new ReferenceDataModule(),
+        new ProcedureComposerModule()
     ]);
 
     public static IReadOnlyList<HexCrawlModuleManifest> All { get; } =

@@ -55,6 +55,25 @@ public static class CampaignProcedureMaterializer
         return new MaterializedCampaignProcedure(procedure, preset.Origin);
     }
 
+    public static CampaignProcedure CreateDraft(
+        CampaignProcedure current,
+        IReadOnlyList<CampaignProcedureOverride> overrides)
+    {
+        ArgumentNullException.ThrowIfNull(current);
+        ArgumentNullException.ThrowIfNull(overrides);
+        current.Validate();
+        return ApplyOverrides(current, overrides, current.Revision);
+    }
+
+    public static CampaignProcedure CreateInitialRevision(
+        CampaignProcedure current,
+        IReadOnlyList<CampaignProcedureOverride> overrides)
+    {
+        var revision = CreateDraft(current, overrides);
+        revision.Validate();
+        return revision;
+    }
+
     public static CampaignProcedure CreateRevision(
         CampaignProcedure current,
         IReadOnlyList<CampaignProcedureOverride> overrides)
@@ -62,6 +81,16 @@ public static class CampaignProcedureMaterializer
         ArgumentNullException.ThrowIfNull(current);
         ArgumentNullException.ThrowIfNull(overrides);
         current.Validate();
+        var revision = ApplyOverrides(current, overrides, checked(current.Revision + 1));
+        revision.Validate();
+        return revision;
+    }
+
+    private static CampaignProcedure ApplyOverrides(
+        CampaignProcedure current,
+        IReadOnlyList<CampaignProcedureOverride> overrides,
+        int revisionNumber)
+    {
         var modules = current.Modules
             .Select(CampaignProcedureSnapshot.Copy)
             .ToDictionary(module => module.Module.Key, StringComparer.Ordinal);
@@ -92,16 +121,14 @@ public static class CampaignProcedureMaterializer
                 parameters);
         }
 
-        var revision = current with
+        return current with
         {
-            Revision = checked(current.Revision + 1),
+            Revision = revisionNumber,
             Modules = current.Modules.Select(module => modules[module.Module.Key]).ToArray(),
             Overrides = current.Overrides
                 .Select(CampaignProcedureSnapshot.Copy)
                 .Concat(overrides.Select(CampaignProcedureSnapshot.Copy))
                 .ToArray()
         };
-        revision.Validate();
-        return revision;
     }
 }
