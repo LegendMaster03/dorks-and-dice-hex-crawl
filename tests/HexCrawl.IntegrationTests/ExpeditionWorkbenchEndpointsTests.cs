@@ -30,7 +30,7 @@ public sealed class ExpeditionWorkbenchEndpointsTests
     }
 
     [Fact]
-    public async Task CustomizedExpeditionContractReturnsProcedurePresentationAndKnownHexState()
+    public async Task ExpeditionContractReturnsProcedurePresentationAndKnownHexState()
     {
         var database = TestWebHost.NewDatabasePath();
         try
@@ -45,33 +45,17 @@ public sealed class ExpeditionWorkbenchEndpointsTests
                 name = "Configured expedition",
                 procedureKey = "simple-fixed-distance",
                 presentationKey = "exploration-map",
-                startHex = new { q = 3, r = -2 },
-                procedureSnapshot = new
-                {
-                    key = "simple-fixed-distance",
-                    name = "House six-hour watch",
-                    watchHours = 6,
-                    travelResolution = "ContinuousDistance",
-                    actualDistanceResolution = "Fixed",
-                    encounterCadence = "PerDay",
-                    usesNavigationChecks = false,
-                    usesPersistentVeer = false,
-                    tracksIntraHexProgress = true,
-                    directionChangesCostProgress = false,
-                    supportsDeliberateDoubleBack = false,
-                    startingExitProgressFactor = 0.5,
-                    nearExitProgressFactor = 0.5,
-                    farExitProgressFactor = 1.0,
-                    backExitProgressFactor = 0.5,
-                    directionChangeProgressCostFactor = 0.0
-                }
+                startHex = new { q = 3, r = -2 }
             });
             startResponse.EnsureSuccessStatusCode();
             var started = await startResponse.Content.ReadFromJsonAsync<JsonElement>();
 
-            Assert.Equal("House six-hour watch", started.GetProperty("profile").GetProperty("name").GetString());
-            Assert.Equal(6, started.GetProperty("profile").GetProperty("watchHours").GetDouble());
-            Assert.Equal("PerDay", started.GetProperty("profile").GetProperty("encounterCadence").GetString());
+            var procedure = started.GetProperty("procedure");
+            Assert.Equal("simple-fixed-distance", procedure.GetProperty("key").GetString());
+            Assert.Equal("Simple Fixed Distance", procedure.GetProperty("name").GetString());
+            Assert.True(procedure.GetProperty("isExecutable").GetBoolean());
+            Assert.Equal(4, procedure.GetProperty("runtime").GetProperty("intervalHours").GetDouble());
+            Assert.Equal("None", procedure.GetProperty("runtime").GetProperty("encounterCadence").GetString());
             Assert.Equal("exploration-map", started.GetProperty("presentation").GetProperty("key").GetString());
             var knownHex = Assert.Single(started.GetProperty("knownHexes").EnumerateArray());
             Assert.Equal(3, knownHex.GetProperty("q").GetInt32());
@@ -84,12 +68,14 @@ public sealed class ExpeditionWorkbenchEndpointsTests
     }
 
     [Fact]
-    public async Task CustomizedProcedureHelpersRoundTripThroughHttpAndRestart()
+    public async Task ProcedureRuntimeHelpersRoundTripThroughHttpAndRestart()
     {
         var database = TestWebHost.NewDatabasePath();
         try
         {
             Guid expeditionId;
+            Guid procedureId;
+            int procedureRevision;
             using (var factory = TestWebHost.Create(database))
             using (var client = factory.CreateClient())
             {
@@ -98,53 +84,18 @@ public sealed class ExpeditionWorkbenchEndpointsTests
 
                 using var startResponse = await client.PostAsJsonAsync($"/api/overworlds/{worldId:D}/expeditions", new
                 {
-                    name = "Customized helper expedition",
+                    name = "Procedure helper expedition",
                     procedureKey = "alexandrian-advanced",
                     presentationKey = "exploration-map",
-                    startHex = new { q = 0, r = 0 },
-                    procedureSnapshot = new
-                    {
-                        key = "alexandrian-advanced",
-                        name = "House helper profile",
-                        watchHours = 6,
-                        travelResolution = "ContinuousDistance",
-                        actualDistanceResolution = "VariableResolved",
-                        encounterCadence = "PerWatch",
-                        usesNavigationChecks = true,
-                        usesPersistentVeer = true,
-                        tracksIntraHexProgress = true,
-                        directionChangesCostProgress = true,
-                        supportsDeliberateDoubleBack = true,
-                        startingExitProgressFactor = 0.5,
-                        nearExitProgressFactor = 0.5,
-                        farExitProgressFactor = 1.0,
-                        backExitProgressFactor = 0.5,
-                        directionChangeProgressCostFactor = 1.0 / 6.0,
-                        resolutionHelpers = new
-                        {
-                            travel = new
-                            {
-                                roll = new { diceCount = 1, dieSides = 6, modifier = 2 },
-                                distanceFactorPerRollPoint = 0.2
-                            },
-                            navigation = new
-                            {
-                                checkRoll = new { diceCount = 2, dieSides = 10, modifier = -1 }
-                            },
-                            encounter = new
-                            {
-                                checkRoll = new { diceCount = 1, dieSides = 6, modifier = 0 },
-                                wanderingResults = new[] { 1, 2 },
-                                keyedLocationResults = new[] { 6 },
-                                timingSlots = 6
-                            }
-                        }
-                    }
+                    startHex = new { q = 0, r = 0 }
                 });
                 startResponse.EnsureSuccessStatusCode();
                 var started = await startResponse.Content.ReadFromJsonAsync<JsonElement>();
                 expeditionId = started.GetProperty("id").GetGuid();
-                AssertCustomizedHelpers(started.GetProperty("profile"));
+                var procedure = started.GetProperty("procedure");
+                procedureId = procedure.GetProperty("procedureId").GetGuid();
+                procedureRevision = procedure.GetProperty("revision").GetInt32();
+                AssertAlexandrianProcedure(procedure);
             }
 
             using (var restartedFactory = TestWebHost.Create(database))
@@ -152,7 +103,10 @@ public sealed class ExpeditionWorkbenchEndpointsTests
             {
                 var reloaded = await restartedClient.GetFromJsonAsync<JsonElement>(
                     $"/api/expeditions/{expeditionId:D}");
-                AssertCustomizedHelpers(reloaded.GetProperty("profile"));
+                var procedure = reloaded.GetProperty("procedure");
+                Assert.Equal(procedureId, procedure.GetProperty("procedureId").GetGuid());
+                Assert.Equal(procedureRevision, procedure.GetProperty("revision").GetInt32());
+                AssertAlexandrianProcedure(procedure);
             }
         }
         finally
@@ -161,27 +115,31 @@ public sealed class ExpeditionWorkbenchEndpointsTests
         }
     }
 
-    private static void AssertCustomizedHelpers(JsonElement profile)
+    private static void AssertAlexandrianProcedure(JsonElement procedure)
     {
-        Assert.Equal("House helper profile", profile.GetProperty("name").GetString());
-        Assert.Equal(6, profile.GetProperty("watchHours").GetDouble());
+        Assert.Equal("alexandrian-advanced", procedure.GetProperty("key").GetString());
+        Assert.Equal("Alexandrian Advanced", procedure.GetProperty("name").GetString());
+        Assert.True(procedure.GetProperty("isExecutable").GetBoolean());
 
-        var helpers = profile.GetProperty("resolutionHelpers");
+        var runtime = procedure.GetProperty("runtime");
+        Assert.Equal(4, runtime.GetProperty("intervalHours").GetDouble());
+        Assert.Equal("PerWatch", runtime.GetProperty("encounterCadence").GetString());
+        var helpers = runtime.GetProperty("resolutionHelpers");
         var travel = helpers.GetProperty("travel");
-        Assert.Equal(1, travel.GetProperty("roll").GetProperty("diceCount").GetInt32());
+        Assert.Equal(2, travel.GetProperty("roll").GetProperty("diceCount").GetInt32());
         Assert.Equal(6, travel.GetProperty("roll").GetProperty("dieSides").GetInt32());
-        Assert.Equal(2, travel.GetProperty("roll").GetProperty("modifier").GetInt32());
-        Assert.Equal(0.2, travel.GetProperty("distanceFactorPerRollPoint").GetDouble(), 6);
+        Assert.Equal(3, travel.GetProperty("roll").GetProperty("modifier").GetInt32());
+        Assert.Equal(0.1, travel.GetProperty("distanceFactorPerRollPoint").GetDouble(), 6);
 
         var navigation = helpers.GetProperty("navigation");
-        Assert.Equal(2, navigation.GetProperty("checkRoll").GetProperty("diceCount").GetInt32());
-        Assert.Equal(10, navigation.GetProperty("checkRoll").GetProperty("dieSides").GetInt32());
-        Assert.Equal(-1, navigation.GetProperty("checkRoll").GetProperty("modifier").GetInt32());
+        Assert.Equal(1, navigation.GetProperty("checkRoll").GetProperty("diceCount").GetInt32());
+        Assert.Equal(20, navigation.GetProperty("checkRoll").GetProperty("dieSides").GetInt32());
+        Assert.Equal(0, navigation.GetProperty("checkRoll").GetProperty("modifier").GetInt32());
 
         var encounter = helpers.GetProperty("encounter");
-        Assert.Equal(6, encounter.GetProperty("timingSlots").GetInt32());
-        Assert.Equal([1, 2], encounter.GetProperty("wanderingResults").EnumerateArray().Select(item => item.GetInt32()).ToArray());
-        Assert.Equal([6], encounter.GetProperty("keyedLocationResults").EnumerateArray().Select(item => item.GetInt32()).ToArray());
+        Assert.Equal(8, encounter.GetProperty("timingSlots").GetInt32());
+        Assert.Equal([1], encounter.GetProperty("wanderingResults").EnumerateArray().Select(item => item.GetInt32()).ToArray());
+        Assert.Equal([8], encounter.GetProperty("keyedLocationResults").EnumerateArray().Select(item => item.GetInt32()).ToArray());
     }
 
     [Fact]
@@ -336,28 +294,9 @@ public sealed class ExpeditionWorkbenchEndpointsTests
                 new
                 {
                     name = "Shared encounter resolution",
-                    procedureKey = "simple-fixed-distance",
+                    procedureKey = "alexandrian-advanced",
                     presentationKey = "exploration-map",
-                    startHex = new { q = 0, r = 0 },
-                    procedureSnapshot = new
-                    {
-                        key = "simple-fixed-distance",
-                        name = "Per-watch shared encounter state",
-                        watchHours = 4,
-                        travelResolution = "ContinuousDistance",
-                        actualDistanceResolution = "Fixed",
-                        encounterCadence = "PerWatch",
-                        usesNavigationChecks = false,
-                        usesPersistentVeer = false,
-                        tracksIntraHexProgress = true,
-                        directionChangesCostProgress = false,
-                        supportsDeliberateDoubleBack = false,
-                        startingExitProgressFactor = 0.5,
-                        nearExitProgressFactor = 0.5,
-                        farExitProgressFactor = 1.0,
-                        backExitProgressFactor = 0.5,
-                        directionChangeProgressCostFactor = 0.0
-                    }
+                    startHex = new { q = 0, r = 0 }
                 });
             startResponse.EnsureSuccessStatusCode();
             var expedition = await startResponse.Content.ReadFromJsonAsync<JsonElement>();
@@ -374,7 +313,11 @@ public sealed class ExpeditionWorkbenchEndpointsTests
                     navigationAidKey = "none",
                     suppressesNavigationCheck = false,
                     resetsVeerAtBoundary = false,
-                    effectiveDistance = 1,
+                    expectedDistance = 1,
+                    actualDistance = 1,
+                    travelResolutionSource = "ManualRoll",
+                    navigationOutcome = "Succeeded",
+                    navigationResolutionSource = "ManualRoll",
                     encounterOutcome = "None",
                     encounterResolutionSource = "ManualRoll",
                     resolutionSource = "ProcedureDefault",
@@ -412,7 +355,11 @@ public sealed class ExpeditionWorkbenchEndpointsTests
                     navigationAidKey = "none",
                     suppressesNavigationCheck = false,
                     resetsVeerAtBoundary = false,
-                    effectiveDistance = 1,
+                    expectedDistance = 1,
+                    actualDistance = 1,
+                    travelResolutionSource = "ManualRoll",
+                    navigationOutcome = "Succeeded",
+                    navigationResolutionSource = "ManualRoll",
                     resolutionSource = "ProcedureDefault",
                     deliberateDoubleBack = false,
                     continueAcrossBoundaries = true
@@ -453,28 +400,9 @@ public sealed class ExpeditionWorkbenchEndpointsTests
                 new
                 {
                     name = "Shared navigation resolution",
-                    procedureKey = "simple-fixed-distance",
+                    procedureKey = "alexandrian-advanced",
                     presentationKey = "exploration-map",
-                    startHex = new { q = 0, r = 0 },
-                    procedureSnapshot = new
-                    {
-                        key = "simple-fixed-distance",
-                        name = "Navigation handoff",
-                        watchHours = 4,
-                        travelResolution = "ContinuousDistance",
-                        actualDistanceResolution = "Fixed",
-                        encounterCadence = "None",
-                        usesNavigationChecks = true,
-                        usesPersistentVeer = true,
-                        tracksIntraHexProgress = true,
-                        directionChangesCostProgress = false,
-                        supportsDeliberateDoubleBack = false,
-                        startingExitProgressFactor = 0.5,
-                        nearExitProgressFactor = 0.5,
-                        farExitProgressFactor = 1.0,
-                        backExitProgressFactor = 0.5,
-                        directionChangeProgressCostFactor = 0.0
-                    }
+                    startHex = new { q = 0, r = 0 }
                 });
             startResponse.EnsureSuccessStatusCode();
             var expedition = await startResponse.Content.ReadFromJsonAsync<JsonElement>();
@@ -509,7 +437,11 @@ public sealed class ExpeditionWorkbenchEndpointsTests
                     navigationAidKey = "none",
                     suppressesNavigationCheck = false,
                     resetsVeerAtBoundary = false,
-                    effectiveDistance = 1,
+                    expectedDistance = 1,
+                    actualDistance = 1,
+                    travelResolutionSource = "ManualRoll",
+                    encounterOutcome = "None",
+                    encounterResolutionSource = "ManualRoll",
                     resolutionSource = "ProcedureDefault",
                     deliberateDoubleBack = false,
                     continueAcrossBoundaries = true
@@ -665,7 +597,7 @@ public sealed class ExpeditionWorkbenchEndpointsTests
                 startResponse.EnsureSuccessStatusCode();
                 var session = await startResponse.Content.ReadFromJsonAsync<JsonElement>();
                 sessionId = session.GetProperty("id").GetGuid();
-                watchHours = session.GetProperty("profile").GetProperty("watchHours").GetDouble();
+                watchHours = session.GetProperty("procedure").GetProperty("runtime").GetProperty("intervalHours").GetDouble();
 
                 Assert.Equal(JsonValueKind.Null, session.GetProperty("overworldId").ValueKind);
                 Assert.Equal("NonSpatial", session.GetProperty("context").GetProperty("kind").GetString());
