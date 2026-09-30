@@ -1,0 +1,190 @@
+name: Phase 3 final cleanup
+
+on:
+  push:
+    branches:
+      - feature/phase-3-preset-proof-matrix
+
+permissions:
+  contents: write
+
+jobs:
+  apply-cleanup:
+    if: github.event.head_commit.message == 'Add Phase 3 final cleanup runner'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/phase-3-preset-proof-matrix
+          fetch-depth: 0
+
+      - name: Apply generic handler and client naming cleanup
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          handler_replacements = {
+              "crawl-profile.watch-length": "procedure.time.fixed-interval",
+              "crawl-profile.movement-resolution": "procedure.movement.resolution",
+              "crawl-profile.hex-progress": "procedure.movement.hex-progress",
+              "crawl-profile.navigation": "procedure.navigation.check-policy",
+              "crawl-profile.encounter-cadence": "procedure.encounter.cadence",
+              "crawl-profile.resolution-helpers": "procedure.resolution-helpers",
+          }
+
+          text_suffixes = {".cs", ".md", ".ts", ".mjs", ".json", ".yml", ".yaml"}
+          for path in Path(".").rglob("*"):
+              if not path.is_file() or ".git" in path.parts or path.suffix.lower() not in text_suffixes:
+                  continue
+              try:
+                  text = path.read_text(encoding="utf-8")
+              except UnicodeDecodeError:
+                  continue
+              updated = text
+              for old, new in handler_replacements.items():
+                  updated = updated.replace(old, new)
+              if updated != text:
+                  path.write_text(updated, encoding="utf-8")
+
+          runtime = Path("src/HexCrawl.Domain/Runtime/GenericProcedureRuntime.cs")
+          text = runtime.read_text(encoding="utf-8")
+          text = text.replace(
+              "    internal static bool Supports(MechanicDefinition mechanic) =>\n",
+              "    public static bool Supports(MechanicDefinition mechanic) =>\n")
+          runtime.write_text(text, encoding="utf-8")
+
+          catalog = Path("src/HexCrawl.Application/Expeditions/GenericProcedureCatalog.cs")
+          text = catalog.read_text(encoding="utf-8")
+          if "using HexCrawl.Domain.Runtime;" not in text:
+              text = text.replace(
+                  "using HexCrawl.Domain.Procedure;\n",
+                  "using HexCrawl.Domain.Procedure;\nusing HexCrawl.Domain.Runtime;\n",
+                  1)
+          text = text.replace(
+              '    private const string DeclarativeContractHandler = "procedure.declarative-contract";\n\n',
+              "")
+          text = text.replace("DeclarativeContractHandler", "GenericProcedureExecutionHandlers.DeclarativeContract")
+          handler_constants = {
+              '"procedure.time.fixed-interval"': "GenericProcedureExecutionHandlers.FixedIntervalDuration",
+              '"procedure.movement.resolution"': "GenericProcedureExecutionHandlers.MovementResolutionPolicy",
+              '"procedure.movement.hex-progress"': "GenericProcedureExecutionHandlers.HexProgressPolicy",
+              '"procedure.navigation.check-policy"': "GenericProcedureExecutionHandlers.NavigationCheckPolicy",
+              '"procedure.encounter.cadence"': "GenericProcedureExecutionHandlers.EncounterCheckCadence",
+              '"procedure.resolution-helpers"': "GenericProcedureExecutionHandlers.DeterministicResolutionHelpers",
+          }
+          for literal, constant in handler_constants.items():
+              text = text.replace(literal, constant)
+          catalog.write_text(text, encoding="utf-8")
+
+          phase3_tests = Path("tests/HexCrawl.Application.Tests/Phase3ProofMatrixTests.cs")
+          text = phase3_tests.read_text(encoding="utf-8")
+          text = text.replace(
+              '.Where(module => module.Mechanic.ExecutionHandler.StartsWith("crawl-profile.", StringComparison.Ordinal))',
+              ".Where(module => GenericProcedureExecutionHandlers.Supports(module.Mechanic))")
+          text = text.replace(
+              'Assert.DoesNotContain(procedure.Modules, module =>\n            module.Mechanic.ExecutionHandler.StartsWith("crawl-profile.", StringComparison.Ordinal));',
+              "Assert.DoesNotContain(procedure.Modules, module =>\n            GenericProcedureExecutionHandlers.Supports(module.Mechanic));")
+          marker = "    [Fact]\n    public void AutomaticMechanicCanNotUseDeclarativeContractHandler()\n"
+          regression = '''    [Fact]\n    public void ExecutableHandlerIdsAreGenericBehaviorContracts()\n    {\n        string[] handlers =\n        [\n            GenericProcedureExecutionHandlers.FixedIntervalDuration,\n            GenericProcedureExecutionHandlers.MovementResolutionPolicy,\n            GenericProcedureExecutionHandlers.HexProgressPolicy,\n            GenericProcedureExecutionHandlers.NavigationCheckPolicy,\n            GenericProcedureExecutionHandlers.EncounterCheckCadence,\n            GenericProcedureExecutionHandlers.DeterministicResolutionHelpers\n        ];\n\n        Assert.All(handlers, handler =>\n        {\n            Assert.True(handler.StartsWith("procedure.", StringComparison.Ordinal));\n            Assert.False(handler.Contains("crawl-profile", StringComparison.Ordinal));\n        });\n        Assert.DoesNotContain(GenericProcedureCatalog.Mechanics, mechanic =>\n            mechanic.ExecutionHandler.Contains("crawl-profile", StringComparison.Ordinal));\n    }\n\n'''
+          if "ExecutableHandlerIdsAreGenericBehaviorContracts" not in text:
+              if marker not in text:
+                  raise SystemExit("Could not locate Phase 3 regression insertion point")
+              text = text.replace(marker, regression + marker, 1)
+          phase3_tests.write_text(text, encoding="utf-8")
+
+          client = Path("src/HexCrawl.Web/Client")
+          old_view = client / "src/procedure-profile-view.ts"
+          new_view = client / "src/campaign-procedure-view.ts"
+          if old_view.exists():
+              old_view.rename(new_view)
+          old_test = client / "test/procedure-profile-view.test.mjs"
+          new_test = client / "test/campaign-procedure-view.test.mjs"
+          if old_test.exists():
+              old_test.rename(new_test)
+
+          for path in client.rglob("*"):
+              if not path.is_file() or path.suffix.lower() not in {".ts", ".mjs", ".json"}:
+                  continue
+              text = path.read_text(encoding="utf-8")
+              updated = text.replace("procedure-profile-view", "campaign-procedure-view")
+              updated = updated.replace("procedureProfileSummary", "campaignProcedureSummary")
+              if path.name == "contract-source.test.mjs":
+                  updated = updated.replace("profileView", "campaignProcedureView")
+              if updated != text:
+                  path.write_text(updated, encoding="utf-8")
+
+          architecture = Path("docs/generic-procedure-architecture.md")
+          text = architecture.read_text(encoding="utf-8")
+          anchor = "Unsupported handlers and versions remain preserved as procedure data and fail clearly when execution is attempted.\n\n"
+          addition = '''Unsupported handlers and versions remain preserved as procedure data and fail clearly when execution is attempted.\n\nThe current deterministic executable handler identities are behavior-oriented contracts persisted exactly with their mechanic versions:\n\n- `procedure.time.fixed-interval`;\n- `procedure.movement.resolution`;\n- `procedure.movement.hex-progress`;\n- `procedure.navigation.check-policy`;\n- `procedure.encounter.cadence`;\n- `procedure.resolution-helpers`.\n\nThese identifiers describe executable behavior. They do not encode a preset, system, edition, or retired procedure representation.\n\n'''
+          if "procedure.time.fixed-interval" not in text:
+              if anchor not in text:
+                  raise SystemExit("Could not locate architecture handler insertion point")
+              text = text.replace(anchor, addition, 1)
+          architecture.write_text(text, encoding="utf-8")
+
+          runtime_doc = Path("docs/runtime-engine.md")
+          text = runtime_doc.read_text(encoding="utf-8")
+          anchor = "`GenericProcedureRuntime.Bind` recognizes explicit `(ExecutionHandler, Version)` combinations embedded in the materialized snapshot. It does not resolve a current global mechanic or inspect origin preset identity.\n\n"
+          addition = '''`GenericProcedureRuntime.Bind` recognizes explicit `(ExecutionHandler, Version)` combinations embedded in the materialized snapshot. It does not resolve a current global mechanic or inspect origin preset identity.\n\nThe current native executable handlers are `procedure.time.fixed-interval`, `procedure.movement.resolution`, `procedure.movement.hex-progress`, `procedure.navigation.check-policy`, `procedure.encounter.cadence`, and `procedure.resolution-helpers`. Handler identity is behavior-oriented and remains paired with the persisted mechanic version for dispatch.\n\n'''
+          if "procedure.time.fixed-interval" not in text:
+              if anchor not in text:
+                  raise SystemExit("Could not locate runtime handler insertion point")
+              text = text.replace(anchor, addition, 1)
+          runtime_doc.write_text(text, encoding="utf-8")
+
+          phase3_doc = Path("docs/phase-3-proof-matrix.md")
+          text = phase3_doc.read_text(encoding="utf-8")
+          anchor = "- `procedure.helpers`.\n\n"
+          addition = '''- `procedure.helpers`.\n\nThose six executable modules bind through generic behavior-oriented handler identities: `procedure.time.fixed-interval`, `procedure.movement.resolution`, `procedure.movement.hex-progress`, `procedure.navigation.check-policy`, `procedure.encounter.cadence`, and `procedure.resolution-helpers`. The handler/version pair is part of the pinned `CampaignProcedure`; no handler identity carries preset or retired profile terminology.\n\n'''
+          if "procedure.time.fixed-interval" not in text:
+              if anchor not in text:
+                  raise SystemExit("Could not locate Phase 3 handler insertion point")
+              text = text.replace(anchor, addition, 1)
+          phase3_doc.write_text(text, encoding="utf-8")
+
+          plan = Path("docs/generic-procedure-development-plan.md")
+          text = plan.read_text(encoding="utf-8")
+          anchor = "The persisted handler/version pair is authoritative for runtime dispatch.\n\n"
+          addition = '''The persisted handler/version pair is authoritative for runtime dispatch. Current native executable handlers use generic `procedure.*` behavior-oriented identifiers; identifiers from retired development representations are not compatibility contracts.\n\n'''
+          if "Current native executable handlers use generic `procedure.*`" not in text:
+              if anchor not in text:
+                  raise SystemExit("Could not locate development-plan handler insertion point")
+              text = text.replace(anchor, addition, 1)
+          plan.write_text(text, encoding="utf-8")
+
+          postgres = Path("docs/postgresql-persistence.md")
+          text = postgres.read_text(encoding="utf-8")
+          anchor = "Persisted JSON remains application-owned; snapshots are not normalized into a competing relational domain model.\n\n"
+          addition = '''Persisted JSON remains application-owned; snapshots are not normalized into a competing relational domain model. Generic execution-handler identity and mechanic version are persisted verbatim inside the `CampaignProcedure` JSON; current native handlers use behavior-oriented `procedure.*` identifiers.\n\n'''
+          if "Generic execution-handler identity and mechanic version" not in text:
+              if anchor not in text:
+                  raise SystemExit("Could not locate persistence handler insertion point")
+              text = text.replace(anchor, addition, 1)
+          postgres.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Verify cleanup diff and audit retired vocabulary
+        shell: bash
+        run: |
+          git diff --check
+          test -f src/HexCrawl.Web/Client/src/campaign-procedure-view.ts
+          test -f src/HexCrawl.Web/Client/test/campaign-procedure-view.test.mjs
+          test ! -e src/HexCrawl.Web/Client/src/procedure-profile-view.ts
+          test ! -e src/HexCrawl.Web/Client/test/procedure-profile-view.test.mjs
+          echo '--- retired architecture audit ---'
+          git grep -n -E 'crawl-profile|CrawlProcedureProfile|CompatibilityProfile|RuntimeProfileContract|procedure-profile|legacy profile|compatibility profile' -- . ':!docs/generic-procedure-development-plan.md' || true
+
+      - name: Commit cleanup
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo 'No cleanup changes produced.' >&2
+            exit 1
+          fi
+          git config user.name 'LegendMaster03'
+          git config user.email 'kbarnett0306@gmail.com'
+          git add -A
+          git commit -m 'Finalize generic procedure handler identities'
+          git push origin HEAD:feature/phase-3-preset-proof-matrix
