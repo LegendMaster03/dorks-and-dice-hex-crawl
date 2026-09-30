@@ -29,7 +29,21 @@ public static class GenericProcedureExecutionHandlers
             [DeclarativeContract] = new HashSet<int> { 1 }
         };
 
-    public static bool Supports(MechanicDefinition mechanic) =>
+    private static readonly IReadOnlySet<string> NativeExecutableHandlers = new HashSet<string>(StringComparer.Ordinal)
+    {
+        FixedIntervalDuration,
+        MovementResolutionPolicy,
+        HexProgressPolicy,
+        NavigationCheckPolicy,
+        EncounterCheckCadence,
+        DeterministicResolutionHelpers
+    };
+
+    public static bool SupportsNativeExecution(MechanicDefinition mechanic) =>
+        NativeExecutableHandlers.Contains(mechanic.ExecutionHandler)
+        && SupportedVersions.TryGetValue(mechanic.ExecutionHandler, out var versions)
+        && versions.Contains(mechanic.Version);
+    internal static bool Supports(MechanicDefinition mechanic) =>
         SupportedVersions.TryGetValue(mechanic.ExecutionHandler, out var versions)
         && versions.Contains(mechanic.Version);
 }

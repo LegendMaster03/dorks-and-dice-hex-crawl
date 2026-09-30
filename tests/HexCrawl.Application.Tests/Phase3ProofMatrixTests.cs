@@ -80,7 +80,7 @@ public sealed class Phase3ProofMatrixTests
     {
         var procedure = CrawlProcedureCatalog.Resolve(presetKey).MaterializeGeneric().Procedure;
         var actual = procedure.Modules
-            .Where(module => GenericProcedureExecutionHandlers.Supports(module.Mechanic))
+            .Where(module => GenericProcedureExecutionHandlers.SupportsNativeExecution(module.Mechanic))
             .Select(module => module.Module.Key)
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
@@ -118,7 +118,7 @@ public sealed class Phase3ProofMatrixTests
             .MaterializeGeneric().Procedure;
 
         Assert.DoesNotContain(procedure.Modules, module =>
-            GenericProcedureExecutionHandlers.Supports(module.Mechanic));
+            GenericProcedureExecutionHandlers.SupportsNativeExecution(module.Mechanic));
         Assert.DoesNotContain(procedure.Modules, module =>
             module.Module.Key == GenericProcedureCatalog.TimeIntervalModule);
 
