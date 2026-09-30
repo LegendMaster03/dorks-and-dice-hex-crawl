@@ -1,6 +1,7 @@
 import type { HexCrawlApi } from "../../api";
 import { manualEntryResolutionSources } from "../expeditions/expedition-input-policy";
 import { assistantEncounterCheckDue } from "../expeditions/expedition-workflow";
+import { canUseFocusedNonSpatialWatch, focusedIntervalHours, focusedIntervalUnavailableMessage } from "../expeditions/focused-interval-policy";
 import { directionLabel, formatDistance, formatHours } from "../../runtime-view";
 import type {
     EncounterCadenceAssistantRequest,
@@ -86,6 +87,7 @@ export async function renderExpeditionAssistant(
         const travelButton = required<HTMLButtonElement>(root, "[data-travel]");
         travelButton.hidden = false;
         travelButton.textContent = next.expedition.isSpatial ? "Travel / watch" : "Watch / time";
+        travelButton.disabled = !next.expedition.isSpatial && !canUseFocusedNonSpatialWatch(next);
         required<HTMLButtonElement>(root, "[data-navigation]").hidden = !next.expedition.isSpatial;
         mapButton.hidden = next.overworldId === null;
         renderStatus();
@@ -97,21 +99,33 @@ export async function renderExpeditionAssistant(
     const renderStatus = (): void => {
         const state = runtime.expedition;
         const execution = runtime.procedure.runtime;
-        if (!execution) {
-            required<HTMLElement>(root, "[data-status]").replaceChildren(
+        const focusedWatch = mode === "travel"
+            && !state.isSpatial
+            && canUseFocusedNonSpatialWatch(runtime);
+        if (!execution && !focusedWatch) {
+            const cells = [
                 statusCell("Procedure", `${runtime.procedure.name} · structural`),
-                statusCell("Execution", "Not supported by the current runtime"));
+                statusCell("Execution", "Not supported by the current runtime")
+            ];
+            if (mode === "travel" && !state.isSpatial) {
+                cells.push(statusCell("Watch / time", focusedIntervalUnavailableMessage(runtime)));
+            }
+            required<HTMLElement>(root, "[data-status]").replaceChildren(...cells);
             return;
         }
 
         const cells = mode === "travel"
             ? state.isSpatial
                 ? travelStatus(state)
-                : nonSpatialWatchStatus(runtime)
+                : [
+                    statusCell("Procedure", `${runtime.procedure.name} · structural`),
+                    statusCell("Focused interval", "Supported"),
+                    ...nonSpatialWatchStatus(runtime)
+                ]
             : mode === "navigation"
                 ? navigationStatus(spatialState(runtime))
                 : [
-                    statusCell("Cadence", prettyEnum(execution.encounterCadence)),
+                    statusCell("Cadence", prettyEnum(execution!.encounterCadence)),
                     statusCell("Current day", String(state.currentDay)),
                     statusCell("Upcoming watch", String(state.completedWatches + 1)),
                     statusCell("Check due", assistantEncounterCheckDue(runtime) ? "Yes" : "No"),
@@ -172,13 +186,16 @@ export async function renderExpeditionAssistant(
 
         required<HTMLElement>(root, "[data-assistant-heading]").textContent = heading(mode, state.isSpatial);
         required<HTMLElement>(root, "[data-assistant-description]").textContent = description(mode, state.isSpatial);
-        if (!runtime.procedure.runtime) {
-            form.innerHTML = '<p class="hc-hint">This materialized procedure is structural and is not executable by the current runtime. Its snapshot remains available on the running sheet for reference.</p>';
+        if (!state.isSpatial && mode === "navigation") {
+            form.innerHTML = '<p class="hc-hint">Navigation requires a spatial crawl context. This session intentionally has no direction, position, or grid state.</p>';
             warning.hidden = true;
             return;
         }
-        if (!state.isSpatial && mode === "navigation") {
-            form.innerHTML = '<p class="hc-hint">Navigation requires a spatial crawl context. This session intentionally has no direction, position, or grid state.</p>';
+        if (!assistantOperationAvailable(runtime, mode)) {
+            const detail = mode === "travel" && !state.isSpatial
+                ? focusedIntervalUnavailableMessage(runtime)
+                : "This materialized procedure is structural and is not executable by the current runtime.";
+            form.innerHTML = `<p class="hc-hint">${escapeHtml(detail)} Its stored snapshot remains available on the running sheet for reference.</p>`;
             warning.hidden = true;
             return;
         }
@@ -206,7 +223,7 @@ export async function renderExpeditionAssistant(
 
     form.addEventListener("submit", event => {
         event.preventDefault();
-        if (pending || !runtime.procedure.runtime || (runtime.expedition.isSpatial && runtime.expedition.activeWatchNumber !== null)) return;
+        if (pending || !assistantOperationAvailable(runtime, mode) || (runtime.expedition.isSpatial && runtime.expedition.activeWatchNumber !== null)) return;
         void (async () => {
             clearUiError(error);
             pending = true;
@@ -274,11 +291,11 @@ function travelForm(runtime: ExpeditionDetail): string {
 }
 
 function nonSpatialWatchForm(runtime: ExpeditionDetail): string {
-    const execution = requireProcedureRuntime(runtime);
+    const intervalHours = requireFocusedIntervalHours(runtime);
     const state = runtime.expedition;
     if (state.isSpatial) throw new Error("Expected a non-spatial crawl session.");
     const watchNumber = state.activeWatchNumber ?? state.completedWatches + 1;
-    const total = state.activeWatchTotalHours ?? execution.intervalHours;
+    const total = state.activeWatchTotalHours ?? intervalHours;
     const elapsed = state.activeWatchElapsedHours ?? 0;
     const remaining = state.activeWatchRemainingHours ?? total;
     return `
@@ -413,6 +430,21 @@ function description(mode: ExpeditionAssistantMode, spatial: boolean): string {
     return "Record encounter-cadence checks and non-geographic outcomes without advancing travel. Keyed-location discovery remains part of world/map composition.";
 }
 
+function assistantOperationAvailable(runtime: ExpeditionDetail, mode: ExpeditionAssistantMode): boolean {
+    if (mode === "travel" && !runtime.expedition.isSpatial) {
+        return canUseFocusedNonSpatialWatch(runtime);
+    }
+    return runtime.procedure.runtime !== null;
+}
+
+function requireFocusedIntervalHours(runtime: ExpeditionDetail): number {
+    const intervalHours = focusedIntervalHours(runtime);
+    if (runtime.expedition.isSpatial || intervalHours === null) {
+        throw new Error(focusedIntervalUnavailableMessage(runtime));
+    }
+    return intervalHours;
+}
+
 function requireProcedureRuntime(runtime: ExpeditionDetail): ProcedureRuntime {
     const execution = runtime.procedure.runtime;
     if (!execution) {
@@ -438,7 +470,7 @@ function travelStatus(state: SpatialRuntimeExpedition): HTMLElement[] {
 }
 
 function nonSpatialWatchStatus(runtime: ExpeditionDetail): HTMLElement[] {
-    const execution = requireProcedureRuntime(runtime);
+    const intervalHours = requireFocusedIntervalHours(runtime);
     const state = runtime.expedition;
     if (state.isSpatial) throw new Error("Expected a non-spatial crawl session.");
     const watch = state.activeWatchNumber === null
@@ -446,9 +478,9 @@ function nonSpatialWatchStatus(runtime: ExpeditionDetail): HTMLElement[] {
         : `Watch ${state.activeWatchNumber}`;
     return [
         statusCell("Watch", watch),
-        statusCell("Configured length", formatHours(state.activeWatchTotalHours ?? execution.intervalHours)),
+        statusCell("Configured length", formatHours(state.activeWatchTotalHours ?? intervalHours)),
         statusCell("Watch elapsed", formatHours(state.activeWatchElapsedHours ?? 0)),
-        statusCell("Watch remaining", formatHours(state.activeWatchRemainingHours ?? execution.intervalHours)),
+        statusCell("Watch remaining", formatHours(state.activeWatchRemainingHours ?? intervalHours)),
         statusCell("Completed watches", String(state.completedWatches)),
         statusCell("Total elapsed", formatHours(state.elapsedTravelHours))
     ];
@@ -467,4 +499,13 @@ function directionOptions(selected: number | null): string {
     return [0, 1, 2, 3, 4, 5]
         .map(value => `<option value="${value}" ${selected === value ? "selected" : ""}>${directionLabel(value)}</option>`)
         .join("");
+}
+
+function escapeHtml(value: string): string {
+    return value
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
 }

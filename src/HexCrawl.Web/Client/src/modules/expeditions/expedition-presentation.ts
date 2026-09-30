@@ -1,5 +1,6 @@
 import { pauseInstruction, watchPhase } from "./expedition-workflow";
 import { buildWatchLedger } from "./expedition-watch-ledger";
+import { canUseFocusedNonSpatialWatch, focusedIntervalHours, focusedIntervalPolicy, focusedIntervalUnavailableMessage } from "./focused-interval-policy";
 import { directionLabel, formatDistance, formatHours } from "../../runtime-view";
 import type { ExpeditionDetail, Overworld, ParticipantActivityAssignment, SpatialRuntimeExpedition } from "../../types";
 import { prettyEnum, required, statusCell } from "../../ui/dom";
@@ -242,10 +243,31 @@ export function renderNonSpatialTracker(
     navigate: (route: string, replace?: boolean) => void): () => void {
     const state = runtime.expedition;
     if (state.isSpatial) throw new Error("Expected non-spatial crawl session.");
-    const intervalHours = runtime.procedure.runtime?.intervalHours ?? null;
+    const intervalPolicy = focusedIntervalPolicy(runtime);
+    const intervalHours = focusedIntervalHours(runtime);
+    const canUseWatch = canUseFocusedNonSpatialWatch(runtime);
+    const watchLength = state.activeWatchTotalHours !== null
+        ? formatHours(state.activeWatchTotalHours)
+        : intervalHours !== null
+            ? formatHours(intervalHours)
+            : intervalPolicy.support === "None"
+                ? "No repeating interval"
+                : "Unavailable";
+    const watchRemaining = state.activeWatchRemainingHours !== null
+        ? formatHours(state.activeWatchRemainingHours)
+        : intervalHours !== null
+            ? formatHours(intervalHours)
+            : intervalPolicy.support === "None"
+                ? "No repeating interval"
+                : "Unavailable";
     const activeAssignments = state.activeActivityAssignments.length > 0
         ? `<div><strong>Participant assignments</strong><span>${escapeHtml(assignmentList(runtime, state.activeActivityAssignments))}</span></div>`
         : "";
+    const procedureHint = runtime.procedure.isExecutable
+        ? "This running sheet intentionally omits map-only information. Use only the watch/time and encounter tools that apply to your procedure."
+        : canUseWatch
+            ? `This materialized procedure is structural and is not executable as a complete runtime. Focused Watch / Time bookkeeping remains available from its pinned ${formatHours(intervalHours!)} interval.`
+            : `${focusedIntervalUnavailableMessage(runtime)} Party assignments and the stored procedure snapshot remain editable/readable without fabricating a watch.`;
 
     root.innerHTML = `
         <section class="hc-page">
@@ -268,9 +290,9 @@ export function renderNonSpatialTracker(
                     <div class="hc-status-grid hc-sheet-status">
                         <div><strong>Day</strong><span>${state.currentDay}</span></div>
                         <div><strong>Watch</strong><span>${state.activeWatchNumber === null ? `Ready for watch ${state.completedWatches + 1}` : `Watch ${state.activeWatchNumber}`}</span></div>
-                        <div><strong>Watch length</strong><span>${state.activeWatchTotalHours !== null ? formatHours(state.activeWatchTotalHours) : intervalHours !== null ? formatHours(intervalHours) : "Not executable"}</span></div>
+                        <div><strong>Watch length</strong><span>${watchLength}</span></div>
                         <div><strong>Watch elapsed</strong><span>${formatHours(state.activeWatchElapsedHours ?? 0)}</span></div>
-                        <div><strong>Watch remaining</strong><span>${state.activeWatchRemainingHours !== null ? formatHours(state.activeWatchRemainingHours) : intervalHours !== null ? formatHours(intervalHours) : "Not executable"}</span></div>
+                        <div><strong>Watch remaining</strong><span>${watchRemaining}</span></div>
                         <div><strong>Completed watches</strong><span>${state.completedWatches}</span></div>
                         <div><strong>Total elapsed</strong><span>${formatHours(state.elapsedTravelHours)}</span></div>
                         <div><strong>Context</strong><span>Non-spatial</span></div>
@@ -283,9 +305,7 @@ export function renderNonSpatialTracker(
                         </div>
                         <div data-party-summary></div>
                     </section>
-                    <p class="hc-hint">${runtime.procedure.isExecutable
-                        ? "This running sheet intentionally omits map-only information. Use only the watch/time and encounter tools that apply to your procedure."
-                        : "This materialized procedure is structural and is not executable by the current runtime. Its party assignments and procedure snapshot remain editable/readable without fabricating a watch."}</p>
+                    <p class="hc-hint">${escapeHtml(procedureHint)}</p>
                     <section class="hc-sheet-ledger" aria-labelledby="hc-nonspatial-watch-log">
                         <div class="hc-sheet-ledger-heading">
                             <h3 id="hc-nonspatial-watch-log">Watch log</h3>
@@ -303,7 +323,7 @@ export function renderNonSpatialTracker(
                     <p class="hc-muted">Open only the bookkeeping surface you need. Participant roles and activities are expedition state and do not require a repeating watch.</p>
                     <details open class="hc-party-editor-panel"><summary>Party & participant assignments</summary><div data-party-editor></div></details>
                     <div class="hc-button-row">
-                        <button type="button" class="hc-primary-action" data-watch ${runtime.procedure.isExecutable ? "" : "disabled"}>Watch / time</button>
+                        <button type="button" class="hc-primary-action" data-watch ${canUseWatch ? "" : "disabled"}>Watch / time</button>
                         <button type="button" data-encounters ${runtime.procedure.isExecutable ? "" : "disabled"}>Encounter cadence</button>
                     </div>
                 </section>
@@ -315,9 +335,11 @@ export function renderNonSpatialTracker(
 
     required<HTMLButtonElement>(root, "[data-home]")
         .addEventListener("click", () => navigate("/"));
-    if (runtime.procedure.isExecutable) {
+    if (canUseWatch) {
         required<HTMLButtonElement>(root, "[data-watch]")
             .addEventListener("click", () => navigate(`/expeditions/${runtime.id}/travel`));
+    }
+    if (runtime.procedure.isExecutable) {
         required<HTMLButtonElement>(root, "[data-encounters]")
             .addEventListener("click", () => navigate(`/expeditions/${runtime.id}/encounters`));
     }

@@ -85,6 +85,23 @@ public sealed record ProcedureRuntimeContract(
         runtime.ResolutionHelpers is null ? null : ProcedureResolutionHelperProfileContract.From(runtime.ResolutionHelpers));
 }
 
+public sealed record FocusedIntervalPolicyContract(
+    FocusedIntervalPolicySupport Support,
+    double? IntervalHours,
+    string? MechanicKey,
+    int? MechanicVersion,
+    string? ExecutionHandler,
+    string? UnsupportedReason)
+{
+    public static FocusedIntervalPolicyContract From(FocusedIntervalPolicy policy) => new(
+        policy.Support,
+        policy.IntervalDuration?.TotalHours,
+        policy.MechanicKey,
+        policy.MechanicVersion,
+        policy.ExecutionHandler,
+        policy.UnsupportedReason);
+}
+
 public sealed record ProcedureModuleContract(
     string ModuleKey,
     string ModuleName,
@@ -111,6 +128,7 @@ public sealed record CampaignProcedureContract(
     string Name,
     bool IsExecutable,
     ProcedureRuntimeContract? Runtime,
+    FocusedIntervalPolicyContract FocusedIntervalPolicy,
     IReadOnlyList<ProcedureModuleContract> Modules)
 {
     public static CampaignProcedureContract From(CampaignProcedure procedure)
@@ -134,6 +152,7 @@ public sealed record CampaignProcedureContract(
             procedure.Name,
             runtime is not null,
             runtime is null ? null : ProcedureRuntimeContract.From(runtime),
+            FocusedIntervalPolicyContract.From(FocusedIntervalPolicyResolver.Resolve(procedure)),
             procedure.Modules.Select(ProcedureModuleContract.From).ToArray());
     }
 }
