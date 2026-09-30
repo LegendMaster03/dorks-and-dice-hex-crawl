@@ -51,7 +51,7 @@ public sealed class RuntimeEndpointsTests
             var oneRingPreset = Assert.Single(
                 presets.EnumerateArray(),
                 preset => preset.GetProperty("presetKey").GetString() == "the-one-ring-2e");
-            Assert.Equal("the-one-ring-2e", oneRingPreset.GetProperty("procedure").GetProperty("key").GetString());
+            Assert.Equal("role-driven-journey", oneRingPreset.GetProperty("procedure").GetProperty("key").GetString());
         }
         finally
         {
