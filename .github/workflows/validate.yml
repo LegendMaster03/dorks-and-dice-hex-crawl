@@ -180,7 +180,7 @@ jobs:
           python3 - "$response_dir/expedition-after-restart.json" <<'PY'
           import json, sys
           d = json.load(open(sys.argv[1]))
-          assert d["profile"]["key"] == "simple-fixed-distance", d
+          assert d["procedure"]["key"] == "simple-fixed-distance", d
           assert d["expedition"]["activeWatchNumber"] == 1, d
           PY
           curl -fsS "http://127.0.0.1:18092/api/overworlds/$world_id/source-maps/$source_map_id/asset" -o "$response_dir/map-after-restart.png"
@@ -226,7 +226,7 @@ jobs:
           import json, sys
           d = json.load(open(sys.argv[1]))
           assert d["context"]["kind"] == "NonSpatial", d
-          assert d["profile"]["key"] == "simple-fixed-distance", d
+          assert d["procedure"]["key"] == "simple-fixed-distance", d
           PY
 
       - name: Cleanup PostgreSQL validation infrastructure
