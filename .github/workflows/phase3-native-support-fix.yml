@@ -23,45 +23,38 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
-
           runtime = Path('src/HexCrawl.Domain/Runtime/GenericProcedureRuntime.cs')
           text = runtime.read_text(encoding='utf-8')
-          old = '''    public static bool Supports(MechanicDefinition mechanic) =>
-        SupportedVersions.TryGetValue(mechanic.ExecutionHandler, out var versions)
-        && versions.Contains(mechanic.Version);
-'''
-          new = '''    private static readonly IReadOnlySet<string> NativeExecutableHandlers = new HashSet<string>(StringComparer.Ordinal)
-    {
-        FixedIntervalDuration,
-        MovementResolutionPolicy,
-        HexProgressPolicy,
-        NavigationCheckPolicy,
-        EncounterCheckCadence,
-        DeterministicResolutionHelpers
-    };
-
-    public static bool SupportsNativeExecution(MechanicDefinition mechanic) =>
-        NativeExecutableHandlers.Contains(mechanic.ExecutionHandler)
-        && SupportedVersions.TryGetValue(mechanic.ExecutionHandler, out var versions)
-        && versions.Contains(mechanic.Version);
-
-    internal static bool Supports(MechanicDefinition mechanic) =>
-        SupportedVersions.TryGetValue(mechanic.ExecutionHandler, out var versions)
-        && versions.Contains(mechanic.Version);
-'''
-          if text.count(old) != 1:
-              raise SystemExit(f'Expected one Supports block, found {text.count(old)}')
-          runtime.write_text(text.replace(old, new), encoding='utf-8')
-
+          marker = '    public static bool Supports(MechanicDefinition mechanic) =>'
+          if text.count(marker) != 1:
+              raise SystemExit(f'Expected one Supports declaration, found {text.count(marker)}')
+          text = text.replace(marker, '    internal static bool Supports(MechanicDefinition mechanic) =>', 1)
+          insert_marker = '    internal static bool Supports(MechanicDefinition mechanic) =>'
+          native_lines = [
+              '    private static readonly IReadOnlySet<string> NativeExecutableHandlers = new HashSet<string>(StringComparer.Ordinal)',
+              '    {',
+              '        FixedIntervalDuration,',
+              '        MovementResolutionPolicy,',
+              '        HexProgressPolicy,',
+              '        NavigationCheckPolicy,',
+              '        EncounterCheckCadence,',
+              '        DeterministicResolutionHelpers',
+              '    };',
+              '',
+              '    public static bool SupportsNativeExecution(MechanicDefinition mechanic) =>',
+              '        NativeExecutableHandlers.Contains(mechanic.ExecutionHandler)',
+              '        && SupportedVersions.TryGetValue(mechanic.ExecutionHandler, out var versions)',
+              '        && versions.Contains(mechanic.Version);',
+              '',
+          ]
+          text = text.replace(insert_marker, '\n'.join(native_lines) + insert_marker, 1)
+          runtime.write_text(text, encoding='utf-8')
           tests = Path('tests/HexCrawl.Application.Tests/Phase3ProofMatrixTests.cs')
           text = tests.read_text(encoding='utf-8')
           old_call = 'GenericProcedureExecutionHandlers.Supports(module.Mechanic)'
-          count = text.count(old_call)
-          if count != 2:
-              raise SystemExit(f'Expected two Phase 3 support classifications, found {count}')
-          tests.write_text(
-              text.replace(old_call, 'GenericProcedureExecutionHandlers.SupportsNativeExecution(module.Mechanic)'),
-              encoding='utf-8')
+          if text.count(old_call) != 2:
+              raise SystemExit(f'Expected two Phase 3 support classifications, found {text.count(old_call)}')
+          tests.write_text(text.replace(old_call, 'GenericProcedureExecutionHandlers.SupportsNativeExecution(module.Mechanic)'), encoding='utf-8')
           PY
           git diff --check
 
