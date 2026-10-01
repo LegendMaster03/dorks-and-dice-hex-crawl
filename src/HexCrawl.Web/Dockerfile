@@ -6,6 +6,7 @@ COPY ["src/HexCrawl.Web/Client/tsconfig.json", "./"]
 COPY ["src/HexCrawl.Web/Client/vite.config.ts", "./"]
 COPY ["src/HexCrawl.Web/Client/src", "./src"]
 COPY ["src/HexCrawl.Web/Client/test", "./test"]
+COPY ["src/HexCrawl.Web/Modules/Expeditions/ExpeditionApiContracts.cs", "/src/src/HexCrawl.Web/Modules/Expeditions/ExpeditionApiContracts.cs"]
 RUN npm install --no-audit --no-fund && npm run build
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
