@@ -1,5 +1,6 @@
 FROM node:24-alpine AS frontend
 WORKDIR /src/src/HexCrawl.Web/Client
+RUN npm install --global --no-audit --no-fund npm@11.19.0
 COPY ["src/HexCrawl.Web/Client/package.json", "./"]
 COPY ["src/HexCrawl.Web/Client/tsconfig.json", "./"]
 COPY ["src/HexCrawl.Web/Client/vite.config.ts", "./"]
