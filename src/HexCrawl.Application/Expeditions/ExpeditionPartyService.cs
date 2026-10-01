@@ -32,6 +32,7 @@ public sealed class ExpeditionPartyService(
         var party = command.ReplaceMovementContributors
             ? command.Party
             : command.Party with { MovementContributors = expedition.Party.MovementContributors };
+        party.Validate();
         var policy = ParticipantActivityPolicyResolver.Resolve(expedition.CampaignProcedure);
         ParticipantActivityPolicyResolver.ValidateAssignments(party, policy);
         var updated = expedition with { Party = party };
