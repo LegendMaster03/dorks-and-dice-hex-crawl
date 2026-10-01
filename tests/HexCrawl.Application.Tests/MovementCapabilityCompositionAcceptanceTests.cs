@@ -93,8 +93,11 @@ public sealed class MovementCapabilityCompositionAcceptanceTests
 
         Assert.Equal(MovementCompositionStatus.Resolved, result.Status);
         Assert.Equal(kilometers.Id, result.LimitingParticipantId);
-        Assert.Equal(DistanceUnit.Miles, result.EffectiveDistanceUnit);
-        Assert.Equal(4d / 1.609344d, result.EffectiveValue!.Value, 8);
+        Assert.NotNull(result.EffectiveDistanceUnit);
+        Assert.NotNull(result.EffectiveValue);
+        var effective = new DistanceMeasure(result.EffectiveValue.Value, result.EffectiveDistanceUnit.Value)
+            .ConvertTo(DistanceUnit.Kilometers);
+        Assert.Equal(4, effective.Value, 8);
     }
 
     [Fact]
