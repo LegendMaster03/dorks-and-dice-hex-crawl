@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import {
     convertDistanceValue,
     suggestedWatchDistance
@@ -8,23 +9,12 @@ import {
 const mile = { kind: "Mile", symbol: "mi", metersPerUnit: 1609.344 };
 const kilometer = { kind: "Kilometer", symbol: "km", metersPerUnit: 1000 };
 
-function runtime({
-    baseMovement = null,
-    activeWatchNumber = null,
-    activeWatchTotalHours = null,
-    activeWatchRemainingHours = null,
-    watchHours = 4,
-    targetUnit = mile
-} = {}) {
+function runtime({ suggestion = null, targetUnit = mile, baseMovement = null } = {}) {
     return {
-        procedure: { runtime: { intervalHours: watchHours } },
+        movementComposition: { suggestedExpectedDistance: suggestion },
         party: { baseMovement },
-        remainingWatchHours: activeWatchRemainingHours ?? watchHours,
         expedition: {
             isSpatial: true,
-            activeWatchNumber,
-            activeWatchTotalHours,
-            activeWatchRemainingHours,
             distanceTraveled: { value: 0, unit: targetUnit }
         }
     };
@@ -42,59 +32,23 @@ test("distance conversion uses explicit physical unit metadata", () => {
         null);
 });
 
-test("new watch prefers explicit per-watch movement reference", () => {
-    const result = suggestedWatchDistance(runtime({
-        baseMovement: {
-            perHour: { value: 2, unit: mile },
-            perWatch: { value: 10, unit: mile },
-            perMarch: null,
-            limitingMemberId: null,
-            note: null
-        }
-    }));
-
-    assert.equal(result, 10);
+test("watch suggestion presents the server-derived movement composition", () => {
+    assert.equal(suggestedWatchDistance(runtime({
+        suggestion: { value: 6, unit: mile }
+    })), 6);
 });
 
-test("new watch can derive a suggestion from per-hour movement", () => {
+test("watch suggestion performs only presentational unit conversion", () => {
+    assert.equal(suggestedWatchDistance(runtime({
+        suggestion: { value: 1, unit: kilometer },
+        targetUnit: mile
+    })), 0.621371192237334);
+});
+
+test("client does not reconstruct movement from party reference state", () => {
     const result = suggestedWatchDistance(runtime({
-        watchHours: 4,
         baseMovement: {
             perHour: { value: 3, unit: mile },
-            perWatch: null,
-            perMarch: null,
-            limitingMemberId: null,
-            note: null
-        }
-    }));
-
-    assert.equal(result, 12);
-});
-
-test("resumed watch only scales a per-hour reference to remaining time", () => {
-    const result = suggestedWatchDistance(runtime({
-        activeWatchNumber: 1,
-        activeWatchTotalHours: 4,
-        activeWatchRemainingHours: 2,
-        baseMovement: {
-            perHour: { value: 3, unit: mile },
-            perWatch: { value: 12, unit: mile },
-            perMarch: null,
-            limitingMemberId: null,
-            note: null
-        }
-    }));
-
-    assert.equal(result, 6);
-});
-
-test("partial watch does not guess from a per-watch-only reference", () => {
-    const result = suggestedWatchDistance(runtime({
-        activeWatchNumber: 1,
-        activeWatchTotalHours: 4,
-        activeWatchRemainingHours: 2,
-        baseMovement: {
-            perHour: null,
             perWatch: { value: 12, unit: mile },
             perMarch: null,
             limitingMemberId: null,
@@ -105,6 +59,13 @@ test("partial watch does not guess from a per-watch-only reference", () => {
     assert.equal(result, null);
 });
 
-test("party movement reference is optional", () => {
+test("server movement suggestion is optional", () => {
     assert.equal(suggestedWatchDistance(runtime()), null);
+});
+
+test("movement suggestion source does not contain watch-duration or party-reference math", () => {
+    const source = fs.readFileSync(new URL("../src/modules/expeditions/expedition-party-movement.ts", import.meta.url), "utf8");
+    assert.doesNotMatch(source, /baseMovement/);
+    assert.doesNotMatch(source, /activeWatchRemainingHours/);
+    assert.doesNotMatch(source, /intervalHours/);
 });
