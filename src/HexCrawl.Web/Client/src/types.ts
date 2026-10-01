@@ -160,6 +160,17 @@ export type ProcedureRuntime = {
     resolutionHelpers: ProcedureResolutionHelpers | null;
 };
 
+export type FocusedIntervalPolicySupport = "None" | "Supported" | "Unsupported";
+
+export type FocusedIntervalPolicy = {
+    support: FocusedIntervalPolicySupport;
+    intervalHours: number | null;
+    mechanicKey: string | null;
+    mechanicVersion: number | null;
+    executionHandler: string | null;
+    unsupportedReason: string | null;
+};
+
 export type ProcedureAutomationLevel = "Manual" | "Assisted" | "Automatic";
 
 export type ProcedureModule = {
@@ -179,6 +190,7 @@ export type CampaignProcedure = {
     name: string;
     isExecutable: boolean;
     runtime: ProcedureRuntime | null;
+    focusedIntervalPolicy: FocusedIntervalPolicy;
     modules: ProcedureModule[];
 };
 

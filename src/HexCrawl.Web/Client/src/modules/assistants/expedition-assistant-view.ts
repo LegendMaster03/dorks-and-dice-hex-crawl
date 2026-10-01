@@ -1,7 +1,7 @@
 import type { HexCrawlApi } from "../../api";
 import { manualEntryResolutionSources } from "../expeditions/expedition-input-policy";
 import { assistantEncounterCheckDue } from "../expeditions/expedition-workflow";
-import { canUseFocusedNonSpatialWatch, focusedIntervalHours, focusedIntervalUnavailableMessage } from "../expeditions/focused-interval-policy";
+import { canUseFocusedNonSpatialWatch, focusedIntervalHours, focusedIntervalProcedurePresentation, focusedIntervalUnavailableMessage } from "../expeditions/focused-interval-policy";
 import { directionLabel, formatDistance, formatHours } from "../../runtime-view";
 import type {
     EncounterCadenceAssistantRequest,
@@ -99,12 +99,13 @@ export async function renderExpeditionAssistant(
     const renderStatus = (): void => {
         const state = runtime.expedition;
         const execution = runtime.procedure.runtime;
+        const focusedPresentation = focusedIntervalProcedurePresentation(runtime);
         const focusedWatch = mode === "travel"
             && !state.isSpatial
             && canUseFocusedNonSpatialWatch(runtime);
         if (!execution && !focusedWatch) {
             const cells = [
-                statusCell("Procedure", `${runtime.procedure.name} · structural`),
+                statusCell("Procedure", focusedPresentation.procedureLabel),
                 statusCell("Execution", "Not supported by the current runtime")
             ];
             if (mode === "travel" && !state.isSpatial) {
@@ -118,8 +119,10 @@ export async function renderExpeditionAssistant(
             ? state.isSpatial
                 ? travelStatus(state)
                 : [
-                    statusCell("Procedure", `${runtime.procedure.name} · structural`),
-                    statusCell("Focused interval", "Supported"),
+                    statusCell("Procedure", focusedPresentation.procedureLabel),
+                    execution
+                        ? statusCell("Execution", focusedPresentation.executionLabel)
+                        : statusCell("Focused interval", "Supported"),
                     ...nonSpatialWatchStatus(runtime)
                 ]
             : mode === "navigation"

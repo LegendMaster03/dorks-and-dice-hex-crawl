@@ -28,3 +28,12 @@ test("focused assistant separates non-spatial interval bookkeeping from full run
     assert.match(assistant, /function navigationForm[\s\S]*spatialState\(runtime\)/);
     assert.match(assistant, /function encounterForm[\s\S]*requireProcedureRuntime\(runtime\)/);
 });
+
+test("non-spatial assistant status distinguishes executable procedures from structural focused capability", () => {
+    assert.match(assistant, /focusedIntervalProcedurePresentation\(runtime\)/);
+    assert.match(assistant, /statusCell\("Procedure", focusedPresentation\.procedureLabel\)/);
+    assert.match(assistant, /execution\s*\? statusCell\("Execution", focusedPresentation\.executionLabel\)\s*:\s*statusCell\("Focused interval", "Supported"\)/);
+    assert.doesNotMatch(
+        assistant,
+        /statusCell\("Procedure", `\$\{runtime\.procedure\.name\} · structural`\),\s*statusCell\("Focused interval", "Supported"\)/s);
+});

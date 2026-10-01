@@ -1,22 +1,22 @@
-import type { ExpeditionDetail } from "../../types";
+import type { ExpeditionDetail, FocusedIntervalPolicy } from "../../types";
 
-export type FocusedIntervalPolicySupport = "None" | "Supported" | "Unsupported";
-
-export type FocusedIntervalPolicyProjection = {
-    support: FocusedIntervalPolicySupport;
-    intervalHours: number | null;
-    mechanicKey: string | null;
-    mechanicVersion: number | null;
-    executionHandler: string | null;
-    unsupportedReason: string | null;
+export type FocusedIntervalProcedurePresentation = {
+    procedureLabel: string;
+    executionLabel: "Executable" | "Structural";
 };
 
-type ProcedureWithFocusedIntervalPolicy = ExpeditionDetail["procedure"] & {
-    focusedIntervalPolicy: FocusedIntervalPolicyProjection;
-};
+export function focusedIntervalPolicy(runtime: ExpeditionDetail): FocusedIntervalPolicy {
+    return runtime.procedure.focusedIntervalPolicy;
+}
 
-export function focusedIntervalPolicy(runtime: ExpeditionDetail): FocusedIntervalPolicyProjection {
-    return (runtime.procedure as ProcedureWithFocusedIntervalPolicy).focusedIntervalPolicy;
+export function focusedIntervalProcedurePresentation(runtime: ExpeditionDetail): FocusedIntervalProcedurePresentation {
+    const executable = runtime.procedure.runtime !== null;
+    return {
+        procedureLabel: executable
+            ? runtime.procedure.name
+            : `${runtime.procedure.name} · structural`,
+        executionLabel: executable ? "Executable" : "Structural"
+    };
 }
 
 export function focusedIntervalHours(runtime: ExpeditionDetail): number | null {
