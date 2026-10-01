@@ -390,12 +390,118 @@ export type PartyMovementReference = {
     note: string | null;
 };
 
+export type MovementCapabilityContributorKind =
+    | "Participant"
+    | "Mount"
+    | "Vehicle"
+    | "Load"
+    | "TravelMode"
+    | "TerrainRoute"
+    | "Environment"
+    | "PersistentEffect"
+    | "DmOverride";
+
+export type MovementCapabilityOperation =
+    | "Base"
+    | "Replace"
+    | "Multiply"
+    | "Add"
+    | "Cap"
+    | "Floor"
+    | "Cost"
+    | "SymbolicLimit";
+
+export type MovementCapabilityScope = "Party" | "Participant" | "MovementUnit";
+
+export type MovementCapabilityContributor = {
+    id: string;
+    kind: MovementCapabilityContributorKind;
+    key: string;
+    operation: MovementCapabilityOperation;
+    scope: MovementCapabilityScope;
+    value: number | null;
+    unit: string | null;
+    perUnit: string | null;
+    distanceUnit: DistanceUnit | null;
+    symbolicValue: string | null;
+    participantId: string | null;
+    movementUnitKey: string | null;
+    replacesParticipantIds: string[];
+    provenance: string | null;
+    note: string | null;
+    enabled: boolean;
+};
+
+export type MovementCompositionPolicySupport = "None" | "Supported" | "Unsupported";
+export type MovementTerrainPolicySupport = "None" | "Supported" | "Unsupported";
+export type MovementCompositionStatus =
+    | "Resolved"
+    | "ReferenceFallback"
+    | "InputRequired"
+    | "RequiresAdjudication"
+    | "Unsupported"
+    | "Unavailable"
+    | "Failed";
+export type MovementReferenceUse = "None" | "AuthoritativeBase" | "Fallback" | "InformationalOnly";
+
+export type MovementCompositionPolicy = {
+    support: MovementCompositionPolicySupport;
+    budgetModel: string | null;
+    baseBudget: number | null;
+    budgetUnit: string | null;
+    limitingScope: string | null;
+    terrainSupport: MovementTerrainPolicySupport;
+    terrainAdjustmentModel: string | null;
+    terrainAdjustments: Record<string, string>;
+    routeAdjustmentModel: string | null;
+    weatherAdjustmentModel: string | null;
+    mechanicKey: string | null;
+    mechanicVersion: number | null;
+    executionHandler: string | null;
+    unsupportedReason: string | null;
+};
+
+export type MovementAppliedContributor = {
+    id: string | null;
+    kind: MovementCapabilityContributorKind | null;
+    key: string;
+    operation: MovementCapabilityOperation;
+    applied: boolean;
+    value: number | null;
+    symbolicValue: string | null;
+    unit: string | null;
+    perUnit: string | null;
+    participantId: string | null;
+    movementUnitKey: string | null;
+    provenance: string | null;
+    detail: string | null;
+};
+
+export type MovementCapabilityComposition = {
+    policy: MovementCompositionPolicy;
+    status: MovementCompositionStatus;
+    effectiveValue: number | null;
+    effectiveUnit: string | null;
+    effectivePerUnit: string | null;
+    effectiveDistanceUnit: DistanceUnit | null;
+    limitingContributorKey: string | null;
+    limitingParticipantId: string | null;
+    preOverrideValue: number | null;
+    contributors: MovementAppliedContributor[];
+    provenance: string[];
+    missingInputs: string[];
+    diagnostics: string[];
+    referenceUse: MovementReferenceUse;
+    suggestedExpectedDistance: DistanceValue | null;
+};
+
 export type ExpeditionParty = {
     members: CrawlPartyMember[];
     marchingOrder: MarchingOrderPosition[];
     watchList: WatchRotationEntry[];
     standingOrders: StandingOrder[];
     activityAssignments: ParticipantActivityAssignment[];
+    movementContributors?: MovementCapabilityContributor[];
     baseMovement: PartyMovementReference | null;
 };
 
@@ -418,6 +524,7 @@ export type ExpeditionDetail = {
     expedition: RuntimeExpedition;
     party: ExpeditionParty;
     participantActivityPolicy: ParticipantActivityPolicy;
+    movementComposition: MovementCapabilityComposition;
     knownHexes: HexCoordinate[];
     knowledge: RuntimeKnowledgeEntry[];
     history: RuntimeEvent[];

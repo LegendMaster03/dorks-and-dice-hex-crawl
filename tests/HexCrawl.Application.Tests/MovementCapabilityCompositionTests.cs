@@ -453,7 +453,7 @@ public sealed class MovementCapabilityCompositionTests
 
         Assert.Equal(MovementCompositionStatus.RequiresAdjudication, result.Status);
         Assert.Contains(result.Diagnostics, value =>
-            value.Contains("incompatible unit", StringComparison.OrdinalIgnoreCase));
+            value.Contains("can not be converted", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -495,7 +495,22 @@ public sealed class MovementCapabilityCompositionTests
 
         Assert.NotNull(loaded);
         var roundTripped = Assert.Single(loaded!.Party.MovementContributors);
-        Assert.Equal(contributor, roundTripped);
+        Assert.Equal(contributor.Id, roundTripped.Id);
+        Assert.Equal(contributor.Kind, roundTripped.Kind);
+        Assert.Equal(contributor.Key, roundTripped.Key);
+        Assert.Equal(contributor.Operation, roundTripped.Operation);
+        Assert.Equal(contributor.Scope, roundTripped.Scope);
+        Assert.Equal(contributor.Value, roundTripped.Value);
+        Assert.Equal(contributor.Unit, roundTripped.Unit);
+        Assert.Equal(contributor.PerUnit, roundTripped.PerUnit);
+        Assert.Equal(contributor.DistanceUnit, roundTripped.DistanceUnit);
+        Assert.Equal(contributor.SymbolicValue, roundTripped.SymbolicValue);
+        Assert.Equal(contributor.ParticipantId, roundTripped.ParticipantId);
+        Assert.Equal(contributor.MovementUnitKey, roundTripped.MovementUnitKey);
+        Assert.Equal(contributor.ReplacesParticipantIds, roundTripped.ReplacesParticipantIds);
+        Assert.Equal(contributor.Provenance, roundTripped.Provenance);
+        Assert.Equal(contributor.Note, roundTripped.Note);
+        Assert.Equal(contributor.Enabled, roundTripped.Enabled);
     }
 
     [Theory]
