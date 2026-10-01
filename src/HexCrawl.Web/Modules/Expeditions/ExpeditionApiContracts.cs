@@ -209,6 +209,7 @@ public sealed record ExpeditionWorkbenchContract(
     WorkbenchExpeditionStateContract Expedition,
     ExpeditionPartyContract Party,
     ParticipantActivityPolicyContract ParticipantActivityPolicy,
+    MovementCapabilityCompositionContract MovementComposition,
     IReadOnlyList<HexCoordinate> KnownHexes,
     IReadOnlyList<KnowledgeEntryContract> Knowledge,
     IReadOnlyList<RuntimeEventContract> History)
@@ -237,6 +238,8 @@ public sealed record ExpeditionWorkbenchContract(
             ExpeditionPartyContract.From(expedition.Party),
             ParticipantActivityPolicyContract.From(
                 ParticipantActivityPolicyResolver.Resolve(expedition.CampaignProcedure)),
+            MovementCapabilityCompositionContract.From(
+                MovementCapabilityComposer.Compose(expedition)),
             expedition.Knowledge?.KnownHexes ?? [],
             expedition.Knowledge?.Entries.Values
                 .OrderBy(item => item.SubjectType)
