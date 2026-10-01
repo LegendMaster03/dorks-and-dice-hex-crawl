@@ -11,6 +11,7 @@ import type {
     PartyMovementReference
 } from "../../types";
 import { required } from "../../ui/dom";
+import { movementContributorsAfterMemberRemoval } from "./expedition-party-movement";
 
 type PartyMutationRunner = (
     control: HTMLButtonElement | null,
@@ -598,9 +599,10 @@ export class ExpeditionPartySheetController {
             event.preventDefault();
             void this.mutate(save, async () => {
                 this.validateDraft();
+                const draft = this.requireDraft();
                 const request = {
                     expectedVersion: this.latestVersion,
-                    ...cloneParty(this.requireDraft())
+                    ...cloneParty(draft, draft.movementContributors !== undefined)
                 };
                 const saved = await this.api.updateExpeditionParty(this.getRuntime().id, request);
                 this.draft = cloneParty(saved.party);
@@ -681,6 +683,17 @@ export class ExpeditionPartySheetController {
             memberIds: entry.memberIds.filter(id => id !== memberId)
         }));
         party.activityAssignments = party.activityAssignments.filter(assignment => assignment.participantId !== memberId);
+
+        const sourceMovementContributors = party.movementContributors
+            ?? this.runtimeForUnits?.party.movementContributors
+            ?? this.getRuntime().party.movementContributors;
+        const movementContributors = movementContributorsAfterMemberRemoval(
+            sourceMovementContributors,
+            memberId);
+        if (movementContributors !== undefined) {
+            party.movementContributors = movementContributors;
+        }
+
         if (party.baseMovement?.limitingMemberId === memberId) {
             party.baseMovement.limitingMemberId = null;
             this.compactMovement();
@@ -929,8 +942,10 @@ function readUnit(kind: string, symbol: string, meters: string): DistanceUnit {
     return { kind: "Mile", symbol: "mi", metersPerUnit: 1609.344 };
 }
 
-function cloneParty(party: ExpeditionParty): ExpeditionParty {
-    return {
+function cloneParty(
+    party: ExpeditionParty,
+    includeMovementContributors = false): ExpeditionParty {
+    const clone: ExpeditionParty = {
         members: party.members.map(member => ({ ...member })),
         marchingOrder: party.marchingOrder.map(position => ({ ...position })),
         watchList: party.watchList.map(entry => ({ ...entry, memberIds: [...entry.memberIds] })),
@@ -946,6 +961,16 @@ function cloneParty(party: ExpeditionParty): ExpeditionParty {
             }
             : null
     };
+
+    if (includeMovementContributors && party.movementContributors !== undefined) {
+        clone.movementContributors = party.movementContributors.map(contributor => ({
+            ...contributor,
+            distanceUnit: contributor.distanceUnit ? { ...contributor.distanceUnit } : null,
+            replacesParticipantIds: [...contributor.replacesParticipantIds]
+        }));
+    }
+
+    return clone;
 }
 
 function cloneDistance(distance: DistanceValue | null): DistanceValue | null {

@@ -113,6 +113,63 @@ public sealed record ParticipantActivityPolicyContract(
         policy.UnsupportedReason);
 }
 
+public sealed record MovementCapabilityContributorContract(
+    Guid Id,
+    MovementCapabilityContributorKind Kind,
+    string Key,
+    MovementCapabilityOperation Operation,
+    MovementCapabilityScope Scope,
+    double? Value,
+    string? Unit,
+    string? PerUnit,
+    DistanceUnitContract? DistanceUnit,
+    string? SymbolicValue,
+    Guid? ParticipantId,
+    string? MovementUnitKey,
+    IReadOnlyList<Guid> ReplacesParticipantIds,
+    string? Provenance,
+    string? Note,
+    bool Enabled)
+{
+    public static MovementCapabilityContributorContract From(MovementCapabilityContributor contributor) => new(
+        contributor.Id,
+        contributor.Kind,
+        contributor.Key,
+        contributor.Operation,
+        contributor.Scope,
+        contributor.Value,
+        contributor.Unit,
+        contributor.PerUnit,
+        contributor.DistanceUnit is { } distanceUnit ? DistanceUnitContract.From(distanceUnit) : null,
+        contributor.SymbolicValue,
+        contributor.ParticipantId,
+        contributor.MovementUnitKey,
+        contributor.ReplacesParticipantIds,
+        contributor.Provenance,
+        contributor.Note,
+        contributor.Enabled);
+
+    public MovementCapabilityContributor ToDomain() => new()
+    {
+        Id = Id,
+        Kind = Kind,
+        Key = Key.Trim(),
+        Operation = Operation,
+        Scope = Scope,
+        Value = Value,
+        Unit = string.IsNullOrWhiteSpace(Unit) ? null : Unit.Trim(),
+        PerUnit = string.IsNullOrWhiteSpace(PerUnit) ? null : PerUnit.Trim(),
+        DistanceUnit = DistanceUnit?.ToDomain(),
+        SymbolicValue = string.IsNullOrWhiteSpace(SymbolicValue) ? null : SymbolicValue.Trim(),
+        ParticipantId = ParticipantId,
+        MovementUnitKey = string.IsNullOrWhiteSpace(MovementUnitKey) ? null : MovementUnitKey.Trim(),
+        ReplacesParticipantIds = ReplacesParticipantIds ?? [],
+        Provenance = string.IsNullOrWhiteSpace(Provenance) ? null : Provenance.Trim(),
+        Note = string.IsNullOrWhiteSpace(Note) ? null : Note.Trim(),
+        Enabled = Enabled
+    };
+}
+
 public sealed record PartyMovementReferenceContract(
     DistanceContract? PerHour,
     DistanceContract? PerWatch,
@@ -146,6 +203,7 @@ public sealed record ExpeditionPartyContract(
     IReadOnlyList<WatchRotationEntryContract> WatchList,
     IReadOnlyList<StandingOrderContract> StandingOrders,
     IReadOnlyList<ParticipantActivityAssignmentContract> ActivityAssignments,
+    IReadOnlyList<MovementCapabilityContributorContract> MovementContributors,
     PartyMovementReferenceContract? BaseMovement)
 {
     public static ExpeditionPartyContract From(CrawlPartySheet party) => new(
@@ -154,6 +212,7 @@ public sealed record ExpeditionPartyContract(
         party.WatchList.Select(WatchRotationEntryContract.From).ToArray(),
         party.StandingOrders.Select(StandingOrderContract.From).ToArray(),
         party.ActivityAssignments.Select(ParticipantActivityAssignmentContract.From).ToArray(),
+        party.MovementContributors.Select(MovementCapabilityContributorContract.From).ToArray(),
         party.BaseMovement is null ? null : PartyMovementReferenceContract.From(party.BaseMovement));
 
     public CrawlPartySheet ToDomain()
@@ -165,6 +224,7 @@ public sealed record ExpeditionPartyContract(
             WatchList = WatchList.Select(item => item.ToDomain()).ToArray(),
             StandingOrders = StandingOrders.Select(item => item.ToDomain()).ToArray(),
             ActivityAssignments = ActivityAssignments.Select(item => item.ToDomain()).ToArray(),
+            MovementContributors = MovementContributors.Select(item => item.ToDomain()).ToArray(),
             BaseMovement = BaseMovement?.ToDomain()
         };
         party.Validate();
@@ -179,6 +239,7 @@ public sealed record UpdateExpeditionPartyRequest(
     IReadOnlyList<WatchRotationEntryContract>? WatchList = null,
     IReadOnlyList<StandingOrderContract>? StandingOrders = null,
     IReadOnlyList<ParticipantActivityAssignmentContract>? ActivityAssignments = null,
+    IReadOnlyList<MovementCapabilityContributorContract>? MovementContributors = null,
     PartyMovementReferenceContract? BaseMovement = null)
 {
     public UpdateExpeditionPartyCommand ToCommand()
@@ -189,7 +250,11 @@ public sealed record UpdateExpeditionPartyRequest(
             WatchList ?? [],
             StandingOrders ?? [],
             ActivityAssignments ?? [],
+            MovementContributors ?? [],
             BaseMovement);
-        return new UpdateExpeditionPartyCommand(ExpectedVersion, contract.ToDomain());
+        return new UpdateExpeditionPartyCommand(
+            ExpectedVersion,
+            contract.ToDomain(),
+            ReplaceMovementContributors: MovementContributors is not null);
     }
 }

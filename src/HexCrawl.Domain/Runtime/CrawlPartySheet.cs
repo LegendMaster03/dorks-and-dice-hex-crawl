@@ -14,6 +14,7 @@ public sealed record CrawlPartySheet
     public IReadOnlyList<WatchRotationEntry> WatchList { get; init; } = [];
     public IReadOnlyList<StandingOrder> StandingOrders { get; init; } = [];
     public IReadOnlyList<ParticipantActivityAssignment> ActivityAssignments { get; init; } = [];
+    public IReadOnlyList<MovementCapabilityContributor> MovementContributors { get; init; } = [];
     public PartyMovementReference? BaseMovement { get; init; }
 
     public static CrawlPartySheet Empty { get; } = new();
@@ -78,6 +79,25 @@ public sealed record CrawlPartySheet
             {
                 throw new InvalidOperationException("Participant activity assignment ids must be unique.");
             }
+        }
+
+        var movementContributorIds = new HashSet<Guid>();
+        var dmOverrides = 0;
+        foreach (var contributor in MovementContributors)
+        {
+            contributor.Validate(memberIds);
+            if (!movementContributorIds.Add(contributor.Id))
+            {
+                throw new InvalidOperationException("Movement contributor ids must be unique.");
+            }
+            if (contributor.Enabled && contributor.Kind == MovementCapabilityContributorKind.DmOverride)
+            {
+                dmOverrides++;
+            }
+        }
+        if (dmOverrides > 1)
+        {
+            throw new InvalidOperationException("Only one enabled DM movement override can be active at a time.");
         }
 
         BaseMovement?.Validate(memberIds);

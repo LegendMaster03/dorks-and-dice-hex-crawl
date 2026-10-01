@@ -5,7 +5,8 @@ namespace HexCrawl.Application;
 
 public sealed record UpdateExpeditionPartyCommand(
     long ExpectedVersion,
-    CrawlPartySheet Party);
+    CrawlPartySheet Party,
+    bool ReplaceMovementContributors = false);
 
 public sealed class ExpeditionPartyService(
     IHexCrawlStore store,
@@ -28,9 +29,13 @@ public sealed class ExpeditionPartyService(
                 "The resource version is stale. Reload the running sheet before saving party information.");
         }
 
+        var party = command.ReplaceMovementContributors
+            ? command.Party
+            : command.Party with { MovementContributors = expedition.Party.MovementContributors };
+        party.Validate();
         var policy = ParticipantActivityPolicyResolver.Resolve(expedition.CampaignProcedure);
-        ParticipantActivityPolicyResolver.ValidateAssignments(command.Party, policy);
-        var updated = expedition with { Party = command.Party };
+        ParticipantActivityPolicyResolver.ValidateAssignments(party, policy);
+        var updated = expedition with { Party = party };
         var result = await store.SaveExpeditionAsync(
             updated,
             command.ExpectedVersion,

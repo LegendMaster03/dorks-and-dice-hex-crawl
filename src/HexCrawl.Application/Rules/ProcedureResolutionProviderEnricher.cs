@@ -24,28 +24,76 @@ public sealed class ProcedureResolutionProviderEnricher(TravelEnvironmentProvide
             return command;
         }
 
-        var selection = providers.Select();
-        if (selection.Provider is null)
-        {
-            var mechanicKey = needsDistance
-                ? TravelMechanicKey(command.TravelDistanceRule!)
-                : TravelEnvironmentMechanicKeys.AvoidGettingLost;
-            throw ProviderProblem(
-                null,
-                mechanicKey,
-                TravelEnvironmentProviderResolutionStates.Unavailable,
-                selection.Detail);
-        }
-
         var prepared = command;
+        TravelEnvironmentProviderSelection? selection = null;
+
         if (needsDistance)
         {
-            prepared = await ResolveDistanceAsync(selection.Provider, expedition, prepared, cancellationToken);
+            var local = MovementCapabilityComposer.Compose(expedition);
+            if (local.Status == MovementCompositionStatus.Resolved
+                && local.SuggestedExpectedDistance is not null)
+            {
+                prepared = ApplyComposition(prepared, local);
+            }
+            else
+            {
+                selection = providers.Select();
+                if (selection.Provider is null)
+                {
+                    if (local.SuggestedExpectedDistance is not null)
+                    {
+                        prepared = ApplyComposition(prepared, local);
+                    }
+                    else
+                    {
+                        throw ProviderProblem(
+                            null,
+                            TravelMechanicKey(command.TravelDistanceRule!),
+                            TravelEnvironmentProviderResolutionStates.Unavailable,
+                            selection.Detail);
+                    }
+                }
+                else
+                {
+                    try
+                    {
+                        prepared = await ResolveDistanceAsync(
+                            selection.Provider,
+                            expedition,
+                            prepared,
+                            cancellationToken);
+                    }
+                    catch (OptionalProviderResolutionException exception)
+                        when (string.Equals(
+                                exception.Status,
+                                TravelEnvironmentProviderResolutionStates.Unavailable,
+                                StringComparison.Ordinal)
+                            && local.SuggestedExpectedDistance is not null)
+                    {
+                        prepared = ApplyComposition(prepared, local);
+                    }
+                }
+            }
         }
+
         if (needsNavigation)
         {
-            prepared = await ResolveNavigationAsync(selection.Provider, expedition, prepared, cancellationToken);
+            selection ??= providers.Select();
+            if (selection.Provider is null)
+            {
+                throw ProviderProblem(
+                    null,
+                    TravelEnvironmentMechanicKeys.AvoidGettingLost,
+                    TravelEnvironmentProviderResolutionStates.Unavailable,
+                    selection.Detail);
+            }
+            prepared = await ResolveNavigationAsync(
+                selection.Provider,
+                expedition,
+                prepared,
+                cancellationToken);
         }
+
         return prepared;
     }
 
@@ -55,7 +103,7 @@ public sealed class ProcedureResolutionProviderEnricher(TravelEnvironmentProvide
         ProcedureResolutionHelperCommand command,
         CancellationToken cancellationToken)
     {
-        if (expedition.Runtime is not ExpeditionState spatial)
+        if (expedition.Runtime is not ExpeditionState)
         {
             throw new InvalidOperationException(
                 "Provider-backed travel distance is available only for spatial crawl sessions.");
@@ -93,28 +141,25 @@ public sealed class ProcedureResolutionProviderEnricher(TravelEnvironmentProvide
         }
 
         var hourly = ToDistanceMeasure(quantity, metadata);
-        DistanceMeasure converted;
-        try
+        var contributors = new List<MovementCapabilityContributor>
         {
-            converted = hourly.ConvertTo(spatial.DistanceTraveled.Unit);
-        }
-        catch (InvalidOperationException exception)
-        {
-            throw new InvalidOperationException(
-                "The provider-backed travel distance can not be converted into this crawl session's distance unit.",
-                exception);
-        }
-
-        var procedure = ExpeditionProcedureExecutionResolver.Resolve(expedition);
-        var watchHours = spatial.ActiveWatch?.Remaining.TotalHours
-            ?? procedure.Time.IntervalDuration.TotalHours;
-        var expected = converted.Value * watchHours;
-        var provenance = new List<string>
-        {
-            DescribeEvaluation(expedition, metadata, evaluation, DescribeQuantity(quantity)),
-            string.Create(
-                CultureInfo.InvariantCulture,
-                $"Applied for {watchHours:0.###}h in {spatial.DistanceTraveled.Unit.Symbol}.")
+            new()
+            {
+                Id = Guid.NewGuid(),
+                Kind = MovementCapabilityContributorKind.Environment,
+                Key = $"provider:{mechanicKey}",
+                Operation = MovementCapabilityOperation.Base,
+                Scope = MovementCapabilityScope.Party,
+                Value = hourly.Value,
+                Unit = hourly.Unit.Symbol,
+                PerUnit = "hour",
+                DistanceUnit = hourly.Unit,
+                Provenance = DescribeEvaluation(
+                    expedition,
+                    metadata,
+                    evaluation,
+                    DescribeQuantity(quantity))
+            }
         };
 
         var hasTerrain = !string.IsNullOrWhiteSpace(command.Terrain);
@@ -126,6 +171,7 @@ public sealed class ProcedureResolutionProviderEnricher(TravelEnvironmentProvide
         }
         if (hasTerrain)
         {
+            EnsureProviderTerrainCanCompose(expedition);
             var catalogResult = await provider.GetCatalogAsync(expedition.CampaignId, cancellationToken);
             var catalog = RequireCatalog(provider, catalogResult, TravelEnvironmentMechanicKeys.TerrainDistanceFactor);
             var mechanic = catalog.Mechanics.SingleOrDefault(value =>
@@ -186,25 +232,84 @@ public sealed class ProcedureResolutionProviderEnricher(TravelEnvironmentProvide
                 throw new InvalidOperationException(
                     $"{ProviderLabel(factorMetadata)} returned a negative terrain distance factor.");
             }
-            expected *= (double)factor;
-            provenance.Add(DescribeEvaluation(
-                expedition,
-                factorMetadata,
-                factorEvaluation,
-                $"factor={factor.ToString(CultureInfo.InvariantCulture)}; semantic={semantic}"));
+
+            contributors.Add(new MovementCapabilityContributor
+            {
+                Id = Guid.NewGuid(),
+                Kind = MovementCapabilityContributorKind.Environment,
+                Key = "provider:terrain-distance-factor",
+                Operation = MovementCapabilityOperation.Multiply,
+                Scope = MovementCapabilityScope.Party,
+                Value = (double)factor,
+                Unit = "factor",
+                Provenance = DescribeEvaluation(
+                    expedition,
+                    factorMetadata,
+                    factorEvaluation,
+                    $"factor={factor.ToString(CultureInfo.InvariantCulture)}; semantic={semantic}")
+            });
         }
 
-        if (!double.IsFinite(expected) || expected < 0)
+        var composition = MovementCapabilityComposer.Compose(
+            expedition,
+            new MovementCompositionInput(ResolvedContributors: contributors));
+        if (composition.Status != MovementCompositionStatus.Resolved
+            || composition.SuggestedExpectedDistance is not { } expected)
         {
+            var detail = composition.Diagnostics.Count == 0
+                ? composition.Status.ToString()
+                : string.Join(" ", composition.Diagnostics);
             throw new InvalidOperationException(
-                "Provider-backed travel mechanics produced an invalid expected distance.");
+                $"Provider-backed movement capabilities could not produce a resolved physical watch-distance suggestion. {detail}");
         }
 
         return command with
         {
-            ExpectedDistance = expected,
-            ExpectedDistanceRulesNote = string.Join(" ", provenance)
+            ExpectedDistance = expected.Value,
+            ExpectedDistanceRulesNote = DescribeComposition(composition)
         };
+    }
+
+    private static void EnsureProviderTerrainCanCompose(StoredExpedition expedition)
+    {
+        var policy = MovementCompositionPolicyResolver.Resolve(expedition.CampaignProcedure);
+        if (policy.Terrain.Support != MovementTerrainPolicySupport.Supported)
+        {
+            return;
+        }
+        if (policy.Terrain.AdjustmentModel is "multiplier" or "distance-per-hour-multiplier")
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"The pinned movement.terrain policy uses '{policy.Terrain.AdjustmentModel}', so a provider distance multiplier can not be substituted for that semantic.");
+    }
+
+    private static ProcedureResolutionHelperCommand ApplyComposition(
+        ProcedureResolutionHelperCommand command,
+        MovementCapabilityComposition composition)
+    {
+        var suggestion = composition.SuggestedExpectedDistance
+            ?? throw new InvalidOperationException(
+                "Movement composition did not produce a physical watch-distance suggestion.");
+        return command with
+        {
+            ExpectedDistance = suggestion.Value,
+            ExpectedDistanceRulesNote = DescribeComposition(composition)
+        };
+    }
+
+    private static string DescribeComposition(MovementCapabilityComposition composition)
+    {
+        var parts = composition.Provenance
+            .Concat(composition.Diagnostics)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        return parts.Length == 0
+            ? "Movement capability composition supplied the expected distance."
+            : string.Join(" ", parts);
     }
 
     private static async Task<ProcedureResolutionHelperCommand> ResolveNavigationAsync(

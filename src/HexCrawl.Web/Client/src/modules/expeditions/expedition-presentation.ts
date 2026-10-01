@@ -1,6 +1,7 @@
 import { pauseInstruction, watchPhase } from "./expedition-workflow";
 import { buildWatchLedger } from "./expedition-watch-ledger";
 import { canUseFocusedNonSpatialWatch, focusedIntervalHours, focusedIntervalPolicy, focusedIntervalUnavailableMessage } from "./focused-interval-policy";
+import { movementCompositionStatusCells } from "./expedition-movement-composition-view";
 import { directionLabel, formatDistance, formatHours } from "../../runtime-view";
 import type { ExpeditionDetail, Overworld, ParticipantActivityAssignment, SpatialRuntimeExpedition } from "../../types";
 import { prettyEnum, required, statusCell } from "../../ui/dom";
@@ -39,6 +40,7 @@ export function renderExpeditionStatus(root: HTMLElement, runtime: ExpeditionDet
                         ? "Watch active"
                         : "Ready")
     ];
+    cells.push(...movementCompositionStatusCells(runtime));
     if (state.activePaceKey) {
         cells.push(statusCell("Pace", state.activePaceKey));
     }
