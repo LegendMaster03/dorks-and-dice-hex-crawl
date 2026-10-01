@@ -66,6 +66,14 @@ public sealed record MovementCapabilityComposition(
 
 public static class MovementCapabilityComposer
 {
+    private static readonly HashSet<string> DirectBudgetModels = new(StringComparer.Ordinal)
+    {
+        "fixed-per-day",
+        "movement-points",
+        "quarter-day-activities",
+        "journey-progress"
+    };
+
     private sealed record Quantity(
         double Value,
         string Unit,
@@ -136,12 +144,42 @@ public static class MovementCapabilityComposer
         }
         else if (policy.Support == MovementCompositionPolicySupport.None)
         {
-            var reference = ResolveReference(expedition, applied, provenance, MovementReferenceUse.AuthoritativeBase);
-            quantity = reference.Quantity;
-            referenceUse = reference.Use;
-            status = quantity is null
-                ? MovementCompositionStatus.InputRequired
-                : MovementCompositionStatus.ReferenceFallback;
+            var policyFree = ResolvePolicyFreeBase(all, applied, provenance, diagnostics);
+            quantity = policyFree.Quantity;
+            status = policyFree.Status;
+            limitingKey = policyFree.LimitingKey;
+            limitingParticipantId = policyFree.LimitingParticipantId;
+
+            if (quantity is null)
+            {
+                var reference = ResolveReference(
+                    expedition,
+                    applied,
+                    provenance,
+                    MovementReferenceUse.AuthoritativeBase);
+                quantity = reference.Quantity;
+                referenceUse = reference.Use;
+                status = quantity is null
+                    ? MovementCompositionStatus.InputRequired
+                    : MovementCompositionStatus.ReferenceFallback;
+            }
+            else
+            {
+                MarkReferenceInformational(expedition, applied, ref referenceUse);
+                status = ApplyAdjustments(
+                    expedition,
+                    policy,
+                    input,
+                    all,
+                    quantity,
+                    applyPinnedTerrain: false,
+                    applied,
+                    provenance,
+                    diagnostics,
+                    missingInputs,
+                    status,
+                    out quantity);
+            }
         }
         else
         {
@@ -150,6 +188,7 @@ public static class MovementCapabilityComposer
                 policy,
                 all,
                 applied,
+                provenance,
                 diagnostics,
                 missingInputs);
             quantity = baseResolution.Quantity;
@@ -167,23 +206,9 @@ public static class MovementCapabilityComposer
                     status = MovementCompositionStatus.ReferenceFallback;
                 }
             }
-            else if (expedition.Party.BaseMovement is { } reference)
+            else
             {
-                referenceUse = MovementReferenceUse.InformationalOnly;
-                applied.Add(new MovementAppliedContributor(
-                    null,
-                    null,
-                    "party-movement-reference",
-                    MovementCapabilityOperation.Base,
-                    false,
-                    null,
-                    null,
-                    null,
-                    null,
-                    reference.LimitingMemberId,
-                    null,
-                    "Explicit party movement reference",
-                    "Informational only because a capability base was composed."));
+                MarkReferenceInformational(expedition, applied, ref referenceUse);
             }
 
             if (quantity is not null && status != MovementCompositionStatus.ReferenceFallback)
@@ -194,6 +219,7 @@ public static class MovementCapabilityComposer
                     input,
                     all,
                     quantity,
+                    applyPinnedTerrain: true,
                     applied,
                     provenance,
                     diagnostics,
@@ -216,7 +242,7 @@ public static class MovementCapabilityComposer
                 quantity = replacement;
                 status = MovementCompositionStatus.Resolved;
                 applied.Add(Applied(dmOverride, true, "Explicit DM final override."));
-                provenance.Add(dmOverride.Provenance?.Trim() ?? "Explicit DM movement override.");
+                AddProvenance(provenance, dmOverride.Provenance, "Explicit DM movement override.");
             }
         }
 
@@ -227,10 +253,14 @@ public static class MovementCapabilityComposer
         }
 
         var suggestion = status is MovementCompositionStatus.Resolved or MovementCompositionStatus.ReferenceFallback
-            ? quantity is null
-                ? SuggestFromReference(expedition)
-                : Suggest(expedition, quantity)
+            && quantity is not null
+            ? Suggest(expedition, quantity)
             : null;
+
+        if (policy.BudgetModel == "journey-progress" && suggestion is not null)
+        {
+            throw new InvalidOperationException("Journey progress must never be reinterpreted as a physical watch-distance suggestion.");
+        }
 
         return new MovementCapabilityComposition(
             policy,
@@ -250,11 +280,51 @@ public static class MovementCapabilityComposer
             suggestion);
     }
 
+    private static BaseResolution ResolvePolicyFreeBase(
+        IReadOnlyList<MovementCapabilityContributor> all,
+        List<MovementAppliedContributor> applied,
+        List<string> provenance,
+        List<string> diagnostics)
+    {
+        var candidates = all
+            .Where(value => value.Scope == MovementCapabilityScope.Party)
+            .Where(value => value.Kind == MovementCapabilityContributorKind.Environment)
+            .Where(value => value.Operation is MovementCapabilityOperation.Base or MovementCapabilityOperation.Replace)
+            .ToArray();
+
+        if (candidates.Length == 0)
+        {
+            return new BaseResolution(null, MovementCompositionStatus.InputRequired, null, null);
+        }
+        if (candidates.Length > 1)
+        {
+            diagnostics.Add("Multiple party-level base movement capabilities are available without a pinned movement.budget policy to select between them.");
+            foreach (var candidate in candidates)
+            {
+                applied.Add(Applied(candidate, false, "Requires adjudication because no pinned policy selects among multiple party-level base capabilities."));
+            }
+            return new BaseResolution(null, MovementCompositionStatus.RequiresAdjudication, null, null);
+        }
+
+        var selected = candidates[0];
+        if (!TryQuantity(selected, null, out var quantity, out var problem) || quantity is null)
+        {
+            diagnostics.Add(problem ?? "The party-level movement capability could not be interpreted.");
+            applied.Add(Applied(selected, false, problem));
+            return new BaseResolution(null, MovementCompositionStatus.RequiresAdjudication, null, null);
+        }
+
+        applied.Add(Applied(selected, true, "Party-level base movement capability used without requiring a structural movement.budget module."));
+        AddProvenance(provenance, selected.Provenance, "Resolved party-level movement capability.");
+        return new BaseResolution(quantity, MovementCompositionStatus.Resolved, selected.Key, selected.ParticipantId);
+    }
+
     private static BaseResolution ResolveBase(
         StoredExpedition expedition,
         MovementCompositionPolicy policy,
         IReadOnlyList<MovementCapabilityContributor> all,
         List<MovementAppliedContributor> applied,
+        List<string> provenance,
         List<string> diagnostics,
         List<string> missingInputs)
     {
@@ -301,6 +371,41 @@ public static class MovementCapabilityComposer
             candidates.Add(contributor);
         }
 
+        if (string.Equals(policy.LimitingScope, "party", StringComparison.Ordinal))
+        {
+            var partyCandidates = candidates
+                .Where(value => value.Scope == MovementCapabilityScope.Party)
+                .ToList();
+            if (partyCandidates.Count > 0)
+            {
+                candidates = partyCandidates;
+            }
+        }
+
+        if (candidates.Count == 0 && TryDirectProcedureBudget(policy, out var procedureBase))
+        {
+            applied.Add(new MovementAppliedContributor(
+                null,
+                null,
+                "procedure-base-budget",
+                MovementCapabilityOperation.Base,
+                true,
+                procedureBase!.Value,
+                null,
+                procedureBase.Unit,
+                procedureBase.PerUnit,
+                null,
+                null,
+                "Pinned CampaignProcedure",
+                $"Stored movement.budget baseBudget for direct budget model '{policy.BudgetModel}'."));
+            provenance.Add("Pinned CampaignProcedure movement.budget.");
+            return new BaseResolution(
+                procedureBase,
+                MovementCompositionStatus.Resolved,
+                "procedure-base-budget",
+                null);
+        }
+
         if (string.Equals(policy.LimitingScope, "guide", StringComparison.Ordinal))
         {
             var guideIds = expedition.Party.ActivityAssignments
@@ -322,31 +427,11 @@ public static class MovementCapabilityComposer
 
         if (candidates.Count == 0)
         {
-            if (policy.BaseBudget is > 0 && !string.IsNullOrWhiteSpace(policy.BudgetUnit))
-            {
-                var procedureBase = new Quantity(policy.BaseBudget.Value, policy.BudgetUnit, null, null);
-                applied.Add(new MovementAppliedContributor(
-                    null,
-                    null,
-                    "procedure-base-budget",
-                    MovementCapabilityOperation.Base,
-                    true,
-                    procedureBase.Value,
-                    null,
-                    procedureBase.Unit,
-                    null,
-                    null,
-                    null,
-                    "Pinned CampaignProcedure",
-                    $"Stored movement.budget baseBudget for model '{policy.BudgetModel}'."));
-                return new BaseResolution(
-                    procedureBase,
-                    MovementCompositionStatus.Resolved,
-                    "procedure-base-budget",
-                    null);
-            }
-
             missingInputs.Add("movement base capability");
+            if (policy.BaseBudget.HasValue)
+            {
+                diagnostics.Add($"The pinned '{policy.BudgetModel}' policy retains baseBudget={policy.BaseBudget.Value.ToString(CultureInfo.InvariantCulture)} {policy.BudgetUnit}, but that value is not sufficient to derive movement safely for this model.");
+            }
             return new BaseResolution(null, MovementCompositionStatus.InputRequired, null, null);
         }
 
@@ -400,12 +485,30 @@ public static class MovementCapabilityComposer
                     ? "Selected by the pinned limiting scope."
                     : "Faster movement unit did not limit the party."));
         }
+        AddProvenance(provenance, selectedContributor.Provenance, "Resolved movement capability.");
 
         return new BaseResolution(
             selected,
             MovementCompositionStatus.Resolved,
             selectedContributor.Key,
             selectedContributor.ParticipantId);
+    }
+
+    private static bool TryDirectProcedureBudget(
+        MovementCompositionPolicy policy,
+        out Quantity? quantity)
+    {
+        quantity = null;
+        if (!policy.BaseBudget.HasValue
+            || string.IsNullOrWhiteSpace(policy.BudgetUnit)
+            || string.IsNullOrWhiteSpace(policy.BudgetModel)
+            || !DirectBudgetModels.Contains(policy.BudgetModel))
+        {
+            return false;
+        }
+
+        quantity = new Quantity(policy.BaseBudget.Value, policy.BudgetUnit, null, null);
+        return true;
     }
 
     private static bool IsBaseCandidate(MovementCapabilityContributor contributor)
@@ -427,6 +530,7 @@ public static class MovementCapabilityComposer
         MovementCompositionInput input,
         IReadOnlyList<MovementCapabilityContributor> all,
         Quantity current,
+        bool applyPinnedTerrain,
         List<MovementAppliedContributor> applied,
         List<string> provenance,
         List<string> diagnostics,
@@ -474,13 +578,10 @@ public static class MovementCapabilityComposer
 
             result = operation.Quantity;
             applied.Add(Applied(adjustment, true, operation.Diagnostic));
-            if (!string.IsNullOrWhiteSpace(adjustment.Provenance))
-            {
-                provenance.Add(adjustment.Provenance.Trim());
-            }
+            AddProvenance(provenance, adjustment.Provenance, null);
         }
 
-        if (!string.IsNullOrWhiteSpace(input.TerrainKey))
+        if (applyPinnedTerrain && !string.IsNullOrWhiteSpace(input.TerrainKey))
         {
             currentStatus = ApplyPinnedTerrain(
                 policy,
@@ -492,9 +593,19 @@ public static class MovementCapabilityComposer
                 currentStatus,
                 out result);
         }
-        else if (policy.Terrain.Support == MovementTerrainPolicySupport.Unsupported)
+        else if (applyPinnedTerrain && policy.Terrain.Support == MovementTerrainPolicySupport.Unsupported)
         {
             diagnostics.Add(policy.Terrain.UnsupportedReason ?? "The pinned terrain policy is unsupported.");
+        }
+
+        if (applyPinnedTerrain && !string.IsNullOrWhiteSpace(input.RouteKey))
+        {
+            currentStatus = ApplyPinnedRoute(
+                policy,
+                input.RouteKey.Trim(),
+                applied,
+                diagnostics,
+                currentStatus);
         }
 
         return currentStatus;
@@ -532,9 +643,7 @@ public static class MovementCapabilityComposer
         {
             case "multiplier":
             case "distance-per-hour-multiplier":
-                if (!double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var factor)
-                    || !double.IsFinite(factor)
-                    || factor < 0)
+                if (!TryFiniteNonNegative(raw, out var factor))
                 {
                     diagnostics.Add($"Terrain '{terrainKey}' has an invalid numeric factor in the pinned procedure.");
                     return MovementCompositionStatus.Unsupported;
@@ -603,6 +712,39 @@ public static class MovementCapabilityComposer
         }
     }
 
+    private static MovementCompositionStatus ApplyPinnedRoute(
+        MovementCompositionPolicy policy,
+        string routeKey,
+        List<MovementAppliedContributor> applied,
+        List<string> diagnostics,
+        MovementCompositionStatus currentStatus)
+    {
+        if (policy.Terrain.Support != MovementTerrainPolicySupport.Supported
+            || string.IsNullOrWhiteSpace(policy.Terrain.RouteAdjustmentModel))
+        {
+            diagnostics.Add($"Route '{routeKey}' was supplied, but no supported route movement policy is available in the pinned procedure.");
+            return currentStatus;
+        }
+
+        var symbolic = $"{policy.Terrain.RouteAdjustmentModel}:{routeKey}";
+        applied.Add(new MovementAppliedContributor(
+            null,
+            MovementCapabilityContributorKind.TerrainRoute,
+            routeKey,
+            MovementCapabilityOperation.SymbolicLimit,
+            false,
+            null,
+            symbolic,
+            null,
+            null,
+            null,
+            null,
+            "Pinned CampaignProcedure movement.terrain",
+            "Route relationship retained symbolically until an explicit resolved route contributor is available."));
+        diagnostics.Add($"Route model '{policy.Terrain.RouteAdjustmentModel}' for route '{routeKey}' requires resolved input or DM adjudication; Hex Crawl will not invent a route formula.");
+        return MovementCompositionStatus.RequiresAdjudication;
+    }
+
     private static ReferenceResolution ResolveReference(
         StoredExpedition expedition,
         List<MovementAppliedContributor> applied,
@@ -657,8 +799,37 @@ public static class MovementCapabilityComposer
             null,
             "Explicit party movement reference",
             detail));
-        provenance.Add("Explicit PartyMovementReference supplied by the expedition DM.");
+        provenance.Add(string.IsNullOrWhiteSpace(reference.Note)
+            ? "Explicit PartyMovementReference supplied by the expedition DM."
+            : $"Explicit PartyMovementReference supplied by the expedition DM: {reference.Note.Trim()}");
         return new ReferenceResolution(quantity, use);
+    }
+
+    private static void MarkReferenceInformational(
+        StoredExpedition expedition,
+        List<MovementAppliedContributor> applied,
+        ref MovementReferenceUse referenceUse)
+    {
+        if (expedition.Party.BaseMovement is not { } reference)
+        {
+            return;
+        }
+
+        referenceUse = MovementReferenceUse.InformationalOnly;
+        applied.Add(new MovementAppliedContributor(
+            null,
+            null,
+            "party-movement-reference",
+            MovementCapabilityOperation.Base,
+            false,
+            null,
+            null,
+            null,
+            null,
+            reference.LimitingMemberId,
+            null,
+            "Explicit party movement reference",
+            "Informational only because a capability base was composed; the reference was not double-counted."));
     }
 
     private static (Quantity? Quantity, string? Diagnostic) ApplyOperation(
@@ -831,45 +1002,6 @@ public static class MovementCapabilityComposer
         return null;
     }
 
-    private static DistanceMeasure? SuggestFromReference(StoredExpedition expedition)
-    {
-        var reference = expedition.Party.BaseMovement;
-        if (expedition.Runtime is not ExpeditionState spatial || reference is null)
-        {
-            return null;
-        }
-
-        try
-        {
-            if (spatial.ActiveWatch is null && reference.PerWatch is { } perWatch)
-            {
-                return perWatch.ConvertTo(spatial.DistanceTraveled.Unit);
-            }
-
-            var interval = FocusedIntervalPolicyResolver.Resolve(expedition.CampaignProcedure);
-            var remaining = spatial.ActiveWatch?.Remaining.TotalHours ?? interval.IntervalDuration?.TotalHours;
-            if (reference.PerHour is { } perHour && remaining.HasValue && remaining.Value >= 0)
-            {
-                var hourly = perHour.ConvertTo(spatial.DistanceTraveled.Unit);
-                return new DistanceMeasure(hourly.Value * remaining.Value, hourly.Unit);
-            }
-
-            if (spatial.ActiveWatch is not null
-                && reference.PerWatch is { } activeWatch
-                && interval.IntervalDuration is { } duration
-                && NearlyEqual(spatial.ActiveWatch.Remaining.TotalHours, duration.TotalHours))
-            {
-                return activeWatch.ConvertTo(spatial.DistanceTraveled.Unit);
-            }
-        }
-        catch (InvalidOperationException)
-        {
-            return null;
-        }
-
-        return null;
-    }
-
     private static MovementAppliedContributor Applied(
         MovementCapabilityContributor contributor,
         bool applied,
@@ -890,6 +1022,21 @@ public static class MovementCapabilityComposer
 
     private static Quantity Physical(DistanceMeasure measure, string perUnit) =>
         new(measure.Value, measure.Unit.Symbol, perUnit, measure.Unit);
+
+    private static void AddProvenance(
+        List<string> provenance,
+        string? value,
+        string? fallback)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            provenance.Add(value.Trim());
+        }
+        else if (!string.IsNullOrWhiteSpace(fallback))
+        {
+            provenance.Add(fallback);
+        }
+    }
 
     private static bool TryFiniteNonNegative(string value, out double result) =>
         double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out result)
