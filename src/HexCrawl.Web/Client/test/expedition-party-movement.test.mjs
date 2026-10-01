@@ -63,9 +63,30 @@ test("server movement suggestion is optional", () => {
     assert.equal(suggestedWatchDistance(runtime()), null);
 });
 
-test("movement suggestion source does not contain watch-duration or party-reference math", () => {
+test("movement suggestion source uses the canonical projection without watch or party-reference math", () => {
     const source = fs.readFileSync(new URL("../src/modules/expeditions/expedition-party-movement.ts", import.meta.url), "utf8");
+    assert.match(source, /runtime\.movementComposition\.suggestedExpectedDistance/);
+    assert.doesNotMatch(source, /MovementCompositionProjection/);
+    assert.doesNotMatch(source, /as\s+MovementComposition/);
     assert.doesNotMatch(source, /baseMovement/);
     assert.doesNotMatch(source, /activeWatchRemainingHours/);
     assert.doesNotMatch(source, /intervalHours/);
+});
+
+test("HTTP and TypeScript expedition detail both expose canonical movement composition", () => {
+    const types = fs.readFileSync(new URL("../src/types.ts", import.meta.url), "utf8");
+    const contract = fs.readFileSync(new URL("../../Modules/Expeditions/ExpeditionApiContracts.cs", import.meta.url), "utf8");
+
+    assert.match(types, /movementComposition:\s*MovementCapabilityComposition;/);
+    assert.match(contract, /MovementCapabilityCompositionContract\s+MovementComposition/);
+    assert.match(contract, /MovementCapabilityComposer\.Compose\(expedition\)/);
+});
+
+test("movement composition UI exposes limiter provenance and unresolved diagnostics", () => {
+    const view = fs.readFileSync(new URL("../src/modules/expeditions/expedition-movement-composition-view.ts", import.meta.url), "utf8");
+
+    assert.match(view, /Movement limiter/);
+    assert.match(view, /Movement provenance/);
+    assert.match(view, /Missing:/);
+    assert.match(view, /composition\.diagnostics/);
 });

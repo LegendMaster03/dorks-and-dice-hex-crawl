@@ -1,18 +1,9 @@
 import type { DistanceUnit, DistanceValue, ExpeditionDetail } from "../../types";
 
-type MovementCompositionProjection = {
-    suggestedExpectedDistance: DistanceValue | null;
-};
-
-type MovementCompositionExpeditionDetail = ExpeditionDetail & {
-    movementComposition?: MovementCompositionProjection | null;
-};
-
 export function suggestedWatchDistance(runtime: ExpeditionDetail): number | null {
     if (!runtime.expedition.isSpatial) return null;
 
-    const composition = (runtime as MovementCompositionExpeditionDetail).movementComposition;
-    const suggestion = composition?.suggestedExpectedDistance;
+    const suggestion = runtime.movementComposition.suggestedExpectedDistance;
     if (!suggestion) return null;
 
     return convertDistanceValue(suggestion, runtime.expedition.distanceTraveled.unit);
