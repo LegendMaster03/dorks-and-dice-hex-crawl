@@ -190,7 +190,7 @@ public sealed class FocusedIntervalRuntimeIntegrationTests
             var policy = future.GetProperty("procedure").GetProperty("focusedIntervalPolicy");
             Assert.Equal("Unsupported", policy.GetProperty("support").GetString());
             Assert.Equal(JsonValueKind.Null, policy.GetProperty("intervalHours").ValueKind);
-            Assert.Equal("future-interval-policy", policy.GetProperty("mechanicKey").GetString());
+            Assert.Equal(GenericProcedureCatalog.FixedIntervalDurationMechanic, policy.GetProperty("mechanicKey").GetString());
             Assert.Equal(99, policy.GetProperty("mechanicVersion").GetInt32());
             Assert.Equal("future.interval.handler", policy.GetProperty("executionHandler").GetString());
 
@@ -308,7 +308,6 @@ public sealed class FocusedIntervalRuntimeIntegrationTests
             {
                 Mechanic = interval.Mechanic with
                 {
-                    Key = "future-interval-policy",
                     Version = 99,
                     ExecutionHandler = "future.interval.handler"
                 },
