@@ -235,12 +235,14 @@ public sealed class MovementContributorParticipantDeletionEndpointsTests
             contributor.GetProperty("participantId").ValueKind != JsonValueKind.Null
             && contributor.GetProperty("participantId").GetGuid() == removedMemberId);
 
-        var wagon = Assert.Single(contributors.Where(contributor => contributor.GetProperty("id").GetGuid() == wagonId));
+        var wagon = Assert.Single(contributors, contributor =>
+            contributor.GetProperty("id").GetGuid() == wagonId);
         Assert.Equal(
             [remainingMemberId],
             wagon.GetProperty("replacesParticipantIds").EnumerateArray().Select(value => value.GetGuid()).ToArray());
 
-        var cart = Assert.Single(contributors.Where(contributor => contributor.GetProperty("id").GetGuid() == cartId));
+        var cart = Assert.Single(contributors, contributor =>
+            contributor.GetProperty("id").GetGuid() == cartId);
         Assert.Equal(0, cart.GetProperty("replacesParticipantIds").GetArrayLength());
 
         Assert.Contains(contributors, contributor => contributor.GetProperty("id").GetGuid() == unrelatedId);
