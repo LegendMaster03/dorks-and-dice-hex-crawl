@@ -21,7 +21,28 @@ During pre-release development:
 - breaking development schema changes and database resets are acceptable;
 - current architecture and intended product behavior take priority over preserving superseded implementation shapes.
 
-Once Hex Crawl reaches a stage where real user-data compatibility commitments exist, meaningful migrations and compatibility guarantees must be evaluated separately and explicitly.
+### Compatibility horizon for internal human testing
+
+For this roadmap, **Phase 12.5 — internal human testing readiness** is the first point at which internal human testers are expected to begin accumulating campaign and expedition data that should create a meaningful preference for migration over reset.
+
+Before Phase 12.5:
+
+- database resets are an accepted development tool when they simplify or improve the target architecture;
+- there is no requirement to migrate development-era data merely to preserve temporary local/test state;
+- there is no requirement to retain legacy persistence shapes, API contracts, runtime models, compatibility projections, fallback loaders, or other obsolete representations;
+- a superseded development representation should normally be removed rather than supported beside its replacement;
+- implementation phases should optimize for the intended final architecture rather than avoiding a reset;
+- compatibility or migration work should be added only when a specific requirement is explicitly approved.
+
+Beginning with Phase 12.5 and the opening of internal human testing:
+
+- Hex Crawl remains pre-release and testers are not guaranteed permanent data retention;
+- a reset remains acceptable when an architectural correction genuinely requires it;
+- before making a breaking persisted-data change, development should evaluate whether a straightforward migration can preserve tester data without compromising the architecture;
+- when migration is simple and architecture-preserving, migration is preferred over reset because tester data now has a human cost;
+- this preference must not turn internal-testing data into a permanent legacy-compatibility burden or justify parallel obsolete models.
+
+Release-level migration and compatibility guarantees remain a separate future decision. Internal testing changes the default cost calculation for resets; it does not create a release compatibility contract.
 
 This policy applies to all phases of this plan.
 
@@ -61,6 +82,8 @@ The current branch establishes these foundations:
 15. Runtime dispatch must depend on materialized mechanic handler/version contracts, never on named-system identity.
 16. A missing `CampaignProcedure` in current-format expedition data is invalid current data, not a trigger for a fallback representation.
 17. Do not merge development branches to `main` without explicit authorization.
+18. Before Phase 12.5, development-era persistence/API/runtime compatibility is not a requirement unless explicitly approved; obsolete shapes should not be retained merely to avoid a database reset.
+19. Hex Crawl durable map/grid state must not depend on whether image-processing work executes locally or through the planned shared headless processing resource.
 
 ## Product model
 
@@ -500,6 +523,16 @@ Phase 12 adds generic Journey Challenge / Complex Hazard support over ordinary e
 
 This is an overlay, not a replacement for the deterministic core travel loop.
 
+## Internal human testing boundary
+
+Internal human testing should begin only after the core persisted expedition-state architecture through Phase 12 has stabilized.
+
+Phases 8 through 12 are intentionally completed before opening the tool to internal testers because they are expected to establish or substantially reshape durable movement capability, environment context, structured effects, resources/survival state, and multi-stage journey/process state. Avoiding a premature compatibility burden during those phases is more valuable than preserving development databases.
+
+Phase 12.5 is therefore the testing-readiness gate. It should verify that the Phase 0–12 vertical slice is usable by a DM, remove tester-blocking UX defects, establish acceptance scenarios and diagnostics, and document the internal-testing reset/migration policy.
+
+After the Phase 12.5 gate, Phases 13 and 14 may proceed while internal human testing is active.
+
 ## Encounter handoff
 
 Existing structured encounter handoff should be expanded rather than reinvented. Later additions may include surprise, start circumstances, delay, reinforcements, altered composition, depleted resources, route/location changes, linked scenes, and source process provenance.
@@ -510,9 +543,33 @@ Block Initiative remains authoritative for tactical combat.
 
 Battle-map ownership remains deliberately unresolved. Hex Crawl owns location and encounter context; tactical/scene maps remain provider-neutral linked resources until an explicit product decision is made.
 
-## Parallel raster/grid auto-alignment
+## Shared image-processing boundary
 
-Raster and baked-grid auto-alignment work remains isolated from procedure/preset architecture. Procedure work should not alter grid-lattice detection, source-raster analysis, registration, or Wonderdraft alignment without a genuine shared contract need.
+Raster and baked-grid auto-alignment work remains independent of procedure/preset architecture and is not a numbered MVP phase in this roadmap.
+
+The existing image-processing and grid-recognition functionality is intended to be extracted into a **shared headless processing resource** so that the same capability can later serve Hex Crawl and other Dorks & Dice tools, including prospective Battle Map and Bastion management tools.
+
+The extraction is intended to be an infrastructure separation, not a Hex Crawl product or persistence change:
+
+```text
+Hex Crawl map/grid workflows
+        ↓
+stable image-processing capability boundary
+        ↓
+shared headless image-processing resource
+```
+
+The intended extraction must preserve Hex Crawl behavior and durable state. Moving the computation out of the Hex Crawl process should not require a Hex Crawl database schema change, should not change accepted map/grid results, and should not make the external processing implementation authoritative for Hex Crawl domain state.
+
+During the current phase-development cycle:
+
+- procedure work must remain independent of raster/grid implementation details;
+- new Hex Crawl code should avoid deepening direct coupling to concrete in-process image-processing or grid-recognition implementations;
+- when related map/image code is touched, prefer boundaries that can later be backed by the shared headless resource without changing Hex Crawl domain or persistence contracts;
+- do not delay Phases 8–12 or the Phase 12.5 internal-testing gate merely to complete the extraction if current functionality remains equivalent;
+- do not introduce compatibility scaffolding solely for the extraction when the public/domain contract can remain stable.
+
+Potential future capabilities such as machine identification of roads, terrain, or other map features are **not part of the current MVP or this phase plan**. They belong to a later development cycle. If Hex Crawl later consumes such observations, the shared processing resource should report observations/results while Hex Crawl remains authoritative for accepted world/terrain/route state and the active `CampaignProcedure` remains authoritative for what that state means mechanically.
 
 ## Phased roadmap
 
@@ -582,13 +639,28 @@ Add fatigue/exposure, food/water/supplies, weather/altitude, forced travel, and 
 
 Add generic Journey Challenge / Complex Hazard execution over ordinary expedition intervals.
 
+### Phase 12.5 — internal human testing readiness
+
+Stabilize the Phase 0–12 vertical slice for internal human use without introducing release-level compatibility guarantees.
+
+Definition of done should include:
+
+- tester-blocking UX defects are resolved;
+- representative acceptance scenarios cover interval/watch travel, activity-budget travel, quarter-day travel, non-spatial/journey-process behavior, custom procedures, optional-provider absence, and DM/manual fallback;
+- persistence/restart behavior for the Phase 0–12 durable state model is validated;
+- logging/diagnostics are sufficient to distinguish user input, unsupported procedure behavior, provider problems, and application defects during testing;
+- tester-facing instructions clearly state that the application remains pre-release and database resets are still possible;
+- the reset/migration policy from this document is applied: migrations become preferable when straightforward, but resets remain permitted when architecture warrants them.
+
+After Phase 12.5 is accepted, open Hex Crawl to internal human testers.
+
 ### Phase 13 — expanded encounter handoff
 
-Carry structured circumstances, effects, composition changes, journey/hazard provenance, and linked-scene references.
+Carry structured circumstances, effects, composition changes, journey/hazard provenance, and linked-scene references. Develop with internal human testing active.
 
 ### Phase 14 — battle-map ownership evaluation
 
-Use actual product needs to decide whether tactical maps remain external, Hex Crawl gains a map surface, or both coexist.
+Use actual product needs to decide whether tactical maps remain external, Hex Crawl gains a map surface, or both coexist. Develop with internal human testing active.
 
 ## Development workflow
 
@@ -601,6 +673,12 @@ Before each implementation phase or major review pass:
 5. update from `main` when required before final validation;
 6. run relevant local/CI validation;
 7. verify the complete exact-head workflow before requesting merge review.
+
+Compatibility handling follows the roadmap horizon:
+
+- before Phase 12.5, do not add migrations, legacy loaders, dual representations, or compatibility adapters merely to avoid development database resets;
+- beginning with Phase 12.5, evaluate migration before resetting tester data and prefer migration when it is straightforward and architecture-preserving;
+- at all stages, explicit architectural requirements override accidental compatibility with superseded development formats.
 
 Do not modify or merge `main` without explicit authorization.
 
