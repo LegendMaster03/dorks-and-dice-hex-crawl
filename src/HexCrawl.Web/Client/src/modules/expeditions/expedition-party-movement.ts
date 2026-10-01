@@ -1,4 +1,9 @@
-import type { DistanceUnit, DistanceValue, ExpeditionDetail } from "../../types";
+import type {
+    DistanceUnit,
+    DistanceValue,
+    ExpeditionDetail,
+    MovementCapabilityContributor
+} from "../../types";
 
 export function suggestedWatchDistance(runtime: ExpeditionDetail): number | null {
     if (!runtime.expedition.isSpatial) return null;
@@ -26,6 +31,23 @@ export function convertDistanceValue(
     }
 
     return distance.value * sourceMeters / targetMeters;
+}
+
+export function movementContributorsAfterMemberRemoval(
+    contributors: MovementCapabilityContributor[] | undefined,
+    memberId: string): MovementCapabilityContributor[] | undefined {
+    if (contributors === undefined) return undefined;
+
+    return contributors
+        .filter(contributor => contributor.participantId !== memberId)
+        .map(contributor => ({
+            ...contributor,
+            distanceUnit: contributor.distanceUnit ? { ...contributor.distanceUnit } : null,
+            replacesParticipantIds:
+                contributor.kind === "Mount" || contributor.kind === "Vehicle"
+                    ? contributor.replacesParticipantIds.filter(id => id !== memberId)
+                    : [...contributor.replacesParticipantIds]
+        }));
 }
 
 function sameUnit(left: DistanceUnit, right: DistanceUnit): boolean {

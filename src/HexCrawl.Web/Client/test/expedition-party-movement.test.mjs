@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import {
     convertDistanceValue,
+    movementContributorsAfterMemberRemoval,
     suggestedWatchDistance
 } from "../.test-dist/modules/expeditions/expedition-party-movement.js";
 
@@ -61,6 +62,105 @@ test("client does not reconstruct movement from party reference state", () => {
 
 test("server movement suggestion is optional", () => {
     assert.equal(suggestedWatchDistance(runtime()), null);
+});
+
+test("member removal drops direct movement references and prunes conveyance assignments", () => {
+    const bob = "00000000-0000-0000-0000-000000000001";
+    const cara = "00000000-0000-0000-0000-000000000002";
+    const contributors = [
+        {
+            id: "10000000-0000-0000-0000-000000000001",
+            kind: "Participant",
+            key: "bob-walk",
+            operation: "Base",
+            scope: "Participant",
+            value: 3,
+            unit: "mi",
+            perUnit: "hour",
+            distanceUnit: mile,
+            symbolicValue: null,
+            participantId: bob,
+            movementUnitKey: null,
+            replacesParticipantIds: [],
+            provenance: null,
+            note: null,
+            enabled: true
+        },
+        {
+            id: "10000000-0000-0000-0000-000000000002",
+            kind: "Vehicle",
+            key: "wagon",
+            operation: "Base",
+            scope: "MovementUnit",
+            value: 4,
+            unit: "mi",
+            perUnit: "hour",
+            distanceUnit: mile,
+            symbolicValue: null,
+            participantId: null,
+            movementUnitKey: null,
+            replacesParticipantIds: [bob, cara],
+            provenance: null,
+            note: null,
+            enabled: true
+        },
+        {
+            id: "10000000-0000-0000-0000-000000000003",
+            kind: "Vehicle",
+            key: "cart",
+            operation: "Base",
+            scope: "MovementUnit",
+            value: 4,
+            unit: "mi",
+            perUnit: "hour",
+            distanceUnit: mile,
+            symbolicValue: null,
+            participantId: null,
+            movementUnitKey: null,
+            replacesParticipantIds: [bob],
+            provenance: null,
+            note: null,
+            enabled: true
+        },
+        {
+            id: "10000000-0000-0000-0000-000000000004",
+            kind: "PersistentEffect",
+            key: "unrelated-effect",
+            operation: "Multiply",
+            scope: "Party",
+            value: 0.75,
+            unit: "factor",
+            perUnit: null,
+            distanceUnit: null,
+            symbolicValue: null,
+            participantId: null,
+            movementUnitKey: null,
+            replacesParticipantIds: [],
+            provenance: null,
+            note: null,
+            enabled: true
+        }
+    ];
+
+    const cleaned = movementContributorsAfterMemberRemoval(contributors, bob);
+
+    assert.ok(cleaned);
+    assert.equal(cleaned.length, 3);
+    assert.equal(cleaned.some(contributor => contributor.participantId === bob), false);
+    assert.deepEqual(cleaned.find(contributor => contributor.key === "wagon").replacesParticipantIds, [cara]);
+    assert.deepEqual(cleaned.find(contributor => contributor.key === "cart").replacesParticipantIds, []);
+    assert.ok(cleaned.some(contributor => contributor.key === "unrelated-effect"));
+});
+
+test("omitted contributor state remains omitted until member removal deliberately materializes it", () => {
+    assert.equal(movementContributorsAfterMemberRemoval(undefined, "member"), undefined);
+
+    const source = fs.readFileSync(
+        new URL("../src/modules/expeditions/expedition-party-sheet.ts", import.meta.url),
+        "utf8");
+    assert.match(source, /movementContributorsAfterMemberRemoval/);
+    assert.match(source, /cloneParty\(draft, draft\.movementContributors !== undefined\)/);
+    assert.match(source, /includeMovementContributors = false/);
 });
 
 test("movement suggestion source uses the canonical projection without watch or party-reference math", () => {

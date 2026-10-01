@@ -540,46 +540,25 @@ public static class MovementCapabilityComposer
     {
         result = current;
         var paceKey = input.PaceKey ?? (expedition.Runtime as ExpeditionState)?.ActiveWatch?.Plan.Mode.PaceKey;
-        var adjustments = all
-            .Where(value => value.Kind is MovementCapabilityContributorKind.Load
-                or MovementCapabilityContributorKind.TravelMode
-                or MovementCapabilityContributorKind.TerrainRoute
-                or MovementCapabilityContributorKind.Environment
-                or MovementCapabilityContributorKind.PersistentEffect)
-            .Where(value => !IsBaseCandidate(value))
-            .OrderBy(value => Stage(value.Kind))
-            .ThenBy(value => value.Id)
-            .ToArray();
 
-        foreach (var adjustment in adjustments)
-        {
-            if (adjustment.Kind == MovementCapabilityContributorKind.TravelMode)
-            {
-                if (paceKey is null)
-                {
-                    applied.Add(Applied(adjustment, false, "No travel mode/pace is currently selected."));
-                    continue;
-                }
-                if (!string.Equals(adjustment.Key, paceKey, StringComparison.Ordinal))
-                {
-                    applied.Add(Applied(adjustment, false, $"Travel mode '{paceKey}' is selected instead."));
-                    continue;
-                }
-            }
-
-            var operation = ApplyOperation(result, adjustment);
-            if (operation.Quantity is null)
-            {
-                diagnostics.Add(operation.Diagnostic ?? $"Movement contributor '{adjustment.Key}' requires adjudication.");
-                applied.Add(Applied(adjustment, false, operation.Diagnostic));
-                currentStatus = MovementCompositionStatus.RequiresAdjudication;
-                continue;
-            }
-
-            result = operation.Quantity;
-            applied.Add(Applied(adjustment, true, operation.Diagnostic));
-            AddProvenance(provenance, adjustment.Provenance, null);
-        }
+        currentStatus = ApplyContributorStage(
+            MovementCapabilityContributorKind.Load,
+            paceKey,
+            all,
+            ref result,
+            applied,
+            provenance,
+            diagnostics,
+            currentStatus);
+        currentStatus = ApplyContributorStage(
+            MovementCapabilityContributorKind.TravelMode,
+            paceKey,
+            all,
+            ref result,
+            applied,
+            provenance,
+            diagnostics,
+            currentStatus);
 
         if (applyPinnedTerrain && !string.IsNullOrWhiteSpace(input.TerrainKey))
         {
@@ -606,6 +585,83 @@ public static class MovementCapabilityComposer
                 applied,
                 diagnostics,
                 currentStatus);
+        }
+
+        currentStatus = ApplyContributorStage(
+            MovementCapabilityContributorKind.TerrainRoute,
+            paceKey,
+            all,
+            ref result,
+            applied,
+            provenance,
+            diagnostics,
+            currentStatus);
+        currentStatus = ApplyContributorStage(
+            MovementCapabilityContributorKind.Environment,
+            paceKey,
+            all,
+            ref result,
+            applied,
+            provenance,
+            diagnostics,
+            currentStatus);
+        currentStatus = ApplyContributorStage(
+            MovementCapabilityContributorKind.PersistentEffect,
+            paceKey,
+            all,
+            ref result,
+            applied,
+            provenance,
+            diagnostics,
+            currentStatus);
+
+        return currentStatus;
+    }
+
+    private static MovementCompositionStatus ApplyContributorStage(
+        MovementCapabilityContributorKind kind,
+        string? paceKey,
+        IReadOnlyList<MovementCapabilityContributor> all,
+        ref Quantity current,
+        List<MovementAppliedContributor> applied,
+        List<string> provenance,
+        List<string> diagnostics,
+        MovementCompositionStatus currentStatus)
+    {
+        var adjustments = all
+            .Where(value => value.Kind == kind)
+            .Where(value => !IsBaseCandidate(value))
+            .OrderBy(value => value.Id)
+            .ToArray();
+
+        foreach (var adjustment in adjustments)
+        {
+            if (adjustment.Kind == MovementCapabilityContributorKind.TravelMode)
+            {
+                if (paceKey is null)
+                {
+                    applied.Add(Applied(adjustment, false, "No travel mode/pace is currently selected."));
+                    continue;
+                }
+                if (!string.Equals(adjustment.Key, paceKey, StringComparison.Ordinal))
+                {
+                    applied.Add(Applied(adjustment, false, $"Travel mode '{paceKey}' is selected instead."));
+                    continue;
+                }
+            }
+
+            var operation = ApplyOperation(current, adjustment);
+            if (operation.Quantity is null)
+            {
+                diagnostics.Add(operation.Diagnostic ?? $"Movement contributor '{adjustment.Key}' requires adjudication.");
+                applied.Add(Applied(adjustment, false, operation.Diagnostic));
+                currentStatus = MovementCompositionStatus.RequiresAdjudication;
+                continue;
+            }
+
+            current = operation.Quantity;
+            applied.Add(Applied(adjustment, true, operation.Diagnostic));
+            AddProvenance(provenance, adjustment.Provenance, null);
         }
 
         return currentStatus;
