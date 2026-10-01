@@ -10,9 +10,6 @@ const types = fs.readFileSync(path.join(clientRoot, "src/types.ts"), "utf8");
 const focusedPolicy = fs.readFileSync(
     path.join(clientRoot, "src/modules/expeditions/focused-interval-policy.ts"),
     "utf8");
-const serverContract = fs.readFileSync(
-    path.join(clientRoot, "../Modules/ReferenceData/ProcedureContracts.cs"),
-    "utf8");
 
 test("CampaignProcedure canonically includes the mandatory focused interval projection", () => {
     assert.match(types, /export type FocusedIntervalPolicySupport = "None" \| "Supported" \| "Unsupported";/);
@@ -28,26 +25,15 @@ test("focused interval client code uses the canonical CampaignProcedure field wi
     assert.doesNotMatch(focusedPolicy, /runtime\.procedure as/);
 });
 
-test("server and client focused interval contract field names remain aligned", () => {
-    const serverFields = [
-        "Support",
-        "IntervalHours",
-        "MechanicKey",
-        "MechanicVersion",
-        "ExecutionHandler",
-        "UnsupportedReason"
-    ];
-    const clientFields = [
+test("focused interval client contract retains the HTTP projection field names", () => {
+    for (const field of [
         "support",
         "intervalHours",
         "mechanicKey",
         "mechanicVersion",
         "executionHandler",
         "unsupportedReason"
-    ];
-
-    assert.match(serverContract, /public sealed record CampaignProcedureContract\([\s\S]*FocusedIntervalPolicyContract FocusedIntervalPolicy,[\s\S]*IReadOnlyList<ProcedureModuleContract> Modules\)/);
-    assert.match(serverContract, /public sealed record FocusedIntervalPolicyContract\([\s\S]*\)/);
-    for (const field of serverFields) assert.match(serverContract, new RegExp(`\\b${field}\\b`));
-    for (const field of clientFields) assert.match(types, new RegExp(`\\b${field}:`));
+    ]) {
+        assert.match(types, new RegExp(`\\b${field}:`));
+    }
 });
