@@ -8,7 +8,7 @@ namespace HexCrawl.Application.Tests;
 public sealed class Phase9ReviewRegressionTests
 {
     [Fact]
-    public void TrimmedDimensionControlsBothPrecedenceAndMechanicalInterpretation()
+    public void TrimmedDimensionAndTagControlMechanicalInterpretation()
     {
         var world = new OverworldDefinition
         {
@@ -78,7 +78,7 @@ public sealed class Phase9ReviewRegressionTests
             },
             Environment = new ExpeditionEnvironmentState
             {
-                CurrentFacts = [Tag(" terrain ", "difficult")]
+                CurrentFacts = [Tag(" terrain ", " difficult ")]
             }
         };
 
@@ -87,7 +87,7 @@ public sealed class Phase9ReviewRegressionTests
         var movement = MovementCapabilityComposer.Compose(expedition, evaluation.MovementInput);
 
         Assert.Contains(context.Facts, value => value.Fact.Tag == "normal" && !value.Effective);
-        Assert.Contains(context.Facts, value => value.Fact.Tag == "difficult" && value.Effective);
+        Assert.Contains(context.Facts, value => value.Fact.Tag == " difficult " && value.Effective);
         Assert.Equal("difficult", evaluation.TerrainKey);
         Assert.Equal(MovementCompositionStatus.Resolved, movement.Status);
         Assert.Equal(1.5, movement.EffectiveValue);
