@@ -40,14 +40,18 @@ public sealed partial class PostgresHexCrawlStore
         IReadOnlyList<SourceMapRepresentation> SourceMaps,
         IReadOnlyList<EnvironmentAnnotation> EnvironmentAnnotations)
     {
-        public static WorldSnapshot FromDomain(OverworldDefinition world) => new(
-            world.Id,
-            world.Name,
-            world.Grid,
-            world.Features.Select(FeatureSnapshot.FromDomain).ToArray(),
-            world.Locations,
-            world.SourceMaps,
-            world.EnvironmentAnnotations);
+        public static WorldSnapshot FromDomain(OverworldDefinition world)
+        {
+            world.ValidateEnvironmentAnnotations();
+            return new WorldSnapshot(
+                world.Id,
+                world.Name,
+                world.Grid,
+                world.Features.Select(FeatureSnapshot.FromDomain).ToArray(),
+                world.Locations,
+                world.SourceMaps,
+                world.EnvironmentAnnotations);
+        }
 
         public OverworldDefinition ToDomain() => new()
         {
