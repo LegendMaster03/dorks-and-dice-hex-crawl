@@ -24,8 +24,13 @@ public sealed class ProcedureResolutionHelperService(
                 "The crawl session changed before procedure inputs were resolved. Reload it before generating another helper result.");
         }
 
-        command = await ApplyEnvironmentAsync(expedition, ownerUserId, command, cancellationToken);
-        command = await providerEnricher.PrepareAsync(expedition, command, cancellationToken);
+        var environment = await ApplyEnvironmentAsync(expedition, ownerUserId, command, cancellationToken);
+        command = environment.Command;
+        command = await providerEnricher.PrepareAsync(
+            expedition,
+            command,
+            environment.MovementInput,
+            cancellationToken);
         var generated = resolver.Resolve(
             ExpeditionProcedureExecutionResolver.Resolve(expedition),
             expedition.Context,
@@ -94,7 +99,7 @@ public sealed class ProcedureResolutionHelperService(
         return audited with { ExpeditionVersion = saved.Version };
     }
 
-    private async Task<ProcedureResolutionHelperCommand> ApplyEnvironmentAsync(
+    private async Task<(ProcedureResolutionHelperCommand Command, MovementCompositionInput MovementInput)> ApplyEnvironmentAsync(
         StoredExpedition expedition,
         string ownerUserId,
         ProcedureResolutionHelperCommand command,
@@ -148,19 +153,7 @@ public sealed class ProcedureResolutionHelperService(
             };
         }
 
-        if (string.IsNullOrWhiteSpace(prepared.Terrain)
-            && string.IsNullOrWhiteSpace(prepared.Route)
-            && !string.IsNullOrWhiteSpace(evaluation.TerrainKey)
-            && !string.IsNullOrWhiteSpace(evaluation.RouteKey))
-        {
-            prepared = prepared with
-            {
-                Terrain = evaluation.TerrainKey,
-                Route = evaluation.RouteKey
-            };
-        }
-
-        return prepared;
+        return (prepared, evaluation.MovementInput);
     }
 
     private static ProcedureResolutionHelperResult AddAuditReference(
