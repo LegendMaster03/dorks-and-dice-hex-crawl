@@ -110,6 +110,22 @@ public sealed class ProcedureResolutionHelperService(
         var context = EnvironmentContextResolver.Resolve(expedition, world);
         var evaluation = EnvironmentProcedureEvaluator.Evaluate(expedition, context);
         var composition = MovementCapabilityComposer.Compose(expedition, evaluation.MovementInput);
+        var needsAutomaticTravelDistance = command.ExpectedDistance is null
+            && !string.IsNullOrWhiteSpace(command.TravelDistanceRule);
+
+        if (needsAutomaticTravelDistance
+            && evaluation.Status != EnvironmentProcedureEvaluationStatus.Resolved)
+        {
+            var detail = evaluation.Diagnostics
+                .Concat(evaluation.UnsupportedSemantics)
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            var suffix = detail.Length == 0 ? "" : " " + string.Join(" ", detail);
+            throw new InvalidOperationException(
+                "Effective environment must be resolved or explicitly adjudicated before expected travel distance can be generated automatically."
+                + suffix);
+        }
 
         var prepared = command;
         if (prepared.ExpectedDistance is null
