@@ -34,6 +34,10 @@ export const expeditionsModule: HexCrawlClientModule = {
                 "tracker",
                 context.navigate);
 
+        if (!context.root.querySelector(".hc-page")) {
+            return disposeView;
+        }
+
         let panelRuntime = await context.api.getExpedition(expeditionId);
         let disposed = false;
         const routePath = route.kind === "expedition"
