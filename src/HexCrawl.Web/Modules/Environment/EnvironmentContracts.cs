@@ -66,6 +66,17 @@ public sealed record EnvironmentAnnotationContract(
     };
 }
 
+public sealed record WorldEnvironmentContract(
+    Guid OverworldId,
+    long Version,
+    IReadOnlyList<EnvironmentAnnotationContract> Annotations)
+{
+    public static WorldEnvironmentContract From(StoredOverworld world) => new(
+        world.World.Id,
+        world.Version,
+        world.World.EnvironmentAnnotations.Select(EnvironmentAnnotationContract.From).ToArray());
+}
+
 public sealed record EnvironmentFactSourceContract(
     EnvironmentFactSourceKind Kind,
     Guid? AnnotationId,
