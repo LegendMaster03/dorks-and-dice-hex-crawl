@@ -47,7 +47,7 @@ public sealed class Phase9NoEffectEnvironmentRegressionTests
             null,
             procedure,
             null,
-            GenericProcedureRuntime.Bind(procedure).Time.IntervalDuration,
+            TimeSpan.FromHours(1),
             "owner",
             1,
             now,
