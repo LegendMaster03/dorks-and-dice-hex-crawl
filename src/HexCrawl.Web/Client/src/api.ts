@@ -26,6 +26,12 @@ import type {
     UpdateExpeditionPartyRequest,
     WorldPoint
 } from "./types";
+import type {
+    EnvironmentWorkbench,
+    ReplaceWorldEnvironmentRequest,
+    UpdateExpeditionEnvironmentRequest,
+    WorldEnvironment
+} from "./environment-types";
 import type { TravelEnvironmentCatalog } from "./travel-rules";
 
 let activeBackendBaseUrl = "";
@@ -157,6 +163,14 @@ export class HexCrawlApi {
 
     public updateOverworld(id: string, name: string, grid: GridDefinition, expectedVersion: number): Promise<Overworld> {
         return this.sendJson("PUT", `/api/overworlds/${encodeURIComponent(id)}`, { name, grid, expectedVersion }, "Update overworld");
+    }
+
+    public getWorldEnvironment(id: string): Promise<WorldEnvironment> {
+        return this.getJson(`/api/overworlds/${encodeURIComponent(id)}/environment`, "World environment");
+    }
+
+    public replaceWorldEnvironment(id: string, input: ReplaceWorldEnvironmentRequest): Promise<WorldEnvironment> {
+        return this.sendJson("PUT", `/api/overworlds/${encodeURIComponent(id)}/environment`, input, "World environment");
     }
 
     public async deleteOverworld(id: string, expectedVersion: number): Promise<Overworld> {
@@ -352,6 +366,16 @@ export class HexCrawlApi {
 
     public getExpedition(expeditionId: string): Promise<ExpeditionDetail> {
         return this.getJson(`/api/expeditions/${encodeURIComponent(expeditionId)}`, "Expedition");
+    }
+
+    public getExpeditionEnvironment(expeditionId: string): Promise<EnvironmentWorkbench> {
+        return this.getJson(`/api/expeditions/${encodeURIComponent(expeditionId)}/environment`, "Expedition environment");
+    }
+
+    public updateExpeditionEnvironment(
+        expeditionId: string,
+        input: UpdateExpeditionEnvironmentRequest): Promise<EnvironmentWorkbench> {
+        return this.sendJson("PUT", `/api/expeditions/${encodeURIComponent(expeditionId)}/environment`, input, "Expedition environment");
     }
 
     public async deleteExpedition(expeditionId: string, expectedVersion: number): Promise<void> {
