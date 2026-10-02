@@ -5,7 +5,7 @@ namespace HexCrawl.Infrastructure.Persistence;
 
 public sealed class PostgresSchemaMigrator(string connectionString)
 {
-    public const int CurrentVersion = 5;
+    public const int CurrentVersion = 6;
     private const long MigrationLockKey = 0x484558435241574C;
 
     public async Task MigrateAsync(CancellationToken cancellationToken = default)
@@ -44,7 +44,7 @@ public sealed class PostgresSchemaMigrator(string connectionString)
             else if (current != CurrentVersion)
             {
                 throw new InvalidOperationException(
-                    $"Hex Crawl PostgreSQL schema version {current} predates the current pre-release environment architecture. Reset the development database and initialize schema version {CurrentVersion}.");
+                    $"Hex Crawl PostgreSQL schema version {current} predates the current pre-release effect/consequence architecture. Reset the development database and initialize schema version {CurrentVersion}.");
             }
 
             await transaction.CommitAsync(cancellationToken);
@@ -110,6 +110,7 @@ public sealed class PostgresSchemaMigrator(string connectionString)
                 knowledge_json jsonb NULL,
                 party_json jsonb NOT NULL,
                 environment_json jsonb NOT NULL,
+                effects_json jsonb NOT NULL,
                 generated_resolutions_json jsonb NOT NULL,
                 procedure_json jsonb NOT NULL,
                 procedure_origin_json jsonb NULL,
