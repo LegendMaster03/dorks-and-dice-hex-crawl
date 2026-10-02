@@ -15,8 +15,12 @@ public sealed record GridContract(
     DistanceContract NeighborCenterDistance)
 {
     public static GridContract From(HexGridDefinition grid) => new(
-        grid.Id, grid.Orientation, grid.CoordinateConvention, grid.Origin,
-        grid.RotationDegrees, grid.HexRadiusWorldUnits,
+        grid.Id,
+        grid.Orientation,
+        grid.CoordinateConvention,
+        grid.Origin,
+        grid.RotationDegrees,
+        grid.HexRadiusWorldUnits,
         DistanceContract.From(grid.NeighborCenterDistance));
 
     public HexGridDefinition ToDomain() => new()
@@ -57,7 +61,11 @@ public sealed record LocationContract(
     LocationDiscoverability Discoverability)
 {
     public static LocationContract From(Location location) => new(
-        location.Id, location.Name, location.Category, location.Position, location.Discoverability);
+        location.Id,
+        location.Name,
+        location.Category,
+        location.Position,
+        location.Discoverability);
 }
 
 public sealed record SourceMapContract(
@@ -71,8 +79,14 @@ public sealed record SourceMapContract(
     IReadOnlyList<WorldPoint> WorldCoverageBoundary)
 {
     public static SourceMapContract From(SourceMapRepresentation sourceMap) => new(
-        sourceMap.Id, sourceMap.GeographyKey, sourceMap.Name, sourceMap.Role, sourceMap.AssetKey,
-        sourceMap.ContainsBakedGrid, sourceMap.Alignment, sourceMap.WorldCoverageBoundary);
+        sourceMap.Id,
+        sourceMap.GeographyKey,
+        sourceMap.Name,
+        sourceMap.Role,
+        sourceMap.AssetKey,
+        sourceMap.ContainsBakedGrid,
+        sourceMap.Alignment,
+        sourceMap.WorldCoverageBoundary);
 }
 
 public sealed record OverworldContract(
