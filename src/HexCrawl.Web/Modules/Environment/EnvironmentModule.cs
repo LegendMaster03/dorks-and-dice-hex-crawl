@@ -2,7 +2,6 @@ using System.Security.Claims;
 using HexCrawl.Application;
 using HexCrawl.Application.Persistence;
 using HexCrawl.Domain.Runtime;
-using HexCrawl.Domain.World;
 using HexCrawl.Web.Api;
 using HexCrawl.Web.Framework;
 using Microsoft.AspNetCore.Routing;
@@ -25,9 +24,20 @@ public sealed class EnvironmentModule : IHexCrawlModule
 
     public void MapEndpoints(RouteGroupBuilder api)
     {
+        api.MapGet("/overworlds/{overworldId:guid}/environment", GetWorldEnvironmentAsync);
         api.MapPut("/overworlds/{overworldId:guid}/environment", ReplaceWorldEnvironmentAsync);
         api.MapGet("/expeditions/{expeditionId:guid}/environment", GetExpeditionEnvironmentAsync);
         api.MapPut("/expeditions/{expeditionId:guid}/environment", UpdateExpeditionEnvironmentAsync);
+    }
+
+    private static async Task<IResult> GetWorldEnvironmentAsync(
+        Guid overworldId,
+        HttpContext context,
+        HexCrawlService service,
+        CancellationToken cancellationToken)
+    {
+        var world = await service.GetOverworldAsync(overworldId, UserId(context), cancellationToken);
+        return Results.Ok(WorldEnvironmentContract.From(world));
     }
 
     private static async Task<IResult> ReplaceWorldEnvironmentAsync(
@@ -39,7 +49,7 @@ public sealed class EnvironmentModule : IHexCrawlModule
     {
         var world = await service.ReplaceWorldEnvironmentAsync(
             overworldId, UserId(context), request.ToCommand(), cancellationToken);
-        return Results.Ok(OverworldContract.From(world));
+        return Results.Ok(WorldEnvironmentContract.From(world));
     }
 
     private static async Task<IResult> GetExpeditionEnvironmentAsync(
