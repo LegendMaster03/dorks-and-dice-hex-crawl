@@ -183,7 +183,7 @@ public static class EnvironmentProcedureEvaluator
     private static IReadOnlyList<string> Tags(EffectiveEnvironmentContext context, string dimension) =>
         context.Facts
             .Where(x => x.Effective)
-            .Where(x => string.Equals(x.Fact.Dimension, dimension, StringComparison.Ordinal))
+            .Where(x => string.Equals(x.Fact.Dimension.Trim(), dimension, StringComparison.Ordinal))
             .Where(x => x.Fact.ValueKind == EnvironmentValueKind.Tag)
             .Select(x => x.Fact.Tag!)
             .Distinct(StringComparer.Ordinal)
