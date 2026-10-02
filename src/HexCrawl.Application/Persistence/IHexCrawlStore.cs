@@ -71,28 +71,109 @@ public sealed record ExpeditionSummary(
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
 
-public enum SaveOutcome { Saved, NotFound, Conflict }
-public enum DeleteOverworldOutcome { Deleted, NotFound, Conflict, HasExpeditions }
-public enum DeleteExpeditionOutcome { Deleted, NotFound, Conflict }
+public enum SaveOutcome
+{
+    Saved,
+    NotFound,
+    Conflict
+}
+
+public enum DeleteOverworldOutcome
+{
+    Deleted,
+    NotFound,
+    Conflict,
+    HasExpeditions
+}
+
+public enum DeleteExpeditionOutcome
+{
+    Deleted,
+    NotFound,
+    Conflict
+}
+
 public sealed record SaveResult<T>(SaveOutcome Outcome, T? Value);
 
 public interface IHexCrawlStore
 {
     Task InitializeAsync(CancellationToken cancellationToken = default);
-    Task<StoredOverworld> CreateOverworldAsync(StoredOverworld overworld, CancellationToken cancellationToken = default);
-    Task<IReadOnlyList<OverworldSummary>> ListOverworldsAsync(string ownerUserId, CancellationToken cancellationToken = default);
-    Task<StoredOverworld?> GetOverworldAsync(Guid overworldId, string ownerUserId, CancellationToken cancellationToken = default);
-    Task<SaveResult<StoredOverworld>> SaveOverworldAsync(StoredOverworld overworld, long expectedVersion, CancellationToken cancellationToken = default);
-    Task<DeleteOverworldOutcome> DeleteOverworldAsync(Guid overworldId, string ownerUserId, long expectedVersion, CancellationToken cancellationToken = default);
-    Task<bool> HasExpeditionsAsync(Guid overworldId, string ownerUserId, CancellationToken cancellationToken = default);
-    Task<StoredCampaignProcedureRevision> CreateCampaignProcedureRevisionAsync(StoredCampaignProcedureRevision revision, CancellationToken cancellationToken = default);
-    Task<StoredCampaignProcedureRevision?> GetCampaignProcedureRevisionAsync(Guid procedureId, int revision, string ownerUserId, CancellationToken cancellationToken = default);
-    Task<StoredCampaignProcedureRevision?> GetLatestCampaignProcedureRevisionAsync(Guid procedureId, string ownerUserId, CancellationToken cancellationToken = default);
-    Task<IReadOnlyList<StoredCampaignProcedureRevision>> ListCampaignProcedureRevisionsAsync(Guid procedureId, string ownerUserId, CancellationToken cancellationToken = default);
-    Task<StoredExpedition> CreateExpeditionAsync(StoredExpedition expedition, CancellationToken cancellationToken = default);
-    Task<IReadOnlyList<ExpeditionSummary>> ListExpeditionsAsync(string ownerUserId, CancellationToken cancellationToken = default);
-    Task<IReadOnlyList<ExpeditionSummary>> ListExpeditionsAsync(Guid overworldId, string ownerUserId, CancellationToken cancellationToken = default);
-    Task<StoredExpedition?> GetExpeditionAsync(Guid expeditionId, string ownerUserId, CancellationToken cancellationToken = default);
-    Task<SaveResult<StoredExpedition>> SaveExpeditionAsync(StoredExpedition expedition, long expectedVersion, CancellationToken cancellationToken = default);
-    Task<DeleteExpeditionOutcome> DeleteExpeditionAsync(Guid expeditionId, string ownerUserId, long expectedVersion, CancellationToken cancellationToken = default);
+
+    Task<StoredOverworld> CreateOverworldAsync(
+        StoredOverworld overworld,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<OverworldSummary>> ListOverworldsAsync(
+        string ownerUserId,
+        CancellationToken cancellationToken = default);
+
+    Task<StoredOverworld?> GetOverworldAsync(
+        Guid overworldId,
+        string ownerUserId,
+        CancellationToken cancellationToken = default);
+
+    Task<SaveResult<StoredOverworld>> SaveOverworldAsync(
+        StoredOverworld overworld,
+        long expectedVersion,
+        CancellationToken cancellationToken = default);
+
+    Task<DeleteOverworldOutcome> DeleteOverworldAsync(
+        Guid overworldId,
+        string ownerUserId,
+        long expectedVersion,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> HasExpeditionsAsync(
+        Guid overworldId,
+        string ownerUserId,
+        CancellationToken cancellationToken = default);
+
+    Task<StoredCampaignProcedureRevision> CreateCampaignProcedureRevisionAsync(
+        StoredCampaignProcedureRevision revision,
+        CancellationToken cancellationToken = default);
+
+    Task<StoredCampaignProcedureRevision?> GetCampaignProcedureRevisionAsync(
+        Guid procedureId,
+        int revision,
+        string ownerUserId,
+        CancellationToken cancellationToken = default);
+
+    Task<StoredCampaignProcedureRevision?> GetLatestCampaignProcedureRevisionAsync(
+        Guid procedureId,
+        string ownerUserId,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<StoredCampaignProcedureRevision>> ListCampaignProcedureRevisionsAsync(
+        Guid procedureId,
+        string ownerUserId,
+        CancellationToken cancellationToken = default);
+
+    Task<StoredExpedition> CreateExpeditionAsync(
+        StoredExpedition expedition,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<ExpeditionSummary>> ListExpeditionsAsync(
+        string ownerUserId,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<ExpeditionSummary>> ListExpeditionsAsync(
+        Guid overworldId,
+        string ownerUserId,
+        CancellationToken cancellationToken = default);
+
+    Task<StoredExpedition?> GetExpeditionAsync(
+        Guid expeditionId,
+        string ownerUserId,
+        CancellationToken cancellationToken = default);
+
+    Task<SaveResult<StoredExpedition>> SaveExpeditionAsync(
+        StoredExpedition expedition,
+        long expectedVersion,
+        CancellationToken cancellationToken = default);
+
+    Task<DeleteExpeditionOutcome> DeleteExpeditionAsync(
+        Guid expeditionId,
+        string ownerUserId,
+        long expectedVersion,
+        CancellationToken cancellationToken = default);
 }
