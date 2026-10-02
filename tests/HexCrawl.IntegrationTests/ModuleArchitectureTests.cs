@@ -22,7 +22,7 @@ public sealed class ModuleArchitectureTests
             manifests.Single(manifest => manifest.Id == "expeditions").Dependencies);
 
         Assert.Equal(
-            ["expeditions"],
+            ["worlds", "expeditions"],
             manifests.Single(manifest => manifest.Id == "environment-context").Dependencies);
 
         Assert.Equal(
