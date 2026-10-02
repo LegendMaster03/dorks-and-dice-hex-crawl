@@ -338,9 +338,11 @@ function readFactForm(form: HTMLFormElement): EnvironmentFact | null {
     let tag: string | null = null;
     let measurement: { value: number; unit: string } | null = null;
     if (valueKind === "Measurement") {
-        const numeric = Number(value("measurement"));
+        const numericText = value("measurement");
         const unit = value("unit");
-        if (!Number.isFinite(numeric) || !unit) return null;
+        if (!numericText || !unit) return null;
+        const numeric = Number(numericText);
+        if (!Number.isFinite(numeric)) return null;
         measurement = { value: numeric, unit };
     } else {
         tag = value("tag");
