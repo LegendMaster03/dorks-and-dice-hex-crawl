@@ -567,6 +567,7 @@ public static class MovementCapabilityComposer
                 input.TerrainKey.Trim(),
                 result,
                 applied,
+                provenance,
                 diagnostics,
                 missingInputs,
                 currentStatus,
@@ -672,6 +673,7 @@ public static class MovementCapabilityComposer
         string terrainKey,
         Quantity current,
         List<MovementAppliedContributor> applied,
+        List<string> provenance,
         List<string> diagnostics,
         List<string> missingInputs,
         MovementCompositionStatus currentStatus,
@@ -719,6 +721,7 @@ public static class MovementCapabilityComposer
                     null,
                     "Pinned CampaignProcedure movement.terrain",
                     $"Applied {terrain.AdjustmentModel}."));
+                provenance.Add($"Pinned CampaignProcedure movement.terrain {terrainKey}.");
                 return currentStatus;
 
             case "maximum-pace":
