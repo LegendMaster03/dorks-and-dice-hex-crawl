@@ -114,7 +114,13 @@ public sealed class ExpeditionEffectService(
         CancellationToken cancellationToken = default)
     {
         var expedition = await LoadAsync(expeditionId, ownerUserId, command.ExpectedVersion, cancellationToken);
-        var policy = PersistentEffectPolicyResolver.Resolve(expedition.CampaignProcedure);
+        var effect = expedition.Effects.ActiveEffects.SingleOrDefault(value => value.Id == effectId);
+        var policy = PersistentEffectPolicyResolver.Resolve(expedition.CampaignProcedure) with
+        {
+            // Recovery semantics are materialized on the effect when it is created or manually
+            // upserted. Do not re-authorize recovery from a later/current procedure projection.
+            RecoveryModel = effect?.RecoveryModel
+        };
         var result = ExpeditionConsequenceEngine.Recover(
             expedition.Effects,
             policy,
@@ -175,7 +181,16 @@ public sealed class ExpeditionEffectService(
         {
             throw new InvalidOperationException("A time-delay consequence can contain only time-delay components.");
         }
-        var delay = components.Aggregate(TimeSpan.Zero, (current, component) => current + component.ToTimeSpan());
+
+        TimeSpan delay;
+        try
+        {
+            delay = components.Aggregate(TimeSpan.Zero, (current, component) => current + component.ToTimeSpan());
+        }
+        catch (OverflowException exception)
+        {
+            throw new InvalidOperationException("Resolved time delay exceeds the supported runtime duration.", exception);
+        }
         if (delay <= TimeSpan.Zero)
         {
             throw new InvalidOperationException("Resolved time delay must be positive.");
@@ -232,12 +247,20 @@ public sealed class ExpeditionEffectService(
             return new ApplyExpeditionConsequenceResult(expedition, recorded);
         }
 
-        CrawlSessionRuntimeState runtime = expedition.Runtime switch
+        CrawlSessionRuntimeState runtime;
+        try
         {
-            ExpeditionState spatial => spatial with { ElapsedTravelTime = spatial.ElapsedTravelTime + delay },
-            NonSpatialSessionState nonSpatial => nonSpatial with { ElapsedTime = nonSpatial.ElapsedTime + delay },
-            _ => throw new InvalidOperationException("Unsupported crawl runtime state for time-delay application.")
-        };
+            runtime = expedition.Runtime switch
+            {
+                ExpeditionState spatial => spatial with { ElapsedTravelTime = spatial.ElapsedTravelTime + delay },
+                NonSpatialSessionState nonSpatial => nonSpatial with { ElapsedTime = nonSpatial.ElapsedTime + delay },
+                _ => throw new InvalidOperationException("Unsupported crawl runtime state for time-delay application.")
+            };
+        }
+        catch (OverflowException exception)
+        {
+            throw new InvalidOperationException("Time delay would exceed the supported expedition clock duration.", exception);
+        }
         var saved = await SaveAsync(
             expedition with { Runtime = runtime, Effects = recorded.State },
             command.ExpectedVersion,
