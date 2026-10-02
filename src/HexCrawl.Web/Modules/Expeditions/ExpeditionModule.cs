@@ -253,7 +253,7 @@ public sealed class ExpeditionModule : IHexCrawlModule
     private static async Task<IResult> ClearEffectAsync(
         Guid expeditionId,
         Guid effectId,
-        ClearExpeditionEffectRequest request,
+        [Microsoft.AspNetCore.Mvc.FromBody] ClearExpeditionEffectRequest request,
         HttpContext context,
         ExpeditionEffectService effects,
         HexCrawlService service,
