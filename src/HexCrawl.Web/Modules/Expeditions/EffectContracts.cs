@@ -1,6 +1,7 @@
 using HexCrawl.Application;
 using HexCrawl.Application.Persistence;
 using HexCrawl.Domain.Runtime;
+using HexCrawl.Web.Api;
 
 namespace HexCrawl.Web.Modules.Expeditions;
 
