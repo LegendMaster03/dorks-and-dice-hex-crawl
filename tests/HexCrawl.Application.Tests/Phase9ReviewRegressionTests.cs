@@ -101,10 +101,71 @@ public sealed class Phase9ReviewRegressionTests
         string value,
         string symbolicValue)
     {
+        var (world, expedition) = ExpeditionWithEnvironment(
+            "alexandrian-advanced",
+            Tag(dimension, value));
+
+        var context = EnvironmentContextResolver.Resolve(expedition, world);
+        var evaluation = EnvironmentProcedureEvaluator.Evaluate(expedition, context);
+
+        Assert.Equal(EnvironmentProcedureEvaluationStatus.RequiresAdjudication, evaluation.Status);
+        Assert.Contains(evaluation.MovementInput.ResolvedContributors!, contributor =>
+            contributor.Kind == MovementCapabilityContributorKind.Environment
+            && contributor.Operation == MovementCapabilityOperation.SymbolicLimit
+            && contributor.SymbolicValue == symbolicValue);
+    }
+
+    [Theory]
+    [InlineData("terrain", "terrain-measurement")]
+    [InlineData("route", "route-measurement")]
+    public void MeasuredTerrainAndRouteRequireAdjudicationInsteadOfBeingSilentlyIgnored(
+        string dimension,
+        string symbolicValue)
+    {
+        var (world, expedition) = ExpeditionWithEnvironment(
+            CrawlProcedureCatalog.Dnd35PresetKey,
+            Measurement(dimension, 2, "custom-unit"));
+
+        var context = EnvironmentContextResolver.Resolve(expedition, world);
+        var evaluation = EnvironmentProcedureEvaluator.Evaluate(expedition, context);
+
+        Assert.Equal(EnvironmentProcedureEvaluationStatus.RequiresAdjudication, evaluation.Status);
+        Assert.Null(evaluation.TerrainKey);
+        Assert.Null(evaluation.RouteKey);
+        Assert.Contains(evaluation.MovementInput.ResolvedContributors!, contributor =>
+            contributor.Kind == MovementCapabilityContributorKind.Environment
+            && contributor.Operation == MovementCapabilityOperation.SymbolicLimit
+            && contributor.SymbolicValue == symbolicValue);
+    }
+
+    [Fact]
+    public void ConflictedRouteDoesNotLeakTagIntoMovementInput()
+    {
+        var (world, expedition) = ExpeditionWithEnvironment(
+            CrawlProcedureCatalog.Dnd35PresetKey,
+            Tag("route", "road"),
+            Measurement("route", 2, "custom-unit"));
+
+        var context = EnvironmentContextResolver.Resolve(expedition, world);
+        var evaluation = EnvironmentProcedureEvaluator.Evaluate(expedition, context);
+
+        Assert.Equal(EnvironmentContextStatus.RequiresAdjudication, context.Status);
+        Assert.Equal(EnvironmentProcedureEvaluationStatus.RequiresAdjudication, evaluation.Status);
+        Assert.Null(evaluation.RouteKey);
+        Assert.Contains(evaluation.MovementInput.ResolvedContributors!, contributor =>
+            contributor.Kind == MovementCapabilityContributorKind.Environment
+            && contributor.Operation == MovementCapabilityOperation.SymbolicLimit
+            && contributor.SymbolicValue == "route-conflict");
+    }
+
+    private static (OverworldDefinition World, StoredExpedition Expedition) ExpeditionWithEnvironment(
+        string procedureKey,
+        params EnvironmentFact[] facts)
+    {
         var world = new OverworldDefinition
         {
             Id = Guid.NewGuid(),
-            Name = "No terrain policy world",
+            Name = "Phase 9 review world",
             Grid = new HexGridDefinition
             {
                 Id = Guid.NewGuid(),
@@ -116,10 +177,9 @@ public sealed class Phase9ReviewRegressionTests
             }
         };
         var now = DateTimeOffset.UtcNow;
-        var procedure = CrawlProcedureCatalog.Resolve("alexandrian-advanced")
-            .MaterializeGeneric().Procedure;
+        var procedure = CrawlProcedureCatalog.Resolve(procedureKey).MaterializeGeneric().Procedure;
         var expedition = new StoredExpedition(
-            "No terrain policy expedition",
+            "Phase 9 review expedition",
             new ExpeditionState
             {
                 Id = Guid.NewGuid(),
@@ -136,20 +196,9 @@ public sealed class Phase9ReviewRegressionTests
             now,
             now)
         {
-            Environment = new ExpeditionEnvironmentState
-            {
-                CurrentFacts = [Tag(dimension, value)]
-            }
+            Environment = new ExpeditionEnvironmentState { CurrentFacts = facts }
         };
-
-        var context = EnvironmentContextResolver.Resolve(expedition, world);
-        var evaluation = EnvironmentProcedureEvaluator.Evaluate(expedition, context);
-
-        Assert.Equal(EnvironmentProcedureEvaluationStatus.RequiresAdjudication, evaluation.Status);
-        Assert.Contains(evaluation.MovementInput.ResolvedContributors!, contributor =>
-            contributor.Kind == MovementCapabilityContributorKind.Environment
-            && contributor.Operation == MovementCapabilityOperation.SymbolicLimit
-            && contributor.SymbolicValue == symbolicValue);
+        return (world, expedition);
     }
 
     private static EnvironmentFact Tag(string dimension, string tag) => new()
@@ -158,5 +207,13 @@ public sealed class Phase9ReviewRegressionTests
         Dimension = dimension,
         ValueKind = EnvironmentValueKind.Tag,
         Tag = tag
+    };
+
+    private static EnvironmentFact Measurement(string dimension, double value, string unit) => new()
+    {
+        Id = Guid.NewGuid(),
+        Dimension = dimension,
+        ValueKind = EnvironmentValueKind.Measurement,
+        Measurement = new EnvironmentMeasurement(value, unit)
     };
 }
