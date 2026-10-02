@@ -7,9 +7,16 @@ namespace HexCrawl.Application.Rules;
 
 public sealed class ProcedureResolutionProviderEnricher(TravelEnvironmentProviderRegistry providers)
 {
+    public Task<ProcedureResolutionHelperCommand> PrepareAsync(
+        StoredExpedition expedition,
+        ProcedureResolutionHelperCommand command,
+        CancellationToken cancellationToken = default) =>
+        PrepareAsync(expedition, command, null, cancellationToken);
+
     public async Task<ProcedureResolutionHelperCommand> PrepareAsync(
         StoredExpedition expedition,
         ProcedureResolutionHelperCommand command,
+        MovementCompositionInput? movementInput,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(expedition);
@@ -29,7 +36,7 @@ public sealed class ProcedureResolutionProviderEnricher(TravelEnvironmentProvide
 
         if (needsDistance)
         {
-            var local = MovementCapabilityComposer.Compose(expedition);
+            var local = MovementCapabilityComposer.Compose(expedition, movementInput);
             if (local.Status == MovementCompositionStatus.Resolved
                 && local.SuggestedExpectedDistance is not null)
             {
@@ -61,6 +68,7 @@ public sealed class ProcedureResolutionProviderEnricher(TravelEnvironmentProvide
                             selection.Provider,
                             expedition,
                             prepared,
+                            movementInput,
                             cancellationToken);
                     }
                     catch (OptionalProviderResolutionException exception)
@@ -101,6 +109,7 @@ public sealed class ProcedureResolutionProviderEnricher(TravelEnvironmentProvide
         ITravelEnvironmentProvider provider,
         StoredExpedition expedition,
         ProcedureResolutionHelperCommand command,
+        MovementCompositionInput? movementInput,
         CancellationToken cancellationToken)
     {
         if (expedition.Runtime is not ExpeditionState)
@@ -162,97 +171,106 @@ public sealed class ProcedureResolutionProviderEnricher(TravelEnvironmentProvide
             }
         };
 
-        var hasTerrain = !string.IsNullOrWhiteSpace(command.Terrain);
-        var hasRoute = !string.IsNullOrWhiteSpace(command.Route);
-        if (hasTerrain != hasRoute)
+        var pinnedEnvironmentOwnsTerrain = !string.IsNullOrWhiteSpace(movementInput?.TerrainKey)
+            || !string.IsNullOrWhiteSpace(movementInput?.RouteKey);
+        if (!pinnedEnvironmentOwnsTerrain)
         {
-            throw new InvalidOperationException(
-                "Provider-backed terrain travel requires both terrain and route, or neither.");
-        }
-        if (hasTerrain)
-        {
-            EnsureProviderTerrainCanCompose(expedition);
-            var catalogResult = await provider.GetCatalogAsync(expedition.CampaignId, cancellationToken);
-            var catalog = RequireCatalog(provider, catalogResult, TravelEnvironmentMechanicKeys.TerrainDistanceFactor);
-            var mechanic = catalog.Mechanics.SingleOrDefault(value =>
-                string.Equals(
-                    value.MechanicKey,
-                    TravelEnvironmentMechanicKeys.TerrainDistanceFactor,
-                    StringComparison.Ordinal));
-            if (mechanic is null)
-            {
-                throw ProviderProblem(
-                    provider.Metadata,
-                    TravelEnvironmentMechanicKeys.TerrainDistanceFactor,
-                    TravelEnvironmentProviderResolutionStates.Unsupported,
-                    "The provider does not expose a resolvable terrain-distance capability.");
-            }
-            if (string.Equals(mechanic.State, TravelEnvironmentMechanicStates.Conflicted, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(mechanic.State, TravelEnvironmentMechanicStates.RequiresAdjudication, StringComparison.OrdinalIgnoreCase))
-            {
-                throw ProviderProblem(
-                    provider.Metadata,
-                    mechanic.MechanicKey,
-                    TravelEnvironmentProviderResolutionStates.RequiresAdjudication,
-                    "The provider reports an unresolved conflict for the terrain-distance capability.");
-            }
-            if (!mechanic.CanResolve || mechanic.Definition is null)
-            {
-                throw ProviderProblem(
-                    provider.Metadata,
-                    TravelEnvironmentMechanicKeys.TerrainDistanceFactor,
-                    TravelEnvironmentProviderResolutionStates.Unsupported,
-                    "The provider does not expose a resolvable terrain-distance capability.");
-            }
-            var semantic = mechanic.Definition.FactorSemantic;
-            if (!string.Equals(semantic, "distance-multiplier", StringComparison.Ordinal))
+            var hasTerrain = !string.IsNullOrWhiteSpace(command.Terrain);
+            var hasRoute = !string.IsNullOrWhiteSpace(command.Route);
+            if (hasTerrain != hasRoute)
             {
                 throw new InvalidOperationException(
-                    $"{ProviderLabel(provider.Metadata)} terrain factor semantic is '{semantic ?? "unspecified"}', not 'distance-multiplier'; Hex Crawl will not reinterpret it.");
+                    "Provider-backed terrain travel requires both terrain and route, or neither.");
             }
-
-            var factorResult = await ResolveRequiredAsync(
-                provider,
-                expedition.CampaignId,
-                TravelEnvironmentMechanicKeys.TerrainDistanceFactor,
-                new TravelEnvironmentResolutionRequest(
-                    StringInputs: new Dictionary<string, string>
-                    {
-                        ["terrain"] = command.Terrain!.Trim(),
-                        ["route"] = command.Route!.Trim()
-                    }),
-                cancellationToken);
-            var factorMetadata = factorResult.Provider ?? provider.Metadata;
-            var factorEvaluation = factorResult.Evaluation!;
-            var factor = factorEvaluation.Factor
-                ?? throw new InvalidOperationException(
-                    $"{ProviderLabel(factorMetadata)} resolved the terrain-distance capability without a factor.");
-            if (factor < 0)
+            if (hasTerrain)
             {
-                throw new InvalidOperationException(
-                    $"{ProviderLabel(factorMetadata)} returned a negative terrain distance factor.");
+                EnsureProviderTerrainCanCompose(expedition);
+                var catalogResult = await provider.GetCatalogAsync(expedition.CampaignId, cancellationToken);
+                var catalog = RequireCatalog(provider, catalogResult, TravelEnvironmentMechanicKeys.TerrainDistanceFactor);
+                var mechanic = catalog.Mechanics.SingleOrDefault(value =>
+                    string.Equals(
+                        value.MechanicKey,
+                        TravelEnvironmentMechanicKeys.TerrainDistanceFactor,
+                        StringComparison.Ordinal));
+                if (mechanic is null)
+                {
+                    throw ProviderProblem(
+                        provider.Metadata,
+                        TravelEnvironmentMechanicKeys.TerrainDistanceFactor,
+                        TravelEnvironmentProviderResolutionStates.Unsupported,
+                        "The provider does not expose a resolvable terrain-distance capability.");
+                }
+                if (string.Equals(mechanic.State, TravelEnvironmentMechanicStates.Conflicted, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(mechanic.State, TravelEnvironmentMechanicStates.RequiresAdjudication, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw ProviderProblem(
+                        provider.Metadata,
+                        mechanic.MechanicKey,
+                        TravelEnvironmentProviderResolutionStates.RequiresAdjudication,
+                        "The provider reports an unresolved conflict for the terrain-distance capability.");
+                }
+                if (!mechanic.CanResolve || mechanic.Definition is null)
+                {
+                    throw ProviderProblem(
+                        provider.Metadata,
+                        TravelEnvironmentMechanicKeys.TerrainDistanceFactor,
+                        TravelEnvironmentProviderResolutionStates.Unsupported,
+                        "The provider does not expose a resolvable terrain-distance capability.");
+                }
+                var semantic = mechanic.Definition.FactorSemantic;
+                if (!string.Equals(semantic, "distance-multiplier", StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        $"{ProviderLabel(provider.Metadata)} terrain factor semantic is '{semantic ?? "unspecified"}', not 'distance-multiplier'; Hex Crawl will not reinterpret it.");
+                }
+
+                var factorResult = await ResolveRequiredAsync(
+                    provider,
+                    expedition.CampaignId,
+                    TravelEnvironmentMechanicKeys.TerrainDistanceFactor,
+                    new TravelEnvironmentResolutionRequest(
+                        StringInputs: new Dictionary<string, string>
+                        {
+                            ["terrain"] = command.Terrain!.Trim(),
+                            ["route"] = command.Route!.Trim()
+                        }),
+                    cancellationToken);
+                var factorMetadata = factorResult.Provider ?? provider.Metadata;
+                var factorEvaluation = factorResult.Evaluation!;
+                var factor = factorEvaluation.Factor
+                    ?? throw new InvalidOperationException(
+                        $"{ProviderLabel(factorMetadata)} resolved the terrain-distance capability without a factor.");
+                if (factor < 0)
+                {
+                    throw new InvalidOperationException(
+                        $"{ProviderLabel(factorMetadata)} returned a negative terrain distance factor.");
+                }
+
+                contributors.Add(new MovementCapabilityContributor
+                {
+                    Id = Guid.NewGuid(),
+                    Kind = MovementCapabilityContributorKind.Environment,
+                    Key = "provider:terrain-distance-factor",
+                    Operation = MovementCapabilityOperation.Multiply,
+                    Scope = MovementCapabilityScope.Party,
+                    Value = (double)factor,
+                    Unit = "factor",
+                    Provenance = DescribeEvaluation(
+                        expedition,
+                        factorMetadata,
+                        factorEvaluation,
+                        $"factor={factor.ToString(CultureInfo.InvariantCulture)}; semantic={semantic}")
+                });
             }
-
-            contributors.Add(new MovementCapabilityContributor
-            {
-                Id = Guid.NewGuid(),
-                Kind = MovementCapabilityContributorKind.Environment,
-                Key = "provider:terrain-distance-factor",
-                Operation = MovementCapabilityOperation.Multiply,
-                Scope = MovementCapabilityScope.Party,
-                Value = (double)factor,
-                Unit = "factor",
-                Provenance = DescribeEvaluation(
-                    expedition,
-                    factorMetadata,
-                    factorEvaluation,
-                    $"factor={factor.ToString(CultureInfo.InvariantCulture)}; semantic={semantic}")
-            });
         }
 
-        var composition = MovementCapabilityComposer.Compose(
-            expedition,
-            new MovementCompositionInput(ResolvedContributors: contributors));
+        var resolvedContributors = (movementInput?.ResolvedContributors ?? [])
+            .Concat(contributors)
+            .ToArray();
+        var compositionInput = movementInput is null
+            ? new MovementCompositionInput(ResolvedContributors: resolvedContributors)
+            : movementInput with { ResolvedContributors = resolvedContributors };
+        var composition = MovementCapabilityComposer.Compose(expedition, compositionInput);
         if (composition.Status != MovementCompositionStatus.Resolved
             || composition.SuggestedExpectedDistance is not { } expected)
         {
