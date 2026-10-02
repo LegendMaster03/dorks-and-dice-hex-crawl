@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using HexCrawl.Application;
 using HexCrawl.Application.Persistence;
+using HexCrawl.Domain.World;
 using HexCrawl.Web.Api;
 using HexCrawl.Web.Framework;
 using Microsoft.AspNetCore.Routing;
@@ -227,13 +228,19 @@ public sealed class ExpeditionModule : IHexCrawlModule
         HexCrawlService service,
         CancellationToken cancellationToken)
     {
+        OverworldDefinition? world = null;
         if (expedition.Context is WorldBoundCrawlSessionContext worldContext)
         {
-            var world = await service.GetOverworldAsync(worldContext.WorldId, ownerUserId, cancellationToken);
-            return ExpeditionWorkbenchContract.From(expedition, world.World);
+            world = (await service.GetOverworldAsync(worldContext.WorldId, ownerUserId, cancellationToken)).World;
         }
 
-        return ExpeditionWorkbenchContract.From(expedition);
+        var context = EnvironmentContextResolver.Resolve(expedition, world);
+        var evaluation = EnvironmentProcedureEvaluator.Evaluate(expedition, context);
+        var movement = MovementCapabilityComposer.Compose(expedition, evaluation.MovementInput);
+        return ExpeditionWorkbenchContract.From(expedition, world) with
+        {
+            MovementComposition = MovementCapabilityCompositionContract.From(movement)
+        };
     }
 
     private static string UserId(HttpContext context) =>

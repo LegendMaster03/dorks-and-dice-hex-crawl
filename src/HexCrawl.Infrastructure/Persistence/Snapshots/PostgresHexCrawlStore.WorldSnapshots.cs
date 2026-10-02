@@ -37,15 +37,21 @@ public sealed partial class PostgresHexCrawlStore
         HexGridDefinition Grid,
         IReadOnlyList<FeatureSnapshot> Features,
         IReadOnlyList<Location> Locations,
-        IReadOnlyList<SourceMapRepresentation> SourceMaps)
+        IReadOnlyList<SourceMapRepresentation> SourceMaps,
+        IReadOnlyList<EnvironmentAnnotation> EnvironmentAnnotations)
     {
-        public static WorldSnapshot FromDomain(OverworldDefinition world) => new(
-            world.Id,
-            world.Name,
-            world.Grid,
-            world.Features.Select(FeatureSnapshot.FromDomain).ToArray(),
-            world.Locations,
-            world.SourceMaps);
+        public static WorldSnapshot FromDomain(OverworldDefinition world)
+        {
+            world.ValidateEnvironmentAnnotations();
+            return new WorldSnapshot(
+                world.Id,
+                world.Name,
+                world.Grid,
+                world.Features.Select(FeatureSnapshot.FromDomain).ToArray(),
+                world.Locations,
+                world.SourceMaps,
+                world.EnvironmentAnnotations);
+        }
 
         public OverworldDefinition ToDomain() => new()
         {
@@ -54,7 +60,8 @@ public sealed partial class PostgresHexCrawlStore
             Grid = Grid,
             Features = Features.Select(item => item.ToDomain()).ToArray(),
             Locations = Locations.ToArray(),
-            SourceMaps = SourceMaps.ToArray()
+            SourceMaps = SourceMaps.ToArray(),
+            EnvironmentAnnotations = EnvironmentAnnotations.ToArray()
         };
     }
 }

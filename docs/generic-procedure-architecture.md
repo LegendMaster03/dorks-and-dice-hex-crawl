@@ -1,12 +1,12 @@
 # Generic Procedure Architecture
 
-This document describes the current generic procedure architecture through Phase 8 of `docs/generic-procedure-development-plan.md`.
+This document describes the current generic procedure architecture through Phase 9 of `docs/generic-procedure-development-plan.md`.
 
 ## Architectural boundary
 
 Named systems remain creation-time preset metadata in `CrawlProcedureCatalog`. A preset is not a runtime authority. It contains a `GenericProcedurePresetRecipe`, which selects generic modules, versioned mechanics, and parameters.
 
-Applying a preset materializes a campaign-owned `CampaignProcedure`. The materialized procedure embeds complete snapshots of every selected `ProcedureModuleDefinition` and `MechanicDefinition`, resolved parameters, and campaign overrides. `ProcedureOriginMetadata` is optional informational provenance and is never consulted to determine runtime, participant-assignment, or movement-composition behavior.
+Applying a preset materializes a campaign-owned `CampaignProcedure`. The materialized procedure embeds complete snapshots of every selected `ProcedureModuleDefinition` and `MechanicDefinition`, resolved parameters, and campaign overrides. `ProcedureOriginMetadata` is optional informational provenance and is never consulted to determine runtime, participant-assignment, movement-composition, or environment-evaluation behavior.
 
 The authoritative procedure path is:
 
@@ -18,212 +18,232 @@ The authoritative procedure path is:
 
 Hex Crawl is pre-release development software. Development-era API, persistence, UI, and internal-model compatibility is not preserved unless a specific compatibility requirement is deliberately approved.
 
-When an obsolete representation conflicts with the target architecture, remove it rather than maintaining parallel models, migration adapters, or compatibility projections. Breaking development migrations and database resets are acceptable while no user-data compatibility commitment exists.
+Retired dual models are removed instead of retained as fallback infrastructure. Current PostgreSQL schema version 5 rejects older development schemas with an explicit reset/reinitialize instruction rather than maintaining compatibility columns or alternate procedure/environment representations.
 
-Meaningful migrations for real user data must be evaluated separately once the product reaches a stage where compatibility commitments exist.
+## Generic modules and mechanics
 
-## Generic definitions
+A procedure is composed from generic modules and mechanics whose keys describe behavior rather than game identity. Mechanic definitions carry versioned semantics and, where executable, explicit handler/version contracts.
 
-`ProcedureModuleDefinition` describes a composable procedure slot. It carries:
+Runtime and focused application projections follow the contracts embedded in the pinned `CampaignProcedure`. They do not ask which named preset originally produced it.
 
-- a generic key and category;
-- display name and purpose;
-- execution stage;
-- declared outputs and any truly module-wide dependencies;
-- compatible mechanic keys;
-- configuration schema;
-- presentation metadata.
+Unknown handlers, future versions, declarative-only mechanics, and unsupported semantic values remain representable. Hex Crawl reports them as unsupported/unresolved rather than replacing them with a current catalog default.
 
-`MechanicDefinition` describes reusable behavior. It carries:
+This distinction lets the same materialized procedure remain authoritative after presets change or are removed.
 
-- a generic key and display metadata;
-- behavior-specific input and output contracts;
-- parameter schema;
-- execution-handler identifier;
-- compatibility tags;
-- automation level;
-- explicit mechanic version.
+## Runtime binding
 
-Neither type contains preset identity or named-system identity.
+`GenericProcedureRuntime.Bind` is the deterministic runtime binding boundary for mechanics owned by `CrawlRuntimeEngine`.
 
-Module shells remain narrow. A module family does not claim every input that any possible mechanic might consume. The selected mechanic input contract is authoritative for behavior-specific reads.
+The runtime assembly receives only the data required for deterministic crawl progression. It does not own repositories, Rules Core clients, world lookup, Character Sheet lookup, or optional environment providers.
 
-## Materialized campaign procedures
+Focused application operations may project one supported contract from the stored procedure without binding the entire procedure. This is used where behavior is not a deterministic crawl-engine transition, including Procedure Composer validation, participant activity state, movement capability composition, and environment-to-movement interpretation.
 
-`CampaignProcedure` is the campaign-owned procedure definition. It has a stable `ProcedureId`, an explicit revision, a generic key/name, materialized modules, and campaign overrides.
+Focused projection is still pinned-procedure evaluation. It is not preset dispatch.
 
-Each selected module embeds its complete module definition, mechanic definition, and parameter set. Persistence therefore does not require the current global module catalog, mechanic catalog, or originating preset to reconstruct a saved procedure.
+## Campaign-owned procedure revisions
 
-Removing, renaming, or revising a preset does not mutate an existing procedure. A campaign revision remains pinned until explicitly revised.
+Campaign procedure revisions persist complete `CampaignProcedure` snapshots. Expeditions persist their own complete pinned procedure snapshot as `procedure_json`.
 
-## Generic execution
+A later edit or catalog change therefore does not silently mutate an existing expedition. Explicit revision/application operations are required to change procedure authority.
 
-`GenericProcedureRuntime.Bind` creates an ephemeral runtime binding from a pinned `CampaignProcedure` when every mechanic required for the current deterministic runtime is executable.
+Origin metadata may identify the recipe or source that created a snapshot, but origin is never used as a runtime switch.
 
-Runtime support is explicit for the embedded `(ExecutionHandler, Version)` combination. The runtime does not:
+## Procedure Composer
 
-- resolve the origin preset;
-- branch on system or edition identity;
-- replace a persisted mechanic with the current catalog definition;
-- silently reinterpret an unknown handler;
-- silently downgrade an unsupported version.
+The Procedure Composer operates on generic modules, mechanics, dependencies, parameters, and revisions.
 
-Unsupported handlers and versions remain preserved as procedure data and fail clearly when execution is attempted.
+It allows a DM to create and revise campaign procedures without selecting a named system at runtime. Validation reports missing dependencies, unsupported contracts, or incomplete values directly instead of forcing every procedure into one preset-shaped schema.
 
-The current deterministic executable handler identities are behavior-oriented contracts persisted exactly with their mechanic versions:
+The browser edits application contracts. Server/application code remains authoritative for materialization and validation.
 
-- `procedure.time.fixed-interval`;
-- `procedure.movement.resolution`;
-- `procedure.movement.hex-progress`;
-- `procedure.navigation.check-policy`;
-- `procedure.encounter.cadence`;
-- `procedure.resolution-helpers`.
+## Generated procedure reference
 
-These identifiers describe executable behavior. They do not encode a preset, system, edition, or retired procedure representation.
+Generated reference content is derived from the pinned generic procedure. It explains the mechanics that the expedition actually owns and retains source/provenance information where available.
 
-Recognized declarative mechanics use `procedure.declarative-contract` version 1. They may validate and persist as structural contracts, but they are intentionally non-executable and can not be `Automatic`.
+Reference generation does not become a second rules model. Structural/declarative mechanics can be described even when no current executable handler exists.
 
-The deterministic `CrawlRuntimeEngine` executes a fully bindable `CampaignProcedure` through the generic binding. Existing movement, navigation, watch lifecycle, encounter timing, pause/resume, and event-transition logic remains reusable, while behavior selection comes from the materialized generic snapshot.
+## Typed participant activities and roles
 
-A focused operation may interpret one supported stored contract without binding unrelated structural mechanics. This is still procedure-snapshot authority, not a second procedure model. Phase 7 uses this boundary for `party.activities` policy projection and focused non-spatial interval-duration bookkeeping. Phase 8 uses it for `movement.budget` and `movement.terrain` composition policy.
+Participant assignment is generic and procedure-owned.
 
-## Runtime authority
+Typed activity/role state records participant choices against the contracts embedded in the pinned procedure. Active-interval snapshots preserve the inputs used for an interval so later party edits do not retroactively rewrite completed or in-progress resolution history.
 
-`StoredExpedition.CampaignProcedure` is required current-format data. Full runtime procedure resolution has one path:
-
-`StoredExpedition.CampaignProcedure -> GenericProcedureRuntime.Bind -> deterministic runtime behavior`
-
-Focused projections likewise begin from `StoredExpedition.CampaignProcedure` and read only the selected stored module/mechanic/parameters required by that operation.
-
-A missing campaign procedure is invalid current data. There is no historical-profile fallback or synthesized compatibility procedure.
-
-Origin metadata remains optional and informational. Runtime execution, participant-activity policy, and movement-composition policy remain unchanged when origin metadata is removed and when the source preset no longer exists.
-
-## Campaign overrides and revisions
-
-`CampaignProcedureOverride` targets a generic module. An override can change parameters or select another compatible generic mechanic/version.
-
-Applying overrides creates a new `CampaignProcedure` revision while retaining the same `ProcedureId`. Previous revisions remain unchanged. Existing expeditions keep their pinned snapshot until explicitly updated.
-
-`CampaignProcedureService` provides the application boundary for materializing, revising, and loading procedure revisions. The Procedure Composer edits that same `CampaignProcedure` model rather than maintaining a second UI procedure authority.
-
-## Dependency model
-
-A materialized procedure evaluates selected behavior contracts rather than broad family assumptions.
-
-- a required selected-module producer that is absent and has no permitted fallback produces `MissingRequiredProducer`;
-- a real unresolved input with permitted sources produces `UnresolvedInput`;
-- unresolved diagnostics expose the complete allowed-source flag set;
-- optional provider, DM/manual, and external/runtime-state sources are attached only to inputs that genuinely allow those sources;
-- broad fallback declarations are not used to hide incorrect dependency graphs.
-
-Produced-but-unused outputs remain diagnostics rather than destructive normalization.
-
-## Structural proof mechanics
-
-The generic structural families cover movement budgets, terrain relationships, participant activities, navigation outcomes, encounter scheduling, resources, foraging, camping, forced travel, persistent effects, journey events, and multi-stage journey processes.
-
-These contracts prove that materially different systems can be represented without system-specific runtime classes. Later execution engines remain deferred according to the development plan.
-
-The One Ring proof is intentionally independent of a fabricated repeating interval: journey progress feeds progress-triggered events, transient event effects feed persistent effects, and role assignment does not require interval or movement-budget state.
-
-The D&D 2024 terrain proof uses a generic `maximum-pace` relationship. Terrain tags map to symbolic pace states, including `arctic=fast-if-appropriately-equipped`, rather than using pace names as terrain keys or numeric costs.
-
-## Typed participant activity state
-
-Phase 7 turns the structural `participant.activity-state` output into real typed expedition state without changing the activity mechanics to automatic execution.
-
-The exact selected `party.activities` module in the expedition's pinned `CampaignProcedure` defines the policy. A supported policy projection preserves:
-
-- selected mechanic key/version and handler;
-- `assignmentScope`;
-- `activityBudgetModel`;
-- `activityKeys`;
-- `roleKeys`.
-
-The projection does not consult origin preset identity or current catalog parameter values. A future/unsupported mechanic remains distinguishable from no policy and from the two currently supported generic activity-policy mechanics.
-
-`CrawlPartySheet` owns current mutable assignment state. `ParticipantActivityAssignment` uses a stable ID, generic `Party`/`Participant`/`Role` scope, an optional real participant reference where structurally appropriate, generic string activity/role keys, and optional context note. The domain does not encode named role enums or infer role-to-activity mappings, exclusivity, required roles, or activity capacity.
-
-A party-wide assignment requires no synthetic participant. Participant and role assignments reference existing party members. Member removal can cascade through the UI, while domain validation independently rejects dangling references.
-
-The former separately persisted `DefaultNavigatorMemberId` is removed. A navigator is an ordinary role assignment when the pinned procedure exposes that key.
-
-The free-form watch activity list is also removed. Spatial watches and real non-spatial intervals snapshot the current typed assignments when the interval begins. Later edits to the party sheet do not mutate that active snapshot.
-
-Journey-role state remains party/session state and does not require an interval. The One Ring guide/hunter/lookout/scout roles can therefore be edited without fabricating `time.interval`, requiring `movement.budget`, or binding the complete structural procedure.
-
-Phase 7 does not execute downstream foraging, camping, resources, fatigue/effects, or journey events. Later mechanics may consume `participant.activity-state` only through explicit generic contracts.
+Participant state does not dispatch on named-system identity and does not import Character Sheet objects. `ExternalCharacterId` remains an optional external lookup key only.
 
 ## Movement capability composition
 
-Phase 8 adds a focused movement-composition layer without making structural movement mechanics automatically executable. Ownership is:
+Phase 8 introduced one generic movement-composition boundary: `MovementCapabilityComposer`.
 
-```text
-CampaignProcedure
-    owns movement.budget and movement.terrain policy
-        ↓
-CrawlPartySheet / expedition state
-    owns explicit/manual movement contributors and PartyMovementReference
-        ↓
-Optional providers
-    may supply a missing resolved capability
-        ↓
-MovementCapabilityComposer
-    derives current effective capability, limiting source, provenance, and optional watch-distance suggestion
-        ↓
-Deterministic runtime
-    receives resolved movement input and never calls a provider
-```
+The composer reads movement policy from the exact stored `CampaignProcedure` and combines typed current capability/consequence inputs. Inputs can represent participants, mounts/vehicles, load consequences, pace/mode, terrain/route, environment, persistent effects, and an explicit DM final override.
 
-`MovementCompositionPolicyResolver` reads only the exact materialized movement modules stored on the pinned `CampaignProcedure`. Preset identity, origin metadata, and current catalog defaults are not inputs. Unknown mechanic versions or unsupported stored semantics remain unsupported rather than being replaced with current definitions.
+Composition preserves non-distance semantics. Activity costs, movement points, quarter-day budgets, terrain difficulty, symbolic maximum pace, and journey progress are not flattened into physical speed unless the pinned contract explicitly provides a safe physical interpretation.
 
-`MovementCapabilityContributor` is expedition-owned generic state. Contributor kinds cover participants, mounts, vehicles, loads, travel modes, terrain/route resolutions, resolved environment consequences, resolved persistent-effect consequences, and DM override. Operations distinguish base/replacement, multiplier, additive change, cap, floor, cost, and symbolic limit. Contributor keys and movement-unit identities are generic strings rather than named-system enums.
+`PartyMovementReference` remains a supported explicit/fallback authority with a declared role in each result rather than being silently added to composed movement.
 
-Participant movement respects `CountsTowardPartyMovement`. Mounts and vehicles can replace the movement unit of assigned riders/passengers; replaced participants do not also independently limit the same party, and unassigned conveyances do not affect the party. Compatible physical units are converted only through explicit `DistanceUnit` metadata; custom or incompatible conversion is not guessed.
+Provider-backed physical rates or factors are converted into explicit typed contributors and still pass through `MovementCapabilityComposer`. Providers do not own final movement composition.
 
-Load and travel-mode contributors compose in deterministic stages. A travel-mode contributor is selected by the current generic pace/mode key. Environment and persistent-effect contributors are accepted only as already resolved movement consequences in Phase 8; Phase 9 owns generalized environment context and Phase 10 owns effect lifecycle/evaluation.
+See `docs/movement-capability-composition.md`.
 
-Pinned terrain semantics are preserved rather than flattened. Numeric `multiplier` and `distance-per-hour-multiplier` relationships can compose numerically. `activity-cost`, `movement-points-per-distance`, `hexes-per-quarter-day`, and `terrain-difficulty` remain their own budget/cost semantics and require explicit resolution where needed. `maximum-pace` remains symbolic; in particular, D&D 2024 `arctic=fast-if-appropriately-equipped` is retained as a conditional limit and is not converted into an unconditional numeric factor.
+## Environment context and evaluation
 
-`PartyMovementReference` remains valid. When no composition policy/capability is available it can be the authoritative explicit movement source; when automatic composition is incomplete it can be a fallback; when a typed capability already resolves movement it is retained as informational reference and is not double-counted. An explicit DM replacement contributor has final precedence and retains pre-override value and provenance.
+Phase 9 adds a generic environment layer above deterministic runtime and upstream of Phase 8 movement composition.
 
-Optional provider adapters are input suppliers, not alternate movement engines. `ProcedureResolutionProviderEnricher` first honors explicit expected-distance input and locally resolved/manual composition. A provider may supply a missing generic physical capability and a semantically compatible resolved terrain factor; the result is fed back through `MovementCapabilityComposer`. Provider unavailability can fall back to an explicit party movement reference where one is usable. Provider status and provenance remain explicit.
+Environment truth is ruleset-neutral. `EnvironmentFact` uses an open dimension string and either a tag or an explicit numeric measurement/unit. Common dimensions include terrain, route, weather, visibility, elevation, depth, water, current, temperature, hazard, and regional effect, but the set is intentionally extensible.
 
-Physical movement may produce a server-side watch-distance suggestion. Per-hour values use the exact pinned interval or active-watch remaining duration. Non-distance budgets such as Hexploration activities, quarter-day budgets, movement points, and journey progress remain explicitly non-distance. The One Ring journey-progress proof never fabricates a repeating interval or physical watch distance.
+### Ownership
 
-## Persistence and restart reproducibility
+Static environment truth belongs to `OverworldDefinition.EnvironmentAnnotations`. An annotation explicitly targets the world, one hex, or one spatial feature.
 
-PostgreSQL stores one authoritative procedure representation for expeditions:
+Transient/current conditions and explicit DM decisions belong to `StoredExpedition.Environment`:
 
-- `expeditions.procedure_json` — required serialized `CampaignProcedure` snapshot.
+- `CurrentFacts` for current/transient conditions;
+- `Overrides` for explicit DM overrides.
 
-Campaign procedure revisions also store their `CampaignProcedure` snapshot in `campaign_procedure_revisions.procedure_json`.
+`ExpeditionState` remains traversal/runtime state. Static world truth is not copied into it.
 
-Current typed participant assignments and explicit/manual movement contributors remain inside the existing expedition party state. Active spatial/non-spatial interval assignment snapshots remain inside runtime state. Generated procedure resolutions retain their own resolved values and provenance when later party edits change current movement state. There is no provider cache and no second movement persistence service.
+### Resolution
 
-The pre-release schema may reject earlier development shapes and require a reset rather than carrying retired navigator, free-form activity, or superseded movement compatibility infrastructure.
+`EnvironmentContextResolver` computes the effective context from the current authoritative state.
 
-Restarting the application reloads the exact persisted generic module/mechanic snapshots, party assignments, movement contributors, explicit movement reference, generated-resolution history, and active interval snapshots. Mechanic versions, handlers, automation levels, parameters, source requirements, overrides, and origin metadata remain pinned.
+For world-bound sessions it considers world annotations, current-hex annotations, and annotations on spatial features intersecting the current hex. Abstract-hex and non-spatial sessions can resolve expedition-current facts without an overworld.
 
-## HTTP representation
+Precedence is deterministic:
 
-Current HTTP surfaces represent procedure state with `CampaignProcedureContract`. The contract exposes generic procedure identity, revision, materialized modules, handler/version metadata, automation levels, and parameters.
+1. static world/hex/spatial-feature facts;
+2. expedition current/transient facts;
+3. DM overrides.
 
-When the snapshot can bind to the currently supported deterministic runtime, the API may additionally expose a derived `ProcedureRuntimeContract`. Structural, declarative, incomplete, and future snapshots remain representable even when runtime binding is unavailable.
+Higher precedence supersedes lower facts for the same dimension, while the lower facts remain visible as non-effective provenance. Compatible same-authority tags can coexist. Incompatible value kinds or disagreeing same-authority scalar measurements produce explicit conflicts and require adjudication instead of an arbitrary tie-break.
 
-Expedition detail also exposes `ParticipantActivityPolicyContract` and `MovementCapabilityCompositionContract` as derived projections of the exact pinned `CampaignProcedure` plus current expedition-owned state. Party responses include typed movement contributors and explicit `PartyMovementReference`; active interval assignment snapshots remain typed runtime state. These are not alternate procedure definitions.
+Moving to a new hex recomputes applicable static world truth. Effective context is derived, not persisted.
 
-The browser consumes the server-derived movement composition. It may convert an already-resolved physical suggestion into the displayed session unit, but it does not independently recompute party limiting, watch duration, terrain semantics, provider precedence, or reference fallback.
+### Pinned-procedure interpretation
 
-## Rules Core and Character Sheet
+`EnvironmentProcedureEvaluator` maps effective environment facts into generic movement inputs using the expedition's exact pinned `CampaignProcedure`.
 
-Rules Core remains optional enrichment. Generic procedure execution, participant activity state, and movement composition do not depend on Rules Core. The travel/environment provider boundary can resolve optional missing inputs, but procedure policy is read from the pinned `CampaignProcedure`, and missing external results are never invented by the runtime.
+It currently interprets terrain, route, and weather for movement where the stored procedure defines a safe contract. It preserves unknown facts and reports unsupported semantics rather than deleting them.
 
-Character Sheet remains optional. `ExternalCharacterId` is only an optional capability lookup key. Hex Crawl movement contracts do not import Character Sheet DTOs, inventories, or stat blocks; a DM can enter movement contributors or an explicit party movement reference directly.
+The evaluator deliberately requires adjudication when competing facts can not be combined safely. Examples include materially different terrain mappings, a mixture of understood and unknown competing terrain, route ambiguity, relevant scalar conflicts, and weather behavior for which no safe local formula exists.
+
+Conditional semantics such as “fast if appropriately equipped” remain conditional. Environment truth does not fabricate equipment/capability state.
+
+### Movement handoff
+
+The normal Phase 9 path is:
+
+`authoritative environment state -> EnvironmentContextResolver -> EnvironmentProcedureEvaluator -> MovementCompositionInput -> MovementCapabilityComposer`
+
+This is the same path used by ordinary expedition projection and the environment workbench. Phase 9 does not add a separate environment movement calculator.
+
+Source provenance and the pinned terrain/mechanical adjustment are retained in the resulting movement explanation.
+
+See `docs/environment-context.md`.
+
+## Optional travel/environment providers
+
+Rules Core remains optional enrichment. Generic procedure execution, participant state, environment authority, and movement composition do not depend on Rules Core.
+
+`ITravelEnvironmentProvider` exposes typed provider catalog/resolution contracts. Provider states keep unavailable, failed, unsupported, input-required, not-applicable, requires-adjudication, and resolved cases distinct.
+
+Provider input/output boundaries preserve units, time bases, factor semantics, missing-input keys, provider identity, and source attribution. Hex Crawl refuses to reinterpret output whose declared semantics do not match the requested generic operation.
+
+Provider output is converted into explicit application inputs/contributors. Provider-native state is not persisted as procedure or environment authority.
+
+## Character Sheet boundary
+
+Character Sheet remains optional. `ExternalCharacterId` is only an optional capability lookup key.
+
+Hex Crawl procedure, participant, movement, and environment contracts do not import Character Sheet DTOs, inventories, or stat blocks. A DM can enter movement contributors, party references, current environment facts, and overrides directly.
+
+A procedure condition that refers to equipment does not prove the party has that equipment. Capability must come from explicit local state, an approved external lookup/provider, or DM adjudication.
+
+## Persistence boundaries
+
+The current PostgreSQL schema version is 5.
+
+Procedure authority is stored as complete `CampaignProcedure` JSON snapshots.
+
+Phase 9 environment authority is stored separately:
+
+- `overworlds.world_json` contains static environment annotations as part of `OverworldDefinition`;
+- `expeditions.environment_json` contains expedition current facts and DM overrides.
+
+Effective environment context, conflicts, provider responses, environment evaluation, and current movement composition are derived and are not persisted as competing authorities.
+
+Generated/consumed resolution history retains the values and provenance that were actually used at the time of resolution, while optimistic concurrency prevents stale automatic results from being committed against newer aggregate state.
+
+See `docs/postgresql-persistence.md`.
+
+## API and UI boundaries
+
+HTTP contracts expose application/domain concepts rather than persistence rows.
+
+The Web module catalog now includes the `environment-context` module. It depends on both `worlds` and `expeditions` because Phase 9 owns static world annotation authoring plus expedition current/override and workbench operations.
+
+World and expedition mutations continue to use aggregate optimistic concurrency.
+
+The TypeScript client presents server-derived procedure, participant, movement, and environment projections. It does not implement a second precedence resolver, procedure interpreter, or movement composer in browser code.
+
+## Preset-proof behavior
+
+The generic architecture is intentionally tested against procedures with materially different travel semantics.
+
+Examples retained across the proof set include:
+
+- ordinary physical distance/rate procedures;
+- D&D 2024 symbolic maximum pace, including conditional Arctic Fast travel;
+- Pathfinder Hexploration activity budgets;
+- Forbidden Lands quarter-day activity budgets;
+- AD&D-style movement-point semantics;
+- The One Ring journey progress without a fabricated repeating time interval;
+- Worlds Without Number numeric party-rate composition without preset dispatch.
+
+Phase 9 proves that environment truth can feed these stored semantics without forcing them into a single miles-per-hour model.
+
+## Provenance and adjudication
+
+The architecture treats provenance and unresolved semantics as first-class output.
+
+Procedure origin, source attribution, environment fact provenance, effective-source information, movement contributor provenance, provider attribution, and generated-resolution provenance remain explanatory data. They never replace the pinned mechanical contracts as authority.
+
+When the system lacks a safe generic rule, it reports missing input, unsupported semantics, or adjudication. It does not choose a “worst” terrain, invent a weather formula, infer equipment, reinterpret provider semantics, or dispatch to a named-system special case.
 
 ## Current scope boundary
 
-Implemented through Phase 8 are the generic procedure/preset foundation, native current-core execution, proof catalog, Procedure Composer, generated procedure reference, optional provider boundary, typed participant activity/role state with active-interval snapshots, and generic movement capability composition with server-derived suggestions and provenance.
+Implemented through Phase 9 are:
 
-Still deferred are Phase 9 generalized environment context/execution, Phase 10 generalized consequence/effect lifecycle, Phase 11 forced-travel/resource/survival execution, activity-driven foraging/camping effects, Phase 12 multi-stage journey execution, expanded encounter runtime, and battle-map ownership.
+- generic preset/materialization and campaign-owned procedure snapshots;
+- native generic runtime binding;
+- preset-proof structural/mechanical catalog;
+- Procedure Composer and generated procedure reference;
+- optional travel/environment provider boundary;
+- typed participant activity/role state with interval snapshots;
+- generic movement capability composition with server-derived suggestions and provenance;
+- generalized environment facts, static annotations, current state, DM overrides, precedence/conflicts, pinned-procedure environment evaluation, persistence, HTTP/UI workbench support, and movement handoff.
+
+Still deferred are:
+
+- Phase 10 generalized consequence/effect lifecycle;
+- Phase 11 forced-travel/resource/survival execution and activity-driven foraging/camping effects;
+- Phase 12 multi-stage journey execution;
+- expanded encounter runtime;
+- battle-map ownership.
+
+Mechanics within the Phase 9 environment domain remain manual/provider-resolved when no safe executable generic contract exists. That is an intentional boundary, not permission to add named-system special cases.
+
+## Invariants
+
+The following invariants apply across the current generic procedure architecture:
+
+- named systems are removable creation-time presets;
+- `CampaignProcedure` is the only mechanical procedure authority for current-format expeditions;
+- runtime/application behavior does not branch on preset identity;
+- execution/projection honors embedded handler/version and semantic contracts;
+- unsupported/future data is preserved rather than silently replaced;
+- external tools are optional input providers, not authorities;
+- static environment truth belongs to the world;
+- transient environment state and DM overrides belong to the expedition aggregate;
+- deterministic runtime has no world/provider dependency;
+- `MovementCapabilityComposer` remains the sole final movement composer;
+- unknown or ambiguous environment semantics are surfaced, not guessed;
+- derived provider/environment/composition output is not persisted as competing truth.

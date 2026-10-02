@@ -45,6 +45,7 @@ public sealed record StoredExpedition(
     DateTimeOffset UpdatedAt)
 {
     public CrawlPartySheet Party { get; init; } = CrawlPartySheet.Empty;
+    public ExpeditionEnvironmentState Environment { get; init; } = ExpeditionEnvironmentState.Empty;
     public IReadOnlyList<GeneratedProcedureResolution> GeneratedProcedureResolutions { get; init; } = [];
     public Guid? CampaignId { get; init; }
     public ProcedureOriginMetadata? ProcedureOrigin { get; init; }

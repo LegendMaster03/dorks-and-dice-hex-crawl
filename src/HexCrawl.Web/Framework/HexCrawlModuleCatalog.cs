@@ -1,3 +1,4 @@
+using HexCrawl.Web.Modules.Environment;
 using HexCrawl.Web.Modules.Expeditions;
 using HexCrawl.Web.Modules.Procedures;
 using HexCrawl.Web.Modules.ReferenceData;
@@ -19,6 +20,7 @@ public static class HexCrawlModuleCatalog
     [
         new WorldModule(),
         new ExpeditionModule(),
+        new EnvironmentModule(),
         new TravelRulesModule(),
         new SourceMapModule(),
         new ReferenceDataModule(),

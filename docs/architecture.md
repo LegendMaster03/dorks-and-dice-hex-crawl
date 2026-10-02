@@ -2,13 +2,14 @@
 
 ## Boundaries
 
-Hex Crawl keeps world truth, crawl/session state, player knowledge, presentation policy, and procedure configuration as independent state axes.
+Hex Crawl keeps world truth, crawl/session state, environment context, player knowledge, presentation policy, and procedure configuration as independent state axes.
 
-1. **World/spatial truth** — `OverworldDefinition`, mathematical grid, semantic point/line/region features, locations, and source-map representations.
-2. **Crawl/session state** — explicit `CrawlSessionContext` plus `ExpeditionState` or `NonSpatialSessionState`.
-3. **Player knowledge** — `PlayerKnowledgeState` records subject-specific knowledge and party presentation state for world-bound sessions.
-4. **Presentation policy** — `MapPresentationPolicy` and projections decide what knowledge changes may happen automatically and how authoritative data is presented.
-5. **Procedure configuration** — `CampaignProcedure` is the single authoritative procedure representation for current-format sessions.
+1. **World/spatial truth** — `OverworldDefinition`, mathematical grid, semantic point/line/region features, locations, source-map representations, and static environment annotations.
+2. **Crawl/session state** — explicit `CrawlSessionContext` plus `ExpeditionState` or `NonSpatialSessionState`. Deterministic runtime state does not own world lookup or provider integration.
+3. **Environment context** — `StoredExpedition.Environment` owns current/transient facts and explicit DM overrides. Static world/hex/spatial-feature facts remain on `OverworldDefinition` and are resolved against current position by the application layer.
+4. **Player knowledge** — `PlayerKnowledgeState` records subject-specific knowledge and party presentation state for world-bound sessions.
+5. **Presentation policy** — `MapPresentationPolicy` and projections decide what knowledge changes may happen automatically and how authoritative data is presented.
+6. **Procedure configuration** — `CampaignProcedure` is the single authoritative procedure representation for current-format sessions.
 
 Named systems exist only as removable creation-time presets. Runtime behavior depends on materialized generic module/mechanic snapshots, never on preset identity.
 
@@ -22,8 +23,8 @@ Future user-data migrations must be evaluated separately when the product reache
 
 ## Project structure
 
-- `HexCrawl.Domain` owns spatial, world, knowledge, presentation, source-map registration math, generic procedure contracts, and deterministic runtime rules.
-- `HexCrawl.Application` owns authenticated use cases, cross-aggregate validation, procedure materialization/revision, runtime orchestration, optional provider integration, and persistence/blob ports.
+- `HexCrawl.Domain` owns spatial, world, knowledge, presentation, source-map registration math, generic procedure contracts, environment fact types, and deterministic runtime rules.
+- `HexCrawl.Application` owns authenticated use cases, cross-aggregate validation, procedure materialization/revision, environment resolution/evaluation, runtime orchestration, optional provider integration, and persistence/blob ports.
 - `HexCrawl.Infrastructure` implements PostgreSQL persistence, filesystem map assets, and Tool Host authentication redemption.
 - `HexCrawl.Web` owns HTTP contracts, authentication middleware, route hosting, and the TypeScript application.
 
@@ -41,6 +42,8 @@ Runtime binding dispatches on embedded handler/version contracts. It does not co
 
 Unknown handlers and unsupported versions remain preserved but unsupported. Recognized declarative structural mechanics are persisted and exposed without pretending they are executable.
 
+Focused application operations may interpret one supported contract from the pinned procedure without binding unrelated structural mechanics. Participant activities, movement capability composition, and environment-to-movement evaluation use this boundary.
+
 ## Continuous overworld and semantic geometry
 
 An `OverworldDefinition` is one continuous world coordinate space. The hex grid is mathematical; creating a world does not pre-populate stored hex rows.
@@ -48,6 +51,31 @@ An `OverworldDefinition` is one continuous world coordinate space. The hex grid 
 The grid supports pointy-top/flat-top orientation, axial coordinates, configurable origin/rotation, world-space radius, and configurable physical center distance/unit.
 
 Point, line, and region features are stored as world-space semantic geometry. Categories are strings so terrain, roads, rivers, borders, and campaign-specific semantics remain extensible without coupling world truth to a raster or edition.
+
+Static environment annotations are explicit world data, not inferred from feature category. An annotation may target the world, one hex, or one spatial feature and carries typed tag or measurement facts with optional provenance and notes.
+
+## Environment context
+
+Phase 9 provides a ruleset-neutral environment layer. Environment dimensions are open strings; common dimensions include terrain, route, weather, visibility, elevation, depth, water, current, temperature, hazard, and regional effect. Values are either tags or measurements with explicit units.
+
+Ownership is deliberately split:
+
+- `OverworldDefinition.EnvironmentAnnotations` owns static world, hex, and spatial-feature truth.
+- `StoredExpedition.Environment.CurrentFacts` owns transient/current session conditions.
+- `StoredExpedition.Environment.Overrides` owns explicit DM overrides.
+- `ExpeditionState` remains traversal/runtime state and does not receive world lookup or provider dependencies.
+
+`EnvironmentContextResolver` computes an effective context above deterministic runtime. Static world/hex/feature facts have precedence 0, expedition-current facts precedence 1, and DM overrides precedence 2. Lower-precedence facts remain visible for provenance but are not effective for the same dimension. Equally authoritative compatible tag facts may coexist; incompatible value kinds or disagreeing scalar measurements produce explicit conflicts and require adjudication.
+
+For world-bound sessions, only annotations applicable to the current hex and intersecting spatial features are considered. Moving to another hex recomputes world truth rather than copying static facts into expedition state. Abstract-hex and non-spatial sessions can use expedition-current facts without an overworld.
+
+`EnvironmentProcedureEvaluator` reads the expedition's pinned `CampaignProcedure` and maps effective environment facts to Phase 8 movement inputs. It does not dispatch on preset identity or current catalog defaults. Unknown values remain valid environment truth even when the pinned procedure can not interpret them.
+
+Automatic interpretation is conservative. Multiple materially different terrain values, partially understood competing terrain, conflicting route inputs, unresolved scalar conflicts, conditional symbolic semantics, and weather models without a safe local formula produce explicit adjudication rather than an invented rule. Final movement is always composed by `MovementCapabilityComposer`; Phase 9 does not introduce a second movement engine.
+
+Optional Rules Core integration remains an input provider above runtime. Provider results must preserve declared units, time bases, factor semantics, status, and source attribution. Provider output is converted into explicit movement contributors and passed through `MovementCapabilityComposer`; unsupported semantics are not reinterpreted locally.
+
+See `docs/environment-context.md` for the complete ownership, precedence, conflict, provenance, persistence, and phase-boundary contract.
 
 ## Session contexts
 
@@ -63,13 +91,17 @@ The deterministic runtime receives only the context data actually required for t
 
 PostgreSQL remains behind `IHexCrawlStore`; application/domain code has no Npgsql dependency.
 
-The current pre-release schema is version 4. Earlier development procedure schemas are intentionally rejected with a reset instruction rather than upgraded through retired compatibility paths.
+The current pre-release schema is version 5. Earlier development schemas are intentionally rejected with a reset instruction rather than upgraded through retired compatibility paths.
 
-The `expeditions` table stores one required procedure representation:
+The `overworlds` table stores the complete `OverworldDefinition` in `world_json`, including static environment annotations.
 
-- `procedure_json` — serialized `CampaignProcedure`.
+The `expeditions` table stores authoritative aggregate state, including:
 
-There is no parallel retired procedure JSON column or profile-only fallback. `campaign_procedure_revisions.procedure_json` likewise stores `CampaignProcedure` revisions.
+- `procedure_json` — serialized pinned `CampaignProcedure`;
+- `environment_json` — current/transient environment facts and explicit DM overrides;
+- `state_json`, `party_json`, `knowledge_json`, and generated-resolution state owned by their existing boundaries.
+
+Derived effective environment context, conflict resolution projections, and provider output are not persisted as a second environment authority. They are recomputed from authoritative stored state. `campaign_procedure_revisions.procedure_json` stores `CampaignProcedure` revisions.
 
 Runtime history remains in `expedition_events`; persistence is aggregate snapshot plus retained ordered history, not event sourcing.
 
@@ -79,11 +111,13 @@ Map assets remain behind `IMapAssetStore` and are filesystem-backed at `/data/as
 
 Persistent APIs require stable identity. Hosted requests use the Dorks & Dice Tool Host authentication contract; standalone development can enable an explicit configured identity.
 
-Every world and crawl session is owner-scoped. Enumeration, direct loads, source-map mutation, asset retrieval, session creation, and session mutation enforce that ownership.
+Every world and crawl session is owner-scoped. Enumeration, direct loads, source-map mutation, environment authoring, asset retrieval, session creation, and session mutation enforce that ownership.
 
 ## Optimistic concurrency
 
 Worlds and crawl sessions have monotonically increasing aggregate versions. Mutations carry `ExpectedVersion`; stale writes return conflicts rather than overwriting newer state.
+
+Environment authoring follows the same aggregate boundaries: static annotation changes use the world version, while current facts and DM overrides use the expedition version.
 
 Grid changes remain blocked once sessions depend on that world geometry.
 
@@ -100,6 +134,8 @@ Procedure-facing endpoints use generic contracts:
 
 Generic procedures are not rejected merely because a retired contract shape can not represent them.
 
+Environment endpoints expose typed facts, static annotation authoring, expedition current/override editing, effective context, conflicts, provenance, and the environment-to-movement evaluation. Ordinary expedition movement projections resolve the same effective context and use the same composition path as the environment workbench.
+
 World and expedition routes retain the existing product organization, including world-bound creation, standalone session creation, full workbench routes, mapless trackers, and focused assistant mutations.
 
 ## Frontend and routing
@@ -108,23 +144,25 @@ Application-owned DOM is driven by explicit route/state transitions. Canvas inva
 
 `/` is the DM tools home. World authoring, full world-bound workbench routes, mapless session routes, and focused assistant routes remain separate product surfaces.
 
+The expedition UI includes a DM environment editor/workbench for current facts and overrides. The browser consumes server-derived effective environment and movement composition; it does not recreate precedence, conflict, procedure interpretation, or movement composition logic.
+
 The browser renders authoritative persisted procedure/session state. It does not create a second procedure model.
 
 ## Source-map boundary
 
 A `SourceMapRepresentation` is evidence/presentation for part of one continuous overworld, never authoritative terrain or procedure state.
 
-Registration, raster rendering, map import, and automatic grid-alignment work remain independent from generic procedure architecture.
+Registration, raster rendering, map import, and automatic grid-alignment work remain independent from generic procedure architecture. Source-map or feature categories are not silently promoted into environment facts; environment truth is explicitly annotated.
 
 ## Rules Core and other tools
 
-Rules Core remains optional enrichment and may provide resolved inputs or canonical content, but it does not own the expedition procedure or runtime.
+Rules Core remains optional enrichment and may provide resolved inputs or canonical content, but it does not own the expedition procedure, environment authority, or runtime.
 
 Character Sheet may provide capabilities. Block Initiative remains authoritative for tactical combat after encounter handoff. Neither tool changes Hex Crawl runtime ownership.
 
-## Phase 3 structural proof
+## Generic procedure implementation through Phase 9
 
-Phase 3 proves that materially different travel/journey systems can be represented with generic module/mechanic contracts without system-specific runtime classes.
+The generic procedure work now includes removable named presets, campaign-owned pinned snapshots, generic runtime binding, proof procedures, Procedure Composer, typed participant activities, Phase 8 movement capability composition, and Phase 9 generalized environment context/evaluation.
 
 Important retained guarantees include:
 
@@ -135,8 +173,12 @@ Important retained guarantees include:
 - explicit unresolved-input source sets;
 - no broad false dependency reads;
 - The One Ring journey graph without a fabricated repeating interval;
-- D&D 2024 terrain represented as terrain-tag-to-symbolic maximum-pace state, including conditional Arctic Fast travel.
+- D&D 2024 terrain represented as terrain-tag-to-symbolic maximum-pace state, including conditional Arctic Fast travel;
+- environment truth independent from named-system identity;
+- deterministic environment precedence/conflict reporting;
+- no silent invention of unsupported terrain, route, weather, equipment, or provider semantics;
+- one movement composition boundary through `MovementCapabilityComposer`.
 
-Later phases own the full Procedure Composer, typed participant activities, movement capability composition, environment execution, generalized effects/consequences, survival/resource execution, journey execution, and expanded encounter runtime.
+Still deferred are Phase 10 generalized effects/consequences, Phase 11 survival/resource and forced-travel execution, Phase 12 multi-stage journey execution, expanded encounter runtime, and battle-map ownership.
 
-See `docs/generic-procedure-architecture.md`, `docs/generic-procedure-development-plan.md`, and `docs/phase-3-proof-matrix.md`.
+See `docs/generic-procedure-architecture.md`, `docs/environment-context.md`, `docs/movement-capability-composition.md`, `docs/postgresql-persistence.md`, `docs/generic-procedure-development-plan.md`, and `docs/phase-3-proof-matrix.md`.
