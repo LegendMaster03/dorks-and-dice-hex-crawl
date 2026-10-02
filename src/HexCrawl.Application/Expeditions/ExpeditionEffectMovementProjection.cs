@@ -14,7 +14,7 @@ public static class ExpeditionEffectMovementProjection
         ArgumentNullException.ThrowIfNull(expedition);
         expedition.Effects.Validate(expedition.Party);
         return expedition.Effects.ActiveEffects
-            .SelectMany(Project)
+            .SelectMany(effect => Project(expedition.Party, effect))
             .OrderBy(value => value.Id)
             .ToArray();
     }
@@ -32,8 +32,11 @@ public static class ExpeditionEffectMovementProjection
         return MovementCapabilityComposer.Compose(expedition, enriched);
     }
 
-    private static IEnumerable<MovementCapabilityContributor> Project(ExpeditionEffect effect)
+    private static IEnumerable<MovementCapabilityContributor> Project(
+        CrawlPartySheet party,
+        ExpeditionEffect effect)
     {
+        var movementUnitKey = ResolveMovementUnitKey(party, effect);
         foreach (var component in effect.MovementComponents)
         {
             var movementScope = effect.Target.Scope switch
@@ -61,13 +64,28 @@ public static class ExpeditionEffectMovementProjection
                 ParticipantId = effect.Target.Scope == ExpeditionEffectScope.Participant
                     ? effect.Target.TargetId
                     : null,
-                MovementUnitKey = effect.Target.Scope is ExpeditionEffectScope.Mount or ExpeditionEffectScope.Vehicle
-                    ? effect.Target.TargetId?.ToString("D")
-                    : null,
+                MovementUnitKey = movementUnitKey,
                 Provenance = provenance,
                 Note = component.Note,
                 Enabled = true
             };
         }
+    }
+
+    private static string? ResolveMovementUnitKey(
+        CrawlPartySheet party,
+        ExpeditionEffect effect)
+    {
+        if (effect.Target.Scope is not (ExpeditionEffectScope.Mount or ExpeditionEffectScope.Vehicle))
+        {
+            return null;
+        }
+
+        var expectedKind = effect.Target.Scope == ExpeditionEffectScope.Mount
+            ? MovementCapabilityContributorKind.Mount
+            : MovementCapabilityContributorKind.Vehicle;
+        return party.MovementContributors.Single(value =>
+                value.Id == effect.Target.TargetId && value.Kind == expectedKind)
+            .MovementUnitKey;
     }
 }

@@ -301,7 +301,7 @@ public static class ExpeditionConsequenceEngine
     {
         provenance.Validate();
         state.Validate(party);
-        var pending = state.PendingConsequences.SingleOrDefault(value => value.Consequence.Id == consequenceId)
+        _ = state.PendingConsequences.SingleOrDefault(value => value.Consequence.Id == consequenceId)
             ?? throw new InvalidOperationException("The requested pending consequence was not found.");
         if (string.IsNullOrWhiteSpace(resolutionNote))
         {
@@ -314,7 +314,7 @@ public static class ExpeditionConsequenceEngine
                 {
                     Status = ExpeditionConsequenceStatus.Recorded,
                     Detail = $"{value.Detail} Resolution: {resolutionNote.Trim()}",
-                    Provenance = provenance
+                    ResolutionProvenance = provenance
                 }
                 : value)
             .ToArray();
@@ -407,21 +407,103 @@ public static class ExpeditionConsequenceEngine
                 consequence.Id, consequence.Provenance));
         }
 
-        var record = AppliedRecord(consequence, ExpeditionConsequenceStatus.Applied, touched.Distinct().ToArray(),
-            "Structured persistent effect consequence applied through the exact pinned effect policy.");
+        var unresolved = consequence.Components
+            .Where(value => value is not PersistentEffectChangeConsequenceComponent)
+            .ToArray();
+        var status = ExpeditionConsequenceStatus.Applied;
+        var detail = "Structured persistent effect consequence applied through the exact pinned effect policy.";
+        PendingExpeditionConsequence? pending = null;
+        if (unresolved.Length > 0)
+        {
+            var disposition = DescribeUnresolved(unresolved);
+            status = disposition.Status;
+            detail = $"Structured persistent effect components applied through the exact pinned effect policy. {disposition.Reason}";
+            pending = new PendingExpeditionConsequence(
+                consequence,
+                disposition.Status,
+                disposition.Reason,
+                disposition.RequiredAction)
+            {
+                UnresolvedComponents = unresolved
+            };
+        }
+
+        var record = AppliedRecord(consequence, status, touched.Distinct().ToArray(), detail);
         var updated = state with
         {
             ActiveEffects = active,
             AppliedConsequences = state.AppliedConsequences.Append(record).ToArray(),
+            PendingConsequences = pending is null
+                ? state.PendingConsequences
+                : state.PendingConsequences.Append(pending).ToArray(),
             History = audit
         };
         updated.Validate(party);
         return new ConsequenceProcessingResult(
             updated,
-            ExpeditionConsequenceStatus.Applied,
+            status,
             record.Detail!,
             record.EffectIds,
             true);
+    }
+
+    private static (ExpeditionConsequenceStatus Status, string Reason, string RequiredAction) DescribeUnresolved(
+        IReadOnlyList<ExpeditionConsequenceComponent> components)
+    {
+        if (components.Any(value => value is CustomConsequenceComponent))
+        {
+            return (
+                ExpeditionConsequenceStatus.Unsupported,
+                "The occurrence also contains custom structured components that Phase 10 can not execute generically.",
+                "Resolve the preserved custom components with a consumer that understands them or record a DM adjudication.");
+        }
+        if (components.Any(value => value is MovementChangeConsequenceComponent))
+        {
+            return (
+                ExpeditionConsequenceStatus.RequiresAdjudication,
+                "The occurrence also contains transient movement components whose duration semantics are unresolved.",
+                "Resolve the preserved movement components explicitly without reapplying the persistent effect portion.");
+        }
+        if (components.Any(value => value is ExternalStateConsequenceComponent))
+        {
+            return (
+                ExpeditionConsequenceStatus.ExternalActionRequired,
+                "The occurrence also contains character-owned state changes that Hex Crawl must not apply.",
+                "Apply the preserved external-state components in the owning Tool, then record their resolution here.");
+        }
+        if (components.Any(value => value is ResourceChangeConsequenceComponent))
+        {
+            return (
+                ExpeditionConsequenceStatus.Deferred,
+                "The occurrence also contains resource changes owned by the Phase 11 survival/resource workflow.",
+                "Apply the preserved resource components through Phase 11 or resolve them manually.");
+        }
+        if (components.Any(value => value is NavigationConsequenceComponent))
+        {
+            return (
+                ExpeditionConsequenceStatus.Deferred,
+                "The occurrence also contains navigation changes that remain owned by the established navigation workflow.",
+                "Resolve the preserved navigation components through that workflow or record a DM adjudication.");
+        }
+        if (components.Any(value => value is EncounterCircumstanceConsequenceComponent))
+        {
+            return (
+                ExpeditionConsequenceStatus.Deferred,
+                "The occurrence also contains encounter circumstances preserved for the encounter handoff workflow.",
+                "Carry the preserved encounter components into that workflow or resolve them manually.");
+        }
+        if (components.Any(value => value is TimeDelayConsequenceComponent))
+        {
+            return (
+                ExpeditionConsequenceStatus.Deferred,
+                "The occurrence also contains time-delay components that must use the existing runtime clock.",
+                "Route the preserved time-delay components through the expedition effect service or resolve them manually.");
+        }
+
+        return (
+            ExpeditionConsequenceStatus.RequiresAdjudication,
+            "The occurrence contains additional structured components that Phase 10 did not consume.",
+            "Resolve the preserved components explicitly without reapplying the persistent effect portion.");
     }
 
     private static bool CanApply(
@@ -534,10 +616,14 @@ public static class ExpeditionConsequenceEngine
         ExpeditionConsequence consequence,
         ExpeditionConsequenceStatus status,
         string reason,
-        string requiredAction)
+        string requiredAction,
+        IReadOnlyList<ExpeditionConsequenceComponent>? unresolvedComponents = null)
     {
         var record = AppliedRecord(consequence, status, [], reason);
-        var pending = new PendingExpeditionConsequence(consequence, status, reason, requiredAction);
+        var pending = new PendingExpeditionConsequence(consequence, status, reason, requiredAction)
+        {
+            UnresolvedComponents = unresolvedComponents ?? consequence.Components
+        };
         var updated = state with
         {
             AppliedConsequences = state.AppliedConsequences.Append(record).ToArray(),

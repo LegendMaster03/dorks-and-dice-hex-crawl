@@ -179,7 +179,7 @@ public sealed record ExpeditionConsequenceProvenance(
 
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
 [JsonDerivedType(typeof(TimeDelayConsequenceComponent), "timeDelay")]
-[JsonDerivedType(typeof(MovementConsequenceComponent), "movement")]
+[JsonDerivedType(typeof(MovementChangeConsequenceComponent), "movement")]
 [JsonDerivedType(typeof(ResourceChangeConsequenceComponent), "resourceChange")]
 [JsonDerivedType(typeof(PersistentEffectChangeConsequenceComponent), "persistentEffectChange")]
 [JsonDerivedType(typeof(NavigationConsequenceComponent), "navigation")]
@@ -527,6 +527,8 @@ public sealed record AppliedConsequenceRecord(
     ExpeditionConsequenceProvenance Provenance,
     string? Detail = null)
 {
+    public ExpeditionConsequenceProvenance? ResolutionProvenance { get; init; }
+
     public void Validate()
     {
         if (ConsequenceId == Guid.Empty)
@@ -535,6 +537,7 @@ public sealed record AppliedConsequenceRecord(
         }
         ExpeditionConsequenceProvenance.RequireText(ConsequenceKey, 200, "Applied consequence key");
         Provenance.Validate();
+        ResolutionProvenance?.Validate();
         if (EffectIds.Any(value => value == Guid.Empty) || EffectIds.Distinct().Count() != EffectIds.Count)
         {
             throw new InvalidOperationException("Applied consequence effect ids must be non-empty and unique.");
@@ -549,6 +552,8 @@ public sealed record PendingExpeditionConsequence(
     string Reason,
     string RequiredAction)
 {
+    public IReadOnlyList<ExpeditionConsequenceComponent> UnresolvedComponents { get; init; } = Consequence.Components;
+
     public void Validate(CrawlPartySheet party)
     {
         Consequence.ValidateAgainst(party);
@@ -559,6 +564,14 @@ public sealed record PendingExpeditionConsequence(
             or ExpeditionConsequenceStatus.ExternalActionRequired))
         {
             throw new InvalidOperationException("Pending consequence status must describe unresolved work.");
+        }
+        if (UnresolvedComponents.Count == 0)
+        {
+            throw new InvalidOperationException("A pending consequence requires at least one unresolved structured component.");
+        }
+        foreach (var component in UnresolvedComponents)
+        {
+            component.Validate();
         }
         ExpeditionConsequenceProvenance.RequireText(Reason, 2000, "Pending consequence reason");
         ExpeditionConsequenceProvenance.RequireText(RequiredAction, 1000, "Pending consequence required action");
