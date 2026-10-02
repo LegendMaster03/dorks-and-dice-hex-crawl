@@ -232,7 +232,7 @@ public sealed class ExpeditionEffectService(
             return new ApplyExpeditionConsequenceResult(expedition, recorded);
         }
 
-        var runtime = expedition.Runtime switch
+        CrawlSessionRuntimeState runtime = expedition.Runtime switch
         {
             ExpeditionState spatial => spatial with { ElapsedTravelTime = spatial.ElapsedTravelTime + delay },
             NonSpatialSessionState nonSpatial => nonSpatial with { ElapsedTime = nonSpatial.ElapsedTime + delay },
