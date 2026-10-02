@@ -43,7 +43,9 @@ public static class EnvironmentProcedureEvaluator
 
         var terrain = Tags(context, EnvironmentDimensions.Terrain);
         var route = Tags(context, EnvironmentDimensions.Route);
-        var weather = Tags(context, EnvironmentDimensions.Weather);
+        var terrainMeasurements = Measurements(context, EnvironmentDimensions.Terrain);
+        var routeMeasurements = Measurements(context, EnvironmentDimensions.Route);
+        var hasWeather = HasEffectiveFacts(context, EnvironmentDimensions.Weather);
 
         foreach (var fact in context.Facts.Where(x => x.Effective))
         {
@@ -57,6 +59,15 @@ public static class EnvironmentProcedureEvaluator
                 "terrain-conflict",
                 "Effective terrain contains conflicting equally authoritative values."));
             diagnostics.Add("Effective terrain requires adjudication before movement interpretation.");
+        }
+        else if (terrainMeasurements.Count > 0)
+        {
+            contributors.Add(AdjudicationContributor(
+                "environment:terrain-measurement",
+                "terrain-measurement",
+                "Effective terrain is expressed as a measurement and the pinned movement input consumes terrain tags."));
+            unsupported.Add("Measured terrain requires explicit interpretation before it can be used as a pinned terrain key.");
+            diagnostics.Add("Measured terrain remains authoritative environment truth, but Hex Crawl will not reinterpret its unit as a terrain tag or movement formula.");
         }
         else if (terrain.Count > 0 && policy.Terrain.Support == MovementTerrainPolicySupport.Unsupported)
         {
@@ -122,7 +133,24 @@ public static class EnvironmentProcedureEvaluator
             }
         }
 
-        if (route.Count > 0 && policy.Terrain.Support == MovementTerrainPolicySupport.Supported)
+        if (HasConflict(context, EnvironmentDimensions.Route))
+        {
+            contributors.Add(AdjudicationContributor(
+                "environment:route-conflict",
+                "route-conflict",
+                "Effective route contains conflicting equally authoritative values."));
+            diagnostics.Add("Effective route requires adjudication before movement interpretation.");
+        }
+        else if (routeMeasurements.Count > 0)
+        {
+            contributors.Add(AdjudicationContributor(
+                "environment:route-measurement",
+                "route-measurement",
+                "Effective route is expressed as a measurement and the pinned movement input consumes route tags."));
+            unsupported.Add("Measured route state requires explicit interpretation before it can be used as a pinned route key.");
+            diagnostics.Add("Measured route state remains authoritative environment truth, but Hex Crawl will not reinterpret its unit as a route tag or movement formula.");
+        }
+        else if (route.Count > 0 && policy.Terrain.Support == MovementTerrainPolicySupport.Supported)
         {
             if (string.Equals(policy.Terrain.RouteAdjustmentModel, "none", StringComparison.Ordinal))
             {
@@ -154,7 +182,7 @@ public static class EnvironmentProcedureEvaluator
             unsupported.Add("Route facts are preserved, but the pinned movement.terrain mechanic is unsupported.");
         }
 
-        if (weather.Count > 0 && policy.Terrain.Support == MovementTerrainPolicySupport.Supported)
+        if (hasWeather && policy.Terrain.Support == MovementTerrainPolicySupport.Supported)
         {
             var model = policy.Terrain.WeatherAdjustmentModel;
             if (!string.Equals(model, "none", StringComparison.Ordinal))
@@ -166,7 +194,7 @@ public static class EnvironmentProcedureEvaluator
                 diagnostics.Add($"Weather model '{model}' remains manual/provider-resolved; no weather formula was invented.");
             }
         }
-        else if (weather.Count > 0 && policy.Terrain.Support == MovementTerrainPolicySupport.None)
+        else if (hasWeather && policy.Terrain.Support == MovementTerrainPolicySupport.None)
         {
             contributors.Add(AdjudicationContributor(
                 "environment:weather-no-policy",
@@ -175,7 +203,7 @@ public static class EnvironmentProcedureEvaluator
             unsupported.Add("The pinned procedure does not define a movement.terrain mechanic for current weather.");
             diagnostics.Add("Current weather requires explicit DM adjudication because the pinned procedure does not define how weather affects movement.");
         }
-        else if (weather.Count > 0 && policy.Terrain.Support == MovementTerrainPolicySupport.Unsupported)
+        else if (hasWeather && policy.Terrain.Support == MovementTerrainPolicySupport.Unsupported)
         {
             contributors.Add(AdjudicationContributor(
                 "environment:weather-unsupported-policy",
@@ -226,6 +254,20 @@ public static class EnvironmentProcedureEvaluator
             .Distinct(StringComparer.Ordinal)
             .OrderBy(x => x, StringComparer.Ordinal)
             .ToArray();
+
+    private static IReadOnlyList<EnvironmentMeasurement> Measurements(
+        EffectiveEnvironmentContext context,
+        string dimension) =>
+        context.Facts
+            .Where(x => x.Effective)
+            .Where(x => string.Equals(x.Fact.Dimension.Trim(), dimension, StringComparison.Ordinal))
+            .Where(x => x.Fact.ValueKind == EnvironmentValueKind.Measurement)
+            .Select(x => x.Fact.Measurement!)
+            .ToArray();
+
+    private static bool HasEffectiveFacts(EffectiveEnvironmentContext context, string dimension) =>
+        context.Facts.Any(x =>
+            x.Effective && string.Equals(x.Fact.Dimension.Trim(), dimension, StringComparison.Ordinal));
 
     private static bool HasConflict(EffectiveEnvironmentContext context, string dimension) =>
         context.Conflicts.Any(x => string.Equals(x.Dimension, dimension, StringComparison.Ordinal));
