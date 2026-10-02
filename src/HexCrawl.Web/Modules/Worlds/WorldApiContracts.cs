@@ -32,8 +32,13 @@ public sealed record GridContract(
 }
 
 public sealed record FeatureContract(
-    Guid Id, string Name, string Category, SpatialFeatureKind Kind,
-    WorldPoint? Position, IReadOnlyList<WorldPoint>? Path, IReadOnlyList<WorldPoint>? Boundary)
+    Guid Id,
+    string Name,
+    string Category,
+    SpatialFeatureKind Kind,
+    WorldPoint? Position,
+    IReadOnlyList<WorldPoint>? Path,
+    IReadOnlyList<WorldPoint>? Boundary)
 {
     public static FeatureContract From(SpatialFeature feature) => feature switch
     {
@@ -45,15 +50,25 @@ public sealed record FeatureContract(
 }
 
 public sealed record LocationContract(
-    Guid Id, string Name, string Category, WorldPoint Position, LocationDiscoverability Discoverability)
+    Guid Id,
+    string Name,
+    string Category,
+    WorldPoint Position,
+    LocationDiscoverability Discoverability)
 {
     public static LocationContract From(Location location) => new(
         location.Id, location.Name, location.Category, location.Position, location.Discoverability);
 }
 
 public sealed record SourceMapContract(
-    Guid Id, string GeographyKey, string Name, SourceMapRole Role, string AssetKey,
-    bool ContainsBakedGrid, MapRegistrationTransform? Alignment, IReadOnlyList<WorldPoint> WorldCoverageBoundary)
+    Guid Id,
+    string GeographyKey,
+    string Name,
+    SourceMapRole Role,
+    string AssetKey,
+    bool ContainsBakedGrid,
+    MapRegistrationTransform? Alignment,
+    IReadOnlyList<WorldPoint> WorldCoverageBoundary)
 {
     public static SourceMapContract From(SourceMapRepresentation sourceMap) => new(
         sourceMap.Id, sourceMap.GeographyKey, sourceMap.Name, sourceMap.Role, sourceMap.AssetKey,
@@ -84,12 +99,22 @@ public sealed record OverworldContract(
 }
 
 public sealed record CreateOverworldRequest(
-    string Name, HexOrientation Orientation, WorldPoint Origin, double RotationDegrees,
-    double HexRadiusWorldUnits, double NeighborCenterDistance, DistanceUnitContract DistanceUnit)
+    string Name,
+    HexOrientation Orientation,
+    WorldPoint Origin,
+    double RotationDegrees,
+    double HexRadiusWorldUnits,
+    double NeighborCenterDistance,
+    DistanceUnitContract DistanceUnit)
 {
     public CreateOverworldCommand ToCommand() => new(
-        Name, Orientation, Origin, RotationDegrees, HexRadiusWorldUnits,
-        NeighborCenterDistance, DistanceUnit.ToDomain());
+        Name,
+        Orientation,
+        Origin,
+        RotationDegrees,
+        HexRadiusWorldUnits,
+        NeighborCenterDistance,
+        DistanceUnit.ToDomain());
 }
 
 public sealed record UpdateOverworldRequest(string Name, GridContract Grid, long ExpectedVersion)
@@ -98,16 +123,26 @@ public sealed record UpdateOverworldRequest(string Name, GridContract Grid, long
 }
 
 public sealed record LocationMutationRequest(
-    string Name, string Category, WorldPoint Position, LocationDiscoverability Discoverability, long ExpectedVersion)
+    string Name,
+    string Category,
+    WorldPoint Position,
+    LocationDiscoverability Discoverability,
+    long ExpectedVersion)
 {
     public CreateLocationCommand ToCreateCommand() => new(Name, Category, Position, Discoverability, ExpectedVersion);
     public UpdateLocationCommand ToUpdateCommand() => new(Name, Category, Position, Discoverability, ExpectedVersion);
 }
 
 public sealed record FeatureMutationRequest(
-    string Name, string Category, SpatialFeatureKind Kind,
-    WorldPoint? Position, IReadOnlyList<WorldPoint>? Path, IReadOnlyList<WorldPoint>? Boundary, long ExpectedVersion)
+    string Name,
+    string Category,
+    SpatialFeatureKind Kind,
+    WorldPoint? Position,
+    IReadOnlyList<WorldPoint>? Path,
+    IReadOnlyList<WorldPoint>? Boundary,
+    long ExpectedVersion)
 {
     public CreateFeatureCommand ToCreateCommand() => new(Name, Category, Kind, Position, Path, Boundary, ExpectedVersion);
     public UpdateFeatureCommand ToUpdateCommand() => new(Name, Category, Kind, Position, Path, Boundary, ExpectedVersion);
 }
+
