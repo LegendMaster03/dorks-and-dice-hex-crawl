@@ -148,6 +148,16 @@ public static class EnvironmentProcedureEvaluator
                 diagnostics.Add($"Weather model '{model}' remains manual/provider-resolved; no weather formula was invented.");
             }
         }
+        else if (weather.Count > 0 && policy.Terrain.Support == MovementTerrainPolicySupport.Unsupported)
+        {
+            contributors.Add(AdjudicationContributor(
+                "environment:weather-unsupported-policy",
+                "weather-unsupported-policy",
+                "Current weather can not be interpreted because the pinned procedure does not define a movement.terrain mechanic."));
+            unsupported.Add(policy.Terrain.UnsupportedReason
+                ?? "The pinned procedure does not define a movement.terrain mechanic for current weather.");
+            diagnostics.Add("Current weather requires explicit DM adjudication because the pinned procedure does not define how weather affects movement.");
+        }
 
         var relevantConflict = context.Conflicts.Any(x =>
             x.Dimension is EnvironmentDimensions.Terrain or EnvironmentDimensions.Route or EnvironmentDimensions.Weather);
