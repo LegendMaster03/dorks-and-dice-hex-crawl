@@ -179,6 +179,13 @@ public sealed partial class HexCrawlService
         {
             throw new HexCrawlNotFoundException("Feature was not found.");
         }
+        if (current.World.EnvironmentAnnotations.Any(annotation =>
+                annotation.Scope.Kind == EnvironmentAnnotationScopeKind.SpatialFeature
+                && annotation.Scope.FeatureId == featureId))
+        {
+            throw new HexCrawlConflictException(
+                "The spatial feature can not be deleted while static environment annotations reference it. Remove those environment annotations first.");
+        }
         await EnsureSemanticDeletionIsSafeAsync(current, cancellationToken);
         var updated = current with
         {
