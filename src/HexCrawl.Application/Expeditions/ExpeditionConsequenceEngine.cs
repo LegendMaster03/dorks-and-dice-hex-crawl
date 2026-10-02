@@ -145,14 +145,15 @@ public static class ExpeditionConsequenceEngine
             return new EffectRecoveryResult(state, ExpeditionConsequenceStatus.Recorded, "The effect is no longer active.", false);
         }
 
+        var recoveryModel = effect.RecoveryModel ?? policy.RecoveryModel;
         var manual = string.Equals(triggerKey, "manual", StringComparison.Ordinal);
-        var supportedTrigger = manual || string.Equals(policy.RecoveryModel, triggerKey, StringComparison.Ordinal);
+        var supportedTrigger = manual || string.Equals(recoveryModel, triggerKey, StringComparison.Ordinal);
         if (!supportedTrigger)
         {
             return new EffectRecoveryResult(
                 state,
                 ExpeditionConsequenceStatus.Recorded,
-                $"Recovery trigger '{triggerKey}' does not match the pinned recovery model and changed no state.",
+                $"Recovery trigger '{triggerKey}' does not match the effect recovery model and changed no state.",
                 false);
         }
 
@@ -161,7 +162,7 @@ public static class ExpeditionConsequenceEngine
             return new EffectRecoveryResult(
                 state,
                 ExpeditionConsequenceStatus.RequiresAdjudication,
-                $"Recovery model '{policy.RecoveryModel ?? "none"}' identifies a trigger but does not define a generic reduction amount.",
+                $"Recovery model '{recoveryModel ?? "none"}' identifies a trigger but does not define a generic reduction amount.",
                 false);
         }
 
@@ -553,7 +554,12 @@ public static class ExpeditionConsequenceEngine
         switch (component.Operation)
         {
             case PersistentEffectChangeOperation.AdjustLevel:
-                level = Math.Max(0, (level ?? 0) + component.LevelDelta!.Value);
+                var adjustedLevel = (long)(level ?? 0) + component.LevelDelta!.Value;
+                if (adjustedLevel > int.MaxValue)
+                {
+                    throw new InvalidOperationException("Adjusted persistent effect level exceeds the supported range.");
+                }
+                level = (int)Math.Max(0L, adjustedLevel);
                 if (level == 0)
                 {
                     return null;
