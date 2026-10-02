@@ -28,8 +28,10 @@ export class ExpeditionEnvironmentPanel {
         private readonly getRuntime: () => ExpeditionDetail,
         private readonly onRuntimeChanged: (next: ExpeditionDetail) => void,
         private readonly mutate: (control: HTMLButtonElement | null, action: () => Promise<void>) => Promise<void>) {
-        const sidebar = root.querySelector<HTMLElement>(".hc-sidebar");
-        if (!sidebar) throw new Error("Expedition environment panel requires the running-sheet sidebar.");
+        const host = root.querySelector<HTMLElement>(".hc-sidebar")
+            ?? root.querySelector<HTMLElement>(".hc-columns > .hc-panel:last-child")
+            ?? root.querySelector<HTMLElement>(".hc-page");
+        if (!host) throw new Error("Expedition environment panel requires a running-sheet host.");
 
         this.panel = document.createElement("details");
         this.panel.className = "hc-environment-panel";
@@ -40,9 +42,9 @@ export class ExpeditionEnvironmentPanel {
         this.body.className = "hc-form";
         this.body.dataset.environmentPanel = "";
         this.panel.append(summary, this.body);
-        const partyPanel = sidebar.querySelector(".hc-party-editor-panel");
-        if (partyPanel?.nextSibling) sidebar.insertBefore(this.panel, partyPanel.nextSibling);
-        else sidebar.prepend(this.panel);
+        const partyPanel = host.querySelector(".hc-party-editor-panel");
+        if (partyPanel?.nextSibling) host.insertBefore(this.panel, partyPanel.nextSibling);
+        else host.append(this.panel);
     }
 
     public sync(): void {
@@ -59,13 +61,11 @@ export class ExpeditionEnvironmentPanel {
         const runtime = this.getRuntime();
         this.body.replaceChildren(hint("Loading environment context…"));
         try {
-            const [workbench, world] = await Promise.all([
+            const [workbench, world, worldEnvironment] = await Promise.all([
                 this.api.getExpeditionEnvironment(runtime.id),
-                runtime.overworldId ? this.api.getOverworld(runtime.overworldId) : Promise.resolve(null)
+                runtime.overworldId ? this.api.getOverworld(runtime.overworldId) : Promise.resolve(null),
+                runtime.overworldId ? this.api.getWorldEnvironment(runtime.overworldId) : Promise.resolve(null)
             ]);
-            const worldEnvironment = runtime.overworldId
-                ? await this.api.getWorldEnvironment(runtime.overworldId)
-                : null;
             if (this.disposed || token !== this.refreshToken) return;
             this.workbench = workbench;
             this.world = world;
@@ -271,7 +271,6 @@ export class ExpeditionEnvironmentPanel {
             });
             const next = await this.api.getExpedition(runtime.id);
             this.onRuntimeChanged(next);
-            await this.refresh();
         });
     }
 
@@ -293,7 +292,15 @@ export class ExpeditionEnvironmentPanel {
                 ? annotation
                 : { ...annotation, facts: annotation.facts.filter(fact => fact.id !== factId) })
             .filter(annotation => annotation.facts.length > 0);
-        await this.mutate(button, async () => this.saveWorld(annotations));
+        await this.mutate(button, async () => {
+            const current = this.worldEnvironment;
+            if (!current) return;
+            this.worldEnvironment = await this.api.replaceWorldEnvironment(current.overworldId, {
+                expectedVersion: current.version,
+                annotations
+            });
+            await this.refresh();
+        });
     }
 }
 
