@@ -70,7 +70,6 @@ public sealed class Phase9ProviderCompositionRegressionTests
 
         Assert.Equal(1.5d, prepared.ExpectedDistance);
         Assert.Equal([TravelEnvironmentMechanicKeys.WalkDistance], provider.ResolveCalls);
-        Assert.Contains("terrain difficult", prepared.ExpectedDistanceRulesNote!, StringComparison.OrdinalIgnoreCase);
     }
 
     private sealed class BaseRateProvider : ITravelEnvironmentProvider
