@@ -253,7 +253,7 @@ public static class EnvironmentProcedureEvaluator
             .Where(x => x.Effective)
             .Where(x => string.Equals(x.Fact.Dimension.Trim(), dimension, StringComparison.Ordinal))
             .Where(x => x.Fact.ValueKind == EnvironmentValueKind.Tag)
-            .Select(x => x.Fact.Tag!)
+            .Select(x => x.Fact.Tag!.Trim())
             .Distinct(StringComparer.Ordinal)
             .OrderBy(x => x, StringComparer.Ordinal)
             .ToArray();
