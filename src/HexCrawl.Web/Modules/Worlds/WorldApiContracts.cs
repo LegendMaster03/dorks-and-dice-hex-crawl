@@ -69,8 +69,7 @@ public sealed record OverworldContract(
     GridContract Grid,
     IReadOnlyList<FeatureContract> Features,
     IReadOnlyList<LocationContract> Locations,
-    IReadOnlyList<SourceMapContract> SourceMaps,
-    IReadOnlyList<EnvironmentAnnotationContract> EnvironmentAnnotations)
+    IReadOnlyList<SourceMapContract> SourceMaps)
 {
     public static OverworldContract From(StoredOverworld world) => new(
         world.World.Id,
@@ -81,8 +80,7 @@ public sealed record OverworldContract(
         GridContract.From(world.World.Grid),
         world.World.Features.Select(FeatureContract.From).ToArray(),
         world.World.Locations.Select(LocationContract.From).ToArray(),
-        world.World.SourceMaps.Select(SourceMapContract.From).ToArray(),
-        world.World.EnvironmentAnnotations.Select(EnvironmentAnnotationContract.From).ToArray());
+        world.World.SourceMaps.Select(SourceMapContract.From).ToArray());
 }
 
 public sealed record CreateOverworldRequest(
