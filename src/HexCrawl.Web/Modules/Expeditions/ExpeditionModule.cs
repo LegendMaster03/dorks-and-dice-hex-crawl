@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using HexCrawl.Application;
 using HexCrawl.Application.Persistence;
+using HexCrawl.Domain.Runtime;
 using HexCrawl.Domain.World;
 using HexCrawl.Web.Api;
 using HexCrawl.Web.Framework;
@@ -25,6 +26,7 @@ public sealed class ExpeditionModule : IHexCrawlModule
         services.AddScoped<ExpeditionWorkbenchService>();
         services.AddScoped<ExpeditionAssistantService>();
         services.AddScoped<ExpeditionPartyService>();
+        services.AddScoped<ExpeditionEffectService>();
         services.AddScoped<ProcedureResolutionResolver>();
         services.AddScoped<ProcedureResolutionHelperService>();
     }
@@ -41,6 +43,12 @@ public sealed class ExpeditionModule : IHexCrawlModule
         api.MapPost("/expeditions/{expeditionId:guid}/resolution-helper", ResolveProcedureInputsAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/discover", DiscoverAsync);
         api.MapPut("/expeditions/{expeditionId:guid}/party", UpdatePartyAsync);
+        api.MapGet("/expeditions/{expeditionId:guid}/effects", GetEffectsAsync);
+        api.MapPost("/expeditions/{expeditionId:guid}/consequences", ApplyConsequenceAsync);
+        api.MapPut("/expeditions/{expeditionId:guid}/effects/{effectId:guid}", UpsertEffectAsync);
+        api.MapPost("/expeditions/{expeditionId:guid}/effects/{effectId:guid}/recover", RecoverEffectAsync);
+        api.MapDelete("/expeditions/{expeditionId:guid}/effects/{effectId:guid}", ClearEffectAsync);
+        api.MapPost("/expeditions/{expeditionId:guid}/consequences/{consequenceId:guid}/resolve", ResolvePendingConsequenceAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/assistants/travel", RecordTravelAssistantAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/assistants/watch", RecordNonSpatialWatchAssistantAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/assistants/navigation", RecordNavigationAssistantAsync);
@@ -170,6 +178,124 @@ public sealed class ExpeditionModule : IHexCrawlModule
         return Results.Ok(await ContractAsync(expedition, owner, service, cancellationToken));
     }
 
+    private static async Task<IResult> GetEffectsAsync(
+        Guid expeditionId,
+        HttpContext context,
+        HexCrawlService service,
+        CancellationToken cancellationToken)
+    {
+        var expedition = await service.GetExpeditionAsync(expeditionId, UserId(context), cancellationToken);
+        return Results.Ok(ExpeditionEffectStateContract.From(expedition));
+    }
+
+    private static async Task<IResult> ApplyConsequenceAsync(
+        Guid expeditionId,
+        ApplyExpeditionConsequenceRequest request,
+        HttpContext context,
+        ExpeditionEffectService effects,
+        HexCrawlService service,
+        CancellationToken cancellationToken)
+    {
+        var owner = UserId(context);
+        var result = await effects.ApplyConsequenceAsync(expeditionId, owner, request.ToCommand(), cancellationToken);
+        return Results.Ok(new ExpeditionEffectOperationContract(
+            await ContractAsync(result.Expedition, owner, service, cancellationToken),
+            ExpeditionEffectStateContract.From(result.Expedition),
+            result.Processing.Status,
+            result.Processing.Detail));
+    }
+
+    private static async Task<IResult> UpsertEffectAsync(
+        Guid expeditionId,
+        Guid effectId,
+        UpsertExpeditionEffectRequest request,
+        HttpContext context,
+        ExpeditionEffectService effects,
+        HexCrawlService service,
+        CancellationToken cancellationToken)
+    {
+        var owner = UserId(context);
+        var expedition = await effects.UpsertEffectAsync(
+            expeditionId,
+            owner,
+            request.ToCommand(effectId),
+            cancellationToken);
+        return Results.Ok(new ExpeditionEffectOperationContract(
+            await ContractAsync(expedition, owner, service, cancellationToken),
+            ExpeditionEffectStateContract.From(expedition),
+            ExpeditionConsequenceStatus.Applied,
+            "Manual expedition effect state saved."));
+    }
+
+    private static async Task<IResult> RecoverEffectAsync(
+        Guid expeditionId,
+        Guid effectId,
+        RecoverExpeditionEffectRequest request,
+        HttpContext context,
+        ExpeditionEffectService effects,
+        HexCrawlService service,
+        CancellationToken cancellationToken)
+    {
+        var owner = UserId(context);
+        var result = await effects.RecoverAsync(
+            expeditionId,
+            effectId,
+            owner,
+            request.ToCommand(),
+            cancellationToken);
+        return Results.Ok(new ExpeditionEffectOperationContract(
+            await ContractAsync(result.Expedition, owner, service, cancellationToken),
+            ExpeditionEffectStateContract.From(result.Expedition),
+            result.Recovery.Status,
+            result.Recovery.Detail));
+    }
+
+    private static async Task<IResult> ClearEffectAsync(
+        Guid expeditionId,
+        Guid effectId,
+        ClearExpeditionEffectRequest request,
+        HttpContext context,
+        ExpeditionEffectService effects,
+        HexCrawlService service,
+        CancellationToken cancellationToken)
+    {
+        var owner = UserId(context);
+        var expedition = await effects.ClearEffectAsync(
+            expeditionId,
+            effectId,
+            owner,
+            request.ToCommand(),
+            cancellationToken);
+        return Results.Ok(new ExpeditionEffectOperationContract(
+            await ContractAsync(expedition, owner, service, cancellationToken),
+            ExpeditionEffectStateContract.From(expedition),
+            ExpeditionConsequenceStatus.Applied,
+            "Manual expedition effect cleared."));
+    }
+
+    private static async Task<IResult> ResolvePendingConsequenceAsync(
+        Guid expeditionId,
+        Guid consequenceId,
+        ResolvePendingConsequenceRequest request,
+        HttpContext context,
+        ExpeditionEffectService effects,
+        HexCrawlService service,
+        CancellationToken cancellationToken)
+    {
+        var owner = UserId(context);
+        var expedition = await effects.ResolvePendingAsync(
+            expeditionId,
+            consequenceId,
+            owner,
+            request.ToCommand(),
+            cancellationToken);
+        return Results.Ok(new ExpeditionEffectOperationContract(
+            await ContractAsync(expedition, owner, service, cancellationToken),
+            ExpeditionEffectStateContract.From(expedition),
+            ExpeditionConsequenceStatus.Recorded,
+            "Deferred consequence resolution recorded."));
+    }
+
     private static async Task<IResult> RecordTravelAssistantAsync(
         Guid expeditionId,
         TravelWatchAssistantRequest request,
@@ -236,7 +362,7 @@ public sealed class ExpeditionModule : IHexCrawlModule
 
         var context = EnvironmentContextResolver.Resolve(expedition, world);
         var evaluation = EnvironmentProcedureEvaluator.Evaluate(expedition, context);
-        var movement = MovementCapabilityComposer.Compose(expedition, evaluation.MovementInput);
+        var movement = ExpeditionEffectMovementProjection.Compose(expedition, evaluation.MovementInput);
         return ExpeditionWorkbenchContract.From(expedition, world) with
         {
             MovementComposition = MovementCapabilityCompositionContract.From(movement)
