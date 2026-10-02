@@ -70,6 +70,15 @@ public static class EnvironmentProcedureEvaluator
                     "Multiple terrain values can not be interpreted by the unsupported pinned terrain policy."));
             }
         }
+        else if (terrain.Count > 0 && policy.Terrain.Support == MovementTerrainPolicySupport.None)
+        {
+            contributors.Add(AdjudicationContributor(
+                "environment:terrain-no-policy",
+                "terrain-no-policy",
+                "Current terrain can not be interpreted because the pinned procedure has no movement.terrain mechanic."));
+            unsupported.Add("The pinned procedure does not define a movement.terrain mechanic for current terrain.");
+            diagnostics.Add("Current terrain requires explicit DM adjudication because the pinned procedure does not define how terrain affects movement.");
+        }
         else if (terrain.Count > 0 && policy.Terrain.Support == MovementTerrainPolicySupport.Supported)
         {
             var understood = terrain
@@ -130,6 +139,15 @@ public static class EnvironmentProcedureEvaluator
                     "route-ambiguity",
                     "Multiple current route facts require adjudication for the pinned route model."));
             }
+        }
+        else if (route.Count > 0 && policy.Terrain.Support == MovementTerrainPolicySupport.None)
+        {
+            contributors.Add(AdjudicationContributor(
+                "environment:route-no-policy",
+                "route-no-policy",
+                "Current route can not be interpreted because the pinned procedure has no movement.terrain mechanic."));
+            unsupported.Add("The pinned procedure does not define a movement.terrain mechanic for current route.");
+            diagnostics.Add("Current route requires explicit DM adjudication because the pinned procedure does not define how route affects movement.");
         }
         else if (route.Count > 0 && policy.Terrain.Support == MovementTerrainPolicySupport.Unsupported)
         {
