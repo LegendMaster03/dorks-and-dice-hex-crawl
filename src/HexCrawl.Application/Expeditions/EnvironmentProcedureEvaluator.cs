@@ -76,12 +76,21 @@ public static class EnvironmentProcedureEvaluator
                 .Where(policy.Terrain.TerrainAdjustments.ContainsKey)
                 .OrderBy(x => x, StringComparer.Ordinal)
                 .ToArray();
-            foreach (var unknown in terrain.Except(understood, StringComparer.Ordinal))
+            var unknown = terrain.Except(understood, StringComparer.Ordinal).ToArray();
+            foreach (var value in unknown)
             {
-                unsupported.Add($"The pinned movement.terrain policy does not define terrain '{unknown}'.");
+                unsupported.Add($"The pinned movement.terrain policy does not define terrain '{value}'.");
             }
 
-            if (understood.Length == 1)
+            if (terrain.Count > 1 && understood.Length == 1 && unknown.Length > 0)
+            {
+                contributors.Add(AdjudicationContributor(
+                    "environment:terrain-ambiguity",
+                    "terrain-ambiguity",
+                    "Multiple current terrain facts exist and only a subset is understood by the pinned procedure."));
+                diagnostics.Add("Multiple current terrain facts require DM selection because automatically applying the one understood value would silently ignore competing world truth.");
+            }
+            else if (understood.Length == 1)
             {
                 terrainKey = understood[0];
             }
