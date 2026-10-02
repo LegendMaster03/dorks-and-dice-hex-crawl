@@ -50,6 +50,8 @@ public sealed class MovementCapabilityCompositionOrderingRegressionTests
 
         Assert.Equal(MovementCompositionStatus.Resolved, result.Status);
         Assert.Equal(2, result.EffectiveValue);
+        Assert.Contains(result.Provenance, value =>
+            value.Contains("terrain difficult", StringComparison.OrdinalIgnoreCase));
         Assert.Equal(
             ["difficult", "persistent-cap"],
             result.Contributors
