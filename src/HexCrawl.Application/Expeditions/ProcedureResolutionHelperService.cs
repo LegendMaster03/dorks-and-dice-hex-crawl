@@ -24,6 +24,7 @@ public sealed class ProcedureResolutionHelperService(
                 "The crawl session changed before procedure inputs were resolved. Reload it before generating another helper result.");
         }
 
+        command = await ApplyEnvironmentAsync(expedition, ownerUserId, command, cancellationToken);
         command = await providerEnricher.PrepareAsync(expedition, command, cancellationToken);
         var generated = resolver.Resolve(
             ExpeditionProcedureExecutionResolver.Resolve(expedition),
@@ -91,6 +92,59 @@ public sealed class ProcedureResolutionHelperService(
         }
 
         return audited with { ExpeditionVersion = saved.Version };
+    }
+
+    private async Task<ProcedureResolutionHelperCommand> ApplyEnvironmentAsync(
+        StoredExpedition expedition,
+        string ownerUserId,
+        ProcedureResolutionHelperCommand command,
+        CancellationToken cancellationToken)
+    {
+        HexCrawl.Domain.World.OverworldDefinition? world = null;
+        if (expedition.Context is WorldBoundCrawlSessionContext worldContext)
+        {
+            world = (await coreService.GetOverworldAsync(
+                worldContext.WorldId, ownerUserId, cancellationToken)).World;
+        }
+
+        var context = EnvironmentContextResolver.Resolve(expedition, world);
+        var evaluation = EnvironmentProcedureEvaluator.Evaluate(expedition, context);
+        var composition = MovementCapabilityComposer.Compose(expedition, evaluation.MovementInput);
+
+        var prepared = command;
+        if (prepared.ExpectedDistance is null
+            && !string.IsNullOrWhiteSpace(prepared.TravelDistanceRule)
+            && composition.Status == MovementCompositionStatus.Resolved
+            && composition.SuggestedExpectedDistance is { } suggested)
+        {
+            var notes = evaluation.Provenance
+                .Concat(composition.Provenance)
+                .Concat(composition.Diagnostics)
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            prepared = prepared with
+            {
+                ExpectedDistance = suggested.Value,
+                ExpectedDistanceRulesNote = notes.Length == 0
+                    ? "Effective environment and movement capability composition supplied the expected distance."
+                    : string.Join(" ", notes)
+            };
+        }
+
+        if (string.IsNullOrWhiteSpace(prepared.Terrain)
+            && string.IsNullOrWhiteSpace(prepared.Route)
+            && !string.IsNullOrWhiteSpace(evaluation.TerrainKey)
+            && !string.IsNullOrWhiteSpace(evaluation.RouteKey))
+        {
+            prepared = prepared with
+            {
+                Terrain = evaluation.TerrainKey,
+                Route = evaluation.RouteKey
+            };
+        }
+
+        return prepared;
     }
 
     private static ProcedureResolutionHelperResult AddAuditReference(
