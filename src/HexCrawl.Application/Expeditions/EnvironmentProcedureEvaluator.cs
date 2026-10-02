@@ -46,6 +46,10 @@ public static class EnvironmentProcedureEvaluator
         var terrainMeasurements = Measurements(context, EnvironmentDimensions.Terrain);
         var routeMeasurements = Measurements(context, EnvironmentDimensions.Route);
         var hasWeather = HasEffectiveFacts(context, EnvironmentDimensions.Weather);
+        var routeHasNoMovementEffect = policy.Terrain.Support == MovementTerrainPolicySupport.Supported
+            && string.Equals(policy.Terrain.RouteAdjustmentModel, "none", StringComparison.Ordinal);
+        var weatherHasNoMovementEffect = policy.Terrain.Support == MovementTerrainPolicySupport.Supported
+            && string.Equals(policy.Terrain.WeatherAdjustmentModel, "none", StringComparison.Ordinal);
 
         foreach (var fact in context.Facts.Where(x => x.Effective))
         {
@@ -133,7 +137,11 @@ public static class EnvironmentProcedureEvaluator
             }
         }
 
-        if (HasConflict(context, EnvironmentDimensions.Route))
+        if (routeHasNoMovementEffect && (route.Count > 0 || routeMeasurements.Count > 0 || HasConflict(context, EnvironmentDimensions.Route)))
+        {
+            diagnostics.Add("The pinned route adjustment model is 'none'; route facts and conflicts remain visible but do not alter movement.");
+        }
+        else if (HasConflict(context, EnvironmentDimensions.Route))
         {
             contributors.Add(AdjudicationContributor(
                 "environment:route-conflict",
@@ -152,11 +160,7 @@ public static class EnvironmentProcedureEvaluator
         }
         else if (route.Count > 0 && policy.Terrain.Support == MovementTerrainPolicySupport.Supported)
         {
-            if (string.Equals(policy.Terrain.RouteAdjustmentModel, "none", StringComparison.Ordinal))
-            {
-                diagnostics.Add("The pinned route adjustment model is 'none'; route facts remain visible but do not alter movement.");
-            }
-            else if (route.Count == 1)
+            if (route.Count == 1)
             {
                 routeKey = route[0];
             }
@@ -182,17 +186,18 @@ public static class EnvironmentProcedureEvaluator
             unsupported.Add("Route facts are preserved, but the pinned movement.terrain mechanic is unsupported.");
         }
 
-        if (hasWeather && policy.Terrain.Support == MovementTerrainPolicySupport.Supported)
+        if (weatherHasNoMovementEffect && hasWeather)
+        {
+            diagnostics.Add("The pinned weather adjustment model is 'none'; weather facts and conflicts remain visible but do not alter movement.");
+        }
+        else if (hasWeather && policy.Terrain.Support == MovementTerrainPolicySupport.Supported)
         {
             var model = policy.Terrain.WeatherAdjustmentModel;
-            if (!string.Equals(model, "none", StringComparison.Ordinal))
-            {
-                contributors.Add(AdjudicationContributor(
-                    "environment:weather",
-                    $"weather:{model}",
-                    $"Current weather is available, but pinned weather model '{model}' does not define a safe local formula."));
-                diagnostics.Add($"Weather model '{model}' remains manual/provider-resolved; no weather formula was invented.");
-            }
+            contributors.Add(AdjudicationContributor(
+                "environment:weather",
+                $"weather:{model}",
+                $"Current weather is available, but pinned weather model '{model}' does not define a safe local formula."));
+            diagnostics.Add($"Weather model '{model}' remains manual/provider-resolved; no weather formula was invented.");
         }
         else if (hasWeather && policy.Terrain.Support == MovementTerrainPolicySupport.None)
         {
@@ -214,9 +219,7 @@ public static class EnvironmentProcedureEvaluator
             diagnostics.Add("Current weather requires explicit DM adjudication because the pinned procedure does not define how weather affects movement.");
         }
 
-        var relevantConflict = context.Conflicts.Any(x =>
-            x.Dimension is EnvironmentDimensions.Terrain or EnvironmentDimensions.Route or EnvironmentDimensions.Weather);
-        var status = relevantConflict || contributors.Any(x => x.Operation == MovementCapabilityOperation.SymbolicLimit)
+        var status = contributors.Any(x => x.Operation == MovementCapabilityOperation.SymbolicLimit)
             ? EnvironmentProcedureEvaluationStatus.RequiresAdjudication
             : unsupported.Count > 0
                 ? EnvironmentProcedureEvaluationStatus.Partial
