@@ -43,6 +43,7 @@ public static class Phase11SurvivalEngine
             return new(state, SurvivalOperationStatus.Unsupported,
                 policy.UnsupportedReason ?? "The exact pinned forced-travel policy is unsupported.", false);
         }
+        var normalLimit = policy.NormalTravelLimit!.Value;
         if (!double.IsFinite(amount) || amount <= 0)
         {
             throw new InvalidOperationException("Forced-travel accounting amount must be positive and finite.");
@@ -76,7 +77,7 @@ public static class Phase11SurvivalEngine
         }
         var pending = current.PendingCheck;
         if (pending is null
-            && nextAmount > policy.NormalTravelLimit!.Value
+            && nextAmount > normalLimit
             && nextAmount > current.LastResolvedAmount)
         {
             pending = new PendingForcedTravelCheck(
@@ -93,7 +94,7 @@ public static class Phase11SurvivalEngine
         updated.Validate(party);
         var detail = pending is not null && current.PendingCheck is null
             ? "Travel was accounted and continuing beyond the pinned normal limit created a forced-travel check due state."
-            : nextAmount >= policy.NormalTravelLimit.Value
+            : nextAmount >= normalLimit
                 ? "Travel was accounted at or beyond the pinned normal-travel threshold."
                 : "Travel was accounted below the pinned normal-travel threshold.";
         return new(updated, SurvivalOperationStatus.Applied, detail, true);
