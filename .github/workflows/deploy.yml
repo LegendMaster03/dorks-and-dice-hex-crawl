@@ -73,17 +73,19 @@ jobs:
             dorks-and-dice-hex-crawl:latest >/dev/null
 
           ready=false
-          for i in {1..45}; do
-            if [ "$(docker inspect -f '{{.State.Running}}' dorks-and-dice-hex-crawl-smoketest 2>/dev/null)" != "true" ]; then
+          for i in {1..30}; do
+            state=$(docker inspect -f '{{.State.Status}}' dorks-and-dice-hex-crawl-smoketest 2>/dev/null || true)
+            if [ "$state" != "running" ]; then
+              echo "Smoke-test container stopped before becoming ready (state: ${state:-missing})."
               docker logs dorks-and-dice-hex-crawl-smoketest || true
               exit 1
             fi
             health=$(docker run --rm --network dorks-and-dice-hex-crawl-test curlimages/curl:8.12.1 \
-              -fsS http://dorks-and-dice-hex-crawl-smoketest:8080/health 2>/dev/null || true)
+              --connect-timeout 1 --max-time 2 -fsS http://dorks-and-dice-hex-crawl-smoketest:8080/health 2>/dev/null || true)
             readiness=$(docker run --rm --network dorks-and-dice-hex-crawl-test curlimages/curl:8.12.1 \
-              -fsS http://dorks-and-dice-hex-crawl-smoketest:8080/ready 2>/dev/null || true)
+              --connect-timeout 1 --max-time 2 -fsS http://dorks-and-dice-hex-crawl-smoketest:8080/ready 2>/dev/null || true)
             appjs=$(docker run --rm --network dorks-and-dice-hex-crawl-test curlimages/curl:8.12.1 \
-              -fsS http://dorks-and-dice-hex-crawl-smoketest:8080/app.js 2>/dev/null || true)
+              --connect-timeout 1 --max-time 2 -fsS http://dorks-and-dice-hex-crawl-smoketest:8080/app.js 2>/dev/null || true)
             if [ "$health" = "Healthy" ] \
               && echo "$readiness" | grep -q '"status":"ready"' \
               && echo "$readiness" | grep -q '"persistence":"postgresql-ready"' \
@@ -95,6 +97,7 @@ jobs:
             sleep 1
           done
           if [ "$ready" != "true" ]; then
+            echo "Smoke-test container did not become ready."
             docker logs dorks-and-dice-hex-crawl-smoketest || true
             exit 1
           fi
@@ -107,18 +110,66 @@ jobs:
           docker rm -f dorks-and-dice-hex-crawl-test-postgres 2>/dev/null || true
           docker network rm dorks-and-dice-hex-crawl-test 2>/dev/null || true
 
-      - name: Deploy
-        timeout-minutes: 5
+      - name: Preflight production compatibility
+        timeout-minutes: 3
         run: |
           ENV_FILE=/mnt/HDDs/www/dorks-and-dice-hex-crawl/.env
+          PRECHECK_CONTAINER=dorks-and-dice-hex-crawl-predeploy
           if [ ! -f "$ENV_FILE" ]; then
             echo "Hex Crawl deployment configuration is missing: $ENV_FILE"
             exit 1
           fi
+
           docker compose \
             --project-name dorks-and-dice-hex-crawl \
             --env-file "$ENV_FILE" \
             -f docker-compose.yml config >/dev/null
+
+          cleanup_precheck() {
+            docker rm -f "$PRECHECK_CONTAINER" 2>/dev/null || true
+          }
+          trap cleanup_precheck EXIT
+          cleanup_precheck
+
+          docker run -d --name "$PRECHECK_CONTAINER" \
+            --network dorks-and-dice-backend \
+            --env-file "$ENV_FILE" \
+            -e 'MapAssets__RootPath=/data/assets' \
+            -e 'ToolHost__BaseUrl=http://dorks-and-dice-site:8080' \
+            dorks-and-dice-hex-crawl:latest >/dev/null
+
+          ready=false
+          for i in {1..30}; do
+            state=$(docker inspect -f '{{.State.Status}}' "$PRECHECK_CONTAINER" 2>/dev/null || true)
+            if [ "$state" != "running" ]; then
+              echo "New image can not start against the production configuration (state: ${state:-missing})."
+              docker logs "$PRECHECK_CONTAINER" || true
+              exit 1
+            fi
+            readiness=$(docker run --rm --network dorks-and-dice-backend curlimages/curl:8.12.1 \
+              --connect-timeout 1 --max-time 2 -fsS "http://${PRECHECK_CONTAINER}:8080/ready" 2>/dev/null || true)
+            if echo "$readiness" | grep -q '"status":"ready"' \
+              && echo "$readiness" | grep -q '"persistence":"postgresql-ready"' \
+              && echo "$readiness" | grep -q '"mapAssets":"filesystem"'; then
+              echo "$readiness"
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != "true" ]; then
+            echo "New image did not become ready against the production configuration."
+            docker logs "$PRECHECK_CONTAINER" || true
+            exit 1
+          fi
+
+          cleanup_precheck
+          trap - EXIT
+
+      - name: Deploy
+        timeout-minutes: 5
+        run: |
+          ENV_FILE=/mnt/HDDs/www/dorks-and-dice-hex-crawl/.env
           docker rm -f dorks-and-dice-hex-crawl 2>/dev/null || true
           docker compose \
             --project-name dorks-and-dice-hex-crawl \
@@ -129,13 +180,19 @@ jobs:
         timeout-minutes: 5
         run: |
           ready=false
-          for i in {1..60}; do
+          for i in {1..30}; do
+            state=$(docker inspect -f '{{.State.Status}}' dorks-and-dice-hex-crawl 2>/dev/null || true)
+            if [ "$state" != "running" ]; then
+              echo "Deployed container stopped before becoming ready (state: ${state:-missing})."
+              docker logs dorks-and-dice-hex-crawl || true
+              exit 1
+            fi
             health=$(docker run --rm --network dorks-and-dice-backend curlimages/curl:8.12.1 \
-              -fsS http://dorks-and-dice-hex-crawl:8080/health 2>/dev/null || true)
+              --connect-timeout 1 --max-time 2 -fsS http://dorks-and-dice-hex-crawl:8080/health 2>/dev/null || true)
             readiness=$(docker run --rm --network dorks-and-dice-backend curlimages/curl:8.12.1 \
-              -fsS http://dorks-and-dice-hex-crawl:8080/ready 2>/dev/null || true)
+              --connect-timeout 1 --max-time 2 -fsS http://dorks-and-dice-hex-crawl:8080/ready 2>/dev/null || true)
             appjs=$(docker run --rm --network dorks-and-dice-backend curlimages/curl:8.12.1 \
-              -fsS http://dorks-and-dice-hex-crawl:8080/app.js 2>/dev/null || true)
+              --connect-timeout 1 --max-time 2 -fsS http://dorks-and-dice-hex-crawl:8080/app.js 2>/dev/null || true)
             if [ "$health" = "Healthy" ] \
               && echo "$readiness" | grep -q '"status":"ready"' \
               && echo "$readiness" | grep -q '"persistence":"postgresql-ready"' \
@@ -148,6 +205,7 @@ jobs:
             sleep 1
           done
           if [ "$ready" != "true" ]; then
+            echo "Deployed service did not become ready."
             docker logs dorks-and-dice-hex-crawl || true
             exit 1
           fi
