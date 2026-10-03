@@ -48,6 +48,7 @@ async function boot(rootElement: HTMLElement): Promise<void> {
                 cleanup = await module.render(route, {
                     root: rootElement,
                     api,
+                    toolContext: context,
                     navigate
                 });
                 injectProcedureComposerShortcut(rootElement, route.kind, navigate);
