@@ -115,8 +115,19 @@ public sealed class ExpeditionAssistantService(
             };
         }
 
+        var forcedTravel = ForcedTravelAccounting.AccountTravelMutation(
+            expedition,
+            stateBefore,
+            state,
+            command.ExpectedVersion,
+            "focused-spatial-travel",
+            new ExpeditionConsequenceProvenance(
+                ExpeditionConsequenceSourceKind.Procedure,
+                "focused-spatial-travel",
+                Note: command.Note));
+
         return await SaveAsync(
-            expedition with { Runtime = state },
+            expedition with { Runtime = state, Survival = forcedTravel.Survival },
             command.ExpectedVersion,
             cancellationToken);
     }
@@ -148,11 +159,23 @@ public sealed class ExpeditionAssistantService(
                 command.Note),
             ParticipantActivityPolicyResolver.SnapshotAssignments(expedition.Party));
 
+        var forcedTravel = ForcedTravelAccounting.AccountTravelMutation(
+            expedition,
+            stateBefore,
+            state,
+            command.ExpectedVersion,
+            "focused-nonspatial-travel",
+            new ExpeditionConsequenceProvenance(
+                ExpeditionConsequenceSourceKind.Procedure,
+                "focused-nonspatial-travel",
+                Note: command.Note));
+
         return await SaveAsync(
             expedition with
             {
                 Runtime = state,
-                RemainingWatchTime = state.ActiveWatch?.Remaining ?? TimeSpan.Zero
+                RemainingWatchTime = state.ActiveWatch?.Remaining ?? TimeSpan.Zero,
+                Survival = forcedTravel.Survival
             },
             command.ExpectedVersion,
             cancellationToken);
