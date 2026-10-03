@@ -80,8 +80,8 @@ public static class ForcedTravelAccounting
         }
 
         var intervalPolicy = FocusedIntervalPolicyResolver.Resolve(procedure);
-        if (intervalPolicy.Support != FocusedIntervalSupport.Supported
-            || intervalPolicy.Duration is not { } interval
+        if (intervalPolicy.Support != FocusedIntervalPolicySupport.Supported
+            || intervalPolicy.IntervalDuration is not { } interval
             || interval <= TimeSpan.Zero)
         {
             return null;
