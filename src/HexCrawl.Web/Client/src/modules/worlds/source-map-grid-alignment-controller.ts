@@ -135,13 +135,6 @@ export class SourceMapGridAlignmentController {
 
             this.sourceResolutionVerified = analyzed.analysis.sourceResolutionVerified;
             this.detection = { status: analyzed.status, fit: analyzed.fit, reason: analyzed.reason };
-            if (this.detection.fit && !this.sourceResolutionVerified) {
-                this.detection = {
-                    ...this.detection,
-                    status: "inconclusive",
-                    reason: "The lattice preview was measured from a downscaled analysis image. Source-resolution phase verification is not available."
-                };
-            }
             const assetUrl = this.api.sourceMapAssetUrl(world.id, sourceMap.id);
             if (!this.detection.fit) {
                 this.proposal = null;
