@@ -35,7 +35,7 @@ public sealed class SurveyorMapAnalysisClientTests
         Assert.Equal(HttpMethod.Post, observed.Method);
         Assert.Equal("http://surveyor.internal/v1/periodic-tiling/detect", observed.RequestUri!.GetLeftPart(UriPartial.Path));
         var query = observed.RequestUri.Query;
-        Assert.Contains("periodicTilingType=Regular", query);
+        Assert.DoesNotContain("periodicTilingType=", query, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("crNotation=6%5E3", query, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("shape=", query, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("minimumSpacingPixels=12.5", query);
