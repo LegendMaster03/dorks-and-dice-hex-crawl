@@ -99,7 +99,6 @@ public sealed class SurveyorMapAnalysisClient(
     {
         var parameters = new List<string>
         {
-            $"periodicTilingType={Uri.EscapeDataString(PeriodicTilingType)}",
             $"crNotation={Uri.EscapeDataString(CrNotation)}"
         };
         AddDouble("minimumSpacingPixels", options.MinimumSpacingPixels);
