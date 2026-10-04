@@ -204,3 +204,7 @@ Phase 8 completes generic movement capability composition over the Phase 7 typed
 Still deferred are Phase 9 generalized environment context/execution, Phase 10 generalized effects/consequence lifecycle, Phase 11 forced-travel/survival/resource execution, Phase 12 multi-stage journey execution, expanded encounter runtime, battle maps, and real-time multiplayer synchronization.
 
 See `docs/generic-procedure-architecture.md` and `docs/phase-3-proof-matrix.md` for the procedure and proof-model details.
+
+## Automatic raster analysis service
+
+The source-map workspace requests automatic grid analysis through the Hex Crawl server. The browser no longer performs computer-vision preprocessing and does not know Surveyor's URL or credential. If Surveyor is unavailable or times out, the existing map and manual/Advanced registration workflow remain usable.

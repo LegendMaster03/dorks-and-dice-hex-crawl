@@ -222,3 +222,9 @@ Important retained guarantees include:
 Still deferred are expanded encounter runtime/tactical circumstance consumption and battle-map ownership. Phase 12.5 is the next internal-human-testing readiness gate.
 
 See `docs/generic-procedure-architecture.md`, `docs/environment-context.md`, `docs/movement-capability-composition.md`, `docs/survival-resources.md`, `docs/journey-processes.md`, `docs/postgresql-persistence.md`, `docs/generic-procedure-development-plan.md`, and `docs/phase-3-proof-matrix.md`.
+
+## Shared map processing (Phase 13)
+
+Raster decoding, bounded grayscale preparation, and hex-lattice detection are owned by the headless Dorks & Dice Surveyor service. The browser calls only the Hex Crawl API. Hex Crawl authorizes the world/source map, loads the authoritative stored raster, calls Surveyor through `IMapAnalysisService`, validates source dimensions/media type, and returns a typed observation to the browser.
+
+Surveyor is computation-only. Hex Crawl retains physical scale, Wonderdraft reconciliation, preview, explicit Apply, grid identity, expedition safety, optimistic concurrency, and final persistence. Surveyor unavailability does not prevent Hex Crawl startup or manual map registration.

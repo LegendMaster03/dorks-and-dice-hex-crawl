@@ -1,16 +1,16 @@
 import type { HexCrawlApi } from "../../api";
-import { detectHexLattice, type HexLatticeDetection, type HexLatticeFit } from "../../grid-lattice-detector";
+import {
+    isCanonicalSourceFit,
+    rasterGridCanonicalResidualLimit,
+    type HexLatticeDetection,
+    type HexLatticeFit,
+    type SourceMapGridAnalysis
+} from "../../hex-grid-analysis";
 import {
     buildRasterGridAlignmentProposal,
     selectPhysicalDistancePerHex,
     type RasterGridAlignmentProposal
 } from "../../raster-grid-alignment";
-import {
-    isCanonicalSourceFit,
-    mapDetectionToSourceImage,
-    rasterGridAnalysisScale,
-    rasterGridCanonicalResidualLimit
-} from "../../raster-analysis-space";
 import type { MapSurface } from "../../map-surface";
 import type { GridDefinition, Overworld, SourceMapDetail } from "../../types";
 import { required } from "../../ui/dom";
@@ -23,6 +23,7 @@ export class SourceMapGridAlignmentController {
     private detection: HexLatticeDetection | null = null;
     private proposal: RasterGridAlignmentProposal | null = null;
     private physicalScaleChange: PhysicalScaleChange | null = null;
+    private analysisAbortController: AbortController | null = null;
     private readonly panel: HTMLElement;
     private readonly status: HTMLElement;
     private readonly applyButton: HTMLButtonElement;
@@ -90,24 +91,32 @@ export class SourceMapGridAlignmentController {
         this.clearPreview();
 
         const world = this.getWorld();
-        const assetUrl = this.api.sourceMapAssetUrl(world.id, sourceMap.id);
-        const analyzed = await analyzeRaster(
-            assetUrl,
-            sourceMap.pixelWidth,
-            sourceMap.pixelHeight);
-        const detection = detectHexLattice(analyzed.raster, {
-            minimumSpacingPixels: Math.max(8, Math.floor(12 * analyzed.scale)),
-            minimumConfidence: AutomaticApplyConfidence
-        });
-        this.detection = mapDetectionToSourceImage(detection, analyzed.scale);
-        if (this.detection.fit && !analyzed.sourceResolution) {
+        this.analysisAbortController?.abort();
+        const abortController = new AbortController();
+        this.analysisAbortController = abortController;
+        let analyzed: SourceMapGridAnalysis;
+        try {
+            analyzed = await this.api.analyzeSourceMapGrid(world.id, sourceMap.id, abortController.signal);
+        } catch (error) {
+            if (abortController.signal.aborted) return;
+            this.detection = null;
+            this.proposal = null;
+            const detail = error instanceof Error ? error.message : "Surveyor did not return an analysis result.";
+            this.status.textContent = `Automatic analysis unavailable: ${detail} Advanced registration remains available.`;
+            return;
+        } finally {
+            if (this.analysisAbortController === abortController) this.analysisAbortController = null;
+        }
+
+        this.detection = { status: analyzed.status, fit: analyzed.fit, reason: analyzed.reason };
+        if (this.detection.fit && !analyzed.analysis.sourceResolutionVerified) {
             this.detection = {
                 ...this.detection,
                 status: "inconclusive",
                 reason: "The lattice preview was measured from a downscaled analysis image. Source-resolution phase verification is required before automatic Apply."
             };
         }
-
+        const assetUrl = this.api.sourceMapAssetUrl(world.id, sourceMap.id);
         if (!this.detection.fit) {
             this.proposal = null;
             this.status.textContent = `${statusLabel(this.detection.status)}: ${this.detection.reason}`;
@@ -155,7 +164,7 @@ export class SourceMapGridAlignmentController {
             `confidence ${(fit.confidence * 100).toFixed(1)}%`,
             `worst distant residual ${fit.residualPixels.toFixed(2)} px`,
             `coverage ${(fit.supportCoverage * 100).toFixed(1)}%`,
-            analyzed.sourceResolution ? "source-resolution phase verified" : "downscaled phase only"
+            analyzed.analysis.sourceResolutionVerified ? "source-resolution phase verified" : "downscaled phase only"
         ];
         if (scaleContext.summary) summary.splice(1, 0, scaleContext.summary);
         const warnings = [
@@ -175,7 +184,7 @@ export class SourceMapGridAlignmentController {
         }
         this.status.textContent = `${summary.join(" · ")}.${warnings.length > 0 ? ` ${warnings.join(" ")}` : ""}`;
         this.applyButton.disabled = fit.confidence < AutomaticApplyConfidence
-            || !isCanonicalSourceFit(this.detection, analyzed.scale);
+            || !isCanonicalSourceFit(this.detection, analyzed.analysis.sourceResolutionVerified);
     }
 
     private async apply(): Promise<void> {
@@ -215,6 +224,8 @@ export class SourceMapGridAlignmentController {
     }
 
     private cancel(): void {
+        this.analysisAbortController?.abort();
+        this.analysisAbortController = null;
         this.selectedMap = null;
         this.detection = null;
         this.proposal = null;
@@ -230,12 +241,6 @@ export class SourceMapGridAlignmentController {
         this.mapSurface.requestRender();
     }
 }
-
-type AnalyzedRaster = {
-    raster: { width: number; height: number; pixels: Uint8Array };
-    scale: number;
-    sourceResolution: boolean;
-};
 
 type WonderdraftAlignmentContext = {
     rasterRelationship: string;
@@ -268,46 +273,6 @@ type PhysicalScaleChange = {
     proposedValue: number;
     unitSymbol: string;
 };
-
-async function analyzeRaster(
-    assetUrl: string,
-    expectedWidth: number,
-    expectedHeight: number): Promise<AnalyzedRaster> {
-    const response = await fetch(assetUrl, { headers: { Accept: "image/*" } });
-    if (!response.ok) throw new Error(`Raster analysis could not load the source image (${response.status}).`);
-    const blob = await response.blob();
-    const bitmap = await createImageBitmap(blob);
-    try {
-        if (bitmap.width !== expectedWidth || bitmap.height !== expectedHeight) {
-            throw new Error(
-                `Stored raster dimensions ${bitmap.width}×${bitmap.height} do not match source-map metadata ${expectedWidth}×${expectedHeight}.`);
-        }
-        const scale = rasterGridAnalysisScale(bitmap.width, bitmap.height);
-        const width = Math.max(1, Math.round(bitmap.width * scale));
-        const height = Math.max(1, Math.round(bitmap.height * scale));
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-        const context = canvas.getContext("2d", { willReadFrequently: true });
-        if (!context) throw new Error("The browser could not create a raster-analysis canvas.");
-        context.drawImage(bitmap, 0, 0, width, height);
-        const rgba = context.getImageData(0, 0,width, height).data;
-        const pixels = new Uint8Array(width * height);
-        for (let source = 0, target = 0; source < rgba.length; source += 4, target++) {
-            pixels[target] = Math.round(
-                (0.2126 * rgba[source])
-                + (0.7152 * rgba[source + 1])
-                + (0.0722 * rgba[source + 2]));
-        }
-        return {
-            raster: { width, height, pixels },
-            scale,
-            sourceResolution: Math.abs(scale - 1) <= Number.EPSILON
-        };
-    } finally {
-        bitmap.close();
-    }
-}
 
 async function loadPhysicalScaleContext(
     assetUrl: string,
