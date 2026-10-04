@@ -59,6 +59,11 @@ public static class JourneyEventEngine
         input.Provenance.Validate();
         ValidateLink(policy, input.ProcessId);
         ValidateProcessStage(state, input.ProcessId, input.StageKey);
+        if (!policy.SupportsTarget(input.TargetKind, allowUnresolved: true))
+        {
+            throw new InvalidOperationException(
+                $"The exact pinned journey-event targeting model '{policy.TargetingModel}' does not support target kind '{input.TargetKind}'.");
+        }
         foreach (var fact in input.Environment) fact.Validate();
 
         var triggerReference = RequiredText(input.TriggerReference, "Journey event trigger reference");
@@ -146,6 +151,11 @@ public static class JourneyEventEngine
         var targetKind = input.TargetKind;
         if (input.Status == JourneyEventStatus.Resolved)
         {
+            if (!policy.SupportsTarget(targetKind, allowUnresolved: false))
+            {
+                throw new InvalidOperationException(
+                    $"The exact pinned journey-event targeting model '{policy.TargetingModel}' does not support resolved target kind '{targetKind}'.");
+            }
             if (string.IsNullOrWhiteSpace(input.EventKey))
             {
                 throw new InvalidOperationException("A resolved journey event requires an explicit event key; event content is never fabricated.");
