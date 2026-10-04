@@ -35,6 +35,19 @@ test("reference-map workspace exposes server-backed automatic baked-grid detecti
     assert.match(renderer, /const grid = this\.gridPreview \?\? world\.grid/);
 });
 
+test("switching maps or starting a newer analysis invalidates stale asynchronous previews", () => {
+    const controller = fs.readFileSync(
+        path.join(sourceRoot, "modules/worlds/source-map-grid-alignment-controller.ts"),
+        "utf8");
+
+    assert.match(controller, /private analysisGeneration = 0/);
+    assert.match(controller, /this\.analysisAbortController\?\.abort\(\);\s*this\.analysisAbortController = null;\s*this\.analysisGeneration \+= 1;\s*this\.selectedMap = sourceMap/);
+    assert.match(controller, /const generation = \+\+this\.analysisGeneration/);
+    assert.match(controller, /generation !== this\.analysisGeneration/);
+    assert.match(controller, /this\.selectedMap\?\.id !== sourceMap\.id/);
+    assert.match(controller, /const scaleContext = await loadPhysicalScaleContext[\s\S]*generation !== this\.analysisGeneration/);
+});
+
 test("unplaced baked-grid Wonderdraft import automatically starts a non-saving detection preview", () => {
     const workspace = fs.readFileSync(
         path.join(sourceRoot, "modules/worlds/source-map-workspace.ts"),
