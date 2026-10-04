@@ -123,9 +123,15 @@ internal static class ProcedureComposerCustomProcedureFactory
     private static MaterializedProcedureModule Select(
         string moduleKey,
         string mechanicKey,
-        params (string Key, string Value)[] parameters) =>
-        new(
-            CampaignProcedureSnapshot.Copy(GenericProcedureCatalog.ResolveModule(moduleKey)),
-            CampaignProcedureSnapshot.Copy(GenericProcedureCatalog.ResolveMechanic(mechanicKey)),
+        params (string Key, string Value)[] parameters)
+    {
+        var module = JourneyProcedureContractSchema.ExtendModule(GenericProcedureCatalog.ResolveModule(moduleKey));
+        var mechanic = JourneyProcedureContractSchema.ExtendMechanic(
+            moduleKey,
+            GenericProcedureCatalog.ResolveMechanic(mechanicKey));
+        return new MaterializedProcedureModule(
+            CampaignProcedureSnapshot.Copy(module),
+            CampaignProcedureSnapshot.Copy(mechanic),
             parameters.ToDictionary(value => value.Key, value => value.Value, StringComparer.Ordinal));
+    }
 }
