@@ -36,11 +36,15 @@ public sealed class ExpeditionPartyService(
         var policy = ParticipantActivityPolicyResolver.Resolve(expedition.CampaignProcedure);
         ParticipantActivityPolicyResolver.ValidateAssignments(party, policy);
 
-        // Effects, resources, survival counters, and pending consequence targets are one aggregate.
-        // Reject participant/mount/vehicle edits that would leave any Phase 10/11 reference dangling.
+        // Effects, resources, survival counters, pending consequences, and live journey targets are
+        // one expedition aggregate. Historical journey participant snapshots are immutable audit
+        // data, but active/pending references must remain valid after party edits.
         expedition.Effects.Validate(party);
         expedition.Resources.Validate(party);
         expedition.Survival.Validate(party);
+        expedition.Journey.Validate(
+            party,
+            expedition.Effects.AppliedConsequences.Select(value => value.ConsequenceId).ToHashSet());
 
         var updated = expedition with { Party = party };
         var result = await store.SaveExpeditionAsync(
