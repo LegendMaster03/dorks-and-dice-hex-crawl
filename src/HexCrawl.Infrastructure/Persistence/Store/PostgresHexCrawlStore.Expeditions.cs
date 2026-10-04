@@ -136,6 +136,7 @@ public sealed partial class PostgresHexCrawlStore
         var generatedResolutions = Deserialize<IReadOnlyList<GeneratedProcedureResolution>>(reader.GetString(10));
         var procedure = Deserialize<CampaignProcedure>(reader.GetString(11));
         procedure.Validate();
+        JourneyAggregateProcedureValidator.Validate(procedure, journey);
         var procedureOrigin = reader.IsDBNull(12) ? null : Deserialize<ProcedureOriginMetadata>(reader.GetString(12));
         RuntimePauseReason? pauseReason = reader.IsDBNull(13) ? null : Enum.Parse<RuntimePauseReason>(reader.GetString(13), true);
         var remaining = TimeSpan.FromTicks(reader.GetInt64(14));
@@ -150,7 +151,7 @@ public sealed partial class PostgresHexCrawlStore
             NonSpatialSessionState nonSpatial => nonSpatial with { History = events },
             _ => throw new InvalidDataException("Persisted crawl session runtime kind is not supported.")
         };
-        return new StoredExpedition(name, runtime, context, knowledge, procedure, pauseReason, remaining,
+        var expedition = new StoredExpedition(name, runtime, context, knowledge, procedure, pauseReason, remaining,
             ownerUserId, version, created, updated)
         {
             Party = party,
@@ -163,6 +164,8 @@ public sealed partial class PostgresHexCrawlStore
             CampaignId = contextSnapshot.CampaignId,
             ProcedureOrigin = procedureOrigin
         };
+        ValidateAggregate(expedition);
+        return expedition;
     }
 
     public async Task<SaveResult<StoredExpedition>> SaveExpeditionAsync(
@@ -313,6 +316,7 @@ public sealed partial class PostgresHexCrawlStore
         AddJsonb(command, "survival", Serialize(expedition.Survival));
         expedition.Journey.Validate(expedition.Party,
             expedition.Effects.AppliedConsequences.Select(value => value.ConsequenceId).ToHashSet());
+        JourneyAggregateProcedureValidator.Validate(expedition.CampaignProcedure, expedition.Journey);
         AddJsonb(command, "journey", Serialize(expedition.Journey));
         AddJsonb(command, "generatedResolutions", Serialize(expedition.GeneratedProcedureResolutions));
         expedition.CampaignProcedure.Validate();
@@ -335,5 +339,6 @@ public sealed partial class PostgresHexCrawlStore
         expedition.Journey.Validate(
             expedition.Party,
             expedition.Effects.AppliedConsequences.Select(value => value.ConsequenceId).ToHashSet());
+        JourneyAggregateProcedureValidator.Validate(expedition.CampaignProcedure, expedition.Journey);
     }
 }
