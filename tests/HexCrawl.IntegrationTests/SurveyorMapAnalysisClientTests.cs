@@ -12,7 +12,7 @@ public sealed class SurveyorMapAnalysisClientTests
     private const string Token = "integration-surveyor-token";
 
     [Fact]
-    public async Task ClientSendsRasterCredentialCorrelationAndSourcePixelOptionsAndMapsValidResponse()
+    public async Task ClientSendsRasterCredentialCorrelationAndNotationFirstTilingRequestAndMapsValidResponse()
     {
         HttpRequestMessage? observed = null;
         byte[]? observedBody = null;
@@ -33,8 +33,10 @@ public sealed class SurveyorMapAnalysisClientTests
 
         Assert.NotNull(observed);
         Assert.Equal(HttpMethod.Post, observed.Method);
-        Assert.Equal("http://surveyor.internal/v1/hex-grid/detect", observed.RequestUri!.GetLeftPart(UriPartial.Path));
+        Assert.Equal("http://surveyor.internal/v1/periodic-tiling/detect", observed.RequestUri!.GetLeftPart(UriPartial.Path));
         var query = observed.RequestUri.Query;
+        Assert.Contains("periodicTilingType=Regular", query);
+        Assert.Contains("cundyRollettNotation=6%5E3", query, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("minimumSpacingPixels=12.5", query);
         Assert.Contains("maximumSpacingPixels=400.25", query);
         Assert.Contains("maximumEdgeSamples=90000", query);
@@ -45,7 +47,7 @@ public sealed class SurveyorMapAnalysisClientTests
         Assert.Equal("image/png", observed.Content!.Headers.ContentType!.MediaType);
         Assert.Equal(raster, observedBody);
         Assert.Equal("v1", result.ApiVersion);
-        Assert.Equal("map.hex-grid.detect", result.Capability);
+        Assert.Equal("map.periodic-tiling.detect", result.Capability);
         Assert.Equal("detected", result.Status);
         Assert.Equal(2048, result.Source.Width);
         Assert.NotNull(result.Fit);
@@ -72,9 +74,10 @@ public sealed class SurveyorMapAnalysisClientTests
 
     [Theory]
     [InlineData("{not-json")]
-    [InlineData("{\"apiVersion\":\"v2\",\"capability\":\"map.hex-grid.detect\",\"status\":\"gridless\",\"reason\":\"x\",\"source\":{\"width\":1,\"height\":1,\"mediaType\":\"image/png\"},\"analysis\":{\"width\":1,\"height\":1,\"scale\":1,\"sourceResolutionVerified\":true},\"fit\":null}")]
-    [InlineData("{\"apiVersion\":\"v1\",\"capability\":\"map.hex-grid.detect\",\"status\":\"detected\",\"reason\":\"x\",\"source\":{\"width\":1,\"height\":1,\"mediaType\":\"image/png\"},\"analysis\":{\"width\":1,\"height\":1,\"scale\":1,\"sourceResolutionVerified\":true},\"fit\":null}")]
-    [InlineData("{\"apiVersion\":\"v1\",\"capability\":\"map.hex-grid.detect\",\"status\":\"detected\",\"reason\":\"x\",\"source\":{\"width\":1,\"height\":1,\"mediaType\":\"image/png\"},\"analysis\":{\"width\":1,\"height\":1,\"scale\":1,\"sourceResolutionVerified\":true},\"fit\":{\"orientation\":\"FlatTop\",\"rotationDegrees\":0,\"centerSpacingPixels\":80,\"anchorPixel\":{\"x\":0,\"y\":0},\"confidence\":2,\"residualPixels\":0,\"supportCoverage\":1,\"orientationSupport\":1,\"translationScore\":1,\"competingTranslationScore\":0,\"linePeriodicityScore\":1,\"phaseScore\":1}}")]
+    [InlineData("{\"apiVersion\":\"v2\",\"capability\":\"map.periodic-tiling.detect\",\"tiling\":{\"periodicTilingType\":\"Regular\",\"cundyRollettNotation\":\"6^3\",\"gomJauHoggNotation\":\"6/m30/r(h1)\",\"shapes\":[{\"name\":\"hex\",\"sides\":6}]},\"status\":\"gridless\",\"reason\":\"x\",\"source\":{\"width\":1,\"height\":1,\"mediaType\":\"image/png\"},\"analysis\":{\"width\":1,\"height\":1,\"scale\":1,\"sourceResolutionVerified\":true},\"fit\":null}")]
+    [InlineData("{\"apiVersion\":\"v1\",\"capability\":\"map.periodic-tiling.detect\",\"tiling\":{\"periodicTilingType\":\"Regular\",\"cundyRollettNotation\":\"4^4\",\"gomJauHoggNotation\":\"4/m45/r(h1)\",\"shapes\":[{\"name\":\"square\",\"sides\":4}]},\"status\":\"gridless\",\"reason\":\"x\",\"source\":{\"width\":1,\"height\":1,\"mediaType\":\"image/png\"},\"analysis\":{\"width\":1,\"height\":1,\"scale\":1,\"sourceResolutionVerified\":true},\"fit\":null}")]
+    [InlineData("{\"apiVersion\":\"v1\",\"capability\":\"map.periodic-tiling.detect\",\"tiling\":{\"periodicTilingType\":\"Regular\",\"cundyRollettNotation\":\"6^3\",\"gomJauHoggNotation\":\"6/m30/r(h1)\",\"shapes\":[{\"name\":\"hex\",\"sides\":6}]},\"status\":\"detected\",\"reason\":\"x\",\"source\":{\"width\":1,\"height\":1,\"mediaType\":\"image/png\"},\"analysis\":{\"width\":1,\"height\":1,\"scale\":1,\"sourceResolutionVerified\":true},\"fit\":null}")]
+    [InlineData("{\"apiVersion\":\"v1\",\"capability\":\"map.periodic-tiling.detect\",\"tiling\":{\"periodicTilingType\":\"Regular\",\"cundyRollettNotation\":\"6^3\",\"gomJauHoggNotation\":\"6/m30/r(h1)\",\"shapes\":[{\"name\":\"hex\",\"sides\":6}]},\"status\":\"detected\",\"reason\":\"x\",\"source\":{\"width\":1,\"height\":1,\"mediaType\":\"image/png\"},\"analysis\":{\"width\":1,\"height\":1,\"scale\":1,\"sourceResolutionVerified\":true},\"fit\":{\"orientation\":\"FlatTop\",\"rotationDegrees\":0,\"centerSpacingPixels\":80,\"anchorPixel\":{\"x\":0,\"y\":0},\"confidence\":2,\"residualPixels\":0,\"supportCoverage\":1,\"orientationSupport\":1,\"translationScore\":1,\"competingTranslationScore\":0,\"linePeriodicityScore\":1,\"phaseScore\":1}}")]
     public async Task ClientRejectsMalformedOrIncompatibleSurveyorResponses(string payload)
     {
         var client = CreateClient(new DelegateHandler((_, _) => Task.FromResult(Json(HttpStatusCode.OK, payload))));
@@ -83,20 +86,31 @@ public sealed class SurveyorMapAnalysisClientTests
     }
 
     [Fact]
-    public async Task ClientTranslatesItsOwnFiniteTimeoutButPreservesCallerCancellation()
+    public async Task ClientTimeoutCoversResponseHeadersAndBodyButPreservesCallerCancellation()
     {
-        var handler = new DelegateHandler(async (_, cancellationToken) =>
+        var headerHandler = new DelegateHandler(async (_, cancellationToken) =>
         {
             await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             throw new InvalidOperationException("unreachable");
         });
-        var client = CreateClient(handler, timeoutMilliseconds: 1_000);
-        await Assert.ThrowsAsync<MapAnalysisTimeoutException>(() => client.DetectHexGridAsync(
+        var headerClient = CreateClient(headerHandler, timeoutMilliseconds: 100);
+        await Assert.ThrowsAsync<MapAnalysisTimeoutException>(() => headerClient.DetectHexGridAsync(
+            new MemoryStream([1]), "image/png", new MapAnalysisOptions()));
+
+        var bodyHandler = new DelegateHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StreamContent(new BlockingReadStream())
+            {
+                Headers = { ContentType = new("application/json") }
+            }
+        }));
+        var bodyClient = CreateClient(bodyHandler, timeoutMilliseconds: 100);
+        await Assert.ThrowsAsync<MapAnalysisTimeoutException>(() => bodyClient.DetectHexGridAsync(
             new MemoryStream([1]), "image/png", new MapAnalysisOptions()));
 
         using var callerCancellation = new CancellationTokenSource();
         callerCancellation.Cancel();
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => client.DetectHexGridAsync(
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => headerClient.DetectHexGridAsync(
             new MemoryStream([1]), "image/png", new MapAnalysisOptions(), cancellationToken: callerCancellation.Token));
     }
 
@@ -132,7 +146,13 @@ public sealed class SurveyorMapAnalysisClientTests
         """
         {
           "apiVersion":"v1",
-          "capability":"map.hex-grid.detect",
+          "capability":"map.periodic-tiling.detect",
+          "tiling":{
+            "periodicTilingType":"Regular",
+            "cundyRollettNotation":"6^3",
+            "gomJauHoggNotation":"6/m30/r(h1)",
+            "shapes":[{"name":"hex","sides":6}]
+          },
           "status":"detected",
           "reason":"fixture",
           "source":{"width":2048,"height":1536,"mediaType":"image/png"},
@@ -160,5 +180,24 @@ public sealed class SurveyorMapAnalysisClientTests
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
             CancellationToken cancellationToken) => send(request, cancellationToken);
+    }
+
+    private sealed class BlockingReadStream : Stream
+    {
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            return 0;
+        }
     }
 }
