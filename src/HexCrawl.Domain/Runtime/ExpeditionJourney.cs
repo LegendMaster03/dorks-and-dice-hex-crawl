@@ -451,9 +451,15 @@ public sealed record JourneyProcessInstance
         {
             throw new InvalidOperationException("Journey process end reference must be non-negative.");
         }
-        if (IsTerminal != EndedAtExpeditionTime.HasValue)
+        if (IsTerminal != EndedAtExpeditionTime.HasValue
+            || IsTerminal != EndedAfterCompletedWatches.HasValue)
         {
-            throw new InvalidOperationException("Journey terminal status and end reference must agree.");
+            throw new InvalidOperationException("Journey terminal status and end references must agree.");
+        }
+        if (EndedAtExpeditionTime is { } endedAt && endedAt < StartedAtExpeditionTime
+            || EndedAfterCompletedWatches is { } endedWatches && endedWatches < StartedAfterCompletedWatches)
+        {
+            throw new InvalidOperationException("Journey process end reference can not precede its start reference.");
         }
         if (IsTerminal && string.IsNullOrWhiteSpace(EndReason))
         {
@@ -684,12 +690,13 @@ public sealed record JourneyHistoryRecord
 
     public void Validate()
     {
-        if (Id == Guid.Empty || ResolutionId == Guid.Empty || EventOccurrenceId == Guid.Empty || ProcessId == Guid.Empty)
+        if (Id == Guid.Empty)
         {
-            if (Id == Guid.Empty)
-            {
-                throw new InvalidOperationException("Journey history id is required.");
-            }
+            throw new InvalidOperationException("Journey history id is required.");
+        }
+        if (ProcessId == Guid.Empty || ResolutionId == Guid.Empty || EventOccurrenceId == Guid.Empty)
+        {
+            throw new InvalidOperationException("Journey history optional identifiers can not contain an empty GUID.");
         }
         ExpeditionConsequenceProvenance.ValidateOptional(StageKey, 200, "Journey history stage key");
         if (ExpeditionTime < TimeSpan.Zero || CompletedWatches < 0)
@@ -748,6 +755,14 @@ public sealed record ExpeditionJourneyState
             {
                 throw new InvalidOperationException("Journey event occurrence ids must be unique.");
             }
+            if (occurrence.ProcessId is { } occurrenceProcessId && occurrence.StageKey is { } occurrenceStageKey)
+            {
+                var process = ActiveProcesses.Concat(ClosedProcesses).Single(value => value.Id == occurrenceProcessId);
+                if (!process.Definition.Stages.Any(value => string.Equals(value.StageKey, occurrenceStageKey, StringComparison.Ordinal)))
+                {
+                    throw new InvalidOperationException("Journey event references a stage that does not exist in its retained process.");
+                }
+            }
         }
         var resolutionIds = new HashSet<Guid>();
         foreach (var resolution in Resolutions)
@@ -756,6 +771,11 @@ public sealed record ExpeditionJourneyState
             if (!processIds.Contains(resolution.ProcessId))
             {
                 throw new InvalidOperationException("Journey resolution references a process that is not retained in journey state.");
+            }
+            var process = ActiveProcesses.Concat(ClosedProcesses).Single(value => value.Id == resolution.ProcessId);
+            if (!process.Definition.Stages.Any(value => string.Equals(value.StageKey, resolution.StageKey, StringComparison.Ordinal)))
+            {
+                throw new InvalidOperationException("Journey resolution references a stage that does not exist in its retained process.");
             }
             if (!resolutionIds.Add(resolution.ResolutionId))
             {
