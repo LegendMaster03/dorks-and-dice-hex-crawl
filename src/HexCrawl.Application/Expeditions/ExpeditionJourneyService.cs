@@ -60,9 +60,11 @@ public sealed class ExpeditionJourneyService(
         var expedition = await LoadAsync(expeditionId, ownerUserId, command.ExpectedVersion, cancellationToken);
         var policy = JourneyProcedurePolicyResolver.ResolveProcess(expedition.CampaignProcedure);
         RequireSupportedProcess(policy);
+        ValidateRoleDrivenPolicy(expedition, policy);
         var definition = command.Definition ?? DefinitionFromPinnedPolicy(policy, command);
         definition.Validate();
         ValidateDefinitionAgainstPinnedPolicy(policy, definition);
+        ValidateDefinitionRoleKeys(expedition, definition);
         var transition = JourneyProcessEngine.Start(
             expedition.Journey,
             command.ProcessId,
@@ -196,6 +198,7 @@ public sealed class ExpeditionJourneyService(
         var expedition = await LoadAsync(expeditionId, ownerUserId, command.ExpectedVersion, cancellationToken);
         var policy = JourneyProcedurePolicyResolver.ResolveEvents(expedition.CampaignProcedure);
         var opportunity = command.Opportunity;
+        if (opportunity.TargetRoleKey is not null) ValidateRoleKey(expedition, opportunity.TargetRoleKey);
         if (command.CaptureCurrentEnvironment && opportunity.Environment.Count == 0)
         {
             opportunity = opportunity with { Environment = await SnapshotEnvironmentAsync(expedition, ownerUserId, cancellationToken) };
@@ -420,6 +423,25 @@ public sealed class ExpeditionJourneyService(
             && definition.Stages.Any(value => string.IsNullOrWhiteSpace(value.InitialProgressState)))
         {
             throw new InvalidOperationException("Every stage of an explicit-state journey process requires an initial progress state.");
+        }
+    }
+
+    private static void ValidateRoleDrivenPolicy(StoredExpedition expedition, JourneyProcessPolicy policy)
+    {
+        if (!policy.RoleDriven) return;
+        var activities = ParticipantActivityPolicyResolver.Resolve(expedition.CampaignProcedure);
+        if (activities.Support != ParticipantActivityPolicySupport.Supported || activities.RoleKeys.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "The exact pinned role-driven journey.process policy requires a supported party.activities policy with declared role keys.");
+        }
+    }
+
+    private static void ValidateDefinitionRoleKeys(StoredExpedition expedition, JourneyProcessDefinition definition)
+    {
+        foreach (var roleKey in definition.Stages.SelectMany(value => value.RoleKeys).Distinct(StringComparer.Ordinal))
+        {
+            ValidateRoleKey(expedition, roleKey);
         }
     }
 
