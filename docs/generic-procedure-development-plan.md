@@ -23,9 +23,9 @@ During pre-release development:
 
 ### Compatibility horizon for internal human testing
 
-For this roadmap, **Phase 12.5 — internal human testing readiness** is the first point at which internal human testers are expected to begin accumulating campaign and expedition data that should create a meaningful preference for migration over reset.
+For this roadmap, **Phase 14.5 — internal human testing readiness** is the first point at which internal human testers are expected to begin accumulating campaign and expedition data that should create a meaningful preference for migration over reset.
 
-Before Phase 12.5:
+Before Phase 14.5:
 
 - database resets are an accepted development tool when they simplify or improve the target architecture;
 - there is no requirement to migrate development-era data merely to preserve temporary local/test state;
@@ -34,7 +34,7 @@ Before Phase 12.5:
 - implementation phases should optimize for the intended final architecture rather than avoiding a reset;
 - compatibility or migration work should be added only when a specific requirement is explicitly approved.
 
-Beginning with Phase 12.5 and the opening of internal human testing:
+Beginning with Phase 14.5 and the opening of internal human testing:
 
 - Hex Crawl remains pre-release and testers are not guaranteed permanent data retention;
 - a reset remains acceptable when an architectural correction genuinely requires it;
@@ -82,8 +82,9 @@ The current branch establishes these foundations:
 15. Runtime dispatch must depend on materialized mechanic handler/version contracts, never on named-system identity.
 16. A missing `CampaignProcedure` in current-format expedition data is invalid current data, not a trigger for a fallback representation.
 17. Do not merge development branches to `main` without explicit authorization.
-18. Before Phase 12.5, development-era persistence/API/runtime compatibility is not a requirement unless explicitly approved; obsolete shapes should not be retained merely to avoid a database reset.
-19. Hex Crawl durable map/grid state must not depend on whether image-processing work executes locally or through the planned shared headless processing resource.
+18. Before Phase 14.5, development-era persistence/API/runtime compatibility is not a requirement unless explicitly approved; obsolete shapes should not be retained merely to avoid a database reset.
+19. Hex Crawl durable map/grid state must not depend on whether image-processing work executes locally or through the shared headless processing resource.
+20. The shared map-processing resource owns computation only; each consuming tool remains authoritative for the accepted domain state produced from those results.
 
 ## Product model
 
@@ -529,51 +530,98 @@ See `docs/journey-processes.md`.
 
 ## Internal human testing boundary
 
-Internal human testing should begin only after the core persisted expedition-state architecture through Phase 12 has stabilized.
+Internal human testing should begin only after the Phase 0–14 application architecture, shared map-processing separation, encounter handoff, and comprehensive remediation/UI pass have stabilized.
 
-Phases 8 through 12 are intentionally completed before opening the tool to internal testers because they establish or substantially reshape durable movement capability, environment context, structured effects, resources/survival state, and multi-stage journey/process state. Avoiding a premature compatibility burden during those phases is more valuable than preserving development databases.
+Phases 8 through 12 intentionally establish the durable expedition-state architecture. Phase 13 then removes the known in-process map/computer-vision ownership problem by extracting image/grid computation behind a shared headless resource. Phase 14 reviews and remediates the resulting product as one complete system, including architecture, persistence, APIs, UI/UX, performance, security/trust boundaries, test quality, and expanded encounter handoff.
 
-Phase 12.5 is therefore the testing-readiness gate. It should verify that the Phase 0–12 vertical slice is usable by a DM, remove tester-blocking UX defects, establish acceptance scenarios and diagnostics, and document the internal-testing reset/migration policy.
+Phase 14.5 is therefore the testing-readiness gate. It should verify that the Phase 0–14 vertical slice is usable by a DM, resolve remaining tester-blocking UX defects, establish representative acceptance scenarios and diagnostics, validate persistence/restart behavior, and document the internal-testing reset/migration policy.
 
-After the Phase 12.5 gate, Phases 13 and 14 may proceed while internal human testing is active.
+After the Phase 14.5 gate, internal human testing begins and later product-evaluation work may proceed with testers active.
 
 ## Encounter handoff
 
-Existing structured encounter handoff should be expanded rather than reinvented. Later additions may include surprise, start circumstances, delay, reinforcements, altered composition, depleted resources, route/location changes, linked scenes, and source process provenance.
+Existing structured encounter handoff should be expanded rather than reinvented. Phase 14 carries structured circumstances, effects, composition changes, journey/hazard provenance, depleted resources, route/location changes, linked scenes, and other expedition context needed for combat handoff while preserving Block Initiative ownership of tactical combat.
 
 Block Initiative remains authoritative for tactical combat.
 
 ## Battle maps and linked scenes
 
-Battle-map ownership remains deliberately unresolved. Hex Crawl owns location and encounter context; tactical/scene maps remain provider-neutral linked resources until an explicit product decision is made.
+Battle-map ownership remains deliberately unresolved. Hex Crawl owns location and encounter context; tactical/scene maps remain provider-neutral linked resources until the Phase 15 product evaluation makes an explicit ownership decision.
 
 ## Shared image-processing boundary
 
-Raster and baked-grid auto-alignment work remains independent of procedure/preset architecture and is not a numbered MVP phase in this roadmap.
+The existing image-processing and grid-recognition functionality must be extracted in **Phase 13** into a shared headless map-processing resource before the comprehensive Phase 14 review and before the internal-testing compatibility horizon.
 
-The existing image-processing and grid-recognition functionality is intended to be extracted into a **shared headless processing resource** so that the same capability can later serve Hex Crawl and other Dorks & Dice tools, including prospective Battle Map and Bastion management tools.
+The shared resource exists so the same computation can later serve Hex Crawl and other Dorks & Dice tools, including prospective Battle Map and Bastion management tools.
 
-The extraction is intended to be an infrastructure separation, not a Hex Crawl product or persistence change:
+The extraction is an infrastructure separation, not a Hex Crawl product-state rewrite:
 
 ```text
 Hex Crawl map/grid workflows
         ↓
-stable image-processing capability boundary
+Hex Crawl-owned stable map-processing client/capability boundary
         ↓
-shared headless image-processing resource
+shared headless map-processing resource
+        ↓
+validated result DTO
+        ↓
+Hex Crawl acceptance/domain operation
+        ↓
+Hex Crawl-owned durable map/grid state
 ```
 
-The intended extraction must preserve Hex Crawl behavior and durable state. Moving the computation out of the Hex Crawl process should not require a Hex Crawl database schema change, should not change accepted map/grid results, and should not make the external processing implementation authoritative for Hex Crawl domain state.
+The shared resource owns computation. Hex Crawl remains authoritative for accepted Hex Crawl map/grid/world state. Other consuming tools remain authoritative for their own accepted state.
 
-During the current phase-development cycle:
+Phase 13 must preserve current Hex Crawl behavior and accepted logical map/grid results. Moving computation out of the Hex Crawl process should not require a Hex Crawl database schema change and must not make service implementation details authoritative for Hex Crawl domain behavior.
 
-- procedure work must remain independent of raster/grid implementation details;
-- new Hex Crawl code should avoid deepening direct coupling to concrete in-process image-processing or grid-recognition implementations;
-- when related map/image code is touched, prefer boundaries that can later be backed by the shared headless resource without changing Hex Crawl domain or persistence contracts;
-- do not delay Phases 8–12 or the Phase 12.5 internal-testing gate merely to complete the extraction if current functionality remains equivalent;
-- do not introduce compatibility scaffolding solely for the extraction when the public/domain contract can remain stable.
+Phase 13 must also establish production-quality service-boundary behavior, including:
 
-Potential future capabilities such as machine identification of roads, terrain, or other map features are **not part of the current MVP or this phase plan**. They belong to a later development cycle. If Hex Crawl later consumes such observations, the shared processing resource should report observations/results while Hex Crawl remains authoritative for accepted world/terrain/route state and the active `CampaignProcedure` remains authoritative for what that state means mechanically.
+- a stable provider-neutral request/response contract;
+- explicit service availability and failure states;
+- timeout and cancellation behavior;
+- validation of service results before domain acceptance;
+- authentication/authorization or trusted-service boundaries appropriate to deployment;
+- safe handling of malformed or partial responses;
+- concurrency and retry/idempotency behavior where operations can be repeated;
+- resource limits for large images or expensive processing;
+- diagnostics, timing, and observability sufficient to distinguish processing failures from Hex Crawl defects;
+- behavior-parity tests against the current in-process implementation before the old path is removed;
+- removal of duplicated/in-process implementation after parity is demonstrated, unless a deliberately reviewed fallback architecture is required.
+
+Phase 13 is not a feature-expansion phase for computer vision. Do not add:
+
+- automatic terrain recognition;
+- automatic road recognition;
+- semantic-map interpretation;
+- new map mechanics;
+- AI/model identity as runtime rule authority.
+
+Potential future capabilities such as machine identification of roads, terrain, or other map features belong to a later development cycle. If Hex Crawl later consumes such observations, the shared processing resource should report observations/results while Hex Crawl remains authoritative for accepted world/terrain/route state and the active `CampaignProcedure` remains authoritative for what that state means mechanically.
+
+## Comprehensive pre-testing review boundary
+
+Phase 14 is the final broad corrective phase before internal human testing. It reviews the architecture that will actually be carried into testing, including the Phase 13 shared map-processing boundary.
+
+Phase 14 has explicit authority to make breaking pre-release corrections when the review finds an underlying defect. It should fix the architecture rather than document around it. Database resets, development API changes, state-model cleanup, and UI restructuring remain acceptable through Phase 14 when they improve the intended product architecture.
+
+The review must cover at least:
+
+- architecture and state ownership across Phases 0–13;
+- persistence, aggregate validation, atomicity, concurrency, idempotency, and restart behavior;
+- backend/API correctness and canonical client contracts;
+- optional-provider and external-tool boundaries;
+- the shared map-processing service boundary and failure behavior;
+- security and trust boundaries, including server-side validation and untrusted client/provider inputs;
+- performance and avoidable repeated work, using measurement rather than speculative optimization;
+- complete UI/UX, information architecture, state visibility, workflow coherence, responsiveness, scrolling/modal behavior, terminology, error states, loading behavior, keyboard/accessibility basics, empty states, destructive actions, and stale-write recovery;
+- cross-phase integration among movement, environment, effects, resources/survival, journeys, and encounter context;
+- test quality, including raw-HTTP versus browser paths, restart coverage, nonspatial coverage, failure paths, and proof scenarios;
+- removal of obsolete scaffolding, dead paths, stale terminology, superseded helpers, and contradictory documentation;
+- the expanded encounter handoff.
+
+Representative Phase 14 acceptance scenarios should exercise complete DM workflows rather than isolated panels, including interval/watch travel, activity-budget travel, quarter-day travel, mapless/nonspatial journeys, forced travel, resources, environment-driven survival consequences, persistent effects that modify movement, foraging/camping/recovery, multi-stage journeys, journey-event consequences, restart/continue behavior, and encounter handoff.
+
+The One Ring no-interval path must receive a dedicated end-to-end UI and backend review to ensure no later feature has accidentally forced it into watch-based execution.
 
 ## Phased roadmap
 
@@ -647,28 +695,70 @@ The One Ring and Mixed House Rule proof recipes now contain their complete gener
 
 See `docs/journey-processes.md`.
 
-### Phase 12.5 — internal human testing readiness
+### Phase 13 — shared headless map-processing extraction
 
-Stabilize the Phase 0–12 vertical slice for internal human use without introducing release-level compatibility guarantees.
+Extract the existing Hex Crawl image-processing and grid-recognition backend behind a stable shared headless resource that can also serve other Dorks & Dice tools.
+
+Phase 13 is a required architectural dependency for Phase 14. Do not begin the comprehensive Phase 14 review until extraction is complete and behavior parity is demonstrated.
+
+Definition of done includes:
+
+- Hex Crawl calls a stable Hex Crawl-owned map-processing client/capability boundary rather than concrete in-process computer-vision/grid-recognition implementation;
+- the shared headless resource owns computation only;
+- Hex Crawl remains authoritative for accepted map/grid/world state;
+- current logical map/grid results and workflows remain behaviorally equivalent;
+- no Hex Crawl persistence/schema change is required solely because computation moved out of process;
+- service availability, timeout, cancellation, malformed-response, retry/idempotency, concurrency, large-input, validation, trust, diagnostics, and timing behavior are explicit and tested;
+- parity tests compare the extracted path against the prior implementation before the old implementation is removed;
+- duplicated/in-process implementation is removed after parity unless a fallback is explicitly justified and reviewed;
+- no automatic terrain recognition, road recognition, semantic-map interpretation, or other new computer-vision product feature is added as part of the extraction;
+- exact-head CI is green for every affected repository/resource.
+
+### Phase 14 — comprehensive code, architecture, UI/UX, and encounter-handoff review
+
+Perform a full review and remediation pass over the complete Phase 0–13 product before internal human testing.
+
+This phase includes the previously planned expanded encounter handoff and explicitly includes a complete UI/UX pass rather than limiting review to backend code.
+
+Definition of done includes:
+
+- architecture/state-ownership review across all durable and derived state;
+- persistence/aggregate-integrity review covering final validation, atomicity, optimistic concurrency, idempotency, restart behavior, deletion/reference integrity, and immutable history;
+- backend/API review for validation, failure semantics, canonical contracts, stale compatibility paths, and client/server authority boundaries;
+- review of optional provider/external-tool boundaries, including the newly extracted shared map-processing resource;
+- security/trust-boundary review of authorization, ownership, untrusted requests, provider/service responses, and server-side enforcement;
+- measurement-driven performance review and remediation of significant repeated work, unnecessary calls, serialization/database inefficiencies, slow client fetch patterns, and rendering problems;
+- comprehensive UI/UX review covering information architecture, workflow coherence, state visibility, action terminology, unsupported/manual states, loading and error behavior, responsive layout, scrolling/modal/card behavior, navigation consistency, accessibility basics, empty/custom-content states, destructive actions, and optimistic-concurrency recovery;
+- cross-phase integration review covering environment → movement, environment → survival → consequence, journey → consequence → resources/effects, typed activity snapshots, forced travel, no-interval journeys, and other Phase 0–13 boundaries;
+- test-quality review focused on actual invariants rather than test count, including browser/raw-HTTP parity, restart scenarios, failure paths, nonspatial behavior, and proof-preset behavior;
+- removal of obsolete Phase 0–13 scaffolding, dead code, superseded helpers, stale terminology, and contradictory documentation;
+- expanded encounter handoff carrying structured circumstances, effects, composition changes, journey/hazard provenance, resource depletion, route/location changes, linked scenes, and other relevant expedition context while Block Initiative remains tactical-combat authority;
+- representative end-to-end DM acceptance scenarios pass through the complete UI and backend;
+- the One Ring mapless/no-interval workflow receives a dedicated end-to-end review and remains free of fabricated watch/interval dependencies;
+- discovered architectural defects are fixed rather than documented around when a clean correction is feasible;
+- breaking development corrections and database resets remain permitted where they improve the intended architecture;
+- exact-head CI is green after remediation.
+
+### Phase 14.5 — internal human testing readiness
+
+Stabilize the Phase 0–14 vertical slice for internal human use without introducing release-level compatibility guarantees.
 
 Definition of done should include:
 
-- tester-blocking UX defects are resolved;
-- representative acceptance scenarios cover interval/watch travel, activity-budget travel, quarter-day travel, non-spatial/journey-process behavior, custom procedures, optional-provider absence, and DM/manual fallback;
-- persistence/restart behavior for the Phase 0–12 durable state model is validated;
-- logging/diagnostics are sufficient to distinguish user input, unsupported procedure behavior, provider problems, and application defects during testing;
+- remaining tester-blocking UX defects are resolved;
+- representative acceptance scenarios cover interval/watch travel, activity-budget travel, quarter-day travel, non-spatial/journey-process behavior, custom procedures, shared map-processing availability/failure, optional-provider absence, DM/manual fallback, and encounter handoff;
+- persistence/restart behavior for the Phase 0–14 durable state model is validated;
+- logging/diagnostics are sufficient to distinguish user input, unsupported procedure behavior, provider/service problems, and application defects during testing;
 - tester-facing instructions clearly state that the application remains pre-release and database resets are still possible;
 - the reset/migration policy from this document is applied: migrations become preferable when straightforward, but resets remain permitted when architecture warrants them.
 
-After Phase 12.5 is accepted, open Hex Crawl to internal human testers.
+After Phase 14.5 is accepted, open Hex Crawl to internal human testers.
 
-### Phase 13 — expanded encounter handoff
+### Phase 15 — battle-map ownership evaluation
 
-Carry structured circumstances, effects, composition changes, journey/hazard provenance, and linked-scene references. Develop with internal human testing active.
+Use actual product needs and internal human testing feedback to decide whether tactical maps remain external, Hex Crawl gains a map surface, or both coexist. The Phase 13 shared map-processing resource should already be available as reusable infrastructure and must not predetermine tactical-map product ownership.
 
-### Phase 14 — battle-map ownership evaluation
-
-Use actual product needs to decide whether tactical maps remain external, Hex Crawl gains a map surface, or both coexist. Develop with internal human testing active.
+Develop with internal human testing active.
 
 ## Development workflow
 
@@ -684,8 +774,8 @@ Before each implementation phase or major review pass:
 
 Compatibility handling follows the roadmap horizon:
 
-- before Phase 12.5, do not add migrations, legacy loaders, dual representations, or compatibility adapters merely to avoid development database resets;
-- beginning with Phase 12.5, evaluate migration before resetting tester data and prefer migration when it is straightforward and architecture-preserving;
+- before Phase 14.5, do not add migrations, legacy loaders, dual representations, or compatibility adapters merely to avoid development database resets;
+- beginning with Phase 14.5, evaluate migration before resetting tester data and prefer migration when it is straightforward and architecture-preserving;
 - at all stages, explicit architectural requirements override accidental compatibility with superseded development formats.
 
 Do not modify or merge `main` without explicit authorization.
@@ -701,8 +791,10 @@ The target architecture is reached when a DM can:
 5. run the resulting executable procedure without the original preset being present;
 6. persist structural procedures even when some later execution engines are not yet implemented;
 7. run core expedition behavior without Rules Core;
-8. use Rules Core, Character Sheet, Block Initiative, and map providers only when they add value;
+8. use Rules Core, Character Sheet, Block Initiative, map providers, and the shared map-processing resource only when they add value;
 9. save and reuse customized procedure revisions;
 10. generate a readable procedure reference from the exact executable configuration;
 11. preserve pinned campaign/session behavior across later preset revisions;
-12. evolve pre-release architecture by removing obsolete development representations rather than accumulating parallel compatibility layers.
+12. keep Hex Crawl durable map/grid/world state independent of shared map-processing implementation details;
+13. complete a reviewed end-to-end DM workflow with coherent UI state and recoverable failure behavior;
+14. evolve pre-release architecture by removing obsolete development representations rather than accumulating parallel compatibility layers.
