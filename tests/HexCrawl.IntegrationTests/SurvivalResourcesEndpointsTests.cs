@@ -1,6 +1,10 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using HexCrawl.Application;
+using HexCrawl.Application.Persistence;
+using HexCrawl.Domain.Procedure;
+using HexCrawl.Infrastructure.Persistence;
 
 namespace HexCrawl.IntegrationTests;
 
@@ -224,6 +228,170 @@ public sealed class SurvivalResourcesEndpointsTests
             var current = await client.GetFromJsonAsync<JsonElement>($"/api/expeditions/{expeditionId:D}/survival");
             Assert.Equal(version, current.GetProperty("expeditionVersion").GetInt64());
             Assert.Equal(0, current.GetProperty("forcedTravel").GetProperty("amountSinceReset").GetDouble());
+        }
+        finally
+        {
+            TestWebHost.DeleteDatabase(database);
+        }
+    }
+
+    [Fact]
+    public async Task ExposureIdentityIsNormalizedAndReplaysDoNotAdvanceVersion()
+    {
+        var database = TestWebHost.NewDatabasePath();
+        try
+        {
+            using var factory = TestWebHost.Create(database);
+            using var client = factory.CreateClient();
+            var started = await StartMaplessExpeditionAsync(client, "Exposure identity", "bx");
+            var expeditionId = started.GetProperty("id").GetGuid();
+            var version = started.GetProperty("version").GetInt64();
+
+            var store = new PostgresHexCrawlStore(database);
+            var expedition = await store.GetExpeditionAsync(expeditionId, "integration-user");
+            Assert.NotNull(expedition);
+            var procedure = expedition.CampaignProcedure with
+            {
+                Modules = expedition.CampaignProcedure.Modules.Append(
+                    new MaterializedProcedureModule(
+                        Phase11GenericProcedureCatalog.ExposureModuleDefinition,
+                        Phase11GenericProcedureCatalog.ExposureMechanicDefinition,
+                        new Dictionary<string, string>(StringComparer.Ordinal)
+                        {
+                            ["dimensions"] = "temperature;elevation;weather",
+                            ["evaluationModel"] = "resolved-check",
+                            ["evaluationInterval"] = "travel-day",
+                            ["targetScope"] = "party",
+                            ["consequenceModel"] = "resolved-structured-consequence"
+                        })).ToArray()
+            };
+            procedure.Validate();
+            var procedureSave = await store.SaveExpeditionAsync(
+                expedition with { CampaignProcedure = procedure }, version);
+            Assert.Equal(SaveOutcome.Saved, procedureSave.Outcome);
+            version = procedureSave.Value!.Version;
+
+            var progressOccurrence = Guid.NewGuid();
+            using var firstResponse = await client.PostAsJsonAsync(
+                $"/api/expeditions/{expeditionId:D}/survival/exposure",
+                new
+                {
+                    expectedVersion = version,
+                    occurrenceId = progressOccurrence,
+                    exposureKey = "  cold  ",
+                    target = new { scope = "Party", targetId = (Guid?)null },
+                    progressDelta = 1.0,
+                    progressUnit = "  hours  ",
+                    consequenceComponents = Array.Empty<object>(),
+                    provenance = Provenance("cold-progress")
+                });
+            firstResponse.EnsureSuccessStatusCode();
+            var first = await firstResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("Applied", first.GetProperty("status").GetString());
+            version = first.GetProperty("expeditionVersion").GetInt64();
+            var progress = Assert.Single(first.GetProperty("state").GetProperty("exposure").EnumerateArray());
+            Assert.Equal("cold", progress.GetProperty("exposureKey").GetString());
+            Assert.Equal("hours", progress.GetProperty("unit").GetString());
+
+            using var replayResponse = await client.PostAsJsonAsync(
+                $"/api/expeditions/{expeditionId:D}/survival/exposure",
+                new
+                {
+                    expectedVersion = version,
+                    occurrenceId = progressOccurrence,
+                    exposureKey = "cold",
+                    target = new { scope = "Party", targetId = (Guid?)null },
+                    progressDelta = 1.0,
+                    progressUnit = "hours",
+                    consequenceComponents = Array.Empty<object>(),
+                    provenance = Provenance("cold-progress")
+                });
+            replayResponse.EnsureSuccessStatusCode();
+            var replay = await replayResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("AlreadyApplied", replay.GetProperty("status").GetString());
+            Assert.Equal(version, replay.GetProperty("expeditionVersion").GetInt64());
+
+            using var collisionResponse = await client.PostAsJsonAsync(
+                $"/api/expeditions/{expeditionId:D}/survival/exposure",
+                new
+                {
+                    expectedVersion = version,
+                    occurrenceId = progressOccurrence,
+                    exposureKey = "altitude",
+                    target = new { scope = "Party", targetId = (Guid?)null },
+                    progressDelta = 1.0,
+                    progressUnit = "hours",
+                    consequenceComponents = Array.Empty<object>(),
+                    provenance = Provenance("collision")
+                });
+            collisionResponse.EnsureSuccessStatusCode();
+            var collision = await collisionResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("RequiresAdjudication", collision.GetProperty("status").GetString());
+            Assert.Equal(version, collision.GetProperty("expeditionVersion").GetInt64());
+
+            var consequenceOccurrence = Guid.NewGuid();
+            using var consequenceResponse = await client.PostAsJsonAsync(
+                $"/api/expeditions/{expeditionId:D}/survival/exposure",
+                new
+                {
+                    expectedVersion = version,
+                    occurrenceId = consequenceOccurrence,
+                    exposureKey = "cold",
+                    target = new { scope = "Party", targetId = (Guid?)null },
+                    progressDelta = (double?)null,
+                    progressUnit = (string?)null,
+                    consequenceComponents = new[]
+                    {
+                        new
+                        {
+                            kind = "PersistentEffect",
+                            key = "cold-fatigue",
+                            effectOperation = "AdjustLevel",
+                            levelDelta = (int?)1,
+                            level = (int?)null,
+                            magnitude = (double?)null,
+                            delta = (double?)null,
+                            unit = (string?)null,
+                            state = (string?)null
+                        }
+                    },
+                    provenance = Provenance("cold-effect")
+                });
+            consequenceResponse.EnsureSuccessStatusCode();
+            var consequence = await consequenceResponse.Content.ReadFromJsonAsync<JsonElement>();
+            version = consequence.GetProperty("expeditionVersion").GetInt64();
+
+            using var consequenceReplayResponse = await client.PostAsJsonAsync(
+                $"/api/expeditions/{expeditionId:D}/survival/exposure",
+                new
+                {
+                    expectedVersion = version,
+                    occurrenceId = consequenceOccurrence,
+                    exposureKey = "cold",
+                    target = new { scope = "Party", targetId = (Guid?)null },
+                    progressDelta = (double?)null,
+                    progressUnit = (string?)null,
+                    consequenceComponents = new[]
+                    {
+                        new
+                        {
+                            kind = "PersistentEffect",
+                            key = "cold-fatigue",
+                            effectOperation = "AdjustLevel",
+                            levelDelta = (int?)1,
+                            level = (int?)null,
+                            magnitude = (double?)null,
+                            delta = (double?)null,
+                            unit = (string?)null,
+                            state = (string?)null
+                        }
+                    },
+                    provenance = Provenance("cold-effect")
+                });
+            consequenceReplayResponse.EnsureSuccessStatusCode();
+            var consequenceReplay = await consequenceReplayResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("AlreadyApplied", consequenceReplay.GetProperty("status").GetString());
+            Assert.Equal(version, consequenceReplay.GetProperty("expeditionVersion").GetInt64());
         }
         finally
         {
