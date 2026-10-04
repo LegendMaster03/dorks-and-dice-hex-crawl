@@ -15,7 +15,7 @@ public sealed class SurvivalResourcesModule : IHexCrawlModule
         Id: "survival-resources",
         DisplayName: "Expedition survival and resources")
     {
-        Dependencies = ["expeditions", "environment"]
+        Dependencies = ["expeditions", "environment-context"]
     };
 
     public void RegisterServices(IServiceCollection services) => services.AddScoped<ExpeditionSurvivalService>();
