@@ -11,14 +11,13 @@ Hex Crawl browser
     -> Hex Crawl ownership-scoped source-map API
     -> Hex Crawl server opens the authoritative raster asset
     -> Surveyor POST /v1/periodic-tiling/detect
-       periodicTilingType=Regular
        crNotation=6^3
     -> Hex Crawl validates/interprets the observation
     -> browser previews a Hex Crawl-owned proposal
     -> explicit Apply mutates Hex Crawl world state
 ```
 
-Surveyor's API is capability-based rather than hex-specific. Known-tiling detection is one operation; future tiling recognition and unrelated computer-vision operations belong on separate endpoints. Hex Crawl requests the Regular `6^3` tiling explicitly and validates the normalized Cundy-Rollett (`crNotation`) and GomJau-Hogg (`gjhNotation`) identities in the response. Shape names and side-count shorthand are not part of this public service contract.
+Surveyor's API is capability-based rather than hex-specific. Known-tiling detection is one operation; future tiling recognition and unrelated computer-vision operations belong on separate endpoints. Hex Crawl requests `6^3` directly by Cundy-Rollett notation. Surveyor derives the periodic-tiling classification from that notation and returns the normalized Cundy-Rollett (`crNotation`), GomJau-Hogg (`gjhNotation`), and `periodicTilingType` identities. Hex Crawl validates all three response fields before accepting the observation. A separate request-side tiling type, shape name, or side-count shorthand is not part of the public service contract.
 
 The browser never calls Surveyor directly and does not receive the Surveyor service credential. Surveyor does not fetch URLs or resolve Hex Crawl asset keys. Hex Crawl loads the raster through `IMapAssetStore` after normal world/source-map authorization and streams the encoded bytes to Surveyor.
 
