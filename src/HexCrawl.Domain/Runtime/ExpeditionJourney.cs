@@ -446,7 +446,8 @@ public sealed record JourneyProcessInstance
         {
             throw new InvalidOperationException("Journey process start reference must be non-negative.");
         }
-        if (EndedAtExpeditionTime is < TimeSpan.Zero || EndedAfterCompletedWatches is < 0)
+        if ((EndedAtExpeditionTime.HasValue && EndedAtExpeditionTime.Value < TimeSpan.Zero)
+            || EndedAfterCompletedWatches is < 0)
         {
             throw new InvalidOperationException("Journey process end reference must be non-negative.");
         }
