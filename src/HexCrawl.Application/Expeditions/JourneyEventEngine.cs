@@ -61,13 +61,22 @@ public static class JourneyEventEngine
         ValidateProcessStage(state, input.ProcessId, input.StageKey);
         foreach (var fact in input.Environment) fact.Validate();
 
+        var triggerReference = RequiredText(input.TriggerReference, "Journey event trigger reference");
+        var targetRole = Trim(input.TargetRoleKey);
+        var note = Trim(input.Note);
         var existing = state.EventOccurrences.SingleOrDefault(value => value.Id == input.OccurrenceId);
         if (existing is not null)
         {
             if (existing.Trigger != input.Trigger
                 || existing.ProcessId != input.ProcessId
                 || !string.Equals(existing.StageKey, input.StageKey, StringComparison.Ordinal)
-                || !string.Equals(existing.TriggerReference, input.TriggerReference, StringComparison.Ordinal))
+                || !string.Equals(existing.TriggerReference, triggerReference, StringComparison.Ordinal)
+                || existing.TargetKind != input.TargetKind
+                || !string.Equals(existing.TargetRoleKey, targetRole, StringComparison.Ordinal)
+                || existing.TargetId != input.TargetId
+                || !existing.Environment.SequenceEqual(input.Environment)
+                || existing.Provenance != input.Provenance
+                || !string.Equals(existing.Note, note, StringComparison.Ordinal))
             {
                 throw new InvalidOperationException("Journey event occurrence id is already used by a different opportunity.");
             }
@@ -80,14 +89,14 @@ public static class JourneyEventEngine
             ProcessId = input.ProcessId,
             StageKey = input.StageKey,
             Trigger = input.Trigger,
-            TriggerReference = RequiredText(input.TriggerReference, "Journey event trigger reference"),
+            TriggerReference = triggerReference,
             Status = JourneyEventStatus.ResolutionRequired,
             TargetKind = input.TargetKind,
-            TargetRoleKey = Trim(input.TargetRoleKey),
+            TargetRoleKey = targetRole,
             TargetId = input.TargetId,
             Environment = input.Environment,
             Provenance = input.Provenance,
-            Note = Trim(input.Note)
+            Note = note
         };
         occurrence.Validate(party, ProcessIds(state));
         var updated = state with
@@ -127,6 +136,7 @@ public static class JourneyEventEngine
             ?? throw new InvalidOperationException("Journey event occurrence was not found.");
         if (occurrence.Status != JourneyEventStatus.ResolutionRequired)
         {
+            ValidateResolutionReplay(occurrence, input);
             return new(state, occurrence, false);
         }
 
@@ -150,9 +160,16 @@ public static class JourneyEventEngine
                 throw new InvalidOperationException("Journey event consequence ids must be unique.");
             }
         }
-        else if (input.Consequences.Count > 0 || input.EventKey is not null || input.EventType is not null)
+        else
         {
-            throw new InvalidOperationException("Skipped or not-applicable journey events can not generate event content or consequences.");
+            if (input.Consequences.Count > 0 || input.EventKey is not null || input.EventType is not null)
+            {
+                throw new InvalidOperationException("Skipped or not-applicable journey events can not generate event content or consequences.");
+            }
+            if (targetKind != JourneyEventTargetKind.Unresolved || targetRole is not null || targetId.HasValue)
+            {
+                throw new InvalidOperationException("Skipped or not-applicable journey events can not retain a resolved target.");
+            }
         }
 
         var environment = input.Environment ?? occurrence.Environment;
@@ -191,6 +208,29 @@ public static class JourneyEventEngine
         };
         updated.Validate(party);
         return new(updated, resolved, true);
+    }
+
+    private static void ValidateResolutionReplay(
+        JourneyEventOccurrence occurrence,
+        JourneyEventResolutionInput input)
+    {
+        var environment = input.Environment ?? occurrence.Environment;
+        var note = Trim(input.Note) ?? occurrence.Note;
+        var consequenceIds = input.Consequences.Select(value => value.Id).ToArray();
+        if (occurrence.Status != input.Status
+            || !string.Equals(occurrence.EventKey, Trim(input.EventKey), StringComparison.Ordinal)
+            || !string.Equals(occurrence.EventType, Trim(input.EventType), StringComparison.Ordinal)
+            || occurrence.TargetKind != input.TargetKind
+            || !string.Equals(occurrence.TargetRoleKey, Trim(input.TargetRoleKey), StringComparison.Ordinal)
+            || occurrence.TargetId != input.TargetId
+            || !occurrence.Environment.SequenceEqual(environment)
+            || !occurrence.ConsequenceIds.SequenceEqual(consequenceIds)
+            || occurrence.Provenance != input.Provenance
+            || !string.Equals(occurrence.Note, note, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Journey event occurrence id is already resolved with different resolved data.");
+        }
     }
 
     private static void ValidateResolvedTarget(
