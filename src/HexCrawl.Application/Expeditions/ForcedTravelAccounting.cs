@@ -110,12 +110,17 @@ public static class ForcedTravelAccounting
 
     private static bool SameOpenUnit(string left, string right)
     {
-        static string Normalize(string value)
-        {
-            var normalized = value.Trim().ToLowerInvariant();
-            return normalized.EndsWith('s') ? normalized[..^1] : normalized;
-        }
-        return string.Equals(Normalize(left), Normalize(right), StringComparison.Ordinal);
+        static string Normalize(string value) => value.Trim().ToLowerInvariant();
+
+        static bool IsSimplePluralOf(string singular, string plural) =>
+            string.Equals(plural, singular + "s", StringComparison.Ordinal)
+            || string.Equals(plural, singular + "es", StringComparison.Ordinal);
+
+        var normalizedLeft = Normalize(left);
+        var normalizedRight = Normalize(right);
+        return string.Equals(normalizedLeft, normalizedRight, StringComparison.Ordinal)
+            || IsSimplePluralOf(normalizedLeft, normalizedRight)
+            || IsSimplePluralOf(normalizedRight, normalizedLeft);
     }
 
     private static TimeSpan Elapsed(CrawlSessionRuntimeState state) => state switch
