@@ -36,7 +36,8 @@ public sealed class SurveyorMapAnalysisClientTests
         Assert.Equal("http://surveyor.internal/v1/periodic-tiling/detect", observed.RequestUri!.GetLeftPart(UriPartial.Path));
         var query = observed.RequestUri.Query;
         Assert.Contains("periodicTilingType=Regular", query);
-        Assert.Contains("cundyRollettNotation=6%5E3", query, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("crNotation=6%5E3", query, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("shape=", query, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("minimumSpacingPixels=12.5", query);
         Assert.Contains("maximumSpacingPixels=400.25", query);
         Assert.Contains("maximumEdgeSamples=90000", query);
@@ -61,8 +62,10 @@ public sealed class SurveyorMapAnalysisClientTests
     [InlineData(HttpStatusCode.Forbidden, typeof(MapAnalysisAuthenticationException))]
     [InlineData(HttpStatusCode.ServiceUnavailable, typeof(MapAnalysisUnavailableException))]
     [InlineData(HttpStatusCode.TooManyRequests, typeof(MapAnalysisUnavailableException))]
+    [InlineData(HttpStatusCode.BadGateway, typeof(MapAnalysisUnavailableException))]
     [InlineData(HttpStatusCode.GatewayTimeout, typeof(MapAnalysisTimeoutException))]
     [InlineData(HttpStatusCode.RequestTimeout, typeof(MapAnalysisTimeoutException))]
+    [InlineData(HttpStatusCode.BadRequest, typeof(MapAnalysisProtocolException))]
     public async Task ClientPreservesTransportFailureCategories(HttpStatusCode status, Type exceptionType)
     {
         var client = CreateClient(new DelegateHandler((_, _) => Task.FromResult(new HttpResponseMessage(status))));
@@ -74,10 +77,11 @@ public sealed class SurveyorMapAnalysisClientTests
 
     [Theory]
     [InlineData("{not-json")]
-    [InlineData("{\"apiVersion\":\"v2\",\"capability\":\"map.periodic-tiling.detect\",\"tiling\":{\"periodicTilingType\":\"Regular\",\"cundyRollettNotation\":\"6^3\",\"gomJauHoggNotation\":\"6/m30/r(h1)\",\"shapes\":[{\"name\":\"hex\",\"sides\":6}]},\"status\":\"gridless\",\"reason\":\"x\",\"source\":{\"width\":1,\"height\":1,\"mediaType\":\"image/png\"},\"analysis\":{\"width\":1,\"height\":1,\"scale\":1,\"sourceResolutionVerified\":true},\"fit\":null}")]
-    [InlineData("{\"apiVersion\":\"v1\",\"capability\":\"map.periodic-tiling.detect\",\"tiling\":{\"periodicTilingType\":\"Regular\",\"cundyRollettNotation\":\"4^4\",\"gomJauHoggNotation\":\"4/m45/r(h1)\",\"shapes\":[{\"name\":\"square\",\"sides\":4}]},\"status\":\"gridless\",\"reason\":\"x\",\"source\":{\"width\":1,\"height\":1,\"mediaType\":\"image/png\"},\"analysis\":{\"width\":1,\"height\":1,\"scale\":1,\"sourceResolutionVerified\":true},\"fit\":null}")]
-    [InlineData("{\"apiVersion\":\"v1\",\"capability\":\"map.periodic-tiling.detect\",\"tiling\":{\"periodicTilingType\":\"Regular\",\"cundyRollettNotation\":\"6^3\",\"gomJauHoggNotation\":\"6/m30/r(h1)\",\"shapes\":[{\"name\":\"hex\",\"sides\":6}]},\"status\":\"detected\",\"reason\":\"x\",\"source\":{\"width\":1,\"height\":1,\"mediaType\":\"image/png\"},\"analysis\":{\"width\":1,\"height\":1,\"scale\":1,\"sourceResolutionVerified\":true},\"fit\":null}")]
-    [InlineData("{\"apiVersion\":\"v1\",\"capability\":\"map.periodic-tiling.detect\",\"tiling\":{\"periodicTilingType\":\"Regular\",\"cundyRollettNotation\":\"6^3\",\"gomJauHoggNotation\":\"6/m30/r(h1)\",\"shapes\":[{\"name\":\"hex\",\"sides\":6}]},\"status\":\"detected\",\"reason\":\"x\",\"source\":{\"width\":1,\"height\":1,\"mediaType\":\"image/png\"},\"analysis\":{\"width\":1,\"height\":1,\"scale\":1,\"sourceResolutionVerified\":true},\"fit\":{\"orientation\":\"FlatTop\",\"rotationDegrees\":0,\"centerSpacingPixels\":80,\"anchorPixel\":{\"x\":0,\"y\":0},\"confidence\":2,\"residualPixels\":0,\"supportCoverage\":1,\"orientationSupport\":1,\"translationScore\":1,\"competingTranslationScore\":0,\"linePeriodicityScore\":1,\"phaseScore\":1}}")]
+    [InlineData("{\"apiVersion\":\"v2\",\"capability\":\"map.periodic-tiling.detect\",\"tiling\":{\"periodicTilingType\":\"Regular\",\"crNotation\":\"6^3\",\"gjhNotation\":\"6/m30/r(h1)\"},\"status\":\"gridless\",\"reason\":\"x\",\"source\":{\"width\":1,\"height\":1,\"mediaType\":\"image/png\"},\"analysis\":{\"width\":1,\"height\":1,\"scale\":1,\"sourceResolutionVerified\":true},\"fit\":null}")]
+    [InlineData("{\"apiVersion\":\"v1\",\"capability\":\"map.periodic-tiling.detect\",\"tiling\":{\"periodicTilingType\":\"Regular\",\"crNotation\":\"4^4\",\"gjhNotation\":\"4/m45/r(h1)\"},\"status\":\"gridless\",\"reason\":\"x\",\"source\":{\"width\":1,\"height\":1,\"mediaType\":\"image/png\"},\"analysis\":{\"width\":1,\"height\":1,\"scale\":1,\"sourceResolutionVerified\":true},\"fit\":null}")]
+    [InlineData("{\"apiVersion\":\"v1\",\"capability\":\"map.periodic-tiling.detect\",\"tiling\":{\"periodicTilingType\":\"Regular\",\"crNotation\":\"6^3\",\"gjhNotation\":\"6/m30/r(h1)\"},\"status\":\"detected\",\"reason\":\"x\",\"source\":{\"width\":1,\"height\":1,\"mediaType\":\"image/png\"},\"analysis\":{\"width\":1,\"height\":1,\"scale\":1,\"sourceResolutionVerified\":true},\"fit\":null}")]
+    [InlineData("{\"apiVersion\":\"v1\",\"capability\":\"map.periodic-tiling.detect\",\"tiling\":{\"periodicTilingType\":\"Regular\",\"crNotation\":\"6^3\",\"gjhNotation\":\"6/m30/r(h1)\"},\"status\":\"gridless\",\"reason\":\"x\",\"source\":{\"width\":1,\"height\":1,\"mediaType\":\"image/png\"},\"analysis\":{\"width\":1,\"height\":1,\"scale\":1,\"sourceResolutionVerified\":true},\"fit\":{\"orientation\":\"FlatTop\",\"rotationDegrees\":0,\"centerSpacingPixels\":80,\"anchorPixel\":{\"x\":0,\"y\":0},\"confidence\":1,\"residualPixels\":0,\"supportCoverage\":1,\"orientationSupport\":1,\"translationScore\":1,\"competingTranslationScore\":0,\"linePeriodicityScore\":1,\"phaseScore\":1}}")]
+    [InlineData("{\"apiVersion\":\"v1\",\"capability\":\"map.periodic-tiling.detect\",\"tiling\":{\"periodicTilingType\":\"Regular\",\"crNotation\":\"6^3\",\"gjhNotation\":\"6/m30/r(h1)\"},\"status\":\"detected\",\"reason\":\"x\",\"source\":{\"width\":1,\"height\":1,\"mediaType\":\"image/png\"},\"analysis\":{\"width\":1,\"height\":1,\"scale\":1,\"sourceResolutionVerified\":true},\"fit\":{\"orientation\":\"FlatTop\",\"rotationDegrees\":0,\"centerSpacingPixels\":80,\"anchorPixel\":{\"x\":0,\"y\":0},\"confidence\":2,\"residualPixels\":0,\"supportCoverage\":1,\"orientationSupport\":1,\"translationScore\":1,\"competingTranslationScore\":0,\"linePeriodicityScore\":1,\"phaseScore\":1}}")]
     public async Task ClientRejectsMalformedOrIncompatibleSurveyorResponses(string payload)
     {
         var client = CreateClient(new DelegateHandler((_, _) => Task.FromResult(Json(HttpStatusCode.OK, payload))));
@@ -149,9 +153,8 @@ public sealed class SurveyorMapAnalysisClientTests
           "capability":"map.periodic-tiling.detect",
           "tiling":{
             "periodicTilingType":"Regular",
-            "cundyRollettNotation":"6^3",
-            "gomJauHoggNotation":"6/m30/r(h1)",
-            "shapes":[{"name":"hex","sides":6}]
+            "crNotation":"6^3",
+            "gjhNotation":"6/m30/r(h1)"
           },
           "status":"detected",
           "reason":"fixture",
