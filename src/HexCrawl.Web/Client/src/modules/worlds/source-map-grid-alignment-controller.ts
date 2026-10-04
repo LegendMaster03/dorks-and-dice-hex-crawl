@@ -1,6 +1,5 @@
 import type { HexCrawlApi } from "../../api";
 import {
-    isCanonicalSourceFit,
     rasterGridCanonicalResidualLimit,
     type HexLatticeDetection,
     type HexLatticeFit,
@@ -15,7 +14,7 @@ import type { MapSurface } from "../../map-surface";
 import type { GridDefinition, Overworld, SourceMapDetail } from "../../types";
 import { required } from "../../ui/dom";
 
-const AutomaticApplyConfidence = 0.54;
+const RecommendedApplyConfidence = 0.54;
 const PhysicalScaleConfirmationTolerance = 0.01;
 
 export class SourceMapGridAlignmentController {
@@ -23,6 +22,8 @@ export class SourceMapGridAlignmentController {
     private detection: HexLatticeDetection | null = null;
     private proposal: RasterGridAlignmentProposal | null = null;
     private physicalScaleChange: PhysicalScaleChange | null = null;
+    private sourceResolutionVerified = false;
+    private applyWarnings: string[] = [];
     private analysisAbortController: AbortController | null = null;
     private analysisGeneration = 0;
     private readonly panel: HTMLElement;
@@ -65,12 +66,19 @@ export class SourceMapGridAlignmentController {
         this.detection = null;
         this.proposal = null;
         this.physicalScaleChange = null;
+        this.sourceResolutionVerified = false;
+        this.applyWarnings = [];
         this.panel.hidden = false;
+        this.panel.setAttribute("aria-busy", "false");
         this.applyButton.disabled = true;
+        this.applyButton.textContent = "Apply alignment";
+        this.applyButton.title = "";
+        this.setAnalysisBusy(false);
         this.status.textContent = sourceMap.containsBakedGrid
             ? "Ready to detect the baked hex lattice. Detection does not change the saved world."
             : "This map is marked gridless. Detection can still check the raster, but Hex Crawl will not invent a grid if evidence is absent.";
         this.clearPreview();
+        this.panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
 
     public async beginAndPreview(sourceMap: SourceMapDetail | null): Promise<void> {
@@ -90,150 +98,193 @@ export class SourceMapGridAlignmentController {
         const sourceMap = this.selectedMap;
         if (!sourceMap) throw new Error("Select a raster map first.");
         this.applyButton.disabled = true;
+        this.applyButton.textContent = "Apply alignment";
+        this.applyButton.title = "";
+        this.applyWarnings = [];
+        this.sourceResolutionVerified = false;
         this.physicalScaleChange = null;
         this.status.textContent = "Analyzing repeated hex-grid evidence across the raster…";
         this.clearPreview();
+        this.panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
 
         const world = this.getWorld();
         this.analysisAbortController?.abort();
         const abortController = new AbortController();
         const generation = ++this.analysisGeneration;
         this.analysisAbortController = abortController;
-        let analyzed: SourceMapGridAnalysis;
+        this.setAnalysisBusy(true);
+
         try {
-            analyzed = await this.api.analyzeSourceMapGrid(world.id, sourceMap.id, abortController.signal);
-        } catch (error) {
-            if (abortController.signal.aborted || generation !== this.analysisGeneration) return;
-            this.detection = null;
-            this.proposal = null;
-            const detail = error instanceof Error ? error.message : "Surveyor did not return an analysis result.";
-            this.status.textContent = `Automatic analysis unavailable: ${detail} Advanced registration remains available.`;
-            return;
+            let analyzed: SourceMapGridAnalysis;
+            try {
+                analyzed = await this.api.analyzeSourceMapGrid(world.id, sourceMap.id, abortController.signal);
+            } catch (error) {
+                if (abortController.signal.aborted || generation !== this.analysisGeneration) return;
+                this.detection = null;
+                this.proposal = null;
+                const detail = error instanceof Error ? error.message : "Surveyor did not return an analysis result.";
+                this.status.textContent = `Automatic analysis unavailable: ${detail} Advanced registration remains available.`;
+                return;
+            } finally {
+                if (this.analysisAbortController === abortController) this.analysisAbortController = null;
+            }
+
+            if (abortController.signal.aborted
+                || generation !== this.analysisGeneration
+                || this.selectedMap?.id !== sourceMap.id) return;
+
+            this.sourceResolutionVerified = analyzed.analysis.sourceResolutionVerified;
+            this.detection = { status: analyzed.status, fit: analyzed.fit, reason: analyzed.reason };
+            if (this.detection.fit && !this.sourceResolutionVerified) {
+                this.detection = {
+                    ...this.detection,
+                    status: "inconclusive",
+                    reason: "The lattice preview was measured from a downscaled analysis image. Source-resolution phase verification is not available."
+                };
+            }
+            const assetUrl = this.api.sourceMapAssetUrl(world.id, sourceMap.id);
+            if (!this.detection.fit) {
+                this.proposal = null;
+                this.status.textContent = `${statusLabel(this.detection.status)}: ${this.detection.reason}`;
+                return;
+            }
+
+            const fit = this.detection.fit;
+            let proposal = buildRasterGridAlignmentProposal(
+                fit,
+                world.grid,
+                sourceMap.alignment,
+                {
+                    pixelWidth: sourceMap.pixelWidth,
+                    pixelHeight: sourceMap.pixelHeight
+                });
+            const scaleContext = await loadPhysicalScaleContext(assetUrl, sourceMap, fit, world.grid);
+            if (abortController.signal.aborted
+                || generation !== this.analysisGeneration
+                || this.selectedMap?.id !== sourceMap.id) return;
+
+            if (scaleContext.distancePerHex != null) {
+                proposal = {
+                    ...proposal,
+                    grid: {
+                        ...proposal.grid,
+                        neighborCenterDistance: {
+                            ...proposal.grid.neighborCenterDistance,
+                            value: scaleContext.distancePerHex
+                        }
+                    },
+                    warnings: proposal.warnings.filter(
+                        warning => !warning.startsWith("Physical distance per hex was not detected"))
+                };
+            }
+            this.proposal = proposal;
+            this.physicalScaleChange = detectPhysicalScaleChange(world.grid, proposal.grid);
+            this.mapSurface.renderer.registrationPreview = {
+                sourceMapId: sourceMap.id,
+                transform: proposal.alignment
+            };
+            this.mapSurface.renderer.gridPreview = proposal.grid;
+            this.mapSurface.renderer.hiddenSourceMapIds.delete(sourceMap.id);
+            this.mapSurface.requestRender();
+
+            const summary = [
+                `${statusLabel(this.detection.status)}: ${fit.orientation === "PointyTop" ? "pointy-top" : "flat-top"} lattice`,
+                `${fit.centerSpacingPixels.toFixed(2)} px center spacing`,
+                `${fit.rotationDegrees.toFixed(2)}° raster rotation`,
+                `confidence ${(fit.confidence * 100).toFixed(1)}%`,
+                `worst distant residual ${fit.residualPixels.toFixed(2)} px`,
+                `coverage ${(fit.supportCoverage * 100).toFixed(1)}%`,
+                this.sourceResolutionVerified ? "source-resolution phase verified" : "downscaled phase only"
+            ];
+            if (scaleContext.summary) summary.splice(1, 0, scaleContext.summary);
+
+            const canonicalResidualLimit = rasterGridCanonicalResidualLimit(fit.centerSpacingPixels);
+            const manualReviewWarnings: string[] = [];
+            if (!this.sourceResolutionVerified) {
+                manualReviewWarnings.push("Source-resolution phase verification is unavailable.");
+            }
+            if (this.detection.status !== "detected") {
+                manualReviewWarnings.push(this.detection.reason);
+            }
+            if (fit.confidence < RecommendedApplyConfidence) {
+                manualReviewWarnings.push(
+                    `Confidence ${(fit.confidence * 100).toFixed(1)}% is below the ${(RecommendedApplyConfidence * 100).toFixed(0)}% recommended threshold.`);
+            }
+            if (fit.residualPixels > canonicalResidualLimit) {
+                manualReviewWarnings.push(
+                    `The final rigid overlay misses at least one distant region by ${fit.residualPixels.toFixed(2)} px; the recommended limit is ${canonicalResidualLimit.toFixed(2)} px for this lattice spacing.`);
+            }
+            this.applyWarnings = [...new Set(manualReviewWarnings)];
+
+            const warnings = [
+                ...proposal.warnings,
+                ...scaleContext.warnings,
+                ...this.applyWarnings,
+                ...impactWarnings(world, sourceMap.id, proposal.grid)
+            ];
+            if (this.physicalScaleChange) {
+                warnings.push(
+                    `Physical distance changes from ${formatPhysicalScale(this.physicalScaleChange.currentValue, this.physicalScaleChange.unitSymbol)} to ${formatPhysicalScale(this.physicalScaleChange.proposedValue, this.physicalScaleChange.unitSymbol)}. Apply requires explicit confirmation.`);
+            }
+            if (this.applyWarnings.length > 0) {
+                warnings.push("The preview can still be explicitly applied after confirming these warnings.");
+            }
+            this.status.textContent = `${summary.join(" · ")}.${warnings.length > 0 ? ` ${warnings.join(" ")}` : ""}`;
+            this.applyButton.disabled = false;
+            this.applyButton.textContent = this.applyWarnings.length > 0 ? "Apply anyway" : "Apply alignment";
+            this.applyButton.title = this.applyWarnings.length > 0
+                ? "Apply this preview after reviewing and confirming the detection warnings."
+                : "Save this detected raster/grid alignment.";
+            this.panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
         } finally {
-            if (this.analysisAbortController === abortController) this.analysisAbortController = null;
+            if (generation === this.analysisGeneration && this.selectedMap?.id === sourceMap.id) {
+                this.setAnalysisBusy(false);
+            }
         }
-
-        if (abortController.signal.aborted
-            || generation !== this.analysisGeneration
-            || this.selectedMap?.id !== sourceMap.id) return;
-
-        this.detection = { status: analyzed.status, fit: analyzed.fit, reason: analyzed.reason };
-        if (this.detection.fit && !analyzed.analysis.sourceResolutionVerified) {
-            this.detection = {
-                ...this.detection,
-                status: "inconclusive",
-                reason: "The lattice preview was measured from a downscaled analysis image. Source-resolution phase verification is required before automatic Apply."
-            };
-        }
-        const assetUrl = this.api.sourceMapAssetUrl(world.id, sourceMap.id);
-        if (!this.detection.fit) {
-            this.proposal = null;
-            this.status.textContent = `${statusLabel(this.detection.status)}: ${this.detection.reason}`;
-            return;
-        }
-
-        const fit = this.detection.fit;
-        let proposal = buildRasterGridAlignmentProposal(
-            fit,
-            world.grid,
-            sourceMap.alignment,
-            {
-                pixelWidth: sourceMap.pixelWidth,
-                pixelHeight: sourceMap.pixelHeight
-            });
-        const scaleContext = await loadPhysicalScaleContext(assetUrl, sourceMap, fit, world.grid);
-        if (abortController.signal.aborted
-            || generation !== this.analysisGeneration
-            || this.selectedMap?.id !== sourceMap.id) return;
-
-        if (scaleContext.distancePerHex != null) {
-            proposal = {
-                ...proposal,
-                grid: {
-                    ...proposal.grid,
-                    neighborCenterDistance: {
-                        ...proposal.grid.neighborCenterDistance,
-                        value: scaleContext.distancePerHex
-                    }
-                },
-                warnings: proposal.warnings.filter(
-                    warning => !warning.startsWith("Physical distance per hex was not detected"))
-            };
-        }
-        this.proposal = proposal;
-        this.physicalScaleChange = detectPhysicalScaleChange(world.grid, proposal.grid);
-        this.mapSurface.renderer.registrationPreview = {
-            sourceMapId: sourceMap.id,
-            transform: proposal.alignment
-        };
-        this.mapSurface.renderer.gridPreview = proposal.grid;
-        this.mapSurface.renderer.hiddenSourceMapIds.delete(sourceMap.id);
-        this.mapSurface.requestRender();
-
-        const summary = [
-            `${statusLabel(this.detection.status)}: ${fit.orientation === "PointyTop" ? "pointy-top" : "flat-top"} lattice`,
-            `${fit.centerSpacingPixels.toFixed(2)} px center spacing`,
-            `${fit.rotationDegrees.toFixed(2)}° raster rotation`,
-            `confidence ${(fit.confidence * 100).toFixed(1)}%`,
-            `worst distant residual ${fit.residualPixels.toFixed(2)} px`,
-            `coverage ${(fit.supportCoverage * 100).toFixed(1)}%`,
-            analyzed.analysis.sourceResolutionVerified ? "source-resolution phase verified" : "downscaled phase only"
-        ];
-        if (scaleContext.summary) summary.splice(1, 0, scaleContext.summary);
-        const warnings = [
-            ...proposal.warnings,
-            ...scaleContext.warnings,
-            ...(this.detection.status === "inconclusive" ? [this.detection.reason] : []),
-            ...impactWarnings(world, sourceMap.id, proposal.grid)
-        ];
-        const canonicalResidualLimit = rasterGridCanonicalResidualLimit(fit.centerSpacingPixels);
-        if (fit.residualPixels > canonicalResidualLimit) {
-            warnings.push(
-                `The final rigid overlay misses at least one distant region by ${fit.residualPixels.toFixed(2)} px; automatic Apply requires at most ${canonicalResidualLimit.toFixed(2)} px for this lattice spacing.`);
-        }
-        if (this.physicalScaleChange) {
-            warnings.push(
-                `Physical distance changes from ${formatPhysicalScale(this.physicalScaleChange.currentValue, this.physicalScaleChange.unitSymbol)} to ${formatPhysicalScale(this.physicalScaleChange.proposedValue, this.physicalScaleChange.unitSymbol)}. Apply requires explicit confirmation.`);
-        }
-        this.status.textContent = `${summary.join(" · ")}.${warnings.length > 0 ? ` ${warnings.join(" ")}` : ""}`;
-        this.applyButton.disabled = fit.confidence < AutomaticApplyConfidence
-            || !isCanonicalSourceFit(this.detection, analyzed.analysis.sourceResolutionVerified);
     }
 
     private async apply(): Promise<void> {
         const sourceMap = this.selectedMap;
         const detection = this.detection;
         const proposal = this.proposal;
-        if (!sourceMap || !detection?.fit || !proposal || detection.status !== "detected") {
-            throw new Error("A high-confidence, source-verified grid detection must be previewed before it can be applied.");
-        }
-        if (detection.fit.confidence < AutomaticApplyConfidence) {
-            throw new Error("The detected lattice is below the automatic-apply confidence threshold.");
-        }
-        const canonicalResidualLimit = rasterGridCanonicalResidualLimit(detection.fit.centerSpacingPixels);
-        if (detection.fit.residualPixels > canonicalResidualLimit) {
-            throw new Error(
-                `The final rigid overlay misses a distant region by ${detection.fit.residualPixels.toFixed(2)} px; automatic Apply requires at most ${canonicalResidualLimit.toFixed(2)} px for this lattice spacing.`);
+        if (!sourceMap || !detection?.fit || !proposal) {
+            throw new Error("Preview a detected grid alignment before applying it.");
         }
 
+        const confirmationWarnings = [...this.applyWarnings];
         if (this.physicalScaleChange) {
             const scale = this.physicalScaleChange;
+            confirmationWarnings.push(
+                `Physical distance per hex changes from ${formatPhysicalScale(scale.currentValue, scale.unitSymbol)} to ${formatPhysicalScale(scale.proposedValue, scale.unitSymbol)}.`);
+        }
+        if (confirmationWarnings.length > 0) {
             const confirmed = window.confirm(
-                `The verified map scale changes physical distance per hex from ${formatPhysicalScale(scale.currentValue, scale.unitSymbol)} to ${formatPhysicalScale(scale.proposedValue, scale.unitSymbol)}. Apply this physical-scale change together with the raster/grid alignment?`);
+                `This alignment has warnings:\n\n- ${confirmationWarnings.join("\n- ")}\n\nApply this preview anyway?`);
             if (!confirmed) {
-                this.status.textContent = "Alignment was not applied because the physical-scale change was not confirmed. The preview remains available.";
+                this.status.textContent = "Alignment was not applied. The preview remains available for review or re-detection.";
                 return;
             }
         }
 
         const world = this.getWorld();
-        const updated = await applyGridAlignment(
-            this.api.sourceMapAssetUrl(world.id, sourceMap.id),
-            proposal,
-            world.version);
-        this.applyWorld(updated);
-        this.cancel();
-        await this.onSaved();
+        this.applyButton.disabled = true;
+        this.applyButton.textContent = "Applying…";
+        this.status.textContent = "Applying the reviewed raster/grid alignment…";
+        try {
+            const updated = await applyGridAlignment(
+                this.api.sourceMapAssetUrl(world.id, sourceMap.id),
+                proposal,
+                world.version);
+            this.applyWorld(updated);
+            this.cancel();
+            await this.onSaved();
+        } catch (error) {
+            if (this.selectedMap?.id === sourceMap.id) {
+                this.applyButton.disabled = false;
+                this.applyButton.textContent = this.applyWarnings.length > 0 ? "Apply anyway" : "Apply alignment";
+            }
+            throw error;
+        }
     }
 
     private cancel(): void {
@@ -244,9 +295,21 @@ export class SourceMapGridAlignmentController {
         this.detection = null;
         this.proposal = null;
         this.physicalScaleChange = null;
+        this.sourceResolutionVerified = false;
+        this.applyWarnings = [];
         this.panel.hidden = true;
+        this.panel.setAttribute("aria-busy", "false");
         this.applyButton.disabled = true;
+        this.applyButton.textContent = "Apply alignment";
+        this.applyButton.title = "";
+        this.setAnalysisBusy(false);
         this.clearPreview();
+    }
+
+    private setAnalysisBusy(busy: boolean): void {
+        this.panel.setAttribute("aria-busy", String(busy));
+        this.previewButton.disabled = busy;
+        this.previewButton.textContent = busy ? "Analyzing…" : "Re-run detection";
     }
 
     private clearPreview(): void {
