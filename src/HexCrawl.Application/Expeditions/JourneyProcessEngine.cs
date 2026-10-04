@@ -144,6 +144,13 @@ public static class JourneyProcessEngine
         {
             throw new InvalidOperationException("Journey resolution must target the process current stage.");
         }
+        if (process.Status == JourneyProcessStatus.ResolutionRequired
+            && process.PendingActions.Count > 0
+            && !input.PendingActionId.HasValue)
+        {
+            throw new InvalidOperationException(
+                "This journey process has pending resolution work; select the pending action being resolved.");
+        }
 
         var definition = process.Definition.Stages.Single(value => string.Equals(value.StageKey, input.StageKey, StringComparison.Ordinal));
         var stageState = process.StageStates.Single(value => string.Equals(value.StageKey, input.StageKey, StringComparison.Ordinal));
