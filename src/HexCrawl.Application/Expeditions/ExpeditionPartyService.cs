@@ -36,9 +36,11 @@ public sealed class ExpeditionPartyService(
         var policy = ParticipantActivityPolicyResolver.Resolve(expedition.CampaignProcedure);
         ParticipantActivityPolicyResolver.ValidateAssignments(party, policy);
 
-        // Phase 10 effect references are part of the same expedition aggregate. Reject party or
-        // conveyance edits that would leave an active effect or pending consequence dangling.
+        // Effects, resources, survival counters, and pending consequence targets are one aggregate.
+        // Reject participant/mount/vehicle edits that would leave any Phase 10/11 reference dangling.
         expedition.Effects.Validate(party);
+        expedition.Resources.Validate(party);
+        expedition.Survival.Validate(party);
 
         var updated = expedition with { Party = party };
         var result = await store.SaveExpeditionAsync(

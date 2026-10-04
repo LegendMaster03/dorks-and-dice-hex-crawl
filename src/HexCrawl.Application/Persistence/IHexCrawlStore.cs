@@ -47,6 +47,8 @@ public sealed record StoredExpedition(
     public CrawlPartySheet Party { get; init; } = CrawlPartySheet.Empty;
     public ExpeditionEnvironmentState Environment { get; init; } = ExpeditionEnvironmentState.Empty;
     public ExpeditionEffectState Effects { get; init; } = ExpeditionEffectState.Empty;
+    public ExpeditionResourceState Resources { get; init; } = ExpeditionResourceState.Empty;
+    public ExpeditionSurvivalState Survival { get; init; } = ExpeditionSurvivalState.Empty;
     public IReadOnlyList<GeneratedProcedureResolution> GeneratedProcedureResolutions { get; init; } = [];
     public Guid? CampaignId { get; init; }
     public ProcedureOriginMetadata? ProcedureOrigin { get; init; }

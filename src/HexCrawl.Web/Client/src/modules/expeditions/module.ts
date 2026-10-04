@@ -1,5 +1,7 @@
 import { renderExpedition } from "./expedition-view";
 import { ExpeditionEnvironmentPanel } from "./environment-panel";
+import { ExpeditionSurvivalResourcesPanel } from "./survival-resources-panel";
+import { SurvivalResourcesApi } from "../../survival-api";
 import type { HexCrawlClientModule } from "../../client-module";
 import { clearUiError, showUiError } from "../../ui-error";
 
@@ -61,7 +63,7 @@ export const expeditionsModule: HexCrawlClientModule = {
                 }
             }
         };
-        const panel = new ExpeditionEnvironmentPanel(
+        const environmentPanel = new ExpeditionEnvironmentPanel(
             context.root,
             context.api,
             () => panelRuntime,
@@ -70,11 +72,19 @@ export const expeditionsModule: HexCrawlClientModule = {
                 context.navigate(routePath, true);
             },
             mutate);
-        panel.sync();
+        environmentPanel.sync();
+
+        const survivalPanel = new ExpeditionSurvivalResourcesPanel(
+            context.root,
+            new SurvivalResourcesApi(context.toolContext),
+            expeditionId,
+            mutate);
+        await survivalPanel.sync();
 
         return () => {
             disposed = true;
-            panel.dispose();
+            survivalPanel.dispose();
+            environmentPanel.dispose();
             disposeView();
         };
     }

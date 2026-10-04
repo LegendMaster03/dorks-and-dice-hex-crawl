@@ -60,6 +60,15 @@ public enum PersistentEffectChangeOperation
     Clear
 }
 
+public enum ResourceChangeOperation
+{
+    AdjustQuantity,
+    SetQuantity,
+    SetState,
+    SetSupplyDie,
+    Deplete
+}
+
 public enum NavigationConsequenceOperation
 {
     SetLostState,
@@ -265,18 +274,70 @@ public sealed record MovementChangeConsequenceComponent(
     public override void Validate() => Movement.Validate();
 }
 
-public sealed record ResourceChangeConsequenceComponent(
-    string ResourceKey,
-    double Delta,
-    string Unit) : ExpeditionConsequenceComponent
+public sealed record ResourceChangeConsequenceComponent : ExpeditionConsequenceComponent
 {
+    public required string ResourceKey { get; init; }
+    public Guid? ResourceId { get; init; }
+    public required ResourceChangeOperation Operation { get; init; }
+    public double? Quantity { get; init; }
+    public string? Unit { get; init; }
+    public string? State { get; init; }
+    public int? SupplyDieSides { get; init; }
+
     public override void Validate()
     {
         ExpeditionConsequenceProvenance.RequireText(ResourceKey, 200, "Resource key");
-        ExpeditionConsequenceProvenance.RequireText(Unit, 100, "Resource unit");
-        if (!double.IsFinite(Delta) || Delta == 0)
+        if (ResourceId == Guid.Empty)
         {
-            throw new InvalidOperationException("Resource delta must be finite and non-zero.");
+            throw new InvalidOperationException("Resource id can not be empty.");
+        }
+        ExpeditionConsequenceProvenance.ValidateOptional(Unit, 100, "Resource unit");
+        ExpeditionConsequenceProvenance.ValidateOptional(State, 500, "Resource state");
+        if (Quantity.HasValue && !double.IsFinite(Quantity.Value))
+        {
+            throw new InvalidOperationException("Resource quantity must be finite.");
+        }
+        if (SupplyDieSides is < 2)
+        {
+            throw new InvalidOperationException("Supply-die sides must be at least two.");
+        }
+
+        switch (Operation)
+        {
+            case ResourceChangeOperation.AdjustQuantity:
+                if (!Quantity.HasValue || Quantity.Value == 0 || string.IsNullOrWhiteSpace(Unit)
+                    || State is not null || SupplyDieSides.HasValue)
+                {
+                    throw new InvalidOperationException("Adjust-quantity resource change requires a non-zero finite quantity and explicit unit only.");
+                }
+                break;
+            case ResourceChangeOperation.SetQuantity:
+                if (!Quantity.HasValue || Quantity.Value < 0 || string.IsNullOrWhiteSpace(Unit)
+                    || State is not null || SupplyDieSides.HasValue)
+                {
+                    throw new InvalidOperationException("Set-quantity resource change requires a non-negative finite quantity and explicit unit only.");
+                }
+                break;
+            case ResourceChangeOperation.SetState:
+                if (string.IsNullOrWhiteSpace(State) || Quantity.HasValue || Unit is not null || SupplyDieSides.HasValue)
+                {
+                    throw new InvalidOperationException("Set-state resource change requires an explicit symbolic state only.");
+                }
+                break;
+            case ResourceChangeOperation.SetSupplyDie:
+                if (!SupplyDieSides.HasValue || Quantity.HasValue || Unit is not null || State is not null)
+                {
+                    throw new InvalidOperationException("Set-supply-die resource change requires an explicit die size only.");
+                }
+                break;
+            case ResourceChangeOperation.Deplete:
+                if (Quantity.HasValue || Unit is not null || State is not null || SupplyDieSides.HasValue)
+                {
+                    throw new InvalidOperationException("Deplete resource change can not contain an additional value.");
+                }
+                break;
+            default:
+                throw new InvalidOperationException("Resource change operation is not supported.");
         }
     }
 }

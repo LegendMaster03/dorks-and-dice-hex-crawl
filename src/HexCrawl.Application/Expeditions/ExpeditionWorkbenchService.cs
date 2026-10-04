@@ -218,13 +218,24 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
             stateWithProvenance,
             automaticResolution,
             command.ExpectedVersion);
+        var forcedTravel = ForcedTravelAccounting.AccountTravelMutation(
+            expedition,
+            state,
+            finalized.State,
+            command.ExpectedVersion,
+            "workbench-travel",
+            new ExpeditionConsequenceProvenance(
+                ExpeditionConsequenceSourceKind.Procedure,
+                "workbench-travel",
+                Note: travelProvenance.Note));
         var updated = expedition with
         {
             Runtime = finalized.State,
             Knowledge = projectedKnowledge,
             PauseReason = result.PauseReason,
             RemainingWatchTime = result.RemainingWatchTime,
-            GeneratedProcedureResolutions = finalized.Resolutions
+            GeneratedProcedureResolutions = finalized.Resolutions,
+            Survival = forcedTravel.Survival
         };
         return await SaveAsync(updated, command.ExpectedVersion, cancellationToken);
     }
