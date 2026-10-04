@@ -84,20 +84,22 @@ public sealed class ExpeditionJourneyService(
     {
         var expedition = await LoadAsync(expeditionId, ownerUserId, command.ExpectedVersion, cancellationToken);
         ValidateRoleKey(expedition, command.Resolution.RoleKey);
+        var resolutionClock = JourneyClockReference.From(expedition.Runtime);
         var transition = JourneyProcessEngine.Resolve(
             expedition.Journey,
             command.Resolution,
-            JourneyClockReference.From(expedition.Runtime),
+            resolutionClock,
             expedition.Party);
         if (!transition.StateChanged)
         {
             return new(expedition, "Journey resolution was already consumed; no state was changed.", false, command.Resolution.ProcessId);
         }
+        ValidateNewConsequenceIds(expedition, command.Resolution.Consequences);
 
         var working = expedition with { Journey = transition.State };
         foreach (var consequence in command.Resolution.Consequences)
         {
-            var sourced = EnsureSourceReference(
+            var sourced = WithSourceReference(
                 consequence,
                 $"journey-process:{command.Resolution.ProcessId:D}:resolution:{command.Resolution.ResolutionId:D}");
             var applied = ExpeditionConsequenceAggregateTransition.Apply(working, sourced, command.Resolution.Provenance);
@@ -133,7 +135,7 @@ public sealed class ExpeditionJourneyService(
                             SourceReference: command.Resolution.ResolutionId.ToString("D")),
                         Note = "Resolved process progress created an event evaluation opportunity. Event content, target selection, and consequence quantities remain unresolved."
                     },
-                    JourneyClockReference.From(working.Runtime),
+                    resolutionClock,
                     working.Party);
                 working = working with { Journey = created.State };
                 eventIds.Add(eventId);
@@ -159,7 +161,7 @@ public sealed class ExpeditionJourneyService(
                             SourceReference: command.Resolution.ResolutionId.ToString("D")),
                         Note = "A resolved stage transition created an event evaluation opportunity."
                     },
-                    JourneyClockReference.From(working.Runtime),
+                    resolutionClock,
                     working.Party);
                 working = working with { Journey = created.State };
                 eventIds.Add(eventId);
@@ -238,11 +240,12 @@ public sealed class ExpeditionJourneyService(
             return new(expedition, "Journey event occurrence was already resolved; no state was changed.", false,
                 transition.Occurrence.ProcessId, transition.Occurrence.Id);
         }
+        ValidateNewConsequenceIds(expedition, resolution.Consequences);
 
         var working = expedition with { Journey = transition.State };
         foreach (var consequence in resolution.Consequences)
         {
-            var sourced = EnsureSourceReference(consequence, $"journey-event:{resolution.OccurrenceId:D}");
+            var sourced = WithSourceReference(consequence, $"journey-event:{resolution.OccurrenceId:D}");
             var applied = ExpeditionConsequenceAggregateTransition.Apply(working, sourced, resolution.Provenance);
             working = applied.Expedition;
         }
@@ -400,10 +403,18 @@ public sealed class ExpeditionJourneyService(
         JourneyProcessPolicy policy,
         JourneyProcessDefinition definition)
     {
-        if (policy.StageKeys.Count > 0 && !policy.StageKeys.SequenceEqual(definition.StageOrder, StringComparer.Ordinal))
+        if (policy.StageKeys.Count > 0)
         {
-            throw new InvalidOperationException(
-                "The supplied process definition does not match the explicit stage keys stored in the pinned journey.process policy.");
+            if (!policy.StageKeys.SequenceEqual(definition.StageOrder, StringComparer.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "The supplied process definition does not match the explicit stage keys stored in the pinned journey.process policy.");
+            }
+            if (!string.Equals(definition.InitialStageKey, policy.StageKeys[0], StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "The supplied process definition must start at the first explicit stage stored in the pinned journey.process policy.");
+            }
         }
         if (policy.ProgressKind == JourneyProgressValueKind.ExplicitState
             && definition.Stages.Any(value => string.IsNullOrWhiteSpace(value.InitialProgressState)))
@@ -424,10 +435,25 @@ public sealed class ExpeditionJourneyService(
         }
     }
 
-    private static ExpeditionConsequence EnsureSourceReference(ExpeditionConsequence consequence, string sourceReference) =>
-        string.IsNullOrWhiteSpace(consequence.SourceReference)
-            ? consequence with { SourceReference = sourceReference }
-            : consequence;
+    private static void ValidateNewConsequenceIds(
+        StoredExpedition expedition,
+        IReadOnlyList<ExpeditionConsequence> consequences)
+    {
+        var existing = expedition.Effects.AppliedConsequences
+            .Select(value => value.ConsequenceId)
+            .ToHashSet();
+        var collision = consequences.FirstOrDefault(value => existing.Contains(value.Id));
+        if (collision is not null)
+        {
+            throw new InvalidOperationException(
+                $"Journey operation consequence id '{collision.Id:D}' was already consumed by a prior expedition consequence.");
+        }
+    }
+
+    private static ExpeditionConsequence WithSourceReference(
+        ExpeditionConsequence consequence,
+        string sourceReference) =>
+        consequence with { SourceReference = sourceReference };
 
     private static void RequireSupportedProcess(JourneyProcessPolicy policy)
     {
