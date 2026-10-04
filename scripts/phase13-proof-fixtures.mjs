@@ -110,13 +110,25 @@ renderHexGrid(detected, {
     anchor: { x: 9.5, y: 11.25 },
     lineValue: 48
 });
-const legacy = detectHexLattice(detected, {
+const rawLegacy = detectHexLattice(detected, {
     minimumSpacingPixels: 12,
     minimumConfidence: 0.54
 });
-if (legacy.status !== "detected" || !legacy.fit) {
-    throw new Error(`Legacy fixture did not detect: ${legacy.reason}`);
+if (rawLegacy.status !== "detected" || !rawLegacy.fit) {
+    throw new Error(`Legacy fixture did not detect: ${rawLegacy.reason}`);
 }
+// The pre-extraction browser never consumed the raw sample-center detector fit directly.
+// It mapped that fit into source-image edge coordinates before proposal/apply logic.
+const legacy = {
+    ...rawLegacy,
+    fit: {
+        ...rawLegacy.fit,
+        anchorPixel: {
+            x: rawLegacy.fit.anchorPixel.x + 0.5,
+            y: rawLegacy.fit.anchorPixel.y + 0.5
+        }
+    }
+};
 fs.writeFileSync(`${outputDirectory}/legacy-analysis.json`, JSON.stringify(legacy, null, 2));
 writeRaw(detected, "detected");
 writeRaw(raster(320, 240, 224), "gridless");
