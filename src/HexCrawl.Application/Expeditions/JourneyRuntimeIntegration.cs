@@ -37,11 +37,22 @@ public static class JourneyRuntimeIntegration
         if (afterCount <= beforeCount) return state;
 
         var eventPolicy = JourneyProcedurePolicyResolver.ResolveEvents(expedition.CampaignProcedure);
+        var watchEventsApply = eventPolicy.Support == JourneyPolicySupport.Supported
+            && eventPolicy.Supports(JourneyEventTriggerKind.WatchCompleted)
+            && eventPolicy.LinkMode is JourneyEventLinkMode.Standalone or JourneyEventLinkMode.Both;
         var working = state;
         for (var watch = beforeCount + 1; watch <= afterCount; watch++)
         {
             var occurrenceKey = $"watch:{watch}";
             if (working.ObservedRuntimeOccurrenceIds.Contains(occurrenceKey, StringComparer.Ordinal)) continue;
+
+            var processWatchApplies = working.ActiveProcesses.Any(value =>
+                value.Execution.IntervalIntegrationModel == JourneyIntervalIntegrationModel.CompletedWatchResolutionOpportunity);
+            if (!processWatchApplies && !watchEventsApply)
+            {
+                continue;
+            }
+
             var clock = JourneyClockReference.From(after);
             var provenance = new ExpeditionConsequenceProvenance(
                 ExpeditionConsequenceSourceKind.Procedure,
@@ -86,9 +97,7 @@ public static class JourneyRuntimeIntegration
             }
             working = working with { ActiveProcesses = active, History = history };
 
-            if (eventPolicy.Support == JourneyPolicySupport.Supported
-                && eventPolicy.Supports(JourneyEventTriggerKind.WatchCompleted)
-                && eventPolicy.LinkMode is JourneyEventLinkMode.Standalone or JourneyEventLinkMode.Both)
+            if (watchEventsApply)
             {
                 var eventId = JourneyProcessEngine.DeterministicId(expedition.Id, $"journey-event:{occurrenceKey}");
                 var eventResult = JourneyEventEngine.CreateOpportunity(
