@@ -1,12 +1,12 @@
 # Generic Procedure Architecture
 
-This document describes the current generic procedure architecture through Phase 9 of `docs/generic-procedure-development-plan.md`.
+This document describes the current generic procedure architecture through Phase 12 of `docs/generic-procedure-development-plan.md`.
 
 ## Architectural boundary
 
 Named systems remain creation-time preset metadata in `CrawlProcedureCatalog`. A preset is not a runtime authority. It contains a `GenericProcedurePresetRecipe`, which selects generic modules, versioned mechanics, and parameters.
 
-Applying a preset materializes a campaign-owned `CampaignProcedure`. The materialized procedure embeds complete snapshots of every selected `ProcedureModuleDefinition` and `MechanicDefinition`, resolved parameters, and campaign overrides. `ProcedureOriginMetadata` is optional informational provenance and is never consulted to determine runtime, participant-assignment, movement-composition, or environment-evaluation behavior.
+Applying a preset materializes a campaign-owned `CampaignProcedure`. The materialized procedure embeds complete snapshots of every selected `ProcedureModuleDefinition` and `MechanicDefinition`, resolved parameters, and campaign overrides. `ProcedureOriginMetadata` is optional informational provenance and is never consulted to determine runtime, participant-assignment, movement-composition, environment-evaluation, survival/resource, or journey behavior.
 
 The authoritative procedure path is:
 
@@ -14,11 +14,13 @@ The authoritative procedure path is:
 
 `CampaignProcedure` is the only supported persisted procedure representation for current-format expeditions.
 
+Phase 12 does not add a preset-specific completion layer. Preset recipes must contain their complete generic journey parameters before materialization; the materializer copies those parameters into the standalone campaign-owned snapshot.
+
 ## Pre-release compatibility policy
 
 Hex Crawl is pre-release development software. Development-era API, persistence, UI, and internal-model compatibility is not preserved unless a specific compatibility requirement is deliberately approved.
 
-Retired dual models are removed instead of retained as fallback infrastructure. Current PostgreSQL schema version 5 rejects older development schemas with an explicit reset/reinitialize instruction rather than maintaining compatibility columns or alternate procedure/environment representations.
+Retired dual models are removed instead of retained as fallback infrastructure. Current PostgreSQL schema version 8 rejects older development schemas with an explicit reset/reinitialize instruction rather than maintaining compatibility columns or alternate procedure/environment/effect/resource/journey representations.
 
 ## Generic modules and mechanics
 
@@ -34,9 +36,9 @@ This distinction lets the same materialized procedure remain authoritative after
 
 `GenericProcedureRuntime.Bind` is the deterministic runtime binding boundary for mechanics owned by `CrawlRuntimeEngine`.
 
-The runtime assembly receives only the data required for deterministic crawl progression. It does not own repositories, Rules Core clients, world lookup, Character Sheet lookup, or optional environment providers.
+The runtime assembly receives only the data required for deterministic crawl progression. It does not own repositories, Rules Core clients, world lookup, Character Sheet lookup, environment providers, resource stores, or journey content.
 
-Focused application operations may project one supported contract from the stored procedure without binding the entire procedure. This is used where behavior is not a deterministic crawl-engine transition, including Procedure Composer validation, participant activity state, movement capability composition, and environment-to-movement interpretation.
+Focused application operations may project one supported contract from the stored procedure without binding the entire procedure. This is used where behavior is not a deterministic crawl-engine transition, including Procedure Composer validation, participant activity state, movement capability composition, environment-to-movement interpretation, resource/survival operations, and journey process/event execution.
 
 Focused projection is still pinned-procedure evaluation. It is not preset dispatch.
 
@@ -54,6 +56,8 @@ The Procedure Composer operates on generic modules, mechanics, dependencies, par
 
 It allows a DM to create and revise campaign procedures without selecting a named system at runtime. Validation reports missing dependencies, unsupported contracts, or incomplete values directly instead of forcing every procedure into one preset-shaped schema.
 
+Phase 12 extends the existing journey module/mechanic schemas with explicit stage, progress, role, interval-integration, event-trigger, linking, and blocking parameters. It does not introduce a second composer-only journey model.
+
 The browser edits application contracts. Server/application code remains authoritative for materialization and validation.
 
 ## Generated procedure reference
@@ -69,6 +73,8 @@ Participant assignment is generic and procedure-owned.
 Typed activity/role state records participant choices against the contracts embedded in the pinned procedure. Active-interval snapshots preserve the inputs used for an interval so later party edits do not retroactively rewrite completed or in-progress resolution history.
 
 Participant state does not dispatch on named-system identity and does not import Character Sheet objects. `ExternalCharacterId` remains an optional external lookup key only.
+
+Phase 12 role-driven journey resolution samples current typed assignments at the explicit resolution boundary and retains a participant/assignment snapshot in journey history. Ambiguous role ownership requires explicit participant selection.
 
 ## Movement capability composition
 
@@ -137,11 +143,49 @@ This is the same path used by ordinary expedition projection and the environment
 
 Source provenance and the pinned terrain/mechanical adjustment are retained in the resulting movement explanation.
 
+Journey events may capture effective environment facts as historical resolution context. This is a snapshot for provenance/adjudication, not a competing current-environment authority and not an inferred modifier.
+
 See `docs/environment-context.md`.
+
+## Generalized effects and consequences
+
+Phase 10 introduces one structured consequence lifecycle. `ExpeditionConsequence` carries stable identity, category, target, typed components, provenance, source reference, and lifecycle status.
+
+Consequences can describe time delay, movement change, resource change, exposure/fatigue, damage/endurance, navigation change, encounter circumstance, persistent-effect change, or custom output. The consequence pipeline is reused by later phases rather than copied into each subsystem.
+
+Persistent effects are expedition state and remain distinct from deterministic runtime pause reasons.
+
+## Resources, survival, and forced travel
+
+Phase 11 adds generic resource inventory/audit state plus forced-travel, exposure, and camp state.
+
+Resource/survival operations are focused projections over exact pinned generic contracts. They do not infer publisher-specific rates or tables from preset identity. When the stored procedure lacks a complete formula, the DM/provider supplies explicit resolved input.
+
+`ForcedTravelAccounting` observes successful authoritative travel mutations. It converts elapsed travel only when the pinned procedure establishes a safe relationship to the forced-travel unit. Exact unit equality and simple singular/plural variants such as `watch`/`watches` are accepted; unrelated open units are not guessed.
+
+See `docs/survival-resources.md`.
+
+## Multi-stage journey processes
+
+Phase 12 adds generic Journey Challenge / Complex Hazard execution without adding a second crawl engine.
+
+`journey.process` focused policy projects stage/progress/completion/role/watch-integration behavior from the expedition's exact pinned procedure. Starting a process persists both the process definition and a `JourneyProcessExecutionSnapshot`, so an in-progress process does not change when catalog recipes later change.
+
+Process definitions use open stage, approach, role, outcome, destination, route, and location keys. Progress can be numeric in any explicit unit or an explicit symbolic state. Stage completion may be explicit, threshold-based, success-count-based, or resolution-selected. Transition behavior is explicit, sequential, or outcome-selected.
+
+Resolution IDs are stable/idempotent. Resolutions preserve progress before/after, counter deltas, participant/role snapshots, transitions, consequence IDs, event IDs, and provenance. A failed attempt does not automatically fail a process.
+
+`journey.events` is independent focused policy. Trigger sources can include process progress, stage transition, completed watch, landmark, explicit/manual, or external opportunities. Policies specify standalone/process-linked/both semantics. Triggering creates a durable unresolved occurrence; event content and consequences remain explicit resolved input unless the pinned procedure actually encodes them.
+
+`JourneyRuntimeIntegration.ObserveCompletedWatches` runs only after an authoritative runtime mutation. It can create stable event/process-resolution opportunities but does not advance runtime or process progress itself. Retained runtime-occurrence identities prevent duplicate opportunities on retry/restart.
+
+Journey-generated consequences flow through the existing Phase 10/11 aggregate transition. Encounter circumstances remain deferred for the later encounter-runtime phase.
+
+See `docs/journey-processes.md`.
 
 ## Optional travel/environment providers
 
-Rules Core remains optional enrichment. Generic procedure execution, participant state, environment authority, and movement composition do not depend on Rules Core.
+Rules Core remains optional enrichment. Generic procedure execution, participant state, environment authority, movement composition, resources, and journey state do not depend on Rules Core.
 
 `ITravelEnvironmentProvider` exposes typed provider catalog/resolution contracts. Provider states keep unavailable, failed, unsupported, input-required, not-applicable, requires-adjudication, and resolved cases distinct.
 
@@ -153,22 +197,25 @@ Provider output is converted into explicit application inputs/contributors. Prov
 
 Character Sheet remains optional. `ExternalCharacterId` is only an optional capability lookup key.
 
-Hex Crawl procedure, participant, movement, and environment contracts do not import Character Sheet DTOs, inventories, or stat blocks. A DM can enter movement contributors, party references, current environment facts, and overrides directly.
+Hex Crawl procedure, participant, movement, environment, resource, and journey contracts do not import Character Sheet DTOs, inventories, or stat blocks. A DM can enter movement contributors, party references, current environment facts, overrides, process resolutions, and consequences directly.
 
-A procedure condition that refers to equipment does not prove the party has that equipment. Capability must come from explicit local state, an approved external lookup/provider, or DM adjudication.
+A procedure condition or journey approach that refers to an external capability does not prove the party has that capability. Capability must come from explicit local state, an approved external lookup/provider, or DM adjudication.
 
 ## Persistence boundaries
 
-The current PostgreSQL schema version is 5.
+The current PostgreSQL schema version is 8.
 
 Procedure authority is stored as complete `CampaignProcedure` JSON snapshots.
 
-Phase 9 environment authority is stored separately:
+Expedition subsystem authority is explicitly separated:
 
-- `overworlds.world_json` contains static environment annotations as part of `OverworldDefinition`;
-- `expeditions.environment_json` contains expedition current facts and DM overrides.
+- `environment_json` — current/transient facts and DM overrides;
+- `effects_json` — generalized consequence/effect lifecycle;
+- `resources_json` — generic resource inventory and audit history;
+- `survival_json` — forced-travel/exposure/camp state;
+- `journey_state_json` — active/closed processes, event occurrences, resolutions, history, and idempotency identities.
 
-Effective environment context, conflicts, provider responses, environment evaluation, and current movement composition are derived and are not persisted as competing authorities.
+Static environment annotations remain in `overworlds.world_json`. Effective environment context, conflicts, provider responses, environment evaluation, movement composition, and current catalog interpretation are derived and are not persisted as competing authorities.
 
 Generated/consumed resolution history retains the values and provenance that were actually used at the time of resolution, while optimistic concurrency prevents stale automatic results from being committed against newer aggregate state.
 
@@ -178,39 +225,40 @@ See `docs/postgresql-persistence.md`.
 
 HTTP contracts expose application/domain concepts rather than persistence rows.
 
-The Web module catalog now includes the `environment-context` module. It depends on both `worlds` and `expeditions` because Phase 9 owns static world annotation authoring plus expedition current/override and workbench operations.
+The Web modules expose typed focused operations for environment, resources/survival, and journey/process state. World and expedition mutations continue to use aggregate optimistic concurrency.
 
-World and expedition mutations continue to use aggregate optimistic concurrency.
+The TypeScript client presents server-derived procedure, participant, movement, environment, survival, and journey projections. It does not implement a second precedence resolver, procedure interpreter, movement composer, resource engine, or process engine in browser code.
 
-The TypeScript client presents server-derived procedure, participant, movement, and environment projections. It does not implement a second precedence resolver, procedure interpreter, or movement composer in browser code.
+The expedition workbench provides typed DM panels for current environment, resources/survival, and Journey / Challenge operations. Journey state is never edited by replacing raw aggregate JSON.
 
 ## Preset-proof behavior
 
-The generic architecture is intentionally tested against procedures with materially different travel semantics.
+The generic architecture is intentionally tested against procedures with materially different travel and journey semantics.
 
 Examples retained across the proof set include:
 
 - ordinary physical distance/rate procedures;
 - D&D 2024 symbolic maximum pace, including conditional Arctic Fast travel;
 - Pathfinder Hexploration activity budgets;
-- Forbidden Lands quarter-day activity budgets;
+- Forbidden Lands quarter-day activity budgets and supply-die resources;
 - AD&D-style movement-point semantics;
-- The One Ring journey progress without a fabricated repeating time interval;
+- The One Ring role-driven three-stage journey progress without a fabricated repeating time interval;
+- Mixed House Rule four-hour watch travel with standalone journey-event opportunities;
 - Worlds Without Number numeric party-rate composition without preset dispatch.
 
-Phase 9 proves that environment truth can feed these stored semantics without forcing them into a single miles-per-hour model.
+The One Ring and Mixed House Rule recipes contain their complete Phase 12 generic parameter sets directly. Materialization does not identify them by preset key to finish their runtime contracts.
 
 ## Provenance and adjudication
 
 The architecture treats provenance and unresolved semantics as first-class output.
 
-Procedure origin, source attribution, environment fact provenance, effective-source information, movement contributor provenance, provider attribution, and generated-resolution provenance remain explanatory data. They never replace the pinned mechanical contracts as authority.
+Procedure origin, source attribution, environment fact provenance, effective-source information, movement contributor provenance, provider attribution, consequence provenance, and journey resolution/event provenance remain explanatory data. They never replace the pinned mechanical contracts as authority.
 
-When the system lacks a safe generic rule, it reports missing input, unsupported semantics, or adjudication. It does not choose a “worst” terrain, invent a weather formula, infer equipment, reinterpret provider semantics, or dispatch to a named-system special case.
+When the system lacks a safe generic rule, it reports missing input, unsupported semantics, or adjudication. It does not choose a “worst” terrain, invent a weather or journey-event formula, infer equipment, reinterpret provider semantics, or dispatch to a named-system special case.
 
 ## Current scope boundary
 
-Implemented through Phase 9 are:
+Implemented through Phase 12 are:
 
 - generic preset/materialization and campaign-owned procedure snapshots;
 - native generic runtime binding;
@@ -219,23 +267,19 @@ Implemented through Phase 9 are:
 - optional travel/environment provider boundary;
 - typed participant activity/role state with interval snapshots;
 - generic movement capability composition with server-derived suggestions and provenance;
-- generalized environment facts, static annotations, current state, DM overrides, precedence/conflicts, pinned-procedure environment evaluation, persistence, HTTP/UI workbench support, and movement handoff.
+- generalized environment facts, static annotations, current state, DM overrides, precedence/conflicts, pinned-procedure environment evaluation, persistence, HTTP/UI workbench support, and movement handoff;
+- generalized consequences and persistent effects;
+- generic resources, forced travel, exposure/camp state, and focused survival/resource operations;
+- multi-stage process definitions/instances, arbitrary progress representation, approaches, role-driven resolution, failures/complications, stage transitions, process completion/failure/abandonment, journey-event opportunities, completed-watch observation, consequence handoff, persistence/restart, HTTP contracts, and DM UI.
 
-Still deferred are:
-
-- Phase 10 generalized consequence/effect lifecycle;
-- Phase 11 forced-travel/resource/survival execution and activity-driven foraging/camping effects;
-- Phase 12 multi-stage journey execution;
-- expanded encounter runtime;
-- battle-map ownership.
-
-Mechanics within the Phase 9 environment domain remain manual/provider-resolved when no safe executable generic contract exists. That is an intentional boundary, not permission to add named-system special cases.
+Still deferred are expanded encounter-runtime consumption of encounter circumstances and battle-map ownership. Phase 12.5 is the next internal-human-testing readiness gate.
 
 ## Invariants
 
 The following invariants apply across the current generic procedure architecture:
 
 - named systems are removable creation-time presets;
+- preset recipes are complete creation inputs, not runtime dependencies;
 - `CampaignProcedure` is the only mechanical procedure authority for current-format expeditions;
 - runtime/application behavior does not branch on preset identity;
 - execution/projection honors embedded handler/version and semantic contracts;
@@ -243,7 +287,10 @@ The following invariants apply across the current generic procedure architecture
 - external tools are optional input providers, not authorities;
 - static environment truth belongs to the world;
 - transient environment state and DM overrides belong to the expedition aggregate;
-- deterministic runtime has no world/provider dependency;
+- deterministic runtime has no world/provider/journey dependency;
 - `MovementCapabilityComposer` remains the sole final movement composer;
-- unknown or ambiguous environment semantics are surfaced, not guessed;
+- generalized consequences remain the shared downstream mutation contract;
+- journey process/event execution overlays deterministic runtime rather than replacing it;
+- stable consequence/resolution/event/runtime-occurrence identities prevent duplicate application;
+- unknown or ambiguous environment, resource, provider, or journey semantics are surfaced, not guessed;
 - derived provider/environment/composition output is not persisted as competing truth.

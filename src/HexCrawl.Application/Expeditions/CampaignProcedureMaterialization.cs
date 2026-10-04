@@ -34,8 +34,11 @@ public static class CampaignProcedureMaterializer
 
         var modules = preset.Recipe.ModuleSelections.Select(selection =>
         {
-            var module = GenericProcedureCatalog.ResolveModule(selection.ModuleKey);
-            var mechanic = GenericProcedureCatalog.ResolveMechanic(selection.MechanicKey, selection.MechanicVersion);
+            var module = JourneyProcedureContractSchema.ExtendModule(
+                GenericProcedureCatalog.ResolveModule(selection.ModuleKey));
+            var mechanic = JourneyProcedureContractSchema.ExtendMechanic(
+                selection.ModuleKey,
+                GenericProcedureCatalog.ResolveMechanic(selection.MechanicKey, selection.MechanicVersion));
             return new MaterializedProcedureModule(
                 CampaignProcedureSnapshot.Copy(module),
                 CampaignProcedureSnapshot.Copy(mechanic),
@@ -107,7 +110,9 @@ public static class CampaignProcedureMaterializer
             if (!string.IsNullOrWhiteSpace(value.ReplacementMechanicKey))
             {
                 mechanic = CampaignProcedureSnapshot.Copy(
-                    GenericProcedureCatalog.ResolveMechanic(value.ReplacementMechanicKey, value.ReplacementMechanicVersion));
+                    JourneyProcedureContractSchema.ExtendMechanic(
+                        selected.Module.Key,
+                        GenericProcedureCatalog.ResolveMechanic(value.ReplacementMechanicKey, value.ReplacementMechanicVersion)));
             }
 
             var parameters = CampaignProcedureSnapshot.CopyStrings(selected.Parameters);

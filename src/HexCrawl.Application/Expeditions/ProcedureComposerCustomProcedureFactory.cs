@@ -64,12 +64,12 @@ internal static class ProcedureComposerCustomProcedureFactory
                 ("inventoryModel", "counted"),
                 ("consumptionModel", "manual"),
                 ("consumptionInterval", "interval")),
-            Select(GenericProcedureCatalog.ForagingModule, GenericProcedureCatalog.ActivityForagingPolicyMechanic,
+            Select(GenericProcedureCatalog.ForagingModule, GenericProcedureCatalog.ForagingPolicyMechanic,
                 ("resolutionModel", "manual-check"),
                 ("timeCost", "1"),
                 ("timeUnit", "activity"),
                 ("movementTradeoff", "replaces-activity")),
-            Select(GenericProcedureCatalog.CampingModule, GenericProcedureCatalog.ActivityCampingPolicyMechanic,
+            Select(GenericProcedureCatalog.CampingModule, GenericProcedureCatalog.CampingPolicyMechanic,
                 ("resolutionModel", "manual-camp"),
                 ("timeCost", "1"),
                 ("timeUnit", "activity"),
@@ -86,14 +86,25 @@ internal static class ProcedureComposerCustomProcedureFactory
                 ("scope", "participant")),
             Select(GenericProcedureCatalog.JourneyEventsModule, GenericProcedureCatalog.JourneyEventPolicyMechanic,
                 ("triggerModel", "manual-or-landmark"),
-                ("targetingModel", "travel-role"),
+                ("targetingModel", "explicit-target"),
                 ("terrainInfluence", "manual"),
-                ("consequenceModel", "event")),
+                ("consequenceModel", "event"),
+                ("triggerSources", "explicit;landmark;watch-completed"),
+                ("linkMode", "both"),
+                ("requiresResolvedTrigger", "true"),
+                ("blocksRelevantTravelWhileResolutionRequired", "false")),
             Select(GenericProcedureCatalog.JourneyProcessModule, GenericProcedureCatalog.MultiStageExpeditionProcessMechanic,
                 ("stageModel", "manual-stages"),
                 ("progressModel", "progress-points"),
                 ("completionModel", "explicit-completion"),
-                ("roleDriven", "true"))
+                ("roleDriven", "false"),
+                ("stageTransitionModel", "explicit"),
+                ("progressKind", "numeric"),
+                ("progressUnit", "progress-points"),
+                ("allowNegativeProgress", "false"),
+                ("roleAssignmentModel", "current-at-resolution"),
+                ("intervalIntegrationModel", "completed-watch-resolution-opportunity"),
+                ("blocksRelevantTravelWhileResolutionRequired", "false"))
         };
 
         var procedure = new CampaignProcedure
@@ -112,9 +123,15 @@ internal static class ProcedureComposerCustomProcedureFactory
     private static MaterializedProcedureModule Select(
         string moduleKey,
         string mechanicKey,
-        params (string Key, string Value)[] parameters) =>
-        new(
-            CampaignProcedureSnapshot.Copy(GenericProcedureCatalog.ResolveModule(moduleKey)),
-            CampaignProcedureSnapshot.Copy(GenericProcedureCatalog.ResolveMechanic(mechanicKey)),
+        params (string Key, string Value)[] parameters)
+    {
+        var module = JourneyProcedureContractSchema.ExtendModule(GenericProcedureCatalog.ResolveModule(moduleKey));
+        var mechanic = JourneyProcedureContractSchema.ExtendMechanic(
+            moduleKey,
+            GenericProcedureCatalog.ResolveMechanic(mechanicKey));
+        return new MaterializedProcedureModule(
+            CampaignProcedureSnapshot.Copy(module),
+            CampaignProcedureSnapshot.Copy(mechanic),
             parameters.ToDictionary(value => value.Key, value => value.Value, StringComparer.Ordinal));
+    }
 }

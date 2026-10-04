@@ -63,6 +63,7 @@ public sealed class ExpeditionAssistantService(
     {
         var expedition = await coreService.GetExpeditionAsync(expeditionId, ownerUserId, cancellationToken);
         RequireVersion(command.ExpectedVersion, expedition.Version);
+        JourneyRuntimeIntegration.EnsureRelevantTravelAllowed(expedition);
 
         var stateBefore = expedition.Runtime as ExpeditionState
             ?? throw new InvalidOperationException("Travel/watch bookkeeping requires a spatial crawl session.");
@@ -125,9 +126,14 @@ public sealed class ExpeditionAssistantService(
                 ExpeditionConsequenceSourceKind.Procedure,
                 "focused-spatial-travel",
                 Note: command.Note));
+        var journey = JourneyRuntimeIntegration.ObserveCompletedWatches(
+            expedition,
+            stateBefore,
+            state,
+            expedition.Journey);
 
         return await SaveAsync(
-            expedition with { Runtime = state, Survival = forcedTravel.Survival },
+            expedition with { Runtime = state, Survival = forcedTravel.Survival, Journey = journey },
             command.ExpectedVersion,
             cancellationToken);
     }
@@ -140,6 +146,7 @@ public sealed class ExpeditionAssistantService(
     {
         var expedition = await coreService.GetExpeditionAsync(expeditionId, ownerUserId, cancellationToken);
         RequireVersion(command.ExpectedVersion, expedition.Version);
+        JourneyRuntimeIntegration.EnsureRelevantTravelAllowed(expedition);
 
         if (expedition.Context is not NonSpatialCrawlSessionContext)
         {
@@ -169,13 +176,19 @@ public sealed class ExpeditionAssistantService(
                 ExpeditionConsequenceSourceKind.Procedure,
                 "focused-nonspatial-travel",
                 Note: command.Note));
+        var journey = JourneyRuntimeIntegration.ObserveCompletedWatches(
+            expedition,
+            stateBefore,
+            state,
+            expedition.Journey);
 
         return await SaveAsync(
             expedition with
             {
                 Runtime = state,
                 RemainingWatchTime = state.ActiveWatch?.Remaining ?? TimeSpan.Zero,
-                Survival = forcedTravel.Survival
+                Survival = forcedTravel.Survival,
+                Journey = journey
             },
             command.ExpectedVersion,
             cancellationToken);

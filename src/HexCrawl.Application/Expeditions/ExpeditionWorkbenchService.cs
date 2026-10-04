@@ -107,6 +107,7 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
     {
         var expedition = await coreService.GetExpeditionAsync(expeditionId, ownerUserId, cancellationToken);
         RequireVersion(command.ExpectedVersion, expedition.Version);
+        JourneyRuntimeIntegration.EnsureRelevantTravelAllowed(expedition);
         var state = expedition.Runtime as ExpeditionState
             ?? throw new InvalidOperationException("The full crawl workbench requires a spatial crawl session.");
         var resolvedContext = await contextResolver.ResolveAsync(expedition, ownerUserId, cancellationToken);
@@ -228,6 +229,11 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
                 ExpeditionConsequenceSourceKind.Procedure,
                 "workbench-travel",
                 Note: travelProvenance.Note));
+        var journey = JourneyRuntimeIntegration.ObserveCompletedWatches(
+            expedition,
+            state,
+            finalized.State,
+            expedition.Journey);
         var updated = expedition with
         {
             Runtime = finalized.State,
@@ -235,7 +241,8 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
             PauseReason = result.PauseReason,
             RemainingWatchTime = result.RemainingWatchTime,
             GeneratedProcedureResolutions = finalized.Resolutions,
-            Survival = forcedTravel.Survival
+            Survival = forcedTravel.Survival,
+            Journey = journey
         };
         return await SaveAsync(updated, command.ExpectedVersion, cancellationToken);
     }

@@ -7,10 +7,28 @@ Hex Crawl uses `IHexCrawlStore` as its application persistence boundary. Product
 The PostgreSQL schema preserves the aggregate-snapshot design:
 
 - `overworlds` stores stable IDs, owner scope, name, aggregate version/timestamps, and the complete world snapshot, including static world/hex/spatial-feature environment annotations;
-- `expeditions` stores session context, runtime state, optional player knowledge, party state, current/transient environment facts, explicit DM environment overrides, generated procedure resolutions, the complete executable procedure snapshot, optional preset-origin metadata, pause state, remaining-watch state, and aggregate version/timestamps;
+- `expeditions` stores session context, runtime state, optional player knowledge, party state, current/transient environment facts, explicit DM environment overrides, Phase 10 effects, Phase 11 resources/survival, Phase 12 journey/process state, generated procedure resolutions, the complete executable procedure snapshot, optional preset-origin metadata, pause state, remaining-watch state, and aggregate version/timestamps;
 - `expedition_events` stores retained runtime history with the exact sequence, kind, optional subject, and complete payload.
 
 PostgreSQL-native `uuid`, `bigint`, `timestamptz`, and `jsonb` types are used. Persisted JSON remains application-owned; snapshots are not normalized into a competing relational domain model. Generic execution-handler identity and mechanic version are persisted verbatim inside the `CampaignProcedure` JSON; current native handlers use behavior-oriented `procedure.*` identifiers.
+
+## Expedition aggregate columns
+
+Current-format expeditions persist the durable Phase 0–12 aggregate in explicit ownership columns:
+
+- `state_json` — deterministic spatial or non-spatial crawl runtime state;
+- `knowledge_json` — optional player-knowledge/presentation state;
+- `party_json` — typed party members, movement contributors, and Phase 7 activity/role assignments;
+- `environment_json` — Phase 9 current/transient environment facts and explicit DM overrides;
+- `effects_json` — Phase 10 applied/pending consequences and persistent expedition effects;
+- `resources_json` — Phase 11 generic expedition resources and audit history;
+- `survival_json` — Phase 11 forced-travel, exposure, and camp state;
+- `journey_state_json` — Phase 12 active/closed journey processes, journey events, resolutions, history, and idempotency identities;
+- `generated_resolutions_json` — retained generated procedure-resolution state;
+- `procedure_json` — the exact pinned `CampaignProcedure` authority;
+- `procedure_origin_json` — optional informational creation provenance.
+
+The columns separate subsystem authority while remaining one optimistic-concurrency expedition aggregate. A successful mutation writes the complete internally consistent aggregate at one new version.
 
 ## Environment persistence boundary
 
@@ -34,11 +52,21 @@ The following are derived and are **not** persisted as competing sources of trut
 
 Those values are recomputed from the current world snapshot, current expedition position/context, expedition environment state, and pinned `CampaignProcedure`. Moving between hexes therefore changes applicable static world truth without copying annotations into expedition state.
 
+## Effects, survival, and journey persistence boundaries
+
+Phase 10 consequence state is authoritative in `effects_json`. Phase 11 resource inventory/audit state and survival state are authoritative in `resources_json` and `survival_json`; journey code does not duplicate those mutations.
+
+Phase 12 stores journey/process authority in `journey_state_json`. It includes process definitions/execution snapshots, stage state, pending actions, closed-process history, journey event occurrences, resolution records, consumed resolution IDs, and observed runtime occurrence IDs. Stable identities make retries and completed-watch observation idempotent across persistence/restart.
+
+A process stores its own execution snapshot when started. Current catalog recipes are therefore not consulted to reinterpret an in-progress process after restart. The expedition's pinned `procedure_json` remains the procedure authority for new focused operations.
+
+Journey event environment facts are historical snapshots attached to occurrences/resolutions where requested; they do not replace `environment_json` as current environment authority.
+
 ## Schema lifecycle
 
 Schema generation is tracked in `hex_crawl_schema_migrations`. `PostgresSchemaMigrator` applies application schema changes transactionally and uses a PostgreSQL transaction advisory lock so concurrent service starts can not race schema creation.
 
-The current pre-release schema version is **5**. Version 5 includes the required `environment_json jsonb NOT NULL` expedition column and the Phase 9 world snapshot shape.
+The current pre-release schema version is **8**. Version 8 includes the Phase 12 `journey_state_json jsonb NOT NULL` expedition column together with the Phase 9–11 `environment_json`, `effects_json`, `resources_json`, and `survival_json` aggregate boundaries.
 
 Hex Crawl is still pre-release and deliberately does not maintain compatibility infrastructure for earlier development schemas. A database whose recorded schema version is not the current version is rejected with a reset/reinitialize instruction rather than silently reshaping obsolete development data. Production data is never recreated or reset automatically.
 
@@ -98,8 +126,8 @@ If PostgreSQL becomes unavailable after startup, `/ready` returns HTTP 503 rathe
 
 ## Validation
 
-CI runs application persistence tests, HTTP integration tests, and container restart smokes against PostgreSQL. Phase 9 coverage verifies static environment annotations and expedition `environment_json` survive persistence/reload, and HTTP coverage verifies effective environment and movement are recomputed after restart from persisted authority.
+CI runs application persistence tests, HTTP integration tests, and container restart smokes against PostgreSQL. Coverage through Phase 12 verifies the durable environment/effect/resource/survival/journey aggregate round-trips through PostgreSQL and that focused runtime operations continue from the stored pinned procedure after reload.
 
-The mapped smoke persists structured state and a filesystem map asset, restarts PostgreSQL and the application, and verifies both survive. A separate mapless smoke persists and reloads a `NonSpatial` crawl session, including the mapless state boundaries used by Phase 9 current-environment support.
+The mapped smoke persists structured state and a filesystem map asset, restarts PostgreSQL and the application, and verifies both survive. A separate mapless smoke persists and reloads a `NonSpatial` crawl session, including the mapless state boundaries used by role-driven journey/process execution.
 
 The retired SQLite-to-PostgreSQL production cutover utility and its migration-only tests are intentionally not part of the ongoing repository surface after Phase 0 completion.

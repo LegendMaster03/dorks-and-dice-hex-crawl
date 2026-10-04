@@ -50,6 +50,8 @@ public sealed class PostgresSchemaTests
         Assert.False(columns[("expeditions", "resources_json")].Nullable);
         Assert.Equal("jsonb", columns[("expeditions", "survival_json")].Type);
         Assert.False(columns[("expeditions", "survival_json")].Nullable);
+        Assert.Equal("jsonb", columns[("expeditions", "journey_state_json")].Type);
+        Assert.False(columns[("expeditions", "journey_state_json")].Nullable);
         Assert.Equal("jsonb", columns[("expeditions", "procedure_origin_json")].Type);
         Assert.DoesNotContain(("expeditions", "campaign_procedure_json"), columns.Keys);
         Assert.Equal("bigint", columns[("expedition_events", "sequence")].Type);
@@ -58,7 +60,7 @@ public sealed class PostgresSchemaTests
         await using var versionCommand = connection.CreateCommand();
         versionCommand.CommandText = "SELECT MAX(version) FROM hex_crawl_schema_migrations;";
         Assert.Equal(PostgresSchemaMigrator.CurrentVersion, Convert.ToInt32(await versionCommand.ExecuteScalarAsync()));
-        Assert.Equal(7, PostgresSchemaMigrator.CurrentVersion);
+        Assert.Equal(8, PostgresSchemaMigrator.CurrentVersion);
     }
 
     [Fact]

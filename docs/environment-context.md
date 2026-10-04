@@ -1,6 +1,6 @@
 # Environment context and evaluation
 
-Phase 9 introduces a generic environment context between authoritative world/session state and the Phase 8 movement-composition boundary. It gives Hex Crawl one ruleset-neutral way to represent terrain, route, weather, physical conditions, hazards, and campaign-defined environmental facts without making named systems runtime authorities.
+Phase 9 introduced a generic environment context between authoritative world/session state and the Phase 8 movement-composition boundary. It gives Hex Crawl one ruleset-neutral way to represent terrain, route, weather, physical conditions, hazards, and campaign-defined environmental facts without making named systems runtime authorities.
 
 ## Authority and ownership
 
@@ -181,12 +181,12 @@ Provider responses and provider-native DTOs are not persisted into the expeditio
 
 ## Persistence
 
-Schema version 5 persists Phase 9 authority explicitly:
+Phase 9 introduced explicit environment persistence in schema version 5. The current pre-release schema is version 8 and preserves the same authority boundary:
 
 - static annotations are serialized inside `overworlds.world_json` as part of `OverworldDefinition`;
 - `expeditions.environment_json` stores `CurrentFacts` and `Overrides`.
 
-Effective context, conflicts, pinned-procedure evaluation, provider output, and composed movement are derived and recomputed. Restart tests exercise both world-bound and mapless persistence paths.
+Effective context, conflicts, pinned-procedure evaluation, provider output, and composed movement are derived and recomputed. Phase 12 journey events may retain effective environment facts as historical event/resolution snapshots, but those snapshots do not become current environment authority. Restart tests exercise both world-bound and mapless persistence paths.
 
 Because the project remains pre-release, prior development schema versions are rejected with a reset/reinitialize instruction rather than supported through compatibility fallback columns or dual models.
 
@@ -216,21 +216,17 @@ The TypeScript client edits environment inputs and renders server-derived result
 
 Mapless sessions retain environment editing/evaluation without requiring an overworld.
 
-## Deliberately manual or deferred mechanics
+## Manual and cross-phase boundaries
 
-Phase 9 creates the environment model and safe movement handoff. It does not fabricate mechanics that belong to later phases or that the pinned procedure/provider does not define.
-
-The following remain manual, symbolic, provider-resolved, or deferred when no safe current contract exists:
+The environment model still does not fabricate semantics that the pinned procedure/provider does not define. The following remain manual, symbolic, provider-resolved, or adjudicated when no safe current contract exists:
 
 - weather formulas not explicitly executable in the pinned generic contract;
 - equipment/capability checks not actually supplied by party state or a provider;
 - incompatible competing terrain/route facts with no combination rule;
-- generalized hazards and persistent condition consequences;
-- resource consumption, food/water, exposure, fatigue/exhaustion, and forced-travel lifecycle;
-- multi-stage journey execution;
+- campaign-defined hazards whose effect formula is not encoded;
 - encounter consequences beyond the existing handoff/runtime boundary.
 
-Phase 10 owns generalized effect/consequence lifecycle. Phase 11 owns survival/resource and forced-travel execution. Phase 12 owns multi-stage journey execution.
+Phase 10 owns generalized consequence/effect lifecycle. Phase 11 owns resource, survival, exposure, camping/foraging, and forced-travel execution. Phase 12 owns multi-stage journey/process and journey-event execution. Those phases consume environment truth without changing Phase 9 ownership.
 
 ## Core invariants
 
