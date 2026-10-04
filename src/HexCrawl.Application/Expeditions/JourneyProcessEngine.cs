@@ -62,6 +62,7 @@ public static class JourneyProcessEngine
         ArgumentNullException.ThrowIfNull(party);
         definition.Validate();
         execution.Validate();
+        ValidateDefinitionCompatibility(definition, execution);
         provenance.Validate();
         if (processId == Guid.Empty)
         {
@@ -186,6 +187,10 @@ public static class JourneyProcessEngine
             || definition.FailProcessAtComplicationLimit && definition.ComplicationLimit.HasValue && nextStageState.Complications >= definition.ComplicationLimit.Value;
         var stageComplete = !processFailed && IsStageComplete(definition, nextStageState, input.CompleteStage);
         nextStageState = nextStageState with { Completed = stageComplete };
+        if (input.CompleteProcess)
+        {
+            ValidateExplicitCompletionRequest(process, input.StageKey, stageComplete);
+        }
 
         var stageStates = process.StageStates.Select(value =>
             string.Equals(value.StageKey, input.StageKey, StringComparison.Ordinal) ? nextStageState : value).ToArray();
@@ -225,13 +230,6 @@ public static class JourneyProcessEngine
         if (completeProcess && processFailed)
         {
             throw new InvalidOperationException("A journey process resolution can not complete and fail the process simultaneously.");
-        }
-        if (input.CompleteProcess
-            && !string.Equals(process.Execution.CompletionModel, "explicit-completion", StringComparison.Ordinal)
-            && !string.Equals(process.Execution.CompletionModel, "reach-destination", StringComparison.Ordinal)
-            && !string.Equals(process.Execution.CompletionModel, "final-stage-completion", StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException("The exact pinned completion model does not support explicit process completion.");
         }
 
         var terminalStatus = processFailed ? JourneyProcessStatus.Failed
@@ -357,6 +355,10 @@ public static class JourneyProcessEngine
         provenance.Validate();
         var process = state.ActiveProcesses.SingleOrDefault(value => value.Id == processId)
             ?? throw new InvalidOperationException("The requested journey process is not active.");
+        if (terminalStatus == JourneyProcessStatus.Completed)
+        {
+            ValidateCloseCompletion(process);
+        }
         var closed = process with
         {
             Status = terminalStatus,
@@ -472,6 +474,65 @@ public static class JourneyProcessEngine
             || !stage.Approaches.Any(value => string.Equals(value.ApproachKey, approachKey, StringComparison.Ordinal)))
         {
             throw new InvalidOperationException("The selected journey approach is not available for the current stage.");
+        }
+    }
+
+    private static void ValidateDefinitionCompatibility(
+        JourneyProcessDefinition definition,
+        JourneyProcessExecutionSnapshot execution)
+    {
+        if (execution.ProgressKind == JourneyProgressValueKind.ExplicitState
+            && definition.Stages.Any(value => value.CompletionModel == JourneyStageCompletionModel.ProgressThreshold))
+        {
+            throw new InvalidOperationException(
+                "A progress-threshold journey stage requires numeric process progress.");
+        }
+    }
+
+    private static void ValidateExplicitCompletionRequest(
+        JourneyProcessInstance process,
+        string stageKey,
+        bool stageComplete)
+    {
+        switch (process.Execution.CompletionModel)
+        {
+            case "explicit-completion":
+            case "reach-destination":
+                return;
+            case "final-stage-completion":
+                if (!IsLastStage(process.Definition, stageKey) || !stageComplete)
+                {
+                    throw new InvalidOperationException(
+                        "The pinned journey completion model requires the final stage to be complete before the process can complete.");
+                }
+                return;
+            default:
+                throw new InvalidOperationException(
+                    "The exact pinned completion model does not support explicit process completion.");
+        }
+    }
+
+    private static void ValidateCloseCompletion(JourneyProcessInstance process)
+    {
+        switch (process.Execution.CompletionModel)
+        {
+            case "explicit-completion":
+            case "reach-destination":
+                return;
+            case "final-stage-completion":
+                var finalStageKey = process.Definition.StageOrder[^1];
+                var finalState = process.StageStates.Single(value =>
+                    string.Equals(value.StageKey, finalStageKey, StringComparison.Ordinal));
+                if (!string.Equals(process.CurrentStageKey, finalStageKey, StringComparison.Ordinal)
+                    || !finalState.Completed)
+                {
+                    throw new InvalidOperationException(
+                        "The pinned journey completion model requires the final stage to be complete before the process can close as completed.");
+                }
+                return;
+            default:
+                throw new InvalidOperationException(
+                    "The exact pinned completion model does not support explicit process completion.");
         }
     }
 
