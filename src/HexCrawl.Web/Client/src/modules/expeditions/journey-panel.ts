@@ -125,6 +125,7 @@ export class ExpeditionJourneyPanel {
                 });
             });
             section.append(this.muted(`The pinned procedure supplies stages: ${state.processPolicy.stageKeys.join(" → ")}. No route length, check formula, or event count is inferred.`), form);
+            return section;
         }
 
         const custom = document.createElement("form");
@@ -205,11 +206,13 @@ export class ExpeditionJourneyPanel {
         const form = document.createElement("form");
         form.className = "hc-form hc-form-grid";
         const stage = process.definition.stages.find(value => value.stageKey === process.currentStageKey)!;
-        const pending = this.select("Pending opportunity", ["", ...process.pendingActions.map(value => value.id)]);
+        const pendingValues = process.pendingActions.length > 0 ? process.pendingActions.map(value => value.id) : [""];
+        const pending = this.select("Pending opportunity", pendingValues);
         const approach = this.select("Approach", ["", ...stage.approaches.map(value => value.approachKey)]);
         const runtime = this.getRuntime();
         const roles = [...new Set(runtime.party.activityAssignments.map(value => value.roleKey).filter((value): value is string => Boolean(value)))];
-        const role = this.select("Role", ["", ...roles]);
+        const roleValues = process.execution.roleDriven && roles.length > 0 ? roles : ["", ...roles];
+        const role = this.select("Role", roleValues);
         const actor = this.select("Actor", ["", ...runtime.party.members.map(value => `${value.id}|${value.name}`)]);
         const progress = this.input(process.execution.progressKind === "Numeric" ? "Progress delta" : "Progress state", process.execution.progressKind === "Numeric" ? "number" : "text", process.execution.progressKind === "Numeric" ? "0" : "");
         if (progress.control instanceof HTMLInputElement && process.execution.progressKind === "Numeric") progress.control.step = "any";
@@ -264,6 +267,13 @@ export class ExpeditionJourneyPanel {
     private processCloseControls(process: JourneyProcessInstance): HTMLElement {
         const row = document.createElement("div");
         row.className = "hc-button-row";
+        const finalStageKey = process.definition.stageOrder.at(-1);
+        const finalStage = process.stageStates.find(value => value.stageKey === finalStageKey);
+        const canComplete = process.execution.completionModel === "explicit-completion"
+            || process.execution.completionModel === "reach-destination"
+            || process.execution.completionModel === "final-stage-completion"
+                && process.currentStageKey === finalStageKey
+                && finalStage?.completed === true;
         const actions: Array<[string, (request: { expectedVersion: number; reason: string; provenance: ReturnType<typeof dmJourneyProvenance> }) => Promise<{ state: ExpeditionJourneyState }>]> = [
             ["Complete", request => this.api.completeProcess(this.expeditionId, process.id, request)],
             ["Fail", request => this.api.failProcess(this.expeditionId, process.id, request)],
@@ -272,6 +282,7 @@ export class ExpeditionJourneyPanel {
         for (const [label, action] of actions) {
             const button = this.button(label);
             button.type = "button";
+            if (label === "Complete") button.disabled = !canComplete;
             button.addEventListener("click", () => {
                 const reason = window.prompt(`${label} process: reason`, label === "Complete" ? "Resolved by DM" : "DM resolution");
                 if (!reason) return;
@@ -343,20 +354,35 @@ export class ExpeditionJourneyPanel {
         if (event.environment.length > 0) card.append(this.muted(`Relevant environment: ${event.environment.map(value => `${value.dimension}=${value.value}${value.unit ? ` ${value.unit}` : ""}`).join("; ")}`));
         const form = document.createElement("form");
         form.className = "hc-form hc-form-grid";
+        const state = this.requireState();
+        const runtime = this.getRuntime();
         const status = this.select("Resolution", ["Resolved", "Skipped", "NotApplicable"]);
         const key = this.input("Event key", "text");
         const type = this.input("Event type/category", "text");
-        const targetKind = this.select("Target kind", ["Party", "Expedition", "Role", "Participant", "Mount", "Vehicle"]);
-        const role = this.input("Target role", "text");
-        const targetId = this.input("Target participant/mount/vehicle ID", "text");
+        const targetKinds = state.eventPolicy.targetingModel === "travel-role"
+            ? ["Role"]
+            : ["Party", "Expedition", "Role", "Participant", "Mount", "Vehicle"];
+        const targetKind = this.select("Target kind", targetKinds);
+        const role = this.select("Target role", ["", ...runtime.participantActivityPolicy.roleKeys]);
+        const participant = this.select("Target participant", ["", ...runtime.party.members.map(value => `${value.id}|${value.name}`)]);
+        const contributors = (runtime.party.movementContributors ?? [])
+            .filter(value => value.kind === "Mount" || value.kind === "Vehicle")
+            .map(value => `${value.id}|${value.kind}: ${value.key}`);
+        const movementTarget = this.select("Target mount / vehicle", ["", ...contributors]);
         const consequence = this.consequenceFields();
         const note = this.input("Resolution note", "text");
         const submit = this.button("Resolve event");
-        form.append(status.wrapper, key.wrapper, type.wrapper, targetKind.wrapper, role.wrapper, targetId.wrapper, consequence.container, note.wrapper, submit);
+        form.append(status.wrapper, key.wrapper, type.wrapper, targetKind.wrapper, role.wrapper, participant.wrapper,
+            movementTarget.wrapper, consequence.container, note.wrapper, submit);
         form.addEventListener("submit", domEvent => {
             domEvent.preventDefault();
             void this.mutate(submit, async () => {
                 const resolved = status.control.value === "Resolved";
+                const selectedKind = targetKind.control.value as JourneyEventTargetKind;
+                const selectedTargetId = !resolved ? null
+                    : selectedKind === "Participant" || selectedKind === "Role" ? nullable(participant.control.value)
+                    : selectedKind === "Mount" || selectedKind === "Vehicle" ? nullable(movementTarget.control.value)
+                    : null;
                 const result = await this.api.resolveEvent(this.expeditionId, event.id, {
                     expectedVersion: this.requireState().expeditionVersion,
                     captureCurrentEnvironment: true,
@@ -365,9 +391,9 @@ export class ExpeditionJourneyPanel {
                         status: status.control.value as "Resolved" | "Skipped" | "NotApplicable",
                         eventKey: resolved ? required(key.control.value, "Event key") : null,
                         eventType: resolved ? nullable(type.control.value) : null,
-                        targetKind: resolved ? targetKind.control.value as JourneyEventTargetKind : "Unresolved",
-                        targetRoleKey: resolved ? nullable(role.control.value) : null,
-                        targetId: resolved ? nullable(targetId.control.value) : null,
+                        targetKind: resolved ? selectedKind : "Unresolved",
+                        targetRoleKey: resolved && selectedKind === "Role" ? required(role.control.value, "Target role") : null,
+                        targetId: selectedTargetId,
                         consequences: resolved ? consequence.build("journey-event", event.id, event.id) : [],
                         provenance: dmJourneyProvenance("journey-event-resolution"),
                         note: nullable(note.control.value)
