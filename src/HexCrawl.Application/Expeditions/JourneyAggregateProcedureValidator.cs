@@ -35,20 +35,32 @@ public static class JourneyAggregateProcedureValidator
                         $"Journey process '{process.Id:D}' execution snapshot does not match the exact pinned journey.process policy.");
                 }
 
-                if (processPolicy.StageKeys.Count > 0)
+                if (processPolicy.StageKeys.Count > 0
+                    && (!processPolicy.StageKeys.SequenceEqual(process.Definition.StageOrder, StringComparer.Ordinal)
+                        || !string.Equals(process.Definition.InitialStageKey, processPolicy.StageKeys[0], StringComparison.Ordinal)))
                 {
-                    if (!processPolicy.StageKeys.SequenceEqual(process.Definition.StageOrder, StringComparer.Ordinal)
-                        || !string.Equals(process.Definition.InitialStageKey, processPolicy.StageKeys[0], StringComparison.Ordinal))
+                    throw new InvalidOperationException(
+                        $"Journey process '{process.Id:D}' stage structure does not match the exact pinned journey.process policy.");
+                }
+
+                if (process.Status == JourneyProcessStatus.Completed
+                    && string.Equals(process.Execution.CompletionModel, "final-stage-completion", StringComparison.Ordinal))
+                {
+                    var finalStageKey = process.Definition.StageOrder[^1];
+                    var finalState = process.StageStates.Single(value =>
+                        string.Equals(value.StageKey, finalStageKey, StringComparison.Ordinal));
+                    if (!string.Equals(process.CurrentStageKey, finalStageKey, StringComparison.Ordinal)
+                        || !finalState.Completed)
                     {
                         throw new InvalidOperationException(
-                            $"Journey process '{process.Id:D}' stage structure does not match the exact pinned journey.process policy.");
+                            $"Journey process '{process.Id:D}' is completed without satisfying its exact final-stage completion policy.");
                     }
                 }
             }
         }
 
         var activityPolicy = ParticipantActivityPolicyResolver.Resolve(procedure);
-        var declaredRoles = activityPolicy.Support == ParticipantActivityPolicySupport.Supported
+        HashSet<string> declaredRoles = activityPolicy.Support == ParticipantActivityPolicySupport.Supported
             ? activityPolicy.RoleKeys.ToHashSet(StringComparer.Ordinal)
             : [];
         var referencedRoles = allProcesses
@@ -71,6 +83,19 @@ public static class JourneyAggregateProcedureValidator
         {
             throw new InvalidOperationException(
                 "A persisted role-driven journey process requires a supported exact-pinned party.activities policy with role keys.");
+        }
+
+        foreach (var snapshot in journey.Resolutions.Select(value => value.Actor)
+                     .Concat(journey.EventOccurrences.Select(value => value.ParticipantSnapshot))
+                     .Where(value => value is not null)
+                     .Cast<JourneyParticipantSnapshot>())
+        {
+            if (snapshot.RoleKey is not null && !snapshot.AssignmentId.HasValue
+                || snapshot.RoleKey is null && snapshot.AssignmentId.HasValue)
+            {
+                throw new InvalidOperationException(
+                    "Persisted journey participant snapshots must retain a Phase 7 assignment id exactly when a role was resolved.");
+            }
         }
 
         var eventPolicy = JourneyProcedurePolicyResolver.ResolveEvents(procedure);
