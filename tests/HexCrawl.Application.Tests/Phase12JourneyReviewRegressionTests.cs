@@ -61,35 +61,11 @@ public sealed class Phase12JourneyReviewRegressionTests
     public void ResolutionRequiredProcessMustConsumeAnExplicitPendingAction()
     {
         var processId = Guid.NewGuid();
-        var definition = new JourneyProcessDefinition
+        var definition = SingleStageDefinition("watch-challenge", "route");
+        var execution = NumericExecution("explicit-completion") with
         {
-            ProcessKey = "watch-challenge",
-            DisplayName = "Watch challenge",
-            InitialStageKey = "route",
-            StageOrder = ["route"],
-            Stages =
-            [
-                new JourneyStageDefinition
-                {
-                    StageKey = "route",
-                    DisplayName = "Route",
-                    CompletionModel = JourneyStageCompletionModel.Explicit
-                }
-            ]
-        };
-        var execution = new JourneyProcessExecutionSnapshot
-        {
-            StageModel = "explicit-stages",
             StageTransitionModel = JourneyStageTransitionModel.Explicit,
-            ProgressModel = "resolved-progress",
-            ProgressKind = JourneyProgressValueKind.Numeric,
-            ProgressUnit = "progress-points",
-            CompletionModel = "explicit-completion",
-            RoleAssignmentModel = JourneyRoleAssignmentModel.CurrentAtResolution,
-            IntervalIntegrationModel = JourneyIntervalIntegrationModel.CompletedWatchResolutionOpportunity,
-            MechanicKey = GenericProcedureCatalog.MultiStageExpeditionProcessMechanic,
-            MechanicVersion = 1,
-            ExecutionHandler = GenericProcedureExecutionHandlers.DeclarativeContract
+            IntervalIntegrationModel = JourneyIntervalIntegrationModel.CompletedWatchResolutionOpportunity
         };
         var started = JourneyProcessEngine.Start(
             ExpeditionJourneyState.Empty,
@@ -160,6 +136,191 @@ public sealed class Phase12JourneyReviewRegressionTests
     }
 
     [Fact]
+    public void FinalStageCompletionModelCanNotBeClosedOrExplicitlyCompletedEarly()
+    {
+        var processId = Guid.NewGuid();
+        var definition = new JourneyProcessDefinition
+        {
+            ProcessKey = "ordered-route",
+            DisplayName = "Ordered route",
+            InitialStageKey = "route",
+            StageOrder = ["route", "arrival"],
+            Stages =
+            [
+                new JourneyStageDefinition
+                {
+                    StageKey = "route",
+                    DisplayName = "Route",
+                    CompletionModel = JourneyStageCompletionModel.Explicit
+                },
+                new JourneyStageDefinition
+                {
+                    StageKey = "arrival",
+                    DisplayName = "Arrival",
+                    CompletionModel = JourneyStageCompletionModel.Explicit
+                }
+            ]
+        };
+        var execution = NumericExecution("final-stage-completion");
+        var started = JourneyProcessEngine.Start(
+            ExpeditionJourneyState.Empty,
+            processId,
+            definition,
+            execution,
+            new JourneyClockReference(TimeSpan.Zero, 0),
+            CrawlPartySheet.Empty,
+            Dm).State;
+
+        Assert.Throws<InvalidOperationException>(() => JourneyProcessEngine.Close(
+            started,
+            processId,
+            JourneyProcessStatus.Completed,
+            "premature",
+            new JourneyClockReference(TimeSpan.Zero, 0),
+            CrawlPartySheet.Empty,
+            Dm));
+        Assert.Throws<InvalidOperationException>(() => JourneyProcessEngine.Resolve(
+            started,
+            new JourneyProcessResolutionInput
+            {
+                ResolutionId = Guid.NewGuid(),
+                ProcessId = processId,
+                StageKey = "route",
+                CompleteProcess = true,
+                Provenance = Dm
+            },
+            new JourneyClockReference(TimeSpan.Zero, 0),
+            CrawlPartySheet.Empty));
+
+        var route = JourneyProcessEngine.Resolve(
+            started,
+            new JourneyProcessResolutionInput
+            {
+                ResolutionId = Guid.NewGuid(),
+                ProcessId = processId,
+                StageKey = "route",
+                CompleteStage = true,
+                Provenance = Dm
+            },
+            new JourneyClockReference(TimeSpan.FromHours(1), 0),
+            CrawlPartySheet.Empty);
+        Assert.Equal("arrival", route.Process.CurrentStageKey);
+        Assert.Throws<InvalidOperationException>(() => JourneyProcessEngine.Close(
+            route.State,
+            processId,
+            JourneyProcessStatus.Completed,
+            "arrival not complete",
+            new JourneyClockReference(TimeSpan.FromHours(1), 0),
+            CrawlPartySheet.Empty,
+            Dm));
+
+        var arrival = JourneyProcessEngine.Resolve(
+            route.State,
+            new JourneyProcessResolutionInput
+            {
+                ResolutionId = Guid.NewGuid(),
+                ProcessId = processId,
+                StageKey = "arrival",
+                CompleteStage = true,
+                Provenance = Dm
+            },
+            new JourneyClockReference(TimeSpan.FromHours(2), 0),
+            CrawlPartySheet.Empty);
+        Assert.Equal(JourneyProcessStatus.Completed, arrival.Process.Status);
+        Assert.Empty(arrival.State.ActiveProcesses);
+        Assert.Single(arrival.State.ClosedProcesses);
+    }
+
+    [Fact]
+    public void ExplicitStateProcessRejectsNumericProgressThresholdStage()
+    {
+        var definition = new JourneyProcessDefinition
+        {
+            ProcessKey = "stateful",
+            DisplayName = "Stateful",
+            InitialStageKey = "phase",
+            StageOrder = ["phase"],
+            Stages =
+            [
+                new JourneyStageDefinition
+                {
+                    StageKey = "phase",
+                    DisplayName = "Phase",
+                    CompletionModel = JourneyStageCompletionModel.ProgressThreshold,
+                    ProgressTarget = 1,
+                    InitialProgressState = "initial"
+                }
+            ]
+        };
+        var execution = NumericExecution("explicit-completion") with
+        {
+            ProgressKind = JourneyProgressValueKind.ExplicitState,
+            ProgressUnit = null
+        };
+
+        Assert.Throws<InvalidOperationException>(() => JourneyProcessEngine.Start(
+            ExpeditionJourneyState.Empty,
+            Guid.NewGuid(),
+            definition,
+            execution,
+            new JourneyClockReference(TimeSpan.Zero, 0),
+            CrawlPartySheet.Empty,
+            Dm));
+    }
+
+    [Fact]
+    public void JourneyEventReplayMustMatchPreviouslyResolvedMeaning()
+    {
+        var policy = JourneyProcedurePolicyResolver.ResolveEvents(
+            CrawlProcedureCatalog.Resolve(CrawlProcedureCatalog.MixedHouseRulePresetKey)
+                .MaterializeGeneric().Procedure);
+        var occurrenceId = Guid.NewGuid();
+        var opportunity = new JourneyEventOpportunityInput
+        {
+            OccurrenceId = occurrenceId,
+            Trigger = JourneyEventTriggerKind.Explicit,
+            TriggerReference = "manual:test",
+            Provenance = Dm
+        };
+        var created = JourneyEventEngine.CreateOpportunity(
+            ExpeditionJourneyState.Empty,
+            policy,
+            opportunity,
+            new JourneyClockReference(TimeSpan.Zero, 0),
+            CrawlPartySheet.Empty);
+        var resolution = new JourneyEventResolutionInput
+        {
+            OccurrenceId = occurrenceId,
+            Status = JourneyEventStatus.Resolved,
+            EventKey = "weather-turn",
+            EventType = "hazard",
+            TargetKind = JourneyEventTargetKind.Party,
+            Provenance = Dm
+        };
+        var first = JourneyEventEngine.Resolve(
+            created.State,
+            policy,
+            resolution,
+            new JourneyClockReference(TimeSpan.Zero, 0),
+            CrawlPartySheet.Empty);
+
+        var retry = JourneyEventEngine.Resolve(
+            first.State,
+            policy,
+            resolution,
+            new JourneyClockReference(TimeSpan.Zero, 0),
+            CrawlPartySheet.Empty);
+        Assert.False(retry.StateChanged);
+
+        Assert.Throws<InvalidOperationException>(() => JourneyEventEngine.Resolve(
+            first.State,
+            policy,
+            resolution with { EventKey = "different-event" },
+            new JourneyClockReference(TimeSpan.Zero, 0),
+            CrawlPartySheet.Empty));
+    }
+
+    [Fact]
     public void PostgreSqlPersistenceRejectsIntegerEnumPayloads()
     {
         var field = typeof(PostgresHexCrawlStore).GetField(
@@ -171,4 +332,36 @@ public sealed class Phase12JourneyReviewRegressionTests
             JsonSerializer.Deserialize<JourneyEventStatus>("1", options));
         Assert.Equal("\"Resolved\"", JsonSerializer.Serialize(JourneyEventStatus.Resolved, options));
     }
+
+    private static JourneyProcessDefinition SingleStageDefinition(string processKey, string stageKey) => new()
+    {
+        ProcessKey = processKey,
+        DisplayName = processKey,
+        InitialStageKey = stageKey,
+        StageOrder = [stageKey],
+        Stages =
+        [
+            new JourneyStageDefinition
+            {
+                StageKey = stageKey,
+                DisplayName = stageKey,
+                CompletionModel = JourneyStageCompletionModel.Explicit
+            }
+        ]
+    };
+
+    private static JourneyProcessExecutionSnapshot NumericExecution(string completionModel) => new()
+    {
+        StageModel = "explicit-stages",
+        StageTransitionModel = JourneyStageTransitionModel.Sequential,
+        ProgressModel = "resolved-progress",
+        ProgressKind = JourneyProgressValueKind.Numeric,
+        ProgressUnit = "progress-points",
+        CompletionModel = completionModel,
+        RoleAssignmentModel = JourneyRoleAssignmentModel.CurrentAtResolution,
+        IntervalIntegrationModel = JourneyIntervalIntegrationModel.None,
+        MechanicKey = GenericProcedureCatalog.MultiStageExpeditionProcessMechanic,
+        MechanicVersion = 1,
+        ExecutionHandler = GenericProcedureExecutionHandlers.DeclarativeContract
+    };
 }
