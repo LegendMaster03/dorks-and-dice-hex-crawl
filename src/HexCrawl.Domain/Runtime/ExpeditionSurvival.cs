@@ -326,12 +326,20 @@ public sealed record ExpeditionSurvivalState
     {
         ForcedTravel.Validate();
         var exposureIds = new HashSet<Guid>();
+        var occurrenceIds = new HashSet<Guid>();
         foreach (var progress in Exposure)
         {
             progress.Validate(party);
             if (!exposureIds.Add(progress.Id))
             {
                 throw new InvalidOperationException("Exposure progress ids must be unique.");
+            }
+            foreach (var occurrenceId in progress.SourceOccurrenceIds)
+            {
+                if (!occurrenceIds.Add(occurrenceId))
+                {
+                    throw new InvalidOperationException("Exposure source occurrence ids must be unique across survival state.");
+                }
             }
         }
         Camp?.Validate(party);
