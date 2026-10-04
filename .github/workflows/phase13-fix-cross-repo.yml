@@ -1,0 +1,44 @@
+name: Phase 13 proof harness fixer
+
+on:
+  push:
+    branches: [ "feature/phase-13-shared-map-processing" ]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/phase-13-shared-map-processing
+      - name: Fix temporary cross-repository compile mode
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('.github/workflows/phase13-cross-repo.yml')
+          text = path.read_text()
+          old = '''          (cd src/HexCrawl.Web/Client && npx tsc --ignoreConfig \\
+            src/raster-grid-alignment.ts src/hex-grid-analysis.ts \\
+            --target ES2023 --module NodeNext --moduleResolution NodeNext \\
+            --outDir .phase13-preview-dist)'''
+          new = '''          (cd src/HexCrawl.Web/Client && npx tsc --ignoreConfig \\
+            src/raster-grid-alignment.ts src/hex-grid-analysis.ts \\
+            --target ES2023 --module CommonJS --moduleResolution Node \\
+            --outDir .phase13-preview-dist)
+          printf '%s\\n' '{"type":"commonjs"}' > src/HexCrawl.Web/Client/.phase13-preview-dist/package.json'''
+          if old not in text:
+              raise SystemExit('expected compile block not found')
+          path.write_text(text.replace(old, new, 1))
+          PY
+      - name: Commit harness fix
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add .github/workflows/phase13-cross-repo.yml
+          git commit -m 'Fix temporary Phase 13 proof compile mode'
+          git push origin HEAD:feature/phase-13-shared-map-processing
