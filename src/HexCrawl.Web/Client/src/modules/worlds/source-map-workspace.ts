@@ -76,7 +76,7 @@ export class SourceMapWorkspace {
                 <p class="hc-hint">Hex Crawl analyzes the raster itself for a repeated hex lattice. Detection previews the proposed raster placement and mathematical grid without saving. Physical distance per hex is only changed when a separate trustworthy scale source is available.</p>
                 <p class="hc-hint" data-grid-alignment-status></p>
                 <div class="hc-button-row">
-                    <button type="button" data-grid-alignment-preview>Detect and preview</button>
+                    <button type="button" data-grid-alignment-preview>Re-run detection and preview</button>
                     <button type="button" class="hc-primary-action" data-grid-alignment-apply disabled>Apply detected alignment</button>
                     <button type="button" data-grid-alignment-cancel>Cancel</button>
                 </div>
@@ -145,10 +145,11 @@ export class SourceMapWorkspace {
                     await this.gridAlignmentController.beginAndPreview(importedSourceMap);
                 }
             });
-        required<HTMLButtonElement>(this.host, "[data-align-grid]").addEventListener("click", () => {
-            if (this.selected) this.registrationController.cancelIfMap(this.selected.id);
-            this.gridAlignmentController.begin(this.selected);
-        });
+        required<HTMLButtonElement>(this.host, "[data-align-grid]").addEventListener("click", () =>
+            void this.run(null, async () => {
+                if (this.selected) this.registrationController.cancelIfMap(this.selected.id);
+                await this.gridAlignmentController.beginAndPreview(this.selected);
+            }));
         required<HTMLButtonElement>(this.host, "[data-register]").addEventListener("click", () => {
             if (this.selected) this.gridAlignmentController.cancelIfMap(this.selected.id);
             this.registrationController.begin(this.selected);
@@ -251,7 +252,7 @@ export class SourceMapWorkspace {
                 this.selected = map;
                 this.renderSelected();
                 this.registrationController.cancelIfMap(map.id);
-                this.gridAlignmentController.begin(this.selected);
+                void this.run(null, () => this.gridAlignmentController.beginAndPreview(map));
             });
             const registerButton = document.createElement("button");
             registerButton.type = "button";
@@ -307,17 +308,28 @@ export class SourceMapWorkspace {
             : this.geographySelect.value;
         if (!geographyKey) throw new Error("A map group is required.");
         const world = this.getWorld();
+        const existingSourceMapIds = new Set(world.sourceMaps.map(map => map.id));
+        const containsBakedGrid = input(this.uploadForm, "bakedGrid").checked;
         const updated = await this.api.uploadSourceMap(world.id, {
             file,
             name: input(this.uploadForm, "name").value.trim(),
             geographyKey,
             role: select(this.uploadForm, "role").value as SourceMapRole,
-            containsBakedGrid: input(this.uploadForm, "bakedGrid").checked,
+            containsBakedGrid,
             expectedVersion: world.version
         });
         this.applyWorld(updated);
         this.uploadForm.reset();
         await this.refresh();
+
+        const uploadedSourceMap = this.details.find(map => !existingSourceMapIds.has(map.id)) ?? null;
+        if (!uploadedSourceMap) return;
+        this.selected = uploadedSourceMap;
+        this.renderSelected();
+        if (uploadedSourceMap.containsBakedGrid && !uploadedSourceMap.alignment) {
+            this.registrationController.cancelIfMap(uploadedSourceMap.id);
+            await this.gridAlignmentController.beginAndPreview(uploadedSourceMap);
+        }
     }
 
     private async updateMetadata(): Promise<void> {
