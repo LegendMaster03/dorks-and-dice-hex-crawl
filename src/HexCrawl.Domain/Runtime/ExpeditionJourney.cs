@@ -438,6 +438,11 @@ public sealed record JourneyProcessInstance
         Definition.Validate();
         Execution.Validate();
         Provenance.Validate();
+        if (Execution.ProgressKind == JourneyProgressValueKind.ExplicitState
+            && Definition.Stages.Any(value => value.CompletionModel == JourneyStageCompletionModel.ProgressThreshold))
+        {
+            throw new InvalidOperationException("A progress-threshold journey stage requires numeric process progress.");
+        }
         if (!Definition.Stages.Any(value => string.Equals(value.StageKey, CurrentStageKey, StringComparison.Ordinal)))
         {
             throw new InvalidOperationException("Journey process current stage does not exist in its definition.");
@@ -534,7 +539,7 @@ public sealed record JourneyEventOccurrence
     public required ExpeditionConsequenceProvenance Provenance { get; init; }
     public string? Note { get; init; }
 
-    public void Validate(CrawlPartySheet party, IReadOnlySet<Guid> activeProcessIds, IReadOnlySet<Guid>? knownConsequenceIds = null)
+    public void Validate(CrawlPartySheet party, IReadOnlySet<Guid> retainedProcessIds, IReadOnlySet<Guid>? knownConsequenceIds = null)
     {
         if (Id == Guid.Empty)
         {
@@ -544,7 +549,11 @@ public sealed record JourneyEventOccurrence
         {
             throw new InvalidOperationException("Journey event process id can not be empty.");
         }
-        if (ProcessId.HasValue && !activeProcessIds.Contains(ProcessId.Value))
+        if (!ProcessId.HasValue && StageKey is not null)
+        {
+            throw new InvalidOperationException("A standalone journey event can not reference a process stage.");
+        }
+        if (ProcessId.HasValue && !retainedProcessIds.Contains(ProcessId.Value))
         {
             throw new InvalidOperationException("Journey event references a process that is not retained in journey state.");
         }
@@ -565,21 +574,83 @@ public sealed record JourneyEventOccurrence
         {
             throw new InvalidOperationException("Journey event references a consequence that is not retained in expedition effect state.");
         }
-        if (Status == JourneyEventStatus.ResolutionRequired)
+
+        switch (Status)
         {
-            if (ParticipantSnapshot is not null || ConsequenceIds.Count > 0 || EventKey is not null)
-            {
-                throw new InvalidOperationException("An unresolved journey event can not contain resolved event output.");
-            }
-            ValidateLiveTarget(party);
+            case JourneyEventStatus.ResolutionRequired:
+                if (ParticipantSnapshot is not null || ConsequenceIds.Count > 0 || EventKey is not null || EventType is not null)
+                {
+                    throw new InvalidOperationException("An unresolved journey event can not contain resolved event output.");
+                }
+                ValidateLiveTarget(party);
+                break;
+            case JourneyEventStatus.Resolved:
+                if (string.IsNullOrWhiteSpace(EventKey))
+                {
+                    throw new InvalidOperationException("A resolved journey event requires an event key.");
+                }
+                ValidateResolvedTargetSnapshot();
+                break;
+            case JourneyEventStatus.Skipped:
+            case JourneyEventStatus.NotApplicable:
+                if (ParticipantSnapshot is not null
+                    || ConsequenceIds.Count > 0
+                    || EventKey is not null
+                    || EventType is not null
+                    || TargetKind != JourneyEventTargetKind.Unresolved
+                    || TargetRoleKey is not null
+                    || TargetId.HasValue)
+                {
+                    throw new InvalidOperationException("Skipped or not-applicable journey events can not retain resolved output or targets.");
+                }
+                break;
+            default:
+                throw new InvalidOperationException("Journey event status is not supported.");
         }
-        else
+    }
+
+    private void ValidateResolvedTargetSnapshot()
+    {
+        if (TargetId == Guid.Empty)
         {
-            ParticipantSnapshot?.Validate();
-            if (Status == JourneyEventStatus.Resolved && string.IsNullOrWhiteSpace(EventKey))
-            {
-                throw new InvalidOperationException("A resolved journey event requires an event key.");
-            }
+            throw new InvalidOperationException("Journey event target id can not be empty.");
+        }
+        switch (TargetKind)
+        {
+            case JourneyEventTargetKind.Participant:
+                if (!TargetId.HasValue || TargetRoleKey is not null || ParticipantSnapshot is null
+                    || ParticipantSnapshot.ParticipantId != TargetId.Value)
+                {
+                    throw new InvalidOperationException("Resolved participant-targeted journey event has inconsistent participant snapshot state.");
+                }
+                ParticipantSnapshot.Validate();
+                break;
+            case JourneyEventTargetKind.Role:
+                if (string.IsNullOrWhiteSpace(TargetRoleKey) || ParticipantSnapshot is null
+                    || !string.Equals(ParticipantSnapshot.RoleKey, TargetRoleKey, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException("Resolved role-targeted journey event requires a matching participant/role snapshot.");
+                }
+                ParticipantSnapshot.Validate();
+                break;
+            case JourneyEventTargetKind.Party:
+            case JourneyEventTargetKind.Expedition:
+                if (TargetId.HasValue || TargetRoleKey is not null || ParticipantSnapshot is not null)
+                {
+                    throw new InvalidOperationException("Resolved party/expedition journey event can not retain participant target state.");
+                }
+                break;
+            case JourneyEventTargetKind.Mount:
+            case JourneyEventTargetKind.Vehicle:
+                if (!TargetId.HasValue || TargetRoleKey is not null || ParticipantSnapshot is not null)
+                {
+                    throw new InvalidOperationException("Resolved mount/vehicle journey event requires only its historical contributor id.");
+                }
+                break;
+            case JourneyEventTargetKind.Unresolved:
+                throw new InvalidOperationException("A resolved journey event can not retain an unresolved target kind.");
+            default:
+                throw new InvalidOperationException("Journey event target kind is not supported.");
         }
     }
 
@@ -592,16 +663,26 @@ public sealed record JourneyEventOccurrence
         switch (TargetKind)
         {
             case JourneyEventTargetKind.Unresolved:
+                if (TargetId.HasValue || TargetRoleKey is not null)
+                {
+                    throw new InvalidOperationException("An unresolved journey event target can not contain a target id or role.");
+                }
+                break;
             case JourneyEventTargetKind.Role:
+                if (string.IsNullOrWhiteSpace(TargetRoleKey) || TargetId.HasValue)
+                {
+                    throw new InvalidOperationException("A pending role-targeted journey event requires a role key and no selected participant id.");
+                }
+                break;
             case JourneyEventTargetKind.Party:
             case JourneyEventTargetKind.Expedition:
-                if (TargetId.HasValue)
+                if (TargetId.HasValue || TargetRoleKey is not null)
                 {
-                    throw new InvalidOperationException("This journey event target kind can not contain a target id while unresolved.");
+                    throw new InvalidOperationException("This journey event target kind can not contain a target id or role while unresolved.");
                 }
                 break;
             case JourneyEventTargetKind.Participant:
-                if (!TargetId.HasValue || !party.Members.Any(value => value.Id == TargetId.Value))
+                if (!TargetId.HasValue || TargetRoleKey is not null || !party.Members.Any(value => value.Id == TargetId.Value))
                 {
                     throw new InvalidOperationException("Journey event references a participant that does not exist.");
                 }
@@ -611,7 +692,8 @@ public sealed record JourneyEventOccurrence
                 var kind = TargetKind == JourneyEventTargetKind.Mount
                     ? MovementCapabilityContributorKind.Mount
                     : MovementCapabilityContributorKind.Vehicle;
-                if (!TargetId.HasValue || !party.MovementContributors.Any(value => value.Id == TargetId && value.Kind == kind))
+                if (!TargetId.HasValue || TargetRoleKey is not null
+                    || !party.MovementContributors.Any(value => value.Id == TargetId && value.Kind == kind))
                 {
                     throw new InvalidOperationException("Journey event references a movement contributor that does not exist.");
                 }
@@ -672,6 +754,10 @@ public sealed record JourneyResolutionRecord
         {
             throw new InvalidOperationException("Journey resolution references a consequence that is not retained in expedition effect state.");
         }
+        if ((TransitionFromStageKey is null) != (TransitionToStageKey is null))
+        {
+            throw new InvalidOperationException("Journey resolution transition source and target must either both be present or both be absent.");
+        }
     }
 }
 
@@ -722,7 +808,7 @@ public sealed record ExpeditionJourneyState
 
     public void Validate(CrawlPartySheet party, IReadOnlySet<Guid>? knownConsequenceIds = null)
     {
-        var processIds = new HashSet<Guid>();
+        var processes = new Dictionary<Guid, JourneyProcessInstance>();
         foreach (var process in ActiveProcesses)
         {
             process.Validate(party);
@@ -730,7 +816,7 @@ public sealed record ExpeditionJourneyState
             {
                 throw new InvalidOperationException("A terminal journey process can not remain active.");
             }
-            if (!processIds.Add(process.Id))
+            if (!processes.TryAdd(process.Id, process))
             {
                 throw new InvalidOperationException("Journey process ids must be unique across active and closed state.");
             }
@@ -742,61 +828,82 @@ public sealed record ExpeditionJourneyState
             {
                 throw new InvalidOperationException("Closed journey process state must use a terminal status.");
             }
-            if (!processIds.Add(process.Id))
+            if (!processes.TryAdd(process.Id, process))
             {
                 throw new InvalidOperationException("Journey process ids must be unique across active and closed state.");
             }
         }
-        var eventIds = new HashSet<Guid>();
+        var processIds = processes.Keys.ToHashSet();
+
+        var events = new Dictionary<Guid, JourneyEventOccurrence>();
         foreach (var occurrence in EventOccurrences)
         {
             occurrence.Validate(party, processIds, knownConsequenceIds);
-            if (!eventIds.Add(occurrence.Id))
+            if (!events.TryAdd(occurrence.Id, occurrence))
             {
                 throw new InvalidOperationException("Journey event occurrence ids must be unique.");
             }
             if (occurrence.ProcessId is { } occurrenceProcessId && occurrence.StageKey is { } occurrenceStageKey)
             {
-                var process = ActiveProcesses.Concat(ClosedProcesses).Single(value => value.Id == occurrenceProcessId);
-                if (!process.Definition.Stages.Any(value => string.Equals(value.StageKey, occurrenceStageKey, StringComparison.Ordinal)))
+                var process = processes[occurrenceProcessId];
+                if (!HasStage(process, occurrenceStageKey))
                 {
                     throw new InvalidOperationException("Journey event references a stage that does not exist in its retained process.");
                 }
             }
         }
-        var resolutionIds = new HashSet<Guid>();
+
+        var resolutions = new Dictionary<Guid, JourneyResolutionRecord>();
         foreach (var resolution in Resolutions)
         {
             resolution.Validate(knownConsequenceIds);
-            if (!processIds.Contains(resolution.ProcessId))
+            if (!processes.TryGetValue(resolution.ProcessId, out var process))
             {
                 throw new InvalidOperationException("Journey resolution references a process that is not retained in journey state.");
             }
-            var process = ActiveProcesses.Concat(ClosedProcesses).Single(value => value.Id == resolution.ProcessId);
-            if (!process.Definition.Stages.Any(value => string.Equals(value.StageKey, resolution.StageKey, StringComparison.Ordinal)))
+            if (!HasStage(process, resolution.StageKey))
             {
                 throw new InvalidOperationException("Journey resolution references a stage that does not exist in its retained process.");
             }
-            if (!resolutionIds.Add(resolution.ResolutionId))
+            if (resolution.TransitionFromStageKey is { } transitionFrom)
+            {
+                if (!string.Equals(transitionFrom, resolution.StageKey, StringComparison.Ordinal)
+                    || !HasStage(process, transitionFrom)
+                    || !HasStage(process, resolution.TransitionToStageKey!))
+                {
+                    throw new InvalidOperationException("Journey resolution transition references inconsistent process stages.");
+                }
+            }
+            if (!resolutions.TryAdd(resolution.ResolutionId, resolution))
             {
                 throw new InvalidOperationException("Journey resolution ids must be unique.");
             }
-            if (resolution.EventOccurrenceIds.Any(value => !eventIds.Contains(value)))
+            foreach (var eventId in resolution.EventOccurrenceIds)
             {
-                throw new InvalidOperationException("Journey resolution references an event occurrence that does not exist.");
+                if (!events.TryGetValue(eventId, out var occurrence))
+                {
+                    throw new InvalidOperationException("Journey resolution references an event occurrence that does not exist.");
+                }
+                if (occurrence.ProcessId != resolution.ProcessId)
+                {
+                    throw new InvalidOperationException("Journey resolution can reference only events linked to the same process.");
+                }
             }
         }
+        var resolutionIds = resolutions.Keys.ToHashSet();
         if (ConsumedResolutionIds.Any(value => value == Guid.Empty)
             || ConsumedResolutionIds.Distinct().Count() != ConsumedResolutionIds.Count
+            || ConsumedResolutionIds.Count != resolutionIds.Count
             || !ConsumedResolutionIds.All(resolutionIds.Contains))
         {
-            throw new InvalidOperationException("Consumed journey resolution ids must be non-empty, unique, and retained in resolution history.");
+            throw new InvalidOperationException("Consumed journey resolution ids must exactly match retained resolution history.");
         }
         if (ObservedRuntimeOccurrenceIds.Any(string.IsNullOrWhiteSpace)
             || ObservedRuntimeOccurrenceIds.Distinct(StringComparer.Ordinal).Count() != ObservedRuntimeOccurrenceIds.Count)
         {
             throw new InvalidOperationException("Observed journey runtime occurrence ids must be nonblank and unique.");
         }
+
         var historyIds = new HashSet<Guid>();
         foreach (var history in History)
         {
@@ -805,18 +912,43 @@ public sealed record ExpeditionJourneyState
             {
                 throw new InvalidOperationException("Journey history ids must be unique.");
             }
-            if (history.ProcessId.HasValue && !processIds.Contains(history.ProcessId.Value))
+            JourneyProcessInstance? historyProcess = null;
+            if (history.ProcessId.HasValue && !processes.TryGetValue(history.ProcessId.Value, out historyProcess))
             {
                 throw new InvalidOperationException("Journey history references a process that is not retained.");
             }
-            if (history.ResolutionId.HasValue && !resolutionIds.Contains(history.ResolutionId.Value))
+            if (history.StageKey is { } historyStage)
             {
-                throw new InvalidOperationException("Journey history references a resolution that is not retained.");
+                if (historyProcess is null || !HasStage(historyProcess, historyStage))
+                {
+                    throw new InvalidOperationException("Journey history stage must belong to its retained process.");
+                }
             }
-            if (history.EventOccurrenceId.HasValue && !eventIds.Contains(history.EventOccurrenceId.Value))
+            if (history.ResolutionId is { } historyResolutionId)
             {
-                throw new InvalidOperationException("Journey history references an event occurrence that is not retained.");
+                if (!resolutions.TryGetValue(historyResolutionId, out var resolution))
+                {
+                    throw new InvalidOperationException("Journey history references a resolution that is not retained.");
+                }
+                if (!history.ProcessId.HasValue || history.ProcessId.Value != resolution.ProcessId)
+                {
+                    throw new InvalidOperationException("Journey history resolution must belong to the same retained process.");
+                }
+            }
+            if (history.EventOccurrenceId is { } historyEventId)
+            {
+                if (!events.TryGetValue(historyEventId, out var occurrence))
+                {
+                    throw new InvalidOperationException("Journey history references an event occurrence that is not retained.");
+                }
+                if (history.ProcessId != occurrence.ProcessId)
+                {
+                    throw new InvalidOperationException("Journey history event occurrence must use the same process relationship.");
+                }
             }
         }
     }
+
+    private static bool HasStage(JourneyProcessInstance process, string stageKey) =>
+        process.Definition.Stages.Any(value => string.Equals(value.StageKey, stageKey, StringComparison.Ordinal));
 }
