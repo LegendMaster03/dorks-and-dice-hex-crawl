@@ -45,7 +45,7 @@ jobs:
             --target ES2023 --module NodeNext --moduleResolution NodeNext \
             --outDir .phase13-legacy-dist)
           export HEX_REPO="$GITHUB_WORKSPACE"
-          cat > "$RUNNER_TEMP/phase13-fixtures.mjs" <<'NODE'
+          cat > "$RUNNER_TEMP/surveyor/phase13-fixtures.mjs" <<'NODE'
           import fs from 'node:fs';
           import { pathToFileURL } from 'node:url';
           import sharp from './node_modules/sharp/lib/index.js';
@@ -103,7 +103,7 @@ jobs:
           renderHexGrid(right,{orientation:'FlatTop',spacing:31,anchor:{x:8,y:17},lineValue:64});
           addNoise(left); addNoise(right); replaceRightHalf(left,right); await write(left,'inconclusive.png');
           NODE
-          RUNNER_TEMP="$RUNNER_TEMP" node "$RUNNER_TEMP/phase13-fixtures.mjs"
+          RUNNER_TEMP="$RUNNER_TEMP" node "$RUNNER_TEMP/surveyor/phase13-fixtures.mjs"
 
       - name: Build exact-head service containers
         run: |
