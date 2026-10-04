@@ -1,0 +1,232 @@
+name: Phase 13 cross-repository proof v3
+
+on:
+  push:
+    branches: [ "feature/phase-13-shared-map-processing" ]
+
+permissions:
+  contents: read
+
+jobs:
+  integration-and-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.x"
+
+      - name: Prepare exact heads and fixture tooling
+        run: |
+          set -euo pipefail
+          echo 'PHASE13_TOKEN=phase13-cross-repository-proof-token' >> "$GITHUB_ENV"
+          git clone --quiet https://github.com/LegendMaster03/dorks-and-dice-surveyor.git "$RUNNER_TEMP/surveyor"
+          git -C "$RUNNER_TEMP/surveyor" checkout --quiet c6496875c6032f7b55ad8e02d997fdb9fba8c80b
+          test "$(git -C "$RUNNER_TEMP/surveyor" rev-parse HEAD)" = c6496875c6032f7b55ad8e02d997fdb9fba8c80b
+          npm install --prefix src/HexCrawl.Web/Client --no-audit --no-fund
+          mkdir -p src/HexCrawl.Web/Client/.phase13-legacy "$RUNNER_TEMP/phase13-fixtures"
+          git show 2dfc4d999ad1b7b36701faac210b2e7d9beedd60:src/HexCrawl.Web/Client/src/grid-lattice-detector.ts \
+            > src/HexCrawl.Web/Client/.phase13-legacy/grid-lattice-detector.ts
+          (cd src/HexCrawl.Web/Client && npx tsc --ignoreConfig \
+            .phase13-legacy/grid-lattice-detector.ts \
+            --target ES2023 --module NodeNext --moduleResolution NodeNext \
+            --outDir .phase13-legacy-dist)
+          PHASE13_LEGACY_DETECTOR="$GITHUB_WORKSPACE/src/HexCrawl.Web/Client/.phase13-legacy-dist/grid-lattice-detector.js" \
+          PHASE13_FIXTURE_DIR="$RUNNER_TEMP/phase13-fixtures" \
+            node scripts/phase13-proof-fixtures.mjs
+          python3 - "$RUNNER_TEMP/phase13-fixtures" <<'PY'
+          import json, struct, sys, zlib
+          from pathlib import Path
+          root=Path(sys.argv[1])
+          def chunk(kind, data):
+              return struct.pack('>I',len(data))+kind+data+struct.pack('>I',zlib.crc32(kind+data)&0xffffffff)
+          for name in ('detected','gridless','inconclusive'):
+              dims=json.loads((root/f'{name}.dimensions.json').read_text())
+              width,height=dims['width'],dims['height']
+              raw=(root/f'{name}.raw').read_bytes()
+              assert len(raw)==width*height
+              scan=b''.join(b'\x00'+raw[y*width:(y+1)*width] for y in range(height))
+              png=b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('>IIBBBBB',width,height,8,0,0,0,0))+chunk(b'IDAT',zlib.compress(scan,9))+chunk(b'IEND',b'')
+              (root/f'{name}.png').write_bytes(png)
+          PY
+
+      - name: Build exact-head containers
+        run: |
+          set -euo pipefail
+          docker build -t phase13-surveyor:test "$RUNNER_TEMP/surveyor"
+          docker build -t phase13-hex:test -f src/HexCrawl.Web/Dockerfile .
+
+      - name: Start exact-head services
+        run: |
+          set -euo pipefail
+          docker network create phase13-proof
+          docker run -d --name phase13-postgres --network phase13-proof \
+            -e POSTGRES_DB=postgres -e POSTGRES_USER=phase13 -e POSTGRES_PASSWORD=phase13 postgres:18 >/dev/null
+          for i in {1..45}; do
+            if docker exec phase13-postgres pg_isready -U phase13 -d postgres >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          docker exec phase13-postgres psql -v ON_ERROR_STOP=1 -U phase13 -d postgres -c 'CREATE SCHEMA phase13;' >/dev/null
+          docker run -d --name phase13-surveyor --network phase13-proof -p 127.0.0.1:18094:8080 \
+            -e "SURVEYOR_SERVICE_TOKEN=$PHASE13_TOKEN" -e SURVEYOR_WORKER_COUNT=2 -e SURVEYOR_QUEUE_LIMIT=2 phase13-surveyor:test >/dev/null
+          docker run -d --name phase13-hex --network phase13-proof -p 127.0.0.1:18095:8080 \
+            -e 'ConnectionStrings__HexCrawl=Host=phase13-postgres;Port=5432;Database=postgres;Username=phase13;Password=phase13;Search Path=phase13' \
+            -e 'MapAssets__RootPath=/data/assets' -e 'ToolHost__StandaloneIdentity__Enabled=true' \
+            -e 'ToolHost__StandaloneIdentity__UserId=phase13-dm' -e 'Surveyor__BaseUrl=http://phase13-surveyor:8080' \
+            -e "Surveyor__ServiceToken=$PHASE13_TOKEN" -e 'Surveyor__RequestTimeoutMilliseconds=35000' phase13-hex:test >/dev/null
+          for i in {1..60}; do
+            if curl -fsS http://127.0.0.1:18094/health/ready >/dev/null 2>&1 \
+              && curl -fsS http://127.0.0.1:18095/ready >/dev/null 2>&1; then exit 0; fi
+            sleep 1
+          done
+          docker logs phase13-surveyor || true
+          docker logs phase13-hex || true
+          exit 1
+
+      - name: Prove pre-extraction detector parity
+        run: |
+          set -euo pipefail
+          fixtures="$RUNNER_TEMP/phase13-fixtures"
+          curl -fsS -X POST 'http://127.0.0.1:18094/v1/hex-grid/detect?minimumSpacingPixels=12&minimumConfidence=0.54' \
+            -H "Authorization: Bearer $PHASE13_TOKEN" -H 'Content-Type: image/png' \
+            --data-binary "@$fixtures/detected.png" -o "$RUNNER_TEMP/surveyor-detected.json"
+          python3 - "$fixtures/legacy-analysis.json" "$RUNNER_TEMP/surveyor-detected.json" <<'PY'
+          import json, os, sys
+          legacy=json.load(open(sys.argv[1])); remote=json.load(open(sys.argv[2]))
+          assert remote['apiVersion']=='v1' and remote['capability']=='map.hex-grid.detect'
+          assert remote['status']==legacy['status']=='detected'
+          a,b=legacy['fit'],remote['fit']; assert a and b and a['orientation']==b['orientation']
+          limits={'centerSpacingPixels':0.05,'rotationDegrees':0.05,'confidence':0.01,'residualPixels':0.05,'supportCoverage':0.01,'orientationSupport':0.01,'translationScore':0.01,'competingTranslationScore':0.01,'linePeriodicityScore':0.01,'phaseScore':0.01}
+          for field,limit in limits.items():
+              assert abs(a[field]-b[field])<=limit,(field,a[field],b[field],limit)
+          assert abs(a['anchorPixel']['x']-b['anchorPixel']['x'])<=0.1
+          assert abs(a['anchorPixel']['y']-b['anchorPixel']['y'])<=0.1
+          residual=lambda s:min(2.5,max(1.5,s*0.025))
+          assert a['residualPixels']<=residual(a['centerSpacingPixels'])
+          assert b['residualPixels']<=residual(b['centerSpacingPixels'])
+          assert remote['analysis']['sourceResolutionVerified'] is True
+          json.dump({'legacy':legacy,'surveyor':remote},open(os.path.join(os.environ['RUNNER_TEMP'],'parity-report.json'),'w'),indent=2)
+          PY
+
+      - name: Prove observation is non-mutating and Apply is explicit
+        run: |
+          set -euo pipefail
+          fixtures="$RUNNER_TEMP/phase13-fixtures"; out="$RUNNER_TEMP/phase13-http"; mkdir -p "$out"
+          curl -fsS -X POST http://127.0.0.1:18095/api/overworlds -H 'Content-Type: application/json' \
+            --data '{"name":"Phase 13 proof","orientation":"PointyTop","origin":{"x":0,"y":0},"rotationDegrees":0,"hexRadiusWorldUnits":1,"neighborCenterDistance":12,"distanceUnit":{"kind":"Mile","symbol":"mi","metersPerUnit":1609.344}}' -o "$out/world.json"
+          world_id="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["id"])' "$out/world.json")"
+          version="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["version"])' "$out/world.json")"
+          upload(){ local file="$1" name="$2" baked="$3" dst="$4"; curl -fsS -X POST "http://127.0.0.1:18095/api/overworlds/$world_id/source-maps" -F "file=@$file;type=image/png;filename=$name.png" -F "name=$name" -F "geographyKey=$name" -F 'role=GM' -F "containsBakedGrid=$baked" -F "expectedVersion=$version" -o "$dst"; version="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["version"])' "$dst")"; }
+          upload "$fixtures/detected.png" detected True "$out/upload-detected.json"
+          detected_id="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["sourceMaps"][-1]["id"])' "$out/upload-detected.json")"
+          before_analysis="$version"
+          curl -fsS -X POST "http://127.0.0.1:18095/api/overworlds/$world_id/source-maps/$detected_id/grid-analysis" -o "$out/hex-detected.json"
+          python3 - "$RUNNER_TEMP/surveyor-detected.json" "$out/hex-detected.json" <<'PY'
+          import json,sys
+          direct=json.load(open(sys.argv[1])); through=json.load(open(sys.argv[2]))
+          assert through['status']=='detected' and through['fit']==direct['fit']
+          assert through['analysis']['sourceResolutionVerified'] is True
+          PY
+          curl -fsS "http://127.0.0.1:18095/api/overworlds/$world_id" -o "$out/after-analysis.json"
+          python3 - "$out/after-analysis.json" "$before_analysis" "$detected_id" <<'PY'
+          import json,sys
+          w=json.load(open(sys.argv[1])); assert w['version']==int(sys.argv[2])
+          assert next(x for x in w['sourceMaps'] if x['id']==sys.argv[3])['alignment'] is None
+          PY
+          python3 - "$out/upload-detected.json" "$out/hex-detected.json" "$out/apply.json" <<'PY'
+          import json,math,sys
+          w=json.load(open(sys.argv[1])); fit=json.load(open(sys.argv[2]))['fit']; grid=dict(w['grid'])
+          scale=grid['hexRadiusWorldUnits']*math.sqrt(3)/fit['centerSpacingPixels']; anchor=fit['anchorPixel']; origin=grid['origin']
+          grid['orientation']=fit['orientation']; grid['rotationDegrees']=fit['rotationDegrees']
+          alignment={'kind':'Affine','m11':scale,'m12':0,'m13':origin['x']-scale*anchor['x'],'m21':0,'m22':scale,'m23':origin['y']-scale*anchor['y'],'m31':0,'m32':0}
+          json.dump({'expectedVersion':w['version'],'grid':grid,'alignment':alignment},open(sys.argv[3],'w'))
+          PY
+          curl -fsS -X PUT "http://127.0.0.1:18095/api/overworlds/$world_id/source-maps/$detected_id/grid-alignment" \
+            -H 'Content-Type: application/json' --data-binary "@$out/apply.json" -o "$out/applied.json"
+          version="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["version"])' "$out/applied.json")"
+          python3 - "$out/applied.json" "$detected_id" <<'PY'
+          import json,sys
+          w=json.load(open(sys.argv[1])); assert w['grid']['orientation']=='FlatTop'
+          assert next(x for x in w['sourceMaps'] if x['id']==sys.argv[2])['alignment'] is not None
+          PY
+          upload "$fixtures/gridless.png" gridless False "$out/upload-gridless.json"
+          gridless_id="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["sourceMaps"][-1]["id"])' "$out/upload-gridless.json")"
+          curl -fsS -X POST "http://127.0.0.1:18095/api/overworlds/$world_id/source-maps/$gridless_id/grid-analysis" -o "$out/gridless.json"
+          python3 - "$out/gridless.json" <<'PY'
+          import json,sys
+          d=json.load(open(sys.argv[1])); assert d['status']=='gridless' and d['fit'] is None
+          PY
+          upload "$fixtures/inconclusive.png" inconclusive True "$out/upload-inconclusive.json"
+          inconclusive_id="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["sourceMaps"][-1]["id"])' "$out/upload-inconclusive.json")"
+          final_version="$version"
+          curl -fsS -X POST "http://127.0.0.1:18095/api/overworlds/$world_id/source-maps/$inconclusive_id/grid-analysis" -o "$out/inconclusive.json"
+          python3 - "$out/inconclusive.json" <<'PY'
+          import json,sys
+          assert json.load(open(sys.argv[1]))['status']=='inconclusive'
+          PY
+          curl -fsS "http://127.0.0.1:18095/api/overworlds/$world_id" -o "$out/after-observations.json"
+          python3 - "$out/after-observations.json" "$final_version" <<'PY'
+          import json,sys
+          assert json.load(open(sys.argv[1]))['version']==int(sys.argv[2])
+          PY
+          printf '%s\n' "$world_id" "$detected_id" "$final_version" > "$out/ids.txt"
+
+      - name: Prove unavailable, auth, timeout, and retry failures are non-mutating
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/phase13-http"; mapfile -t ids < "$out/ids.txt"; world_id="${ids[0]}"; detected_id="${ids[1]}"; expected_version="${ids[2]}"
+          docker stop phase13-surveyor >/dev/null
+          test "$(curl -sS -o "$out/unavailable.json" -w '%{http_code}' -X POST "http://127.0.0.1:18095/api/overworlds/$world_id/source-maps/$detected_id/grid-analysis")" = 503
+          docker start phase13-surveyor >/dev/null
+          for i in {1..30}; do curl -fsS http://127.0.0.1:18094/health/ready >/dev/null 2>&1 && break; sleep 1; done
+          curl -fsS -X POST "http://127.0.0.1:18095/api/overworlds/$world_id/source-maps/$detected_id/grid-analysis" -o "$out/retry.json"
+          docker run -d --name phase13-hex-bad-auth --network phase13-proof -p 127.0.0.1:18096:8080 \
+            -e 'ConnectionStrings__HexCrawl=Host=phase13-postgres;Port=5432;Database=postgres;Username=phase13;Password=phase13;Search Path=phase13' -e 'MapAssets__RootPath=/data/assets' \
+            -e 'ToolHost__StandaloneIdentity__Enabled=true' -e 'ToolHost__StandaloneIdentity__UserId=phase13-dm' \
+            -e 'Surveyor__BaseUrl=http://phase13-surveyor:8080' -e 'Surveyor__ServiceToken=wrong-phase13-token-value' phase13-hex:test >/dev/null
+          for i in {1..45}; do curl -fsS http://127.0.0.1:18096/ready >/dev/null 2>&1 && break; sleep 1; done
+          test "$(curl -sS -o "$out/auth.json" -w '%{http_code}' -X POST "http://127.0.0.1:18096/api/overworlds/$world_id/source-maps/$detected_id/grid-analysis")" = 502
+          docker rm -f phase13-hex-bad-auth >/dev/null
+          docker run -d --name phase13-surveyor-timeout --network phase13-proof \
+            -e "SURVEYOR_SERVICE_TOKEN=$PHASE13_TOKEN" -e SURVEYOR_WORKER_COUNT=1 -e SURVEYOR_QUEUE_LIMIT=1 -e SURVEYOR_ANALYSIS_TIMEOUT=1 phase13-surveyor:test >/dev/null
+          docker run -d --name phase13-hex-timeout --network phase13-proof -p 127.0.0.1:18097:8080 \
+            -e 'ConnectionStrings__HexCrawl=Host=phase13-postgres;Port=5432;Database=postgres;Username=phase13;Password=phase13;Search Path=phase13' -e 'MapAssets__RootPath=/data/assets' \
+            -e 'ToolHost__StandaloneIdentity__Enabled=true' -e 'ToolHost__StandaloneIdentity__UserId=phase13-dm' \
+            -e 'Surveyor__BaseUrl=http://phase13-surveyor-timeout:8080' -e "Surveyor__ServiceToken=$PHASE13_TOKEN" -e 'Surveyor__RequestTimeoutMilliseconds=35000' phase13-hex:test >/dev/null
+          for i in {1..45}; do curl -fsS http://127.0.0.1:18097/ready >/dev/null 2>&1 && break; sleep 1; done
+          test "$(curl -sS -o "$out/timeout.json" -w '%{http_code}' -X POST "http://127.0.0.1:18097/api/overworlds/$world_id/source-maps/$detected_id/grid-analysis")" = 504
+          curl -fsS "http://127.0.0.1:18095/api/overworlds/$world_id" -o "$out/after-failures.json"
+          python3 - "$out/after-failures.json" "$expected_version" <<'PY'
+          import json,sys
+          assert json.load(open(sys.argv[1]))['version']==int(sys.argv[2])
+          PY
+
+      - name: Phase 13 architecture audit
+        run: |
+          set -euo pipefail
+          report="$RUNNER_TEMP/phase13-http/architecture-audit.txt"; : > "$report"
+          if git grep -n -E 'detectHexLattice|grid-lattice-detector|GrayscaleRaster|mapDetectionToSourceImage|RasterGridAnalysisMaximumDimension' -- src/HexCrawl.Web/Client/src >> "$report"; then echo 'browser analysis implementation remains' >&2; exit 1; fi
+          if git grep -n -E 'SURVEYOR_SERVICE_TOKEN|/v1/hex-grid/detect' -- src/HexCrawl.Web/Client/src >> "$report"; then echo 'browser has direct Surveyor coupling' >&2; exit 1; fi
+          if git -C "$RUNNER_TEMP/surveyor" grep -n -E 'Overworld|GridDefinition|CampaignProcedure|Expedition|SourceMapDetail|WorldPoint|HexCrawl\.' -- src >> "$report"; then echo 'Surveyor embeds Hex Crawl domain state' >&2; exit 1; fi
+          if git -C "$RUNNER_TEMP/surveyor" grep -n -E '\bfetch\(' -- src >> "$report"; then echo 'Surveyor performs arbitrary outbound fetches' >&2; exit 1; fi
+          echo 'Phase 13 architecture audit passed.' >> "$report"
+
+      - name: Upload proof report
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase13-cross-repository-proof-v3
+          path: |
+            ${{ runner.temp }}/parity-report.json
+            ${{ runner.temp }}/phase13-http/*.json
+            ${{ runner.temp }}/phase13-http/architecture-audit.txt
+          if-no-files-found: error
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker rm -f phase13-hex-timeout phase13-surveyor-timeout phase13-hex-bad-auth phase13-hex phase13-surveyor phase13-postgres 2>/dev/null || true
+          docker network rm phase13-proof 2>/dev/null || true
