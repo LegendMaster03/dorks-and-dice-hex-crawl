@@ -21,19 +21,29 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           path = Path('.github/workflows/phase13-cross-repo.yml')
-          text = path.read_text()
-          old = '''          (cd src/HexCrawl.Web/Client && npx tsc --ignoreConfig \\
-            src/raster-grid-alignment.ts src/hex-grid-analysis.ts \\
-            --target ES2023 --module NodeNext --moduleResolution NodeNext \\
-            --outDir .phase13-preview-dist)'''
-          new = '''          (cd src/HexCrawl.Web/Client && npx tsc --ignoreConfig \\
-            src/raster-grid-alignment.ts src/hex-grid-analysis.ts \\
-            --target ES2023 --module CommonJS --moduleResolution Node \\
-            --outDir .phase13-preview-dist)
-          printf '%s\\n' '{"type":"commonjs"}' > src/HexCrawl.Web/Client/.phase13-preview-dist/package.json'''
-          if old not in text:
-              raise SystemExit('expected compile block not found')
-          path.write_text(text.replace(old, new, 1))
+          lines = path.read_text().splitlines()
+          marker_seen = False
+          target_line = None
+          outdir_line = None
+          for index, line in enumerate(lines):
+              if 'src/raster-grid-alignment.ts src/hex-grid-analysis.ts' in line:
+                  marker_seen = True
+                  continue
+              if marker_seen and '--target ES2023 --module NodeNext --moduleResolution NodeNext' in line:
+                  target_line = index
+                  continue
+              if target_line is not None and '--outDir .phase13-preview-dist)' in line:
+                  outdir_line = index
+                  break
+          if target_line is None or outdir_line is None:
+              raise SystemExit('expected preview compile block not found')
+          lines[target_line] = lines[target_line].replace(
+              '--module NodeNext --moduleResolution NodeNext',
+              '--module CommonJS --moduleResolution Node')
+          lines.insert(
+              outdir_line + 1,
+              "          printf '%s\\n' '{\"type\":\"commonjs\"}' > src/HexCrawl.Web/Client/.phase13-preview-dist/package.json")
+          path.write_text('\n'.join(lines) + '\n')
           PY
       - name: Commit harness fix
         run: |
