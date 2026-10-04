@@ -96,19 +96,22 @@ public sealed class SurveyorMapAnalysisClient(
     private static Uri BuildRequestUri(string baseUrl, MapAnalysisOptions options)
     {
         var parameters = new List<string>();
-        Add("minimumSpacingPixels", options.MinimumSpacingPixels);
-        Add("maximumSpacingPixels", options.MaximumSpacingPixels);
-        Add("maximumEdgeSamples", options.MaximumEdgeSamples);
-        Add("minimumConfidence", options.MinimumConfidence);
+        AddDouble("minimumSpacingPixels", options.MinimumSpacingPixels);
+        AddDouble("maximumSpacingPixels", options.MaximumSpacingPixels);
+        AddInteger("maximumEdgeSamples", options.MaximumEdgeSamples);
+        AddDouble("minimumConfidence", options.MinimumConfidence);
         var relative = "/v1/hex-grid/detect" + (parameters.Count == 0 ? string.Empty : "?" + string.Join('&', parameters));
         return new Uri(new Uri(baseUrl.TrimEnd('/') + "/", UriKind.Absolute), relative.TrimStart('/'));
 
-        void Add(string name, double? value)
+        void AddDouble(string name, double? value)
         {
             if (value is null) return;
+            if (!double.IsFinite(value.Value))
+                throw new ArgumentOutOfRangeException(nameof(options), $"{name} must be finite.");
             parameters.Add($"{name}={Uri.EscapeDataString(value.Value.ToString("R", CultureInfo.InvariantCulture))}");
         }
-        void Add(string name, int? value)
+
+        void AddInteger(string name, int? value)
         {
             if (value is null) return;
             parameters.Add($"{name}={value.Value.ToString(CultureInfo.InvariantCulture)}");
