@@ -269,11 +269,46 @@ public sealed class Phase12JourneyReviewRegressionTests
     }
 
     [Fact]
-    public void JourneyEventReplayMustMatchPreviouslyResolvedMeaning()
+    public void TravelRoleTargetingRejectsArbitraryPartyTarget()
     {
         var policy = JourneyProcedurePolicyResolver.ResolveEvents(
             CrawlProcedureCatalog.Resolve(CrawlProcedureCatalog.MixedHouseRulePresetKey)
                 .MaterializeGeneric().Procedure);
+        var occurrenceId = Guid.NewGuid();
+        var created = JourneyEventEngine.CreateOpportunity(
+            ExpeditionJourneyState.Empty,
+            policy,
+            new JourneyEventOpportunityInput
+            {
+                OccurrenceId = occurrenceId,
+                Trigger = JourneyEventTriggerKind.Explicit,
+                TriggerReference = "manual:role-target",
+                Provenance = Dm
+            },
+            new JourneyClockReference(TimeSpan.Zero, 0),
+            CrawlPartySheet.Empty);
+
+        Assert.Throws<InvalidOperationException>(() => JourneyEventEngine.Resolve(
+            created.State,
+            policy,
+            new JourneyEventResolutionInput
+            {
+                OccurrenceId = occurrenceId,
+                Status = JourneyEventStatus.Resolved,
+                EventKey = "event",
+                TargetKind = JourneyEventTargetKind.Party,
+                Provenance = Dm
+            },
+            new JourneyClockReference(TimeSpan.Zero, 0),
+            CrawlPartySheet.Empty));
+    }
+
+    [Fact]
+    public void JourneyEventReplayMustMatchPreviouslyResolvedMeaning()
+    {
+        var policy = JourneyProcedurePolicyResolver.ResolveEvents(
+            CrawlProcedureCatalog.Resolve(CrawlProcedureCatalog.MixedHouseRulePresetKey)
+                .MaterializeGeneric().Procedure) with { TargetingModel = "explicit-target" };
         var occurrenceId = Guid.NewGuid();
         var opportunity = new JourneyEventOpportunityInput
         {
