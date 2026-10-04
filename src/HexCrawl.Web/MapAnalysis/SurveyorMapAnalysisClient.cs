@@ -13,7 +13,10 @@ public sealed class SurveyorMapAnalysisClient(
     ILogger<SurveyorMapAnalysisClient> logger) : IMapAnalysisService
 {
     private const string ApiVersion = "v1";
-    private const string Capability = "map.hex-grid.detect";
+    private const string Capability = "map.periodic-tiling.detect";
+    private const string PeriodicTilingType = "Regular";
+    private const string CundyRollettNotation = "6^3";
+    private const string GomJauHoggNotation = "6/m30/r(h1)";
 
     public async Task<MapHexGridAnalysis> DetectHexGridAsync(
         Stream raster,
@@ -41,25 +44,13 @@ public sealed class SurveyorMapAnalysisClient(
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(configuration.RequestTimeout);
-        HttpResponseMessage response;
         try
         {
-            response = await httpClient.SendAsync(
+            using var response = await httpClient.SendAsync(
                 request,
                 HttpCompletionOption.ResponseHeadersRead,
                 timeout.Token);
-        }
-        catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested)
-        {
-            throw new MapAnalysisTimeoutException("Surveyor did not complete map analysis before the configured timeout.", exception);
-        }
-        catch (HttpRequestException exception)
-        {
-            throw new MapAnalysisUnavailableException("Surveyor could not be reached.", exception);
-        }
 
-        using (response)
-        {
             if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
             {
                 throw new MapAnalysisAuthenticationException("Surveyor rejected the internal service credential.");
@@ -75,15 +66,15 @@ public sealed class SurveyorMapAnalysisClient(
             if (!response.IsSuccessStatusCode)
             {
                 logger.LogWarning(
-                    "Surveyor returned HTTP {StatusCode} for map hex-grid analysis.",
+                    "Surveyor returned HTTP {StatusCode} for map periodic-tiling analysis.",
                     (int)response.StatusCode);
                 throw new MapAnalysisUnavailableException($"Surveyor analysis failed with HTTP {(int)response.StatusCode}.");
             }
 
             try
             {
-                await using var body = await response.Content.ReadAsStreamAsync(cancellationToken);
-                using var document = await JsonDocument.ParseAsync(body, cancellationToken: cancellationToken);
+                await using var body = await response.Content.ReadAsStreamAsync(timeout.Token);
+                using var document = await JsonDocument.ParseAsync(body, cancellationToken: timeout.Token);
                 return Parse(document.RootElement);
             }
             catch (JsonException exception)
@@ -91,16 +82,28 @@ public sealed class SurveyorMapAnalysisClient(
                 throw new MapAnalysisProtocolException("Surveyor returned malformed JSON.", exception);
             }
         }
+        catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new MapAnalysisTimeoutException("Surveyor did not complete map analysis before the configured timeout.", exception);
+        }
+        catch (HttpRequestException exception)
+        {
+            throw new MapAnalysisUnavailableException("Surveyor could not be reached.", exception);
+        }
     }
 
     private static Uri BuildRequestUri(string baseUrl, MapAnalysisOptions options)
     {
-        var parameters = new List<string>();
+        var parameters = new List<string>
+        {
+            $"periodicTilingType={Uri.EscapeDataString(PeriodicTilingType)}",
+            $"cundyRollettNotation={Uri.EscapeDataString(CundyRollettNotation)}"
+        };
         AddDouble("minimumSpacingPixels", options.MinimumSpacingPixels);
         AddDouble("maximumSpacingPixels", options.MaximumSpacingPixels);
         AddInteger("maximumEdgeSamples", options.MaximumEdgeSamples);
         AddDouble("minimumConfidence", options.MinimumConfidence);
-        var relative = "/v1/hex-grid/detect" + (parameters.Count == 0 ? string.Empty : "?" + string.Join('&', parameters));
+        var relative = "/v1/periodic-tiling/detect?" + string.Join('&', parameters);
         return new Uri(new Uri(baseUrl.TrimEnd('/') + "/", UriKind.Absolute), relative.TrimStart('/'));
 
         void AddDouble(string name, double? value)
@@ -127,6 +130,8 @@ public sealed class SurveyorMapAnalysisClient(
         {
             throw new MapAnalysisProtocolException("Surveyor returned an unsupported API version or capability identity.");
         }
+
+        ValidateRequestedTiling(root);
 
         var status = RequiredString(root, "status");
         if (status is not ("detected" or "inconclusive" or "gridless"))
@@ -171,8 +176,33 @@ public sealed class SurveyorMapAnalysisClient(
         }
         if (status == "detected" && fit is null)
             throw new MapAnalysisProtocolException("A detected Surveyor result must include a fit.");
+        if (status != "detected" && fit is not null)
+            throw new MapAnalysisProtocolException("A non-detected Surveyor result must not include a fit.");
 
         return new MapHexGridAnalysis(apiVersion, capability, status, reason, source, analysis, fit);
+    }
+
+    private static void ValidateRequestedTiling(JsonElement root)
+    {
+        var tiling = RequiredObject(root, "tiling");
+        if (!string.Equals(RequiredString(tiling, "periodicTilingType"), PeriodicTilingType, StringComparison.Ordinal)
+            || !string.Equals(RequiredString(tiling, "cundyRollettNotation"), CundyRollettNotation, StringComparison.Ordinal)
+            || !string.Equals(RequiredString(tiling, "gomJauHoggNotation"), GomJauHoggNotation, StringComparison.Ordinal))
+        {
+            throw new MapAnalysisProtocolException("Surveyor returned a different periodic tiling than Hex Crawl requested.");
+        }
+
+        if (!tiling.TryGetProperty("shapes", out var shapes) || shapes.ValueKind != JsonValueKind.Array || shapes.GetArrayLength() != 1)
+        {
+            throw new MapAnalysisProtocolException("Surveyor returned an unexpected Regular tiling shape set.");
+        }
+        var shape = shapes[0];
+        if (shape.ValueKind != JsonValueKind.Object
+            || !string.Equals(RequiredString(shape, "name"), "hex", StringComparison.Ordinal)
+            || RequiredPositiveInt(shape, "sides") != 6)
+        {
+            throw new MapAnalysisProtocolException("Surveyor returned an unexpected Regular tiling shape identity.");
+        }
     }
 
     private static JsonElement RequiredObject(JsonElement value, string name) =>
