@@ -495,39 +495,43 @@ Phase 7 does not execute downstream foraging, camping, movement penalties, resou
 
 ## Movement capability composition
 
-Phase 8 should compose movement contributors from participants, mounts/vehicles, encumbrance, travel mode, terrain/route, environment, persistent effects, and explicit DM override.
+Phase 8 composes movement contributors from participants, mounts/vehicles, encumbrance, travel mode, terrain/route, environment, persistent effects, and explicit DM override through one generic composition boundary.
 
 The current explicit `PartyMovementReference` remains a valid authoritative reference and fallback.
 
 ## Environment context
 
-Phase 9 introduces ruleset-neutral environment context such as terrain tags, route tags, weather, visibility, elevation/depth, water/current, temperature, hazard tags, and regional effects.
+Phase 9 provides ruleset-neutral environment context such as terrain tags, route tags, weather, visibility, elevation/depth, water/current, temperature, hazard tags, and regional effects.
 
 World truth describes the environment. Generic mechanics decide what that environment means to the active procedure.
 
 ## Effects and consequences
 
-Phase 10 introduces a generalized structured effect pipeline capable of representing time delay, movement changes, resources, exposure/fatigue, damage/endurance, navigation changes, encounter circumstances, and campaign/provider-defined consequences.
+Phase 10 provides a generalized structured effect pipeline capable of representing time delay, movement changes, resources, exposure/fatigue, damage/endurance, navigation changes, encounter circumstances, and campaign/provider-defined consequences.
 
-Do not overload `RuntimePauseReason` for persistent effects.
+Persistent effects remain separate from `RuntimePauseReason`.
 
 ## Resources and survival
 
-Phase 11 adds generic expedition resources and survival behavior after the effect/resource infrastructure is stable.
+Phase 11 provides generic expedition resources, forced-travel accounting/resolution, exposure tracking, foraging/camping operations, and survival behavior on top of Phase 10 consequence ownership.
 
-Possible resources include food, water, light, ammunition, fuel, medicine, generic supplies, mount/vehicle supplies, harvested materials, and campaign-defined resources.
+Supported resource shapes include counted, abstract, supply-die, and external/manual resources without assuming one published inventory model.
 
 ## Multi-stage expedition processes
 
-Phase 12 adds generic Journey Challenge / Complex Hazard support over ordinary expedition intervals.
+Phase 12 provides generic Journey Challenge / Complex Hazard execution as an overlay, not a replacement for the deterministic core travel loop.
 
-This is an overlay, not a replacement for the deterministic core travel loop.
+Processes persist explicit definitions, execution snapshots, stage state, progress, success/failure/complication counters, approaches, role snapshots, transitions, terminal history, and stable resolution identities. `journey.events` separately models standalone/process-linked trigger opportunities and explicit event resolution. Completed-watch observation is idempotent and can create pending journey work without automatically advancing process progress or fabricating event content.
+
+Journey consequences reuse Phase 10/11 aggregate mutation boundaries, and journey event environment context snapshots reuse Phase 9 authority without inventing modifiers.
+
+See `docs/journey-processes.md`.
 
 ## Internal human testing boundary
 
 Internal human testing should begin only after the core persisted expedition-state architecture through Phase 12 has stabilized.
 
-Phases 8 through 12 are intentionally completed before opening the tool to internal testers because they are expected to establish or substantially reshape durable movement capability, environment context, structured effects, resources/survival state, and multi-stage journey/process state. Avoiding a premature compatibility burden during those phases is more valuable than preserving development databases.
+Phases 8 through 12 are intentionally completed before opening the tool to internal testers because they establish or substantially reshape durable movement capability, environment context, structured effects, resources/survival state, and multi-stage journey/process state. Avoiding a premature compatibility burden during those phases is more valuable than preserving development databases.
 
 Phase 12.5 is therefore the testing-readiness gate. It should verify that the Phase 0–12 vertical slice is usable by a DM, remove tester-blocking UX defects, establish acceptance scenarios and diagnostics, and document the internal-testing reset/migration policy.
 
@@ -589,7 +593,7 @@ Made materialized `CampaignProcedure` snapshots the runtime authority for curren
 
 ### Phase 3 — preset catalog and proof matrix — complete
 
-Implement enough generic structural primitives to represent materially different proof systems without system-specific runtime classes. Preserve current executable behavior where supported; later-phase engines remain deferred.
+Implemented enough generic structural primitives to represent materially different proof systems without system-specific runtime classes while preserving current executable behavior where supported.
 
 Phase 3 definition of done includes:
 
@@ -605,39 +609,43 @@ Phase 3 definition of done includes:
 
 ### Phase 4 — Procedure Composer UI — complete
 
-Add preset picker, module review, generic behavior selection, parameter editing, modification count, provenance display, and dependency warnings.
+Added preset picker, module review, generic behavior selection, parameter editing, modification count, provenance display, and dependency warnings.
 
 ### Phase 5 — generated procedure documentation — complete
 
-Generate readable campaign procedure documentation directly from the materialized snapshot. Procedure references are derived from the exact immutable `CampaignProcedure` revision and remain independent of optional providers.
+Generates readable campaign procedure documentation directly from the materialized snapshot. Procedure references are derived from the exact immutable `CampaignProcedure` revision and remain independent of optional providers.
 
 ### Phase 6 — optional provider adapters — complete
 
-External rules/capability sources now sit behind Hex Crawl-owned capability interfaces. Travel/environment resolution uses `ITravelEnvironmentProvider`; Rules Core is the first adapter, provider availability and unresolved states are explicit, DM/manual values bypass providers, provider identity is retained as provenance, and deterministic runtime/domain code remains provider-free.
+External rules/capability sources sit behind Hex Crawl-owned capability interfaces. Travel/environment resolution uses `ITravelEnvironmentProvider`; Rules Core is the first adapter, provider availability and unresolved states are explicit, DM/manual values bypass providers, provider identity is retained as provenance, and deterministic runtime/domain code remains provider-free.
 
 ### Phase 7 — typed participant activities — complete
 
-Added typed party, participant, and role assignment state to `CrawlPartySheet`; exact pinned-procedure activity-policy projection; policy-driven party UI; typed spatial/non-spatial active-interval snapshots; PostgreSQL/API round-trip; removal of the independent default-navigator and free-form watch-activity authorities; and structural journey-role editing without fabricating an interval. Activity mechanics remain declarative/manual and downstream movement/effect/resource/journey execution remains deferred.
+Added typed party, participant, and role assignment state to `CrawlPartySheet`; exact pinned-procedure activity-policy projection; policy-driven party UI; typed spatial/non-spatial active-interval snapshots; PostgreSQL/API round-trip; removal of the independent default-navigator and free-form watch-activity authorities; and structural journey-role editing without fabricating an interval.
 
-### Phase 8 — movement capability composition
+### Phase 8 — movement capability composition — complete
 
-Compose participant, mount, vehicle, environment, load, and effect contributors with manual fallback and DM override.
+Added one generic movement-composition boundary for participant, mount/vehicle, load, mode/pace, environment, persistent-effect, explicit party-reference, and DM-override contributors while preserving non-distance semantics and provider provenance.
 
-### Phase 9 — environment context
+### Phase 9 — environment context — complete
 
-Introduce generic terrain/route/weather/elevation/water/hazard execution context.
+Added generic static/current/override environment facts, deterministic precedence/conflict handling, spatial resolution, pinned-procedure environment evaluation, provider composition, persistence, HTTP/UI support, and movement handoff without making world truth procedure-specific.
 
-### Phase 10 — generalized effect/consequence engine
+### Phase 10 — generalized effect/consequence engine — complete
 
-Add structured expedition effects and provenance.
+Added stable structured expedition consequences, typed consequence components, persistent effects, lifecycle/idempotency/provenance, application consumers, persistence, and focused HTTP/UI contracts without overloading runtime pause state.
 
-### Phase 11 — forced travel, survival, and generic resources
+### Phase 11 — forced travel, survival, and generic resources — complete
 
-Add fatigue/exposure, food/water/supplies, weather/altitude, forced travel, and generic resources.
+Added generic counted/abstract/supply-die/external resources, audit history, forced-travel accounting/checks, exposure, camping/foraging support, Phase 10 consequence reuse, persistence, and DM-facing resource/survival operations.
 
-### Phase 12 — multi-stage journey processes
+### Phase 12 — multi-stage journey processes — complete
 
-Add generic Journey Challenge / Complex Hazard execution over ordinary expedition intervals.
+Added generic Journey Challenge / Complex Hazard definitions and persistent instances; numeric or explicit-state progress; approaches; role-driven resolution; success/failure/complication tracking; stage transitions; explicit completion/failure/abandonment; stable/idempotent resolution and event identities; standalone/process-linked journey events; completed-watch observation over the existing deterministic runtime; Phase 9 environment snapshots; Phase 10/11 consequence handoff; PostgreSQL schema-8 persistence/restart; typed HTTP/TypeScript contracts; and a DM Journey / Challenge workbench.
+
+The One Ring and Mixed House Rule proof recipes now contain their complete generic Phase 12 parameters directly. Materialization/runtime no longer uses preset identity to complete or select their journey behavior. Publisher-specific event tables, formulas, distances, modifiers, and fatigue values remain explicit resolved input where not encoded by the pinned procedure.
+
+See `docs/journey-processes.md`.
 
 ### Phase 12.5 — internal human testing readiness
 
