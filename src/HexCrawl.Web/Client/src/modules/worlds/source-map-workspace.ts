@@ -76,7 +76,7 @@ export class SourceMapWorkspace {
                 <p class="hc-hint">Hex Crawl analyzes the raster itself for a repeated hex lattice. Detection previews the proposed raster placement and mathematical grid without saving. Physical distance per hex is only changed when a separate trustworthy scale source is available.</p>
                 <p class="hc-hint" data-grid-alignment-status></p>
                 <div class="hc-button-row">
-                    <button type="button" data-grid-alignment-preview>Re-run detection and preview</button>
+                    <button type="button" data-grid-alignment-preview>Re-run detection</button>
                     <button type="button" class="hc-primary-action" data-grid-alignment-apply disabled>Apply detected alignment</button>
                     <button type="button" data-grid-alignment-cancel>Cancel</button>
                 </div>
