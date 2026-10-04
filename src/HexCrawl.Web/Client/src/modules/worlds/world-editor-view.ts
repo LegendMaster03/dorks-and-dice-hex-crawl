@@ -34,7 +34,7 @@ export async function renderWorldEditor(
             <div class="hc-workspace-grid">
                 <section class="hc-map-panel" aria-label="Overworld map">
                     <div class="hc-map-host" data-map></div>
-                    <p class="hc-hint" data-map-hint>Use the controls to add locations and map features. Shift-drag or middle-drag pans; wheel zooms; the focused map also supports keyboard pan, zoom, and center-point selection.</p>
+                    <p class="hc-hint" data-map-hint>Click to select or author map content; drag to pan; wheel to zoom. The focused map also supports keyboard pan, zoom, and center-point selection.</p>
                 </section>
                 <aside class="hc-sidebar" aria-label="Overworld authoring controls">
                     <details open><summary>World and grid</summary><form class="hc-form" data-grid-form>

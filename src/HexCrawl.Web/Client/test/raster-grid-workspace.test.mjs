@@ -17,7 +17,7 @@ test("reference-map workspace exposes server-backed automatic baked-grid detecti
 
     assert.match(workspace, /SourceMapGridAlignmentController/);
     assert.match(workspace, /Detect \/ repair hex grid/);
-    assert.match(workspace, /Re-run detection and preview/);
+    assert.match(workspace, /Re-run detection/);
     assert.match(workspace, /Advanced registration/);
     assert.match(controller, /analyzeSourceMapGrid/);
     assert.doesNotMatch(controller, /detectHexLattice/);
@@ -25,7 +25,7 @@ test("reference-map workspace exposes server-backed automatic baked-grid detecti
     assert.doesNotMatch(controller, /getImageData/);
     assert.match(api, /source-maps\/\$\{encodeURIComponent\(sourceMapId\)\}\/grid-analysis/);
     assert.match(controller, /buildRasterGridAlignmentProposal/);
-    assert.match(controller, /detection\.status !== "detected"/);
+    assert.match(controller, /this\.detection\.status !== "detected"/);
     assert.match(controller, /gridPreview = proposal\.grid/);
     assert.match(controller, /registrationPreview =/);
     assert.match(controller, /grid-alignment/);
@@ -57,6 +57,18 @@ test("standalone baked-grid upload automatically selects the new raster and star
     assert.match(workspace, /await this\.gridAlignmentController\.beginAndPreview\(uploadedSourceMap\)/);
 });
 
+test("grid detection scrolls its workflow into view and exposes analysis progress", () => {
+    const controller = fs.readFileSync(
+        path.join(sourceRoot, "modules/worlds/source-map-grid-alignment-controller.ts"),
+        "utf8");
+
+    assert.match(controller, /scrollIntoView\(\{ behavior: "smooth", block: "nearest" \}\)/);
+    assert.match(controller, /setAnalysisBusy\(true\)/);
+    assert.match(controller, /aria-busy/);
+    assert.match(controller, /Analyzing…/);
+    assert.match(controller, /Re-run detection/);
+});
+
 test("switching maps or starting a newer analysis invalidates stale asynchronous previews", () => {
     const controller = fs.readFileSync(
         path.join(sourceRoot, "modules/worlds/source-map-grid-alignment-controller.ts"),
@@ -86,7 +98,7 @@ test("unplaced baked-grid Wonderdraft import automatically starts a non-saving d
     assert.doesNotMatch(workspace, /containsBakedGrid && importedSourceMap\.alignment[^\n]*beginAndPreview/);
 });
 
-test("grid detection requires Surveyor source-resolution verification before automatic Apply", () => {
+test("lower-confidence or downscaled previews remain explicitly applicable after confirmation", () => {
     const controller = fs.readFileSync(
         path.join(sourceRoot, "modules/worlds/source-map-grid-alignment-controller.ts"),
         "utf8");
@@ -94,9 +106,13 @@ test("grid detection requires Surveyor source-resolution verification before aut
     assert.match(controller, /analyzed\.analysis\.sourceResolutionVerified/);
     assert.match(controller, /source-resolution phase verified/);
     assert.match(controller, /downscaled phase only/);
-    assert.match(controller, /Source-resolution phase verification is required before automatic Apply|source-resolution phase verification is required before automatic Apply/i);
-    assert.match(controller, /isCanonicalSourceFit/);
-    assert.match(controller, /rasterGridCanonicalResidualLimit/);
+    assert.match(controller, /Source-resolution phase verification is unavailable/);
+    assert.match(controller, /this\.applyButton\.disabled = false/);
+    assert.match(controller, /Apply anyway/);
+    assert.match(controller, /window\.confirm\(/);
+    assert.match(controller, /Apply this preview anyway/);
+    assert.doesNotMatch(controller, /isCanonicalSourceFit/);
+    assert.doesNotMatch(controller, /high-confidence, source-verified grid detection must be previewed/);
     assert.doesNotMatch(controller, /rasterGridAnalysisScale/);
     assert.doesNotMatch(controller, /mapDetectionToSourceImage/);
     assert.doesNotMatch(controller, /AnalysisMaximumDimension = 768/);
@@ -121,7 +137,7 @@ test("Wonderdraft grid metadata and scale-bar metadata remain independent cross-
     assert.match(controller, /usedWholeUnitCandidate/);
 });
 
-test("preview reports and gates final worst distant-region behavior", () => {
+test("preview reports distant-region residual and turns threshold failures into review warnings", () => {
     const controller = fs.readFileSync(
         path.join(sourceRoot, "modules/worlds/source-map-grid-alignment-controller.ts"),
         "utf8");
@@ -129,17 +145,18 @@ test("preview reports and gates final worst distant-region behavior", () => {
     assert.match(controller, /worst distant residual/);
     assert.match(controller, /fit\.residualPixels/);
     assert.match(controller, /final rigid overlay misses at least one distant region/);
-    assert.match(controller, /automatic Apply requires at most/);
+    assert.match(controller, /recommended limit is/);
+    assert.match(controller, /explicitly applied after confirming these warnings/);
 });
 
-test("verified physical-scale conflicts require explicit confirmation before apply", () => {
+test("verified physical-scale conflicts remain part of explicit apply confirmation", () => {
     const controller = fs.readFileSync(
         path.join(sourceRoot, "modules/worlds/source-map-grid-alignment-controller.ts"),
         "utf8");
 
     assert.match(controller, /PhysicalScaleConfirmationTolerance = 0\.01/);
     assert.match(controller, /detectPhysicalScaleChange\(world\.grid, proposal\.grid\)/);
-    assert.match(controller, /Apply requires explicit confirmation/);
+    assert.match(controller, /Physical distance per hex changes from/);
     assert.match(controller, /window\.confirm\(/);
-    assert.match(controller, /physical-scale change was not confirmed/);
+    assert.match(controller, /Alignment was not applied/);
 });

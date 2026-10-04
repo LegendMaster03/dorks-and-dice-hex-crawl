@@ -25,7 +25,7 @@ export class MapSurface {
         const help = document.createElement("p");
         help.id = `hc-map-help-${accessibilityId}`;
         help.className = "hc-sr-only";
-        help.textContent = "Interactive hex map. Use the visible map controls, arrow keys, plus and minus, or Home for navigation. Shift-drag or middle-drag pans, the wheel zooms, Enter or Space selects and activates the point at the center of the map, and Escape clears the selected hex.";
+        help.textContent = "Interactive hex map. Drag to pan, use the wheel to zoom, arrow keys pan, plus and minus zoom, Home resets the view, Enter or Space selects and activates the point at the center of the map, and Escape clears the selected hex.";
 
         this.accessibilityStatus = document.createElement("p");
         this.accessibilityStatus.id = `hc-map-status-${accessibilityId}`;
@@ -40,9 +40,7 @@ export class MapSurface {
         this.canvas.setAttribute("role", "region");
         this.canvas.setAttribute("aria-describedby", `${help.id} ${this.accessibilityStatus.id}`);
         this.canvas.setAttribute("aria-keyshortcuts", "ArrowUp ArrowDown ArrowLeft ArrowRight + - Home Enter Space Escape");
-
-        host.style.position = "relative";
-        host.replaceChildren(this.canvas, this.createNavigationToolbar(), help, this.accessibilityStatus);
+        host.replaceChildren(this.canvas, help, this.accessibilityStatus);
 
         this.renderer = new CanvasMapRenderer(this.canvas, this.viewport, this.getWorld, () => this.requestRender());
         this.lifecycle.register("map", () => {
@@ -50,8 +48,13 @@ export class MapSurface {
             this.updateAccessibilityLabel();
         });
 
+        let suppressNextClick = false;
         this.canvas.addEventListener("click", event => {
             if (event.button !== 0) return;
+            if (suppressNextClick) {
+                suppressNextClick = false;
+                return;
+            }
             const rect = this.canvas.getBoundingClientRect();
             this.activatePoint(this.viewport.screenToWorld(
                 event.clientX - rect.left,
@@ -73,24 +76,55 @@ export class MapSurface {
             this.requestRender();
         }, { passive: false });
 
+        const dragThresholdPixels = 4;
+        let activePointerId: number | null = null;
+        let pointerButton = 0;
         let dragging = false;
+        let startX = 0;
+        let startY = 0;
         let lastX = 0;
         let lastY = 0;
+
         this.canvas.addEventListener("pointerdown", event => {
-            if (event.button !== 1 && !event.shiftKey) return;
-            dragging = true;
-            lastX = event.clientX;
-            lastY = event.clientY;
+            if (event.button !== 0 && event.button !== 1) return;
+            activePointerId = event.pointerId;
+            pointerButton = event.button;
+            dragging = event.button === 1;
+            startX = lastX = event.clientX;
+            startY = lastY = event.clientY;
             this.canvas.setPointerCapture(event.pointerId);
+            if (dragging) this.canvas.style.cursor = "grabbing";
         });
         this.canvas.addEventListener("pointermove", event => {
-            if (!dragging) return;
+            if (activePointerId !== event.pointerId) return;
+            if (!dragging) {
+                if (Math.hypot(event.clientX - startX, event.clientY - startY) < dragThresholdPixels) return;
+                dragging = true;
+                this.canvas.style.cursor = "grabbing";
+            }
+
             this.viewport.panByPixels(event.clientX - lastX, event.clientY - lastY);
             lastX = event.clientX;
             lastY = event.clientY;
+            event.preventDefault();
             this.requestRender();
         });
-        this.canvas.addEventListener("pointerup", () => { dragging = false; });
+        const finishPointer = (event: PointerEvent, canceled: boolean): void => {
+            if (activePointerId !== event.pointerId) return;
+            const wasDragging = dragging;
+            const wasLeftButton = pointerButton === 0;
+            if (this.canvas.hasPointerCapture(event.pointerId)) this.canvas.releasePointerCapture(event.pointerId);
+            activePointerId = null;
+            dragging = false;
+            this.canvas.style.cursor = "";
+            if (wasDragging && wasLeftButton && !canceled) {
+                suppressNextClick = true;
+                window.setTimeout(() => { suppressNextClick = false; }, 0);
+            }
+            if (wasDragging) this.announceView("Map panned");
+        };
+        this.canvas.addEventListener("pointerup", event => finishPointer(event, false));
+        this.canvas.addEventListener("pointercancel", event => finishPointer(event, true));
 
         this.resizeObserver = new ResizeObserver(() => this.requestRender());
         this.resizeObserver.observe(host);
@@ -122,38 +156,6 @@ export class MapSurface {
         this.reviewSelectionHandler = null;
         this.resizeObserver.disconnect();
         this.renderer.dispose();
-    }
-
-    private createNavigationToolbar(): HTMLElement {
-        const toolbar = document.createElement("div");
-        toolbar.setAttribute("role", "group");
-        toolbar.setAttribute("aria-label", "Map navigation controls");
-        toolbar.style.cssText = "position:absolute;z-index:2;top:.55rem;left:.55rem;display:flex;flex-wrap:wrap;align-items:center;gap:.3rem;max-width:calc(100% - 1.1rem);padding:.35rem;border:1px solid var(--hc-border);border-radius:.5rem;background:var(--hc-surface);box-shadow:0 .1rem .35rem rgba(0,0,0,.18)";
-
-        const label = document.createElement("span");
-        label.textContent = "Map controls";
-        label.style.cssText = "padding:0 .25rem;color:var(--hc-text-strong);font-size:.78rem;font-weight:700";
-        toolbar.append(label);
-
-        const addButton = (text: string, title: string, action: () => void): void => {
-            const button = document.createElement("button");
-            button.type = "button";
-            button.textContent = text;
-            button.title = title;
-            button.setAttribute("aria-label", title);
-            button.style.cssText = "min-width:2.15rem;padding:.3rem .45rem";
-            button.addEventListener("click", action);
-            toolbar.append(button);
-        };
-
-        addButton("←", "Pan map left", () => this.panViewport(48, 0));
-        addButton("↑", "Pan map up", () => this.panViewport(0, 48));
-        addButton("↓", "Pan map down", () => this.panViewport(0, -48));
-        addButton("→", "Pan map right", () => this.panViewport(-48, 0));
-        addButton("−", "Zoom map out", () => this.zoomViewport(1 / 1.12));
-        addButton("+", "Zoom map in", () => this.zoomViewport(1.12));
-        addButton("Reset", "Reset map view", () => this.resetView());
-        return toolbar;
     }
 
     private activatePoint(point: WorldPoint): void {
