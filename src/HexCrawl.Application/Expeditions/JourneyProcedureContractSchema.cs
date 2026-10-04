@@ -6,7 +6,8 @@ namespace HexCrawl.Application;
 /// Phase 12 extends the journey parameter contract without creating a second procedure model.
 /// The values and their schema metadata are copied into the materialized CampaignProcedure, so
 /// Composer/reference surfaces and runtime focused resolvers all consume the same pinned snapshot.
-/// Creation-time preset upgrades live here; runtime journey resolution never reads preset identity.
+/// Preset recipes must declare their complete generic journey parameters before materialization;
+/// runtime journey resolution never reads preset identity or current catalog defaults.
 /// </summary>
 public static class JourneyProcedureContractSchema
 {
@@ -57,49 +58,6 @@ public static class JourneyProcedureContractSchema
         var schema = mechanic.ParameterSchema.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         foreach (var (key, definition) in extras) schema[key] = definition;
         return mechanic with { ParameterSchema = schema };
-    }
-
-    /// <summary>
-    /// Upgrades the known Phase 3 proof recipes at preset materialization time. This is creation-time
-    /// preset data, equivalent to correcting the preset recipe itself. The resulting CampaignProcedure
-    /// contains every execution parameter and remains valid if origin metadata or the catalog is removed.
-    /// </summary>
-    public static IReadOnlyDictionary<string, string> UpgradePresetParameters(
-        CrawlProcedurePresetDefinition preset,
-        ProcedureModuleRecipe selection)
-    {
-        var parameters = selection.Parameters.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
-        if (string.Equals(preset.PresetKey, CrawlProcedureCatalog.OneRing2ePresetKey, StringComparison.Ordinal))
-        {
-            if (string.Equals(selection.ModuleKey, GenericProcedureCatalog.JourneyProcessModule, StringComparison.Ordinal))
-            {
-                parameters["stageKeys"] = "route;events;arrival";
-                parameters["stageTransitionModel"] = "sequential";
-                parameters["progressKind"] = "numeric";
-                parameters["progressUnit"] = "journey-progress";
-                parameters["allowNegativeProgress"] = "false";
-                parameters["completionModel"] = "final-stage-completion";
-                parameters["roleAssignmentModel"] = "current-at-resolution";
-                parameters["intervalIntegrationModel"] = "none";
-                parameters["blocksRelevantTravelWhileResolutionRequired"] = "false";
-            }
-            else if (string.Equals(selection.ModuleKey, GenericProcedureCatalog.JourneyEventsModule, StringComparison.Ordinal))
-            {
-                parameters["triggerSources"] = "process-progress";
-                parameters["linkMode"] = "process-linked";
-                parameters["requiresResolvedTrigger"] = "true";
-                parameters["blocksRelevantTravelWhileResolutionRequired"] = "false";
-            }
-        }
-        else if (string.Equals(preset.PresetKey, CrawlProcedureCatalog.MixedHouseRulePresetKey, StringComparison.Ordinal)
-                 && string.Equals(selection.ModuleKey, GenericProcedureCatalog.JourneyEventsModule, StringComparison.Ordinal))
-        {
-            parameters["triggerSources"] = "watch-completed;landmark;explicit";
-            parameters["linkMode"] = "standalone";
-            parameters["requiresResolvedTrigger"] = "true";
-            parameters["blocksRelevantTravelWhileResolutionRequired"] = "false";
-        }
-        return parameters;
     }
 
     public static IReadOnlyDictionary<string, ProcedureParameterDefinition> Merge(MaterializedProcedureModule selected)

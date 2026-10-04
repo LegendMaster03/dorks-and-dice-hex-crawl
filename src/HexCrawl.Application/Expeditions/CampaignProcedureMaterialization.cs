@@ -42,8 +42,7 @@ public static class CampaignProcedureMaterializer
             return new MaterializedProcedureModule(
                 CampaignProcedureSnapshot.Copy(module),
                 CampaignProcedureSnapshot.Copy(mechanic),
-                CampaignProcedureSnapshot.CopyStrings(
-                    JourneyProcedureContractSchema.UpgradePresetParameters(preset, selection)));
+                CampaignProcedureSnapshot.CopyStrings(selection.Parameters));
         }).ToArray();
 
         var procedure = new CampaignProcedure
