@@ -86,7 +86,7 @@ internal static class ProcedureComposerCustomProcedureFactory
                 ("scope", "participant")),
             Select(GenericProcedureCatalog.JourneyEventsModule, GenericProcedureCatalog.JourneyEventPolicyMechanic,
                 ("triggerModel", "manual-or-landmark"),
-                ("targetingModel", "travel-role"),
+                ("targetingModel", "explicit-target"),
                 ("terrainInfluence", "manual"),
                 ("consequenceModel", "event"),
                 ("triggerSources", "explicit;landmark;watch-completed"),
