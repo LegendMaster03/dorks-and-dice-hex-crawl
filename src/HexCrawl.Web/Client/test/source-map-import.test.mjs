@@ -69,6 +69,29 @@ test("renderer source puts rasters before semantic regions and grid", () => {
     assert.match(renderer, /rasterCache\.get/);
 });
 
+test("preview grid is authoritative for click selection and selected-hex rendering", () => {
+    const surface = fs.readFileSync(path.join(sourceRoot, "map-surface.ts"), "utf8");
+    const renderer = fs.readFileSync(path.join(sourceRoot, "canvas-renderer.ts"), "utf8");
+
+    assert.match(surface, /const grid = this\.renderer\.gridPreview \?\? world\.grid/);
+    assert.match(surface, /worldToHex\(grid, point\)/);
+    assert.doesNotMatch(surface, /worldToHex\(world\.grid, point\)/);
+    assert.match(renderer, /private drawSelection[\s\S]*const grid = this\.gridPreview \?\? world\.grid[\s\S]*hexCorners\(grid, this\.selectedHex\)/);
+});
+
+test("map navigation has discoverable on-map controls in addition to gestures and keyboard input", () => {
+    const surface = fs.readFileSync(path.join(sourceRoot, "map-surface.ts"), "utf8");
+
+    assert.match(surface, /Map controls/);
+    assert.match(surface, /Pan map left/);
+    assert.match(surface, /Pan map right/);
+    assert.match(surface, /Zoom map out/);
+    assert.match(surface, /Zoom map in/);
+    assert.match(surface, /Reset map view/);
+    assert.match(surface, /Shift-drag or middle-drag pans/);
+    assert.match(surface, /this\.canvas\.addEventListener\("wheel"/);
+});
+
 test("registration consumes map clicks through an explicit interaction interceptor", () => {
     const surface = fs.readFileSync(path.join(sourceRoot, "map-surface.ts"), "utf8");
     const workspace = fs.readFileSync(path.join(sourceRoot, "modules/worlds/source-map-workspace.ts"), "utf8");

@@ -17,7 +17,7 @@ test("reference-map workspace exposes server-backed automatic baked-grid detecti
 
     assert.match(workspace, /SourceMapGridAlignmentController/);
     assert.match(workspace, /Detect \/ repair hex grid/);
-    assert.match(workspace, /Detect and preview/);
+    assert.match(workspace, /Re-run detection and preview/);
     assert.match(workspace, /Advanced registration/);
     assert.match(controller, /analyzeSourceMapGrid/);
     assert.doesNotMatch(controller, /detectHexLattice/);
@@ -33,6 +33,28 @@ test("reference-map workspace exposes server-backed automatic baked-grid detecti
     assert.match(controller, /Advanced registration remains available/);
     assert.match(renderer, /public gridPreview: GridDefinition \| null = null/);
     assert.match(renderer, /const grid = this\.gridPreview \?\? world\.grid/);
+});
+
+test("explicit detect controls run detection immediately instead of only opening the panel", () => {
+    const workspace = fs.readFileSync(
+        path.join(sourceRoot, "modules/worlds/source-map-workspace.ts"),
+        "utf8");
+
+    assert.match(workspace, /await this\.gridAlignmentController\.beginAndPreview\(this\.selected\)/);
+    assert.match(workspace, /this\.gridAlignmentController\.beginAndPreview\(map\)/);
+    assert.doesNotMatch(workspace, /this\.gridAlignmentController\.begin\(this\.selected\)/);
+});
+
+test("standalone baked-grid upload automatically selects the new raster and starts preview", () => {
+    const workspace = fs.readFileSync(
+        path.join(sourceRoot, "modules/worlds/source-map-workspace.ts"),
+        "utf8");
+
+    assert.match(workspace, /const existingSourceMapIds = new Set\(world\.sourceMaps\.map\(map => map\.id\)\)/);
+    assert.match(workspace, /const uploadedSourceMap = this\.details\.find\(map => !existingSourceMapIds\.has\(map\.id\)\) \?\? null/);
+    assert.match(workspace, /this\.selected = uploadedSourceMap/);
+    assert.match(workspace, /uploadedSourceMap\.containsBakedGrid && !uploadedSourceMap\.alignment/);
+    assert.match(workspace, /await this\.gridAlignmentController\.beginAndPreview\(uploadedSourceMap\)/);
 });
 
 test("switching maps or starting a newer analysis invalidates stale asynchronous previews", () => {

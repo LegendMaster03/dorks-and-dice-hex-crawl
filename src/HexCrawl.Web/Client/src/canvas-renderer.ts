@@ -279,7 +279,8 @@ export class CanvasMapRenderer {
 
     private drawSelection(ctx: CanvasRenderingContext2D, world: DemoWorld, width: number, height: number): void {
         if (!this.selectedHex) return;
-        const points = hexCorners(world.grid, this.selectedHex).map(point => this.toScreen(point, width, height));
+        const grid = this.gridPreview ?? world.grid;
+        const points = hexCorners(grid, this.selectedHex).map(point => this.toScreen(point, width, height));
         ctx.beginPath();
         points.forEach((point, index) => index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
         ctx.closePath();

@@ -25,7 +25,7 @@ export class MapSurface {
         const help = document.createElement("p");
         help.id = `hc-map-help-${accessibilityId}`;
         help.className = "hc-sr-only";
-        help.textContent = "Interactive hex map. Arrow keys pan the map, plus and minus zoom, Home resets the view, Enter or Space selects and activates the point at the center of the map, and Escape clears the selected hex.";
+        help.textContent = "Interactive hex map. Use the visible map controls, arrow keys, plus and minus, or Home for navigation. Shift-drag or middle-drag pans, the wheel zooms, Enter or Space selects and activates the point at the center of the map, and Escape clears the selected hex.";
 
         this.accessibilityStatus = document.createElement("p");
         this.accessibilityStatus.id = `hc-map-status-${accessibilityId}`;
@@ -40,7 +40,9 @@ export class MapSurface {
         this.canvas.setAttribute("role", "region");
         this.canvas.setAttribute("aria-describedby", `${help.id} ${this.accessibilityStatus.id}`);
         this.canvas.setAttribute("aria-keyshortcuts", "ArrowUp ArrowDown ArrowLeft ArrowRight + - Home Enter Space Escape");
-        host.replaceChildren(this.canvas, help, this.accessibilityStatus);
+
+        host.style.position = "relative";
+        host.replaceChildren(this.canvas, this.createNavigationToolbar(), help, this.accessibilityStatus);
 
         this.renderer = new CanvasMapRenderer(this.canvas, this.viewport, this.getWorld, () => this.requestRender());
         this.lifecycle.register("map", () => {
@@ -122,6 +124,38 @@ export class MapSurface {
         this.renderer.dispose();
     }
 
+    private createNavigationToolbar(): HTMLElement {
+        const toolbar = document.createElement("div");
+        toolbar.setAttribute("role", "group");
+        toolbar.setAttribute("aria-label", "Map navigation controls");
+        toolbar.style.cssText = "position:absolute;z-index:2;top:.55rem;left:.55rem;display:flex;flex-wrap:wrap;align-items:center;gap:.3rem;max-width:calc(100% - 1.1rem);padding:.35rem;border:1px solid var(--hc-border);border-radius:.5rem;background:var(--hc-surface);box-shadow:0 .1rem .35rem rgba(0,0,0,.18)";
+
+        const label = document.createElement("span");
+        label.textContent = "Map controls";
+        label.style.cssText = "padding:0 .25rem;color:var(--hc-text-strong);font-size:.78rem;font-weight:700";
+        toolbar.append(label);
+
+        const addButton = (text: string, title: string, action: () => void): void => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.textContent = text;
+            button.title = title;
+            button.setAttribute("aria-label", title);
+            button.style.cssText = "min-width:2.15rem;padding:.3rem .45rem";
+            button.addEventListener("click", action);
+            toolbar.append(button);
+        };
+
+        addButton("←", "Pan map left", () => this.panViewport(48, 0));
+        addButton("↑", "Pan map up", () => this.panViewport(0, 48));
+        addButton("↓", "Pan map down", () => this.panViewport(0, -48));
+        addButton("→", "Pan map right", () => this.panViewport(-48, 0));
+        addButton("−", "Zoom map out", () => this.zoomViewport(1 / 1.12));
+        addButton("+", "Zoom map in", () => this.zoomViewport(1.12));
+        addButton("Reset", "Reset map view", () => this.resetView());
+        return toolbar;
+    }
+
     private activatePoint(point: WorldPoint): void {
         if (this.clickInterceptor?.(point)) return;
 
@@ -133,7 +167,8 @@ export class MapSurface {
 
         const world = this.getWorld();
         if (world) {
-            const selected = worldToHex(world.grid, point);
+            const grid = this.renderer.gridPreview ?? world.grid;
+            const selected = worldToHex(grid, point);
             this.renderer.selectedHex = selected;
             this.accessibilityStatus.textContent = `Selected hex q ${selected.q}, r ${selected.r}.`;
             this.requestRender();
@@ -145,34 +180,37 @@ export class MapSurface {
     }
 
     private handleKeyDown(event: KeyboardEvent): void {
-        const rect = this.canvas.getBoundingClientRect();
-        const panPixels = 48;
-        if (event.key === "ArrowLeft") this.viewport.panByPixels(panPixels, 0);
-        else if (event.key === "ArrowRight") this.viewport.panByPixels(-panPixels, 0);
-        else if (event.key === "ArrowUp") this.viewport.panByPixels(0, panPixels);
-        else if (event.key === "ArrowDown") this.viewport.panByPixels(0, -panPixels);
-        else if (event.key === "+" || event.key === "=") this.viewport.zoomAt(1.12, rect.width / 2, rect.height / 2, rect.width, rect.height);
-        else if (event.key === "-" || event.key === "_") this.viewport.zoomAt(1 / 1.12, rect.width / 2, rect.height / 2, rect.width, rect.height);
-        else if (event.key === "Home") {
-            this.resetView();
-            event.preventDefault();
-            return;
-        } else if (event.key === "Enter" || event.key === " ") {
+        if (event.key === "ArrowLeft") this.panViewport(48, 0);
+        else if (event.key === "ArrowRight") this.panViewport(-48, 0);
+        else if (event.key === "ArrowUp") this.panViewport(0, 48);
+        else if (event.key === "ArrowDown") this.panViewport(0, -48);
+        else if (event.key === "+" || event.key === "=") this.zoomViewport(1.12);
+        else if (event.key === "-" || event.key === "_") this.zoomViewport(1 / 1.12);
+        else if (event.key === "Home") this.resetView();
+        else if (event.key === "Enter" || event.key === " ") {
+            const rect = this.canvas.getBoundingClientRect();
             this.activatePoint(this.viewport.screenToWorld(rect.width / 2, rect.height / 2, rect.width, rect.height));
-            event.preventDefault();
-            return;
         } else if (event.key === "Escape") {
             this.renderer.selectedHex = null;
             this.accessibilityStatus.textContent = "Selected hex cleared.";
             this.requestRender();
-            event.preventDefault();
-            return;
         } else {
             return;
         }
 
         event.preventDefault();
-        this.announceView(event.key.startsWith("Arrow") ? "Map panned" : "Map zoom changed");
+    }
+
+    private panViewport(dx: number, dy: number): void {
+        this.viewport.panByPixels(dx, dy);
+        this.announceView("Map panned");
+        this.requestRender();
+    }
+
+    private zoomViewport(factor: number): void {
+        const rect = this.canvas.getBoundingClientRect();
+        this.viewport.zoomAt(factor, rect.width / 2, rect.height / 2, rect.width, rect.height);
+        this.announceView("Map zoom changed");
         this.requestRender();
     }
 
