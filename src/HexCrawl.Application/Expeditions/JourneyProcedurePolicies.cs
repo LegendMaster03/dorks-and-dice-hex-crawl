@@ -350,7 +350,7 @@ public static class JourneyProcedurePolicyResolver
     {
         switch (value.Trim().ToLowerInvariant())
         {
-            case "numeric": modelNumeric: kind = JourneyProgressValueKind.Numeric; return true;
+            case "numeric": kind = JourneyProgressValueKind.Numeric; return true;
             case "explicit-state": kind = JourneyProgressValueKind.ExplicitState; return true;
             default: kind = default; return false;
         }
