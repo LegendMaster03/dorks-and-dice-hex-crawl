@@ -10,7 +10,7 @@ public sealed class ModuleArchitectureTests
         var manifests = HexCrawlModuleCatalog.All;
 
         Assert.Equal(
-            ["worlds", "expeditions", "environment-context", "survival-resources", "travel-rules", "source-maps", "reference-data", "procedure-composer"],
+            ["worlds", "expeditions", "environment-context", "survival-resources", "journey-processes", "travel-rules", "source-maps", "reference-data", "procedure-composer"],
             manifests.Select(manifest => manifest.Id).ToArray());
 
         Assert.Equal(
@@ -28,6 +28,10 @@ public sealed class ModuleArchitectureTests
         Assert.Equal(
             ["expeditions", "environment-context"],
             manifests.Single(manifest => manifest.Id == "survival-resources").Dependencies);
+
+        Assert.Equal(
+            ["expeditions", "environment-context", "survival-resources"],
+            manifests.Single(manifest => manifest.Id == "journey-processes").Dependencies);
 
         Assert.Equal(
             ["expeditions"],
