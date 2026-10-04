@@ -135,11 +135,15 @@ public sealed class ExpeditionSurvivalService(IHexCrawlStore store, HexCrawlServ
         command.Provenance.Validate();
         var resource = expedition.Resources.Resources.SingleOrDefault(value => value.Id == resourceId)
             ?? throw new InvalidOperationException("Expedition resource was not found.");
-        if (expedition.Effects.PendingConsequences.Any(value =>
-                value.UnresolvedComponents.OfType<ResourceChangeConsequenceComponent>()
-                    .Any(component => component.ResourceId == resourceId)))
+        if (expedition.Effects.PendingConsequences.Any(pending =>
+                pending.UnresolvedComponents.OfType<ResourceChangeConsequenceComponent>()
+                    .Any(component =>
+                        component.ResourceId == resourceId
+                        || (!component.ResourceId.HasValue
+                            && string.Equals(component.ResourceKey, resource.ResourceKey, StringComparison.Ordinal)
+                            && pending.Consequence.Target == resource.Target))))
         {
-            throw new InvalidOperationException("Resource can not be removed while a pending consequence targets it.");
+            throw new InvalidOperationException("Resource can not be removed while a pending consequence targets it explicitly or by resource key and target.");
         }
         var audit = new ExpeditionResourceAuditRecord(
             Guid.NewGuid(), resource.Id, resource.ResourceKey, "manual:remove",
@@ -244,6 +248,10 @@ public sealed class ExpeditionSurvivalService(IHexCrawlStore store, HexCrawlServ
         CancellationToken cancellationToken = default)
     {
         var expedition = await LoadAsync(expeditionId, ownerUserId, command.ExpectedVersion, cancellationToken);
+        if (command.OccurrenceId == Guid.Empty)
+        {
+            throw new InvalidOperationException("Forced-travel usage occurrence id is required.");
+        }
         var transition = Phase11SurvivalEngine.AccountForcedTravel(
             expedition.Survival,
             Phase11ProcedurePolicyResolver.ResolveForcedTravel(expedition.CampaignProcedure),
@@ -351,6 +359,10 @@ public sealed class ExpeditionSurvivalService(IHexCrawlStore store, HexCrawlServ
         {
             return PolicyFailure(expedition, policy.Support, policy.UnsupportedReason, Phase11GenericProcedureCatalog.ExposureModule);
         }
+        if (command.OccurrenceId == Guid.Empty)
+        {
+            throw new InvalidOperationException("Exposure occurrence id is required.");
+        }
         if (policy.TargetScope != command.Target.Scope)
         {
             return new(expedition, SurvivalOperationStatus.RequiresAdjudication,
@@ -358,26 +370,56 @@ public sealed class ExpeditionSurvivalService(IHexCrawlStore store, HexCrawlServ
         }
         command.Target.ValidateAgainst(expedition.Party);
         command.Provenance.Validate();
+        var exposureKey = RequiredTrim(command.ExposureKey, "Exposure key");
+        var progressUnit = string.IsNullOrWhiteSpace(command.ProgressUnit) ? null : command.ProgressUnit.Trim();
         if (!command.ProgressDelta.HasValue && command.ConsequenceComponents.Count == 0)
         {
             return new(expedition, SurvivalOperationStatus.InputRequired,
                 "Exposure semantics remain unresolved. Supply explicit progress and/or structured consequence components.");
         }
         if (command.ProgressDelta.HasValue
-            && (!double.IsFinite(command.ProgressDelta.Value) || command.ProgressDelta.Value == 0 || string.IsNullOrWhiteSpace(command.ProgressUnit)))
+            && (!double.IsFinite(command.ProgressDelta.Value) || command.ProgressDelta.Value == 0 || progressUnit is null))
         {
             throw new InvalidOperationException("Resolved exposure progress requires a non-zero finite delta and explicit unit.");
         }
 
         var exposure = expedition.Survival.Exposure.ToList();
-        var progress = exposure.SingleOrDefault(value =>
-            string.Equals(value.ExposureKey, command.ExposureKey, StringComparison.Ordinal)
-            && value.Target == command.Target
-            && string.Equals(value.Unit, command.ProgressUnit, StringComparison.Ordinal));
-        if (progress?.SourceOccurrenceIds.Contains(command.OccurrenceId) == true)
+        var priorOccurrence = exposure.SingleOrDefault(value => value.SourceOccurrenceIds.Contains(command.OccurrenceId));
+        if (priorOccurrence is not null)
         {
-            return new(expedition, SurvivalOperationStatus.AlreadyApplied, "This exposure occurrence was already resolved.", command.OccurrenceId);
+            var sameIdentity = string.Equals(priorOccurrence.ExposureKey, exposureKey, StringComparison.Ordinal)
+                && priorOccurrence.Target == command.Target
+                && (!command.ProgressDelta.HasValue || string.Equals(priorOccurrence.Unit, progressUnit, StringComparison.Ordinal));
+            return sameIdentity
+                ? new(expedition, SurvivalOperationStatus.AlreadyApplied, "This exposure occurrence was already resolved.", command.OccurrenceId)
+                : new(expedition, SurvivalOperationStatus.RequiresAdjudication,
+                    "This exposure occurrence id was already used by a different exposure target, key, or unit.", command.OccurrenceId);
         }
+
+        var existingConsequence = expedition.Effects.AppliedConsequences.SingleOrDefault(value => value.ConsequenceId == command.OccurrenceId);
+        if (existingConsequence is not null)
+        {
+            if (!string.Equals(existingConsequence.ConsequenceKey, "survival-exposure", StringComparison.Ordinal))
+            {
+                return new(expedition, SurvivalOperationStatus.RequiresAdjudication,
+                    "This exposure occurrence id is already owned by a different consequence.", command.OccurrenceId);
+            }
+            if (command.ProgressDelta.HasValue)
+            {
+                return new(expedition, SurvivalOperationStatus.RequiresAdjudication,
+                    "The exposure consequence was already recorded without matching exposure progress; automatic replay would risk a partial duplicate.", command.OccurrenceId);
+            }
+            return new(expedition, SurvivalOperationStatus.AlreadyApplied,
+                "This consequence-only exposure occurrence was already resolved.", command.OccurrenceId);
+        }
+
+        var progress = command.ProgressDelta.HasValue
+            ? exposure.SingleOrDefault(value =>
+                string.Equals(value.ExposureKey, exposureKey, StringComparison.Ordinal)
+                && value.Target == command.Target
+                && string.Equals(value.Unit, progressUnit, StringComparison.Ordinal))
+            : null;
+        var progressChanged = false;
         if (command.ProgressDelta.HasValue)
         {
             var nextAmount = (progress?.Amount ?? 0) + command.ProgressDelta.Value;
@@ -389,19 +431,21 @@ public sealed class ExpeditionSurvivalService(IHexCrawlStore store, HexCrawlServ
             var next = new ExpeditionExposureProgress
             {
                 Id = progress?.Id ?? Guid.NewGuid(),
-                ExposureKey = command.ExposureKey.Trim(),
+                ExposureKey = exposureKey,
                 Target = command.Target,
                 Amount = nextAmount,
-                Unit = command.ProgressUnit!.Trim(),
+                Unit = progressUnit!,
                 SourceOccurrenceIds = (progress?.SourceOccurrenceIds ?? []).Append(command.OccurrenceId).ToArray(),
                 Provenance = (progress?.Provenance ?? []).Append(command.Provenance).ToArray()
             };
             if (progress is null) exposure.Add(next); else exposure[exposure.IndexOf(progress)] = next;
+            progressChanged = true;
         }
 
         var effects = expedition.Effects;
         SurvivalOperationStatus resultStatus = SurvivalOperationStatus.Applied;
         string detail = "Explicit exposure progress recorded without changing environment truth.";
+        var effectChanged = false;
         if (command.ConsequenceComponents.Count > 0)
         {
             var consequence = BuildResolvedConsequence(
@@ -411,7 +455,13 @@ public sealed class ExpeditionSurvivalService(IHexCrawlStore store, HexCrawlServ
             effects = result.State;
             resultStatus = ToSurvivalStatus(result.Status);
             detail = result.Detail;
+            effectChanged = result.StateChanged;
         }
+        if (!progressChanged && !effectChanged)
+        {
+            return new(expedition, resultStatus, detail, command.ConsequenceComponents.Count > 0 ? command.OccurrenceId : null);
+        }
+
         var survival = expedition.Survival with { Exposure = exposure };
         survival.Validate(expedition.Party);
         var saved = await SaveAsync(expedition with { Survival = survival, Effects = effects }, command.ExpectedVersion, cancellationToken);
@@ -511,6 +561,12 @@ public sealed class ExpeditionSurvivalService(IHexCrawlStore store, HexCrawlServ
         provenance.Validate();
 
         var existing = expedition.Effects.AppliedConsequences.SingleOrDefault(value => value.ConsequenceId == occurrenceId);
+        if (existing is not null && !string.Equals(existing.ConsequenceKey, consequenceKey, StringComparison.Ordinal))
+        {
+            return new(expedition, SurvivalOperationStatus.RequiresAdjudication,
+                $"Occurrence '{occurrenceId:D}' is already owned by consequence '{existing.ConsequenceKey}'.", occurrenceId);
+        }
+
         var effects = expedition.Effects;
         if (existing is null)
         {
@@ -587,6 +643,11 @@ public sealed class ExpeditionSurvivalService(IHexCrawlStore store, HexCrawlServ
             $"The exact pinned CampaignProcedure has no {moduleKey} focused policy.")
         : new(expedition, SurvivalOperationStatus.Unsupported,
             reason ?? $"The exact pinned {moduleKey} policy is unsupported.");
+
+    private static string RequiredTrim(string? value, string label) =>
+        !string.IsNullOrWhiteSpace(value)
+            ? value.Trim()
+            : throw new InvalidOperationException($"{label} is required.");
 
     private async Task<StoredExpedition> LoadAsync(
         Guid expeditionId,
