@@ -1,0 +1,157 @@
+name: Phase 13 browser extraction
+
+on:
+  push:
+    branches: [ "feature/phase-13-shared-map-processing" ]
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/phase-13-shared-map-processing
+          fetch-depth: 0
+      - name: Replace browser CV pipeline with server analysis
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+
+          api = Path('src/HexCrawl.Web/Client/src/api.ts')
+          text = api.read_text()
+          marker = 'import type {\n'
+          if not text.startswith(marker):
+              raise SystemExit('unexpected api.ts import prefix')
+          text = 'import type { SourceMapGridAnalysis } from "./hex-grid-analysis";\n' + text
+          old = '''    public sourceMapAssetUrl(worldId: string, sourceMapId: string): string {\n        return `${this.backendBaseUrl}/api/overworlds/${encodeURIComponent(worldId)}/source-maps/${encodeURIComponent(sourceMapId)}/asset`;\n    }\n\n    public getProcedurePresets(): Promise<ProcedurePreset[]> {'''
+          new = '''    public sourceMapAssetUrl(worldId: string, sourceMapId: string): string {\n        return `${this.backendBaseUrl}/api/overworlds/${encodeURIComponent(worldId)}/source-maps/${encodeURIComponent(sourceMapId)}/asset`;\n    }\n\n    public async analyzeSourceMapGrid(\n        worldId: string,\n        sourceMapId: string,\n        signal?: AbortSignal): Promise<SourceMapGridAnalysis> {\n        const response = await fetch(\n            `${this.backendBaseUrl}/api/overworlds/${encodeURIComponent(worldId)}/source-maps/${encodeURIComponent(sourceMapId)}/grid-analysis`,\n            { method: "POST", headers: { Accept: "application/json" }, signal });\n        if (!response.ok) throw await apiError(response, "Automatic map analysis");\n        return await response.json() as SourceMapGridAnalysis;\n    }\n\n    public getProcedurePresets(): Promise<ProcedurePreset[]> {'''
+          if old not in text:
+              raise SystemExit('sourceMapAssetUrl insertion point not found')
+          api.write_text(text.replace(old, new, 1))
+
+          alignment = Path('src/HexCrawl.Web/Client/src/raster-grid-alignment.ts')
+          text = alignment.read_text()
+          old = 'import type { HexLatticeFit } from "./grid-lattice-detector";'
+          if old not in text:
+              raise SystemExit('raster-grid alignment detector import not found')
+          alignment.write_text(text.replace(old, 'import type { HexLatticeFit } from "./hex-grid-analysis";', 1))
+
+          controller = Path('src/HexCrawl.Web/Client/src/modules/worlds/source-map-grid-alignment-controller.ts')
+          text = controller.read_text()
+          old_imports = '''import type { HexCrawlApi } from "../../api";\nimport { detectHexLattice, type HexLatticeDetection, type HexLatticeFit } from "../../grid-lattice-detector";\nimport {\n    buildRasterGridAlignmentProposal,\n    selectPhysicalDistancePerHex,\n    type RasterGridAlignmentProposal\n} from "../../raster-grid-alignment";\nimport {\n    isCanonicalSourceFit,\n    mapDetectionToSourceImage,\n    rasterGridAnalysisScale,\n    rasterGridCanonicalResidualLimit\n} from "../../raster-analysis-space";'''
+          new_imports = '''import type { HexCrawlApi } from "../../api";\nimport {\n    isCanonicalSourceFit,\n    rasterGridCanonicalResidualLimit,\n    type HexLatticeDetection,\n    type HexLatticeFit,\n    type SourceMapGridAnalysis\n} from "../../hex-grid-analysis";\nimport {\n    buildRasterGridAlignmentProposal,\n    selectPhysicalDistancePerHex,\n    type RasterGridAlignmentProposal\n} from "../../raster-grid-alignment";'''
+          if old_imports not in text:
+              raise SystemExit('controller import block not found')
+          text = text.replace(old_imports, new_imports, 1)
+          old_field = '    private physicalScaleChange: PhysicalScaleChange | null = null;'
+          text = text.replace(old_field, old_field + '\n    private analysisAbortController: AbortController | null = null;', 1)
+          start = text.index('        const world = this.getWorld();\n        const assetUrl = this.api.sourceMapAssetUrl(world.id, sourceMap.id);')
+          end = text.index('\n        if (!this.detection.fit) {', start)
+          replacement = '''        const world = this.getWorld();\n        this.analysisAbortController?.abort();\n        const abortController = new AbortController();\n        this.analysisAbortController = abortController;\n        let analyzed: SourceMapGridAnalysis;\n        try {\n            analyzed = await this.api.analyzeSourceMapGrid(world.id, sourceMap.id, abortController.signal);\n        } catch (error) {\n            if (abortController.signal.aborted) return;\n            this.detection = null;\n            this.proposal = null;\n            const detail = error instanceof Error ? error.message : "Surveyor did not return an analysis result.";\n            this.status.textContent = `Automatic analysis unavailable: ${detail} Advanced registration remains available.`;\n            return;\n        } finally {\n            if (this.analysisAbortController === abortController) this.analysisAbortController = null;\n        }\n\n        this.detection = { status: analyzed.status, fit: analyzed.fit, reason: analyzed.reason };\n        if (this.detection.fit && !analyzed.analysis.sourceResolutionVerified) {\n            this.detection = {\n                ...this.detection,\n                status: "inconclusive",\n                reason: "The lattice preview was measured from a downscaled analysis image. Source-resolution phase verification is required before automatic Apply."\n            };\n        }\n        const assetUrl = this.api.sourceMapAssetUrl(world.id, sourceMap.id);'''
+          text = text[:start] + replacement + text[end:]
+          text = text.replace('analyzed.sourceResolution ? "source-resolution phase verified" : "downscaled phase only"',
+                              'analyzed.analysis.sourceResolutionVerified ? "source-resolution phase verified" : "downscaled phase only"')
+          text = text.replace('|| !isCanonicalSourceFit(this.detection, analyzed.scale);',
+                              '|| !isCanonicalSourceFit(this.detection, analyzed.analysis.sourceResolutionVerified);')
+          old_cancel = '''    private cancel(): void {\n        this.selectedMap = null;'''
+          new_cancel = '''    private cancel(): void {\n        this.analysisAbortController?.abort();\n        this.analysisAbortController = null;\n        this.selectedMap = null;'''
+          if old_cancel not in text:
+              raise SystemExit('cancel insertion point not found')
+          text = text.replace(old_cancel, new_cancel, 1)
+          start = text.index('type AnalyzedRaster = {')
+          end = text.index('type WonderdraftAlignmentContext = {', start)
+          text = text[:start] + text[end:]
+          start = text.index('async function analyzeRaster(') if 'async function analyzeRaster(' in text else -1
+          if start >= 0:
+              end = text.index('async function loadPhysicalScaleContext(', start)
+              text = text[:start] + text[end:]
+          controller.write_text(text)
+
+          package_path = Path('src/HexCrawl.Web/Client/package.json')
+          package = json.loads(package_path.read_text())
+          script = package['scripts']['test']
+          script = script.replace(' src/grid-lattice-detector.ts', '')
+          script = script.replace(' src/raster-analysis-space.ts', '')
+          script = script.replace(' src/affine-registration.ts', ' src/affine-registration.ts src/hex-grid-analysis.ts')
+          script = script.replace(' test/grid-lattice-detector.test.mjs', '')
+          script = script.replace(' test/raster-analysis-space.test.mjs', '')
+          script = script.replace(' test/raster-grid-alignment.test.mjs', ' test/hex-grid-analysis.test.mjs test/raster-grid-alignment.test.mjs')
+          package['scripts']['test'] = script
+          package_path.write_text(json.dumps(package, indent=2) + '\n')
+          PY
+
+          cat > src/HexCrawl.Web/Client/test/hex-grid-analysis.test.mjs <<'EOF'
+          import assert from "node:assert/strict";
+          import test from "node:test";
+          import { isCanonicalSourceFit, rasterGridCanonicalResidualLimit } from "../.test-dist/hex-grid-analysis.js";
+
+          test("canonical residual policy remains a Hex Crawl apply policy", () => {
+              assert.equal(rasterGridCanonicalResidualLimit(40), 1.5);
+              assert.equal(rasterGridCanonicalResidualLimit(100), 2.5);
+              assert.equal(rasterGridCanonicalResidualLimit(200), 2.5);
+          });
+
+          test("automatic apply requires a detected source-resolution fit", () => {
+              const detection = {
+                  status: "detected",
+                  reason: "fixture",
+                  fit: {
+                      orientation: "FlatTop",
+                      rotationDegrees: 0,
+                      centerSpacingPixels: 80,
+                      anchorPixel: { x: 10, y: 20 },
+                      confidence: 0.98,
+                      residualPixels: 1.2,
+                      supportCoverage: 0.8,
+                      orientationSupport: 0.9,
+                      translationScore: 0.9,
+                      competingTranslationScore: 0.1,
+                      linePeriodicityScore: 0.9,
+                      phaseScore: 0.8
+                  }
+              };
+              assert.equal(isCanonicalSourceFit(detection, true), true);
+              assert.equal(isCanonicalSourceFit(detection, false), false);
+              assert.equal(isCanonicalSourceFit({ ...detection, status: "inconclusive" }, true), false);
+          });
+          EOF
+
+          rm src/HexCrawl.Web/Client/src/grid-lattice-detector.ts
+          rm src/HexCrawl.Web/Client/src/raster-analysis-space.ts
+          rm src/HexCrawl.Web/Client/test/grid-lattice-detector.test.mjs
+          rm src/HexCrawl.Web/Client/test/raster-analysis-space.test.mjs
+
+          cat >> docs/architecture.md <<'EOF'
+
+          ## Shared map processing (Phase 13)
+
+          Raster decoding, bounded grayscale preparation, and hex-lattice detection are owned by the headless Dorks & Dice Surveyor service. The browser calls only the Hex Crawl API. Hex Crawl authorizes the world/source map, loads the authoritative stored raster, calls Surveyor through `IMapAnalysisService`, validates source dimensions/media type, and returns a typed observation to the browser.
+
+          Surveyor is computation-only. Hex Crawl retains physical scale, Wonderdraft reconciliation, preview, explicit Apply, grid identity, expedition safety, optimistic concurrency, and final persistence. Surveyor unavailability does not prevent Hex Crawl startup or manual map registration.
+          EOF
+
+          cat >> docs/raster-grid-alignment-acceptance.md <<'EOF'
+
+          ## Phase 13 shared-processing ownership
+
+          Hex-lattice detector correctness and encoded PNG/JPEG/WebP preprocessing are now owned by Dorks & Dice Surveyor. These documented real-map measurements remain parity references. Hex Crawl retains alignment-proposal, physical-scale, Wonderdraft, preview, Apply, and automatic-apply safety tests. Automatic analysis failure is distinct from `gridless` and leaves Advanced/manual registration available.
+          EOF
+
+          cat >> docs/dm-expedition-workbench.md <<'EOF'
+
+          ## Automatic raster analysis service
+
+          The source-map workspace requests automatic grid analysis through the Hex Crawl server. The browser no longer performs computer-vision preprocessing and does not know Surveyor's URL or credential. If Surveyor is unavailable or times out, the existing map and manual/Advanced registration workflow remain usable.
+          EOF
+
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m 'Move raster grid analysis out of the browser'
+          git push origin HEAD:feature/phase-13-shared-map-processing
