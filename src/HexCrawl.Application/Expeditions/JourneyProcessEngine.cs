@@ -340,7 +340,7 @@ public static class JourneyProcessEngine
         {
             throw new InvalidOperationException("Journey process close operation requires Completed, Failed, or Abandoned status.");
         }
-        ExpeditionConsequenceProvenance.RequireText(reason, 2000, "Journey process close reason");
+        reason = RequiredText(reason, "Journey process close reason", 2000);
         provenance.Validate();
         var process = state.ActiveProcesses.SingleOrDefault(value => value.Id == processId)
             ?? throw new InvalidOperationException("The requested journey process is not active.");
@@ -350,7 +350,7 @@ public static class JourneyProcessEngine
             PendingActions = [],
             EndedAtExpeditionTime = clock.ExpeditionTime,
             EndedAfterCompletedWatches = clock.CompletedWatches,
-            EndReason = reason.Trim()
+            EndReason = reason
         };
         closed.Validate(party);
         var kind = terminalStatus switch
@@ -364,7 +364,7 @@ public static class JourneyProcessEngine
         {
             ActiveProcesses = state.ActiveProcesses.Where(value => value.Id != processId).ToArray(),
             ClosedProcesses = state.ClosedProcesses.Append(closed).ToArray(),
-            History = state.History.Append(History(kind, clock, provenance, reason.Trim(), processId, process.CurrentStageKey)).ToArray()
+            History = state.History.Append(History(kind, clock, provenance, reason, processId, process.CurrentStageKey)).ToArray()
         };
         updated.Validate(party);
         return updated;
@@ -420,7 +420,7 @@ public static class JourneyProcessEngine
 
     public static Guid DeterministicId(Guid sourceId, string discriminator)
     {
-        ExpeditionConsequenceProvenance.RequireText(discriminator, 200, "Journey deterministic-id discriminator");
+        discriminator = RequiredText(discriminator, "Journey deterministic-id discriminator", 200);
         var source = Encoding.UTF8.GetBytes($"{sourceId:D}:{discriminator}");
         var hash = SHA256.HashData(source);
         Span<byte> bytes = stackalloc byte[16];
@@ -612,12 +612,17 @@ public static class JourneyProcessEngine
         Provenance = provenance
     };
 
-    private static string RequiredText(string? value, string label)
+    private static string RequiredText(string? value, string label, int maxLength = 2000)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
             throw new InvalidOperationException($"{label} is required.");
         }
-        return value.Trim();
+        var trimmed = value.Trim();
+        if (trimmed.Length > maxLength)
+        {
+            throw new InvalidOperationException($"{label} is too long.");
+        }
+        return trimmed;
     }
 }
