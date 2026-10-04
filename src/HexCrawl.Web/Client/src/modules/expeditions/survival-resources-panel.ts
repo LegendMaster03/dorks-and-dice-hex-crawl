@@ -9,6 +9,8 @@ import type {
     ExposurePolicy,
     ForagingPolicy,
     ForcedTravelPolicy,
+    ResolvedSurvivalComponentRequest,
+    ResourceChangeOperation,
     ResourceConsumptionPolicy,
     ResourceChangeRequest,
     SurvivalResources
@@ -199,33 +201,38 @@ export class ExpeditionSurvivalResourcesPanel {
         const resourceKey = this.input("Resource key", "text");
         resourceKey.control.value = policy.resourceKinds[0] ?? "";
         const resourceId = this.input("Resource ID when needed", "text");
-        const amount = this.input("Resolved quantity change", "number");
-        amount.control.step = "any";
-        const unit = this.input("Unit", "text");
+        const operation = this.select("Resolved operation", ["AdjustQuantity", "SetQuantity", "SetState", "SetSupplyDie", "Deplete"]);
+        operation.control.value = defaultResourceOperation(policy.inventoryModel);
+        const value = this.input("Resolved value", "text");
+        const unit = this.input("Unit for quantity operations", "text");
+        const scope = this.select("Target scope", ["Party", "Expedition", "Participant", "Mount", "Vehicle"]);
+        const target = this.input("Target ID when scope requires it", "text");
         const submit = this.button("Resolve consumption");
-        form.append(due.wrapper, resourceKey.wrapper, resourceId.wrapper, amount.wrapper, unit.wrapper, submit);
+        form.append(due.wrapper, resourceKey.wrapper, resourceId.wrapper, operation.wrapper, value.wrapper, unit.wrapper,
+            scope.wrapper, target.wrapper, submit);
         form.addEventListener("submit", event => {
             event.preventDefault();
             void this.mutate(submit, async () => {
-                const changes: ResourceChangeRequest[] = due.control.checked ? [{
-                    resourceKey: required(resourceKey.control.value, "Resource key"),
-                    resourceId: nullable(resourceId.control.value),
-                    operation: "AdjustQuantity",
-                    quantity: finiteNumber(amount.control.value, "Resolved quantity change"),
-                    unit: required(unit.control.value, "Resource unit")
-                }] : [];
+                const changes: ResourceChangeRequest[] = due.control.checked
+                    ? [buildResourceChange(
+                        required(resourceKey.control.value, "Resource key"),
+                        nullable(resourceId.control.value),
+                        operation.control.value as ResourceChangeOperation,
+                        value.control.value,
+                        unit.control.value)]
+                    : [];
                 const result = await this.api.resolveConsumption(this.expeditionId, {
                     expectedVersion: this.requireState().expeditionVersion,
                     occurrenceId: crypto.randomUUID(),
                     due: due.control.checked,
-                    target: { scope: "Party", targetId: null },
+                    target: targetValue(scope.control.value as ExpeditionEffectScope, target.control.value),
                     changes,
                     provenance: dmProvenance("resource-consumption-resolution")
                 });
                 this.apply(result.state);
             });
         });
-        wrapper.append(this.muted(`Model ${policy.consumptionModel ?? "unspecified"}; cadence ${policy.consumptionInterval ?? "unspecified"}. Quantities are entered explicitly when the pinned contract does not define them.`), form);
+        wrapper.append(this.muted(`Model ${policy.consumptionModel ?? "unspecified"}; cadence ${policy.consumptionInterval ?? "unspecified"}. The exact resolved operation is entered explicitly when the pinned contract does not define it.`), form);
         return wrapper;
     }
 
@@ -279,29 +286,35 @@ export class ExpeditionSurvivalResourcesPanel {
             levelDelta.control.value = "1";
             const externalKey = this.input("External state key, optional", "text");
             const externalDelta = this.input("External state delta, optional", "number");
+            const scope = this.select("Failure target scope", ["Party", "Expedition", "Participant", "Mount", "Vehicle"]);
+            const target = this.input("Failure target ID when scope requires it", "text");
             const resolve = this.button("Resolve forced-travel check");
-            form.append(success.wrapper, effectKey.wrapper, levelDelta.wrapper, externalKey.wrapper, externalDelta.wrapper, resolve);
+            form.append(success.wrapper, effectKey.wrapper, levelDelta.wrapper, externalKey.wrapper, externalDelta.wrapper,
+                scope.wrapper, target.wrapper, resolve);
             form.addEventListener("submit", event => {
                 event.preventDefault();
                 void this.mutate(resolve, async () => {
-                    const failureComponents = success.control.checked ? [] : [{
-                        kind: "PersistentEffect" as const,
-                        key: required(effectKey.control.value, "Failure effect key"),
-                        effectOperation: "AdjustLevel" as const,
-                        levelDelta: finiteNumber(levelDelta.control.value, "Effect level delta")
-                    }];
-                    if (!success.control.checked && nullable(externalKey.control.value)) {
+                    const failureComponents: ResolvedSurvivalComponentRequest[] = [];
+                    if (!success.control.checked) {
                         failureComponents.push({
-                            kind: "ExternalState" as never,
-                            key: required(externalKey.control.value, "External state key"),
-                            delta: finiteNumber(externalDelta.control.value, "External state delta")
-                        } as never);
+                            kind: "PersistentEffect",
+                            key: required(effectKey.control.value, "Failure effect key"),
+                            effectOperation: "AdjustLevel",
+                            levelDelta: finiteNumber(levelDelta.control.value, "Effect level delta")
+                        });
+                        if (nullable(externalKey.control.value)) {
+                            failureComponents.push({
+                                kind: "ExternalState",
+                                key: required(externalKey.control.value, "External state key"),
+                                delta: finiteNumber(externalDelta.control.value, "External state delta")
+                            });
+                        }
                     }
                     const result = await this.api.resolveForcedTravelCheck(this.expeditionId, {
                         expectedVersion: this.requireState().expeditionVersion,
                         checkId: current.pendingCheckId!,
                         success: success.control.checked,
-                        target: { scope: "Party", targetId: null },
+                        target: targetValue(scope.control.value as ExpeditionEffectScope, target.control.value),
                         failureComponents,
                         provenance: dmProvenance("forced-travel-check-resolution")
                     });
@@ -349,20 +362,22 @@ export class ExpeditionSurvivalResourcesPanel {
         const delta = this.input("Resolved progress delta", "number");
         delta.control.step = "any";
         const unit = this.input("Progress unit", "text");
+        const target = this.input(`${policy.targetScope ?? "Party"} target ID when required`, "text");
         const effect = this.input("Resolved persistent effect key, optional", "text");
         const level = this.input("Resolved effect level delta", "number");
         level.control.value = "1";
         const submit = this.button("Resolve exposure");
-        form.append(key.wrapper, delta.wrapper, unit.wrapper, effect.wrapper, level.wrapper, submit);
+        form.append(key.wrapper, delta.wrapper, unit.wrapper, target.wrapper, effect.wrapper, level.wrapper, submit);
         form.addEventListener("submit", event => {
             event.preventDefault();
             void this.mutate(submit, async () => {
                 const effectKey = nullable(effect.control.value);
+                const targetScope = policy.targetScope ?? "Party";
                 const result = await this.api.resolveExposure(this.expeditionId, {
                     expectedVersion: this.requireState().expeditionVersion,
                     occurrenceId: crypto.randomUUID(),
                     exposureKey: required(key.control.value, "Exposure key"),
-                    target: { scope: policy.targetScope ?? "Party", targetId: null },
+                    target: targetValue(targetScope, target.control.value),
                     progressDelta: nullable(delta.control.value) === null ? null : finiteNumber(delta.control.value, "Exposure progress"),
                     progressUnit: nullable(unit.control.value),
                     consequenceComponents: effectKey ? [{
@@ -389,26 +404,34 @@ export class ExpeditionSurvivalResourcesPanel {
         const form = document.createElement("form");
         form.className = "hc-form hc-form-grid";
         const resource = this.input("Resolved resource key", "text");
-        const amount = this.input("Resolved gain", "number");
-        amount.control.step = "any";
-        const unit = this.input("Unit", "text");
+        const resourceId = this.input("Resource ID when needed", "text");
+        const operation = this.select("Resolved operation", ["AdjustQuantity", "SetQuantity", "SetState", "SetSupplyDie", "Deplete"]);
+        const value = this.input("Resolved value", "text");
+        const unit = this.input("Unit for quantity operations", "text");
+        const scope = this.select("Target scope", ["Party", "Expedition", "Participant", "Mount", "Vehicle"]);
+        const target = this.input("Target ID when scope requires it", "text");
         const assignments = this.input("Activity assignment IDs, comma-separated", "text");
         const submit = this.button("Resolve foraging yield");
-        form.append(resource.wrapper, amount.wrapper, unit.wrapper, assignments.wrapper, submit);
+        form.append(resource.wrapper, resourceId.wrapper, operation.wrapper, value.wrapper, unit.wrapper,
+            scope.wrapper, target.wrapper, assignments.wrapper, submit);
         form.addEventListener("submit", event => {
             event.preventDefault();
             void this.mutate(submit, async () => {
+                const change = buildResourceChange(
+                    required(resource.control.value, "Resource key"),
+                    nullable(resourceId.control.value),
+                    operation.control.value as ResourceChangeOperation,
+                    value.control.value,
+                    unit.control.value);
+                if (change.operation === "AdjustQuantity" && (change.quantity ?? 0) <= 0) {
+                    throw new Error("Foraging adjust-quantity gains must be positive; negative input is not silently reinterpreted.");
+                }
                 const result = await this.api.resolveForaging(this.expeditionId, {
                     expectedVersion: this.requireState().expeditionVersion,
                     occurrenceId: crypto.randomUUID(),
-                    target: { scope: "Party", targetId: null },
+                    target: targetValue(scope.control.value as ExpeditionEffectScope, target.control.value),
                     activityAssignmentIds: csv(assignments.control.value),
-                    resourceGains: [{
-                        resourceKey: required(resource.control.value, "Resource key"),
-                        operation: "AdjustQuantity",
-                        quantity: Math.abs(finiteNumber(amount.control.value, "Resolved gain")),
-                        unit: required(unit.control.value, "Resource unit")
-                    }],
+                    resourceGains: [change],
                     provenance: dmProvenance("foraging-resolution")
                 });
                 this.apply(result.state);
@@ -568,6 +591,35 @@ export class ExpeditionSurvivalResourcesPanel {
 
 function dmProvenance(sourceKey: string): ConsequenceProvenanceRequest {
     return { sourceKind: "Dm", sourceKey };
+}
+
+function defaultResourceOperation(model: ExpeditionResourceInventoryModel | null): ResourceChangeOperation {
+    if (model === "Abstract") return "SetState";
+    if (model === "SupplyDie") return "SetSupplyDie";
+    return "AdjustQuantity";
+}
+
+function buildResourceChange(
+    resourceKey: string,
+    resourceId: string | null,
+    operation: ResourceChangeOperation,
+    rawValue: string,
+    rawUnit: string): ResourceChangeRequest {
+    const base = { resourceKey, resourceId, operation };
+    switch (operation) {
+        case "AdjustQuantity":
+            return { ...base, quantity: finiteNumber(rawValue, "Resolved quantity change"), unit: required(rawUnit, "Resource unit") };
+        case "SetQuantity":
+            return { ...base, quantity: nonNegativeNumber(rawValue, "Resolved quantity"), unit: required(rawUnit, "Resource unit") };
+        case "SetState":
+            return { ...base, state: required(rawValue, "Resolved resource state") };
+        case "SetSupplyDie":
+            return { ...base, supplyDieSides: positiveInteger(rawValue, "Resolved supply die sides") };
+        case "Deplete":
+            return base;
+        default:
+            throw new Error("Unsupported resource operation.");
+    }
 }
 
 function targetValue(scope: ExpeditionEffectScope, rawTarget: string): ExpeditionTarget {
