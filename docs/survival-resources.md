@@ -28,6 +28,8 @@ MovementCapabilityComposition
 
 Character Sheet remains authoritative for character inventory, hit points, Constitution/endurance statistics, skills, and other persistent character state. A Phase 11 operation may consume a typed resolved result from Character Sheet, a DM, or an optional provider, but does not copy those authorities into Hex Crawl.
 
+Phase 12 journey/process state remains a separate expedition subsystem. Journey resolutions can produce Phase 10 consequences, but journey code does not become a second resource/survival/effect owner.
+
 ## Exact-pinned focused policies
 
 Phase 11 resolves only the exact materialized `CampaignProcedure` stored on the expedition. Runtime behavior does not consult preset identity, procedure origin metadata, or current catalog defaults.
@@ -88,6 +90,8 @@ The Phase 11 resource consumer then, under one expedition optimistic-concurrency
 
 A consumed consequence ID has no pending resource work on retry and therefore can not mutate inventory twice. Phase 11 does not submit the same occurrence back through `ExpeditionConsequenceEngine.Process` after it is already accepted.
 
+Phase 12 reuses this same consequence identity boundary for journey/process and journey-event outputs, so retries can not create a second inventory mutation path.
+
 ## Resource consumption
 
 The structural names in current proof procedures are not formulas. For example, `fixed-per-person`, `daily-supplies`, and `usage-roll` do not state exact quantities, rolls, or transitions.
@@ -119,7 +123,7 @@ Phase 11 does not invent skill formulas, DCs, dice formulas, or yield tables.
 
 The exact pinned policy supplies the normal limit and limit unit. Supported open units include hours, intervals, watches, quarter-days, and other campaign units when the exact stored procedure establishes their relationship to authoritative travel progress.
 
-Authoritative spatial and nonspatial travel mutations account successful elapsed travel once. Hours are directly measurable. Interval accounting uses the exact pinned `time.interval` duration. A non-time unit such as `quarter-days` is derived automatically only when the same pinned procedure explicitly establishes the relationship through its interval and movement-budget unit. Otherwise the typed forced-travel operation requires a resolved amount; no implicit conversion is performed.
+Authoritative spatial and nonspatial travel mutations account successful elapsed travel once. Hours are directly measurable. Interval accounting uses the exact pinned `time.interval` duration. A non-time unit such as `quarter-days` is derived automatically only when the same pinned procedure explicitly establishes the relationship through its interval and movement-budget unit. Simple singular/plural spelling variants of the same open unit, such as `watch` and `watches`, are treated as the same declared unit; unrelated open units are never guessed. Otherwise the typed forced-travel operation requires a resolved amount.
 
 The normal threshold is distinct from forced travel beyond the threshold. Continuing past the normal limit creates a stable pending check occurrence. Check-model strings such as `escalating-check`, `escalating-constitution-save`, or `endurance-check` do not encode formulas, abilities, DCs, or escalation values, so those results remain typed DM/provider inputs unless a future generic procedure explicitly adds the missing parameters.
 
@@ -160,9 +164,11 @@ Providers do not mutate resources, effects, or survival state directly and are n
 
 ## Persistence and concurrency
 
-PostgreSQL schema version 7 stores authoritative `resources_json` and `survival_json` beside existing `effects_json` and `environment_json`. This is a pre-Phase-12.5 schema correction; older development databases are reset rather than supported by a duplicate legacy representation.
+Phase 11 introduced authoritative `resources_json` and `survival_json` in schema version 7 beside existing `effects_json` and `environment_json`. The current pre-release schema is version 8, which retains those Phase 11 boundaries and adds Phase 12 `journey_state_json` as a separate authority.
 
-All Phase 11 changes use the existing expedition version for optimistic concurrency. Resource mutation and the matching Phase 10 consequence-state update are saved as one expedition aggregate operation.
+All Phase 11 changes use the existing expedition version for optimistic concurrency. Resource mutation and the matching Phase 10 consequence-state update are saved as one expedition aggregate operation. Journey-generated Phase 10/11 mutations are likewise committed with journey state in the same expedition optimistic-concurrency save.
+
+This remains a pre-Phase-12.5 development schema. Older development databases are reset rather than supported by duplicate legacy representations.
 
 ## UI and API
 
@@ -172,8 +178,10 @@ The expedition running sheet mounts a DM-facing **Survival and resources** panel
 
 Persistent effects remain visible through the existing Phase 10 effect state rather than a duplicate Phase 11 fatigue panel.
 
-## Deferred boundaries
+Phase 12 adds a separate **Journey / Challenge** panel. That panel can create Phase 10 consequences which are consumed through these same Phase 11 resource/survival boundaries rather than implementing duplicate resource logic in the browser or journey service.
 
-Phase 11 does not implement multi-stage journey execution, One Ring journey-event scheduling, journey completion, or higher-level journey challenge orchestration. Those remain Phase 12.
+## Cross-phase boundaries
 
-Phase 11 does not expand combat encounter handoff. That remains Phase 13.
+Phase 12 now owns multi-stage journey execution, journey-event opportunities, journey completion/failure/abandonment, and journey-generated consequence handoff. Phase 11 remains the resource/survival owner for any resulting resource or survival mutation.
+
+Expanded tactical encounter handoff remains Phase 13. Battle-map ownership remains later work.
