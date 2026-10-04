@@ -104,6 +104,17 @@ public sealed record JourneyEventPolicy(
         null, null, null, null);
 
     public bool Supports(JourneyEventTriggerKind trigger) => TriggerSources.Contains(trigger);
+
+    public bool SupportsTarget(JourneyEventTargetKind target, bool allowUnresolved)
+    {
+        if (allowUnresolved && target == JourneyEventTargetKind.Unresolved) return true;
+        return TargetingModel switch
+        {
+            "travel-role" => target == JourneyEventTargetKind.Role,
+            "explicit-target" => target != JourneyEventTargetKind.Unresolved,
+            _ => false
+        };
+    }
 }
 
 /// <summary>
@@ -129,6 +140,7 @@ public static class JourneyProcedurePolicyResolver
             || !Required(selected, "progressKind", out var progressKindRaw)
             || !TryProgressKind(progressKindRaw, out var progressKind)
             || !Required(selected, "completionModel", out var completionModel)
+            || !IsSupportedCompletionModel(completionModel)
             || !TryBoolean(selected, "roleDriven", out var roleDriven)
             || !Required(selected, "roleAssignmentModel", out var roleRaw)
             || !TryRoleAssignment(roleRaw, out var roleAssignment)
@@ -200,6 +212,7 @@ public static class JourneyProcedurePolicyResolver
             || !Required(selected, "linkMode", out var linkModeRaw)
             || !TryLinkMode(linkModeRaw, out var linkMode)
             || !Required(selected, "targetingModel", out var targetingModel)
+            || !IsSupportedTargetingModel(targetingModel)
             || !Required(selected, "terrainInfluence", out var terrainInfluence)
             || !Required(selected, "consequenceModel", out var consequenceModel)
             || !TryBoolean(selected, "requiresResolvedTrigger", out var requiresResolvedTrigger)
@@ -385,6 +398,12 @@ public static class JourneyProcedurePolicyResolver
             default: mode = default; return false;
         }
     }
+
+    private static bool IsSupportedCompletionModel(string value) =>
+        value is "explicit-completion" or "reach-destination" or "final-stage-completion";
+
+    private static bool IsSupportedTargetingModel(string value) =>
+        value is "travel-role" or "explicit-target";
 
     private static bool TryTriggerSources(string value, out IReadOnlyList<JourneyEventTriggerKind> sources)
     {
