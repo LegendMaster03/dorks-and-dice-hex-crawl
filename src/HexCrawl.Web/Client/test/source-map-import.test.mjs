@@ -79,17 +79,17 @@ test("preview grid is authoritative for click selection and selected-hex renderi
     assert.match(renderer, /private drawSelection[\s\S]*const grid = this\.gridPreview \?\? world\.grid[\s\S]*hexCorners\(grid, this\.selectedHex\)/);
 });
 
-test("map navigation has discoverable on-map controls in addition to gestures and keyboard input", () => {
+test("map navigation uses direct drag panning without redundant arrow controls", () => {
     const surface = fs.readFileSync(path.join(sourceRoot, "map-surface.ts"), "utf8");
 
-    assert.match(surface, /Map controls/);
-    assert.match(surface, /Pan map left/);
-    assert.match(surface, /Pan map right/);
-    assert.match(surface, /Zoom map out/);
-    assert.match(surface, /Zoom map in/);
-    assert.match(surface, /Reset map view/);
-    assert.match(surface, /Shift-drag or middle-drag pans/);
+    assert.match(surface, /Drag to pan/);
+    assert.match(surface, /dragThresholdPixels = 4/);
+    assert.match(surface, /event\.button !== 0 && event\.button !== 1/);
+    assert.match(surface, /Math\.hypot\(event\.clientX - startX, event\.clientY - startY\)/);
+    assert.match(surface, /suppressNextClick = true/);
     assert.match(surface, /this\.canvas\.addEventListener\("wheel"/);
+    assert.doesNotMatch(surface, /createNavigationToolbar/);
+    assert.doesNotMatch(surface, /Pan map left|Pan map right|Map controls/);
 });
 
 test("registration consumes map clicks through an explicit interaction interceptor", () => {
