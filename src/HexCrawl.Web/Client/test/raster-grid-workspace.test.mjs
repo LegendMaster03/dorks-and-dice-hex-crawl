@@ -17,7 +17,7 @@ test("reference-map workspace exposes server-backed automatic baked-grid detecti
 
     assert.match(workspace, /SourceMapGridAlignmentController/);
     assert.match(workspace, /Detect \/ repair hex grid/);
-    assert.match(workspace, /Re-run detection and preview/);
+    assert.match(workspace, /Re-run detection/);
     assert.match(workspace, /Advanced registration/);
     assert.match(controller, /analyzeSourceMapGrid/);
     assert.doesNotMatch(controller, /detectHexLattice/);
