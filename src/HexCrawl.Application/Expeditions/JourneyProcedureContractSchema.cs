@@ -4,9 +4,9 @@ namespace HexCrawl.Application;
 
 /// <summary>
 /// Phase 12 extends the journey parameter contract without creating a second procedure model.
-/// The values live in MaterializedProcedureModule.Parameters and are therefore pinned with the
-/// CampaignProcedure. This helper supplies schema metadata to the Composer/reference generator and
-/// performs creation-time preset recipe upgrades only. Runtime journey resolution never calls it.
+/// The values and their schema metadata are copied into the materialized CampaignProcedure, so
+/// Composer/reference surfaces and runtime focused resolvers all consume the same pinned snapshot.
+/// Creation-time preset upgrades live here; runtime journey resolution never reads preset identity.
 /// </summary>
 public static class JourneyProcedureContractSchema
 {
@@ -39,13 +39,30 @@ public static class JourneyProcedureContractSchema
             ? ProcessParameters
             : string.Equals(moduleKey, GenericProcedureCatalog.JourneyEventsModule, StringComparison.Ordinal)
                 ? EventParameters
-                : new Dictionary<string, ProcedureParameterDefinition>(StringComparer.Ordinal);
+                : Empty;
+
+    public static ProcedureModuleDefinition ExtendModule(ProcedureModuleDefinition module)
+    {
+        var extras = ForModule(module.Key);
+        if (extras.Count == 0) return module;
+        var schema = module.ConfigurationSchema.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        foreach (var (key, definition) in extras) schema[key] = definition;
+        return module with { ConfigurationSchema = schema };
+    }
+
+    public static MechanicDefinition ExtendMechanic(string moduleKey, MechanicDefinition mechanic)
+    {
+        var extras = ForModule(moduleKey);
+        if (extras.Count == 0) return mechanic;
+        var schema = mechanic.ParameterSchema.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        foreach (var (key, definition) in extras) schema[key] = definition;
+        return mechanic with { ParameterSchema = schema };
+    }
 
     /// <summary>
-    /// Upgrades the known Phase 3 proof recipes at preset materialization time. This is deliberately
-    /// creation-time preset data, equivalent to editing the preset recipe itself. The resulting
-    /// CampaignProcedure contains every execution parameter and remains valid if preset origin
-    /// metadata or the current catalog later disappears.
+    /// Upgrades the known Phase 3 proof recipes at preset materialization time. This is creation-time
+    /// preset data, equivalent to correcting the preset recipe itself. The resulting CampaignProcedure
+    /// contains every execution parameter and remains valid if origin metadata or the catalog is removed.
     /// </summary>
     public static IReadOnlyDictionary<string, string> UpgradePresetParameters(
         CrawlProcedurePresetDefinition preset,
@@ -85,17 +102,16 @@ public static class JourneyProcedureContractSchema
         return parameters;
     }
 
-    public static IReadOnlyDictionary<string, ProcedureParameterDefinition> Merge(
-        MaterializedProcedureModule selected)
+    public static IReadOnlyDictionary<string, ProcedureParameterDefinition> Merge(MaterializedProcedureModule selected)
     {
         var result = selected.Module.ConfigurationSchema
             .Concat(selected.Mechanic.ParameterSchema)
             .GroupBy(item => item.Key, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.Last().Value, StringComparer.Ordinal);
-        foreach (var (key, definition) in ForModule(selected.Module.Key))
-        {
-            result[key] = definition;
-        }
+        foreach (var (key, definition) in ForModule(selected.Module.Key)) result[key] = definition;
         return result;
     }
+
+    private static IReadOnlyDictionary<string, ProcedureParameterDefinition> Empty { get; } =
+        new Dictionary<string, ProcedureParameterDefinition>(StringComparer.Ordinal);
 }
