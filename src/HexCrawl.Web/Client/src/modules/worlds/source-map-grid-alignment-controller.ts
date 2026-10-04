@@ -24,6 +24,7 @@ export class SourceMapGridAlignmentController {
     private proposal: RasterGridAlignmentProposal | null = null;
     private physicalScaleChange: PhysicalScaleChange | null = null;
     private analysisAbortController: AbortController | null = null;
+    private analysisGeneration = 0;
     private readonly panel: HTMLElement;
     private readonly status: HTMLElement;
     private readonly applyButton: HTMLButtonElement;
@@ -57,6 +58,9 @@ export class SourceMapGridAlignmentController {
             throw new Error("This source map has no usable raster dimensions.");
         }
 
+        this.analysisAbortController?.abort();
+        this.analysisAbortController = null;
+        this.analysisGeneration += 1;
         this.selectedMap = sourceMap;
         this.detection = null;
         this.proposal = null;
@@ -93,12 +97,13 @@ export class SourceMapGridAlignmentController {
         const world = this.getWorld();
         this.analysisAbortController?.abort();
         const abortController = new AbortController();
+        const generation = ++this.analysisGeneration;
         this.analysisAbortController = abortController;
         let analyzed: SourceMapGridAnalysis;
         try {
             analyzed = await this.api.analyzeSourceMapGrid(world.id, sourceMap.id, abortController.signal);
         } catch (error) {
-            if (abortController.signal.aborted) return;
+            if (abortController.signal.aborted || generation !== this.analysisGeneration) return;
             this.detection = null;
             this.proposal = null;
             const detail = error instanceof Error ? error.message : "Surveyor did not return an analysis result.";
@@ -107,6 +112,10 @@ export class SourceMapGridAlignmentController {
         } finally {
             if (this.analysisAbortController === abortController) this.analysisAbortController = null;
         }
+
+        if (abortController.signal.aborted
+            || generation !== this.analysisGeneration
+            || this.selectedMap?.id !== sourceMap.id) return;
 
         this.detection = { status: analyzed.status, fit: analyzed.fit, reason: analyzed.reason };
         if (this.detection.fit && !analyzed.analysis.sourceResolutionVerified) {
@@ -133,6 +142,10 @@ export class SourceMapGridAlignmentController {
                 pixelHeight: sourceMap.pixelHeight
             });
         const scaleContext = await loadPhysicalScaleContext(assetUrl, sourceMap, fit, world.grid);
+        if (abortController.signal.aborted
+            || generation !== this.analysisGeneration
+            || this.selectedMap?.id !== sourceMap.id) return;
+
         if (scaleContext.distancePerHex != null) {
             proposal = {
                 ...proposal,
@@ -226,6 +239,7 @@ export class SourceMapGridAlignmentController {
     private cancel(): void {
         this.analysisAbortController?.abort();
         this.analysisAbortController = null;
+        this.analysisGeneration += 1;
         this.selectedMap = null;
         this.detection = null;
         this.proposal = null;
