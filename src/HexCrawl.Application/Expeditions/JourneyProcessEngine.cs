@@ -122,6 +122,12 @@ public static class JourneyProcessEngine
         if (state.ConsumedResolutionIds.Contains(input.ResolutionId))
         {
             var prior = state.Resolutions.Single(value => value.ResolutionId == input.ResolutionId);
+            if (prior.ProcessId != input.ProcessId
+                || !string.Equals(prior.StageKey, input.StageKey, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "Journey resolution id is already consumed by a different process or stage resolution.");
+            }
             var retained = state.ActiveProcesses.Concat(state.ClosedProcesses).Single(value => value.Id == prior.ProcessId);
             return new(state, retained, prior, false,
                 prior.ProgressBefore != prior.ProgressAfter || !string.Equals(prior.StateBefore, prior.StateAfter, StringComparison.Ordinal),
