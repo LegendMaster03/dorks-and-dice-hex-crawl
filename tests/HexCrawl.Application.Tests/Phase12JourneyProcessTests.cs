@@ -350,7 +350,8 @@ public sealed class Phase12JourneyProcessTests
     [Fact]
     public void StandaloneEventOccurrenceIsStableAndResolvedContentIsExplicit()
     {
-        var policy = JourneyProcedurePolicyResolver.ResolveEvents(Materialize(CrawlProcedureCatalog.MixedHouseRulePresetKey));
+        var policy = JourneyProcedurePolicyResolver.ResolveEvents(Materialize(CrawlProcedureCatalog.MixedHouseRulePresetKey))
+            with { TargetingModel = "explicit-target" };
         var id = Guid.NewGuid();
         var created = JourneyEventEngine.CreateOpportunity(
             ExpeditionJourneyState.Empty,
