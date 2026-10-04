@@ -10,6 +10,9 @@ services:
       MapImport__MaxPixelCount: "100000000"
       MapImport__MaxDimension: "32768"
       ToolHost__BaseUrl: "http://dorks-and-dice-site:8080"
+      Surveyor__BaseUrl: "${Surveyor__BaseUrl:-}"
+      Surveyor__ServiceToken: "${Surveyor__ServiceToken:-}"
+      Surveyor__RequestTimeoutMilliseconds: "${Surveyor__RequestTimeoutMilliseconds:-35000}"
     volumes:
       - hex-crawl-data:/data
     networks:
