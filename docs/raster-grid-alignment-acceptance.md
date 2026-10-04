@@ -114,3 +114,7 @@ Use disposable/recreated test worlds only. Do not modify a human tester's active
 ## Acceptance boundary
 
 A green branch validation plus the fixture measurements above establishes implementation readiness for browser acceptance. It does **not** establish that the affected human tester is unblocked. That conclusion requires the deployed build to pass the Humblewood center/corner/zoom/reload checks above against the actual baked raster grid.
+
+## Phase 13 shared-processing ownership
+
+Hex-lattice detector correctness and encoded PNG/JPEG/WebP preprocessing are now owned by Dorks & Dice Surveyor. These documented real-map measurements remain parity references. Hex Crawl retains alignment-proposal, physical-scale, Wonderdraft, preview, Apply, and automatic-apply safety tests. Automatic analysis failure is distinct from `gridless` and leaves Advanced/manual registration available.

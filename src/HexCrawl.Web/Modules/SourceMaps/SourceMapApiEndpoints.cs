@@ -17,6 +17,7 @@ public static partial class SourceMapApiEndpoints
         api.MapPost("/{sourceMapId:guid}/wonderdraft/promote", ImportStoredWonderdraftCandidatesAsync);
         api.MapPut("/{sourceMapId:guid}", UpdateMetadataAsync);
         api.MapPut("/{sourceMapId:guid}/registration", RegisterAsync);
+        api.MapPost("/{sourceMapId:guid}/grid-analysis", AnalyzeGridAsync);
         api.MapPut("/{sourceMapId:guid}/grid-alignment", ApplyGridAlignmentAsync);
         api.MapGet("/{sourceMapId:guid}/asset", GetAssetAsync);
         api.MapGet("/{sourceMapId:guid}/source-archive", GetSourceArchiveAsync);
@@ -27,6 +28,4 @@ public static partial class SourceMapApiEndpoints
         context.User.FindFirstValue(ClaimTypes.NameIdentifier) is { Length: > 0 } value
             ? value
             : throw new UnauthorizedAccessException("An authenticated Tool Host or explicitly configured standalone development identity is required.");
-
-
 }

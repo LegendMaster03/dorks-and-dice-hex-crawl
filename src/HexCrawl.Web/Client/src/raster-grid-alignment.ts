@@ -1,4 +1,4 @@
-import type { HexLatticeFit } from "./grid-lattice-detector";
+import type { HexLatticeFit } from "./hex-grid-analysis";
 import type { GridDefinition, MapRegistrationTransform, WorldPoint } from "./types";
 
 export type RasterGridAlignmentProposal = {

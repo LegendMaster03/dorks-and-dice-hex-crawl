@@ -5,27 +5,47 @@ import test from "node:test";
 
 const sourceRoot = path.resolve("src");
 
-test("reference-map workspace exposes automatic baked-grid detection before manual registration", () => {
+test("reference-map workspace exposes server-backed automatic baked-grid detection before manual registration", () => {
     const workspace = fs.readFileSync(
         path.join(sourceRoot, "modules/worlds/source-map-workspace.ts"),
         "utf8");
     const controller = fs.readFileSync(
         path.join(sourceRoot, "modules/worlds/source-map-grid-alignment-controller.ts"),
         "utf8");
+    const api = fs.readFileSync(path.join(sourceRoot, "api.ts"), "utf8");
     const renderer = fs.readFileSync(path.join(sourceRoot, "canvas-renderer.ts"), "utf8");
 
     assert.match(workspace, /SourceMapGridAlignmentController/);
     assert.match(workspace, /Detect \/ repair hex grid/);
     assert.match(workspace, /Detect and preview/);
     assert.match(workspace, /Advanced registration/);
-    assert.match(controller, /detectHexLattice/);
+    assert.match(controller, /analyzeSourceMapGrid/);
+    assert.doesNotMatch(controller, /detectHexLattice/);
+    assert.doesNotMatch(controller, /createImageBitmap/);
+    assert.doesNotMatch(controller, /getImageData/);
+    assert.match(api, /source-maps\/\$\{encodeURIComponent\(sourceMapId\)\}\/grid-analysis/);
     assert.match(controller, /buildRasterGridAlignmentProposal/);
     assert.match(controller, /detection\.status !== "detected"/);
     assert.match(controller, /gridPreview = proposal\.grid/);
     assert.match(controller, /registrationPreview =/);
     assert.match(controller, /grid-alignment/);
+    assert.match(controller, /Automatic analysis unavailable/);
+    assert.match(controller, /Advanced registration remains available/);
     assert.match(renderer, /public gridPreview: GridDefinition \| null = null/);
     assert.match(renderer, /const grid = this\.gridPreview \?\? world\.grid/);
+});
+
+test("switching maps or starting a newer analysis invalidates stale asynchronous previews", () => {
+    const controller = fs.readFileSync(
+        path.join(sourceRoot, "modules/worlds/source-map-grid-alignment-controller.ts"),
+        "utf8");
+
+    assert.match(controller, /private analysisGeneration = 0/);
+    assert.match(controller, /this\.analysisAbortController\?\.abort\(\);\s*this\.analysisAbortController = null;\s*this\.analysisGeneration \+= 1;\s*this\.selectedMap = sourceMap/);
+    assert.match(controller, /const generation = \+\+this\.analysisGeneration/);
+    assert.match(controller, /generation !== this\.analysisGeneration/);
+    assert.match(controller, /this\.selectedMap\?\.id !== sourceMap\.id/);
+    assert.match(controller, /const scaleContext = await loadPhysicalScaleContext[\s\S]*generation !== this\.analysisGeneration/);
 });
 
 test("unplaced baked-grid Wonderdraft import automatically starts a non-saving detection preview", () => {
@@ -44,18 +64,19 @@ test("unplaced baked-grid Wonderdraft import automatically starts a non-saving d
     assert.doesNotMatch(workspace, /containsBakedGrid && importedSourceMap\.alignment[^\n]*beginAndPreview/);
 });
 
-test("grid detection verifies phase at source resolution before automatic Apply", () => {
+test("grid detection requires Surveyor source-resolution verification before automatic Apply", () => {
     const controller = fs.readFileSync(
         path.join(sourceRoot, "modules/worlds/source-map-grid-alignment-controller.ts"),
         "utf8");
 
-    assert.match(controller, /rasterGridAnalysisScale/);
-    assert.match(controller, /mapDetectionToSourceImage/);
+    assert.match(controller, /analyzed\.analysis\.sourceResolutionVerified/);
     assert.match(controller, /source-resolution phase verified/);
     assert.match(controller, /downscaled phase only/);
-    assert.match(controller, /Source-resolution phase verification is required before automatic Apply/);
+    assert.match(controller, /Source-resolution phase verification is required before automatic Apply|source-resolution phase verification is required before automatic Apply/i);
     assert.match(controller, /isCanonicalSourceFit/);
     assert.match(controller, /rasterGridCanonicalResidualLimit/);
+    assert.doesNotMatch(controller, /rasterGridAnalysisScale/);
+    assert.doesNotMatch(controller, /mapDetectionToSourceImage/);
     assert.doesNotMatch(controller, /AnalysisMaximumDimension = 768/);
 });
 

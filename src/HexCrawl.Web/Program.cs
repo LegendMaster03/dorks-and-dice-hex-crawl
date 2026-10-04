@@ -11,6 +11,7 @@ using HexCrawl.Infrastructure.Runtime;
 using HexCrawl.Web.Api;
 using HexCrawl.Web.Authentication;
 using HexCrawl.Web.Framework;
+using HexCrawl.Web.MapAnalysis;
 using HexCrawl.Web.Rules;
 using Microsoft.AspNetCore.Http.Features;
 
@@ -32,6 +33,7 @@ var requestBodyCeiling = checked(mapImportOptions.MaxFileBytes + (4L * 1024 * 10
 builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = requestBodyCeiling);
 builder.Services.Configure<FormOptions>(options => options.MultipartBodyLengthLimit = requestBodyCeiling);
 builder.Services.Configure<MapImportOptions>(builder.Configuration.GetSection(MapImportOptions.SectionName));
+builder.Services.Configure<SurveyorOptions>(builder.Configuration.GetSection(SurveyorOptions.SectionName));
 
 var assetRoot = builder.Configuration["MapAssets:RootPath"];
 if (string.IsNullOrWhiteSpace(assetRoot))
@@ -73,6 +75,16 @@ builder.Services
     {
         client.Timeout = TimeSpan.FromSeconds(5);
         client.BaseAddress = toolHostBaseUri;
+    })
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+    {
+        AllowAutoRedirect = false,
+        UseCookies = false
+    });
+builder.Services
+    .AddHttpClient<IMapAnalysisService, SurveyorMapAnalysisClient>(client =>
+    {
+        client.Timeout = Timeout.InfiniteTimeSpan;
     })
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
     {
