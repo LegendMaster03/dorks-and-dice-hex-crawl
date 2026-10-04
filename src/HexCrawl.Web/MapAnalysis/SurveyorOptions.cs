@@ -9,7 +9,8 @@ public sealed class SurveyorOptions
     public int RequestTimeoutMilliseconds { get; set; } = 35_000;
 
     public bool IsConfigured =>
-        Uri.TryCreate(BaseUrl, UriKind.Absolute, out _)
+        Uri.TryCreate(BaseUrl, UriKind.Absolute, out var uri)
+        && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
         && !string.IsNullOrWhiteSpace(ServiceToken);
 
     public TimeSpan RequestTimeout => TimeSpan.FromMilliseconds(
