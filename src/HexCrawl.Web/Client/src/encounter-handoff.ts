@@ -8,6 +8,110 @@ export type EncounterHandoffCombatant = {
     rulesCoreConceptKey?: string | null;
 };
 
+export type EncounterHandoffTarget = {
+    scope: string;
+    targetId: string | null;
+};
+
+export type EncounterHandoffProvenance = {
+    sourceKind: string;
+    sourceKey: string;
+    sourceReference: string | null;
+    providerName: string | null;
+    note: string | null;
+};
+
+export type EncounterHandoffCircumstance = {
+    consequenceId: string;
+    consequenceKey: string;
+    circumstanceKey: string;
+    value: string | null;
+    target: EncounterHandoffTarget;
+    provenance: EncounterHandoffProvenance;
+};
+
+export type EncounterHandoffEffect = {
+    id: string;
+    effectKey: string;
+    target: EncounterHandoffTarget;
+    level: number | null;
+    magnitude: number | null;
+    unit: string | null;
+    state: string | null;
+    sourceConsequenceIds: string[];
+};
+
+export type EncounterHandoffResource = {
+    id: string;
+    resourceKey: string;
+    target: EncounterHandoffTarget;
+    inventoryModel: string;
+    isDepleted: boolean;
+    quantity: number | null;
+    unit: string | null;
+    symbolicState: string | null;
+    supplyDieSides: number | null;
+};
+
+export type EncounterHandoffJourneyProvenance = {
+    eventOccurrenceId: string;
+    processId: string | null;
+    processKey: string | null;
+    stageKey: string | null;
+    eventKey: string;
+    eventType: string | null;
+    triggerReference: string;
+    provenance: EncounterHandoffProvenance;
+};
+
+export type EncounterHandoffLinkedScene = {
+    id: string;
+    kind: string;
+    referenceKey: string;
+};
+
+export type HexCrawlEncounterHandoffV2 = {
+    version: 2;
+    sourceTool: "hex-crawl";
+    identity: {
+        handoffId: string;
+        encounterOccurrenceId: string;
+        expeditionId: string;
+        expeditionName: string;
+    };
+    returnContext: { returnPath: string | null };
+    timeContext: {
+        day: number;
+        watchNumber: number | null;
+        expeditionElapsedHours: number;
+    };
+    worldContext: {
+        overworldId: string | null;
+        hex: HexCoordinate | null;
+        location: { id: string; name: string; category: string } | null;
+    };
+    encounter: {
+        outcome: string;
+        summary: string;
+        dmNote: string | null;
+    };
+    combatants: EncounterHandoffCombatant[];
+    circumstances: EncounterHandoffCircumstance[];
+    effects: EncounterHandoffEffect[];
+    resources: EncounterHandoffResource[];
+    journeyProvenance: EncounterHandoffJourneyProvenance | null;
+    linkedScenes: EncounterHandoffLinkedScene[];
+};
+
+export type CreateEncounterHandoffRequest = {
+    expectedVersion: number;
+    handoffId: string;
+    returnPath: string | null;
+    runtimeEncounterSequence: number | null;
+    journeyEventOccurrenceId: string | null;
+};
+
+/** @deprecated Phase 14 transition only. Remove after all call sites use v2. */
 export type HexCrawlEncounterHandoff = {
     version: 1;
     sourceTool: "hex-crawl";
@@ -28,6 +132,7 @@ export type HexCrawlEncounterHandoff = {
     combatants: EncounterHandoffCombatant[];
 };
 
+/** @deprecated Phase 14 transition only. Remove after all call sites use v2. */
 export function encounterHandoffFromRuntime(
     runtime: ExpeditionDetail,
     options: {
@@ -74,7 +179,8 @@ export function encounterHandoffFromRuntime(
     };
 }
 
-export function blockInitiativeHandoffHref(handoff: HexCrawlEncounterHandoff): string {
+export function blockInitiativeHandoffHref(
+    handoff: HexCrawlEncounterHandoff | HexCrawlEncounterHandoffV2): string {
     const params = new URLSearchParams();
     params.set("hexEncounter", JSON.stringify(handoff));
     return `/tools/block-initiative?${params.toString()}`;
