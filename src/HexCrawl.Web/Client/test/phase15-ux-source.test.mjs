@@ -161,6 +161,20 @@ test("focused spatial watch failures stay visible in the drawer and do not escap
     assert.match(controller, /this\.runMutation\([\s\S]*\)\.catch\(value => \{\s*if \(!this\.disposed\) this\.showAdvanceError\(value\);\s*\}\);/);
 });
 
+test("focused expedition mutations share the visible workspace error boundary and authoritative runtime application", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+
+    assert.match(view, /const runUiMutation = async \(action: \(\) => Promise<void>\): Promise<void> =>/);
+    assert.match(view, /await mutate\(action\);\s*\} catch \{\s*\/\/ mutate already surfaced the failure in the workspace error region\./);
+    assert.match(view, /new ExpeditionWatchController\([\s\S]*\(\) => runtime,\s*applyRuntime,/);
+    assert.match(view, /new ExpeditionPartySheetController\([\s\S]*\(\) => runtime,\s*applyRuntime,/);
+    assert.match(view, /new ExpeditionEnvironmentPanel\([\s\S]*\(\) => runtime,\s*applyRuntime,/);
+    assert.ok((view.match(/await runUiMutation\(action\)/g) ?? []).length >= 4);
+    assert.match(view, /void runUiMutation\(async \(\) => \{/);
+});
+
 test("Phase 15 map selection is contextual and never directly mutates expedition position", () => {
     const view = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
