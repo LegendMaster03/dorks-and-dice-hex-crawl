@@ -26,6 +26,7 @@ test("Phase 15 procedure authoring separates entry choice from one shared Campai
     assert.match(workspace, /Areas you omit are absent from the materialized CampaignProcedure/);
     assert.match(workspace, /Advanced exposes exact generic module keys, mechanics, versions, parameters, and contracts/);
     assert.match(workspace, /exact same CampaignProcedure produced by Compact structural choices and Advanced edits/);
+    assert.match(workspace, /sourceProcedureId === null && \(sourcePresetKey !== null \|\| \(draft\?\.modules\.length \?\? 0\) > 0\)/);
     assert.match(workspace, /moduleSelections/);
     assert.match(types, /ProcedureComposerModuleSelectionInput/);
     assert.match(contracts, /ProcedureComposerModuleSelectionRequest/);

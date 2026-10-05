@@ -491,7 +491,9 @@ export async function renderProcedureAuthoringWorkspace(
     };
 
     const hasStructuredChanges = (): boolean =>
-        pending.size > 0 || moduleSelections.size > 0 || sourceProcedureId === null;
+        pending.size > 0
+        || moduleSelections.size > 0
+        || (sourceProcedureId === null && (sourcePresetKey !== null || (draft?.modules.length ?? 0) > 0));
 
     const renderCompact = (): HTMLElement => {
         const shell = document.createElement("div");
