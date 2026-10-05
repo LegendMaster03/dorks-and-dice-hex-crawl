@@ -30,7 +30,8 @@ test("Phase 15 procedure authoring separates entry choice from one shared Campai
     assert.match(types, /ProcedureComposerModuleSelectionInput/);
     assert.match(contracts, /ProcedureComposerModuleSelectionRequest/);
     assert.match(module, /renderProcedureAuthoringWorkspace/);
-    assert.match(factory, /Modules = \[CreateDefaultModule\(GenericProcedureCatalog\.TimeIntervalModule\)\]/);
+    assert.match(factory, /Modules = \[\]/);
+    assert.doesNotMatch(factory, /Modules = \[CreateDefaultModule\(GenericProcedureCatalog\.TimeIntervalModule\)\]/);
     assert.doesNotMatch(factory, /GenericProcedureCatalog\.Catalog\.Select/);
 });
 
