@@ -434,59 +434,70 @@ export class ExpeditionWatchController {
         button.disabled = true;
         button.textContent = "Rolling…";
 
-        void this.runMutation(async () => {
-            try {
-                const runtime = this.getRuntime();
-                const execution = requireProcedureRuntime(runtime);
-                const applicability = this.helperApplicability(runtime);
-                if (!applicability.travel && !applicability.navigation && !applicability.encounter) {
-                    throw new Error("No automatic procedure helper is applicable to the current watch state.");
-                }
+        void this.generateProcedureResolutionInPlace(button, idleText);
+    }
 
-                const request: SourceBackedProcedureResolutionHelperRequest = {
-                    expectedVersion: runtime.version,
-                    suppressesNavigationCheck: checkbox(this.form, "suppressNav").checked,
-                    deliberateDoubleBack:
-                        execution.supportsDeliberateDoubleBack
-                        && checkbox(this.form, "doubleBack").checked,
-                    navigationModifier: applicability.navigation
-                        ? integer(input(this.form, "helperNavigationModifier"))
-                        : 0,
-                    expectedDistance: applicability.travel
-                        ? optionalNumeric(input(this.form, "expectedDistance"))
-                        : undefined,
-                    navigationDifficultyClass: applicability.navigation
-                        ? optionalInteger(input(this.form, "helperNavigationDc"))
-                        : undefined,
-                    failureVeerSteps: applicability.navigation
-                        ? nonZeroInteger(input(this.form, "helperFailureVeer"))
-                        : undefined,
-                    keyedLocationId: applicability.encounter && this.locationSelect.value
-                        ? this.locationSelect.value
-                        : undefined
-                };
-                this.providerTravelUi.applySourceInputs(request, applicability);
-
-                const result = await this.api.resolveProcedureInputs(runtime.id, request);
-                if (result.generatedResolutionId !== null) {
-                    const refreshed = await this.api.getExpedition(runtime.id);
-                    if (refreshed.version !== result.expeditionVersion) {
-                        throw new Error(
-                            "The crawl session changed after procedure inputs were generated. Generate them again for the current version.");
-                    }
-                    this.applyRuntime(refreshed);
-                }
-                this.applyGeneratedResolution(result);
-            } finally {
-                this.resolutionPending = false;
-                if (!this.disposed) {
-                    button.textContent = idleText;
-                    this.advanceButton.disabled = false;
-                    this.advanceButton.textContent = watchActionLabel(this.getRuntime());
-                    this.syncResolutionHelperVisibility();
-                }
+    private async generateProcedureResolutionInPlace(
+        button: HTMLButtonElement,
+        idleText: string): Promise<void> {
+        const summary = required<HTMLElement>(this.root, "[data-resolution-helper-result]");
+        try {
+            const runtime = this.getRuntime();
+            const execution = requireProcedureRuntime(runtime);
+            const applicability = this.helperApplicability(runtime);
+            if (!applicability.travel && !applicability.navigation && !applicability.encounter) {
+                throw new Error("No automatic procedure helper is applicable to the current watch state.");
             }
-        });
+
+            const request: SourceBackedProcedureResolutionHelperRequest = {
+                expectedVersion: runtime.version,
+                suppressesNavigationCheck: checkbox(this.form, "suppressNav").checked,
+                deliberateDoubleBack:
+                    execution.supportsDeliberateDoubleBack
+                    && checkbox(this.form, "doubleBack").checked,
+                navigationModifier: applicability.navigation
+                    ? integer(input(this.form, "helperNavigationModifier"))
+                    : 0,
+                expectedDistance: applicability.travel
+                    ? optionalNumeric(input(this.form, "expectedDistance"))
+                    : undefined,
+                navigationDifficultyClass: applicability.navigation
+                    ? optionalInteger(input(this.form, "helperNavigationDc"))
+                    : undefined,
+                failureVeerSteps: applicability.navigation
+                    ? nonZeroInteger(input(this.form, "helperFailureVeer"))
+                    : undefined,
+                keyedLocationId: applicability.encounter && this.locationSelect.value
+                    ? this.locationSelect.value
+                    : undefined
+            };
+            this.providerTravelUi.applySourceInputs(request, applicability);
+
+            const result = await this.api.resolveProcedureInputs(runtime.id, request);
+            if (result.generatedResolutionId !== null) {
+                const refreshed = await this.api.getExpedition(runtime.id);
+                if (refreshed.version !== result.expeditionVersion) {
+                    throw new Error(
+                        "The crawl session changed after procedure inputs were generated. Generate them again for the current version.");
+                }
+                this.applyRuntime(refreshed);
+            }
+            this.applyGeneratedResolution(result);
+        } catch (value) {
+            if (!this.disposed) {
+                summary.textContent = value instanceof Error
+                    ? value.message
+                    : String(value);
+            }
+        } finally {
+            this.resolutionPending = false;
+            if (!this.disposed) {
+                button.textContent = idleText;
+                this.advanceButton.disabled = false;
+                this.advanceButton.textContent = watchActionLabel(this.getRuntime());
+                this.syncResolutionHelperVisibility();
+            }
+        }
     }
 
     private applyGeneratedResolution(result: ProcedureResolutionHelperResult): void {
