@@ -1,7 +1,7 @@
 import { CanvasMapRenderer } from "./canvas-renderer";
 import { worldToHex } from "./hex-math";
 import { RenderLifecycle } from "./render-lifecycle";
-import type { Overworld, WorldPoint } from "./types";
+import type { HexCoordinate, Overworld, WorldPoint } from "./types";
 import { Viewport } from "./viewport";
 
 export class MapSurface {
@@ -16,6 +16,7 @@ export class MapSurface {
     private disposed = false;
     private clickInterceptor: ((point: WorldPoint) => boolean) | null = null;
     private reviewSelectionHandler: ((id: string) => void) | null = null;
+    private hexSelectionHandler: ((hex: HexCoordinate | null) => void) | null = null;
 
     public constructor(
         host: HTMLElement,
@@ -139,6 +140,10 @@ export class MapSurface {
         this.reviewSelectionHandler = handler;
     }
 
+    public setHexSelectionHandler(handler: ((hex: HexCoordinate | null) => void) | null): void {
+        this.hexSelectionHandler = handler;
+    }
+
     public requestRender(): void {
         if (!this.disposed) this.lifecycle.requestRender();
     }
@@ -154,6 +159,7 @@ export class MapSurface {
         this.disposed = true;
         this.clickInterceptor = null;
         this.reviewSelectionHandler = null;
+        this.hexSelectionHandler = null;
         this.resizeObserver.disconnect();
         this.renderer.dispose();
     }
@@ -173,6 +179,7 @@ export class MapSurface {
             const selected = worldToHex(grid, point);
             this.renderer.selectedHex = selected;
             this.accessibilityStatus.textContent = `Selected hex q ${selected.q}, r ${selected.r}.`;
+            this.hexSelectionHandler?.(selected);
             this.requestRender();
         } else {
             this.accessibilityStatus.textContent = `Selected map position ${point.x.toFixed(2)}, ${point.y.toFixed(2)}.`;
@@ -195,6 +202,7 @@ export class MapSurface {
         } else if (event.key === "Escape") {
             this.renderer.selectedHex = null;
             this.accessibilityStatus.textContent = "Selected hex cleared.";
+            this.hexSelectionHandler?.(null);
             this.requestRender();
         } else {
             return;
