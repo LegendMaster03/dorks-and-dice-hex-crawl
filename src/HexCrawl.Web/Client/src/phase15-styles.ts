@@ -38,7 +38,7 @@ export function ensurePhase15Styles(): void {
         .hc-focus-workspace { position:fixed; z-index:45; right:clamp(.5rem,2vw,1.5rem); top:clamp(.5rem,2vw,1.5rem); bottom:clamp(.5rem,2vw,1.5rem); width:min(44rem,calc(100vw - 1rem)); border:1px solid var(--hc-border, rgba(127,127,127,.45)); border-radius:1rem; background:var(--hc-panel,#fff); color:inherit; box-shadow:0 .8rem 2.4rem rgba(0,0,0,.28); display:grid; grid-template-rows:auto minmax(0,1fr); overflow:hidden; }
         .hc-focus-workspace-header { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:1rem 1.1rem; border-bottom:1px solid var(--hc-border, rgba(127,127,127,.35)); }
         .hc-focus-workspace-header h2 { margin:0; }
-        .hc-focus-workspace-body { overflow:auto; overscroll-behavior:contain; padding:1rem 1.1rem 2rem; display:grid; gap:1rem; }
+        .hc-focus-workspace-body { overflow:auto; overscroll-behavior:contain; padding:1rem 1.1rem 2rem; display:grid; gap:1rem; align-content:start; }
         .hc-focus-workspace-module { display:grid; gap:.8rem; padding:1rem; border:1px solid var(--hc-border, rgba(127,127,127,.3)); border-radius:.75rem; }
         .hc-compact-field-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,14rem),1fr)); gap:.75rem; }
         .hc-compact-field { display:grid; gap:.3rem; min-width:0; }
@@ -70,7 +70,7 @@ export function ensurePhase15Styles(): void {
         .hc-phase15-expedition { display:grid; gap:var(--hc-ux-gap); }
         .hc-phase15-expedition .hc-workspace-grid { grid-template-columns:minmax(0,1fr) minmax(18rem,23rem); align-items:start; }
         .hc-phase15-expedition .hc-map-sheet-top { grid-template-columns:minmax(0,1.5fr) minmax(17rem,.8fr); }
-        .hc-phase15-expedition .hc-sidebar { display:grid; gap:.7rem; max-height:calc(100vh - 10rem); overflow:auto; overscroll-behavior:contain; }
+        .hc-phase15-expedition .hc-sidebar { display:grid; gap:.7rem; align-content:start; }
         .hc-phase15-expedition .hc-running-sheet { display:grid; gap:.75rem; }
         .hc-phase15-expedition .hc-sheet-status { display:none; }
         .hc-phase15-runtime-summary { display:grid; gap:.65rem; }
@@ -83,7 +83,6 @@ export function ensurePhase15Styles(): void {
         @media (max-width: 1040px) {
             .hc-phase15-expedition .hc-workspace-grid,
             .hc-nonspatial-primary { grid-template-columns:1fr; }
-            .hc-phase15-expedition .hc-sidebar { max-height:none; overflow:visible; }
             .hc-phase15-expedition .hc-map-sheet-top { grid-template-columns:1fr; }
         }
         @media (max-width: 760px) {
