@@ -13,7 +13,7 @@ import type {
 } from "../../procedure-composer-types";
 import type { ProcedurePreset } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
-import { badge, openWorkspaceDrawer, textElement } from "../../ui/workspace";
+import { badge, openWorkspaceDrawer, textElement, type WorkspaceDrawer } from "../../ui/workspace";
 import {
     executionSummary,
     groupComposerModules,
@@ -146,7 +146,9 @@ export async function renderProcedureAuthoringWorkspace(
     let revisions: ProcedureRevisionSummary[] = [];
     let savePending = false;
     let refreshSerial = 0;
-    let activeDrawer: { close: () => void } | null = null;
+    let activeDrawer: WorkspaceDrawer | null = null;
+    let activeCompactArea: string | null = null;
+    let closingDrawerForRender = false;
     const pending = new Map<string, ProcedureComposerOverrideInput>();
     const moduleSelections = new Map<string, boolean>();
 
@@ -182,6 +184,19 @@ export async function renderProcedureAuthoringWorkspace(
         jsonValidation = null;
     };
 
+    const closeActiveDrawerForRender = (): void => {
+        const current = activeDrawer;
+        activeDrawer = null;
+        activeCompactArea = null;
+        if (!current) return;
+        closingDrawerForRender = true;
+        try {
+            current.close();
+        } finally {
+            closingDrawerForRender = false;
+        }
+    };
+
     const loadWorkspace = async (): Promise<void> => {
         if (sourceProcedureId) {
             revisions = await composerApi.listRevisions(sourceProcedureId);
@@ -205,7 +220,7 @@ export async function renderProcedureAuthoringWorkspace(
             if (disposed || serial !== refreshSerial) return;
             draft = next;
             invalidateJson();
-            render();
+            if (!refreshCompactDrawer(next)) render();
         } catch (value) {
             if (disposed || serial !== refreshSerial) return;
             if (error) showUiError(error, value);
@@ -253,8 +268,7 @@ export async function renderProcedureAuthoringWorkspace(
     };
 
     const render = (): void => {
-        activeDrawer?.close();
-        activeDrawer = null;
+        closeActiveDrawerForRender();
         if (entry === "landing" && !sourceProcedureId) {
             renderLanding();
             return;
@@ -467,7 +481,8 @@ export async function renderProcedureAuthoringWorkspace(
             heading.className = "hc-area-card-heading";
             heading.append(textElement("h3", group.section), badge(`${group.modules.length} part${group.modules.length === 1 ? "" : "s"}`, "neutral"));
             card.append(heading, textElement("p", compactBehaviorSummary(group.modules), "hc-muted"));
-            const open = button("Edit area", () => openCompactArea(group.section, group.modules));
+            const open = button("Edit area", () => openCompactArea(group.section, group.modules, open));
+            open.dataset.compactArea = group.section;
             open.disabled = historical();
             card.append(open);
             areas.append(card);
@@ -506,12 +521,65 @@ export async function renderProcedureAuthoringWorkspace(
         await refreshDraft();
     };
 
-    const openCompactArea = (title: string, modules: ProcedureModuleComposer[]): void => {
-        activeDrawer?.close();
+    const openCompactArea = (
+        title: string,
+        modules: ProcedureModuleComposer[],
+        returnFocus: HTMLElement): void => {
+        closeActiveDrawerForRender();
+        activeCompactArea = title;
         activeDrawer = openWorkspaceDrawer(root, title, body => {
-            body.append(textElement("p", "Normal Compact editing uses tabletop concepts rather than mechanic IDs or dependency keys.", "hc-muted"));
-            for (const module of modules) body.append(renderCompactModule(module));
+            populateCompactArea(body, modules);
+        }, returnFocus, () => {
+            if (closingDrawerForRender) return;
+            const area = activeCompactArea;
+            activeDrawer = null;
+            activeCompactArea = null;
+            if (disposed) return;
+            render();
+            if (area) {
+                queueMicrotask(() => {
+                    const replacement = [...root.querySelectorAll<HTMLButtonElement>("[data-compact-area]")]
+                        .find(control => control.dataset.compactArea === area);
+                    replacement?.focus();
+                });
+            }
         });
+    };
+
+    const populateCompactArea = (body: HTMLElement, modules: ProcedureModuleComposer[]): void => {
+        const contents: Node[] = [
+            textElement("p", "Normal Compact editing uses tabletop concepts rather than mechanic IDs or dependency keys.", "hc-muted")
+        ];
+        for (const module of modules) contents.push(renderCompactModule(module));
+        body.replaceChildren(...contents);
+    };
+
+    const refreshCompactDrawer = (current: ProcedureComposer): boolean => {
+        if (!activeDrawer?.element.isConnected || !activeCompactArea) return false;
+        const group = groupComposerModules(current.modules)
+            .find(candidate => candidate.section === activeCompactArea);
+        const body = activeDrawer.element.querySelector<HTMLElement>(".hc-focus-workspace-body");
+        if (!group || !body) return false;
+
+        const focused = document.activeElement instanceof HTMLElement
+            && activeDrawer.element.contains(document.activeElement)
+            ? {
+                moduleKey: document.activeElement.dataset.compactModule,
+                fieldKey: document.activeElement.dataset.compactField
+            }
+            : null;
+
+        populateCompactArea(body, group.modules);
+        if (focused?.moduleKey && focused.fieldKey) {
+            queueMicrotask(() => {
+                const replacement = [...body.querySelectorAll<HTMLElement>("[data-compact-module]")]
+                    .find(control =>
+                        control.dataset.compactModule === focused.moduleKey
+                        && control.dataset.compactField === focused.fieldKey);
+                replacement?.focus();
+            });
+        }
+        return true;
     };
 
     const renderCompactModule = (module: ProcedureModuleComposer): HTMLElement => {
@@ -525,6 +593,8 @@ export async function renderProcedureAuthoringWorkspace(
             label.append(textElement("span", behaviorQuestion(module)));
             const select = document.createElement("select");
             select.dataset.composerControl = "";
+            select.dataset.compactModule = module.moduleKey;
+            select.dataset.compactField = "mechanic";
             for (const mechanic of alternatives) {
                 const option = document.createElement("option");
                 option.value = `${mechanic.key}@${mechanic.version}`;
@@ -568,10 +638,13 @@ export async function renderProcedureAuthoringWorkspace(
                 ?? humanizeIdentifier(key);
         label.append(textElement("span", `${display}${definition.required ? " *" : ""}`));
         const value = module.parameters[key] ?? definition.defaultValue ?? "";
-        label.append(parameterControl(definition, value, next => {
+        const control = parameterControl(definition, value, next => {
             pending.set(module.moduleKey, withParameter(module, pending.get(module.moduleKey), key, next));
             void refreshDraft();
-        }, historical()));
+        }, historical());
+        control.dataset.compactModule = module.moduleKey;
+        control.dataset.compactField = key;
+        label.append(control);
         if (definition.description) label.append(textElement("span", definition.description, "hc-muted"));
         return label;
     };
