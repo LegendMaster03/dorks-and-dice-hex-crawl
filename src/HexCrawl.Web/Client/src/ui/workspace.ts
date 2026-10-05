@@ -81,7 +81,7 @@ export function openWorkspaceDrawer(
     const close = (): void => {
         if (closed) return;
         closed = true;
-        document.removeEventListener("keydown", onKeyDown, true);
+        panel.removeEventListener("keydown", onKeyDown);
         drawerClosers.delete(panel);
         onClose?.();
         panel.remove();
@@ -90,7 +90,7 @@ export function openWorkspaceDrawer(
 
     drawerClosers.set(panel, close);
     closeButton.addEventListener("click", close);
-    document.addEventListener("keydown", onKeyDown, true);
+    panel.addEventListener("keydown", onKeyDown);
     root.append(panel);
     build(body, close);
     closeButton.focus();
