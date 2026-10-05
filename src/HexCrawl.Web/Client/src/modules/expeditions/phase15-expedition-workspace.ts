@@ -8,6 +8,7 @@ import type { SurvivalResources } from "../../survival-types";
 import type { ExpeditionDetail, Overworld, SpatialRuntimeExpedition } from "../../types";
 import { ensurePhase15Styles } from "../../phase15-styles";
 import { badge, openWorkspaceDrawer, statAction, textElement } from "../../ui/workspace";
+import { subscribeExpeditionRuntimeChanged } from "./expedition-runtime-events";
 
 export async function enhanceExpeditionWorkspace(
     root: HTMLElement,
@@ -61,7 +62,7 @@ export async function enhanceExpeditionWorkspace(
         if (changed) void refreshSupportingState();
     };
 
-    const restoreApiHooks = installRuntimeHooks(api, expeditionId, acceptRuntime);
+    const unsubscribeRuntime = subscribeExpeditionRuntimeChanged(root, acceptRuntime);
 
     const render = (): void => {
         if (disposed) return;
@@ -320,7 +321,7 @@ export async function enhanceExpeditionWorkspace(
         supportingRefresh += 1;
         mapCanvas?.removeEventListener("click", scheduleMapSelectionRead);
         mapCanvas?.removeEventListener("keydown", scheduleMapSelectionRead);
-        restoreApiHooks();
+        unsubscribeRuntime();
         drawer?.close();
         host.remove();
         page.classList.remove("hc-phase15-expedition", "hc-phase15");
@@ -344,72 +345,6 @@ function action(
     buttonLabel: string | null,
     activate: (() => void) | null): CurrentAction {
     return { status, tone, title, detail, buttonLabel, activate };
-}
-
-function installRuntimeHooks(
-    api: HexCrawlApi,
-    expeditionId: string,
-    accept: (runtime: ExpeditionDetail) => void): () => void {
-    const getExpedition = api.getExpedition.bind(api);
-    const advanceExpedition = api.advanceExpedition.bind(api);
-    const updateExpeditionParty = api.updateExpeditionParty.bind(api);
-    const discover = api.discover.bind(api);
-    const travelAssistant = api.recordTravelAssistant.bind(api);
-    const watchAssistant = api.recordWatchAssistant.bind(api);
-    const navigationAssistant = api.recordNavigationAssistant.bind(api);
-    const encounterAssistant = api.recordEncounterAssistant.bind(api);
-
-    api.getExpedition = async id => {
-        const result = await getExpedition(id);
-        if (id === expeditionId) accept(result);
-        return result;
-    };
-    api.advanceExpedition = async (id, input) => {
-        const result = await advanceExpedition(id, input);
-        if (id === expeditionId) accept(result);
-        return result;
-    };
-    api.updateExpeditionParty = async (id, input) => {
-        const result = await updateExpeditionParty(id, input);
-        if (id === expeditionId) accept(result);
-        return result;
-    };
-    api.discover = async (id, expectedVersion, subjectId, subjectType) => {
-        const result = await discover(id, expectedVersion, subjectId, subjectType);
-        if (id === expeditionId) accept(result);
-        return result;
-    };
-    api.recordTravelAssistant = async (id, input) => {
-        const result = await travelAssistant(id, input);
-        if (id === expeditionId) accept(result);
-        return result;
-    };
-    api.recordWatchAssistant = async (id, input) => {
-        const result = await watchAssistant(id, input);
-        if (id === expeditionId) accept(result);
-        return result;
-    };
-    api.recordNavigationAssistant = async (id, input) => {
-        const result = await navigationAssistant(id, input);
-        if (id === expeditionId) accept(result);
-        return result;
-    };
-    api.recordEncounterAssistant = async (id, input) => {
-        const result = await encounterAssistant(id, input);
-        if (id === expeditionId) accept(result);
-        return result;
-    };
-
-    return () => {
-        api.getExpedition = getExpedition;
-        api.advanceExpedition = advanceExpedition;
-        api.updateExpeditionParty = updateExpeditionParty;
-        api.discover = discover;
-        api.recordTravelAssistant = travelAssistant;
-        api.recordWatchAssistant = watchAssistant;
-        api.recordNavigationAssistant = navigationAssistant;
-        api.recordEncounterAssistant = encounterAssistant;
-    };
 }
 
 function contextButton(label: string, action: () => void): HTMLButtonElement {
