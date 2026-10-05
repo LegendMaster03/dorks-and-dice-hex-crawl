@@ -404,8 +404,7 @@ public static class JourneyProcessEngine
         if (!string.IsNullOrWhiteSpace(roleKey))
         {
             var matches = party.ActivityAssignments.Where(value =>
-                value.Scope == ParticipantActivityAssignmentScope.Role
-                && string.Equals(value.RoleKey, roleKey, StringComparison.Ordinal)).ToArray();
+                string.Equals(value.RoleKey, roleKey, StringComparison.Ordinal)).ToArray();
             if (participantId.HasValue)
             {
                 matches = matches.Where(value => value.ParticipantId == participantId).ToArray();

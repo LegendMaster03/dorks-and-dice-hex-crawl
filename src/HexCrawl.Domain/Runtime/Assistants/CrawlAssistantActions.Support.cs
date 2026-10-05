@@ -43,7 +43,10 @@ public static partial class CrawlAssistantActions
         HexCoordinate? hex,
         string message,
         double? distanceValue = null,
-        string? distanceUnit = null) =>
+        string? distanceUnit = null,
+        EncounterOutcomeKind? encounterOutcome = null,
+        string? encounterNote = null,
+        ResolutionProvenance? encounterProvenance = null) =>
         new(
             NextSequence(state, pending),
             watchNumber,
@@ -52,7 +55,10 @@ public static partial class CrawlAssistantActions
             hex,
             message,
             distanceValue,
-            distanceUnit);
+            distanceUnit,
+            EncounterOutcome: encounterOutcome,
+            EncounterNote: encounterNote,
+            EncounterProvenance: encounterProvenance);
 
     private static CrawlRuntimeEvent ProvenanceEvent(
         CrawlSessionRuntimeState state,

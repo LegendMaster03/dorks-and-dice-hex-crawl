@@ -70,8 +70,8 @@ public static class ExpeditionConsequenceEngine
                 "Resolve it through the established navigation operation or record a DM adjudication."),
             ExpeditionConsequenceCategory.EncounterCircumstance => Pend(
                 state, consequence, ExpeditionConsequenceStatus.Deferred,
-                "Encounter circumstances are preserved for the Phase 13 encounter handoff expansion.",
-                "Carry this circumstance into the later encounter handoff or resolve it manually."),
+                "Encounter circumstances are preserved for the encounter handoff workflow.",
+                "Carry this circumstance into the encounter handoff workflow or resolve it manually."),
             ExpeditionConsequenceCategory.MovementChange => Pend(
                 state, consequence, ExpeditionConsequenceStatus.RequiresAdjudication,
                 "A transient movement change does not state whether it is one-shot or ongoing persistent effect state.",

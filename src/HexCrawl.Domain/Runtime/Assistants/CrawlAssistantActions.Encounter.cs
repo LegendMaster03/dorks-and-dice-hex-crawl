@@ -38,7 +38,10 @@ public static partial class CrawlAssistantActions
                 state.CurrentHex,
                 string.IsNullOrWhiteSpace(input.Note)
                     ? $"{input.Outcome} triggered."
-                    : $"{input.Outcome}: {input.Note.Trim()}"));
+                    : $"{input.Outcome}: {input.Note.Trim()}",
+                encounterOutcome: input.Outcome,
+                encounterNote: input.Note,
+                encounterProvenance: input.Provenance));
         }
         events.Add(ProvenanceEvent(
             state,
@@ -83,7 +86,10 @@ public static partial class CrawlAssistantActions
                 null,
                 string.IsNullOrWhiteSpace(input.Note)
                     ? $"{input.Outcome} triggered."
-                    : $"{input.Outcome}: {input.Note.Trim()}"));
+                    : $"{input.Outcome}: {input.Note.Trim()}",
+                encounterOutcome: input.Outcome,
+                encounterNote: input.Note,
+                encounterProvenance: input.Provenance));
         }
         events.Add(ProvenanceEvent(
             state,
@@ -95,6 +101,4 @@ public static partial class CrawlAssistantActions
 
         return state with { History = [.. state.History, .. events] };
     }
-
-
 }

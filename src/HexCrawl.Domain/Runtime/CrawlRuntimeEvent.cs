@@ -31,6 +31,17 @@ public enum CrawlRuntimeEventKind
     ResolutionProvenanceRecorded
 }
 
+public sealed record CrawlRuntimeLinkedSceneSnapshot(
+    Guid Id,
+    string Kind,
+    string ReferenceKey);
+
+public sealed record CrawlRuntimeLocationSnapshot(
+    Guid Id,
+    string Name,
+    string Category,
+    IReadOnlyList<CrawlRuntimeLinkedSceneSnapshot> LinkedScenes);
+
 public sealed record CrawlRuntimeEvent(
     long Sequence,
     int WatchNumber,
@@ -41,7 +52,11 @@ public sealed record CrawlRuntimeEvent(
     double? DistanceValue = null,
     string? DistanceUnit = null,
     Guid? SubjectId = null,
-    KnowledgeSubjectType? SubjectType = null);
+    KnowledgeSubjectType? SubjectType = null,
+    EncounterOutcomeKind? EncounterOutcome = null,
+    string? EncounterNote = null,
+    ResolutionProvenance? EncounterProvenance = null,
+    CrawlRuntimeLocationSnapshot? EncounterLocation = null);
 
 public sealed record WatchAdvanceResult(
     ExpeditionState Expedition,

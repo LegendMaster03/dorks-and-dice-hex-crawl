@@ -9,7 +9,7 @@ import { renderExpeditionHistory, renderExpeditionPause, renderExpeditionSnapsho
 import { ExpeditionPartySheetController } from "./expedition-party-sheet";
 import { ExpeditionWatchController } from "./expedition-watch-controller";
 import { required } from "../../ui/dom";
-import { blockInitiativeHandoffHref, encounterHandoffFromRuntime } from "../../encounter-handoff";
+import { blockInitiativeHandoffHref } from "../../encounter-handoff";
 
 export type ExpeditionViewMode = "map" | "tracker";
 
@@ -250,22 +250,27 @@ export async function renderExpedition(
         if (runtime.pauseReason !== "EncounterTriggered") return;
 
         const triggered = [...runtime.history].reverse().find(event => event.kind === "EncounterTriggered");
-        const locationName = triggered?.subjectId
-            ? world?.locations.find(location => location.id === triggered.subjectId)?.name ?? null
-            : null;
-        const handoff = encounterHandoffFromRuntime(runtime, {
-            locationName,
-            returnPath: window.location.pathname
-        });
-        if (!handoff) return;
+        if (!triggered) return;
 
         const text = document.createElement("span");
-        text.textContent = "This encounter interrupted the watch.";
-        const link = document.createElement("a");
-        link.className = "hc-button-link";
-        link.href = blockInitiativeHandoffHref(handoff);
-        link.textContent = "Open in Block Initiative";
-        host.append(text, link);
+        text.textContent = "This encounter interrupted the watch. Preparing the handoff does not consume or clear expedition consequences.";
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "hc-button-link";
+        button.textContent = "Open in Block Initiative";
+        const handoffId = crypto.randomUUID();
+        button.addEventListener("click", () => void mutate(button, async () => {
+            button.textContent = "Preparing encounter…";
+            const handoff = await api.createEncounterHandoff(runtime.id, {
+                expectedVersion: runtime.version,
+                handoffId,
+                returnPath: safeCurrentReturnPath(),
+                runtimeEncounterSequence: triggered.sequence,
+                journeyEventOccurrenceId: null
+            });
+            window.location.assign(blockInitiativeHandoffHref(handoff));
+        }));
+        host.append(text, button);
         host.hidden = false;
     };
 
@@ -423,6 +428,12 @@ function bindNonSpatialParty(
         disposed = true;
         disposeTracker();
     };
+}
+
+function safeCurrentReturnPath(): string | null {
+    const path = window.location.pathname;
+    if (path !== "/tools/hex-crawl" && !path.startsWith("/tools/hex-crawl/")) return null;
+    return `${path}${window.location.search}${window.location.hash}`;
 }
 
 function directionOptions(): string {

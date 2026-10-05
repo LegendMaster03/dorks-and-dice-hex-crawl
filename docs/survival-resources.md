@@ -168,7 +168,7 @@ Phase 11 introduced authoritative `resources_json` and `survival_json` in schema
 
 All Phase 11 changes use the existing expedition version for optimistic concurrency. Resource mutation and the matching Phase 10 consequence-state update are saved as one expedition aggregate operation. Journey-generated Phase 10/11 mutations are likewise committed with journey state in the same expedition optimistic-concurrency save.
 
-This remains a pre-Phase-12.5 development schema. Older development databases are reset rather than supported by duplicate legacy representations.
+This remains a pre-Phase-14.5 development schema. Older development databases are reset rather than supported by duplicate legacy representations.
 
 ## UI and API
 
@@ -184,4 +184,4 @@ Phase 12 adds a separate **Journey / Challenge** panel. That panel can create Ph
 
 Phase 12 now owns multi-stage journey execution, journey-event opportunities, journey completion/failure/abandonment, and journey-generated consequence handoff. Phase 11 remains the resource/survival owner for any resulting resource or survival mutation.
 
-Expanded tactical encounter handoff remains Phase 13. Battle-map ownership remains later work.
+Phase 14 now projects encounter-relevant linked resource/effect context through the server-authoritative v2 handoff while Block Initiative remains authoritative for tactical combat. Battle-map ownership remains deferred to Phase 15.

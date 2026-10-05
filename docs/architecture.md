@@ -219,7 +219,7 @@ Important retained guarantees include:
 - stable journey resolution/event/runtime-occurrence identities for retry and restart safety;
 - journey processes overlay deterministic travel rather than replacing it.
 
-Still deferred are expanded encounter runtime/tactical circumstance consumption and battle-map ownership. Phase 12.5 is the next internal-human-testing readiness gate.
+Phase 13 subsequently extracted shared raster preparation and lattice detection into Surveyor. Phase 14 now provides the server-authoritative v2 encounter handoff, including structured circumstances, linked effects/resources, journey provenance, historical runtime context, and linked scenes while Block Initiative remains authoritative for tactical combat. Battle-map ownership remains deferred to Phase 15. Phase 14.5 is the next internal-human-testing readiness gate.
 
 See `docs/generic-procedure-architecture.md`, `docs/environment-context.md`, `docs/movement-capability-composition.md`, `docs/survival-resources.md`, `docs/journey-processes.md`, `docs/postgresql-persistence.md`, `docs/generic-procedure-development-plan.md`, and `docs/phase-3-proof-matrix.md`.
 

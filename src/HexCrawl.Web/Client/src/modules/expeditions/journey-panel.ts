@@ -1,3 +1,4 @@
+import { blockInitiativeHandoffHref } from "../../encounter-handoff";
 import { JourneyApi } from "../../journey-api";
 import type {
     ExpeditionConsequenceInput,
@@ -340,10 +341,33 @@ export class ExpeditionJourneyPanel {
                 card.append(this.heading(`${event.eventKey ?? event.trigger} — ${event.status}`));
                 card.append(this.muted(`Trigger ${event.trigger}: ${event.triggerReference}. Target ${event.participantSnapshot?.participantName ?? event.targetRoleKey ?? event.targetKind}. Consequences: ${event.consequenceIds.length ? event.consequenceIds.join(", ") : "none"}.`));
                 if (event.environment.length > 0) card.append(this.muted(`Environment snapshot: ${event.environment.map(value => `${value.dimension}=${value.value}${value.unit ? ` ${value.unit}` : ""}`).join("; ")}`));
+                if (event.status === "Resolved" && event.consequenceIds.length > 0) card.append(this.encounterHandoffControl(event));
                 section.append(card);
             }
         }
         return section;
+    }
+
+    private encounterHandoffControl(event: JourneyEventOccurrence): HTMLElement {
+        const row = document.createElement("div");
+        row.className = "hc-button-row";
+        const text = this.muted("If this event retained an encounter circumstance, Hex Crawl can prepare its exact occurrence context for Block Initiative. Preparing it does not consume the consequence.");
+        const button = this.button("Open encounter in Block Initiative");
+        button.type = "button";
+        const handoffId = crypto.randomUUID();
+        button.addEventListener("click", () => void this.mutate(button, async () => {
+            button.textContent = "Preparing encounter…";
+            const handoff = await this.api.createEncounterHandoff(this.expeditionId, {
+                expectedVersion: this.requireState().expeditionVersion,
+                handoffId,
+                returnPath: safeCurrentReturnPath(),
+                runtimeEncounterSequence: null,
+                journeyEventOccurrenceId: event.id
+            });
+            window.location.assign(blockInitiativeHandoffHref(handoff));
+        }));
+        row.append(text, button);
+        return row;
     }
 
     private eventCard(event: JourneyEventOccurrence): HTMLElement {
@@ -600,6 +624,12 @@ function describeProgress(process: JourneyProcessInstance, state: JourneyProcess
     return process.execution.progressKind === "Numeric"
         ? `Progress ${state.numericProgress ?? 0} ${process.execution.progressUnit ?? "units"}.`
         : `State ${state.explicitState ?? "—"}.`;
+}
+
+function safeCurrentReturnPath(): string | null {
+    const path = window.location.pathname;
+    if (path !== "/tools/hex-crawl" && !path.startsWith("/tools/hex-crawl/")) return null;
+    return `${path}${window.location.search}${window.location.hash}`;
 }
 
 function splitKeys(value: string): string[] {

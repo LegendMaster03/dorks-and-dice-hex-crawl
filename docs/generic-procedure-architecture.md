@@ -1,6 +1,6 @@
 # Generic Procedure Architecture
 
-This document describes the current generic procedure architecture through Phase 12 of `docs/generic-procedure-development-plan.md`.
+This document describes the generic procedure architecture implemented through Phase 12 of `docs/generic-procedure-development-plan.md`, with current Phase 14 encounter-handoff status noted where it crosses that architecture.
 
 ## Architectural boundary
 
@@ -179,7 +179,7 @@ Resolution IDs are stable/idempotent. Resolutions preserve progress before/after
 
 `JourneyRuntimeIntegration.ObserveCompletedWatches` runs only after an authoritative runtime mutation. It can create stable event/process-resolution opportunities but does not advance runtime or process progress itself. Retained runtime-occurrence identities prevent duplicate opportunities on retry/restart.
 
-Journey-generated consequences flow through the existing Phase 10/11 aggregate transition. Encounter circumstances remain deferred for the later encounter-runtime phase.
+Journey-generated consequences flow through the existing Phase 10/11 aggregate transition. Phase 12 retained encounter circumstances as deferred structured state; Phase 14 now projects relevant pending circumstances and their linked context through the server-authoritative v2 encounter handoff without moving tactical authority into Hex Crawl.
 
 See `docs/journey-processes.md`.
 
@@ -272,7 +272,7 @@ Implemented through Phase 12 are:
 - generic resources, forced travel, exposure/camp state, and focused survival/resource operations;
 - multi-stage process definitions/instances, arbitrary progress representation, approaches, role-driven resolution, failures/complications, stage transitions, process completion/failure/abandonment, journey-event opportunities, completed-watch observation, consequence handoff, persistence/restart, HTTP contracts, and DM UI.
 
-Still deferred are expanded encounter-runtime consumption of encounter circumstances and battle-map ownership. Phase 12.5 is the next internal-human-testing readiness gate.
+Phase 13 subsequently extracted shared raster preparation and lattice detection into Surveyor. Phase 14 subsequently added the server-authoritative v2 encounter handoff, with structured circumstances, linked effects/resources, journey provenance, historical runtime context, and linked scenes. Block Initiative remains authoritative for tactical combat. Battle-map ownership remains deferred to Phase 15, and Phase 14.5 is the next internal-human-testing readiness gate.
 
 ## Invariants
 

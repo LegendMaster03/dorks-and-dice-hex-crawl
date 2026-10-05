@@ -3,13 +3,19 @@ using HexCrawl.Application.Rules;
 
 namespace HexCrawl.Web.Api;
 
-public sealed class HexCrawlExceptionMiddleware(RequestDelegate next)
+public sealed class HexCrawlExceptionMiddleware(
+    RequestDelegate next,
+    ILogger<HexCrawlExceptionMiddleware> logger)
 {
     public async Task InvokeAsync(HttpContext context)
     {
         try
         {
             await next(context);
+        }
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+        {
+            throw;
         }
         catch (HexCrawlNotFoundException exception)
         {
@@ -38,6 +44,19 @@ public sealed class HexCrawlExceptionMiddleware(RequestDelegate next)
         catch (InvalidOperationException exception)
         {
             await WriteAsync(context, StatusCodes.Status400BadRequest, exception.Message);
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(
+                exception,
+                "Unhandled Hex Crawl request failure for {Method} {Path}. TraceId={TraceId}",
+                context.Request.Method,
+                context.Request.Path,
+                context.TraceIdentifier);
+            await WriteAsync(
+                context,
+                StatusCodes.Status500InternalServerError,
+                "Hex Crawl could not complete the request because of an unexpected application error.");
         }
     }
 

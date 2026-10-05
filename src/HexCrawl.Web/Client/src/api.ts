@@ -1,4 +1,5 @@
 import type { SourceMapGridAnalysis } from "./hex-grid-analysis";
+import type { CreateEncounterHandoffRequest, HexCrawlEncounterHandoffV2 } from "./encounter-handoff";
 import type {
     ExpeditionDetail,
     ExpeditionSummary,
@@ -378,6 +379,16 @@ export class HexCrawlApi {
 
     public getExpedition(expeditionId: string): Promise<ExpeditionDetail> {
         return this.getJson(`/api/expeditions/${encodeURIComponent(expeditionId)}`, "Expedition");
+    }
+
+    public createEncounterHandoff(
+        expeditionId: string,
+        input: CreateEncounterHandoffRequest): Promise<HexCrawlEncounterHandoffV2> {
+        return this.sendJson(
+            "POST",
+            `/api/expeditions/${encodeURIComponent(expeditionId)}/encounter-handoff`,
+            input,
+            "Encounter handoff");
     }
 
     public getExpeditionEnvironment(expeditionId: string): Promise<EnvironmentWorkbench> {

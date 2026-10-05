@@ -38,18 +38,48 @@ public static class ExpeditionWorldComposition
         };
 
         var triggered = runtime.Events.LastOrDefault(item =>
-            item.Kind == CrawlRuntimeEventKind.EncounterTriggered
-            && item.SubjectId.HasValue);
+            item.Kind == CrawlRuntimeEventKind.EncounterTriggered);
+        Location? encounterLocation = null;
+        if (triggered?.SubjectId is Guid locationId)
+        {
+            encounterLocation = world.Locations.SingleOrDefault(candidate => candidate.Id == locationId)
+                ?? throw new InvalidOperationException(
+                    "The resolved encounter location does not exist in this overworld.");
+            triggered = triggered with
+            {
+                EncounterLocation = new CrawlRuntimeLocationSnapshot(
+                    encounterLocation.Id,
+                    encounterLocation.Name,
+                    encounterLocation.Category,
+                    encounterLocation.DetailMaps
+                        .Select(value => new CrawlRuntimeLinkedSceneSnapshot(
+                            value.Id,
+                            value.Kind,
+                            value.ReferenceKey))
+                        .ToArray())
+            };
+            state = state with
+            {
+                History = state.History
+                    .Select(item => item.Sequence == triggered.Sequence ? triggered : item)
+                    .ToArray()
+            };
+        }
+
         if (triggered is null
             || state.ActiveWatch?.Encounter.Kind != EncounterOutcomeKind.KeyedLocationDiscovery)
         {
             return new ExpeditionWorldProjection(state, knowledge);
         }
 
-        var locationId = triggered.SubjectId!.Value;
-        var location = world.Locations.SingleOrDefault(candidate => candidate.Id == locationId)
-            ?? throw new InvalidOperationException("The resolved keyed location does not exist in this overworld.");
-        if (HexGeometry.WorldToHex(world.Grid, location.Position) != state.CurrentHex)
+        encounterLocation ??= triggered.SubjectId is Guid keyedLocationId
+            ? world.Locations.SingleOrDefault(candidate => candidate.Id == keyedLocationId)
+            : null;
+        if (encounterLocation is null)
+        {
+            throw new InvalidOperationException("The resolved keyed location does not exist in this overworld.");
+        }
+        if (HexGeometry.WorldToHex(world.Grid, encounterLocation.Position) != state.CurrentHex)
         {
             throw new InvalidOperationException("A keyed-location encounter can only discover a location in the expedition's current hex.");
         }
@@ -61,8 +91,8 @@ public static class ExpeditionWorldComposition
             CrawlRuntimeEventKind.KeyedLocationEncountered,
             state.ElapsedTravelTime,
             state.CurrentHex,
-            $"Encountered keyed location {location.Name}.",
-            SubjectId: location.Id,
+            $"Encountered keyed location {encounterLocation.Name}.",
+            SubjectId: encounterLocation.Id,
             SubjectType: KnowledgeSubjectType.Location);
         var discovered = new CrawlRuntimeEvent(
             nextSequence + 1,
@@ -70,8 +100,8 @@ public static class ExpeditionWorldComposition
             CrawlRuntimeEventKind.LocationDiscovered,
             state.ElapsedTravelTime,
             state.CurrentHex,
-            $"Discovered location {location.Name}; no other contents of the hex were revealed.",
-            SubjectId: location.Id,
+            $"Discovered location {encounterLocation.Name}; no other contents of the hex were revealed.",
+            SubjectId: encounterLocation.Id,
             SubjectType: KnowledgeSubjectType.Location);
         state = state with { History = [.. state.History, encountered, discovered] };
 
@@ -79,7 +109,7 @@ public static class ExpeditionWorldComposition
         {
             knowledge = KnowledgeDiscovery.Discover(
                 knowledge,
-                location.Id,
+                encounterLocation.Id,
                 KnowledgeSubjectType.Location,
                 "runtime:keyed-location");
         }
