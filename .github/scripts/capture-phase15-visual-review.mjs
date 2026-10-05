@@ -22,7 +22,8 @@ class CdpClient {
             const pending = this.pending.get(message.id);
             if (!pending) return;
             this.pending.delete(message.id);
-            if (message.error) pending.reject(new Error(`${message.error.code}: ${message.error.message}`));
+            clearTimeout(pending.timer);
+            if (message.error) pending.reject(new Error(`${pending.method}: ${message.error.code}: ${message.error.message}`));
             else pending.resolve(message.result ?? {});
         });
     }
@@ -30,7 +31,11 @@ class CdpClient {
     send(method, params = {}) {
         const id = this.nextId++;
         return new Promise((resolve, reject) => {
-            this.pending.set(id, { resolve, reject });
+            const timer = setTimeout(() => {
+                this.pending.delete(id);
+                reject(new Error(`CDP command timed out after 10s: ${method}`));
+            }, 10_000);
+            this.pending.set(id, { resolve, reject, timer, method });
             this.socket.send(JSON.stringify({ id, method, params }));
         });
     }
@@ -46,6 +51,11 @@ class CdpClient {
     }
 
     close() {
+        for (const pending of this.pending.values()) {
+            clearTimeout(pending.timer);
+            pending.reject(new Error(`CDP client closed while waiting for ${pending.method}`));
+        }
+        this.pending.clear();
         this.socket.close();
     }
 }
