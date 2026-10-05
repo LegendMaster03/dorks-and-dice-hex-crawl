@@ -347,7 +347,8 @@ export async function renderExpedition(
 
     const renderMapContext = (): void => {
         const host = root.querySelector<HTMLElement>("[data-map-context]");
-        if (!host || !runtime.expedition.isSpatial || !world) return;
+        const currentWorld = world;
+        if (!host || !runtime.expedition.isSpatial || !currentWorld) return;
         host.replaceChildren();
         if (!selectedHex) {
             host.append(textElement("p", "Select a hex to inspect it. Selecting a hex does not mutate expedition state.", "hc-muted"));
@@ -371,11 +372,11 @@ export async function renderExpedition(
         }
 
         const subjects = [
-            ...world.locations
-                .filter(item => sameHex(worldToHex(world.grid, item.position), selectedHex!))
+            ...currentWorld.locations
+                .filter(item => sameHex(worldToHex(currentWorld.grid, item.position), selectedHex!))
                 .map(item => ({ id: item.id, name: item.name, type: "Location" as const })),
-            ...world.features
-                .filter(item => item.kind === "Point" && item.position && sameHex(worldToHex(world.grid, item.position), selectedHex!))
+            ...currentWorld.features
+                .filter(item => item.kind === "Point" && item.position && sameHex(worldToHex(currentWorld.grid, item.position), selectedHex!))
                 .map(item => ({ id: item.id, name: item.name, type: "Feature" as const }))
         ];
         if (subjects.length > 0) {
