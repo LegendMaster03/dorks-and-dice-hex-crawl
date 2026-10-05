@@ -111,8 +111,18 @@ export type CreateEncounterHandoffRequest = {
     journeyEventOccurrenceId: string | null;
 };
 
-export function blockInitiativeHandoffHref(handoff: HexCrawlEncounterHandoffV2): string {
+export interface EncounterHandoffStorage {
+    setItem(key: string, value: string): void;
+}
+
+export const encounterHandoffStoragePrefix = "dorks-and-dice:hex-encounter-handoff:";
+
+export function blockInitiativeHandoffHref(
+    handoff: HexCrawlEncounterHandoffV2,
+    storage: EncounterHandoffStorage = window.sessionStorage): string {
+    const handoffId = handoff.identity.handoffId;
+    storage.setItem(`${encounterHandoffStoragePrefix}${handoffId}`, JSON.stringify(handoff));
     const params = new URLSearchParams();
-    params.set("hexEncounter", JSON.stringify(handoff));
+    params.set("hexEncounterId", handoffId);
     return `/tools/block-initiative?${params.toString()}`;
 }
