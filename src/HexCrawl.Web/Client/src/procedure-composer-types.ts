@@ -139,3 +139,29 @@ export type ProcedureRevisionSummary = {
     modificationCount: number;
     createdAt: string;
 };
+
+export type ProcedureCanonicalJson = {
+    procedureId: string;
+    revision: number;
+    canonicalJson: string;
+};
+
+export type ProcedureCanonicalValidation = {
+    isValid: boolean;
+    procedureId: string | null;
+    revision: number | null;
+    error: string | null;
+    lineNumber: number | null;
+    bytePositionInLine: number | null;
+};
+
+export type ProcedureCanonicalCreateInput = {
+    canonicalJson: string;
+    presetKey?: string | null;
+    campaignId?: string | null;
+};
+
+export type ProcedureCanonicalRevisionInput = {
+    expectedRevision: number;
+    canonicalJson: string;
+};

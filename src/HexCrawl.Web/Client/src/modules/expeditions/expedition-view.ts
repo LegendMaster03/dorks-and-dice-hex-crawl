@@ -7,6 +7,7 @@ import type { ExpeditionDetail, Overworld, SpatialRuntimeExpedition } from "../.
 import { clearUiError, showUiError } from "../../ui-error";
 import { renderExpeditionHistory, renderExpeditionPause, renderExpeditionSnapshots, renderExpeditionStatus, renderNonSpatialTracker, renderPlayerKnowledgePreview } from "./expedition-presentation";
 import { ExpeditionPartySheetController } from "./expedition-party-sheet";
+import { publishExpeditionRuntimeChanged } from "./expedition-runtime-events";
 import { ExpeditionWatchController } from "./expedition-watch-controller";
 import { required } from "../../ui/dom";
 import { blockInitiativeHandoffHref } from "../../encounter-handoff";
@@ -112,7 +113,7 @@ export async function renderExpedition(
                 ${runSurfaceMarkup}
                 <aside class="hc-sidebar" aria-label="Expedition controls">
                     <details class="hc-party-editor-panel"><summary>Party & travel order</summary><div data-party-editor></div></details>
-                    <details open class="hc-sheet-controls"><summary data-watch-summary>Run watch</summary>
+                    <details class="hc-sheet-controls"><summary data-watch-summary>Run watch</summary>
                         <p class="hc-hint">Fill only the parts that apply to the procedure you are using. Hidden sections are not required.</p>
                         <div class="hc-form hc-watch-requirements" data-requirements></div>
                         <form class="hc-form" data-advance>
@@ -296,6 +297,7 @@ export async function renderExpedition(
         renderExpeditionSnapshots(root, runtime, showMap);
         partyController.sync(next);
         watchController?.sync(next);
+        publishExpeditionRuntimeChanged(root, next);
     };
 
     partyController = new ExpeditionPartySheetController(
@@ -414,6 +416,7 @@ function bindNonSpatialParty(
     const apply = (next: ExpeditionDetail): void => {
         runtime = next;
         partyController.sync(next);
+        publishExpeditionRuntimeChanged(root, next);
     };
 
     partyController = new ExpeditionPartySheetController(
@@ -423,6 +426,7 @@ function bindNonSpatialParty(
         apply,
         mutate);
     partyController.sync(runtime);
+    publishExpeditionRuntimeChanged(root, runtime);
 
     return () => {
         disposed = true;

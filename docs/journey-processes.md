@@ -132,7 +132,7 @@ Typed HTTP operations expose journey state and focused mutations for:
 - creating an event opportunity;
 - resolving or skipping an event.
 
-The TypeScript client uses the same contracts through `JourneyApi`. The expedition workbench includes a Journey / Challenge panel for process creation/resolution, event opportunities, structured consequences, and durable history. The browser does not edit raw journey JSON or implement a second process engine.
+The TypeScript client uses the same contracts through `JourneyApi`. Phase 15 presents journey state within the unified procedure-aware expedition workspace: journey-first/nonspatial procedures can make the active process, stage, progress, roles, and unresolved events the primary operating context, while spatial procedures keep journey state close at hand as relevant supporting context. The browser does not edit raw journey aggregate JSON or implement a second process engine.
 
 ## Proof presets
 
@@ -155,8 +155,10 @@ Phase 12 completes generic multi-stage journey/challenge state and journey-event
 - publisher-specific event tables or formulas that are not encoded in the pinned procedure;
 - a second travel engine;
 - automatic environment modifiers without a stored contract;
-- tactical encounter execution or battle-map ownership;
+- tactical encounter execution or Battle Map architecture;
 - named-system runtime branches;
-- compatibility reconstruction for pre-release development databases.
+- compatibility reconstruction for obsolete pre-test development representations.
 
-Phase 14 subsequently added structured encounter handoff across the Hex Crawl/Block Initiative ownership boundary; it did not move tactical combat into Hex Crawl. Phase 14.5 is the next testing-readiness gate, while battle-map ownership remains deferred to Phase 15.
+Phase 14 subsequently added structured encounter handoff across the Hex Crawl/Block Initiative ownership boundary without moving tactical combat into Hex Crawl. Phase 15 is now the core UX/presentation phase and the internal-human-testing gate; its nonspatial workspace preserves journey-first/no-interval behavior rather than forcing journey procedures into watch-based UI. After Phase 15 acceptance, internal human testing begins, followed by Phase 15.1 Guided work and later Phase 15.5 stabilization.
+
+A future Battle Map tool and cross-tool tactical-map ownership/integration are outside the Hex Crawl roadmap.

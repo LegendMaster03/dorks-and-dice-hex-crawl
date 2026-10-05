@@ -16,19 +16,24 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
     {
         services.AddScoped<CampaignProcedureService>();
         services.AddScoped<ProcedureComposerService>();
+        services.AddScoped<ProcedureCanonicalJsonService>();
         services.AddScoped<ProcedureReferenceService>();
     }
 
     public void MapEndpoints(RouteGroupBuilder api)
     {
         api.MapPost("/procedures/composer/draft", ComposeDraftAsync);
+        api.MapPost("/procedures/composer/canonical/draft", ComposeCanonicalDraftAsync);
+        api.MapPost("/procedures/composer/canonical/validate", ValidateCanonicalAsync);
         api.MapPost("/procedures", CreateProcedureAsync);
+        api.MapPost("/procedures/canonical", CreateCanonicalProcedureAsync);
         api.MapGet("/procedures/{procedureId:guid}", GetLatestProcedureAsync);
         api.MapGet("/procedures/{procedureId:guid}/reference", GetLatestProcedureReferenceAsync);
         api.MapGet("/procedures/{procedureId:guid}/revisions", ListProcedureRevisionsAsync);
         api.MapGet("/procedures/{procedureId:guid}/revisions/{revision:int}", GetProcedureRevisionAsync);
         api.MapGet("/procedures/{procedureId:guid}/revisions/{revision:int}/reference", GetProcedureRevisionReferenceAsync);
         api.MapPost("/procedures/{procedureId:guid}/revisions", CreateProcedureRevisionAsync);
+        api.MapPost("/procedures/{procedureId:guid}/canonical/revisions", CreateCanonicalProcedureRevisionAsync);
     }
 
     private static async Task<IResult> ComposeDraftAsync(
@@ -47,6 +52,45 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
         return Results.Ok(ProcedureComposerContract.From(draft));
     }
 
+    private static async Task<IResult> ComposeCanonicalDraftAsync(
+        ProcedureCanonicalDraftRequest request,
+        HttpContext context,
+        ProcedureCanonicalJsonService service,
+        CancellationToken cancellationToken)
+    {
+        var canonicalJson = await service.CreateDraftJsonAsync(
+            UserId(context),
+            request.PresetKey,
+            request.ProcedureId,
+            request.Revision,
+            Overrides(request.Overrides),
+            cancellationToken);
+        var validation = service.Validate(canonicalJson);
+        if (!validation.IsValid || validation.Procedure is null)
+        {
+            throw new InvalidOperationException(validation.Error ?? "Canonical procedure draft could not be validated.");
+        }
+
+        return Results.Ok(new ProcedureCanonicalJsonContract(
+            validation.Procedure.ProcedureId,
+            validation.Procedure.Revision,
+            canonicalJson));
+    }
+
+    private static IResult ValidateCanonicalAsync(
+        ProcedureCanonicalValidationRequest request,
+        ProcedureCanonicalJsonService service)
+    {
+        var validation = service.Validate(request.CanonicalJson);
+        return Results.Ok(new ProcedureCanonicalValidationContract(
+            validation.IsValid,
+            validation.Procedure?.ProcedureId,
+            validation.Procedure?.Revision,
+            validation.Error,
+            validation.LineNumber,
+            validation.BytePositionInLine));
+    }
+
     private static async Task<IResult> CreateProcedureAsync(
         ProcedureComposerCreateRequest request,
         HttpContext context,
@@ -61,6 +105,32 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
             request.CampaignId,
             cancellationToken);
         var draft = await service.CreateDraftAsync(
+            owner,
+            null,
+            stored.ProcedureId,
+            stored.Revision,
+            [],
+            cancellationToken);
+        return Results.Created(
+            $"/api/procedures/{stored.ProcedureId:D}/revisions/{stored.Revision}",
+            ProcedureComposerContract.From(draft));
+    }
+
+    private static async Task<IResult> CreateCanonicalProcedureAsync(
+        ProcedureCanonicalCreateRequest request,
+        HttpContext context,
+        ProcedureCanonicalJsonService canonical,
+        ProcedureComposerService composer,
+        CancellationToken cancellationToken)
+    {
+        var owner = UserId(context);
+        var stored = await canonical.CreateAsync(
+            owner,
+            request.CanonicalJson,
+            request.PresetKey,
+            request.CampaignId,
+            cancellationToken);
+        var draft = await composer.CreateDraftAsync(
             owner,
             null,
             stored.ProcedureId,
@@ -159,6 +229,31 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
             Overrides(request.Overrides),
             cancellationToken);
         var draft = await service.CreateDraftAsync(
+            owner,
+            null,
+            stored.ProcedureId,
+            stored.Revision,
+            [],
+            cancellationToken);
+        return Results.Ok(ProcedureComposerContract.From(draft));
+    }
+
+    private static async Task<IResult> CreateCanonicalProcedureRevisionAsync(
+        Guid procedureId,
+        ProcedureCanonicalRevisionRequest request,
+        HttpContext context,
+        ProcedureCanonicalJsonService canonical,
+        ProcedureComposerService composer,
+        CancellationToken cancellationToken)
+    {
+        var owner = UserId(context);
+        var stored = await canonical.CreateRevisionAsync(
+            owner,
+            procedureId,
+            request.ExpectedRevision,
+            request.CanonicalJson,
+            cancellationToken);
+        var draft = await composer.CreateDraftAsync(
             owner,
             null,
             stored.ProcedureId,

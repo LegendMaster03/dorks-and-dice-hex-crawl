@@ -2,6 +2,8 @@ import { renderExpedition } from "./expedition-view";
 import { ExpeditionEnvironmentPanel } from "./environment-panel";
 import { ExpeditionSurvivalResourcesPanel } from "./survival-resources-panel";
 import { ExpeditionJourneyPanel } from "./journey-panel";
+import { enhanceExpeditionWorkspace } from "./phase15-expedition-workspace";
+import { publishExpeditionRuntimeChanged, subscribeExpeditionRuntimeChanged } from "./expedition-runtime-events";
 import { SurvivalResourcesApi } from "../../survival-api";
 import { JourneyApi } from "../../journey-api";
 import type { HexCrawlClientModule } from "../../client-module";
@@ -13,8 +15,8 @@ export const expeditionsModule: HexCrawlClientModule = {
 
     loadingMessage(route) {
         return route.kind === "expedition"
-            ? "Loading full crawl workbench…"
-            : "Loading expedition tracker…";
+            ? "Loading expedition workspace…"
+            : "Loading expedition workspace…";
     },
 
     async render(route, context) {
@@ -57,6 +59,7 @@ export const expeditionsModule: HexCrawlClientModule = {
             try {
                 await action();
                 panelRuntime = await context.api.getExpedition(expeditionId);
+                if (!disposed) publishExpeditionRuntimeChanged(context.root, panelRuntime);
             } catch (value) {
                 if (!disposed && error) showUiError(error, value);
             } finally {
@@ -77,23 +80,42 @@ export const expeditionsModule: HexCrawlClientModule = {
             mutate);
         environmentPanel.sync();
 
+        const survivalApi = new SurvivalResourcesApi(context.toolContext);
         const survivalPanel = new ExpeditionSurvivalResourcesPanel(
             context.root,
-            new SurvivalResourcesApi(context.toolContext),
+            survivalApi,
             expeditionId,
             mutate);
         await survivalPanel.sync();
 
+        const journeyApi = new JourneyApi(context.toolContext);
         const journeyPanel = new ExpeditionJourneyPanel(
             context.root,
-            new JourneyApi(context.toolContext),
+            journeyApi,
             expeditionId,
             () => panelRuntime,
             mutate);
         await journeyPanel.sync();
 
+        const unsubscribePanelRuntime = subscribeExpeditionRuntimeChanged(context.root, next => {
+            if (disposed || next.id !== expeditionId) return;
+            panelRuntime = next;
+            environmentPanel.sync();
+            void survivalPanel.sync();
+            void journeyPanel.sync();
+        });
+
+        const disposeWorkspace = await enhanceExpeditionWorkspace(
+            context.root,
+            context.api,
+            survivalApi,
+            journeyApi,
+            expeditionId);
+
         return () => {
             disposed = true;
+            unsubscribePanelRuntime();
+            disposeWorkspace();
             journeyPanel.dispose();
             survivalPanel.dispose();
             environmentPanel.dispose();

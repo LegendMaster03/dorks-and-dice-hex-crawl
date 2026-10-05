@@ -10,6 +10,10 @@ The central product principle is:
 
 > **Named systems are removable presets. Mechanics are generic. Procedures are campaign-owned snapshots. The runtime executes behavior, not branding.**
 
+Phase 15 adds the presentation principle:
+
+> **Organize the interface around the DM's tabletop workflow and information needs, not around backend modules or persistence boundaries.**
+
 ## Pre-release compatibility policy
 
 Hex Crawl is still a pre-release development application. Development-era API, persistence, UI, and internal-model compatibility is not preserved unless a specific compatibility requirement is deliberately approved.
@@ -18,28 +22,28 @@ During pre-release development:
 
 - obsolete representations should be removed rather than maintained beside the target architecture;
 - the project should not carry adapters, dual persistence, fallback runtime paths, or migrations solely to keep throwaway development data readable;
-- breaking development schema changes and database resets are acceptable;
+- breaking development schema changes and database resets are acceptable before the internal-testing compatibility horizon;
 - current architecture and intended product behavior take priority over preserving superseded implementation shapes.
 
 ### Compatibility horizon for internal human testing
 
-For this roadmap, **Phase 14.5 — internal human testing readiness** is the first point at which internal human testers are expected to begin accumulating campaign and expedition data that should create a meaningful preference for migration over reset.
+For this roadmap, **Phase 15 — core UX and presentation architecture** is the gate after which internal human testers are expected to begin accumulating campaign and expedition data that should create a meaningful preference for migration over reset.
 
-Before Phase 14.5:
+Before Phase 15 is accepted:
 
 - database resets are an accepted development tool when they simplify or improve the target architecture;
 - there is no requirement to migrate development-era data merely to preserve temporary local/test state;
 - there is no requirement to retain legacy persistence shapes, API contracts, runtime models, compatibility projections, fallback loaders, or other obsolete representations;
 - a superseded development representation should normally be removed rather than supported beside its replacement;
-- implementation phases should optimize for the intended final architecture rather than avoiding a reset;
+- implementation should optimize for the intended final architecture and coherent UX rather than avoiding a reset;
 - compatibility or migration work should be added only when a specific requirement is explicitly approved.
 
-Beginning with Phase 14.5 and the opening of internal human testing:
+After Phase 15 acceptance and the opening of internal human testing:
 
 - Hex Crawl remains pre-release and testers are not guaranteed permanent data retention;
 - a reset remains acceptable when an architectural correction genuinely requires it;
 - before making a breaking persisted-data change, development should evaluate whether a straightforward migration can preserve tester data without compromising the architecture;
-- when migration is simple and architecture-preserving, migration is preferred over reset because tester data now has a human cost;
+- when migration is simple and architecture-preserving, migration is preferred because tester data now has a human cost;
 - this preference must not turn internal-testing data into a permanent legacy-compatibility burden or justify parallel obsolete models.
 
 Release-level migration and compatibility guarantees remain a separate future decision. Internal testing changes the default cost calculation for resets; it does not create a release compatibility contract.
@@ -48,7 +52,7 @@ This policy applies to all phases of this plan.
 
 ## Current repository baseline
 
-The current branch establishes these foundations:
+The current architecture establishes these foundations:
 
 - `CampaignProcedure` is the single authoritative procedure representation for current-format sessions;
 - built-in procedure keys are creation-time presets rather than reload-time authorities;
@@ -57,11 +61,12 @@ The current branch establishes these foundations:
 - `WorldBound`, `AbstractHex`, and `NonSpatial` contexts separate expedition procedure from map ownership;
 - `CrawlPartySheet` stores party members, marching order, watch rotation, standing orders, typed participant activity/role assignments, and explicit movement references;
 - active intervals snapshot applicable typed participant assignments so later party edits do not rewrite active runtime state;
-- generated/manual/external/DM-override provenance already exists;
-- Block Initiative receives a versioned encounter handoff;
-- `LocationDetailMapReference` provides an early location-to-detail-map relationship;
+- generated/manual/external/DM-override provenance exists throughout resolution paths;
+- Block Initiative receives a server-authoritative versioned encounter handoff;
+- `LocationDetailMapReference` and linked-scene references provide provider-neutral location/scene relationships without making Hex Crawl a tactical-map product;
 - PostgreSQL is the structured persistence backend;
-- source-map/raster alignment is isolated enough to proceed independently of procedure architecture.
+- Surveyor owns shared image/grid computation while Hex Crawl remains authoritative for accepted map/grid/world state;
+- Phase 15 presents Compact, Advanced, and JSON over the same canonical `CampaignProcedure` and unifies expedition state around the DM's current workflow.
 
 ## Hard architectural invariants
 
@@ -77,14 +82,17 @@ The current branch establishes these foundations:
 10. The Dorks & Dice Site owns account identity, authentication, campaign identity, permissions, hosting, and platform navigation.
 11. Character Sheet owns character state and may optionally provide capabilities.
 12. Block Initiative owns tactical combat.
-13. Battle-map ownership remains intentionally undecided; Hex Crawl owns locations and encounter context and stores provider-neutral linked-scene references.
+13. Battle Map product design, tactical-map ownership, and cross-tool tactical-map integration are outside the Hex Crawl roadmap. Existing provider-neutral linked-scene references do not predetermine that future architecture.
 14. Raster/grid auto-alignment remains independent of procedure/preset development.
 15. Runtime dispatch must depend on materialized mechanic handler/version contracts, never on named-system identity.
 16. A missing `CampaignProcedure` in current-format expedition data is invalid current data, not a trigger for a fallback representation.
 17. Do not merge development branches to `main` without explicit authorization.
-18. Before Phase 14.5, development-era persistence/API/runtime compatibility is not a requirement unless explicitly approved; obsolete shapes should not be retained merely to avoid a database reset.
+18. Before Phase 15 acceptance, development-era persistence/API/runtime/UI compatibility is not a requirement unless explicitly approved; obsolete shapes should not be retained merely to avoid a database reset.
 19. Hex Crawl durable map/grid state must not depend on whether image-processing work executes locally or through the shared headless processing resource.
 20. The shared map-processing resource owns computation only; each consuming tool remains authoritative for the accepted domain state produced from those results.
+21. Compact, Advanced, JSON, and future Guided presentation must not become competing procedure authorities.
+22. Browser presentation must not recreate authoritative procedure, movement, environment, survival, journey, or consequence calculations solely to avoid an application/server query.
+23. Nonspatial and no-interval procedures remain first-class and must not be forced into fabricated map/watch/interval state.
 
 ## Product model
 
@@ -105,12 +113,18 @@ CampaignProcedure
     +-- Environment / effect modules
     +-- Multi-stage journey modules
     |
-    v
-Handler/version-aware runtime binding
+    +--> Compact presentation
+    +--> Advanced presentation
+    +--> JSON presentation
     |
     v
-Expedition Runtime
+Handler/version-aware runtime binding / focused stored-contract projection
+    |
+    v
+Expedition Runtime / focused application operations
 ```
+
+Phase 15.1 later adds Guided presentation around the same canonical procedure and Compact interaction architecture.
 
 A preset answers:
 
@@ -127,6 +141,10 @@ A generic mechanic answers:
 A campaign override answers:
 
 > What did this DM change?
+
+A presentation answers:
+
+> How should this authoritative behavior be organized so the DM can understand and operate it efficiently?
 
 ## Preset containment
 
@@ -169,6 +187,8 @@ Optional `ProcedureOriginMetadata` is stored adjacent to the procedure, not insi
 | Attribution/disclaimer changed | See current metadata | Execution unchanged |
 | Preset recipe corrected | New materializations use corrected recipe | Existing snapshots remain pinned |
 | Origin metadata removed | No effect on behavior | Execution unchanged |
+
+Phase 15 preset browsing may use current catalog metadata to help a user choose a starting point. Once materialized, authoring and runtime behavior must remain understandable without a live preset lookup.
 
 ## Generic mechanic architecture
 
@@ -242,7 +262,7 @@ A module contract exposes category, purpose, execution stage, outputs, compatibl
 
 Module shells must not introduce broad reads merely because some compatible mechanic might need them.
 
-The selected `MechanicDefinition.InputContract` is authoritative for behavior-specific reads. This is a Phase 3 architectural requirement.
+The selected `MechanicDefinition.InputContract` is authoritative for behavior-specific reads.
 
 Examples:
 
@@ -270,6 +290,8 @@ A selected input with no selected producer but one or more permitted fallback so
 
 Broad fallback-source declarations must not be used to hide incorrect dependencies.
 
+Compact presentation should translate those technical diagnostics into domain-facing actionable language. Advanced may expose underlying keys and graph relationships; JSON exposes the raw canonical representation. Genuine invalid procedure state must never be hidden.
+
 ## Procedure persistence
 
 `CampaignProcedure` is the single authoritative persisted procedure snapshot.
@@ -285,13 +307,13 @@ For campaign procedure revisions:
 - `campaign_procedure_revisions.procedure_json` stores the exact `CampaignProcedure` revision;
 - origin metadata is stored separately and remains optional.
 
-The current pre-release schema may reject earlier development schemas and require a development database reset.
-
 Pinned snapshots must round-trip handler/version metadata, automation level, parameters, input-source requirements, module definitions, overrides, and origin metadata unchanged.
+
+Phase 15 JSON editing creates ordinary campaign procedure revisions. It does not write directly to storage or establish a JSON-only authority.
 
 ## HTTP/API representation
 
-Current development API surfaces represent procedures using generic contracts derived from `CampaignProcedure`.
+API surfaces represent procedures using generic contracts derived from `CampaignProcedure`.
 
 An endpoint may expose:
 
@@ -303,6 +325,8 @@ An endpoint may expose:
 - an optional derived executable-runtime projection when the current runtime can bind the snapshot.
 
 A generic procedure is not exceptional merely because some mechanics are structural or deferred. Persistence and representation remain valid; execution fails only when unsupported runtime behavior is actually invoked.
+
+Phase 15 canonical JSON endpoints may create a server-produced canonical draft, validate canonical JSON, create a new procedure, or create an immutable revision. Domain-invalid JSON, identity changes, stale revisions, and semantic no-op revisions are rejected through authoritative application/server checks.
 
 ## Optional provider boundary
 
@@ -326,9 +350,9 @@ Hex Crawl application / procedure engine
             +-- future providers
 ```
 
-Provider selection is deterministic rather than vendor-switched. A single provider can be used directly; multiple providers require explicit selection or one unambiguous default. Phase 6 does not invent provider-precedence arbitration.
+Provider selection is deterministic rather than vendor-switched. A single provider can be used directly; multiple providers require explicit selection or one unambiguous default.
 
-Provider absence is explicit feature state. The application distinguishes unavailable/not-configured, unsupported capability, input-required, not-applicable, adjudication/conflict, resolved, and provider failure states. A missing or failed provider never causes Hex Crawl to invent a rule.
+Provider absence is explicit feature state. A missing or failed provider never causes Hex Crawl to invent a rule.
 
 Explicit DM values retain precedence. Provider enrichment is attempted only for missing values whose workflow requests provider-backed resolution, and provider results become resolved application inputs before deterministic runtime execution.
 
@@ -346,7 +370,7 @@ generic deterministic runtime
 
 The runtime does not call providers or HTTP services.
 
-Provider identity remains useful provenance. An audit record may truthfully say `Provider: Rules Core`, but `Rules Core` is not procedure identity, mechanic identity, or runtime dispatch input.
+Provider identity remains useful provenance but is not procedure identity, mechanic identity, or runtime dispatch input.
 
 ## No rule-import requirement
 
@@ -373,7 +397,7 @@ Use original Hex Crawl descriptions and generic structured data. Source expressi
 
 ## Preset proof catalog
 
-Phase 3 proof candidates include:
+Representative proof procedures include:
 
 - B/X;
 - Old-School Essentials Classic Fantasy as a shared/alias recipe with B/X unless a verified difference exists;
@@ -385,9 +409,12 @@ Phase 3 proof candidates include:
 - Worlds Without Number;
 - The One Ring 2e;
 - The Alexandrian;
-- a deliberately mixed house-rule procedure.
+- a deliberately mixed house-rule procedure;
+- Custom/no-origin procedures.
 
 The proof matrix stresses hours, quarter-days, days, party-wide and participant-specific activities, navigation, terrain, encounter scheduling, resources, foraging, camping, forced travel, persistent effects, journey events, and higher-level journey processes.
+
+Phase 15 must exercise materially different proof families through presentation, not only the easiest D&D preset.
 
 ## Terrain relationship model
 
@@ -415,6 +442,8 @@ Required relationships:
 5. persistent effects consume those transient effects directly;
 6. no false resource-consumption dependency is introduced.
 
+Phase 15 presentation must preserve this graph: a no-interval journey is journey/process dominant and does not receive a fabricated watch or map requirement.
+
 ## Preset versioning
 
 Preset revisions never silently mutate active procedures.
@@ -431,34 +460,29 @@ Exact expedition snapshot
 
 A future update workflow may compare newer preset recipes at module level, but the DM explicitly chooses whether to accept changes.
 
-## Procedure Composer UX
+## Procedure authoring UX
 
-Phase 4 introduces a first-class DM Procedure Composer.
+Phase 4 introduced the original first-class Procedure Composer. Phase 15 replaces its default interaction architecture while retaining useful low-level generic editing capabilities for Advanced mode.
 
-Start with recognizable presets, then organize customization around generic behavior:
+Phase 15 authoring begins with a first-class preset browser and a readable description of **what the procedure does**, then supports explicit modes:
 
 ```text
-Start with:
-  B/X | AD&D 2e | 3.5e | 5.5e | Pathfinder 2e | Custom | ...
-
-Review / Customize:
-  Time
-  Movement
-  Party Organization
-  Navigation
-  Exploration
-  Encounters
-  Survival
-  Journey Processes
+Compact | Advanced | JSON
 ```
 
-Each module should explain what it controls, selected behavior, parameters, automation level, required inputs, outputs, dependencies, alternatives, campaign modifications, and origin preset only as secondary provenance.
+- Compact uses ordinary tabletop terminology and focused procedure-area editors.
+- Advanced progressively exposes mechanic/version, execution support, parameters, input/output contracts, dependencies, alternatives, provenance, and diagnostics.
+- JSON exposes the same canonical `CampaignProcedure` through safe server validation and optimistic concurrency.
 
-The Composer edits the same `CampaignProcedure` model runtime and persistence consume. It must not introduce a separate UI procedure model.
+Compact is not Advanced with less text, and Advanced is not the old giant settings page. All modes share one coherent product architecture and one procedure authority.
+
+Phase 15.1 later adds Guided as the eventual default, wrapping/enriching Compact rather than forking procedure state.
+
+See `docs/phase-15-design-architecture.md`.
 
 ## Generated procedure documentation
 
-Phase 5 generates readable DM procedure documentation from the exact materialized snapshot. Do not maintain a second manually authored rules document that can drift from execution configuration.
+Readable DM procedure documentation is generated from the exact materialized snapshot. Do not maintain a second manually authored rules document that can drift from execution configuration.
 
 Procedure reference generation remains provider-independent and does not fetch external capability data.
 
@@ -482,17 +506,13 @@ Later mechanics
     may consume participant.activity-state through explicit generic contracts
 ```
 
-The `party.activities` policy projection is derived from the expedition's pinned `CampaignProcedure`, never from preset identity, origin metadata, or current catalog defaults. It preserves assignment scope, activity-budget model, activity keys, role keys, and selected mechanic metadata.
+The `party.activities` policy projection is derived from the expedition's pinned `CampaignProcedure`, never from preset identity, origin metadata, or current catalog defaults.
 
-`CrawlPartySheet` stores stable typed assignments using generic `Party`, `Participant`, and `Role` scopes plus source-defined string activity/role keys. It can represent navigator, lookout, mapper, forager, scout, guide, hunter, quarter-day duties, party-wide activities, journey roles, and future campaign-defined keys without system-specific enums or code changes.
+`CrawlPartySheet` stores stable typed assignments using generic `Party`, `Participant`, and `Role` scopes plus source-defined activity/role keys. It can represent navigator, lookout, mapper, forager, scout, guide, hunter, quarter-day duties, party-wide activities, journey roles, and future campaign-defined keys without system-specific enums or code changes.
 
-The former independently persisted `DefaultNavigatorMemberId` is removed. Navigator is ordinary role data when the stored procedure defines that role. Likewise, the former free-form watch `Activities: string[]` path is removed; a watch snapshots the current typed assignments rather than accepting a second unowned activity list.
-
-A single stored `roleKeys = none` value used as a no-role sentinel is normalized at the generic policy interpretation boundary and is not offered as an assignable role. No exclusivity, mandatory-role, role-to-activity mapping, or activity-capacity rule is inferred unless a future generic contract explicitly encodes it.
+Navigator and watch activities are ordinary typed assignment data rather than parallel authorities.
 
 Journey-role state is current expedition state and does not require a repeating interval. The One Ring proof therefore remains structural: guide, hunter, lookout, and scout assignments can be edited without adding `time.interval`, requiring `movement.budget`, or binding the complete structural procedure.
-
-Phase 7 does not execute downstream foraging, camping, movement penalties, resources, effects, fatigue, or journey events. Those remain later-phase concerns.
 
 ## Movement capability composition
 
@@ -530,29 +550,33 @@ See `docs/journey-processes.md`.
 
 ## Internal human testing boundary
 
-Internal human testing should begin only after the Phase 0–14 application architecture, shared map-processing separation, encounter handoff, and comprehensive remediation/UI pass have stabilized.
+The Phase 0–14 backend/application architecture is complete and reviewed, but the old collection-of-panels interaction model is not the intended human-testing baseline.
 
-Phases 8 through 12 intentionally establish the durable expedition-state architecture. Phase 13 then removes the known in-process map/computer-vision ownership problem by extracting image/grid computation behind a shared headless resource. Phase 14 reviews and remediates the resulting product as one complete system, including architecture, persistence, APIs, UI/UX, performance, security/trust boundaries, test quality, and expanded encounter handoff.
+Phase 15 is therefore the internal-human-testing gate. It builds the coherent production interaction model: unified expedition workspace, Compact, Advanced, JSON, preset browsing, procedure-aware presentation, responsive/focused workspace patterns, and accessibility foundations.
 
-Phase 14.5 is therefore the testing-readiness gate. It should verify that the Phase 0–14 vertical slice is usable by a DM, resolve remaining tester-blocking UX defects, establish representative acceptance scenarios and diagnostics, validate persistence/restart behavior, and document the internal-testing reset/migration policy.
+**After Phase 15 acceptance, internal human testing begins.**
 
-After the Phase 14.5 gate, internal human testing begins and later product-evaluation work may proceed with testers active.
+Testing continues while Phase 15.1 adds the Guided experience. Phase 15.5 later consolidates problems found during Phase 15/15.1 testing and establishes the stable pre-release baseline.
 
 ## Encounter handoff
 
-Existing structured encounter handoff should be expanded rather than reinvented. Phase 14 carries structured circumstances, effects, composition changes, journey/hazard provenance, depleted resources, route/location changes, linked scenes, and other expedition context needed for combat handoff while preserving Block Initiative ownership of tactical combat.
+Phase 14 expanded the structured encounter handoff rather than reinventing it. The v2 handoff carries structured circumstances, effects, composition changes, journey/hazard provenance, depleted resources, route/location changes, linked scenes, and other expedition context needed for combat handoff while preserving Block Initiative ownership of tactical combat.
+
+Phase 15 preserves that server-authoritative behavior while presenting the interrupted encounter coherently in the unified expedition workspace.
 
 Block Initiative remains authoritative for tactical combat.
 
-## Battle maps and linked scenes
+## Battle Map scope
 
-Battle-map ownership remains deliberately unresolved. Hex Crawl owns location and encounter context; tactical/scene maps remain provider-neutral linked resources until the Phase 15 product evaluation makes an explicit ownership decision.
+Battle Map is removed from the Hex Crawl roadmap.
+
+A Battle Map tool has not yet been designed or implemented. Phase 15 does not invent that product, decide future tactical-map ownership, or generalize Hex Crawl into a tactical-map application. Cross-tool tactical-map ownership/integration belongs to a future Battle Map roadmap once that tool exists and is sufficiently mature.
+
+Hex Crawl may continue to carry existing provider-neutral linked-scene references and encounter context. Those current integration surfaces do not predetermine a future Battle Map architecture.
 
 ## Shared image-processing boundary
 
-The existing image-processing and grid-recognition functionality must be extracted in **Phase 13** into a shared headless map-processing resource before the comprehensive Phase 14 review and before the internal-testing compatibility horizon.
-
-The shared resource exists so the same computation can later serve Hex Crawl and other Dorks & Dice tools, including prospective Battle Map and Bastion management tools.
+Phase 13 extracted image-processing and grid-recognition functionality into the shared headless Surveyor resource.
 
 The extraction is an infrastructure separation, not a Hex Crawl product-state rewrite:
 
@@ -561,7 +585,7 @@ Hex Crawl map/grid workflows
         ↓
 Hex Crawl-owned stable map-processing client/capability boundary
         ↓
-shared headless map-processing resource
+Surveyor shared computation
         ↓
 validated result DTO
         ↓
@@ -570,58 +594,102 @@ Hex Crawl acceptance/domain operation
 Hex Crawl-owned durable map/grid state
 ```
 
-The shared resource owns computation. Hex Crawl remains authoritative for accepted Hex Crawl map/grid/world state. Other consuming tools remain authoritative for their own accepted state.
+Surveyor owns computation. Hex Crawl remains authoritative for accepted Hex Crawl map/grid/world state. Other consuming tools remain authoritative for their own accepted state.
 
-Phase 13 must preserve current Hex Crawl behavior and accepted logical map/grid results. Moving computation out of the Hex Crawl process should not require a Hex Crawl database schema change and must not make service implementation details authoritative for Hex Crawl domain behavior.
+Surveyor availability, timeout/cancellation, malformed responses, validation, trust, diagnostics, timing, retry/idempotency, and resource limits are explicit service-boundary concerns. Surveyor does not imply automatic terrain/road recognition, semantic-map interpretation, new map mechanics, or AI/model identity as runtime rule authority.
 
-Phase 13 must also establish production-quality service-boundary behavior, including:
+## Comprehensive Phase 14 review boundary
 
-- a stable provider-neutral request/response contract;
-- explicit service availability and failure states;
-- timeout and cancellation behavior;
-- validation of service results before domain acceptance;
-- authentication/authorization or trusted-service boundaries appropriate to deployment;
-- safe handling of malformed or partial responses;
-- concurrency and retry/idempotency behavior where operations can be repeated;
-- resource limits for large images or expensive processing;
-- diagnostics, timing, and observability sufficient to distinguish processing failures from Hex Crawl defects;
-- behavior-parity tests against the current in-process implementation before the old path is removed;
-- removal of duplicated/in-process implementation after parity is demonstrated, unless a deliberately reviewed fallback architecture is required.
+Phase 14 completed the broad corrective review of the Phase 0–13 architecture before Phase 15 rebuilt the core interaction model.
 
-Phase 13 is not a feature-expansion phase for computer vision. Do not add:
+Its review covered architecture/state ownership, persistence integrity, backend/API correctness, optional-provider and external-tool boundaries, Surveyor failure behavior, security/trust boundaries, measurement-driven performance, comprehensive UI/UX defects, cross-phase integration, test quality, obsolete scaffolding, and expanded encounter handoff.
 
-- automatic terrain recognition;
-- automatic road recognition;
-- semantic-map interpretation;
-- new map mechanics;
-- AI/model identity as runtime rule authority.
+Representative Phase 14 scenarios covered interval/watch travel, activity-budget travel, quarter-day travel, mapless/nonspatial journeys, forced travel, resources, environment-driven survival consequences, persistent effects, foraging/camping/recovery, multi-stage journeys, journey-event consequences, restart/continue behavior, and encounter handoff. The One Ring no-interval path received dedicated review to protect it from fabricated watch dependencies.
 
-Potential future capabilities such as machine identification of roads, terrain, or other map features belong to a later development cycle. If Hex Crawl later consumes such observations, the shared processing resource should report observations/results while Hex Crawl remains authoritative for accepted world/terrain/route state and the active `CampaignProcedure` remains authoritative for what that state means mechanically.
+## Phase 15 core UX and presentation architecture
 
-## Comprehensive pre-testing review boundary
+Phase 15 is a major product-design/frontend-architecture phase, not a cosmetic pass.
 
-Phase 14 is the final broad corrective phase before internal human testing. It reviews the architecture that will actually be carried into testing, including the Phase 13 shared map-processing boundary.
+Its target Compact persona is an experienced traditional-hexcrawl DM who understands tabletop procedure but should never need to learn Hex Crawl's implementation vocabulary.
 
-Phase 14 has explicit authority to make breaking pre-release corrections when the review finds an underlying defect. It should fix the architecture rather than document around it. Database resets, development API changes, state-model cleanup, and UI restructuring remain acceptable through Phase 14 when they improve the intended product architecture.
+Phase 15 definition of done includes:
 
-The review must cover at least:
+- one coherent expedition product rather than disconnected map/tracker/configuration experiences;
+- a map-centered spatial workspace where map and current expedition state interact;
+- an equally intentional nonspatial/journey-first workspace;
+- current action and blockers visible as primary state;
+- scannable status/stat-block summaries that group related raw and derived information;
+- interactive domain summaries for party, movement, navigation, resources, effects, environment, journey, encounter, and history as applicable;
+- a first-class preset browser and understandable procedure summaries;
+- Compact procedure editing that does not require implementation keys;
+- Advanced editing that exposes exact generic mechanics/contracts without abandoning the coherent product architecture;
+- expert canonical JSON editing with formatting, validation, useful diagnostics, safe unsaved/reload behavior, authoritative server save, and stale-revision handling;
+- all modes operating on the same `CampaignProcedure`;
+- origin/provenance understandable to humans but non-authoritative;
+- no live preset identity dispatch for presentation or runtime;
+- consistent disclosure/context/focused-workspace interaction patterns;
+- responsive behavior across wide desktop, ordinary laptop, embedded Site width, tablet-like width, and narrow/mobile width;
+- keyboard/focus/touch/accessibility behavior built into reusable components;
+- loading, mutation-pending, provider-unavailable, unsupported/manual, empty, validation, stale/conflict, missing-reference, and retry states remaining understandable;
+- no significant regression of Phase 14 performance/lifecycle work;
+- representative procedures and complete DM workflows exercised through browser and server boundaries;
+- actual rendered visual review, not unit tests alone;
+- exact-head CI green.
 
-- architecture and state ownership across Phases 0–13;
-- persistence, aggregate validation, atomicity, concurrency, idempotency, and restart behavior;
-- backend/API correctness and canonical client contracts;
-- optional-provider and external-tool boundaries;
-- the shared map-processing service boundary and failure behavior;
-- security and trust boundaries, including server-side validation and untrusted client/provider inputs;
-- performance and avoidable repeated work, using measurement rather than speculative optimization;
-- complete UI/UX, information architecture, state visibility, workflow coherence, responsiveness, scrolling/modal behavior, terminology, error states, loading behavior, keyboard/accessibility basics, empty states, destructive actions, and stale-write recovery;
-- cross-phase integration among movement, environment, effects, resources/survival, journeys, and encounter context;
-- test quality, including raw-HTTP versus browser paths, restart coverage, nonspatial coverage, failure paths, and proof scenarios;
-- removal of obsolete scaffolding, dead paths, stale terminology, superseded helpers, and contradictory documentation;
-- the expanded encounter handoff.
+Tracking-sheet research and the detailed interaction architecture are documented in `docs/phase-15-design-architecture.md`.
 
-Representative Phase 14 acceptance scenarios should exercise complete DM workflows rather than isolated panels, including interval/watch travel, activity-budget travel, quarter-day travel, mapless/nonspatial journeys, forced travel, resources, environment-driven survival consequences, persistent effects that modify movement, foraging/camping/recovery, multi-stage journeys, journey-event consequences, restart/continue behavior, and encounter handoff.
+## Required Phase 15 procedure families
 
-The One Ring no-interval path must receive a dedicated end-to-end UI and backend review to ensure no later feature has accidentally forced it into watch-based execution.
+At minimum, presentation validation should cover:
+
+1. OSE/B/X — interval/watch-oriented traditional crawl;
+2. Alexandrian Advanced — dense traditional hexcrawl state;
+3. D&D 5.5e/2024 — simpler modern-D&D baseline;
+4. Pathfinder 2e Hexploration — activity-oriented proof;
+5. Forbidden Lands or Worlds Without Number — survival/resource-oriented proof;
+6. The One Ring 2e — mandatory no-fabricated-interval journey proof;
+7. Mixed House Rule — materialized behavior must drive UI rather than named preset assumptions;
+8. Custom — no preset origin.
+
+## Required Phase 15 end-to-end scenarios
+
+Representative acceptance includes:
+
+- preset discovery/inspection/materialization;
+- Compact customization and understandable modification/provenance state;
+- Advanced low-level customization and round-trip back to Compact;
+- canonical JSON syntax failure, domain failure, valid save, stale conflict, and cross-mode round-trip;
+- spatial expedition travel and map context through the unified workspace;
+- forced-travel/survival resolution and resulting resource/effect visibility;
+- The One Ring/nonspatial journey roles, progress, events, consequences, and completion without fake map/watch/interval state;
+- encounter interruption and Phase 14 Block Initiative handoff;
+- failure/stale/provider/Surveyor/restart/missing-reference/slow-request states.
+
+## Required Phase 15 visual review
+
+Rendered visual review must inspect representative states at:
+
+- wide desktop;
+- ordinary laptop;
+- embedded Site width;
+- tablet-like width;
+- narrow/mobile width.
+
+Review should include the default Compact expedition, expanded status/context, focused workspace, preset browser, Compact procedure overview, Advanced procedure editor, JSON editor, nonspatial journey, loading/error/conflict/empty states, long content, and scrolling/off-screen controls.
+
+## Phase 15.1 — Guided Hex Crawl experience
+
+Phase 15.1 adds the eventual default experience for users who understand tabletop RPGs/D&D but do not already know hexcrawling or Hex Crawl.
+
+Guided should wrap/enrich Compact through reusable help/explanation/recommendation/next-action affordances. It may add beginner-friendly preset discovery, examples, "Why?" explanations, consequence explanations, and coaching, but it must not fork procedure authority or runtime state.
+
+Internal human testing continues during Phase 15.1.
+
+## Phase 15.5 — internal-testing stabilization and pre-release hardening
+
+Phase 15.5 resolves issues discovered during Phase 15/15.1 human testing and establishes the stable pre-release baseline.
+
+It should prioritize real tester blockers, persistence/restart/migration issues, diagnostics, cross-tool failures, procedure-proof regressions, accessibility/responsive defects, and performance problems found in actual use. It does not convert temporary tester data into a permanent legacy-model burden.
 
 ## Phased roadmap
 
@@ -629,136 +697,91 @@ The One Ring no-interval path must receive a dedicated end-to-end UI and backend
 
 Established creation-time preset identity separation, informational origin metadata, PostgreSQL persistence, explicit session contexts, and deterministic runtime foundations.
 
-Any temporary development scaffolding from this stage is not a compatibility commitment and may be removed when superseded.
-
 ### Phase 1 — generic procedure and preset foundation — complete
 
 Introduced generic module/mechanic contracts, preset recipes, materialization, campaign procedure revisions, overrides, dependency metadata, persistence, and architecture tests.
 
 ### Phase 2 — native generic execution of current behavior — complete
 
-Made materialized `CampaignProcedure` snapshots the runtime authority for currently executable behavior. Runtime binding now dispatches through persisted handler/version contracts.
+Made materialized `CampaignProcedure` snapshots the runtime authority for currently executable behavior. Runtime binding dispatches through persisted handler/version contracts.
 
 ### Phase 3 — preset catalog and proof matrix — complete
 
 Implemented enough generic structural primitives to represent materially different proof systems without system-specific runtime classes while preserving current executable behavior where supported.
 
-Phase 3 definition of done includes:
-
-- all required proof presets materialize and validate;
-- proof dependency graphs are behaviorally accurate;
-- generic-only/structural procedures persist normally;
-- executable procedures run through generic binding;
-- unsupported/declarative behavior fails clearly when execution is attempted;
-- PostgreSQL stores one authoritative procedure representation;
-- current APIs represent generic procedure state directly;
-- no runtime identity dependency exists;
-- exact-head CI is green.
-
 ### Phase 4 — Procedure Composer UI — complete
 
-Added preset picker, module review, generic behavior selection, parameter editing, modification count, provenance display, and dependency warnings.
+Added the original generic Composer, including preset selection, module review, behavior selection, parameter editing, provenance, modification count, and dependency diagnostics. Phase 15 later replaces its default interaction architecture while retaining useful low-level capabilities for Advanced mode.
 
 ### Phase 5 — generated procedure documentation — complete
 
-Generates readable campaign procedure documentation directly from the materialized snapshot. Procedure references are derived from the exact immutable `CampaignProcedure` revision and remain independent of optional providers.
+Generates readable campaign procedure documentation directly from the exact materialized snapshot.
 
 ### Phase 6 — optional provider adapters — complete
 
-External rules/capability sources sit behind Hex Crawl-owned capability interfaces. Travel/environment resolution uses `ITravelEnvironmentProvider`; Rules Core is the first adapter, provider availability and unresolved states are explicit, DM/manual values bypass providers, provider identity is retained as provenance, and deterministic runtime/domain code remains provider-free.
+External rules/capability sources sit behind Hex Crawl-owned capability interfaces; Rules Core is optional enrichment and deterministic runtime/domain code remains provider-free.
 
 ### Phase 7 — typed participant activities — complete
 
-Added typed party, participant, and role assignment state to `CrawlPartySheet`; exact pinned-procedure activity-policy projection; policy-driven party UI; typed spatial/non-spatial active-interval snapshots; PostgreSQL/API round-trip; removal of the independent default-navigator and free-form watch-activity authorities; and structural journey-role editing without fabricating an interval.
+Added typed party, participant, and role assignment state, exact pinned activity-policy projection, typed interval snapshots, and structural journey-role editing without fabricating an interval.
 
 ### Phase 8 — movement capability composition — complete
 
-Added one generic movement-composition boundary for participant, mount/vehicle, load, mode/pace, environment, persistent-effect, explicit party-reference, and DM-override contributors while preserving non-distance semantics and provider provenance.
+Added one generic movement-composition boundary for participant, mount/vehicle, load, mode/pace, environment, persistent-effect, party-reference, and DM-override contributors.
 
 ### Phase 9 — environment context — complete
 
-Added generic static/current/override environment facts, deterministic precedence/conflict handling, spatial resolution, pinned-procedure environment evaluation, provider composition, persistence, HTTP/UI support, and movement handoff without making world truth procedure-specific.
+Added generic static/current/override environment facts, deterministic precedence/conflict handling, spatial resolution, pinned-procedure evaluation, provider composition, persistence, HTTP/UI support, and movement handoff.
 
 ### Phase 10 — generalized effect/consequence engine — complete
 
-Added stable structured expedition consequences, typed consequence components, persistent effects, lifecycle/idempotency/provenance, application consumers, persistence, and focused HTTP/UI contracts without overloading runtime pause state.
+Added stable structured expedition consequences, typed components, persistent effects, lifecycle/idempotency/provenance, persistence, and focused HTTP/UI contracts.
 
 ### Phase 11 — forced travel, survival, and generic resources — complete
 
-Added generic counted/abstract/supply-die/external resources, audit history, forced-travel accounting/checks, exposure, camping/foraging support, Phase 10 consequence reuse, persistence, and DM-facing resource/survival operations.
+Added generic counted/abstract/supply-die/external resources, audit history, forced-travel accounting/checks, exposure, camping/foraging support, consequence reuse, persistence, and DM-facing operations.
 
 ### Phase 12 — multi-stage journey processes — complete
 
-Added generic Journey Challenge / Complex Hazard definitions and persistent instances; numeric or explicit-state progress; approaches; role-driven resolution; success/failure/complication tracking; stage transitions; explicit completion/failure/abandonment; stable/idempotent resolution and event identities; standalone/process-linked journey events; completed-watch observation over the existing deterministic runtime; Phase 9 environment snapshots; Phase 10/11 consequence handoff; PostgreSQL schema-8 persistence/restart; typed HTTP/TypeScript contracts; and a DM Journey / Challenge workbench.
+Added generic Journey Challenge / Complex Hazard definitions/instances, progress, approaches, role-driven resolution, counters/transitions, terminal state/history, stable identities, journey events, completed-watch observation, consequence handoff, persistence/restart, typed contracts, and DM UI.
 
-The One Ring and Mixed House Rule proof recipes now contain their complete generic Phase 12 parameters directly. Materialization/runtime no longer uses preset identity to complete or select their journey behavior. Publisher-specific event tables, formulas, distances, modifiers, and fatigue values remain explicit resolved input where not encoded by the pinned procedure.
+### Phase 13 — shared headless map-processing extraction — complete
 
-See `docs/journey-processes.md`.
+Extracted image/grid computation behind the Surveyor service while retaining Hex Crawl authority for accepted map/grid/world state and explicit failure/trust/validation boundaries.
 
-### Phase 13 — shared headless map-processing extraction
+### Phase 14 — comprehensive architecture/correctness/integration review — complete
 
-Extract the existing Hex Crawl image-processing and grid-recognition backend behind a stable shared headless resource that can also serve other Dorks & Dice tools.
+Completed the broad Phase 0–13 review/remediation, including persistence, API, security, performance, UI/UX defects, cross-phase integration, test quality, stale/dead paths, and the expanded server-authoritative encounter handoff.
 
-Phase 13 is a required architectural dependency for Phase 14. Do not begin the comprehensive Phase 14 review until extraction is complete and behavior parity is demonstrated.
+### Phase 15 — core UX and presentation architecture — current
 
-Definition of done includes:
+Build the coherent production interaction model, including:
 
-- Hex Crawl calls a stable Hex Crawl-owned map-processing client/capability boundary rather than concrete in-process computer-vision/grid-recognition implementation;
-- the shared headless resource owns computation only;
-- Hex Crawl remains authoritative for accepted map/grid/world state;
-- current logical map/grid results and workflows remain behaviorally equivalent;
-- no Hex Crawl persistence/schema change is required solely because computation moved out of process;
-- service availability, timeout, cancellation, malformed-response, retry/idempotency, concurrency, large-input, validation, trust, diagnostics, and timing behavior are explicit and tested;
-- parity tests compare the extracted path against the prior implementation before the old implementation is removed;
-- duplicated/in-process implementation is removed after parity unless a fallback is explicitly justified and reviewed;
-- no automatic terrain recognition, road recognition, semantic-map interpretation, or other new computer-vision product feature is added as part of the extraction;
-- exact-head CI is green for every affected repository/resource.
+- unified expedition workspace;
+- Compact mode;
+- Advanced mode;
+- expert JSON procedure editing;
+- preset browsing;
+- procedure-aware presentation;
+- responsive interaction model;
+- reusable UI primitives for later guidance;
+- tracking-sheet-informed information architecture;
+- accessibility/focus foundations;
+- representative visual and end-to-end review.
 
-### Phase 14 — comprehensive code, architecture, UI/UX, and encounter-handoff review
+After Phase 15 acceptance, internal human testing begins.
 
-Perform a full review and remediation pass over the complete Phase 0–13 product before internal human testing.
+### Phase 15.1 — Guided Hex Crawl experience — later
 
-This phase includes the previously planned expanded encounter handoff and explicitly includes a complete UI/UX pass rather than limiting review to backend code.
+Add the beginner-facing Guided layer over the Compact architecture while internal human testing continues.
 
-Definition of done includes:
+### Phase 15.5 — internal-testing stabilization and pre-release hardening — later
 
-- architecture/state-ownership review across all durable and derived state;
-- persistence/aggregate-integrity review covering final validation, atomicity, optimistic concurrency, idempotency, restart behavior, deletion/reference integrity, and immutable history;
-- backend/API review for validation, failure semantics, canonical contracts, stale compatibility paths, and client/server authority boundaries;
-- review of optional provider/external-tool boundaries, including the newly extracted shared map-processing resource;
-- security/trust-boundary review of authorization, ownership, untrusted requests, provider/service responses, and server-side enforcement;
-- measurement-driven performance review and remediation of significant repeated work, unnecessary calls, serialization/database inefficiencies, slow client fetch patterns, and rendering problems;
-- comprehensive UI/UX review covering information architecture, workflow coherence, state visibility, action terminology, unsupported/manual states, loading and error behavior, responsive layout, scrolling/modal/card behavior, navigation consistency, accessibility basics, empty/custom-content states, destructive actions, and optimistic-concurrency recovery;
-- cross-phase integration review covering environment → movement, environment → survival → consequence, journey → consequence → resources/effects, typed activity snapshots, forced travel, no-interval journeys, and other Phase 0–13 boundaries;
-- test-quality review focused on actual invariants rather than test count, including browser/raw-HTTP parity, restart scenarios, failure paths, nonspatial behavior, and proof-preset behavior;
-- removal of obsolete Phase 0–13 scaffolding, dead code, superseded helpers, stale terminology, and contradictory documentation;
-- expanded encounter handoff carrying structured circumstances, effects, composition changes, journey/hazard provenance, resource depletion, route/location changes, linked scenes, and other relevant expedition context while Block Initiative remains tactical-combat authority;
-- representative end-to-end DM acceptance scenarios pass through the complete UI and backend;
-- the One Ring mapless/no-interval workflow receives a dedicated end-to-end review and remains free of fabricated watch/interval dependencies;
-- discovered architectural defects are fixed rather than documented around when a clean correction is feasible;
-- breaking development corrections and database resets remain permitted where they improve the intended architecture;
-- exact-head CI is green after remediation.
+Resolve real human-testing problems and establish the stable pre-release baseline.
 
-### Phase 14.5 — internal human testing readiness
+### Battle Map — separate future roadmap
 
-Stabilize the Phase 0–14 vertical slice for internal human use without introducing release-level compatibility guarantees.
-
-Definition of done should include:
-
-- remaining tester-blocking UX defects are resolved;
-- representative acceptance scenarios cover interval/watch travel, activity-budget travel, quarter-day travel, non-spatial/journey-process behavior, custom procedures, shared map-processing availability/failure, optional-provider absence, DM/manual fallback, and encounter handoff;
-- persistence/restart behavior for the Phase 0–14 durable state model is validated;
-- logging/diagnostics are sufficient to distinguish user input, unsupported procedure behavior, provider/service problems, and application defects during testing;
-- tester-facing instructions clearly state that the application remains pre-release and database resets are still possible;
-- the reset/migration policy from this document is applied: migrations become preferable when straightforward, but resets remain permitted when architecture warrants them.
-
-After Phase 14.5 is accepted, open Hex Crawl to internal human testers.
-
-### Phase 15 — battle-map ownership evaluation
-
-Use actual product needs and internal human testing feedback to decide whether tactical maps remain external, Hex Crawl gains a map surface, or both coexist. The Phase 13 shared map-processing resource should already be available as reusable infrastructure and must not predetermine tactical-map product ownership.
-
-Develop with internal human testing active.
+Battle Map product design, tactical-map ownership, and cross-tool integration are not a Hex Crawl phase. Address them through a future Battle Map roadmap once that product exists and is sufficiently mature.
 
 ## Development workflow
 
@@ -774,8 +797,8 @@ Before each implementation phase or major review pass:
 
 Compatibility handling follows the roadmap horizon:
 
-- before Phase 14.5, do not add migrations, legacy loaders, dual representations, or compatibility adapters merely to avoid development database resets;
-- beginning with Phase 14.5, evaluate migration before resetting tester data and prefer migration when it is straightforward and architecture-preserving;
+- before Phase 15 acceptance, do not add migrations, legacy loaders, dual representations, or compatibility adapters merely to avoid development database resets;
+- after Phase 15 acceptance opens internal testing, evaluate migration before resetting persisted tester data and prefer migration when it is straightforward and architecture-preserving;
 - at all stages, explicit architectural requirements override accidental compatibility with superseded development formats.
 
 Do not modify or merge `main` without explicit authorization.
@@ -784,17 +807,19 @@ Do not modify or merge `main` without explicit authorization.
 
 The target architecture is reached when a DM can:
 
-1. select a recognizable preset;
+1. browse and select a recognizable preset;
 2. receive a complete generic campaign procedure;
-3. understand each major part in plain language;
+3. understand each major part in tabletop language;
 4. replace individual behaviors with alternatives or house rules;
 5. run the resulting executable procedure without the original preset being present;
-6. persist structural procedures even when some later execution engines are not yet implemented;
+6. persist structural procedures even when some later execution engines are not implemented;
 7. run core expedition behavior without Rules Core;
-8. use Rules Core, Character Sheet, Block Initiative, map providers, and the shared map-processing resource only when they add value;
+8. use Rules Core, Character Sheet, Block Initiative, map providers, and Surveyor only when they add value;
 9. save and reuse customized procedure revisions;
 10. generate a readable procedure reference from the exact executable configuration;
 11. preserve pinned campaign/session behavior across later preset revisions;
-12. keep Hex Crawl durable map/grid/world state independent of shared map-processing implementation details;
-13. complete a reviewed end-to-end DM workflow with coherent UI state and recoverable failure behavior;
-14. evolve pre-release architecture by removing obsolete development representations rather than accumulating parallel compatibility layers.
+12. keep Hex Crawl durable map/grid/world state independent of Surveyor implementation details;
+13. use Compact, Advanced, and JSON as coherent presentations over the same canonical procedure;
+14. run spatial and nonspatial/journey procedures from a workflow-oriented expedition workspace without fabricated state;
+15. recover from validation, provider, service, and optimistic-concurrency failures without losing authoritative context;
+16. evolve pre-release architecture by removing obsolete development representations rather than accumulating parallel compatibility layers.
