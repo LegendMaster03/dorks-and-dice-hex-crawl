@@ -43,13 +43,14 @@ test("client modules have stable, complete route ownership", async () => {
     }
 });
 
-test("procedure module exposes read-only reference navigation for the selected revision", async () => {
+test("procedure module exposes read-only reference navigation for the explicit selected revision", async () => {
     const procedures = await source("modules/procedures/module.ts");
     const reference = await source("modules/procedures/procedure-reference-view.ts");
 
     assert.match(procedures, /View procedure reference/);
-    assert.match(procedures, /button\[data-revision\]:disabled/);
-    assert.match(procedures, /revisions\/\$\{encodeURIComponent\(activeRevision\)\}\/reference/);
+    assert.match(procedures, /route\.kind === "procedure-revision" \? route\.revision : null/);
+    assert.match(procedures, /revision === null[\s\S]*\$\{base\}\/reference[\s\S]*revisions\/\$\{encodeURIComponent\(String\(revision\)\)\}\/reference/);
+    assert.doesNotMatch(procedures, /button\[data-revision\]:disabled/);
     assert.match(reference, /Print reference/);
     assert.match(reference, /@media print/);
     assert.match(reference, /Back to procedure/);

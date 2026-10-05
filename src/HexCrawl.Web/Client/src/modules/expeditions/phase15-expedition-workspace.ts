@@ -27,9 +27,7 @@ export async function enhanceExpeditionWorkspace(
     let journey = initialJourney.status === "fulfilled" ? initialJourney.value : null;
     let world: Overworld | null = initialWorld.status === "fulfilled" ? initialWorld.value : null;
     let selectedHex: { q: number; r: number } | null = null;
-    let runtimeRefreshTimer: number | null = null;
-    let survivalRefreshTimer: number | null = null;
-    let journeyRefreshTimer: number | null = null;
+    let supportingRefresh = 0;
     let drawer: { close: () => void } | null = null;
 
     const page = root.querySelector<HTMLElement>(".hc-page");
@@ -43,11 +41,31 @@ export async function enhanceExpeditionWorkspace(
     if (grid) page.insertBefore(host, grid);
     else page.append(host);
 
+    const refreshSupportingState = async (): Promise<void> => {
+        const token = ++supportingRefresh;
+        const [nextSurvival, nextJourney] = await Promise.allSettled([
+            survivalApi.get(expeditionId),
+            journeyApi.get(expeditionId)
+        ]);
+        if (disposed || token !== supportingRefresh) return;
+        if (nextSurvival.status === "fulfilled") survival = nextSurvival.value;
+        if (nextJourney.status === "fulfilled") journey = nextJourney.value;
+        render();
+    };
+
+    const acceptRuntime = (next: ExpeditionDetail): void => {
+        if (disposed || next.id !== expeditionId) return;
+        const changed = next.version !== runtime.version;
+        runtime = next;
+        render();
+        if (changed) void refreshSupportingState();
+    };
+
+    const restoreApiHooks = installRuntimeHooks(api, expeditionId, acceptRuntime);
+
     const render = (): void => {
         if (disposed) return;
-        host.replaceChildren();
-        host.append(renderCurrentAction());
-
+        host.replaceChildren(renderCurrentAction());
         const stats = document.createElement("div");
         stats.className = "hc-stat-action-grid";
         stats.setAttribute("aria-label", "Expedition current state");
@@ -59,7 +77,7 @@ export async function enhanceExpeditionWorkspace(
         context.append(
             contextButton("Party", showPartyContext),
             contextButton(runtime.expedition.isSpatial ? "Current hex" : "Current context", showCurrentContext),
-            contextButton("History", () => focusHistory()));
+            contextButton("History", focusHistory));
         if (survival) context.append(contextButton("Resources & effects", () => openDetails("[data-survival-resources-panel]")));
         if (journey && journey.processPolicy.support !== "None") context.append(contextButton("Journey", () => openDetails("[data-journey-panel]")));
         host.append(context);
@@ -70,10 +88,9 @@ export async function enhanceExpeditionWorkspace(
     const renderCurrentAction = (): HTMLElement => {
         const section = document.createElement("section");
         section.className = "hc-current-action";
-        const header = document.createElement("header");
-        header.append(textElement("h2", "Current action"));
         const action = currentAction();
-        header.append(badge(action.status, action.tone));
+        const header = document.createElement("header");
+        header.append(textElement("h2", "Current action"), badge(action.status, action.tone));
         section.append(
             header,
             textElement("p", action.title, "hc-current-action-primary"),
@@ -89,221 +106,121 @@ export async function enhanceExpeditionWorkspace(
         return section;
     };
 
-    const currentAction = (): {
-        status: string;
-        tone: "neutral" | "good" | "warning" | "danger" | "info";
-        title: string;
-        detail: string;
-        buttonLabel: string | null;
-        activate: (() => void) | null;
-    } => {
+    const currentAction = (): CurrentAction => {
         if (runtime.pauseReason === "EncounterTriggered") {
-            return {
-                status: "Paused",
-                tone: "warning",
-                title: "An encounter interrupted the expedition.",
-                detail: "Review the encounter context, hand off to Block Initiative when ready, and return to the same expedition state afterward.",
-                buttonLabel: "Review encounter handoff",
-                activate: () => focusEncounterHandoff()
-            };
+            return action("Paused", "warning", "An encounter interrupted the expedition.",
+                "Review the encounter context, hand off to Block Initiative when ready, and return to the same expedition state afterward.",
+                "Review encounter handoff", focusEncounterHandoff);
         }
         if (runtime.pauseReason === "LostRecognitionRequired") {
-            return {
-                status: "Decision required",
-                tone: "warning",
-                title: "The party may recognize that it is lost.",
-                detail: "Resolve recognition and reorientation before continuing travel.",
-                buttonLabel: "Resolve navigation decision",
-                activate: () => openRunWatch("[data-boundary-resolution]")
-            };
+            return action("Decision required", "warning", "The party may recognize that it is lost.",
+                "Resolve recognition and reorientation before continuing travel.",
+                "Resolve navigation decision", () => openRunWatch("[data-boundary-resolution]"));
         }
         if (runtime.pauseReason === "ConditionsReviewRequired") {
-            return {
-                status: "Review required",
-                tone: "warning",
-                title: "Current conditions require DM review.",
-                detail: "Review the relevant travel, environment, and consequence state before continuing.",
-                buttonLabel: "Review travel controls",
-                activate: () => openRunWatch()
-            };
+            return action("Review required", "warning", "Current conditions require DM review.",
+                "Review the relevant travel, environment, and consequence state before continuing.",
+                "Review travel controls", () => openRunWatch());
         }
         if (runtime.pauseReason === "BacktrackBoundaryReached") {
-            return {
-                status: "Boundary reached",
-                tone: "warning",
-                title: "Travel reached a boundary that needs a decision.",
-                detail: "Resolve the boundary/backtrack decision before the expedition advances.",
-                buttonLabel: "Resolve boundary",
-                activate: () => openRunWatch("[data-boundary-resolution]")
-            };
+            return action("Boundary reached", "warning", "Travel reached a boundary that needs a decision.",
+                "Resolve the boundary/backtrack decision before the expedition advances.",
+                "Resolve boundary", () => openRunWatch("[data-boundary-resolution]"));
         }
 
-        const pendingJourneyEvent = journey?.eventOccurrences.find(event => event.status === "ResolutionRequired") ?? null;
-        if (pendingJourneyEvent) {
-            return {
-                status: "Journey event",
-                tone: "warning",
-                title: pendingJourneyEvent.eventType
-                    ? `${pendingJourneyEvent.eventType} needs resolution.`
-                    : "A journey event needs resolution.",
-                detail: "Resolve the current event and its consequences from the journey workspace.",
-                buttonLabel: "Resolve journey event",
-                activate: () => openDetails("[data-journey-panel]")
-            };
+        const pendingEvent = journey?.eventOccurrences.find(event => event.status === "ResolutionRequired") ?? null;
+        if (pendingEvent) {
+            return action("Journey event", "warning",
+                pendingEvent.eventType ? `${pendingEvent.eventType} needs resolution.` : "A journey event needs resolution.",
+                "Resolve the current event and its consequences from the journey workspace.",
+                "Resolve journey event", () => openDetails("[data-journey-panel]"));
         }
 
         const activeJourney = journey?.activeProcesses[0] ?? null;
         if (activeJourney && (!runtime.expedition.isSpatial || activeJourney.status === "ResolutionRequired")) {
             const stage = activeJourney.definition.stages.find(value => value.stageKey === activeJourney.currentStageKey);
             const state = activeJourney.stageStates.find(value => value.stageKey === activeJourney.currentStageKey);
-            return {
-                status: activeJourney.status === "ResolutionRequired" ? "Resolution required" : "Journey active",
-                tone: activeJourney.status === "ResolutionRequired" ? "warning" : "info",
-                title: `${activeJourney.definition.displayName}: ${stage?.displayName ?? activeJourney.currentStageKey}`,
-                detail: state ? journeyProgress(activeJourney, state.numericProgress, state.explicitState) : "Review the active journey stage.",
-                buttonLabel: "Open journey workspace",
-                activate: () => openDetails("[data-journey-panel]")
-            };
+            return action(
+                activeJourney.status === "ResolutionRequired" ? "Resolution required" : "Journey active",
+                activeJourney.status === "ResolutionRequired" ? "warning" : "info",
+                `${activeJourney.definition.displayName}: ${stage?.displayName ?? activeJourney.currentStageKey}`,
+                state ? journeyProgress(activeJourney, state.numericProgress, state.explicitState) : "Review the active journey stage.",
+                "Open journey workspace", () => openDetails("[data-journey-panel]"));
         }
 
         const state = runtime.expedition;
         if (state.isSpatial) {
             if (state.activeWatchNumber !== null) {
-                const remaining = state.activeWatchRemainingHours ?? runtime.remainingWatchHours;
-                return {
-                    status: "In progress",
-                    tone: "info",
-                    title: `Continue watch ${state.activeWatchNumber}.`,
-                    detail: `${formatHours(remaining)} remain in the current watch. Review only the resolutions that apply to this procedure before advancing.`,
-                    buttonLabel: "Continue current watch",
-                    activate: () => openRunWatch()
-                };
+                return action("In progress", "info", `Continue watch ${state.activeWatchNumber}.`,
+                    `${formatHours(state.activeWatchRemainingHours ?? runtime.remainingWatchHours)} remain in the current watch. Review only the resolutions that apply to this procedure before advancing.`,
+                    "Continue current watch", () => openRunWatch());
             }
-            return {
-                status: "Ready",
-                tone: "good",
-                title: `Plan travel from hex ${state.currentHex.q}, ${state.currentHex.r}.`,
-                detail: runtime.procedure.runtime
+            return action("Ready", "good", `Plan travel from hex ${state.currentHex.q}, ${state.currentHex.r}.`,
+                runtime.procedure.runtime
                     ? "Set the intended course and applicable travel inputs, then run the next watch."
-                    : "The stored procedure is structural; use the applicable assisted/manual procedure tools rather than inventing executable travel.",
-                buttonLabel: runtime.procedure.runtime ? "Plan next travel watch" : null,
-                activate: runtime.procedure.runtime ? () => openRunWatch("[data-plan-fields]") : null
-            };
+                    : "The stored procedure is structural; use the applicable assisted/manual tools rather than inventing executable travel.",
+                runtime.procedure.runtime ? "Plan next travel watch" : null,
+                runtime.procedure.runtime ? () => openRunWatch("[data-plan-fields]") : null);
         }
 
-        const intervalAvailable = runtime.procedure.focusedIntervalPolicy.support === "Supported";
-        if (intervalAvailable) {
-            return {
-                status: state.activeWatchNumber === null ? "Ready" : "In progress",
-                tone: "good",
-                title: state.activeWatchNumber === null
-                    ? `Ready for watch ${state.completedWatches + 1}.`
-                    : `Continue watch ${state.activeWatchNumber}.`,
-                detail: "This procedure provides a real focused interval, so watch/time bookkeeping is available without fabricating spatial travel.",
-                buttonLabel: "Open watch / time",
-                activate: () => clickIfPresent("[data-watch]")
-            };
+        if (runtime.procedure.focusedIntervalPolicy.support === "Supported") {
+            return action(state.activeWatchNumber === null ? "Ready" : "In progress", "good",
+                state.activeWatchNumber === null ? `Ready for watch ${state.completedWatches + 1}.` : `Continue watch ${state.activeWatchNumber}.`,
+                "This procedure provides a real focused interval, so watch/time bookkeeping is available without fabricating spatial travel.",
+                "Open watch / time", () => clickIfPresent("[data-watch]"));
         }
 
         if (journey?.processPolicy.support === "Supported") {
-            return {
-                status: "Journey procedure",
-                tone: "info",
-                title: "No repeating watch is required by this procedure.",
-                detail: activeJourney
-                    ? "Continue the active multi-stage journey process."
-                    : "Start or manage the journey process directly; no map or interval bookkeeping is fabricated.",
-                buttonLabel: "Open journey workspace",
-                activate: () => openDetails("[data-journey-panel]")
-            };
+            return action("Journey procedure", "info", "No repeating watch is required by this procedure.",
+                activeJourney ? "Continue the active multi-stage journey process." : "Start or manage the journey process directly; no map or interval bookkeeping is fabricated.",
+                "Open journey workspace", () => openDetails("[data-journey-panel]"));
         }
 
-        return {
-            status: "Procedure-led",
-            tone: "neutral",
-            title: "No repeating watch or spatial action is currently required.",
-            detail: "Use only the party, resource, environment, or custom procedure surfaces that apply to this expedition.",
-            buttonLabel: null,
-            activate: null
-        };
+        return action("Procedure-led", "neutral", "No repeating watch or spatial action is currently required.",
+            "Use only the party, resource, environment, or custom procedure surfaces that apply to this expedition.", null, null);
     };
 
     const runtimeStats = (): HTMLElement[] => {
         const state = runtime.expedition;
         const stats: HTMLElement[] = [
-            statAction(
-                "Time",
-                `Day ${state.currentDay}`,
-                `${formatHours(state.elapsedTravelHours)} elapsed`,
-                focusHistory)
+            statAction("Time", `Day ${state.currentDay}`, `${formatHours(state.elapsedTravelHours)} elapsed`, focusHistory)
         ];
-
         if (state.isSpatial) {
             stats.push(
-                statAction(
-                    "Travel",
-                    formatDistance(state.distanceTraveled),
+                statAction("Travel", formatDistance(state.distanceTraveled),
                     state.activeWatchNumber === null ? "Ready for next watch" : `${formatHours(state.activeWatchRemainingHours ?? runtime.remainingWatchHours)} remaining`,
-                    () => openRunWatch("[data-travel-resolution]"),
-                    state.activeWatchNumber === null ? "neutral" : "info"),
-                statAction(
-                    "Navigation",
-                    navigationValue(state),
+                    () => openRunWatch("[data-travel-resolution]"), state.activeWatchNumber === null ? "neutral" : "info"),
+                statAction("Navigation", navigationValue(state),
                     state.intendedDirection === null ? "No current course" : `Intended ${directionLabel(state.intendedDirection)}`,
-                    () => openRunWatch("[data-navigation-resolution]"),
-                    state.isLost ? "warning" : "good"),
-                statAction(
-                    "Current hex",
-                    `${state.currentHex.q}, ${state.currentHex.r}`,
-                    state.actualDirection === null ? "No active course" : `Actual ${directionLabel(state.actualDirection)}`,
-                    showCurrentContext)
-            );
+                    () => openRunWatch("[data-navigation-resolution]"), state.isLost ? "warning" : "good"),
+                statAction("Current hex", `${state.currentHex.q}, ${state.currentHex.r}`,
+                    state.actualDirection === null ? "No active course" : `Actual ${directionLabel(state.actualDirection)}`, showCurrentContext));
         } else if (runtime.procedure.focusedIntervalPolicy.support === "Supported") {
-            stats.push(statAction(
-                "Watch",
+            stats.push(statAction("Watch",
                 state.activeWatchNumber === null ? `Ready for ${state.completedWatches + 1}` : String(state.activeWatchNumber),
                 state.activeWatchNumber === null ? "No active watch" : `${formatHours(state.activeWatchRemainingHours ?? runtime.remainingWatchHours)} remaining`,
                 () => clickIfPresent("[data-watch]")));
         }
 
         stats.push(
-            statAction(
-                "Party",
-                `${runtime.party.members.length} member${runtime.party.members.length === 1 ? "" : "s"}`,
-                activeAssignmentSummary(runtime),
-                showPartyContext),
-            statAction(
-                "Movement",
-                movementValue(runtime),
-                movementDetail(runtime),
-                () => openPartyEditor(),
-                runtime.movementComposition.status === "Resolved" ? "good" : runtime.movementComposition.status === "InputRequired" ? "warning" : "neutral")
-        );
+            statAction("Party", `${runtime.party.members.length} member${runtime.party.members.length === 1 ? "" : "s"}`,
+                activeAssignmentSummary(runtime), showPartyContext),
+            statAction("Movement", movementValue(runtime), movementDetail(runtime), openPartyEditor,
+                runtime.movementComposition.status === "Resolved" ? "good" : runtime.movementComposition.status === "InputRequired" ? "warning" : "neutral"));
 
         if (survival) {
             stats.push(
-                statAction(
-                    "Resources",
-                    resourceValue(survival),
-                    resourceDetail(survival),
-                    () => openDetails("[data-survival-resources-panel]"),
-                    survival.resources.some(resource => resource.isDepleted) || survival.pendingResourceConsequences.length > 0 ? "warning" : "neutral"),
-                statAction(
-                    "Forced travel",
-                    forcedTravelValue(survival),
-                    forcedTravelDetail(survival),
-                    () => openDetails("[data-survival-resources-panel]"),
-                    survival.forcedTravel.checkDue ? "warning" : "neutral")
-            );
+                statAction("Resources", resourceValue(survival), resourceDetail(survival), () => openDetails("[data-survival-resources-panel]"),
+                    survival.resources.some(value => value.isDepleted) || survival.pendingResourceConsequences.length > 0 ? "warning" : "neutral"),
+                statAction("Forced travel", forcedTravelValue(survival), forcedTravelDetail(survival), () => openDetails("[data-survival-resources-panel]"),
+                    survival.forcedTravel.checkDue ? "warning" : "neutral"));
         }
 
         if (journey && journey.processPolicy.support !== "None") {
             const active = journey.activeProcesses[0] ?? null;
-            stats.push(statAction(
-                "Journey",
+            stats.push(statAction("Journey",
                 active ? active.definition.displayName : journey.processPolicy.support === "Supported" ? "Ready" : "Unavailable",
-                active ? journeyStageLabel(active) : "No active process",
-                () => openDetails("[data-journey-panel]"),
+                active ? journeyStageLabel(active) : "No active process", () => openDetails("[data-journey-panel]"),
                 active?.status === "ResolutionRequired" ? "warning" : "neutral"));
         }
         return stats;
@@ -316,18 +233,12 @@ export async function enhanceExpeditionWorkspace(
         heading.className = "hc-area-card-heading";
         heading.append(textElement("h3", `Selected hex ${q}, ${r}`), badge("Map context", "info"));
         card.append(heading);
-        const spatial = runtime.expedition.isSpatial ? runtime.expedition : null;
-        if (spatial && spatial.currentHex.q === q && spatial.currentHex.r === r) {
-            card.append(textElement("p", "The party is currently in this hex."));
-        }
+        const state = runtime.expedition;
+        if (state.isSpatial && state.currentHex.q === q && state.currentHex.r === r) card.append(textElement("p", "The party is currently in this hex."));
         const locations = locationsInHex(world!, q, r);
         if (locations.length > 0) {
             const list = document.createElement("ul");
-            for (const location of locations) {
-                const item = document.createElement("li");
-                item.textContent = `${location.name} · ${location.category}`;
-                list.append(item);
-            }
+            for (const location of locations) list.append(textElement("li", `${location.name} · ${location.category}`));
             card.append(textElement("strong", "Locations"), list);
         } else {
             card.append(textElement("p", "No authored locations are recorded in this selected hex.", "hc-muted"));
@@ -339,31 +250,23 @@ export async function enhanceExpeditionWorkspace(
     const showPartyContext = (): void => {
         drawer?.close();
         drawer = openWorkspaceDrawer(root, "Party", body => {
-            const members = runtime.party.members;
-            if (members.length === 0) body.append(textElement("p", "No party members are recorded.", "hc-phase15-empty"));
+            if (runtime.party.members.length === 0) body.append(textElement("p", "No party members are recorded.", "hc-phase15-empty"));
             else {
                 const list = document.createElement("ul");
-                for (const member of members) {
-                    const assignments = runtime.party.activityAssignments.filter(value => value.participantId === member.id);
-                    const item = document.createElement("li");
-                    const details = assignments
+                for (const member of runtime.party.members) {
+                    const roles = runtime.party.activityAssignments
+                        .filter(value => value.participantId === member.id)
                         .map(value => value.roleKey ?? value.activityKey)
                         .filter((value): value is string => Boolean(value));
-                    item.textContent = `${member.name}${details.length > 0 ? ` · ${details.join(", ")}` : ""}`;
-                    list.append(item);
+                    list.append(textElement("li", `${member.name}${roles.length > 0 ? ` · ${roles.join(", ")}` : ""}`));
                 }
                 body.append(list);
             }
-            if (runtime.party.baseMovement) {
-                body.append(textElement("p", `Movement reference: ${movementReference(runtime)}.`));
-            }
+            if (runtime.party.baseMovement) body.append(textElement("p", `Movement reference: ${movementReference(runtime)}.`));
             const edit = document.createElement("button");
             edit.type = "button";
             edit.textContent = "Manage party";
-            edit.addEventListener("click", () => {
-                drawer?.close();
-                openPartyEditor();
-            });
+            edit.addEventListener("click", () => { drawer?.close(); openPartyEditor(); });
             body.append(edit);
         });
     };
@@ -380,11 +283,11 @@ export async function enhanceExpeditionWorkspace(
                     contextLine("Actual course", directionLabel(state.actualDirection)),
                     contextLine("Distance traveled", formatDistance(state.distanceTraveled)),
                     contextLine("Navigation", navigationValue(state)));
-                const currentLocations = world ? locationsInHex(world, state.currentHex.q, state.currentHex.r) : [];
-                if (currentLocations.length > 0) {
+                const locations = world ? locationsInHex(world, state.currentHex.q, state.currentHex.r) : [];
+                if (locations.length > 0) {
                     body.append(textElement("h3", "Locations here"));
                     const list = document.createElement("ul");
-                    for (const location of currentLocations) list.append(textElement("li", `${location.name} · ${location.category}`));
+                    for (const location of locations) list.append(textElement("li", `${location.name} · ${location.category}`));
                     body.append(list);
                 }
             } else {
@@ -396,90 +299,117 @@ export async function enhanceExpeditionWorkspace(
         });
     };
 
-    const refreshRuntime = (): void => {
-        if (runtimeRefreshTimer !== null) window.clearTimeout(runtimeRefreshTimer);
-        runtimeRefreshTimer = window.setTimeout(() => {
-            runtimeRefreshTimer = null;
-            void api.getExpedition(expeditionId).then(next => {
-                if (disposed) return;
-                runtime = next;
-                if (runtime.overworldId && !world) {
-                    void api.getOverworld(runtime.overworldId).then(value => {
-                        if (!disposed) {
-                            world = value;
-                            render();
-                        }
-                    }).catch(() => {});
-                }
-                render();
-            }).catch(() => {});
-        }, 50);
+    const mapCanvas = root.querySelector<HTMLCanvasElement>("[data-map] canvas");
+    const readMapSelection = (): void => {
+        if (!mapCanvas || disposed) return;
+        const label = mapCanvas.getAttribute("aria-label") ?? "";
+        const match = label.match(/Selected hex q (-?\d+), r (-?\d+)/i);
+        selectedHex = match ? { q: Number(match[1]), r: Number(match[2]) } : null;
+        render();
     };
-
-    const refreshSurvival = (): void => {
-        if (survivalRefreshTimer !== null) window.clearTimeout(survivalRefreshTimer);
-        survivalRefreshTimer = window.setTimeout(() => {
-            survivalRefreshTimer = null;
-            void survivalApi.get(expeditionId).then(next => {
-                if (!disposed) {
-                    survival = next;
-                    render();
-                }
-            }).catch(() => {});
-        }, 50);
+    const scheduleMapSelectionRead = (): void => {
+        requestAnimationFrame(() => requestAnimationFrame(readMapSelection));
     };
-
-    const refreshJourney = (): void => {
-        if (journeyRefreshTimer !== null) window.clearTimeout(journeyRefreshTimer);
-        journeyRefreshTimer = window.setTimeout(() => {
-            journeyRefreshTimer = null;
-            void journeyApi.get(expeditionId).then(next => {
-                if (!disposed) {
-                    journey = next;
-                    render();
-                }
-            }).catch(() => {});
-        }, 50);
-    };
-
-    const runtimeObserver = observe(root.querySelector("[data-status]"), refreshRuntime);
-    const survivalObserver = observe(root.querySelector("[data-survival-resources-panel]"), refreshSurvival);
-    const journeyObserver = observe(root.querySelector("[data-journey-panel]"), refreshJourney);
-    const mapStatus = root.querySelector<HTMLElement>("[data-map] [role='status']");
-    const mapObserver = mapStatus ? new MutationObserver(() => {
-        const match = mapStatus.textContent?.match(/Selected hex q (-?\d+), r (-?\d+)/i);
-        if (match) {
-            selectedHex = { q: Number(match[1]), r: Number(match[2]) };
-            render();
-        } else if (/cleared/i.test(mapStatus.textContent ?? "")) {
-            selectedHex = null;
-            render();
-        }
-    }) : null;
-    mapObserver?.observe(mapStatus!, { childList: true, subtree: true, characterData: true });
+    mapCanvas?.addEventListener("click", scheduleMapSelectionRead);
+    mapCanvas?.addEventListener("keydown", scheduleMapSelectionRead);
 
     render();
 
     return () => {
         disposed = true;
-        if (runtimeRefreshTimer !== null) window.clearTimeout(runtimeRefreshTimer);
-        if (survivalRefreshTimer !== null) window.clearTimeout(survivalRefreshTimer);
-        if (journeyRefreshTimer !== null) window.clearTimeout(journeyRefreshTimer);
-        runtimeObserver?.disconnect();
-        survivalObserver?.disconnect();
-        journeyObserver?.disconnect();
-        mapObserver?.disconnect();
+        supportingRefresh += 1;
+        mapCanvas?.removeEventListener("click", scheduleMapSelectionRead);
+        mapCanvas?.removeEventListener("keydown", scheduleMapSelectionRead);
+        restoreApiHooks();
         drawer?.close();
         host.remove();
         page.classList.remove("hc-phase15-expedition", "hc-phase15");
     };
 }
 
-function observe(target: Node | null, action: () => void): MutationObserver | null {
-    if (!target) return null;
-    const observer = new MutationObserver(action);
-    observer.observe(target, { childList: true, subtree: true, characterData: true });
-    return observer;
+type CurrentAction = {
+    status: string;
+    tone: "neutral" | "good" | "warning" | "danger" | "info";
+    title: string;
+    detail: string;
+    buttonLabel: string | null;
+    activate: (() => void) | null;
+};
+
+function action(
+    status: string,
+    tone: CurrentAction["tone"],
+    title: string,
+    detail: string,
+    buttonLabel: string | null,
+    activate: (() => void) | null): CurrentAction {
+    return { status, tone, title, detail, buttonLabel, activate };
+}
+
+function installRuntimeHooks(
+    api: HexCrawlApi,
+    expeditionId: string,
+    accept: (runtime: ExpeditionDetail) => void): () => void {
+    const getExpedition = api.getExpedition.bind(api);
+    const advanceExpedition = api.advanceExpedition.bind(api);
+    const updateExpeditionParty = api.updateExpeditionParty.bind(api);
+    const discover = api.discover.bind(api);
+    const travelAssistant = api.recordTravelAssistant.bind(api);
+    const watchAssistant = api.recordWatchAssistant.bind(api);
+    const navigationAssistant = api.recordNavigationAssistant.bind(api);
+    const encounterAssistant = api.recordEncounterAssistant.bind(api);
+
+    api.getExpedition = async id => {
+        const result = await getExpedition(id);
+        if (id === expeditionId) accept(result);
+        return result;
+    };
+    api.advanceExpedition = async (id, input) => {
+        const result = await advanceExpedition(id, input);
+        if (id === expeditionId) accept(result);
+        return result;
+    };
+    api.updateExpeditionParty = async (id, input) => {
+        const result = await updateExpeditionParty(id, input);
+        if (id === expeditionId) accept(result);
+        return result;
+    };
+    api.discover = async (id, expectedVersion, subjectId, subjectType) => {
+        const result = await discover(id, expectedVersion, subjectId, subjectType);
+        if (id === expeditionId) accept(result);
+        return result;
+    };
+    api.recordTravelAssistant = async (id, input) => {
+        const result = await travelAssistant(id, input);
+        if (id === expeditionId) accept(result);
+        return result;
+    };
+    api.recordWatchAssistant = async (id, input) => {
+        const result = await watchAssistant(id, input);
+        if (id === expeditionId) accept(result);
+        return result;
+    };
+    api.recordNavigationAssistant = async (id, input) => {
+        const result = await navigationAssistant(id, input);
+        if (id === expeditionId) accept(result);
+        return result;
+    };
+    api.recordEncounterAssistant = async (id, input) => {
+        const result = await encounterAssistant(id, input);
+        if (id === expeditionId) accept(result);
+        return result;
+    };
+
+    return () => {
+        api.getExpedition = getExpedition;
+        api.advanceExpedition = advanceExpedition;
+        api.updateExpeditionParty = updateExpeditionParty;
+        api.discover = discover;
+        api.recordTravelAssistant = travelAssistant;
+        api.recordWatchAssistant = watchAssistant;
+        api.recordNavigationAssistant = navigationAssistant;
+        api.recordEncounterAssistant = encounterAssistant;
+    };
 }
 
 function contextButton(label: string, action: () => void): HTMLButtonElement {
@@ -501,8 +431,7 @@ function contextLine(label: string, value: string): HTMLElement {
 
 function navigationValue(state: SpatialRuntimeExpedition): string {
     if (state.isLost) return `Lost · ${state.veerDegrees}° off course`;
-    if (state.activeWatchNumber !== null) return "Oriented · watch active";
-    return "Oriented";
+    return state.activeWatchNumber !== null ? "Oriented · watch active" : "Oriented";
 }
 
 function movementValue(runtime: ExpeditionDetail): string {
@@ -512,7 +441,7 @@ function movementValue(runtime: ExpeditionDetail): string {
     }
     if (runtime.party.baseMovement?.perWatch) return formatDistance(runtime.party.baseMovement.perWatch);
     if (runtime.party.baseMovement?.perHour) return `${formatDistance(runtime.party.baseMovement.perHour)}/hour`;
-    return humanMovementStatus(movement.status);
+    return friendlyKey(movement.status);
 }
 
 function movementDetail(runtime: ExpeditionDetail): string {
@@ -522,11 +451,7 @@ function movementDetail(runtime: ExpeditionDetail): string {
         if (member) return `Limited by ${member.name}`;
     }
     if (movement.missingInputs.length > 0) return `${movement.missingInputs.length} input${movement.missingInputs.length === 1 ? "" : "s"} needed`;
-    return movement.referenceUse === "Fallback" ? "Using party movement reference" : humanMovementStatus(movement.status);
-}
-
-function humanMovementStatus(value: string): string {
-    return value.replace(/([a-z])([A-Z])/g, "$1 $2");
+    return movement.referenceUse === "Fallback" ? "Using party movement reference" : friendlyKey(movement.status);
 }
 
 function movementReference(runtime: ExpeditionDetail): string {
@@ -540,28 +465,26 @@ function movementReference(runtime: ExpeditionDetail): string {
 
 function activeAssignmentSummary(runtime: ExpeditionDetail): string {
     const assignments = runtime.expedition.activeActivityAssignments;
-    if (assignments.length === 0) return runtime.party.activityAssignments.length > 0
+    if (assignments.length > 0) return `${assignments.length} active assignment${assignments.length === 1 ? "" : "s"}`;
+    return runtime.party.activityAssignments.length > 0
         ? `${runtime.party.activityAssignments.length} standing assignment${runtime.party.activityAssignments.length === 1 ? "" : "s"}`
         : "No active role/activity assignments";
-    return `${assignments.length} active assignment${assignments.length === 1 ? "" : "s"}`;
 }
 
 function resourceValue(state: SurvivalResources): string {
     if (state.resources.length === 0) return "None recorded";
     const depleted = state.resources.filter(value => value.isDepleted).length;
-    return depleted > 0
-        ? `${depleted} depleted`
-        : `${state.resources.length} tracked`;
+    return depleted > 0 ? `${depleted} depleted` : `${state.resources.length} tracked`;
 }
 
 function resourceDetail(state: SurvivalResources): string {
+    if (state.pendingResourceConsequences.length > 0) {
+        return `${state.pendingResourceConsequences.length} consequence${state.pendingResourceConsequences.length === 1 ? "" : "s"} pending`;
+    }
     const counted = state.resources
         .filter(value => value.inventoryModel === "Counted" && value.quantity !== null)
         .slice(0, 2)
         .map(value => `${friendlyKey(value.resourceKey)} ${value.quantity}${value.unit ? ` ${value.unit}` : ""}`);
-    if (state.pendingResourceConsequences.length > 0) {
-        return `${state.pendingResourceConsequences.length} consequence${state.pendingResourceConsequences.length === 1 ? "" : "s"} pending`;
-    }
     return counted.length > 0 ? counted.join(" · ") : "Open for current inventory";
 }
 
@@ -596,7 +519,7 @@ function journeyProgress(process: JourneyProcessInstance, numeric: number | null
 }
 
 function friendlyKey(value: string): string {
-    return value.replace(/[._-]+/g, " ").replace(/\b\w/g, match => match.toUpperCase());
+    return value.replace(/[._-]+/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2").replace(/\b\w/g, match => match.toUpperCase());
 }
 
 function locationsInHex(world: Overworld, q: number, r: number) {
@@ -611,13 +534,8 @@ function openRunWatch(focusSelector?: string): void {
     if (!details) return;
     details.open = true;
     details.scrollIntoView({ block: "nearest" });
-    const target = focusSelector
-        ? details.querySelector<HTMLElement>(focusSelector)
-        : details.querySelector<HTMLElement>("input, select, button, textarea");
-    const focus = target?.matches("input,select,button,textarea")
-        ? target
-        : target?.querySelector<HTMLElement>("input, select, button, textarea");
-    focus?.focus();
+    const target = focusSelector ? details.querySelector<HTMLElement>(focusSelector) : details;
+    (target?.matches("input,select,button,textarea") ? target : target?.querySelector<HTMLElement>("input, select, button, textarea"))?.focus();
 }
 
 function openPartyEditor(): void {
@@ -644,9 +562,8 @@ function focusHistory(): void {
 
 function focusEncounterHandoff(): void {
     const host = document.querySelector<HTMLElement>(".hex-crawl-app [data-encounter-handoff]");
-    if (!host) return;
-    host.scrollIntoView({ block: "center" });
-    host.querySelector<HTMLButtonElement>("button")?.focus();
+    host?.scrollIntoView({ block: "center" });
+    host?.querySelector<HTMLButtonElement>("button")?.focus();
 }
 
 function clickIfPresent(selector: string): void {
