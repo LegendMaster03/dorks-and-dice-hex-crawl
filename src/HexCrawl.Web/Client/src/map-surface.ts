@@ -12,6 +12,7 @@ export class MapSurface {
     private readonly viewport = new Viewport();
     private readonly lifecycle = new RenderLifecycle();
     private readonly resizeObserver: ResizeObserver;
+    private readonly accessibilityHelp: HTMLElement;
     private readonly accessibilityStatus: HTMLElement;
     private disposed = false;
     private clickInterceptor: ((point: WorldPoint) => boolean) | null = null;
@@ -23,10 +24,10 @@ export class MapSurface {
         private readonly getWorld: () => Overworld | null,
         private readonly onWorldClick?: (point: WorldPoint) => void) {
         const accessibilityId = ++MapSurface.nextAccessibilityId;
-        const help = document.createElement("p");
-        help.id = `hc-map-help-${accessibilityId}`;
-        help.className = "hc-sr-only";
-        help.textContent = "Interactive hex map. Drag to pan, use the wheel to zoom, arrow keys pan, plus and minus zoom, Home resets the view, Enter or Space selects and activates the point at the center of the map, and Escape clears the selected hex.";
+        this.accessibilityHelp = document.createElement("p");
+        this.accessibilityHelp.id = `hc-map-help-${accessibilityId}`;
+        this.accessibilityHelp.className = "hc-sr-only";
+        this.accessibilityHelp.textContent = "Interactive hex map. Drag to pan, use the wheel to zoom, arrow keys pan, plus and minus zoom, Home resets the view, Enter or Space selects and activates the point at the center of the map, and Escape clears the selected hex.";
 
         this.accessibilityStatus = document.createElement("p");
         this.accessibilityStatus.id = `hc-map-status-${accessibilityId}`;
@@ -39,9 +40,9 @@ export class MapSurface {
         this.canvas.className = "hc-map-canvas";
         this.canvas.tabIndex = 0;
         this.canvas.setAttribute("role", "region");
-        this.canvas.setAttribute("aria-describedby", `${help.id} ${this.accessibilityStatus.id}`);
+        this.canvas.setAttribute("aria-describedby", `${this.accessibilityHelp.id} ${this.accessibilityStatus.id}`);
         this.canvas.setAttribute("aria-keyshortcuts", "ArrowUp ArrowDown ArrowLeft ArrowRight + - Home Enter Space Escape");
-        host.replaceChildren(this.canvas, help, this.accessibilityStatus);
+        host.replaceChildren(this.canvas, this.accessibilityHelp, this.accessibilityStatus);
 
         this.renderer = new CanvasMapRenderer(this.canvas, this.viewport, this.getWorld, () => this.requestRender());
         this.lifecycle.register("map", () => {
@@ -128,6 +129,14 @@ export class MapSurface {
         this.canvas.addEventListener("pointercancel", event => finishPointer(event, true));
 
         this.resizeObserver = new ResizeObserver(() => this.requestRender());
+        this.resizeObserver.observe(host);
+        this.requestRender();
+    }
+
+    public attach(host: HTMLElement): void {
+        if (this.disposed) throw new Error("Can not attach a disposed map surface.");
+        this.resizeObserver.disconnect();
+        host.replaceChildren(this.canvas, this.accessibilityHelp, this.accessibilityStatus);
         this.resizeObserver.observe(host);
         this.requestRender();
     }
