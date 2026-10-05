@@ -134,6 +134,42 @@ public sealed class ProcedureComposerEndpointsTests
     }
 
     [Fact]
+    public async Task ExtensionMechanicRemainsPresentInComposerAlternatives()
+    {
+        var database = TestWebHost.NewDatabasePath();
+        try
+        {
+            using var factory = TestWebHost.Create(database);
+            using var client = factory.CreateClient();
+
+            using var response = await client.PostAsJsonAsync("/api/procedures/composer/draft", new
+            {
+                presetKey = (string?)null,
+                procedureId = (Guid?)null,
+                revision = (int?)null,
+                moduleSelections = new[]
+                {
+                    new { moduleKey = Phase11GenericProcedureCatalog.ExposureModule, included = true }
+                },
+                overrides = Array.Empty<object>()
+            });
+            response.EnsureSuccessStatusCode();
+            var draft = await response.Content.ReadFromJsonAsync<JsonElement>();
+            var exposure = Assert.Single(
+                draft.GetProperty("modules").EnumerateArray(),
+                module => module.GetProperty("moduleKey").GetString() == Phase11GenericProcedureCatalog.ExposureModule);
+
+            Assert.Contains(
+                exposure.GetProperty("alternatives").EnumerateArray(),
+                mechanic => mechanic.GetProperty("key").GetString() == Phase11GenericProcedureCatalog.ExposurePolicyMechanic);
+        }
+        finally
+        {
+            TestWebHost.DeleteDatabase(database);
+        }
+    }
+
+    [Fact]
     public async Task DraftChangeRefreshesDependenciesAndModificationMetadata()
     {
         var database = TestWebHost.NewDatabasePath();

@@ -501,6 +501,7 @@ export async function renderProcedureAuthoringWorkspace(
         home.addEventListener("click", returnToProcedureHome);
 
         if (sourceProcedureId && revisions.length > 0) {
+            const procedureId = sourceProcedureId;
             const currentRevision = viewedRevision ?? latestRevision ?? draft.revision;
             const revisionField = document.createElement("label");
             revisionField.className = "hc-revision-picker";
@@ -524,7 +525,7 @@ export async function renderProcedureAuthoringWorkspace(
                     return;
                 }
                 resetEdits();
-                const base = `/procedures/${encodeURIComponent(sourceProcedureId)}`;
+                const base = `/procedures/${encodeURIComponent(procedureId)}`;
                 navigate(nextRevision === latestRevision
                     ? base
                     : `${base}/revisions/${encodeURIComponent(String(nextRevision))}`);
