@@ -62,6 +62,19 @@ test("Phase 15 expedition workspace is one procedure-driven surface instead of m
     assert.doesNotMatch(module, /subscribeExpeditionRuntimeChanged/);
 });
 
+test("Phase 15 nonspatial actions never route an interval or no-interval journey through spatial travel", () => {
+    const model = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-workspace-model.ts"),
+        "utf8");
+
+    assert.match(model, /runtime\.expedition\.isSpatial\s*&&\s*runtime\.expedition\.activeWatchNumber !== null/);
+    assert.match(model, /!runtime\.expedition\.isSpatial && canUseFocusedNonSpatialWatch\(runtime\)/);
+    assert.match(model, /kind: "watch"/);
+    assert.match(model, /Resume watch/);
+    assert.match(model, /if \(!hasInterval\) \{\s*return `Day \$\{state\.currentDay\} · \$\{formatNumber\(state\.elapsedTravelHours\)\} h elapsed`;/);
+    assert.doesNotMatch(model, /if \(runtime\.expedition\.activeWatchNumber !== null && runtime\.procedure\.runtime !== null\)/);
+});
+
 test("routine spatial travel reuses intent and suppresses fixed movement inputs already resolved by the server", () => {
     const view = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
