@@ -137,6 +137,18 @@ test("Wonderdraft source import is automatic, scalable, and spatially reviewable
     assert.ok(activatePoint.indexOf("hitTestReview") < activatePoint.indexOf("worldToHex"));
 });
 
+test("reference map image loading retries transient failures instead of staying blank forever", () => {
+    const cache = fs.readFileSync(path.join(sourceRoot, "raster-image-cache.ts"), "utf8");
+
+    assert.match(cache, /const MaximumLoadAttempts = 3/);
+    assert.match(cache, /entry\.attempts \+= 1/);
+    assert.match(cache, /entry\.attempts < MaximumLoadAttempts/);
+    assert.match(cache, /entry\.retryTimer = window\.setTimeout/);
+    assert.match(cache, /void this\.load\(url, entry, onReady\)/);
+    assert.match(cache, /window\.clearTimeout\(entry\.retryTimer\)/);
+    assert.match(cache, /console\.warn\(`Reference map image could not be loaded after/);
+});
+
 test("route cleanup disposes raster resources and application-owned DOM does not use MutationObserver", () => {
     const surface = fs.readFileSync(path.join(sourceRoot, "map-surface.ts"), "utf8");
     const cache = fs.readFileSync(path.join(sourceRoot, "raster-image-cache.ts"), "utf8");
