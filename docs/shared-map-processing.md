@@ -15,25 +15,24 @@ Hex Crawl browser
        crNotation=6^3
     -> Hex Crawl validates/interprets the observation
     -> browser builds a transient Hex Crawl-owned alignment proposal
-    -> Hex Crawl automatic-apply safety policy accepts or rejects the proposal
-    -> if accepted, the same user action PUTs grid-alignment
+    -> when Surveyor returned a usable fit, the same user action PUTs grid-alignment
 ```
 
-There is no second user-facing Preview / Apply / Confirm sequence. The analysis request remains non-mutating, and the `grid-alignment` request remains the explicit persistence boundary in the architecture. The browser simply performs both parts of the trusted workflow behind the single Detect / repair action.
+There is no second user-facing Preview / Apply / Confirm sequence. The analysis request remains non-mutating, and the `grid-alignment` request remains the explicit persistence boundary in the architecture. The browser simply performs both parts behind the single Detect / repair action.
 
 Surveyor's API is capability-based rather than hex-specific. Known-tiling detection is one operation; future tiling recognition and unrelated computer-vision operations belong on separate endpoints. Hex Crawl requests `6^3` directly by Cundy-Rollett notation. Surveyor derives the periodic-tiling classification from that notation and returns the normalized Cundy-Rollett (`crNotation`), GomJau-Hogg (`gjhNotation`), and `periodicTilingType` identities. Hex Crawl validates all three response fields before accepting the observation. A separate request-side tiling type, shape name, or side-count shorthand is not part of the public service contract.
 
 The browser never calls Surveyor directly and does not receive the Surveyor service credential. Surveyor does not fetch URLs or resolve Hex Crawl asset keys. Hex Crawl loads the image through `IMapAssetStore` after normal world/source-map authorization and streams the encoded bytes to Surveyor.
 
-Surveyor results are observations rather than commands. A successful `grid-analysis` request does not change the overworld version, mathematical grid, source-map alignment, or any expedition state. Hex Crawl owns the later decision to persist an accepted proposal under optimistic concurrency.
+Surveyor results are observations rather than commands. A successful `grid-analysis` request does not change the overworld version, mathematical grid, source-map alignment, or any expedition state. Hex Crawl owns the later persistence request under optimistic concurrency.
 
-Hex Crawl also retains all consumer-specific interpretation: physical distance, Wonderdraft scale and grid cross-checks, alignment proposals, automatic-apply safety policy, map rendering, and final persistence. Surveyor contains no Hex Crawl domain or persistence model.
+Hex Crawl also retains all consumer-specific interpretation: physical distance, Wonderdraft scale and grid cross-checks, alignment proposals, map rendering, and final persistence. Surveyor contains no Hex Crawl domain or persistence model.
 
 ## Source-image coordinate contract
 
-Surveyor returns detected spacing, anchor, and residual in source-image pixel coordinates. Internally it may analyze a bounded-resolution image, but it normalizes detector output back to the original source image before returning it. `analysis.sourceResolutionVerified` states whether the final phase was verified at source resolution.
+Surveyor returns detected spacing, anchor, and residual in source-image pixel coordinates. Internally it may analyze a bounded-resolution image, but it normalizes detector output back to the original source image before returning it. `analysis.sourceResolutionVerified` remains useful diagnostic metadata.
 
-Automatic persistence remains gated on source-resolution verification and the existing Hex Crawl canonical residual policy. A downscaled-only, inconclusive, gridless, or otherwise non-canonical fit does not silently become durable grid truth. In the one-step UI that condition is reported as a failed automatic alignment, while the map image remains visible and Manual placement remains available.
+The one-click product workflow deliberately does not expose or require the user to adjudicate confidence, residual, or source-resolution verification. If Surveyor returns a usable non-gridless fit, Hex Crawl applies that fit. If Surveyor returns no fit or classifies the image as gridless, nothing is persisted and Manual placement remains available. This preserves the explicit one-button workflow while keeping no-result failures non-mutating.
 
 ## Map images and map sets
 
@@ -61,13 +60,15 @@ Automatic analysis failure is explicit and non-mutating:
 - rejected internal credential or invalid Surveyor protocol -> Hex Crawl `502`;
 - Surveyor/Hex Crawl analysis timeout -> Hex Crawl `504`;
 - browser cancellation aborts the in-flight request without applying a proposal;
-- a result that fails Hex Crawl's automatic-apply trust policy remains non-persistent.
+- no-fit or gridless results remain non-persistent.
 
 The configured Hex Crawl timeout covers both receipt of Surveyor response headers and consumption/parsing of the response body. Switching source maps or starting a newer analysis invalidates earlier asynchronous work, including later Wonderdraft/physical-scale cross-checks, so stale results can not overwrite the current state or report false success.
 
-Wonderdraft physical-scale lookup is an optional cross-check. Failure to read that optional context does not invalidate an otherwise trustworthy image-grid alignment; Hex Crawl simply preserves the existing physical distance when no usable independent scale is available.
+Wonderdraft physical-scale lookup is an optional cross-check. Failure to read that optional context does not invalidate an otherwise usable image-grid alignment; Hex Crawl simply preserves the existing physical distance when no usable independent scale is available.
 
-Retrying analysis is safe because the observation request has no persistence side effect. Manual placement remains available when automatic analysis can not complete or can not be trusted strongly enough for one-step persistence.
+Reference-map image loading retries bounded transient fetch/decode failures rather than leaving a map permanently blank after one failed request. Terminal failures are diagnosed in the browser console and retries are canceled when the cache entry is pruned or disposed.
+
+Retrying analysis is safe because the observation request has no persistence side effect before the final version-checked alignment mutation. Manual placement remains available when automatic analysis can not produce a usable fit.
 
 ## Scope
 
