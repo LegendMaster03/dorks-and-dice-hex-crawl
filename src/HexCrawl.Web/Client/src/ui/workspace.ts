@@ -41,7 +41,8 @@ export function openWorkspaceDrawer(
     root: HTMLElement,
     title: string,
     build: (body: HTMLElement, close: () => void) => void,
-    returnFocus: HTMLElement | null = document.activeElement instanceof HTMLElement ? document.activeElement : null): WorkspaceDrawer {
+    returnFocus: HTMLElement | null = document.activeElement instanceof HTMLElement ? document.activeElement : null,
+    onClose?: () => void): WorkspaceDrawer {
     const existing = root.querySelector<HTMLElement>("[data-phase15-drawer]");
     if (existing) {
         const closeExisting = drawerClosers.get(existing);
@@ -82,6 +83,7 @@ export function openWorkspaceDrawer(
         closed = true;
         document.removeEventListener("keydown", onKeyDown, true);
         drawerClosers.delete(panel);
+        onClose?.();
         panel.remove();
         if (returnFocus?.isConnected) returnFocus.focus();
     };
