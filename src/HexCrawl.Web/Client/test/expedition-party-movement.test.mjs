@@ -16,12 +16,17 @@ function runtime({
     targetUnit = mile,
     baseMovement = null,
     missingInputs = [],
+    compositionStatus = "Resolved",
     travelResolution = "ContinuousDistance",
     actualDistanceResolution = "Fixed",
     isSpatial = true
 } = {}) {
     return {
-        movementComposition: { suggestedExpectedDistance: suggestion, missingInputs },
+        movementComposition: {
+            suggestedExpectedDistance: suggestion,
+            missingInputs,
+            status: compositionStatus
+        },
         party: { baseMovement },
         procedure: {
             runtime: {
@@ -61,14 +66,30 @@ test("watch suggestion performs only presentational unit conversion", () => {
     })), 0.621371192237334);
 });
 
-test("authoritative fixed travel defaults are available only when no movement input remains unresolved", () => {
+test("fixed travel defaults consume deterministic resolved and reference-fallback suggestions", () => {
     assert.equal(authoritativeFixedWatchDistance(runtime({
         suggestion: { value: 6, unit: mile }
     })), 6);
     assert.equal(authoritativeFixedWatchDistance(runtime({
-        suggestion: { value: 6, unit: mile },
-        missingInputs: ["participant-speed"]
-    })), null);
+        suggestion: { value: 4, unit: mile },
+        compositionStatus: "ReferenceFallback",
+        missingInputs: ["automatic movement capability"]
+    })), 4);
+});
+
+test("fixed travel defaults reject non-resolved composition states even if malformed input carries a suggestion", () => {
+    for (const compositionStatus of [
+        "InputRequired",
+        "RequiresAdjudication",
+        "Unsupported",
+        "Unavailable",
+        "Failed"
+    ]) {
+        assert.equal(authoritativeFixedWatchDistance(runtime({
+            suggestion: { value: 6, unit: mile },
+            compositionStatus
+        })), null);
+    }
 });
 
 test("variable and step travel still require procedure resolution rather than inventing a fixed default", () => {
