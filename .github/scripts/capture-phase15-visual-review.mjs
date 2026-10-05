@@ -76,7 +76,16 @@ try {
     await client.send("Runtime.enable");
 
     const metrics = [];
-    const capture = async ({ name, url, width, height, setup, ready = ".hc-page", captureBottom = true }) => {
+    const capture = async ({
+        name,
+        url,
+        width,
+        height,
+        setup,
+        initialReady,
+        ready = ".hc-page",
+        captureBottom = true
+    }) => {
         await client.send("Emulation.setDeviceMetricsOverride", {
             width,
             height,
@@ -84,7 +93,7 @@ try {
             mobile: width <= 480
         });
         await client.send("Page.navigate", { url });
-        await waitForReady(client, ready);
+        await waitForReady(client, initialReady ?? ready);
         if (setup) {
             await client.evaluate(setup);
             await sleep(350);
@@ -154,6 +163,7 @@ try {
         width: 1280,
         height: 800,
         setup: `localStorage.setItem("hex-crawl.procedure-mode", "json"); location.reload();`,
+        initialReady: "[data-procedure-mode-content]",
         ready: "textarea[aria-label=\"Canonical campaign procedure JSON\"]"
     });
     await capture({
