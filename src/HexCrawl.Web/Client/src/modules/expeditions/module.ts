@@ -3,7 +3,7 @@ import { ExpeditionEnvironmentPanel } from "./environment-panel";
 import { ExpeditionSurvivalResourcesPanel } from "./survival-resources-panel";
 import { ExpeditionJourneyPanel } from "./journey-panel";
 import { enhanceExpeditionWorkspace } from "./phase15-expedition-workspace";
-import { publishExpeditionRuntimeChanged } from "./expedition-runtime-events";
+import { publishExpeditionRuntimeChanged, subscribeExpeditionRuntimeChanged } from "./expedition-runtime-events";
 import { SurvivalResourcesApi } from "../../survival-api";
 import { JourneyApi } from "../../journey-api";
 import type { HexCrawlClientModule } from "../../client-module";
@@ -97,6 +97,14 @@ export const expeditionsModule: HexCrawlClientModule = {
             mutate);
         await journeyPanel.sync();
 
+        const unsubscribePanelRuntime = subscribeExpeditionRuntimeChanged(context.root, next => {
+            if (disposed || next.id !== expeditionId) return;
+            panelRuntime = next;
+            environmentPanel.sync();
+            void survivalPanel.sync();
+            void journeyPanel.sync();
+        });
+
         const disposeWorkspace = await enhanceExpeditionWorkspace(
             context.root,
             context.api,
@@ -106,6 +114,7 @@ export const expeditionsModule: HexCrawlClientModule = {
 
         return () => {
             disposed = true;
+            unsubscribePanelRuntime();
             disposeWorkspace();
             journeyPanel.dispose();
             survivalPanel.dispose();
