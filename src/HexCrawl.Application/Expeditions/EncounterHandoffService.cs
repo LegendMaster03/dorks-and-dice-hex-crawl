@@ -1,7 +1,6 @@
 using HexCrawl.Application.Persistence;
 using HexCrawl.Domain.Runtime;
 using HexCrawl.Domain.Spatial;
-using HexCrawl.Domain.World;
 
 namespace HexCrawl.Application;
 
@@ -149,17 +148,15 @@ public sealed class EncounterHandoffService(HexCrawlService coreService)
         }
 
         var returnPath = ValidateReturnPath(command.ReturnPath);
-        StoredOverworld? world = null;
-        if (expedition.Context is WorldBoundCrawlSessionContext worldContext)
-        {
-            world = await coreService.GetOverworldAsync(worldContext.WorldId, ownerUserId, cancellationToken);
-        }
+        var overworldId = expedition.Context is WorldBoundCrawlSessionContext worldContext
+            ? worldContext.WorldId
+            : (Guid?)null;
 
         return command.RuntimeEncounterSequence is { } sequence
-            ? BuildFromRuntime(expedition, world, command.HandoffId, returnPath, sequence)
+            ? BuildFromRuntime(expedition, overworldId, command.HandoffId, returnPath, sequence)
             : BuildFromJourney(
                 expedition,
-                world,
+                overworldId,
                 command.HandoffId,
                 returnPath,
                 command.JourneyEventOccurrenceId!.Value);
@@ -167,7 +164,7 @@ public sealed class EncounterHandoffService(HexCrawlService coreService)
 
     private static EncounterHandoffV2 BuildFromRuntime(
         StoredExpedition expedition,
-        StoredOverworld? world,
+        Guid? overworldId,
         Guid handoffId,
         string? returnPath,
         long sequence)
@@ -180,9 +177,25 @@ public sealed class EncounterHandoffService(HexCrawlService coreService)
             throw new ArgumentException(
                 "The requested runtime event is not a structured encounter occurrence.");
         }
+        if (runtimeEvent.SubjectId.HasValue && runtimeEvent.EncounterLocation is null)
+        {
+            throw new InvalidOperationException(
+                "The runtime encounter references a location without retained historical location metadata.");
+        }
+        if (runtimeEvent.EncounterLocation is { } snapshot
+            && runtimeEvent.SubjectId != snapshot.Id)
+        {
+            throw new InvalidOperationException(
+                "The retained encounter location metadata does not match the runtime encounter subject.");
+        }
 
-        var location = ResolveLocation(world, runtimeEvent.SubjectId);
-        var linkedScenes = ProjectLinkedScenes(location);
+        var location = runtimeEvent.EncounterLocation is null
+            ? null
+            : new EncounterHandoffLocation(
+                runtimeEvent.EncounterLocation.Id,
+                runtimeEvent.EncounterLocation.Name,
+                runtimeEvent.EncounterLocation.Category);
+        var linkedScenes = ProjectLinkedScenes(runtimeEvent.EncounterLocation);
         var elapsed = runtimeEvent.ExpeditionElapsedTime;
         int? watchNumber = expedition.Context.Kind == CrawlSessionContextKind.NonSpatial
             ? null
@@ -195,7 +208,7 @@ public sealed class EncounterHandoffService(HexCrawlService coreService)
             returnPath,
             elapsed,
             watchNumber,
-            world?.World.Id,
+            overworldId,
             runtimeEvent.Hex,
             location,
             runtimeEvent.EncounterOutcome.Value.ToString(),
@@ -208,7 +221,7 @@ public sealed class EncounterHandoffService(HexCrawlService coreService)
 
     private static EncounterHandoffV2 BuildFromJourney(
         StoredExpedition expedition,
-        StoredOverworld? world,
+        Guid? overworldId,
         Guid handoffId,
         string? returnPath,
         Guid eventOccurrenceId)
@@ -255,7 +268,7 @@ public sealed class EncounterHandoffService(HexCrawlService coreService)
             returnPath,
             elapsed,
             expedition.Context.Kind == CrawlSessionContextKind.NonSpatial ? null : history?.CompletedWatches,
-            world?.World.Id,
+            overworldId,
             null,
             null,
             "JourneyEvent",
@@ -275,7 +288,7 @@ public sealed class EncounterHandoffService(HexCrawlService coreService)
         int? watchNumber,
         Guid? overworldId,
         HexCoordinate? hex,
-        Location? location,
+        EncounterHandoffLocation? location,
         string outcome,
         string summary,
         string? dmNote,
@@ -305,7 +318,7 @@ public sealed class EncounterHandoffService(HexCrawlService coreService)
             new EncounterHandoffWorldContext(
                 overworldId,
                 hex,
-                location is null ? null : new EncounterHandoffLocation(location.Id, location.Name, location.Category)),
+                location),
             new EncounterHandoffEncounter(outcome, summary, dmNote),
             [],
             circumstances,
@@ -376,16 +389,9 @@ public sealed class EncounterHandoffService(HexCrawlService coreService)
             .ToArray();
     }
 
-    private static Location? ResolveLocation(StoredOverworld? world, Guid? locationId)
-    {
-        if (world is null || !locationId.HasValue) return null;
-        return world.World.Locations.SingleOrDefault(value => value.Id == locationId.Value)
-            ?? throw new InvalidOperationException(
-                "The encounter references a location that is no longer retained by the authoritative overworld.");
-    }
-
-    private static IReadOnlyList<EncounterHandoffLinkedScene> ProjectLinkedScenes(Location? location) =>
-        location?.DetailMaps
+    private static IReadOnlyList<EncounterHandoffLinkedScene> ProjectLinkedScenes(
+        CrawlRuntimeLocationSnapshot? location) =>
+        location?.LinkedScenes
             .Select(value => new EncounterHandoffLinkedScene(value.Id, value.Kind, value.ReferenceKey))
             .ToArray()
         ?? [];
