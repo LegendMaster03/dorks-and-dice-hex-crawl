@@ -392,8 +392,9 @@ export class SourceMapWorkspace {
                 visible.dataset.sourceMapVisibleId = sourceMap.id;
                 visible.checked = !this.map.renderer.hiddenSourceMapIds.has(sourceMap.id);
                 visible.addEventListener("change", () => {
+                    const requestedVisible = visible.checked;
                     if (isCoordinatedViewSource(sourceMap)) this.switchToManualVisibility();
-                    if (visible.checked) this.map.renderer.hiddenSourceMapIds.delete(sourceMap.id);
+                    if (requestedVisible) this.map.renderer.hiddenSourceMapIds.delete(sourceMap.id);
                     else this.map.renderer.hiddenSourceMapIds.add(sourceMap.id);
                     this.syncVisibilityControls();
                     this.map.requestRender();
