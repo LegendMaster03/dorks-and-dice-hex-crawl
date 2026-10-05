@@ -15,11 +15,6 @@ public sealed partial class PostgresHexCrawlStore
     {
         public RuntimeStateKind Kind { get; init; } = RuntimeStateKind.Spatial;
         public Guid Id { get; init; }
-
-        // Legacy v1 snapshots included OverworldId here. It remains tolerated because
-        // CrawlSessionContext is authoritative after the historical SQLite v2 migration.
-        public Guid? OverworldId { get; init; }
-
         public WorldPoint? Position { get; init; }
         public WorldPositionPrecision? PositionPrecision { get; init; }
         public HexCoordinate? CurrentHex { get; init; }
