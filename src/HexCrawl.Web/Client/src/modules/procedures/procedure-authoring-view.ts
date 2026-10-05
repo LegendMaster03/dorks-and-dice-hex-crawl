@@ -28,7 +28,7 @@ import {
 } from "./procedure-presentation";
 
 export type ProcedureAuthoringMode = "compact" | "advanced" | "json";
-type EntryState = "home" | "catalog" | "workspace";
+type EntryState = "landing" | "presets" | "workspace";
 
 const modeStorageKey = "hex-crawl.procedure-authoring.mode";
 
@@ -42,7 +42,7 @@ export async function renderProcedureAuthoringWorkspace(
     root.classList.add("hc-phase15");
 
     let disposed = false;
-    let entry: EntryState = procedureId ? "workspace" : "home";
+    let entry: EntryState = procedureId ? "workspace" : "landing";
     let mode = readMode();
     let sourcePresetKey: string | null = null;
     let sourceProcedureId = procedureId;
@@ -54,13 +54,14 @@ export async function renderProcedureAuthoringWorkspace(
     let revisions: ProcedureRevisionSummary[] = [];
     let savePending = false;
     let refreshSerial = 0;
-    let drawer: WorkspaceDrawer | null = null;
+    let activeDrawer: WorkspaceDrawer | null = null;
     const pending = new Map<string, ProcedureComposerOverrideInput>();
     const moduleSelections = new Map<string, boolean>();
 
     let jsonText = "";
     let jsonBaseline = "";
     let jsonBusy = false;
+    let jsonLoadFailed = false;
     let jsonValidation: ProcedureCanonicalValidation | null = null;
 
     root.replaceChildren(loadingPanel("Loading exploration procedures…"));
@@ -90,12 +91,13 @@ export async function renderProcedureAuthoringWorkspace(
         moduleSelections.clear();
         jsonText = "";
         jsonBaseline = "";
+        jsonLoadFailed = false;
         jsonValidation = null;
     };
 
     const closeDrawer = (): void => {
-        const active = drawer;
-        drawer = null;
+        const active = activeDrawer;
+        activeDrawer = null;
         active?.close();
     };
 
@@ -110,8 +112,12 @@ export async function renderProcedureAuthoringWorkspace(
         draft = await composerApi.composeDraft(currentInput());
         jsonText = "";
         jsonBaseline = "";
+        jsonLoadFailed = false;
         jsonValidation = null;
-        if (mode === "json") await loadJson();
+        if (mode === "json") {
+            await loadJson();
+            if (jsonLoadFailed) return;
+        }
         if (!disposed) render();
     };
 
@@ -123,8 +129,9 @@ export async function renderProcedureAuthoringWorkspace(
             draft = next;
             jsonText = "";
             jsonBaseline = "";
+            jsonLoadFailed = false;
             jsonValidation = null;
-            render();
+            if (!refreshCompactDrawer(next)) render();
         } catch (error) {
             const target = root.querySelector<HTMLElement>("[data-error]");
             if (target) showUiError(target, error);
@@ -145,15 +152,27 @@ export async function renderProcedureAuthoringWorkspace(
 
     const loadJson = async (): Promise<void> => {
         if (!draft || jsonBusy || jsonText) return;
+        let failure: unknown | null = null;
         jsonBusy = true;
+        jsonLoadFailed = false;
         try {
             const canonical = await composerApi.composeCanonicalDraft(currentInput());
             if (disposed) return;
             jsonText = canonical.canonicalJson;
             jsonBaseline = canonical.canonicalJson;
             jsonValidation = await composerApi.validateCanonical(jsonText);
+        } catch (value) {
+            failure = value;
+            jsonLoadFailed = true;
         } finally {
             jsonBusy = false;
+            if (!disposed) {
+                render();
+                if (failure !== null) {
+                    const target = root.querySelector<HTMLElement>("[data-error]");
+                    if (target) showUiError(target, failure);
+                }
+            }
         }
     };
 
@@ -179,6 +198,7 @@ export async function renderProcedureAuthoringWorkspace(
         if (!draft || savePending || historical()) return;
         const error = root.querySelector<HTMLElement>("[data-error]");
         if (error) clearUiError(error);
+        let failure: unknown | null = null;
         savePending = true;
         render();
         try {
@@ -201,25 +221,29 @@ export async function renderProcedureAuthoringWorkspace(
             navigate(`/procedures/${encodeURIComponent(saved.procedureId)}`, true);
             await loadWorkspace();
         } catch (errorValue) {
-            const target = root.querySelector<HTMLElement>("[data-error]");
-            if (target) showUiError(target, errorValue);
+            failure = errorValue;
         } finally {
             savePending = false;
-            if (!disposed) render();
+            if (!disposed) {
+                render();
+                if (failure !== null) {
+                    const target = root.querySelector<HTMLElement>("[data-error]");
+                    if (target) showUiError(target, failure);
+                }
+            }
         }
     };
 
     const saveCanonical = async (): Promise<void> => {
         if (!draft || !jsonText || savePending || historical()) return;
-        const validation = await composerApi.validateCanonical(jsonText);
-        jsonValidation = validation;
-        if (!validation.isValid) {
-            render();
-            return;
-        }
+        let failure: unknown | null = null;
         savePending = true;
         render();
         try {
+            const validation = await composerApi.validateCanonical(jsonText);
+            jsonValidation = validation;
+            if (!validation.isValid) return;
+
             const saved = sourceProcedureId
                 ? await composerApi.createCanonicalRevision(sourceProcedureId, {
                     expectedRevision: latestRevision ?? draft.revision,
@@ -237,11 +261,16 @@ export async function renderProcedureAuthoringWorkspace(
             navigate(`/procedures/${encodeURIComponent(saved.procedureId)}`, true);
             await loadWorkspace();
         } catch (errorValue) {
-            const target = root.querySelector<HTMLElement>("[data-error]");
-            if (target) showUiError(target, errorValue);
+            failure = errorValue;
         } finally {
             savePending = false;
-            if (!disposed) render();
+            if (!disposed) {
+                render();
+                if (failure !== null) {
+                    const target = root.querySelector<HTMLElement>("[data-error]");
+                    if (target) showUiError(target, failure);
+                }
+            }
         }
     };
 
@@ -249,17 +278,20 @@ export async function renderProcedureAuthoringWorkspace(
         mode = next;
         localStorage.setItem(modeStorageKey, next);
         closeDrawer();
-        if (mode === "json") await loadJson();
+        if (mode === "json") {
+            await loadJson();
+            if (jsonLoadFailed) return;
+        }
         if (!disposed) render();
     };
 
     const render = (): void => {
         closeDrawer();
-        if (entry === "home") {
+        if (entry === "landing") {
             renderHome();
             return;
         }
-        if (entry === "catalog") {
+        if (entry === "presets") {
             renderCatalog();
             return;
         }
@@ -288,7 +320,7 @@ export async function renderProcedureAuthoringWorkspace(
         build.className = "hc-procedure-home-section hc-build-custom";
         const copy = document.createElement("div");
         copy.append(
-            textElement("h2", "Build your own"),
+            textElement("h2", "Build my own"),
             textElement("p", "Start without hidden timing or movement assumptions. Add only the rules your table uses."));
         const action = button("Build a custom procedure", "primary");
         action.addEventListener("click", () => void startCustom());
@@ -297,9 +329,9 @@ export async function renderProcedureAuthoringWorkspace(
 
         const familiar = document.createElement("section");
         familiar.className = "hc-procedure-home-section";
-        const heading = sectionHeading("Start from a familiar procedure", "Inspect the rules first, then materialize an editable campaign-owned copy.");
+        const heading = sectionHeading("Start from a known procedure", "Inspect the rules first, then materialize an editable campaign-owned copy.");
         const browse = button("Browse all presets", "secondary");
-        browse.addEventListener("click", () => { entry = "catalog"; render(); });
+        browse.addEventListener("click", () => { entry = "presets"; render(); });
         heading.append(browse);
         familiar.append(heading);
         const grid = document.createElement("div");
@@ -334,7 +366,7 @@ export async function renderProcedureAuthoringWorkspace(
         const toolbar = document.createElement("div");
         toolbar.className = "hc-procedure-toolbar";
         const back = button("Back to procedures", "secondary");
-        back.addEventListener("click", () => { entry = "home"; render(); });
+        back.addEventListener("click", () => { entry = "landing"; render(); });
         toolbar.append(back);
         page.append(toolbar, errorBox());
 
@@ -383,12 +415,12 @@ export async function renderProcedureAuthoringWorkspace(
 
     const inspectPreset = (preset: ProcedurePreset): void => {
         closeDrawer();
-        drawer = openWorkspaceDrawer(root, {
+        activeDrawer = openWorkspaceDrawer(root, {
             title: preset.displayName,
             description: "Inspect this creation-time recipe before materializing a campaign-owned procedure.",
-            onClose: () => { drawer = null; }
+            onClose: () => { activeDrawer = null; }
         });
-        drawer.body.append(presetFacts(preset));
+        activeDrawer.body.append(presetFacts(preset));
         const behavior = document.createElement("section");
         behavior.className = "hc-focus-workspace-module";
         behavior.append(textElement("h3", "Procedure rules"));
@@ -398,18 +430,18 @@ export async function renderProcedureAuthoringWorkspace(
             row.append(textElement("strong", module.moduleName), textElement("span", presetModuleSummary(module)));
             behavior.append(row);
         }
-        drawer.body.append(behavior);
+        activeDrawer.body.append(behavior);
         if (preset.attribution || preset.disclaimer) {
             const source = document.createElement("section");
             source.className = "hc-focus-workspace-module";
             source.append(textElement("h3", "Source and provenance"));
             if (preset.attribution) source.append(textElement("p", preset.attribution));
             if (preset.disclaimer) source.append(textElement("p", preset.disclaimer));
-            drawer.body.append(source);
+            activeDrawer.body.append(source);
         }
         const use = button("Use as starting point", "primary");
         use.addEventListener("click", () => void selectPreset(preset));
-        drawer.body.append(use);
+        activeDrawer.body.append(use);
     };
 
     const renderWorkspace = (): void => {
@@ -431,7 +463,7 @@ export async function renderProcedureAuthoringWorkspace(
         const right = document.createElement("div");
         right.className = "hc-preset-actions";
         const home = button("Procedure home", "secondary");
-        home.addEventListener("click", () => { entry = "home"; render(); });
+        home.addEventListener("click", () => { entry = "landing"; render(); });
         const save = button(savePending ? "Saving…" : sourceProcedureId ? "Save new revision" : "Save procedure", "primary");
         save.disabled = savePending || historical() || (mode !== "json" && !hasStructuredChanges());
         save.addEventListener("click", () => void (mode === "json" ? saveCanonical() : saveStructured()));
@@ -464,6 +496,7 @@ export async function renderProcedureAuthoringWorkspace(
         const shell = document.createElement("div");
         shell.className = "hc-procedure-shell hc-compact-procedure";
         if (!draft) return shell;
+        shell.append(textElement("p", "Areas you omit are absent from the materialized CampaignProcedure."));
 
         if (draft.modules.length === 0) {
             const neutral = document.createElement("section");
@@ -598,20 +631,26 @@ export async function renderProcedureAuthoringWorkspace(
         return facts;
     };
 
-    const editCompactModule = (module: ProcedureModuleComposer): void => {
-        closeDrawer();
-        const descriptor = compactRule(module.moduleKey);
-        drawer = openWorkspaceDrawer(root, {
-            title: descriptor?.label ?? module.displayName,
-            description: descriptor?.description ?? module.purpose,
-            onClose: () => { drawer = null; }
-        });
+    const compactGroup = (current: ProcedureComposer, section: string) => ({
+        section,
+        modules: current.modules.filter(module => module.moduleKey === section)
+    });
+
+    const populateCompactArea = (body: HTMLElement, modules: ProcedureModuleComposer[]): void => {
+        body.replaceChildren();
+        const module = modules[0];
+        if (!module) {
+            body.append(textElement("p", "This rule is no longer part of the procedure."));
+            return;
+        }
 
         if (module.alternatives.length > 1) {
             const field = document.createElement("label");
             field.className = "hc-compact-field";
             field.append(textElement("span", "Behavior"));
             const select = document.createElement("select");
+            select.dataset.compactModule = module.moduleKey;
+            select.dataset.compactField = "behavior";
             for (const option of module.alternatives) {
                 const item = document.createElement("option");
                 item.value = `${option.key}|${option.version}`;
@@ -624,7 +663,7 @@ export async function renderProcedureAuthoringWorkspace(
                 void setOverride(withBehavior(module, pending.get(module.moduleKey), key, Number(version)));
             });
             field.append(select);
-            drawer.body.append(field);
+            body.append(field);
         }
 
         const grid = document.createElement("div");
@@ -635,13 +674,49 @@ export async function renderProcedureAuthoringWorkspace(
             const value = module.parameters[key] ?? definition.defaultValue ?? "";
             grid.append(compactEditor(module, key, value, presentation));
         }
-        drawer.body.append(grid);
+        body.append(grid);
         const remove = button("Remove this rule", "secondary");
         remove.addEventListener("click", () => void setModule(module.moduleKey, false));
-        drawer.body.append(remove);
+        body.append(remove);
     };
 
-    const compactEditor = (
+    const refreshCompactDrawer = (current: ProcedureComposer): boolean => {
+        if (!activeDrawer || mode !== "compact") return false;
+        const body = activeDrawer.body;
+        const section = body.dataset.compactArea;
+        if (!section) return false;
+        const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        const moduleKey = focused?.dataset.compactModule ?? null;
+        const fieldKey = focused?.dataset.compactField ?? null;
+        const group = compactGroup(current, section);
+        if (group.modules.length === 0) {
+            closeDrawer();
+            return false;
+        }
+        populateCompactArea(body, group.modules);
+        if (moduleKey && fieldKey) {
+            const replacement = [...body.querySelectorAll<HTMLElement>("[data-compact-module][data-compact-field]")]
+                .find(control => control.dataset.compactModule === moduleKey && control.dataset.compactField === fieldKey);
+            replacement?.focus();
+        }
+        return true;
+    };
+
+    const editCompactModule = (module: ProcedureModuleComposer): void => {
+        closeDrawer();
+        const descriptor = compactRule(module.moduleKey);
+        const group = compactGroup(draft!, module.moduleKey);
+        activeDrawer = openWorkspaceDrawer(root, {
+            title: descriptor?.label ?? module.displayName,
+            description: descriptor?.description ?? module.purpose,
+            onClose: () => { activeDrawer = null; }
+        });
+        const open = activeDrawer.body;
+        open.dataset.compactArea = group.section;
+        populateCompactArea(open, group.modules);
+    };
+
+    const compactEditor = (    const compactEditor = (
         module: ProcedureModuleComposer,
         key: string,
         value: string,
@@ -651,6 +726,11 @@ export async function renderProcedureAuthoringWorkspace(
         field.append(textElement("span", presentation.label));
         const commit = (next: string): void => {
             void setOverride(withParameter(module, pending.get(module.moduleKey), key, next));
+        };
+        const mark = <T extends HTMLElement>(control: T, fieldKey = key): T => {
+            control.dataset.compactModule = module.moduleKey;
+            control.dataset.compactField = fieldKey;
+            return control;
         };
 
         if (presentation.control === "summary") {
@@ -669,7 +749,9 @@ export async function renderProcedureAuthoringWorkspace(
             amount.min = "0.01";
             amount.step = "any";
             amount.value = String(parsed.amount);
+            mark(amount);
             const unit = document.createElement("select");
+            mark(unit, `${key}:unit`);
             for (const name of ["minutes", "hours", "days"] as const) {
                 const option = document.createElement("option");
                 option.value = name;
@@ -686,10 +768,12 @@ export async function renderProcedureAuthoringWorkspace(
             const input = document.createElement("input");
             input.type = "checkbox";
             input.checked = value.toLowerCase() === "true";
+            mark(input);
             input.addEventListener("change", () => commit(String(input.checked)));
             field.append(input);
         } else if (presentation.control === "select") {
             const select = document.createElement("select");
+            mark(select);
             const choices = presentation.choices ?? [];
             if (!choices.some(choice => choice.value === value) && value) {
                 choices.unshift({ value, label: friendlyStoredValue(key, value) });
@@ -706,12 +790,14 @@ export async function renderProcedureAuthoringWorkspace(
         } else if (presentation.control === "key-list") {
             const input = document.createElement("textarea");
             input.rows = 3;
+            mark(input);
             input.value = value.split(";").join(", ");
             input.addEventListener("change", () => commit(input.value.split(",").map(item => item.trim()).filter(Boolean).join(";")));
             field.append(input);
         } else if (presentation.control === "mapping") {
             const input = document.createElement("textarea");
             input.rows = 4;
+            mark(input);
             input.value = value.split(";").map(item => item.replace("=", ": ")).join("\n");
             input.addEventListener("change", () => commit(input.value.split(/\r?\n/).map(line => {
                 const separator = line.indexOf(":");
@@ -721,6 +807,7 @@ export async function renderProcedureAuthoringWorkspace(
         } else {
             const input = document.createElement("input");
             input.type = presentation.control === "number" ? "number" : "text";
+            mark(input);
             input.value = value;
             input.addEventListener("change", () => commit(input.value));
             field.append(input);
@@ -734,7 +821,7 @@ export async function renderProcedureAuthoringWorkspace(
         layout.className = "hc-advanced-layout";
         const index = document.createElement("aside");
         index.className = "hc-panel hc-advanced-index";
-        index.append(textElement("h2", "Procedure structure"), textElement("p", "Exact generic modules selected for this CampaignProcedure."));
+        index.append(textElement("h2", "Procedure structure"), textElement("p", "Advanced exposes exact generic module keys, mechanics, versions, parameters, and contracts."));
         for (const rule of compactRuleCatalog()) {
             const label = document.createElement("label");
             label.className = "hc-advanced-module-toggle";
@@ -817,12 +904,13 @@ export async function renderProcedureAuthoringWorkspace(
     const renderJson = (): HTMLElement => {
         const section = document.createElement("section");
         section.className = "hc-panel hc-json-editor";
-        section.append(textElement("h2", "Canonical CampaignProcedure JSON"), textElement("p", "Exact expert editor. Server parsing, domain validation, identity, revisions, and optimistic concurrency remain authoritative."));
+        section.append(textElement("h2", "Canonical CampaignProcedure JSON"), textElement("p", "JSON edits the exact same CampaignProcedure produced by Compact structural choices and Advanced edits. Server parsing, domain validation, identity, revisions, and optimistic concurrency remain authoritative."));
         if (jsonBusy || !jsonText) {
-            const load = button(jsonBusy ? "Loading…" : "Load canonical JSON", "secondary");
-            load.disabled = jsonBusy;
-            load.addEventListener("click", () => void loadJson().then(render));
-            section.append(load);
+            const retry = button(jsonBusy ? "Loading…" : jsonLoadFailed ? "Retry canonical JSON" : "Load canonical JSON", "secondary");
+            retry.dataset.jsonRetry = "";
+            retry.disabled = jsonBusy;
+            retry.addEventListener("click", () => void loadJson());
+            section.append(retry);
             return section;
         }
         const textarea = document.createElement("textarea");

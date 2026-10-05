@@ -52,7 +52,8 @@ test("focused assistants require explicit resolved outcomes and provenance", () 
 test("mapless session creation never creates a placeholder Overworld", () => {
     const source = read("modules/home/tool-home-view.ts");
     assert.equal(source.includes("api.createOverworld("), false);
-    assert.match(source, /api\.startStandaloneSession\(request\)/);
+    assert.match(source, /api\.startStandaloneSession/);
+    assert.match(source, /applyStandaloneProcedureChoice/);
     assert.match(source, /kind: "AbstractHex"/);
     assert.match(source, /kind: "NonSpatial"/);
 });
@@ -311,11 +312,17 @@ test("world-bound unified workspace keeps the map primary and stacks cleanly on 
     assert.match(styles, /@media \(max-width: 1040px\)[\s\S]*\.hc-phase15-expedition \.hc-workspace-grid,[\s\S]*grid-template-columns:1fr/);
 });
 
-test("expedition setup materializes the selected preset and defers editing to the Procedure Composer", () => {
+test("expedition setup accepts saved revisions and materializes preset selections through one start contract", () => {
     const setup = read("modules/expeditions/expedition-setup.ts");
+    const selection = read("modules/expeditions/procedure-start-selection.ts");
     assert.match(setup, /api\.getProcedurePresets\(\)/);
-    assert.match(setup, /Procedure customization moves to the Procedure Composer/);
-    assert.match(setup, /procedureKey: preset\.presetKey/);
+    assert.match(setup, /ProcedureComposerApi\.create/);
+    assert.match(setup, /populateProcedureStartChoices/);
+    assert.match(setup, /applyWorldProcedureChoice/);
+    assert.match(setup, /Saved procedures use the selected revision exactly/);
+    assert.match(selection, /procedureKey: choice\.presetKey/);
+    assert.match(selection, /procedureId: choice\.procedureId/);
+    assert.match(selection, /procedureRevision: choice\.revision/);
     assert.match(setup, /renderProcedureMechanicList/);
     assert.doesNotMatch(setup, /procedureSnapshot/);
     assert.doesNotMatch(setup, /name="customize"/);
@@ -346,7 +353,8 @@ test("procedure selectors expose materialized procedure mechanics before a sessi
         assert.match(source, /renderProcedureMechanicList/);
         assert.match(source, /getProcedurePresets/);
     }
-    assert.match(setup, /<summary>Materialized procedure<\/summary>/);
+    assert.match(setup, /<summary>Procedure details<\/summary>/);
+    assert.match(setup, /populateProcedureStartChoices/);
 });
 
 test("procedure mechanics use one shared presentation policy across setup, assistants, and running sheet", () => {

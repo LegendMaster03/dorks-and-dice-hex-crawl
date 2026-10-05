@@ -71,31 +71,29 @@ export function startChoiceSummary(
 }
 
 export function applyWorldProcedureChoice(
-    base: Omit<StartExpeditionInput, "procedureKey">,
+    base: Omit<StartExpeditionInput, "procedureKey" | "procedureId" | "procedureRevision">,
     choice: ProcedureStartChoice): StartExpeditionInput {
     if (choice.kind === "preset") {
         return { ...base, procedureKey: choice.presetKey };
     }
     return {
         ...base,
-        procedureKey: "",
         procedureId: choice.procedureId,
         procedureRevision: choice.revision
-    } as StartExpeditionInput & { procedureId: string; procedureRevision: number };
+    };
 }
 
 export function applyStandaloneProcedureChoice(
-    base: Omit<StartStandaloneCrawlSessionInput, "procedureKey">,
+    base: Omit<StartStandaloneCrawlSessionInput, "procedureKey" | "procedureId" | "procedureRevision">,
     choice: ProcedureStartChoice): StartStandaloneCrawlSessionInput {
     if (choice.kind === "preset") {
         return { ...base, procedureKey: choice.presetKey };
     }
     return {
         ...base,
-        procedureKey: "",
         procedureId: choice.procedureId,
         procedureRevision: choice.revision
-    } as StartStandaloneCrawlSessionInput & { procedureId: string; procedureRevision: number };
+    };
 }
 
 function option(value: string, label: string): HTMLOptionElement {
