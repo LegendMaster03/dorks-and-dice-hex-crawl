@@ -182,8 +182,7 @@ try {
         url: procedureUrl,
         width: 1280,
         height: 800,
-        setup: `localStorage.setItem("hex-crawl.procedure-mode", "json")`,
-        reloadAfterSetup: true,
+        setup: `[...document.querySelectorAll('button')].find(button => button.textContent?.trim() === 'JSON')?.click();`,
         initialReady: "[data-procedure-mode-content]",
         ready: "textarea[aria-label=\"Canonical campaign procedure JSON\"]"
     });
