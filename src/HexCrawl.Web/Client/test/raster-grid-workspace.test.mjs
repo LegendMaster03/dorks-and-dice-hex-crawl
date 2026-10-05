@@ -79,12 +79,12 @@ test("map sets collect alternate source versions without becoming the future lay
     assert.match(workspace, /neighboring regional map belongs in a different set/);
     assert.match(workspace, /future image comparison can derive a common base and true visual-difference layers/);
     assert.match(workspace, /temporary whole-image view switch/);
-    assert.match(workspace, /without treating the rasters themselves as the final layer model/);
+    assert.match(workspace, /without treating whole map images as the final layer model/);
     assert.match(workspace, /Shared \/ neutral reference/);
     assert.match(workspace, /Auxiliary \/ reference only/);
 });
 
-test("map-set import accepts several raster versions and reuses an existing set by selection", () => {
+test("map-set import accepts several image versions and reuses an existing set by selection", () => {
     const workspace = fs.readFileSync(
         path.join(sourceRoot, "modules/worlds/source-map-workspace.ts"),
         "utf8");
@@ -99,7 +99,7 @@ test("map-set import accepts several raster versions and reuses an existing set 
     assert.match(workspace, /containsBakedGrid: input\(row, "mapBakedGrid"\)\.checked/);
 });
 
-test("coordinated raster views switch GM and player sources across sets but leave auxiliary references manual", () => {
+test("coordinated map views switch GM and player sources across sets but leave auxiliary references manual", () => {
     const workspace = fs.readFileSync(
         path.join(sourceRoot, "modules/worlds/source-map-workspace.ts"),
         "utf8");
@@ -109,4 +109,16 @@ test("coordinated raster views switch GM and player sources across sets but leav
     assert.match(workspace, /sourceMap\.role === target\.role/);
     assert.match(workspace, /sourceMap\.containsBakedGrid === target\.containsBakedGrid/);
     assert.match(workspace, /Shared and auxiliary references keep their manual visibility/);
+});
+
+test("normal map-management UI does not require raster terminology", () => {
+    const workspace = fs.readFileSync(
+        path.join(sourceRoot, "modules/worlds/source-map-workspace.ts"),
+        "utf8");
+
+    assert.match(workspace, />Map view </);
+    assert.match(workspace, />Map images </);
+    assert.match(workspace, />Selected reference map</);
+    assert.match(workspace, />Delete reference map</);
+    assert.doesNotMatch(workspace, />Raster view |\bRaster files\b|>Selected raster map|>Delete raster map/);
 });
