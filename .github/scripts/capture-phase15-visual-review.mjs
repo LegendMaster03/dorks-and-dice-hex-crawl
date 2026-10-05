@@ -2,6 +2,54 @@ import { spawn } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import process from "node:process";
 
+class CdpClient {
+    static async connect(url) {
+        const socket = new WebSocket(url);
+        await new Promise((resolve, reject) => {
+            socket.addEventListener("open", resolve, { once: true });
+            socket.addEventListener("error", reject, { once: true });
+        });
+        return new CdpClient(socket);
+    }
+
+    constructor(socket) {
+        this.socket = socket;
+        this.nextId = 1;
+        this.pending = new Map();
+        socket.addEventListener("message", event => {
+            const message = JSON.parse(event.data);
+            if (!message.id) return;
+            const pending = this.pending.get(message.id);
+            if (!pending) return;
+            this.pending.delete(message.id);
+            if (message.error) pending.reject(new Error(`${message.error.code}: ${message.error.message}`));
+            else pending.resolve(message.result ?? {});
+        });
+    }
+
+    send(method, params = {}) {
+        const id = this.nextId++;
+        return new Promise((resolve, reject) => {
+            this.pending.set(id, { resolve, reject });
+            this.socket.send(JSON.stringify({ id, method, params }));
+        });
+    }
+
+    async evaluate(expression) {
+        const result = await this.send("Runtime.evaluate", {
+            expression,
+            awaitPromise: true,
+            returnByValue: true
+        });
+        if (result.exceptionDetails) throw new Error(result.exceptionDetails.text ?? "Runtime evaluation failed.");
+        return result.result?.value;
+    }
+
+    close() {
+        this.socket.close();
+    }
+}
+
 const [chromeBinary, baseUrl, outputDir, procedureId, worldId, expeditionId, journeyId] = process.argv.slice(2);
 if (![chromeBinary, baseUrl, outputDir, procedureId, worldId, expeditionId, journeyId].every(Boolean)) {
     throw new Error("Usage: capture-phase15-visual-review.mjs <chrome> <baseUrl> <outputDir> <procedureId> <worldId> <expeditionId> <journeyId>");
@@ -206,52 +254,4 @@ async function screenshot(client, path) {
 
 function sleep(milliseconds) {
     return new Promise(resolve => setTimeout(resolve, milliseconds));
-}
-
-class CdpClient {
-    static async connect(url) {
-        const socket = new WebSocket(url);
-        await new Promise((resolve, reject) => {
-            socket.addEventListener("open", resolve, { once: true });
-            socket.addEventListener("error", reject, { once: true });
-        });
-        return new CdpClient(socket);
-    }
-
-    constructor(socket) {
-        this.socket = socket;
-        this.nextId = 1;
-        this.pending = new Map();
-        socket.addEventListener("message", event => {
-            const message = JSON.parse(event.data);
-            if (!message.id) return;
-            const pending = this.pending.get(message.id);
-            if (!pending) return;
-            this.pending.delete(message.id);
-            if (message.error) pending.reject(new Error(`${message.error.code}: ${message.error.message}`));
-            else pending.resolve(message.result ?? {});
-        });
-    }
-
-    send(method, params = {}) {
-        const id = this.nextId++;
-        return new Promise((resolve, reject) => {
-            this.pending.set(id, { resolve, reject });
-            this.socket.send(JSON.stringify({ id, method, params }));
-        });
-    }
-
-    async evaluate(expression) {
-        const result = await this.send("Runtime.evaluate", {
-            expression,
-            awaitPromise: true,
-            returnByValue: true
-        });
-        if (result.exceptionDetails) throw new Error(result.exceptionDetails.text ?? "Runtime evaluation failed.");
-        return result.result?.value;
-    }
-
-    close() {
-        this.socket.close();
-    }
 }
