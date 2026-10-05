@@ -1,0 +1,67 @@
+name: Phase 15 Nonspatial Panel Repair
+
+on:
+  push:
+    branches:
+      - feature/phase-15-core-ux
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    if: github.actor != 'github-actions[bot]'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Collapse nonspatial party editor by default
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          presentation = Path('src/HexCrawl.Web/Client/src/modules/expeditions/expedition-presentation.ts')
+          text = presentation.read_text()
+          old = '<details open class="hc-party-editor-panel"><summary>Party & participant assignments</summary><div data-party-editor></div></details>'
+          new = '<details class="hc-party-editor-panel"><summary>Party & participant assignments</summary><div data-party-editor></div></details>'
+          if old not in text:
+              raise SystemExit('Expected open nonspatial party editor was not found.')
+          presentation.write_text(text.replace(old, new, 1))
+
+          test = Path('src/HexCrawl.Web/Client/test/phase15-ux-source.test.mjs')
+          text = test.read_text()
+          old = '''    const environment = fs.readFileSync(
+              path.join(sourceDir, "modules/expeditions/environment-panel.ts"),
+              "utf8");
+
+          assert.doesNotMatch(view, /<details open class="hc-sheet-controls"/);
+          assert.doesNotMatch(environment, /this\\.panel\\.open = true/);
+'''
+          new = '''    const environment = fs.readFileSync(
+              path.join(sourceDir, "modules/expeditions/environment-panel.ts"),
+              "utf8");
+          const presentation = fs.readFileSync(
+              path.join(sourceDir, "modules/expeditions/expedition-presentation.ts"),
+              "utf8");
+
+          assert.doesNotMatch(view, /<details open class="hc-sheet-controls"/);
+          assert.doesNotMatch(environment, /this\\.panel\\.open = true/);
+          assert.doesNotMatch(presentation, /<details open class="hc-party-editor-panel"><summary>Party & participant assignments/);
+'''
+          if old not in text:
+              raise SystemExit('Expected Phase 15 secondary-panel regression block was not found.')
+          test.write_text(text.replace(old, new, 1))
+          PY
+
+          node --test src/HexCrawl.Web/Client/test/phase15-ux-source.test.mjs
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/HexCrawl.Web/Client/src/modules/expeditions/expedition-presentation.ts \
+                  src/HexCrawl.Web/Client/test/phase15-ux-source.test.mjs
+          git commit -m 'Collapse nonspatial Phase 15 party editor by default'
+          git push origin HEAD:feature/phase-15-core-ux
