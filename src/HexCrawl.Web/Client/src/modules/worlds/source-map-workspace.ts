@@ -42,21 +42,21 @@ export class SourceMapWorkspace {
         this.host.open = true;
         this.host.innerHTML = `
             <summary>Reference maps</summary>
-            <p class="hc-hint">A map group is one geographic extent. Keep every useful source image for that extent together: GM/player versions, grid/gridless exports, numbered/keyed references, and other evidence. These source images remain independent so future image comparison can derive a common base and true visual-difference layers.</p>
+            <p class="hc-hint">A map set is a collection of alternate source versions of the same map and geographic extent. Keep GM/player versions, grid/gridless exports, numbered/keyed references, and other evidence for that map in one set. A neighboring regional map belongs in a different set. These source images remain independent so future image comparison can derive a common base and true visual-difference layers.</p>
             <label>Raster view <select data-source-map-raster-view>
                 <option value="manual">Manual visibility</option>
                 <option value="gm-grid">GM · baked grid</option>
                 <option value="gm-gridless">GM · gridless</option>
                 <option value="player-grid">Player · baked grid</option>
                 <option value="player-gridless">Player · gridless</option>
-            </select><span class="hc-hint">This is a temporary whole-image view switch. It coordinates GM/Player source maps across all groups without treating the rasters themselves as the final layer model. Shared and auxiliary references keep their manual visibility.</span></label>
+            </select><span class="hc-hint">This is a temporary whole-image view switch. It coordinates GM/Player source maps across all map sets without treating the rasters themselves as the final layer model. Shared and auxiliary references keep their manual visibility.</span></label>
             <p class="hc-hint" data-source-map-raster-view-status></p>
             <div data-source-map-list></div>
             <form class="hc-form" data-source-map-upload>
-                <p class="hc-subsection-title">Import map group</p>
-                <label>Raster files <input name="file" type="file" accept="image/png,image/jpeg,image/webp" multiple required><span class="hc-hint">Select one image or a complete set for the same geographic extent.</span></label>
-                <label>Map group <select name="geography"></select><span class="hc-hint">Choose an existing group to avoid spelling variants. Create a new group only for a new geographic extent or neighboring region.</span></label>
-                <label data-new-geography>New map group <input name="newGeography" placeholder="Bellowing Wilds"><span class="hc-hint">Separate neighboring regions remain manually registered for now. Automatic landmark/road matching is future Surveyor work.</span></label>
+                <p class="hc-subsection-title">Import map set</p>
+                <label>Raster files <input name="file" type="file" accept="image/png,image/jpeg,image/webp" multiple required><span class="hc-hint">Select one image or a complete set of alternate versions of the same map.</span></label>
+                <label>Map set <select name="geography"></select><span class="hc-hint">Choose an existing set to avoid spelling variants. Create a new set only for a different underlying map or geographic extent.</span></label>
+                <label data-new-geography>New map set <input name="newGeography" placeholder="Bellowing Wilds"><span class="hc-hint">For example, Bellowing Wilds and neighboring Kylandria are separate map sets even though both occupy the same overworld. Separate regions remain manually registered for now; automatic landmark/road matching is future Surveyor work.</span></label>
                 <div data-source-map-upload-files></div>
                 <button type="submit" class="hc-primary-action">Upload reference maps</button>
             </form>
@@ -72,7 +72,7 @@ export class SourceMapWorkspace {
                 <p class="hc-subsection-title">Selected raster map</p>
                 <p class="hc-hint" data-source-map-selected-meta></p>
                 <label>Name <input name="name" required></label>
-                <label>Map group <select name="geographyKey"></select><span class="hc-hint">Maps in the same group represent the same geographic extent. Registration remains per image so differently cropped exports are not guessed.</span></label>
+                <label>Map set <select name="geographyKey"></select><span class="hc-hint">A set contains alternate versions of the same underlying map/extent. Registration remains per source image so differently cropped exports are not guessed.</span></label>
                 <label>Source use <select name="role">
                     <option value="Gm">GM view source</option>
                     <option value="Player">Player view source</option>
@@ -210,7 +210,7 @@ export class SourceMapWorkspace {
         }
         const create = document.createElement("option");
         create.value = newGeographyValue;
-        create.textContent = "Create new map group";
+        create.textContent = "Create new map set";
         this.geographySelect.append(create);
 
         if (groups.includes(previous)) this.geographySelect.value = previous;
@@ -296,8 +296,8 @@ export class SourceMapWorkspace {
                 && map.role === target.role
                 && map.containsBakedGrid === target.containsBakedGrid));
         this.rasterViewStatus.textContent = missingGroups.length === 0
-            ? `${coordinatedViewLabel(view)} is available in every map group.`
-            : `${coordinatedViewLabel(view)} is active. No matching source image exists in: ${missingGroups.join(", ")}.`;
+            ? `${coordinatedViewLabel(view)} is available in every map set.`
+            : `${coordinatedViewLabel(view)} is active. No matching source image exists in map set${missingGroups.length === 1 ? "" : "s"}: ${missingGroups.join(", ")}.`;
         this.map.requestRender();
     }
 
@@ -315,7 +315,7 @@ export class SourceMapWorkspace {
             const heading = document.createElement("strong");
             heading.textContent = "No reference maps yet.";
             const detail = document.createElement("span");
-            detail.textContent = "Upload one image or a complete map group below. Unregistered rasters appear immediately with temporary centered placement.";
+            detail.textContent = "Upload one image or a complete map set below. Unregistered rasters appear immediately with temporary centered placement.";
             empty.append(heading, detail);
             this.list.append(empty);
             return;
@@ -325,10 +325,10 @@ export class SourceMapWorkspace {
             const group = document.createElement("section");
             group.className = "hc-status-section";
             const groupHeading = document.createElement("strong");
-            groupHeading.textContent = `Map group: ${groupName}`;
+            groupHeading.textContent = `Map set: ${groupName}`;
             const groupHint = document.createElement("p");
             groupHint.className = "hc-hint";
-            groupHint.textContent = "Same geographic extent. Registration stays per source image. GM/Player view sources can switch together across groups; shared and auxiliary references remain independently visible.";
+            groupHint.textContent = "Alternate source versions of the same map/extent. Registration stays per source image. GM/Player views can switch together across map sets; shared and auxiliary references remain independently visible.";
             group.append(groupHeading, groupHint);
 
             for (const sourceMap of this.details.filter(item => item.geographyKey === groupName)) {
@@ -448,7 +448,7 @@ export class SourceMapWorkspace {
         const geographyKey = this.geographySelect.value === newGeographyValue
             ? this.newGeographyInput.value.trim()
             : this.geographySelect.value;
-        if (!geographyKey) throw new Error("A map group is required.");
+        if (!geographyKey) throw new Error("A map set is required.");
 
         let world = this.getWorld();
         const existingSourceMapIds = new Set(world.sourceMaps.map(map => map.id));
@@ -478,7 +478,7 @@ export class SourceMapWorkspace {
         this.selected = uploadedSourceMaps[0] ?? null;
         this.renderSelected();
         if (uploadedSourceMaps.length > 0) {
-            this.mapHint.textContent = `${uploadedSourceMaps.length} reference map${uploadedSourceMaps.length === 1 ? "" : "s"} uploaded to ${geographyKey}. Unregistered rasters are visible with temporary placement until registered.`;
+            this.mapHint.textContent = `${uploadedSourceMaps.length} reference map${uploadedSourceMaps.length === 1 ? "" : "s"} uploaded to map set ${geographyKey}. Unregistered rasters are visible with temporary placement until registered.`;
         }
     }
 
