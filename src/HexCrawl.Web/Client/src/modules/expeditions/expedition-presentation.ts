@@ -323,7 +323,7 @@ export function renderNonSpatialTracker(
                 <section class="hc-panel">
                     <h2>Optional tools</h2>
                     <p class="hc-muted">Open only the bookkeeping surface you need. Participant roles and activities are expedition state and do not require a repeating watch.</p>
-                    <details open class="hc-party-editor-panel"><summary>Party & participant assignments</summary><div data-party-editor></div></details>
+                    <details class="hc-party-editor-panel"><summary>Party & participant assignments</summary><div data-party-editor></div></details>
                     <div class="hc-button-row">
                         <button type="button" class="hc-primary-action" data-watch ${canUseWatch ? "" : "disabled"}>Watch / time</button>
                         <button type="button" data-encounters ${runtime.procedure.isExecutable ? "" : "disabled"}>Encounter cadence</button>

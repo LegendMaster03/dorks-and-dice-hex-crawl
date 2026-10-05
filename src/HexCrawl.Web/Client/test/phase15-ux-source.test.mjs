@@ -63,9 +63,13 @@ test("Phase 15 secondary panels stay collapsed until requested", () => {
     const environment = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/environment-panel.ts"),
         "utf8");
+    const presentation = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-presentation.ts"),
+        "utf8");
 
     assert.doesNotMatch(view, /<details open class="hc-sheet-controls"/);
     assert.doesNotMatch(environment, /this\.panel\.open = true/);
+    assert.doesNotMatch(presentation, /<details open class="hc-party-editor-panel"><summary>Party & participant assignments/);
 });
 
 test("Phase 15 map selection stays contextual instead of becoming an implicit mutation", () => {
