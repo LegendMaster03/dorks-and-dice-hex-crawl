@@ -1,0 +1,189 @@
+name: Phase 15 self-review repair
+
+on:
+  push:
+    branches:
+      - feature/phase-15-core-ux
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/phase-15-core-ux
+          fetch-depth: 0
+
+      - name: Apply self-review repairs
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_checked(path: str, old: str, new: str, count: int = 1) -> None:
+              file = Path(path)
+              text = file.read_text()
+              actual = text.count(old)
+              if actual != count:
+                  raise SystemExit(f"{path}: expected {count} occurrence(s), found {actual}: {old[:100]!r}")
+              file.write_text(text.replace(old, new, count))
+
+          workspace = "src/HexCrawl.Web/Client/src/ui/workspace.ts"
+          replace_checked(
+              workspace,
+              'export type WorkspaceDrawer = {\n',
+              'const drawerClosers = new WeakMap<HTMLElement, () => void>();\n\nexport type WorkspaceDrawer = {\n')
+          replace_checked(
+              workspace,
+              '    root.querySelector<HTMLElement>("[data-phase15-drawer]")?.remove();\n',
+              '    const existing = root.querySelector<HTMLElement>("[data-phase15-drawer]");\n'
+              '    if (existing) {\n'
+              '        const closeExisting = drawerClosers.get(existing);\n'
+              '        if (closeExisting) closeExisting();\n'
+              '        else existing.remove();\n'
+              '    }\n')
+          replace_checked(
+              workspace,
+              '        document.removeEventListener("keydown", onKeyDown, true);\n        panel.remove();\n',
+              '        document.removeEventListener("keydown", onKeyDown, true);\n        drawerClosers.delete(panel);\n        panel.remove();\n')
+          replace_checked(
+              workspace,
+              '    closeButton.addEventListener("click", close);\n',
+              '    drawerClosers.set(panel, close);\n    closeButton.addEventListener("click", close);\n')
+          replace_checked(
+              workspace,
+              '    const previous = button.textContent ?? "";\n    button.disabled = pending;\n',
+              '    const previous = button.textContent ?? "";\n    const previousDisabled = button.disabled;\n    button.disabled = pending;\n')
+          replace_checked(
+              workspace,
+              '        button.disabled = false;\n        button.textContent = previous;\n',
+              '        button.disabled = previousDisabled;\n        button.textContent = previous;\n')
+
+          procedure = "src/HexCrawl.Web/Client/src/modules/procedures/procedure-workspace-view.ts"
+          replace_checked(
+              procedure,
+              '    presets = await api.getProcedurePresets();\n',
+              '    if (!sourceProcedureId) presets = await api.getProcedurePresets();\n')
+          replace_checked(
+              procedure,
+              '''    const validateJson = async (): Promise<boolean> => {\n        if (jsonBusy) return false;\n        jsonBusy = true;\n        updateJsonStatus(root);\n        try {\n            jsonValidation = await composerApi.validateCanonical(jsonText);\n            updateJsonStatus(root);\n            return jsonValidation.isValid;\n        } catch (value) {\n            const error = root.querySelector<HTMLElement>("[data-error]");\n            if (error) showUiError(error, value);\n            return false;\n        } finally {\n            jsonBusy = false;\n        }\n    };\n''',
+              '''    const validateJson = async (): Promise<boolean> => {\n        if (jsonBusy) return false;\n        const validatingText = jsonText;\n        jsonBusy = true;\n        updateJsonStatus(root);\n        try {\n            const validation = await composerApi.validateCanonical(validatingText);\n            if (jsonText !== validatingText) {\n                jsonValidation = null;\n                updateJsonStatus(root);\n                return false;\n            }\n            jsonValidation = validation;\n            updateJsonStatus(root);\n            return validation.isValid;\n        } catch (value) {\n            const error = root.querySelector<HTMLElement>("[data-error]");\n            if (error) showUiError(error, value);\n            return false;\n        } finally {\n            jsonBusy = false;\n            updateJsonStatus(root);\n        }\n    };\n''')
+          replace_checked(
+              procedure,
+              '''    const restoreLabel = (): string => {\n        if (draft?.origin && exactOriginPreset()) return "Restore starting behavior";\n        return "Discard unsaved changes";\n    };\n\n    const canRestoreArea = (modules: ProcedureModuleComposer[]): boolean => {\n        if (draft?.origin && exactOriginPreset()) return true;\n        return modules.some(module => pending.has(module.moduleKey));\n    };\n\n    const restoreArea = async (modules: ProcedureModuleComposer[]): Promise<void> => {\n        if (!draft || historical()) return;\n        const origin = exactOriginPreset();\n        if (!origin) {\n            for (const module of modules) pending.delete(module.moduleKey);\n            await refreshDraft();\n            return;\n        }\n\n        for (const module of modules) {\n            const baseline = origin.procedure.modules.find(candidate => candidate.moduleKey === module.moduleKey);\n            if (!baseline) continue;\n            pending.set(module.moduleKey, {\n                ...createPendingOverride(module, pending.get(module.moduleKey)),\n                replacementMechanicKey: baseline.mechanicKey,\n                replacementMechanicVersion: baseline.mechanicVersion,\n                parameters: { ...baseline.parameters },\n                note: "Restore starting preset behavior"\n            });\n        }\n        await refreshDraft();\n    };\n\n    const exactOriginPreset = (): ProcedurePreset | null => {\n        if (!draft?.origin?.presetKey || !draft.origin.presetRevision) return null;\n        return presets.find(preset =>\n            preset.presetKey === draft!.origin!.presetKey\n            && preset.presetRevision === draft!.origin!.presetRevision) ?? null;\n    };\n''',
+              '''    const restoreLabel = (): string => "Discard unsaved changes";\n\n    const canRestoreArea = (modules: ProcedureModuleComposer[]): boolean =>\n        modules.some(module => pending.has(module.moduleKey));\n\n    const restoreArea = async (modules: ProcedureModuleComposer[]): Promise<void> => {\n        if (!draft || historical()) return;\n        for (const module of modules) pending.delete(module.moduleKey);\n        await refreshDraft();\n    };\n''')
+
+          expedition = "src/HexCrawl.Web/Client/src/modules/expeditions/phase15-expedition-workspace.ts"
+          replace_checked(
+              expedition,
+              '''    const acceptRuntime = (next: ExpeditionDetail): void => {\n        if (disposed || next.id !== expeditionId) return;\n        const changed = next.version !== runtime.version;\n        runtime = next;\n        render();\n        if (changed) void refreshSupportingState();\n    };\n''',
+              '''    const acceptRuntime = (next: ExpeditionDetail): void => {\n        if (disposed || next.id !== expeditionId) return;\n        runtime = next;\n        render();\n        void refreshSupportingState();\n    };\n''')
+          replacements = [
+              ('"Review encounter handoff", focusEncounterHandoff);', '"Review encounter handoff", () => focusEncounterHandoff(root));'),
+              ('() => openRunWatch("[data-boundary-resolution]")', '() => openRunWatch(root, "[data-boundary-resolution]")'),
+              ('() => openRunWatch("[data-plan-fields]")', '() => openRunWatch(root, "[data-plan-fields]")'),
+              ('() => openRunWatch("[data-travel-resolution]")', '() => openRunWatch(root, "[data-travel-resolution]")'),
+              ('() => openRunWatch("[data-navigation-resolution]")', '() => openRunWatch(root, "[data-navigation-resolution]")'),
+              ('() => openRunWatch()', '() => openRunWatch(root)'),
+              ('() => openDetails("[data-journey-panel]")', '() => openDetails(root, "[data-journey-panel]")'),
+              ('() => openDetails("[data-survival-resources-panel]")', '() => openDetails(root, "[data-survival-resources-panel]")'),
+              ('() => clickIfPresent("[data-watch]")', '() => clickIfPresent(root, "[data-watch]")'),
+              ('contextButton("History", focusHistory)', 'contextButton("History", () => focusHistory(root))'),
+              ('`${formatHours(state.elapsedTravelHours)} elapsed`, focusHistory)', '`${formatHours(state.elapsedTravelHours)} elapsed`, () => focusHistory(root))'),
+              ('movementValue(runtime), movementDetail(runtime), openPartyEditor,', 'movementValue(runtime), movementDetail(runtime), () => openPartyEditor(root),'),
+              ('drawer?.close(); openPartyEditor();', 'drawer?.close(); openPartyEditor(root);')
+          ]
+          for old, new in replacements:
+              replace_checked(expedition, old, new, 1 if old != '() => openDetails("[data-journey-panel]")' else 3)
+          replace_checked(
+              expedition,
+              '''function openRunWatch(focusSelector?: string): void {\n    const details = document.querySelector<HTMLDetailsElement>(".hex-crawl-app .hc-sheet-controls");\n''',
+              '''function openRunWatch(root: HTMLElement, focusSelector?: string): void {\n    const details = root.querySelector<HTMLDetailsElement>(".hc-sheet-controls");\n''')
+          replace_checked(
+              expedition,
+              '''function openPartyEditor(): void {\n    const details = document.querySelector<HTMLDetailsElement>(".hex-crawl-app .hc-party-editor-panel");\n''',
+              '''function openPartyEditor(root: HTMLElement): void {\n    const details = root.querySelector<HTMLDetailsElement>(".hc-party-editor-panel");\n''')
+          replace_checked(
+              expedition,
+              '''function openDetails(selector: string): void {\n    const details = document.querySelector<HTMLDetailsElement>(`.hex-crawl-app ${selector}`);\n''',
+              '''function openDetails(root: HTMLElement, selector: string): void {\n    const details = root.querySelector<HTMLDetailsElement>(selector);\n''')
+          replace_checked(
+              expedition,
+              '''function focusHistory(): void {\n    const target = document.querySelector<HTMLElement>(".hex-crawl-app [data-history]");\n''',
+              '''function focusHistory(root: HTMLElement): void {\n    const target = root.querySelector<HTMLElement>("[data-history]");\n''')
+          replace_checked(
+              expedition,
+              '''function focusEncounterHandoff(): void {\n    const host = document.querySelector<HTMLElement>(".hex-crawl-app [data-encounter-handoff]");\n''',
+              '''function focusEncounterHandoff(root: HTMLElement): void {\n    const host = root.querySelector<HTMLElement>("[data-encounter-handoff]");\n''')
+          replace_checked(
+              expedition,
+              '''function clickIfPresent(selector: string): void {\n    document.querySelector<HTMLButtonElement>(`.hex-crawl-app ${selector}`)?.click();\n}\n''',
+              '''function clickIfPresent(root: HTMLElement, selector: string): void {\n    root.querySelector<HTMLButtonElement>(selector)?.click();\n}\n''')
+
+          module = "src/HexCrawl.Web/Client/src/modules/expeditions/module.ts"
+          replace_checked(
+              module,
+              'import { enhanceExpeditionWorkspace } from "./phase15-expedition-workspace";\n',
+              'import { enhanceExpeditionWorkspace } from "./phase15-expedition-workspace";\nimport { publishExpeditionRuntimeChanged } from "./expedition-runtime-events";\n')
+          replace_checked(
+              module,
+              '                panelRuntime = await context.api.getExpedition(expeditionId);\n',
+              '                panelRuntime = await context.api.getExpedition(expeditionId);\n                if (!disposed) publishExpeditionRuntimeChanged(context.root, panelRuntime);\n')
+
+          procedures_module = "src/HexCrawl.Web/Client/src/modules/procedures/module.ts"
+          replace_checked(
+              procedures_module,
+              '    document.body.append(button);\n',
+              '    root.append(button);\n')
+
+          tests = "src/HexCrawl.Web/Client/test/phase15-ux-source.test.mjs"
+          replace_checked(
+              tests,
+              '    assert.match(workspace, /createCanonicalRevision/);\n',
+              '    assert.match(workspace, /createCanonicalRevision/);\n'
+              '    assert.match(workspace, /if \\(!sourceProcedureId\\) presets = await api\\.getProcedurePresets\\(\\)/);\n'
+              '    assert.doesNotMatch(workspace, /exactOriginPreset/);\n'
+              '    assert.match(workspace, /const validatingText = jsonText/);\n'
+              '    assert.match(workspace, /jsonBusy = false;\\s*updateJsonStatus\\(root\\)/);\n')
+          replace_checked(
+              tests,
+              '    const signal = fs.readFileSync(\n        path.join(sourceDir, "modules/expeditions/expedition-runtime-events.ts"),\n        "utf8");\n',
+              '    const signal = fs.readFileSync(\n        path.join(sourceDir, "modules/expeditions/expedition-runtime-events.ts"),\n        "utf8");\n'
+              '    const module = fs.readFileSync(\n        path.join(sourceDir, "modules/expeditions/module.ts"),\n        "utf8");\n')
+          replace_checked(
+              tests,
+              '    assert.match(signal, /root\\.removeEventListener/);\n',
+              '    assert.match(signal, /root\\.removeEventListener/);\n'
+              '    assert.match(module, /publishExpeditionRuntimeChanged\\(context\\.root, panelRuntime\\)/);\n'
+              '    assert.doesNotMatch(workspace, /document\\.querySelector/);\n')
+          replace_checked(
+              tests,
+              '    assert.match(workspace, /returnFocus\\.focus\\(\\)/);\n',
+              '    assert.match(workspace, /returnFocus\\.focus\\(\\)/);\n'
+              '    assert.match(workspace, /drawerClosers\\.get\\(existing\\)/);\n'
+              '    assert.match(workspace, /drawerClosers\\.delete\\(panel\\)/);\n')
+          PY
+
+      - name: Validate client repair
+        working-directory: src/HexCrawl.Web/Client
+        run: |
+          npm ci
+          npm run build
+          npm test
+
+      - name: Commit repairs
+        shell: bash
+        run: |
+          git add src/HexCrawl.Web/Client/src src/HexCrawl.Web/Client/test/phase15-ux-source.test.mjs
+          if git diff --cached --quiet; then
+            echo "No repair changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Fix Phase 15 self-review findings"
+          git push origin HEAD:feature/phase-15-core-ux
