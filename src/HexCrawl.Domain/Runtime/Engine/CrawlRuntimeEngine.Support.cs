@@ -60,7 +60,10 @@ public sealed partial class CrawlRuntimeEngine
             double? distanceValue = null,
             string? distanceUnit = null,
             Guid? subjectId = null,
-            KnowledgeSubjectType? subjectType = null)
+            KnowledgeSubjectType? subjectType = null,
+            EncounterOutcomeKind? encounterOutcome = null,
+            string? encounterNote = null,
+            ResolutionProvenance? encounterProvenance = null)
         {
             NewEvents.Add(new CrawlRuntimeEvent(
                 _nextSequence++,
@@ -72,7 +75,10 @@ public sealed partial class CrawlRuntimeEngine
                 distanceValue,
                 distanceUnit,
                 subjectId,
-                subjectType));
+                subjectType,
+                encounterOutcome,
+                encounterNote,
+                encounterProvenance));
         }
     }
 }
