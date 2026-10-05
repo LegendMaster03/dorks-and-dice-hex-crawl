@@ -15,7 +15,7 @@ import type {
 } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
 import { checkbox, input, integer, numeric, option, optionalText, prettyEnum, required, select, sourceLabel, statusCell } from "../../ui/dom";
-import { blockInitiativeHandoffHref, encounterHandoffFromRuntime } from "../../encounter-handoff";
+import { blockInitiativeHandoffHref } from "../../encounter-handoff";
 
 export type ExpeditionAssistantMode = "travel" | "navigation" | "encounters";
 
@@ -154,28 +154,50 @@ export async function renderExpeditionAssistant(
         }
     };
 
-    let lastEncounterSelection: { outcome: string; note: string | null } | null = null;
-
     const renderEncounterHandoff = (): void => {
         const host = required<HTMLElement>(root, "[data-encounter-handoff]");
         host.replaceChildren();
         host.hidden = true;
         if (mode !== "encounters") return;
 
-        const handoff = encounterHandoffFromRuntime(runtime, {
-            outcome: lastEncounterSelection?.outcome,
-            note: lastEncounterSelection?.note,
-            returnPath: window.location.pathname
-        });
-        if (!handoff) return;
+        const triggered = [...runtime.history].reverse().find(event => event.kind === "EncounterTriggered");
+        if (!triggered) return;
 
         const text = document.createElement("span");
-        text.textContent = "Continue this encounter in the combat tracker.";
-        const link = document.createElement("a");
-        link.className = "hc-button-link";
-        link.href = blockInitiativeHandoffHref(handoff);
-        link.textContent = "Open in Block Initiative";
-        host.append(text, link);
+        text.textContent = "Continue this recorded encounter in the combat tracker. Preparing the handoff does not alter expedition state.";
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "hc-button-link";
+        button.textContent = "Open in Block Initiative";
+        const handoffId = crypto.randomUUID();
+        button.addEventListener("click", () => {
+            if (pending) return;
+            void (async () => {
+                clearUiError(error);
+                pending = true;
+                button.disabled = true;
+                button.textContent = "Preparing encounter…";
+                try {
+                    const handoff = await api.createEncounterHandoff(runtime.id, {
+                        expectedVersion: runtime.version,
+                        handoffId,
+                        returnPath: safeCurrentReturnPath(),
+                        runtimeEncounterSequence: triggered.sequence,
+                        journeyEventOccurrenceId: null
+                    });
+                    window.location.assign(blockInitiativeHandoffHref(handoff));
+                } catch (value) {
+                    if (!disposed) showUiError(error, value);
+                } finally {
+                    pending = false;
+                    if (!disposed) {
+                        button.disabled = false;
+                        button.textContent = "Open in Block Initiative";
+                    }
+                }
+            })();
+        });
+        host.append(text, button);
         host.hidden = false;
     };
 
@@ -244,9 +266,6 @@ export async function renderExpeditionAssistant(
                     next = await api.recordNavigationAssistant(runtime.id, navigationRequest(form, runtime));
                 } else {
                     const request = encounterRequest(form, runtime);
-                    lastEncounterSelection = request.outcome === "None"
-                        ? null
-                        : { outcome: request.outcome, note: request.note ?? null };
                     next = await api.recordEncounterAssistant(runtime.id, request);
                 }
                 if (!disposed) apply(next);
@@ -496,6 +515,12 @@ function navigationStatus(state: SpatialRuntimeExpedition): HTMLElement[] {
         statusCell("Intended course", directionLabel(state.intendedDirection)),
         statusCell("Actual course", directionLabel(state.actualDirection))
     ];
+}
+
+function safeCurrentReturnPath(): string | null {
+    const path = window.location.pathname;
+    if (path !== "/tools/hex-crawl" && !path.startsWith("/tools/hex-crawl/")) return null;
+    return `${path}${window.location.search}${window.location.hash}`;
 }
 
 function directionOptions(selected: number | null): string {
