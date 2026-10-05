@@ -82,10 +82,12 @@ try {
         width,
         height,
         setup,
+        reloadAfterSetup = false,
         initialReady,
         ready = ".hc-page",
         captureBottom = true
     }) => {
+        console.log(`[visual] ${name}: navigating`);
         await client.send("Emulation.setDeviceMetricsOverride", {
             width,
             height,
@@ -93,11 +95,15 @@ try {
             mobile: width <= 480
         });
         await client.send("Page.navigate", { url });
-        await waitForReady(client, initialReady ?? ready);
+        await waitForReady(client, initialReady ?? ready, name);
         if (setup) {
+            console.log(`[visual] ${name}: applying setup`);
             await client.evaluate(setup);
+            if (reloadAfterSetup) {
+                await client.send("Page.reload", { ignoreCache: true });
+            }
             await sleep(350);
-            await waitForReady(client, ready);
+            await waitForReady(client, ready, name);
         }
         await sleep(250);
         await client.evaluate("window.scrollTo(0, 0)");
@@ -119,6 +125,7 @@ try {
             await sleep(150);
             await screenshot(client, `${outputDir}/${name}-bottom.png`);
         }
+        console.log(`[visual] ${name}: captured`);
     };
 
     const procedureUrl = `${baseUrl}/procedures/${procedureId}`;
@@ -130,7 +137,8 @@ try {
         url: `${baseUrl}/procedures`,
         width: 1440,
         height: 1000,
-        setup: `localStorage.setItem("hex-crawl.procedure-mode", "compact"); location.reload();`,
+        setup: `localStorage.setItem("hex-crawl.procedure-mode", "compact")`,
+        reloadAfterSetup: true,
         ready: ".hc-preset-browser"
     });
     await capture({
@@ -146,7 +154,8 @@ try {
         url: procedureUrl,
         width: 1280,
         height: 800,
-        setup: `localStorage.setItem("hex-crawl.procedure-mode", "compact"); location.reload();`,
+        setup: `localStorage.setItem("hex-crawl.procedure-mode", "compact")`,
+        reloadAfterSetup: true,
         ready: "[data-procedure-mode-content]"
     });
     await capture({
@@ -154,7 +163,8 @@ try {
         url: procedureUrl,
         width: 1280,
         height: 800,
-        setup: `localStorage.setItem("hex-crawl.procedure-mode", "advanced"); location.reload();`,
+        setup: `localStorage.setItem("hex-crawl.procedure-mode", "advanced")`,
+        reloadAfterSetup: true,
         ready: "[data-procedure-mode-content]"
     });
     await capture({
@@ -162,7 +172,8 @@ try {
         url: procedureUrl,
         width: 1280,
         height: 800,
-        setup: `localStorage.setItem("hex-crawl.procedure-mode", "json"); location.reload();`,
+        setup: `localStorage.setItem("hex-crawl.procedure-mode", "json")`,
+        reloadAfterSetup: true,
         initialReady: "[data-procedure-mode-content]",
         ready: "textarea[aria-label=\"Canonical campaign procedure JSON\"]"
     });
@@ -243,14 +254,14 @@ async function waitForDebugger() {
     throw new Error("Chrome DevTools endpoint did not become ready.");
 }
 
-async function waitForReady(client, selector) {
+async function waitForReady(client, selector, name) {
     for (let attempt = 0; attempt < 100; attempt += 1) {
         const ready = await client.evaluate(`document.readyState === "complete" && Boolean(document.querySelector(${JSON.stringify(selector)}))`);
         if (ready) return;
         await sleep(100);
     }
     const body = await client.evaluate("document.body?.innerText?.slice(0, 2000) ?? ''");
-    throw new Error(`Timed out waiting for ${selector}. Page text: ${body}`);
+    throw new Error(`Timed out waiting for ${selector} during ${name}. Page text: ${body}`);
 }
 
 async function screenshot(client, path) {
