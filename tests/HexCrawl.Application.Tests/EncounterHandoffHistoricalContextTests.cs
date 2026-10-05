@@ -1,6 +1,7 @@
 using HexCrawl.Domain.Runtime;
 using HexCrawl.Domain.Spatial;
 using HexCrawl.Domain.World;
+using HexCrawl.Infrastructure.Persistence;
 
 namespace HexCrawl.Application.Tests;
 
@@ -90,5 +91,35 @@ public sealed class EncounterHandoffHistoricalContextTests
         Assert.Equal("Old Ruin", handoffLocation.Name);
         Assert.Equal("ruin", handoffLocation.Category);
         Assert.Empty(handoff.LinkedScenes);
+    }
+
+    private sealed class TestDatabase : IAsyncDisposable
+    {
+        private readonly PostgresTestDatabase _database;
+        private string ConnectionString => _database.ConnectionString;
+
+        private TestDatabase(PostgresTestDatabase database)
+        {
+            _database = database;
+        }
+
+        public static async Task<TestDatabase> CreateAsync()
+        {
+            var database = await PostgresTestDatabase.CreateAsync();
+            var store = new PostgresHexCrawlStore(database.ConnectionString);
+            await store.InitializeAsync();
+            return new TestDatabase(database);
+        }
+
+        public async Task<(HexCrawlService Core, ExpeditionWorkbenchService Workbench)> ServicesAsync()
+        {
+            var store = new PostgresHexCrawlStore(ConnectionString);
+            await store.InitializeAsync();
+            var core = new HexCrawlService(store);
+            var resolver = new CrawlSessionContextResolver(core);
+            return (core, new ExpeditionWorkbenchService(store, core, resolver));
+        }
+
+        public ValueTask DisposeAsync() => _database.DisposeAsync();
     }
 }
