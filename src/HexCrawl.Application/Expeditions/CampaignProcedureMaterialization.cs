@@ -139,6 +139,10 @@ public static class CampaignProcedureMaterializer
             .Select(CampaignProcedureSnapshot.Copy)
             .ToDictionary(module => module.Module.Key, StringComparer.Ordinal);
         var order = current.Modules.Select(module => module.Module.Key).ToList();
+        var removedModuleKeys = moduleSelections
+            .Where(selection => !selection.Included)
+            .Select(selection => selection.ModuleKey)
+            .ToHashSet(StringComparer.Ordinal);
 
         foreach (var selection in moduleSelections)
         {
@@ -190,6 +194,7 @@ public static class CampaignProcedureMaterializer
             Revision = revisionNumber,
             Modules = order.Where(modules.ContainsKey).Select(key => modules[key]).ToArray(),
             Overrides = current.Overrides
+                .Where(value => !removedModuleKeys.Contains(value.ModuleKey))
                 .Select(CampaignProcedureSnapshot.Copy)
                 .Concat(overrides.Select(CampaignProcedureSnapshot.Copy))
                 .ToArray()
