@@ -357,6 +357,11 @@ test("procedure selectors expose materialized procedure mechanics before a sessi
     }
     assert.match(setup, /<summary>Procedure details<\/summary>/);
     assert.match(setup, /populateProcedureStartChoices/);
+    assert.match(assistant, /<summary>Procedure details<\/summary>/);
+    assert.match(assistant, /populateProcedureStartChoices/);
+    assert.match(assistant, /applyStandaloneProcedureChoice/);
+    assert.match(assistant, /ProcedureComposerApi\.create/);
+    assert.doesNotMatch(assistant, /Procedure preset/);
 });
 
 test("procedure mechanics use one shared presentation policy across setup, assistants, and running sheet", () => {

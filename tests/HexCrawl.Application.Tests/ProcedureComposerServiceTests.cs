@@ -44,7 +44,7 @@ public sealed class ProcedureComposerServiceTests
             []);
 
         Assert.Null(draft.Origin);
-        Assert.Contains(draft.Procedure.Modules, module =>
+        Assert.DoesNotContain(draft.Procedure.Modules, module =>
             module.Module.Key == GenericProcedureCatalog.TimeIntervalModule);
         Assert.Contains(draft.Procedure.Modules, module =>
             module.Module.Key == GenericProcedureCatalog.NavigationOutcomeModule);
