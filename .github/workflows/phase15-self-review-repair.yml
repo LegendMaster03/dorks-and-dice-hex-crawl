@@ -126,7 +126,7 @@ jobs:
       - name: Validate client repair
         working-directory: src/HexCrawl.Web/Client
         run: |
-          npm ci
+          npm install --no-audit --no-fund
           npm run build
           npm test
 
