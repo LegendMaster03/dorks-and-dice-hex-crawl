@@ -36,7 +36,7 @@ export async function enhanceExpeditionSetup(
         <label>Map presentation <select name="presentation"></select></label>
         <p class="hc-hint" data-presentation-summary></p>
         <div class="hc-inline"><label>Start q <input name="q" type="number" step="1" value="0"></label><label>Start r <input name="r" type="number" step="1" value="0"></label></div>
-        <p class="hc-hint">Saved procedures use the selected revision exactly. Presets are materialized into a campaign-owned procedure before play begins.</p>
+        <p class="hc-hint">Saved procedures use the selected revision. A preset creates a new saved procedure when play begins.</p>
         <button type="submit" class="hc-primary-action">Start expedition</button>`;
     previous.replaceWith(form);
 

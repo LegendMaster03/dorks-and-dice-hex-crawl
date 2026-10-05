@@ -23,7 +23,7 @@ test("Phase 15 procedure authoring separates entry choice from one shared Campai
     assert.match(workspace, /Build my own/);
     assert.match(workspace, /EntryState = "landing" \| "presets" \| "workspace"/);
     assert.match(workspace, /ProcedureAuthoringMode = "compact" \| "advanced" \| "json"/);
-    assert.match(workspace, /Areas you omit are absent from the materialized CampaignProcedure/);
+    assert.match(workspace, /Only the rules shown here are part of this procedure/);
     assert.match(workspace, /Advanced exposes exact generic module keys, mechanics, versions, parameters, and contracts/);
     assert.match(workspace, /exact same CampaignProcedure produced by Compact structural choices and Advanced edits/);
     assert.match(workspace, /sourceProcedureId === null && \(sourcePresetKey !== null \|\| \(draft\?\.modules\.length \?\? 0\) > 0\)/);
@@ -59,7 +59,7 @@ test("procedure authoring exposes revision navigation and protects unsaved work"
         path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"),
         "utf8");
 
-    assert.match(workspace, /data\.procedureRevision/);
+    assert.match(workspace, /dataset\.procedureRevision/);
     assert.match(workspace, /Choose the latest revision above before saving further changes/);
     assert.match(workspace, /Discard unsaved procedure changes\?/);
     assert.match(workspace, /beforeunload/);

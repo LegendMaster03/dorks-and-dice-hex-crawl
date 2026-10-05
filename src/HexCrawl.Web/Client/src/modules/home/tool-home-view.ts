@@ -90,7 +90,7 @@ export async function renderToolHome(
                             <label>Context name <input name="nonSpatialName" value="Procedure session" autocomplete="off"></label>
                             <p class="hc-hint">Non-spatial sessions persist procedure/history state without hex coordinates, distance scale, world position, or Overworld.</p>
                         </div>
-                        <p class="hc-hint">Saved procedures use the selected revision exactly. Presets are materialized into a campaign-owned procedure before play begins.</p>
+                        <p class="hc-hint">Saved procedures use the selected revision. A preset creates a new saved procedure when play begins.</p>
                         <button type="submit" class="hc-primary-action" data-start-button>Start session</button>
                     </form>
                 </section>
@@ -157,7 +157,7 @@ export async function renderToolHome(
             const preset = presets.find(candidate => candidate.presetKey === choice.presetKey);
             if (preset) {
                 required<HTMLElement>(form, "[data-procedure-summary]").textContent =
-                    `${preset.description} · ${campaignProcedureSummary(preset.procedure)} · materializes a campaign-owned procedure when play begins`;
+                    `${preset.description} · ${campaignProcedureSummary(preset.procedure)} · creates a new saved procedure when play begins`;
                 renderProcedureMechanicList(mechanics, preset.procedure);
             }
             return;

@@ -389,7 +389,7 @@ export async function renderProcedureAuthoringWorkspace(
         const origin = value.originPresetDisplayName
             ? `Started from ${value.originPresetDisplayName}`
             : "Built as a custom procedure";
-        card.append(textElement("p", `${origin} · ${value.moduleCount} rule ${value.moduleCount === 1 ? "block" : "blocks"}`));
+        card.append(textElement("p", `${origin} · ${value.moduleCount} ${value.moduleCount === 1 ? "rule" : "rules"}`));
         const open = button("Open procedure", "secondary");
         open.addEventListener("click", () => navigate(`/procedures/${encodeURIComponent(value.procedureId)}`));
         card.append(open);
@@ -416,7 +416,7 @@ export async function renderProcedureAuthoringWorkspace(
     const presetSection = (title: string, values: ProcedurePreset[], description?: string): HTMLElement => {
         const section = document.createElement("section");
         section.className = "hc-procedure-home-section";
-        section.append(sectionHeading(title, description ?? "Creation-time recipes. Saved procedures remain independent after materialization."));
+        section.append(sectionHeading(title, description ?? "Use a starting point, then edit and save the procedure for your table."));
         const grid = document.createElement("div");
         grid.className = "hc-preset-grid";
         for (const preset of values) grid.append(presetCard(preset));
@@ -452,7 +452,7 @@ export async function renderProcedureAuthoringWorkspace(
         closeDrawer();
         activeDrawer = openWorkspaceDrawer(root, {
             title: preset.displayName,
-            description: "Inspect this creation-time recipe before materializing a campaign-owned procedure.",
+            description: "Inspect the procedure before using it as the starting point for your table.",
             onClose: () => { activeDrawer = null; }
         });
         activeDrawer.body.append(presetFacts(preset));
@@ -569,7 +569,7 @@ export async function renderProcedureAuthoringWorkspace(
         const shell = document.createElement("div");
         shell.className = "hc-procedure-shell hc-compact-procedure";
         if (!draft) return shell;
-        shell.append(textElement("p", "Areas you omit are absent from the materialized CampaignProcedure."));
+        shell.append(textElement("p", "Only the rules shown here are part of this procedure. Add optional rules when your table uses them."));
 
         if (draft.modules.length === 0) {
             const neutral = document.createElement("section");
@@ -812,7 +812,7 @@ export async function renderProcedureAuthoringWorkspace(
             const output = document.createElement("div");
             output.className = "hc-readonly-domain-value";
             output.textContent = friendlyStoredValue(key, value);
-            field.append(output, textElement("small", "Use Advanced to edit the exact structured value."));
+            field.append(output, textElement("small", "This specialized setting can be edited in Advanced."));
             return field;
         }
         if (presentation.control === "duration") {

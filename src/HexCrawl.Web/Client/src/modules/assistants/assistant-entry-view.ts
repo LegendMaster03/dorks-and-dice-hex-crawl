@@ -56,7 +56,7 @@ export async function renderAssistantEntry(
                         <label>Procedure <select name="procedure"></select></label>
                         <p class="hc-hint" data-procedure-summary></p>
                         <details class="hc-optional-reference"><summary>Procedure details</summary><ul data-procedure-mechanics></ul></details>
-                        <p class="hc-hint">Saved procedures use the selected revision exactly. Presets are materialized into a campaign-owned procedure before the assistant session begins.</p>
+                        <p class="hc-hint">Saved procedures use the selected revision. A preset creates a new saved procedure when the assistant session begins.</p>
                         ${assistant === "travel" ? `
                             <label>Bookkeeping mode
                                 <select name="mode">
@@ -173,7 +173,7 @@ export async function renderAssistantEntry(
             const preset = presets.find(candidate => candidate.presetKey === choice.presetKey);
             if (preset) {
                 required<HTMLElement>(form, "[data-procedure-summary]").textContent =
-                    `${preset.description} · ${campaignProcedureSummary(preset.procedure)} · materializes a campaign-owned procedure when the assistant session begins`;
+                    `${preset.description} · ${campaignProcedureSummary(preset.procedure)} · creates a new saved procedure when the assistant session begins`;
                 renderProcedureMechanicList(mechanics, preset.procedure);
             }
             submit.disabled = false;

@@ -60,12 +60,12 @@ export function startChoiceSummary(
         const selected = saved.find(value =>
             value.procedureId === choice.procedureId && value.revision === choice.revision);
         return selected
-            ? `${selected.name} · saved revision ${selected.revision} · ${selected.moduleCount} rule ${selected.moduleCount === 1 ? "block" : "blocks"}${selected.originPresetDisplayName ? ` · started from ${selected.originPresetDisplayName}` : " · custom"}`
+            ? `${selected.name} · saved revision ${selected.revision} · ${selected.moduleCount} ${selected.moduleCount === 1 ? "rule" : "rules"}${selected.originPresetDisplayName ? ` · started from ${selected.originPresetDisplayName}` : " · custom"}`
             : `Saved procedure revision ${choice.revision}`;
     }
     const preset = presets.find(value => value.presetKey === choice.presetKey);
     return preset
-        ? `${preset.description} · materializes a campaign-owned procedure when the expedition starts`
+        ? `${preset.description} · creates a new saved procedure for this crawl when play begins`
         : "Preset starting point";
 }
 
