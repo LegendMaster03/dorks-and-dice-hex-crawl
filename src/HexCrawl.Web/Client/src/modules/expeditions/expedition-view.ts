@@ -106,8 +106,6 @@ export async function renderExpedition(
     const render = (): void => {
         cleanupDrawer();
         drawer = null;
-        map?.dispose();
-        map = null;
 
         const presentation = expeditionWorkspacePresentation(runtime, journey, survival);
         const page = document.createElement("section");
@@ -402,14 +400,23 @@ export async function renderExpedition(
 
     const bindMapIfPresent = (): void => {
         const host = root.querySelector<HTMLElement>("[data-map]");
-        if (!host || !world || !runtime.expedition.isSpatial) return;
-        map = new MapSurface(host, () => world);
+        if (!host || !world || !runtime.expedition.isSpatial) {
+            map?.dispose();
+            map = null;
+            return;
+        }
+        if (map) {
+            map.attach(host);
+        } else {
+            map = new MapSurface(host, () => world);
+            map.setHexSelectionHandler(hex => {
+                selectedHex = hex;
+                renderMapContext();
+            });
+        }
         map.renderer.expeditionHex = runtime.expedition.currentHex;
         map.renderer.discoveredSubjectIds = discoveredSubjectIds(runtime);
-        map.setHexSelectionHandler(hex => {
-            selectedHex = hex;
-            renderMapContext();
-        });
+        map.renderer.selectedHex = selectedHex;
         map.requestRender();
         renderMapContext();
     };
