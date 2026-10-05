@@ -55,11 +55,12 @@ public sealed class ExpeditionStartService(
         CancellationToken cancellationToken = default)
     {
         var owner = RequiredText(ownerUserId, "Owner user id");
-        var world = await coreService.GetOverworldAsync(overworldId, owner, cancellationToken);
-        var selected = await ResolveProcedureAsync(owner, selection, cancellationToken);
-
+        var expeditionName = RequiredText(name, "Expedition name");
         var presentation = MapPresentationPolicyCatalog.Resolve(presentationKey);
         presentation.Validate();
+
+        var world = await coreService.GetOverworldAsync(overworldId, owner, cancellationToken);
+        var selected = await ResolveProcedureAsync(owner, selection, cancellationToken);
 
         var expeditionId = Guid.NewGuid();
         var state = new ExpeditionState
@@ -81,7 +82,7 @@ public sealed class ExpeditionStartService(
 
         var now = DateTimeOffset.UtcNow;
         return await store.CreateExpeditionAsync(new StoredExpedition(
-            RequiredText(name, "Expedition name"),
+            expeditionName,
             state,
             new WorldBoundCrawlSessionContext(world.World.Id),
             knowledge,
@@ -107,7 +108,8 @@ public sealed class ExpeditionStartService(
         CancellationToken cancellationToken = default)
     {
         var owner = RequiredText(ownerUserId, "Owner user id");
-        var selected = await ResolveProcedureAsync(owner, selection, cancellationToken);
+        var sessionName = RequiredText(name, "Session name");
+        ArgumentNullException.ThrowIfNull(context);
 
         var id = Guid.NewGuid();
         CrawlSessionRuntimeState runtime = context switch
@@ -122,10 +124,11 @@ public sealed class ExpeditionStartService(
                 nameof(context)),
             _ => throw new ArgumentException("Unsupported crawl session context.", nameof(context))
         };
+        var selected = await ResolveProcedureAsync(owner, selection, cancellationToken);
 
         var now = DateTimeOffset.UtcNow;
         return await store.CreateExpeditionAsync(new StoredExpedition(
-            RequiredText(name, "Session name"),
+            sessionName,
             runtime,
             context,
             null,

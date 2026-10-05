@@ -465,6 +465,7 @@ export async function renderProcedureAuthoringWorkspace(
         const home = button("Procedure home", "secondary");
         home.addEventListener("click", () => { entry = "landing"; render(); });
         const save = button(savePending ? "Saving…" : sourceProcedureId ? "Save new revision" : "Save procedure", "primary");
+        save.dataset.procedureSave = "";
         save.disabled = savePending || historical() || (mode !== "json" && !hasStructuredChanges());
         save.addEventListener("click", () => void (mode === "json" ? saveCanonical() : saveStructured()));
         right.append(home, save);
@@ -694,6 +695,8 @@ export async function renderProcedureAuthoringWorkspace(
             return false;
         }
         populateCompactArea(body, group.modules);
+        const save = root.querySelector<HTMLButtonElement>("[data-procedure-save]");
+        if (save) save.disabled = savePending || historical() || !hasStructuredChanges();
         if (moduleKey && fieldKey) {
             const replacement = [...body.querySelectorAll<HTMLElement>("[data-compact-module][data-compact-field]")]
                 .find(control => control.dataset.compactModule === moduleKey && control.dataset.compactField === fieldKey);

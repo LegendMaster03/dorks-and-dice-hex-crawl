@@ -16,7 +16,7 @@ public sealed class ExpeditionModule : IHexCrawlModule
         Id: "expeditions",
         DisplayName: "Expedition runtime and assistants")
     {
-        Dependencies = ["worlds"]
+        Dependencies = ["worlds", "procedure-composer"]
     };
 
     public void RegisterServices(IServiceCollection services)

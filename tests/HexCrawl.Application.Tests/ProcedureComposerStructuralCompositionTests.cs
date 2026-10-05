@@ -7,7 +7,7 @@ namespace HexCrawl.Application.Tests;
 public sealed class ProcedureComposerStructuralCompositionTests
 {
     [Fact]
-    public async Task CustomDraftStartsFromSmallGenericShapeInsteadOfEveryCatalogSubsystem()
+    public async Task CustomDraftStartsNeutralUntilTheDmChoosesProcedureStructure()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = new PostgresHexCrawlStore(database.ConnectionString);
@@ -17,12 +17,10 @@ public sealed class ProcedureComposerStructuralCompositionTests
         var draft = await service.CreateDraftAsync("alice", null, null, null, []);
 
         Assert.Null(draft.Origin);
-        var only = Assert.Single(draft.Procedure.Modules);
-        Assert.Equal(GenericProcedureCatalog.TimeIntervalModule, only.Module.Key);
-        Assert.DoesNotContain(draft.Procedure.Modules, module =>
-            module.Module.Key == GenericProcedureCatalog.ResourceConsumptionModule);
-        Assert.DoesNotContain(draft.Procedure.Modules, module =>
-            module.Module.Key == GenericProcedureCatalog.JourneyProcessModule);
+        Assert.Empty(draft.Procedure.Modules);
+        Assert.Empty(draft.Procedure.Overrides);
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.CreateAsync("alice", null, [], []));
     }
 
     [Fact]
@@ -91,8 +89,12 @@ public sealed class ProcedureComposerStructuralCompositionTests
         var store = new PostgresHexCrawlStore(database.ConnectionString);
         await store.InitializeAsync();
         var service = Composer(store);
-        var created = await service.CreateAsync("alice", null, [], []);
+        var created = await service.CreateAsync("alice", null, [
+            new ProcedureModuleSelection(GenericProcedureCatalog.TimeIntervalModule, true)
+        ], []);
 
+        Assert.Contains(created.Procedure.Modules, module =>
+            module.Module.Key == GenericProcedureCatalog.TimeIntervalModule);
         Assert.DoesNotContain(created.Procedure.Modules, module =>
             module.Module.Key == GenericProcedureCatalog.EncounterCadenceModule);
 
@@ -114,7 +116,9 @@ public sealed class ProcedureComposerStructuralCompositionTests
         var store = new PostgresHexCrawlStore(database.ConnectionString);
         await store.InitializeAsync();
         var service = Composer(store);
-        var created = await service.CreateAsync("alice", null, [], []);
+        var created = await service.CreateAsync("alice", null, [
+            new ProcedureModuleSelection(GenericProcedureCatalog.TimeIntervalModule, true)
+        ], []);
         var customized = await service.CreateRevisionAsync(
             "alice",
             created.ProcedureId,
