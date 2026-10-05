@@ -1,7 +1,15 @@
 import type { HexCrawlApi } from "../../api";
+import { ProcedureComposerApi } from "../../procedure-composer-api";
+import type { SavedProcedureSummary } from "../../procedure-composer-types";
 import type { PresentationProfile, ProcedurePreset } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
 import { campaignProcedureSummary, renderProcedureMechanicList } from "../../campaign-procedure-view";
+import {
+    applyWorldProcedureChoice,
+    populateProcedureStartChoices,
+    readProcedureStartChoice,
+    startChoiceSummary
+} from "./procedure-start-selection";
 
 export async function enhanceExpeditionSetup(
     root: HTMLElement,
@@ -11,37 +19,55 @@ export async function enhanceExpeditionSetup(
     const previous = root.querySelector<HTMLFormElement>("[data-expedition-form]");
     if (!previous) return () => {};
 
-    const [presets, presentations] = await Promise.all([
+    const composerApi = await ProcedureComposerApi.create(root);
+    const [presets, presentations, savedProcedures] = await Promise.all([
         api.getProcedurePresets(),
-        api.getPresentationProfiles()
+        api.getPresentationProfiles(),
+        composerApi.listProcedures()
     ]);
     const form = document.createElement("form");
     form.className = "hc-form";
     form.dataset.expeditionForm = "";
     form.innerHTML = `
         <label>Name <input name="name" required value="Expedition"></label>
-        <label>Procedure preset <select name="procedure"></select></label>
+        <label>Procedure <select name="procedure"></select></label>
         <p class="hc-hint" data-procedure-summary></p>
-        <details class="hc-optional-reference"><summary>Materialized procedure</summary><ul data-procedure-mechanics></ul></details>
+        <details class="hc-optional-reference"><summary>Procedure details</summary><ul data-procedure-mechanics></ul></details>
         <label>Map presentation <select name="presentation"></select></label>
         <p class="hc-hint" data-presentation-summary></p>
         <div class="hc-inline"><label>Start q <input name="q" type="number" step="1" value="0"></label><label>Start r <input name="r" type="number" step="1" value="0"></label></div>
-        <p class="hc-hint">Procedure customization moves to the Procedure Composer. This setup materializes the selected preset exactly and stores that campaign-owned snapshot.</p>
+        <p class="hc-hint">Saved procedures use the selected revision exactly. Presets are materialized into a campaign-owned procedure before play begins.</p>
         <button type="submit" class="hc-primary-action">Start expedition</button>`;
     previous.replaceWith(form);
 
     const procedure = select(form, "procedure");
-    for (const preset of presets) procedure.append(option(preset.presetKey, preset.displayName));
+    populateProcedureStartChoices(procedure, savedProcedures, presets);
     const presentation = select(form, "presentation");
     for (const policy of presentations) presentation.append(option(policy.key, policy.name));
     if (presentations.some(policy => policy.key === "exploration-map")) presentation.value = "exploration-map";
 
-    const renderProcedureSummary = (preset: ProcedurePreset): void => {
+    const renderProcedureSummary = async (): Promise<void> => {
+        const mechanics = required<HTMLElement>(form, "[data-procedure-mechanics]");
+        mechanics.replaceChildren();
+        if (!procedure.value) {
+            required<HTMLElement>(form, "[data-procedure-summary]").textContent = "No runnable procedure is available.";
+            return;
+        }
+        const choice = readProcedureStartChoice(procedure.value);
         required<HTMLElement>(form, "[data-procedure-summary]").textContent =
-            `${preset.description} · ${campaignProcedureSummary(preset.procedure)}`;
-        renderProcedureMechanicList(
-            required<HTMLElement>(form, "[data-procedure-mechanics]"),
-            preset.procedure);
+            startChoiceSummary(choice, savedProcedures, presets);
+        if (choice.kind === "preset") {
+            const preset = selectedPreset(presets, choice.presetKey);
+            renderProcedureMechanicList(mechanics, preset.procedure);
+            return;
+        }
+
+        const saved = await composerApi.getProcedure(choice.procedureId, choice.revision);
+        for (const module of saved.modules) {
+            const item = document.createElement("li");
+            item.textContent = `${module.displayName}: ${module.mechanic.displayName}`;
+            mechanics.append(item);
+        }
     };
     const renderPresentationSummary = (policy: PresentationProfile): void => {
         const automation = policy.automationMode === "DmControlled" ? "DM controls every reveal" : policy.markEnteredHexKnown ? "explored hexes become known" : "no travel-based reveal";
@@ -49,14 +75,15 @@ export async function enhanceExpeditionSetup(
             `${policy.playerGrid.toLowerCase()} player grid · terrain ${policy.terrainMode.replace(/([A-Z])/g, " $1").trim().toLowerCase()} · ${automation}`;
     };
 
-    procedure.addEventListener("change", () => renderProcedureSummary(selectedPreset(presets, procedure.value)));
+    procedure.addEventListener("change", () => void renderProcedureSummary());
     presentation.addEventListener("change", () => renderPresentationSummary(selectedPresentation(presentations, presentation.value)));
 
-    if (presets.length > 0) renderProcedureSummary(selectedPreset(presets, procedure.value));
+    if (procedure.value) await renderProcedureSummary();
     renderPresentationSummary(selectedPresentation(presentations, presentation.value));
 
     const error = root.querySelector<HTMLElement>("[data-error]");
     const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+    submit.disabled = !procedure.value;
     form.addEventListener("submit", event => {
         event.preventDefault();
         if (form.dataset.pending === "true") return;
@@ -66,19 +93,18 @@ export async function enhanceExpeditionSetup(
         if (error) clearUiError(error);
         void (async () => {
             try {
-                const preset = selectedPreset(presets, procedure.value);
-                const expedition = await api.startConfiguredExpedition(worldId, {
+                const choice = readProcedureStartChoice(procedure.value);
+                const expedition = await api.startConfiguredExpedition(worldId, applyWorldProcedureChoice({
                     name: input(form, "name").value.trim(),
-                    procedureKey: preset.presetKey,
                     presentationKey: presentation.value,
                     startHex: { q: integer(numberInput(form, "q")), r: integer(numberInput(form, "r")) }
-                });
+                }, choice));
                 navigate(`/worlds/${worldId}/expeditions/${expedition.id}`);
             } catch (value) {
                 if (error) showUiError(error, value);
             } finally {
                 form.dataset.pending = "false";
-                submit.disabled = false;
+                submit.disabled = !procedure.value;
                 submit.textContent = "Start expedition";
             }
         })();
