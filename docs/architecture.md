@@ -19,9 +19,11 @@ Named systems exist only as removable creation-time presets. Runtime behavior de
 
 Hex Crawl is pre-release. Development-era API, persistence, UI, and internal model compatibility is not preserved unless a specific requirement is explicitly approved.
 
-Obsolete representations should be removed instead of maintained beside the target architecture. Breaking development migrations and database resets are acceptable while no compatibility commitment exists for real user data.
+Before Phase 15 is accepted and internal human testing begins, obsolete representations should be removed instead of maintained beside the target architecture. Breaking development migrations and database resets remain acceptable; compatibility scaffolding should not be added merely to preserve throwaway development data.
 
-Future user-data migrations must be evaluated separately when the product reaches a stage where such commitments exist.
+After Phase 15 acceptance, tester data has a human cost. Hex Crawl still remains pre-release and resets remain possible, but a straightforward architecture-preserving migration should be preferred before breaking persisted tester data where practical. Tester data does not justify retaining obsolete parallel models or permanent compatibility infrastructure.
+
+Release-level migration and compatibility guarantees remain a separate future decision.
 
 ## Project structure
 
@@ -173,17 +175,19 @@ Environment endpoints expose typed facts, static annotation authoring, expeditio
 
 Survival/resource and journey endpoints expose focused typed operations against the same stored expedition aggregate. Journey endpoints start/resolve/close processes and create/resolve event opportunities; clients do not upload replacement raw aggregate JSON.
 
-World and expedition routes retain the existing product organization, including world-bound creation, standalone session creation, full workbench routes, mapless trackers, and focused assistant mutations.
+Phase 15 adds authoritative canonical-procedure JSON draft/validation/save endpoints. JSON editing reconstructs the same `CampaignProcedure`, runs domain validation, preserves procedure identity and optimistic concurrency, and stores ordinary immutable campaign procedure revisions rather than introducing a parallel JSON authority.
 
 ## Frontend and routing
 
 Application-owned DOM is driven by explicit route/state transitions. Canvas invalidation goes through `RenderLifecycle`; `MutationObserver` is not used.
 
-`/` is the DM tools home. World authoring, full world-bound workbench routes, mapless session routes, and focused assistant routes remain separate product surfaces.
+Phase 15 presents one coherent expedition product rather than requiring the DM to assemble separate map/tracker/subsystem screens mentally. Spatial expeditions use a map-centered workspace with a primary current-action/status surface and contextual access to party, current map context, history, resources/effects, and journeys. Nonspatial and journey-oriented procedures adapt the primary surface to their actual stored procedure and do not fabricate map or interval state.
 
-The expedition UI includes DM environment, survival/resource, and Journey / Challenge panels. The browser consumes server-derived policy/state and typed mutation contracts; it does not recreate environment precedence, movement composition, survival policy, consequence ownership, or journey transition logic.
+Procedure authoring exposes Compact, Advanced, and JSON presentations over the same authoritative `CampaignProcedure`. Compact uses tabletop concepts; Advanced exposes generic mechanic/contracts and diagnostics; JSON exposes the canonical representation through server-authoritative validation and revision commands. Preset browsing is a first-class discovery surface rather than only a select box.
 
-The browser renders authoritative persisted procedure/session state. It does not create a second procedure model.
+Existing typed controllers remain authoritative for mutations. The richer workspace composes their state and actions without recreating environment precedence, movement composition, survival policy, consequence ownership, journey transitions, or runtime rules in presentation code.
+
+See `docs/phase-15-design-architecture.md` for the Phase 15 interaction architecture, Compact persona, tracking-sheet research, responsive/accessibility rules, and Phase 15.1 extension points.
 
 ## Source-map boundary
 
@@ -197,9 +201,11 @@ Rules Core remains optional enrichment and may provide resolved inputs or canoni
 
 Character Sheet may provide capabilities. Block Initiative remains authoritative for tactical combat after encounter handoff. Neither tool changes Hex Crawl runtime ownership.
 
-## Generic procedure implementation through Phase 12
+A future Battle Map tool and cross-tool tactical-map ownership/integration are outside the Hex Crawl roadmap. Phase 15 does not invent that product or its ownership model.
 
-The generic procedure work now includes removable named presets, campaign-owned pinned snapshots, generic runtime binding, proof procedures, Procedure Composer, typed participant activities, Phase 8 movement capability composition, Phase 9 generalized environment context/evaluation, Phase 10 generalized consequences/effects, Phase 11 resources/survival/forced travel, and Phase 12 multi-stage journey/process execution.
+## Generic procedure implementation through Phase 15
+
+The generic procedure work includes removable named presets, campaign-owned pinned snapshots, generic runtime binding, proof procedures, Procedure Composer, typed participant activities, Phase 8 movement capability composition, Phase 9 generalized environment context/evaluation, Phase 10 generalized consequences/effects, Phase 11 resources/survival/forced travel, Phase 12 multi-stage journey/process execution, Phase 13 shared Surveyor extraction, Phase 14 comprehensive remediation/encounter handoff, and the Phase 15 core UX/presentation architecture.
 
 Important retained guarantees include:
 
@@ -217,11 +223,15 @@ Important retained guarantees include:
 - one movement composition boundary through `MovementCapabilityComposer`;
 - one structured consequence/application boundary reused by resources, survival, and journeys;
 - stable journey resolution/event/runtime-occurrence identities for retry and restart safety;
-- journey processes overlay deterministic travel rather than replacing it.
+- journey processes overlay deterministic travel rather than replacing it;
+- Compact, Advanced, and JSON remain presentations over one canonical `CampaignProcedure`;
+- spatial and nonspatial workspaces follow stored procedure behavior rather than named preset identity.
 
-Phase 13 subsequently extracted shared raster preparation and lattice detection into Surveyor. Phase 14 now provides the server-authoritative v2 encounter handoff, including structured circumstances, linked effects/resources, journey provenance, historical runtime context, and linked scenes while Block Initiative remains authoritative for tactical combat. Battle-map ownership remains deferred to Phase 15. Phase 14.5 is the next internal-human-testing readiness gate.
+Phase 13 extracted shared raster preparation and lattice detection into Surveyor. Phase 14 completed the broad architecture/correctness/security/performance review and expanded the server-authoritative v2 encounter handoff while Block Initiative remained tactical-combat authority. Phase 15 is the core UX/presentation phase and is the new internal-human-testing gate. After Phase 15 acceptance, internal human testing begins while Phase 15.1 Guided work proceeds. Phase 15.5 is the later testing-stabilization/pre-release-hardening phase.
 
-See `docs/generic-procedure-architecture.md`, `docs/environment-context.md`, `docs/movement-capability-composition.md`, `docs/survival-resources.md`, `docs/journey-processes.md`, `docs/postgresql-persistence.md`, `docs/generic-procedure-development-plan.md`, and `docs/phase-3-proof-matrix.md`.
+Battle Map ownership evaluation has been removed from the Hex Crawl roadmap and belongs to a future Battle Map roadmap once that product exists and is sufficiently mature.
+
+See `docs/generic-procedure-architecture.md`, `docs/environment-context.md`, `docs/movement-capability-composition.md`, `docs/survival-resources.md`, `docs/journey-processes.md`, `docs/postgresql-persistence.md`, `docs/generic-procedure-development-plan.md`, `docs/phase-3-proof-matrix.md`, and `docs/phase-15-design-architecture.md`.
 
 ## Shared map processing (Phase 13)
 
