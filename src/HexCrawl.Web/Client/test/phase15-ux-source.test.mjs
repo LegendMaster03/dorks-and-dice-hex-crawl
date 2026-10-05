@@ -149,6 +149,18 @@ test("automatic procedure helpers keep generated values and token in the focused
     assert.match(controller, /request\.generatedProcedureResolutionId = this\.generatedResolutionId/);
 });
 
+test("focused spatial watch failures stay visible in the drawer and do not escape as discarded rejections", () => {
+    const controller = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-watch-controller.ts"),
+        "utf8");
+
+    assert.match(controller, /private showAdvanceError\(value: unknown\): void/);
+    assert.match(controller, /error\.dataset\.watchAdvanceError = ""/);
+    assert.match(controller, /error\.setAttribute\("role", "alert"\)/);
+    assert.match(controller, /this\.clearAdvanceError\(\);\s*this\.advancePending = true/);
+    assert.match(controller, /this\.runMutation\([\s\S]*\)\.catch\(value => \{\s*if \(!this\.disposed\) this\.showAdvanceError\(value\);\s*\}\);/);
+});
+
 test("Phase 15 map selection is contextual and never directly mutates expedition position", () => {
     const view = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
