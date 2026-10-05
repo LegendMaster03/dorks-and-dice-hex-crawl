@@ -64,7 +64,7 @@ export async function renderProcedureWorkspace(
     root.classList.add("hc-phase15");
     root.replaceChildren(loadingPanel("Loading exploration procedure…"));
     const composerApi = await ProcedureComposerApi.create(root);
-    presets = await api.getProcedurePresets();
+    if (!sourceProcedureId) presets = await api.getProcedurePresets();
     if (disposed) return () => {};
 
     const historical = (): boolean =>
@@ -727,18 +727,26 @@ export async function renderProcedureWorkspace(
 
     const validateJson = async (): Promise<boolean> => {
         if (jsonBusy) return false;
+        const validatingText = jsonText;
         jsonBusy = true;
         updateJsonStatus(root);
         try {
-            jsonValidation = await composerApi.validateCanonical(jsonText);
+            const validation = await composerApi.validateCanonical(validatingText);
+            if (jsonText !== validatingText) {
+                jsonValidation = null;
+                updateJsonStatus(root);
+                return false;
+            }
+            jsonValidation = validation;
             updateJsonStatus(root);
-            return jsonValidation.isValid;
+            return validation.isValid;
         } catch (value) {
             const error = root.querySelector<HTMLElement>("[data-error]");
             if (error) showUiError(error, value);
             return false;
         } finally {
             jsonBusy = false;
+            updateJsonStatus(root);
         }
     };
 
@@ -817,44 +825,15 @@ export async function renderProcedureWorkspace(
         }
     };
 
-    const restoreLabel = (): string => {
-        if (draft?.origin && exactOriginPreset()) return "Restore starting behavior";
-        return "Discard unsaved changes";
-    };
+    const restoreLabel = (): string => "Discard unsaved changes";
 
-    const canRestoreArea = (modules: ProcedureModuleComposer[]): boolean => {
-        if (draft?.origin && exactOriginPreset()) return true;
-        return modules.some(module => pending.has(module.moduleKey));
-    };
+    const canRestoreArea = (modules: ProcedureModuleComposer[]): boolean =>
+        modules.some(module => pending.has(module.moduleKey));
 
     const restoreArea = async (modules: ProcedureModuleComposer[]): Promise<void> => {
         if (!draft || historical()) return;
-        const origin = exactOriginPreset();
-        if (!origin) {
-            for (const module of modules) pending.delete(module.moduleKey);
-            await refreshDraft();
-            return;
-        }
-
-        for (const module of modules) {
-            const baseline = origin.procedure.modules.find(candidate => candidate.moduleKey === module.moduleKey);
-            if (!baseline) continue;
-            pending.set(module.moduleKey, {
-                ...createPendingOverride(module, pending.get(module.moduleKey)),
-                replacementMechanicKey: baseline.mechanicKey,
-                replacementMechanicVersion: baseline.mechanicVersion,
-                parameters: { ...baseline.parameters },
-                note: "Restore starting preset behavior"
-            });
-        }
+        for (const module of modules) pending.delete(module.moduleKey);
         await refreshDraft();
-    };
-
-    const exactOriginPreset = (): ProcedurePreset | null => {
-        if (!draft?.origin?.presetKey || !draft.origin.presetRevision) return null;
-        return presets.find(preset =>
-            preset.presetKey === draft!.origin!.presetKey
-            && preset.presetRevision === draft!.origin!.presetRevision) ?? null;
     };
 
     const invalidateJson = (): void => {

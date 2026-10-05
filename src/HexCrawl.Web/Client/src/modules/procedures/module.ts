@@ -59,7 +59,7 @@ function attachReferenceAction(
             ? `${base}/reference`
             : `${base}/revisions/${encodeURIComponent(String(revision))}/reference`);
     });
-    document.body.append(button);
+    root.append(button);
     return () => button.remove();
 }
 

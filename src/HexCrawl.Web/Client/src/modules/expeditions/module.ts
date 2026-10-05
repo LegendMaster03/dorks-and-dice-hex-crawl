@@ -3,6 +3,7 @@ import { ExpeditionEnvironmentPanel } from "./environment-panel";
 import { ExpeditionSurvivalResourcesPanel } from "./survival-resources-panel";
 import { ExpeditionJourneyPanel } from "./journey-panel";
 import { enhanceExpeditionWorkspace } from "./phase15-expedition-workspace";
+import { publishExpeditionRuntimeChanged } from "./expedition-runtime-events";
 import { SurvivalResourcesApi } from "../../survival-api";
 import { JourneyApi } from "../../journey-api";
 import type { HexCrawlClientModule } from "../../client-module";
@@ -58,6 +59,7 @@ export const expeditionsModule: HexCrawlClientModule = {
             try {
                 await action();
                 panelRuntime = await context.api.getExpedition(expeditionId);
+                if (!disposed) publishExpeditionRuntimeChanged(context.root, panelRuntime);
             } catch (value) {
                 if (!disposed && error) showUiError(error, value);
             } finally {

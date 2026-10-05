@@ -19,6 +19,10 @@ test("Phase 15 procedure workspace keeps Compact Advanced and JSON on one Campai
     assert.match(workspace, /same CampaignProcedure used by Compact and Advanced/);
     assert.match(workspace, /server parsing, domain validation, and optimistic concurrency/);
     assert.match(workspace, /createCanonicalRevision/);
+    assert.match(workspace, /if \(!sourceProcedureId\) presets = await api\.getProcedurePresets\(\)/);
+    assert.doesNotMatch(workspace, /exactOriginPreset/);
+    assert.match(workspace, /const validatingText = jsonText/);
+    assert.match(workspace, /jsonBusy = false;\s*updateJsonStatus\(root\)/);
     assert.match(workspace, /mode !== "json" \|\| jsonBusy/);
     assert.match(api, /composer\/canonical\/draft/);
     assert.match(api, /composer\/canonical\/validate/);
@@ -35,6 +39,9 @@ test("Phase 15 expedition workspace derives the next action from authoritative r
     const signal = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/expedition-runtime-events.ts"),
         "utf8");
+    const module = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/module.ts"),
+        "utf8");
 
     assert.match(workspace, /Current action/);
     assert.match(workspace, /runtime\.pauseReason === "EncounterTriggered"/);
@@ -50,6 +57,8 @@ test("Phase 15 expedition workspace derives the next action from authoritative r
     assert.match(signal, /root\.dispatchEvent\(new CustomEvent/);
     assert.match(signal, /root\.addEventListener/);
     assert.match(signal, /root\.removeEventListener/);
+    assert.match(module, /publishExpeditionRuntimeChanged\(context\.root, panelRuntime\)/);
+    assert.doesNotMatch(workspace, /document\.querySelector/);
     assert.doesNotMatch(workspace, /installRuntimeHooks/);
     assert.doesNotMatch(workspace, /api\.getExpedition\s*=/);
     assert.doesNotMatch(workspace, /api\.advanceExpedition\s*=/);
@@ -93,6 +102,8 @@ test("Phase 15 shared workspace primitives retain accessible drawer behavior", (
     assert.match(workspace, /Escape/);
     assert.match(workspace, /returnFocus\?\.isConnected/);
     assert.match(workspace, /returnFocus\.focus\(\)/);
+    assert.match(workspace, /drawerClosers\.get\(existing\)/);
+    assert.match(workspace, /drawerClosers\.delete\(panel\)/);
     assert.match(styles, /hc-focus-workspace/);
     assert.match(styles, /@media \(max-width: 760px\)/);
 });

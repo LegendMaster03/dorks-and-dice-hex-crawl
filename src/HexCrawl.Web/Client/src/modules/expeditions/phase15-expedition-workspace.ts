@@ -56,10 +56,9 @@ export async function enhanceExpeditionWorkspace(
 
     const acceptRuntime = (next: ExpeditionDetail): void => {
         if (disposed || next.id !== expeditionId) return;
-        const changed = next.version !== runtime.version;
         runtime = next;
         render();
-        if (changed) void refreshSupportingState();
+        void refreshSupportingState();
     };
 
     const unsubscribeRuntime = subscribeExpeditionRuntimeChanged(root, acceptRuntime);
@@ -78,9 +77,9 @@ export async function enhanceExpeditionWorkspace(
         context.append(
             contextButton("Party", showPartyContext),
             contextButton(runtime.expedition.isSpatial ? "Current hex" : "Current context", showCurrentContext),
-            contextButton("History", focusHistory));
-        if (survival) context.append(contextButton("Resources & effects", () => openDetails("[data-survival-resources-panel]")));
-        if (journey && journey.processPolicy.support !== "None") context.append(contextButton("Journey", () => openDetails("[data-journey-panel]")));
+            contextButton("History", () => focusHistory(root)));
+        if (survival) context.append(contextButton("Resources & effects", () => openDetails(root, "[data-survival-resources-panel]")));
+        if (journey && journey.processPolicy.support !== "None") context.append(contextButton("Journey", () => openDetails(root, "[data-journey-panel]")));
         host.append(context);
 
         if (selectedHex && world) host.append(renderSelectedHex(selectedHex.q, selectedHex.r));
@@ -111,22 +110,22 @@ export async function enhanceExpeditionWorkspace(
         if (runtime.pauseReason === "EncounterTriggered") {
             return action("Paused", "warning", "An encounter interrupted the expedition.",
                 "Review the encounter context, hand off to Block Initiative when ready, and return to the same expedition state afterward.",
-                "Review encounter handoff", focusEncounterHandoff);
+                "Review encounter handoff", () => focusEncounterHandoff(root));
         }
         if (runtime.pauseReason === "LostRecognitionRequired") {
             return action("Decision required", "warning", "The party may recognize that it is lost.",
                 "Resolve recognition and reorientation before continuing travel.",
-                "Resolve navigation decision", () => openRunWatch("[data-boundary-resolution]"));
+                "Resolve navigation decision", () => openRunWatch(root, "[data-boundary-resolution]"));
         }
         if (runtime.pauseReason === "ConditionsReviewRequired") {
             return action("Review required", "warning", "Current conditions require DM review.",
                 "Review the relevant travel, environment, and consequence state before continuing.",
-                "Review travel controls", () => openRunWatch());
+                "Review travel controls", () => openRunWatch(root));
         }
         if (runtime.pauseReason === "BacktrackBoundaryReached") {
             return action("Boundary reached", "warning", "Travel reached a boundary that needs a decision.",
                 "Resolve the boundary/backtrack decision before the expedition advances.",
-                "Resolve boundary", () => openRunWatch("[data-boundary-resolution]"));
+                "Resolve boundary", () => openRunWatch(root, "[data-boundary-resolution]"));
         }
 
         const pendingEvent = journey?.eventOccurrences.find(event => event.status === "ResolutionRequired") ?? null;
@@ -134,7 +133,7 @@ export async function enhanceExpeditionWorkspace(
             return action("Journey event", "warning",
                 pendingEvent.eventType ? `${pendingEvent.eventType} needs resolution.` : "A journey event needs resolution.",
                 "Resolve the current event and its consequences from the journey workspace.",
-                "Resolve journey event", () => openDetails("[data-journey-panel]"));
+                "Resolve journey event", () => openDetails(root, "[data-journey-panel]"));
         }
 
         const activeJourney = journey?.activeProcesses[0] ?? null;
@@ -146,7 +145,7 @@ export async function enhanceExpeditionWorkspace(
                 activeJourney.status === "ResolutionRequired" ? "warning" : "info",
                 `${activeJourney.definition.displayName}: ${stage?.displayName ?? activeJourney.currentStageKey}`,
                 state ? journeyProgress(activeJourney, state.numericProgress, state.explicitState) : "Review the active journey stage.",
-                "Open journey workspace", () => openDetails("[data-journey-panel]"));
+                "Open journey workspace", () => openDetails(root, "[data-journey-panel]"));
         }
 
         const state = runtime.expedition;
@@ -154,27 +153,27 @@ export async function enhanceExpeditionWorkspace(
             if (state.activeWatchNumber !== null) {
                 return action("In progress", "info", `Continue watch ${state.activeWatchNumber}.`,
                     `${formatHours(state.activeWatchRemainingHours ?? runtime.remainingWatchHours)} remain in the current watch. Review only the resolutions that apply to this procedure before advancing.`,
-                    "Continue current watch", () => openRunWatch());
+                    "Continue current watch", () => openRunWatch(root));
             }
             return action("Ready", "good", `Plan travel from hex ${state.currentHex.q}, ${state.currentHex.r}.`,
                 runtime.procedure.runtime
                     ? "Set the intended course and applicable travel inputs, then run the next watch."
                     : "The stored procedure is structural; use the applicable assisted/manual tools rather than inventing executable travel.",
                 runtime.procedure.runtime ? "Plan next travel watch" : null,
-                runtime.procedure.runtime ? () => openRunWatch("[data-plan-fields]") : null);
+                runtime.procedure.runtime ? () => openRunWatch(root, "[data-plan-fields]") : null);
         }
 
         if (runtime.procedure.focusedIntervalPolicy.support === "Supported") {
             return action(state.activeWatchNumber === null ? "Ready" : "In progress", "good",
                 state.activeWatchNumber === null ? `Ready for watch ${state.completedWatches + 1}.` : `Continue watch ${state.activeWatchNumber}.`,
                 "This procedure provides a real focused interval, so watch/time bookkeeping is available without fabricating spatial travel.",
-                "Open watch / time", () => clickIfPresent("[data-watch]"));
+                "Open watch / time", () => clickIfPresent(root, "[data-watch]"));
         }
 
         if (journey?.processPolicy.support === "Supported") {
             return action("Journey procedure", "info", "No repeating watch is required by this procedure.",
                 activeJourney ? "Continue the active multi-stage journey process." : "Start or manage the journey process directly; no map or interval bookkeeping is fabricated.",
-                "Open journey workspace", () => openDetails("[data-journey-panel]"));
+                "Open journey workspace", () => openDetails(root, "[data-journey-panel]"));
         }
 
         return action("Procedure-led", "neutral", "No repeating watch or spatial action is currently required.",
@@ -184,36 +183,36 @@ export async function enhanceExpeditionWorkspace(
     const runtimeStats = (): HTMLElement[] => {
         const state = runtime.expedition;
         const stats: HTMLElement[] = [
-            statAction("Time", `Day ${state.currentDay}`, `${formatHours(state.elapsedTravelHours)} elapsed`, focusHistory)
+            statAction("Time", `Day ${state.currentDay}`, `${formatHours(state.elapsedTravelHours)} elapsed`, () => focusHistory(root))
         ];
         if (state.isSpatial) {
             stats.push(
                 statAction("Travel", formatDistance(state.distanceTraveled),
                     state.activeWatchNumber === null ? "Ready for next watch" : `${formatHours(state.activeWatchRemainingHours ?? runtime.remainingWatchHours)} remaining`,
-                    () => openRunWatch("[data-travel-resolution]"), state.activeWatchNumber === null ? "neutral" : "info"),
+                    () => openRunWatch(root, "[data-travel-resolution]"), state.activeWatchNumber === null ? "neutral" : "info"),
                 statAction("Navigation", navigationValue(state),
                     state.intendedDirection === null ? "No current course" : `Intended ${directionLabel(state.intendedDirection)}`,
-                    () => openRunWatch("[data-navigation-resolution]"), state.isLost ? "warning" : "good"),
+                    () => openRunWatch(root, "[data-navigation-resolution]"), state.isLost ? "warning" : "good"),
                 statAction("Current hex", `${state.currentHex.q}, ${state.currentHex.r}`,
                     state.actualDirection === null ? "No active course" : `Actual ${directionLabel(state.actualDirection)}`, showCurrentContext));
         } else if (runtime.procedure.focusedIntervalPolicy.support === "Supported") {
             stats.push(statAction("Watch",
                 state.activeWatchNumber === null ? `Ready for ${state.completedWatches + 1}` : String(state.activeWatchNumber),
                 state.activeWatchNumber === null ? "No active watch" : `${formatHours(state.activeWatchRemainingHours ?? runtime.remainingWatchHours)} remaining`,
-                () => clickIfPresent("[data-watch]")));
+                () => clickIfPresent(root, "[data-watch]")));
         }
 
         stats.push(
             statAction("Party", `${runtime.party.members.length} member${runtime.party.members.length === 1 ? "" : "s"}`,
                 activeAssignmentSummary(runtime), showPartyContext),
-            statAction("Movement", movementValue(runtime), movementDetail(runtime), openPartyEditor,
+            statAction("Movement", movementValue(runtime), movementDetail(runtime), () => openPartyEditor(root),
                 runtime.movementComposition.status === "Resolved" ? "good" : runtime.movementComposition.status === "InputRequired" ? "warning" : "neutral"));
 
         if (survival) {
             stats.push(
-                statAction("Resources", resourceValue(survival), resourceDetail(survival), () => openDetails("[data-survival-resources-panel]"),
+                statAction("Resources", resourceValue(survival), resourceDetail(survival), () => openDetails(root, "[data-survival-resources-panel]"),
                     survival.resources.some(value => value.isDepleted) || survival.pendingResourceConsequences.length > 0 ? "warning" : "neutral"),
-                statAction("Forced travel", forcedTravelValue(survival), forcedTravelDetail(survival), () => openDetails("[data-survival-resources-panel]"),
+                statAction("Forced travel", forcedTravelValue(survival), forcedTravelDetail(survival), () => openDetails(root, "[data-survival-resources-panel]"),
                     survival.forcedTravel.checkDue ? "warning" : "neutral"));
         }
 
@@ -221,7 +220,7 @@ export async function enhanceExpeditionWorkspace(
             const active = journey.activeProcesses[0] ?? null;
             stats.push(statAction("Journey",
                 active ? active.definition.displayName : journey.processPolicy.support === "Supported" ? "Ready" : "Unavailable",
-                active ? journeyStageLabel(active) : "No active process", () => openDetails("[data-journey-panel]"),
+                active ? journeyStageLabel(active) : "No active process", () => openDetails(root, "[data-journey-panel]"),
                 active?.status === "ResolutionRequired" ? "warning" : "neutral"));
         }
         return stats;
@@ -267,7 +266,7 @@ export async function enhanceExpeditionWorkspace(
             const edit = document.createElement("button");
             edit.type = "button";
             edit.textContent = "Manage party";
-            edit.addEventListener("click", () => { drawer?.close(); openPartyEditor(); });
+            edit.addEventListener("click", () => { drawer?.close(); openPartyEditor(root); });
             body.append(edit);
         });
     };
@@ -464,8 +463,8 @@ function locationsInHex(world: Overworld, q: number, r: number) {
     });
 }
 
-function openRunWatch(focusSelector?: string): void {
-    const details = document.querySelector<HTMLDetailsElement>(".hex-crawl-app .hc-sheet-controls");
+function openRunWatch(root: HTMLElement, focusSelector?: string): void {
+    const details = root.querySelector<HTMLDetailsElement>(".hc-sheet-controls");
     if (!details) return;
     details.open = true;
     details.scrollIntoView({ block: "nearest" });
@@ -473,34 +472,34 @@ function openRunWatch(focusSelector?: string): void {
     (target?.matches("input,select,button,textarea") ? target : target?.querySelector<HTMLElement>("input, select, button, textarea"))?.focus();
 }
 
-function openPartyEditor(): void {
-    const details = document.querySelector<HTMLDetailsElement>(".hex-crawl-app .hc-party-editor-panel");
+function openPartyEditor(root: HTMLElement): void {
+    const details = root.querySelector<HTMLDetailsElement>(".hc-party-editor-panel");
     if (!details) return;
     details.open = true;
     details.scrollIntoView({ block: "nearest" });
     details.querySelector<HTMLElement>("input, select, button, textarea, summary")?.focus();
 }
 
-function openDetails(selector: string): void {
-    const details = document.querySelector<HTMLDetailsElement>(`.hex-crawl-app ${selector}`);
+function openDetails(root: HTMLElement, selector: string): void {
+    const details = root.querySelector<HTMLDetailsElement>(selector);
     if (!details) return;
     details.open = true;
     details.scrollIntoView({ block: "start" });
     details.querySelector<HTMLElement>("summary")?.focus();
 }
 
-function focusHistory(): void {
-    const target = document.querySelector<HTMLElement>(".hex-crawl-app [data-history]");
+function focusHistory(root: HTMLElement): void {
+    const target = root.querySelector<HTMLElement>("[data-history]");
     target?.scrollIntoView({ block: "start" });
     target?.querySelector<HTMLElement>("summary, button, a")?.focus();
 }
 
-function focusEncounterHandoff(): void {
-    const host = document.querySelector<HTMLElement>(".hex-crawl-app [data-encounter-handoff]");
+function focusEncounterHandoff(root: HTMLElement): void {
+    const host = root.querySelector<HTMLElement>("[data-encounter-handoff]");
     host?.scrollIntoView({ block: "center" });
     host?.querySelector<HTMLButtonElement>("button")?.focus();
 }
 
-function clickIfPresent(selector: string): void {
-    document.querySelector<HTMLButtonElement>(`.hex-crawl-app ${selector}`)?.click();
+function clickIfPresent(root: HTMLElement, selector: string): void {
+    root.querySelector<HTMLButtonElement>(selector)?.click();
 }

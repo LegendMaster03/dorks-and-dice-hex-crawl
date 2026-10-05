@@ -1,3 +1,5 @@
+const drawerClosers = new WeakMap<HTMLElement, () => void>();
+
 export type WorkspaceDrawer = {
     element: HTMLElement;
     close: () => void;
@@ -40,7 +42,12 @@ export function openWorkspaceDrawer(
     title: string,
     build: (body: HTMLElement, close: () => void) => void,
     returnFocus: HTMLElement | null = document.activeElement instanceof HTMLElement ? document.activeElement : null): WorkspaceDrawer {
-    root.querySelector<HTMLElement>("[data-phase15-drawer]")?.remove();
+    const existing = root.querySelector<HTMLElement>("[data-phase15-drawer]");
+    if (existing) {
+        const closeExisting = drawerClosers.get(existing);
+        if (closeExisting) closeExisting();
+        else existing.remove();
+    }
 
     const panel = document.createElement("section");
     panel.className = "hc-focus-workspace";
@@ -74,10 +81,12 @@ export function openWorkspaceDrawer(
         if (closed) return;
         closed = true;
         document.removeEventListener("keydown", onKeyDown, true);
+        drawerClosers.delete(panel);
         panel.remove();
         if (returnFocus?.isConnected) returnFocus.focus();
     };
 
+    drawerClosers.set(panel, close);
     closeButton.addEventListener("click", close);
     document.addEventListener("keydown", onKeyDown, true);
     root.append(panel);
@@ -98,10 +107,11 @@ export function disclosure(title: string, open = false): HTMLDetailsElement {
 
 export function setButtonPending(button: HTMLButtonElement, pending: boolean, pendingLabel: string): () => void {
     const previous = button.textContent ?? "";
+    const previousDisabled = button.disabled;
     button.disabled = pending;
     if (pending) button.textContent = pendingLabel;
     return () => {
-        button.disabled = false;
+        button.disabled = previousDisabled;
         button.textContent = previous;
     };
 }
