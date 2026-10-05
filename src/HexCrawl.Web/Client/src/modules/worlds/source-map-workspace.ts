@@ -42,25 +42,25 @@ export class SourceMapWorkspace {
         this.host.open = true;
         this.host.innerHTML = `
             <summary>Reference maps</summary>
-            <p class="hc-hint">A map set is a collection of alternate source versions of the same map and geographic extent. Keep GM/player versions, grid/gridless exports, numbered/keyed references, and other evidence for that map in one set. A neighboring regional map belongs in a different set. These source images remain independent so future image comparison can derive a common base and true visual-difference layers.</p>
+            <p class="hc-hint">A map set is a collection of alternate source versions of the same map and geographic extent. Keep GM/player versions, copies with or without a visible hex grid, numbered/keyed references, and other useful versions of that map in one set. A neighboring regional map belongs in a different set.</p>
             <details>
                 <summary>Technical details</summary>
-                <p class="hc-hint">Internally, these are stored as source-map representations. The map-set label is a user-facing way to organize versions of the same map without changing that underlying data model.</p>
+                <p class="hc-hint">Internally, these are stored as source-map representations. The images remain independent evidence so future image comparison can derive a common base and true visual-difference layers without treating whole map images as the final layer model.</p>
             </details>
             <label>Map view <select data-source-map-raster-view>
                 <option value="manual">Manual visibility</option>
-                <option value="gm-grid">GM · baked grid</option>
-                <option value="gm-gridless">GM · gridless</option>
-                <option value="player-grid">Player · baked grid</option>
-                <option value="player-gridless">Player · gridless</option>
-            </select><span class="hc-hint">This is a temporary whole-image view switch. It coordinates GM/Player source maps across all map sets without treating whole map images as the final layer model. Shared and auxiliary references keep their manual visibility.</span></label>
+                <option value="gm-grid">GM · grid shown</option>
+                <option value="gm-gridless">GM · no printed grid</option>
+                <option value="player-grid">Player · grid shown</option>
+                <option value="player-gridless">Player · no printed grid</option>
+            </select><span class="hc-hint">Switches the GM/Player map version for every map set at once. Shared and auxiliary references keep their manual visibility.</span></label>
             <p class="hc-hint" data-source-map-raster-view-status></p>
             <div data-source-map-list></div>
             <form class="hc-form" data-source-map-upload>
                 <p class="hc-subsection-title">Import map set</p>
                 <label>Map images <input name="file" type="file" accept="image/png,image/jpeg,image/webp" multiple required><span class="hc-hint">Select one image or a complete set of alternate versions of the same map.</span></label>
-                <label>Map set <select name="geography"></select><span class="hc-hint">Choose an existing set to avoid spelling variants. Create a new set only for a different underlying map or geographic extent.</span></label>
-                <label data-new-geography>New map set <input name="newGeography" placeholder="Bellowing Wilds"><span class="hc-hint">For example, Bellowing Wilds and neighboring Kylandria are separate map sets even though both occupy the same overworld. Separate regions remain manually registered for now; automatic landmark/road matching is future Surveyor work.</span></label>
+                <label>Map set <select name="geography"></select><span class="hc-hint">Choose an existing set to avoid spelling variants and add another version without retyping its name. Create a new set only for a different underlying map or geographic extent.</span></label>
+                <label data-new-geography>New map set <input name="newGeography" placeholder="Region or map name"><span class="hc-hint">A neighboring region or separate regional map should use its own map set. Separate regions remain manually registered for now; automatic landmark/road matching is future Surveyor work.</span></label>
                 <div data-source-map-upload-files></div>
                 <button type="submit" class="hc-primary-action">Upload reference maps</button>
             </form>
@@ -77,13 +77,13 @@ export class SourceMapWorkspace {
                 <p class="hc-hint" data-source-map-selected-meta></p>
                 <label>Name <input name="name" required></label>
                 <label>Map set <select name="geographyKey"></select><span class="hc-hint">A set contains alternate versions of the same underlying map/extent. Registration remains per source image so differently cropped exports are not guessed.</span></label>
-                <label>Source use <select name="role">
-                    <option value="Gm">GM view source</option>
-                    <option value="Player">Player view source</option>
+                <label>Version type <select name="role">
+                    <option value="Gm">GM version</option>
+                    <option value="Player">Player version</option>
                     <option value="Neutral">Shared / neutral reference</option>
                     <option value="Other">Auxiliary / reference only</option>
                 </select></label>
-                <label><input name="bakedGrid" type="checkbox"> Source image contains a baked-in hex grid</label>
+                <label><input name="bakedGrid" type="checkbox"> Image includes a visible hex grid</label>
                 <div class="hc-button-row">
                     <button type="submit" class="hc-primary-action">Save metadata</button>
                     <button type="button" data-align-grid>Detect / repair hex grid</button>
@@ -93,7 +93,7 @@ export class SourceMapWorkspace {
             </form>
             <section data-registration-panel hidden>
                 <p class="hc-subsection-title">Advanced map registration</p>
-                <p class="hc-hint">Manual placement uses three matching landmarks. This can align a gridless representation to an established world grid or place a neighboring regional map into the same overworld. Automatic landmark/road-based regional alignment is not implemented yet.</p>
+                <p class="hc-hint">Manual placement uses three matching landmarks. This can align a gridless version to an established world grid or place a neighboring regional map into the same overworld. Automatic landmark/road-based regional alignment is not implemented yet.</p>
                 <img data-registration-image alt="Source map registration preview" style="display:block;max-width:100%;max-height:280px;object-fit:contain;cursor:crosshair;border:1px solid rgba(0,0,0,.2)">
                 <p class="hc-hint" data-registration-status></p>
                 <div class="hc-button-row">
@@ -259,7 +259,7 @@ export class SourceMapWorkspace {
             nameLabel.append(name);
 
             const roleLabelElement = document.createElement("label");
-            roleLabelElement.append(document.createTextNode("Source use "));
+            roleLabelElement.append(document.createTextNode("Version type "));
             const role = document.createElement("select");
             role.name = "mapRole";
             role.innerHTML = sourceUseOptions();
@@ -270,7 +270,7 @@ export class SourceMapWorkspace {
             const bakedGrid = document.createElement("input");
             bakedGrid.type = "checkbox";
             bakedGrid.name = "mapBakedGrid";
-            gridLabel.append(bakedGrid, document.createTextNode(" Source image contains a baked-in hex grid"));
+            gridLabel.append(bakedGrid, document.createTextNode(" Image includes a visible hex grid"));
 
             row.append(heading, nameLabel, roleLabelElement, gridLabel);
             this.uploadFilesHost.append(row);
@@ -281,6 +281,7 @@ export class SourceMapWorkspace {
         const view = this.rasterViewSelect.value as CoordinatedRasterView;
         if (view === "manual") {
             this.rasterViewStatus.textContent = "Manual visibility is active. Each reference map can be shown or hidden independently.";
+            this.syncVisibilityControls();
             this.map.requestRender();
             return;
         }
@@ -301,8 +302,16 @@ export class SourceMapWorkspace {
                 && map.containsBakedGrid === target.containsBakedGrid));
         this.rasterViewStatus.textContent = missingGroups.length === 0
             ? `${coordinatedViewLabel(view)} is available in every map set.`
-            : `${coordinatedViewLabel(view)} is active. No matching source image exists in map set${missingGroups.length === 1 ? "" : "s"}: ${missingGroups.join(", ")}.`;
+            : `${coordinatedViewLabel(view)} is active. No matching version exists in map set${missingGroups.length === 1 ? "" : "s"}: ${missingGroups.join(", ")}.`;
+        this.syncVisibilityControls();
         this.map.requestRender();
+    }
+
+    private syncVisibilityControls(): void {
+        for (const checkbox of this.list.querySelectorAll<HTMLInputElement>("[data-source-map-visible-id]")) {
+            const id = checkbox.dataset.sourceMapVisibleId;
+            if (id) checkbox.checked = !this.map.renderer.hiddenSourceMapIds.has(id);
+        }
     }
 
     private ensureVisibleForEditing(sourceMap: SourceMapDetail): void {
@@ -332,7 +341,7 @@ export class SourceMapWorkspace {
             groupHeading.textContent = `Map set: ${groupName}`;
             const groupHint = document.createElement("p");
             groupHint.className = "hc-hint";
-            groupHint.textContent = "Alternate source versions of the same map/extent. Registration stays per source image. GM/Player views can switch together across map sets; shared and auxiliary references remain independently visible.";
+            groupHint.textContent = "Alternate versions of the same map/extent. Registration stays per image. GM/Player views can switch together across map sets; shared and auxiliary references remain independently visible.";
             group.append(groupHeading, groupHint);
 
             for (const sourceMap of this.details.filter(item => item.geographyKey === groupName)) {
@@ -342,13 +351,14 @@ export class SourceMapWorkspace {
                 heading.textContent = sourceMap.name;
                 const metadata = document.createElement("p");
                 metadata.className = "hc-hint";
-                metadata.textContent = `${sourceUseLabel(sourceMap.role)} · ${sourceMap.pixelWidth}×${sourceMap.pixelHeight} · ${sourceMap.containsBakedGrid ? "baked grid" : "gridless"} · ${sourceMap.alignment ? "registered" : "temporary centered placement"} · ${(sourceMap.importedContentCount ?? 0) > 0 ? `${sourceMap.importedContentCount} imported source records` : "no source records"}`;
+                metadata.textContent = `${sourceUseLabel(sourceMap.role)} · ${sourceMap.pixelWidth}×${sourceMap.pixelHeight} · ${sourceMap.containsBakedGrid ? "grid shown" : "no printed grid"} · ${sourceMap.alignment ? "registered" : "temporary centered placement"} · ${(sourceMap.importedContentCount ?? 0) > 0 ? `${sourceMap.importedContentCount} imported source records` : "no source records"}`;
 
                 const controls = document.createElement("div");
                 controls.className = "hc-button-row";
                 const visibleLabel = document.createElement("label");
                 const visible = document.createElement("input");
                 visible.type = "checkbox";
+                visible.dataset.sourceMapVisibleId = sourceMap.id;
                 visible.checked = !this.map.renderer.hiddenSourceMapIds.has(sourceMap.id);
                 visible.addEventListener("change", () => {
                     this.rasterViewSelect.value = "manual";
@@ -456,19 +466,32 @@ export class SourceMapWorkspace {
 
         let world = this.getWorld();
         const existingSourceMapIds = new Set(world.sourceMaps.map(map => map.id));
-        for (const [index, file] of files.entries()) {
-            const row = rows.find(candidate => candidate.dataset.sourceMapUploadIndex === String(index));
-            if (!row) throw new Error(`Missing metadata for ${file.name}.`);
-            const updated = await this.api.uploadSourceMap(world.id, {
-                file,
-                name: input(row, "mapName").value.trim(),
-                geographyKey,
-                role: select(row, "mapRole").value as SourceMapRole,
-                containsBakedGrid: input(row, "mapBakedGrid").checked,
-                expectedVersion: world.version
-            });
-            this.applyWorld(updated);
-            world = updated;
+        let completed = 0;
+        try {
+            for (const [index, file] of files.entries()) {
+                const row = rows.find(candidate => candidate.dataset.sourceMapUploadIndex === String(index));
+                if (!row) throw new Error(`Missing metadata for ${file.name}.`);
+                const updated = await this.api.uploadSourceMap(world.id, {
+                    file,
+                    name: input(row, "mapName").value.trim(),
+                    geographyKey,
+                    role: select(row, "mapRole").value as SourceMapRole,
+                    containsBakedGrid: input(row, "mapBakedGrid").checked,
+                    expectedVersion: world.version
+                });
+                this.applyWorld(updated);
+                world = updated;
+                completed += 1;
+            }
+        } catch (error) {
+            if (completed === 0) throw error;
+            this.uploadForm.reset();
+            this.uploadFilesHost.replaceChildren();
+            await this.refresh();
+            const detail = error instanceof Error ? error.message : String(error);
+            throw new Error(
+                `${completed} map image${completed === 1 ? " was" : "s were"} uploaded before the remaining import failed. `
+                + `Those maps are already in ${geographyKey}; re-select only the images that are still missing. ${detail}`);
         }
 
         this.uploadForm.reset();
@@ -529,8 +552,8 @@ export class SourceMapWorkspace {
 
 function sourceUseOptions(): string {
     return [
-        '<option value="Gm">GM view source</option>',
-        '<option value="Player">Player view source</option>',
+        '<option value="Gm">GM version</option>',
+        '<option value="Player">Player version</option>',
         '<option value="Neutral">Shared / neutral reference</option>',
         '<option value="Other">Auxiliary / reference only</option>'
     ].join("");
@@ -538,8 +561,8 @@ function sourceUseOptions(): string {
 
 function sourceUseLabel(role: SourceMapRole): string {
     switch (role) {
-        case "Gm": return "GM view source";
-        case "Player": return "Player view source";
+        case "Gm": return "GM version";
+        case "Player": return "Player version";
         case "Neutral": return "shared / neutral reference";
         case "Other": return "auxiliary / reference only";
     }
@@ -557,7 +580,7 @@ function coordinatedViewTarget(view: Exclude<CoordinatedRasterView, "manual">): 
 
 function coordinatedViewLabel(view: Exclude<CoordinatedRasterView, "manual">): string {
     const target = coordinatedViewTarget(view);
-    return `${target.role === "Gm" ? "GM" : "Player"} · ${target.containsBakedGrid ? "baked grid" : "gridless"}`;
+    return `${target.role === "Gm" ? "GM" : "Player"} · ${target.containsBakedGrid ? "grid shown" : "no printed grid"}`;
 }
 
 function displayNameFromFile(fileName: string): string {
