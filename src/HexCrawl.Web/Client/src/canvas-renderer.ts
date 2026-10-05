@@ -25,6 +25,7 @@ export class CanvasMapRenderer {
     public gridPreview: GridDefinition | null = null;
     public reviewOverlay: MapReviewOverlay | null = null;
     private readonly rasterCache = new RasterImageCache();
+    private readonly provisionalSourceMapTransforms = new Map<string, MapRegistrationTransform>();
 
     public constructor(
         private readonly canvas: HTMLCanvasElement,
@@ -99,23 +100,70 @@ export class CanvasMapRenderer {
 
     public dispose(): void {
         this.rasterCache.dispose();
+        this.provisionalSourceMapTransforms.clear();
     }
 
     private drawSourceMaps(ctx: CanvasRenderingContext2D, world: DemoWorld, width: number, height: number): void {
         const activeUrls = new Set<string>();
+        const activeMapIds = new Set<string>();
         for (const map of world.sourceMaps) {
+            activeMapIds.add(map.id);
             const url = sourceMapAssetUrl(world.id, map.id);
             activeUrls.add(url);
             if (this.hiddenSourceMapIds.has(map.id)) continue;
-            const transform = this.registrationPreview?.sourceMapId === map.id
-                ? this.registrationPreview.transform
-                : map.alignment;
-            if (!transform || transform.kind !== "Affine") continue;
+
             const image = this.rasterCache.get(url, this.requestRender);
             if (!image) continue;
-            this.drawAffineRaster(ctx, image, transform, width, height, this.registrationPreview?.sourceMapId === map.id);
+
+            const previewTransform = this.registrationPreview?.sourceMapId === map.id
+                ? this.registrationPreview.transform
+                : null;
+            const savedTransform = map.alignment?.kind === "Affine" ? map.alignment : null;
+            const provisional = previewTransform == null && savedTransform == null;
+            if (!provisional) this.provisionalSourceMapTransforms.delete(map.id);
+            const transform = previewTransform
+                ?? savedTransform
+                ?? this.provisionalSourceMapTransform(map.id, image, width, height);
+            if (!transform || transform.kind !== "Affine") continue;
+
+            this.drawAffineRaster(ctx, image, transform, width, height, previewTransform != null || provisional);
         }
         this.rasterCache.prune(activeUrls);
+        for (const sourceMapId of this.provisionalSourceMapTransforms.keys()) {
+            if (!activeMapIds.has(sourceMapId)) this.provisionalSourceMapTransforms.delete(sourceMapId);
+        }
+    }
+
+    private provisionalSourceMapTransform(
+        sourceMapId: string,
+        image: CanvasImageSource,
+        width: number,
+        height: number): MapRegistrationTransform | null {
+        const existing = this.provisionalSourceMapTransforms.get(sourceMapId);
+        if (existing) return existing;
+
+        const dimensions = rasterSourceDimensions(image);
+        if (!dimensions) return null;
+        const worldWidth = width / this.viewport.zoom;
+        const worldHeight = height / this.viewport.zoom;
+        const scale = Math.min(
+            (worldWidth * 0.9) / dimensions.width,
+            (worldHeight * 0.9) / dimensions.height);
+        if (!Number.isFinite(scale) || scale <= 0) return null;
+
+        const transform: MapRegistrationTransform = {
+            kind: "Affine",
+            m11: scale,
+            m12: 0,
+            m13: this.viewport.center.x - ((dimensions.width * scale) / 2),
+            m21: 0,
+            m22: scale,
+            m23: this.viewport.center.y - ((dimensions.height * scale) / 2),
+            m31: 0,
+            m32: 0
+        };
+        this.provisionalSourceMapTransforms.set(sourceMapId, transform);
+        return transform;
     }
 
     private drawAffineRaster(
@@ -311,6 +359,24 @@ export class CanvasMapRenderer {
     private toScreen(point: WorldPoint, width: number, height: number): WorldPoint {
         return this.viewport.worldToScreen(point, width, height);
     }
+}
+
+function rasterSourceDimensions(source: CanvasImageSource): { width: number; height: number } | null {
+    if (typeof ImageBitmap !== "undefined" && source instanceof ImageBitmap) {
+        return source.width > 0 && source.height > 0 ? { width: source.width, height: source.height } : null;
+    }
+    if (typeof HTMLImageElement !== "undefined" && source instanceof HTMLImageElement) {
+        const width = source.naturalWidth || source.width;
+        const height = source.naturalHeight || source.height;
+        return width > 0 && height > 0 ? { width, height } : null;
+    }
+    if (typeof HTMLCanvasElement !== "undefined" && source instanceof HTMLCanvasElement) {
+        return source.width > 0 && source.height > 0 ? { width: source.width, height: source.height } : null;
+    }
+    if (typeof OffscreenCanvas !== "undefined" && source instanceof OffscreenCanvas) {
+        return source.width > 0 && source.height > 0 ? { width: source.width, height: source.height } : null;
+    }
+    return null;
 }
 
 function distance(a: WorldPoint, b: WorldPoint): number {
