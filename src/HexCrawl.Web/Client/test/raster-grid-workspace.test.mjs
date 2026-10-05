@@ -70,6 +70,17 @@ test("Wonderdraft physical scale remains an independent optional cross-check", (
     assert.doesNotMatch(controller, /window\.confirm/);
 });
 
+test("unregistered map images receive temporary centered placement instead of disappearing", () => {
+    const renderer = fs.readFileSync(path.join(sourceRoot, "canvas-renderer.ts"), "utf8");
+
+    assert.match(renderer, /private readonly provisionalSourceMapTransforms/);
+    assert.match(renderer, /private provisionalSourceMapTransform\(/);
+    assert.match(renderer, /previewTransform[\s\S]*savedTransform[\s\S]*provisionalSourceMapTransform/);
+    assert.match(renderer, /this\.viewport\.center\.x - \(\(dimensions\.width \* scale\) \/ 2\)/);
+    assert.match(renderer, /this\.viewport\.center\.y - \(\(dimensions\.height \* scale\) \/ 2\)/);
+    assert.match(renderer, /this\.provisionalSourceMapTransforms\.set\(sourceMapId, transform\)/);
+});
+
 test("map sets collect alternate source versions without becoming the future layer model", () => {
     const workspace = fs.readFileSync(
         path.join(sourceRoot, "modules/worlds/source-map-workspace.ts"),
@@ -122,7 +133,7 @@ test("coordinated map views switch GM and player sources across sets but leave a
     assert.match(workspace, /sourceMap\.role === target\.role/);
     assert.match(workspace, /sourceMap\.containsBakedGrid === target\.containsBakedGrid/);
     assert.match(workspace, /Shared and auxiliary references keep their manual visibility/);
-    assert.match(workspace, /data\.sourceMapVisibleId = sourceMap\.id/);
+    assert.match(workspace, /visible\.dataset\.sourceMapVisibleId = sourceMap\.id/);
     assert.match(workspace, /private syncVisibilityControls\(\): void/);
     assert.match(workspace, /this\.syncVisibilityControls\(\)/);
 });
@@ -131,10 +142,14 @@ test("normal map-management UI does not require raster terminology", () => {
     const workspace = fs.readFileSync(
         path.join(sourceRoot, "modules/worlds/source-map-workspace.ts"),
         "utf8");
+    const controller = fs.readFileSync(
+        path.join(sourceRoot, "modules/worlds/source-map-grid-alignment-controller.ts"),
+        "utf8");
 
     assert.match(workspace, />Map view </);
     assert.match(workspace, />Map images </);
     assert.match(workspace, />Selected reference map</);
     assert.match(workspace, />Delete reference map</);
     assert.doesNotMatch(workspace, />Raster view |\bRaster files\b|>Selected raster map|>Delete raster map/);
+    assert.doesNotMatch(controller, /usable raster dimensions/);
 });
