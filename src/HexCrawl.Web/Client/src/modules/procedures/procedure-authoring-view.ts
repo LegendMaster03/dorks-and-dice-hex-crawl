@@ -285,6 +285,41 @@ export async function renderProcedureAuthoringWorkspace(
         if (!disposed) render();
     };
 
+    const hasUnsavedChanges = (): boolean =>
+        hasStructuredChanges()
+        || (jsonText.length > 0 && jsonText !== jsonBaseline);
+
+    const hasSaveableChanges = (): boolean =>
+        mode === "json"
+            ? sourceProcedureId === null
+                ? hasStructuredChanges() || (jsonText.length > 0 && jsonText !== jsonBaseline)
+                : jsonText.length > 0 && jsonText !== jsonBaseline
+            : hasStructuredChanges();
+
+    const confirmDiscardChanges = (): boolean =>
+        !hasUnsavedChanges()
+        || window.confirm("Discard unsaved procedure changes?");
+
+    const returnToProcedureHome = (): void => {
+        if (!confirmDiscardChanges()) return;
+        resetEdits();
+        sourcePresetKey = null;
+        sourceProcedureId = null;
+        viewedRevision = null;
+        latestRevision = null;
+        revisions = [];
+        draft = null;
+        entry = "landing";
+        render();
+    };
+
+    const onBeforeUnload = (event: BeforeUnloadEvent): void => {
+        if (!hasUnsavedChanges()) return;
+        event.preventDefault();
+        event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+
     const render = (): void => {
         closeDrawer();
         if (entry === "landing") {
@@ -463,10 +498,44 @@ export async function renderProcedureAuthoringWorkspace(
         const right = document.createElement("div");
         right.className = "hc-preset-actions";
         const home = button("Procedure home", "secondary");
-        home.addEventListener("click", () => { entry = "landing"; render(); });
+        home.addEventListener("click", returnToProcedureHome);
+
+        if (sourceProcedureId && revisions.length > 0) {
+            const currentRevision = viewedRevision ?? latestRevision ?? draft.revision;
+            const revisionField = document.createElement("label");
+            revisionField.className = "hc-revision-picker";
+            revisionField.append(textElement("span", "Revision"));
+            const revisionSelect = document.createElement("select");
+            revisionSelect.dataset.procedureRevision = "";
+            for (const revision of [...revisions].sort((left, right) => right.revision - left.revision)) {
+                const option = document.createElement("option");
+                option.value = String(revision.revision);
+                option.textContent = revision.revision === latestRevision
+                    ? `Revision ${revision.revision} · latest`
+                    : `Revision ${revision.revision}`;
+                revisionSelect.append(option);
+            }
+            revisionSelect.value = String(currentRevision);
+            revisionSelect.addEventListener("change", () => {
+                const nextRevision = Number(revisionSelect.value);
+                if (nextRevision === currentRevision) return;
+                if (!confirmDiscardChanges()) {
+                    revisionSelect.value = String(currentRevision);
+                    return;
+                }
+                resetEdits();
+                const base = `/procedures/${encodeURIComponent(sourceProcedureId)}`;
+                navigate(nextRevision === latestRevision
+                    ? base
+                    : `${base}/revisions/${encodeURIComponent(String(nextRevision))}`);
+            });
+            revisionField.append(revisionSelect);
+            left.append(revisionField);
+        }
+
         const save = button(savePending ? "Saving…" : sourceProcedureId ? "Save new revision" : "Save procedure", "primary");
         save.dataset.procedureSave = "";
-        save.disabled = savePending || historical() || (mode !== "json" && !hasStructuredChanges());
+        save.disabled = savePending || historical() || !hasSaveableChanges();
         save.addEventListener("click", () => void (mode === "json" ? saveCanonical() : saveStructured()));
         right.append(home, save);
         toolbar.append(left, right);
@@ -481,7 +550,7 @@ export async function renderProcedureAuthoringWorkspace(
             metric("Origin", draft.origin?.presetDisplayName ?? "Custom"));
         page.append(strip);
         if (historical()) {
-            page.append(notice("You are viewing a historical revision. Open the latest revision before saving further changes."));
+            page.append(notice("You are viewing a historical revision. Choose the latest revision above before saving further changes."));
         }
 
         if (mode === "compact") page.append(renderCompact());
@@ -927,7 +996,16 @@ export async function renderProcedureAuthoringWorkspace(
         const actions = document.createElement("div");
         actions.className = "hc-json-actions";
         const validate = button("Validate JSON", "secondary");
-        validate.addEventListener("click", () => void composerApi.validateCanonical(jsonText).then(value => { jsonValidation = value; render(); }));
+        validate.addEventListener("click", () => void (async () => {
+            const error = root.querySelector<HTMLElement>("[data-error]");
+            if (error) clearUiError(error);
+            try {
+                jsonValidation = await composerApi.validateCanonical(jsonText);
+                render();
+            } catch (value) {
+                if (error) showUiError(error, value);
+            }
+        })());
         const reset = button("Reset draft", "secondary");
         reset.disabled = jsonText === jsonBaseline;
         reset.addEventListener("click", () => { jsonText = jsonBaseline; jsonValidation = null; render(); });
@@ -950,6 +1028,7 @@ export async function renderProcedureAuthoringWorkspace(
 
     return () => {
         disposed = true;
+        window.removeEventListener("beforeunload", onBeforeUnload);
         closeDrawer();
         root.classList.remove("hc-phase15");
     };

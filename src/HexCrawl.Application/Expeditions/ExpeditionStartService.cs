@@ -23,11 +23,15 @@ public sealed record ProcedureStartSelection(
         {
             throw new ArgumentException("Saved procedure id can not be empty.");
         }
-        if (ProcedureRevision.HasValue && !ProcedureId.HasValue)
+        if (hasProcedure && !ProcedureRevision.HasValue)
+        {
+            throw new ArgumentException("A saved procedure start requires an explicit revision.");
+        }
+        if (!hasProcedure && ProcedureRevision.HasValue)
         {
             throw new ArgumentException("A procedure revision requires a saved procedure id.");
         }
-        if (ProcedureRevision <= 0)
+        if (ProcedureRevision.HasValue && ProcedureRevision.Value <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(ProcedureRevision));
         }
@@ -154,16 +158,11 @@ public sealed class ExpeditionStartService(
         selection.Validate();
         if (selection.ProcedureId.HasValue)
         {
-            return selection.ProcedureRevision.HasValue
-                ? await procedures.GetAsync(
-                    ownerUserId,
-                    selection.ProcedureId.Value,
-                    selection.ProcedureRevision.Value,
-                    cancellationToken)
-                : await procedures.GetLatestAsync(
-                    ownerUserId,
-                    selection.ProcedureId.Value,
-                    cancellationToken);
+            return await procedures.GetAsync(
+                ownerUserId,
+                selection.ProcedureId.Value,
+                selection.ProcedureRevision!.Value,
+                cancellationToken);
         }
 
         return await procedures.CreateFromPresetAsync(

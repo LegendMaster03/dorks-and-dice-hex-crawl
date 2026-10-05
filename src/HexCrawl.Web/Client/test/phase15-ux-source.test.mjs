@@ -54,6 +54,19 @@ test("Compact procedure edits keep their focused workspace across draft recompos
     assert.match(workspace, /save\.disabled = savePending \|\| historical\(\) \|\| !hasStructuredChanges\(\)/);
 });
 
+test("procedure authoring exposes revision navigation and protects unsaved work", () => {
+    const workspace = fs.readFileSync(
+        path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"),
+        "utf8");
+
+    assert.match(workspace, /data\.procedureRevision/);
+    assert.match(workspace, /Choose the latest revision above before saving further changes/);
+    assert.match(workspace, /Discard unsaved procedure changes\?/);
+    assert.match(workspace, /beforeunload/);
+    assert.match(workspace, /window\.removeEventListener\("beforeunload"/);
+    assert.match(workspace, /jsonText\.length > 0 && jsonText !== jsonBaseline/);
+});
+
 test("Phase 15 procedure authoring keeps save and canonical-load failures visible after busy state clears", () => {
     const workspace = fs.readFileSync(
         path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"),

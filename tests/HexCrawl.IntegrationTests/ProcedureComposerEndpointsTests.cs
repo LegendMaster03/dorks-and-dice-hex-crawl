@@ -98,6 +98,42 @@ public sealed class ProcedureComposerEndpointsTests
     }
 
     [Fact]
+    public async Task NeutralCustomCanonicalDraftCanBeEditedBeforeItIsPersistable()
+    {
+        var database = TestWebHost.NewDatabasePath();
+        try
+        {
+            using var factory = TestWebHost.Create(database);
+            using var client = factory.CreateClient();
+
+            using var draftResponse = await client.PostAsJsonAsync("/api/procedures/composer/canonical/draft", new
+            {
+                presetKey = (string?)null,
+                procedureId = (Guid?)null,
+                revision = (int?)null,
+                moduleSelections = Array.Empty<object>(),
+                overrides = Array.Empty<object>()
+            });
+            draftResponse.EnsureSuccessStatusCode();
+            var draft = await draftResponse.Content.ReadFromJsonAsync<JsonElement>();
+            var canonicalJson = draft.GetProperty("canonicalJson").GetString();
+            Assert.False(string.IsNullOrWhiteSpace(canonicalJson));
+
+            using var validationResponse = await client.PostAsJsonAsync(
+                "/api/procedures/composer/canonical/validate",
+                new { canonicalJson });
+            validationResponse.EnsureSuccessStatusCode();
+            var validation = await validationResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.False(validation.GetProperty("isValid").GetBoolean());
+            Assert.Contains("module", validation.GetProperty("error").GetString()!, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            TestWebHost.DeleteDatabase(database);
+        }
+    }
+
+    [Fact]
     public async Task DraftChangeRefreshesDependenciesAndModificationMetadata()
     {
         var database = TestWebHost.NewDatabasePath();

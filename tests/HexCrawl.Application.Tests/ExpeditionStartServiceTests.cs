@@ -71,6 +71,25 @@ public sealed class ExpeditionStartServiceTests
     }
 
     [Fact]
+    public async Task SavedProcedureStartRequiresExplicitRevision()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var store = new PostgresHexCrawlStore(database.ConnectionString);
+        await store.InitializeAsync();
+        var procedures = new CampaignProcedureService(store);
+        var composer = new ProcedureComposerService(procedures);
+        var starter = new ExpeditionStartService(store, new HexCrawlService(store), procedures);
+        var created = await composer.CreateAsync("alice", "simple-fixed-distance", []);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            starter.StartStandaloneAsync(
+                "alice",
+                "Ambiguous saved procedure",
+                new ProcedureStartSelection(ProcedureId: created.ProcedureId),
+                new NonSpatialCrawlSessionContext("Procedure clock")));
+    }
+
+    [Fact]
     public async Task SavedProcedureStartIsOwnerScoped()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
