@@ -136,6 +136,7 @@ export type ProcedureComposerDraftInput = {
     presetKey?: string | null;
     procedureId?: string | null;
     revision?: number | null;
+    name?: string | null;
     moduleSelections?: ProcedureComposerModuleSelectionInput[];
     overrides?: ProcedureComposerOverrideInput[];
 };
@@ -143,12 +144,14 @@ export type ProcedureComposerDraftInput = {
 export type ProcedureComposerCreateInput = {
     presetKey?: string | null;
     campaignId?: string | null;
+    name?: string | null;
     moduleSelections?: ProcedureComposerModuleSelectionInput[];
     overrides?: ProcedureComposerOverrideInput[];
 };
 
 export type ProcedureComposerRevisionInput = {
     expectedRevision: number;
+    name?: string | null;
     moduleSelections?: ProcedureComposerModuleSelectionInput[];
     overrides: ProcedureComposerOverrideInput[];
 };

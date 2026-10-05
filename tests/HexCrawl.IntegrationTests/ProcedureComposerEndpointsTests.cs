@@ -239,6 +239,7 @@ public sealed class ProcedureComposerEndpointsTests
             {
                 presetKey = (string?)null,
                 campaignId = (Guid?)null,
+                name = "North March procedure",
                 moduleSelections = new[]
                 {
                     new { moduleKey = GenericProcedureCatalog.TimeIntervalModule, included = true }
@@ -248,6 +249,26 @@ public sealed class ProcedureComposerEndpointsTests
             Assert.Equal(HttpStatusCode.Created, customResponse.StatusCode);
             var custom = await customResponse.Content.ReadFromJsonAsync<JsonElement>();
             Assert.Equal(JsonValueKind.Null, custom.GetProperty("origin").ValueKind);
+            Assert.Equal("North March procedure", custom.GetProperty("name").GetString());
+
+            var customId = custom.GetProperty("procedureId").GetGuid();
+            using var renameResponse = await client.PostAsJsonAsync(
+                $"/api/procedures/{customId:D}/revisions",
+                new
+                {
+                    expectedRevision = 1,
+                    name = "Winter North March",
+                    moduleSelections = Array.Empty<object>(),
+                    overrides = Array.Empty<object>()
+                });
+            renameResponse.EnsureSuccessStatusCode();
+            var renamedCustom = await renameResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(2, renamedCustom.GetProperty("revision").GetInt32());
+            Assert.Equal("Winter North March", renamedCustom.GetProperty("name").GetString());
+
+            var originalCustom = await client.GetFromJsonAsync<JsonElement>(
+                $"/api/procedures/{customId:D}/revisions/1");
+            Assert.Equal("North March procedure", originalCustom.GetProperty("name").GetString());
 
             using var createResponse = await client.PostAsJsonAsync("/api/procedures", new
             {

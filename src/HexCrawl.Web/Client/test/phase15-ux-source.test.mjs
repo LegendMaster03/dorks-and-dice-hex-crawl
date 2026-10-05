@@ -86,6 +86,21 @@ test("Compact procedure edits keep their focused workspace across draft recompos
     assert.match(workspace, /save\.disabled = savePending \|\| historical\(\) \|\| !hasStructuredChanges\(\)/);
 });
 
+test("structured procedure authoring exposes human-readable procedure naming", () => {
+    const workspace = fs.readFileSync(
+        path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"),
+        "utf8");
+    const contracts = fs.readFileSync(
+        path.join(repositoryRoot, "src/HexCrawl.Web/Modules/Procedures/ProcedureComposerContracts.cs"),
+        "utf8");
+
+    assert.match(workspace, /Procedure name/);
+    assert.match(workspace, /nameInput\.name = "procedureName"/);
+    assert.match(workspace, /nameOverride/);
+    assert.match(workspace, /name: nameOverride/);
+    assert.match(contracts, /string\? Name/);
+});
+
 test("procedure authoring exposes revision navigation and protects unsaved work", () => {
     const workspace = fs.readFileSync(
         path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"),

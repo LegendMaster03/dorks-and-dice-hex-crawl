@@ -24,6 +24,42 @@ public sealed class ProcedureComposerStructuralCompositionTests
     }
 
     [Fact]
+    public async Task StructuredAuthoringCanNameAndRenameProcedure()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var store = new PostgresHexCrawlStore(database.ConnectionString);
+        await store.InitializeAsync();
+        var service = Composer(store);
+        ProcedureModuleSelection[] selections =
+        [
+            new(GenericProcedureCatalog.TimeIntervalModule, true)
+        ];
+
+        var created = await service.CreateAsync(
+            "alice",
+            null,
+            selections,
+            [],
+            cancellationToken: default,
+            name: "North March procedure");
+        Assert.Equal("North March procedure", created.Procedure.Name);
+
+        var renamed = await service.CreateRevisionAsync(
+            "alice",
+            created.ProcedureId,
+            created.Revision,
+            [],
+            [],
+            cancellationToken: default,
+            name: "Winter North March");
+        Assert.Equal(2, renamed.Revision);
+        Assert.Equal("Winter North March", renamed.Procedure.Name);
+
+        var original = await service.GetAsync("alice", created.ProcedureId, 1);
+        Assert.Equal("North March procedure", original.Procedure.Name);
+    }
+
+    [Fact]
     public async Task ModuleSelectionsCanAuthorAndReloadNoIntervalJourneyProcedure()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();

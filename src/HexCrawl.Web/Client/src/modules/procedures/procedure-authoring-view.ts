@@ -48,6 +48,8 @@ export async function renderProcedureAuthoringWorkspace(
     let sourceProcedureId = procedureId;
     let viewedRevision = requestedRevision;
     let latestRevision: number | null = null;
+    let baselineName: string | null = null;
+    let nameOverride: string | null = null;
     let draft: ProcedureComposer | null = null;
     let presets: ProcedurePreset[] = [];
     let savedProcedures: SavedProcedureSummary[] = [];
@@ -82,6 +84,7 @@ export async function renderProcedureAuthoringWorkspace(
         presetKey: sourceProcedureId ? null : sourcePresetKey,
         procedureId: sourceProcedureId,
         revision: sourceProcedureId ? viewedRevision : null,
+        name: nameOverride,
         moduleSelections: [...moduleSelections.entries()].map(([moduleKey, included]) => ({ moduleKey, included })),
         overrides: [...pending.values()]
     });
@@ -89,6 +92,7 @@ export async function renderProcedureAuthoringWorkspace(
     const resetEdits = (): void => {
         pending.clear();
         moduleSelections.clear();
+        nameOverride = null;
         jsonText = "";
         jsonBaseline = "";
         jsonLoadFailed = false;
@@ -110,6 +114,7 @@ export async function renderProcedureAuthoringWorkspace(
             latestRevision = null;
         }
         draft = await composerApi.composeDraft(currentInput());
+        baselineName = draft.name;
         jsonText = "";
         jsonBaseline = "";
         jsonLoadFailed = false;
@@ -205,11 +210,13 @@ export async function renderProcedureAuthoringWorkspace(
             const saved = sourceProcedureId
                 ? await composerApi.createRevision(sourceProcedureId, {
                     expectedRevision: latestRevision ?? draft.revision,
+                    name: nameOverride,
                     moduleSelections: moduleSelectionInputs(moduleSelections),
                     overrides: [...pending.values()]
                 })
                 : await composerApi.createProcedure({
                     presetKey: sourcePresetKey,
+                    name: nameOverride,
                     moduleSelections: moduleSelectionInputs(moduleSelections),
                     overrides: [...pending.values()]
                 });
@@ -320,6 +327,7 @@ export async function renderProcedureAuthoringWorkspace(
         latestRevision = null;
         revisions = [];
         draft = null;
+        baselineName = null;
         entry = "landing";
         render();
     };
@@ -490,12 +498,15 @@ export async function renderProcedureAuthoringWorkspace(
         activeDrawer.body.append(use);
     };
 
+    const displayedName = (): string =>
+        nameOverride ?? baselineName ?? draft?.name ?? "Exploration procedure";
+
     const renderWorkspace = (): void => {
         if (!draft) {
             root.replaceChildren(loadingPanel("Loading procedure…"));
             return;
         }
-        const page = pageShell(draft.name, "Edit the rules the DM will actually run. Compact, Advanced, and JSON edit the same campaign procedure.");
+        const page = pageShell(displayedName(), "Edit the rules the DM will actually run. Compact, Advanced, and JSON edit the same campaign procedure.");
         const toolbar = document.createElement("section");
         toolbar.className = "hc-panel hc-procedure-toolbar";
         const left = document.createElement("div");
@@ -561,6 +572,35 @@ export async function renderProcedureAuthoringWorkspace(
             metric("Status", draft.isExecutable ? "Executable" : draft.modules.length === 0 ? "Choose structure" : "Structured / assisted"),
             metric("Origin", draft.origin?.presetDisplayName ?? "Custom"));
         page.append(strip);
+
+        if (mode !== "json") {
+            const identity = document.createElement("section");
+            identity.className = "hc-panel hc-procedure-identity";
+            const nameField = document.createElement("label");
+            nameField.className = "hc-compact-field";
+            nameField.append(textElement("span", "Procedure name"));
+            const nameInput = document.createElement("input");
+            nameInput.type = "text";
+            nameInput.name = "procedureName";
+            nameInput.value = displayedName();
+            nameInput.disabled = savePending || historical();
+            nameInput.addEventListener("change", () => {
+                const next = nameInput.value.trim();
+                const error = root.querySelector<HTMLElement>("[data-error]");
+                if (!next) {
+                    nameInput.value = displayedName();
+                    if (error) showUiError(error, new Error("Procedure name is required."));
+                    return;
+                }
+                if (error) clearUiError(error);
+                nameOverride = next === baselineName ? null : next;
+                render();
+            });
+            nameField.append(nameInput);
+            identity.append(nameField);
+            page.append(identity);
+        }
+
         if (historical()) {
             page.append(notice("You are viewing a historical revision. Choose the latest revision above before saving further changes."));
         }
@@ -574,6 +614,7 @@ export async function renderProcedureAuthoringWorkspace(
     const hasStructuredChanges = (): boolean =>
         pending.size > 0
         || moduleSelections.size > 0
+        || nameOverride !== null
         || (sourceProcedureId === null && (sourcePresetKey !== null || (draft?.modules.length ?? 0) > 0));
 
     const renderCompact = (): HTMLElement => {

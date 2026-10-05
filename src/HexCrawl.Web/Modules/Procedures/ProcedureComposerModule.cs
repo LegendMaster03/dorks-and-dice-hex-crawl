@@ -50,7 +50,8 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
             request.Revision,
             ModuleSelections(request.ModuleSelections),
             Overrides(request.Overrides),
-            cancellationToken);
+            cancellationToken,
+            request.Name);
         return Results.Ok(ProcedureComposerContract.From(draft));
     }
 
@@ -68,7 +69,8 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
             request.Revision,
             ModuleSelections(request.ModuleSelections),
             Overrides(request.Overrides),
-            cancellationToken);
+            cancellationToken,
+            request.Name);
         var canonicalJson = canonical.Serialize(draft.Procedure);
 
         return Results.Ok(new ProcedureCanonicalJsonContract(
@@ -113,7 +115,8 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
             ModuleSelections(request.ModuleSelections),
             Overrides(request.Overrides),
             request.CampaignId,
-            cancellationToken);
+            cancellationToken,
+            request.Name);
         var draft = await service.CreateDraftAsync(
             owner,
             null,
@@ -238,7 +241,8 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
             request.ExpectedRevision,
             ModuleSelections(request.ModuleSelections),
             Overrides(request.Overrides),
-            cancellationToken);
+            cancellationToken,
+            request.Name);
         var draft = await service.CreateDraftAsync(
             owner,
             null,
