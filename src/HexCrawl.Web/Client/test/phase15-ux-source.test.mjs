@@ -62,12 +62,15 @@ test("Phase 15 expedition workspace is one procedure-driven surface instead of m
     assert.doesNotMatch(module, /subscribeExpeditionRuntimeChanged/);
 });
 
-test("routine spatial travel uses reusable intent and authoritative movement suggestions", () => {
+test("routine spatial travel reuses intent and suppresses fixed movement inputs already resolved by the server", () => {
     const view = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
         "utf8");
     const controller = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/expedition-watch-controller.ts"),
+        "utf8");
+    const movement = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-party-movement.ts"),
         "utf8");
 
     assert.match(view, /Adjacent hex travel direction/);
@@ -76,8 +79,15 @@ test("routine spatial travel uses reusable intent and authoritative movement sug
     assert.match(view, /Reusable course and pace stay filled until changed/);
     assert.match(view, /movementComposition\.suggestedExpectedDistance/);
     assert.match(controller, /suggestedWatchDistance\(runtime\)/);
+    assert.match(controller, /authoritativeFixedWatchDistance\(runtime\)/);
+    assert.match(controller, /travelSource"\)\.value = "ProcedureDefault"/);
+    assert.match(controller, /Override movement/);
+    assert.match(controller, /source\.value = "DmOverride"/);
+    assert.match(controller, /No movement value or provenance needs to be re-entered/);
     assert.match(controller, /activePaceKey/);
     assert.match(controller, /state\.intendedDirection/);
+    assert.match(movement, /composition\.status !== "Resolved"/);
+    assert.match(movement, /composition\.status !== "ReferenceFallback"/);
     assert.doesNotMatch(view, /currentHex\s*=/);
 });
 
@@ -93,6 +103,27 @@ test("Phase 15 map selection is contextual and never directly mutates expedition
     assert.match(map, /setHexSelectionHandler/);
     assert.match(map, /this\.hexSelectionHandler\?\.\(selected\)/);
     assert.doesNotMatch(view, /setHexSelectionHandler[\s\S]{0,800}advanceExpedition/);
+});
+
+test("Phase 15 workspace rerenders preserve the existing map surface and viewport lifecycle", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+    const map = fs.readFileSync(path.join(sourceDir, "map-surface.ts"), "utf8");
+
+    const renderStart = view.indexOf("const render = (): void =>");
+    const presentationStart = view.indexOf("const presentation =", renderStart);
+    assert.notEqual(renderStart, -1);
+    assert.notEqual(presentationStart, -1);
+    assert.doesNotMatch(view.slice(renderStart, presentationStart), /map\?\.dispose\(\)/);
+
+    assert.match(view, /if \(map\) \{\s*map\.attach\(host\)/);
+    assert.match(view, /map = new MapSurface\(host, \(\) => world\)/);
+    assert.match(view, /map\.renderer\.selectedHex = selectedHex/);
+    assert.match(map, /public attach\(host: HTMLElement\): void/);
+    assert.match(map, /this\.resizeObserver\.disconnect\(\)/);
+    assert.match(map, /host\.replaceChildren\(this\.canvas, this\.accessibilityHelp, this\.accessibilityStatus\)/);
+    assert.match(map, /this\.resizeObserver\.observe\(host\)/);
 });
 
 test("Phase 15 focused editing uses accessible drawers and keeps secondary tools out of the primary surface", () => {
