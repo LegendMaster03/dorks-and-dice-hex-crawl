@@ -108,6 +108,55 @@ public sealed class ProcedureComposerStructuralCompositionTests
     }
 
     [Fact]
+    public async Task RemovedCustomizedModuleDoesNotLeakOldOverrideIntoLaterReAdd()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var store = new PostgresHexCrawlStore(database.ConnectionString);
+        await store.InitializeAsync();
+        var service = Composer(store);
+        var created = await service.CreateAsync("alice", null, [], []);
+        var customized = await service.CreateRevisionAsync(
+            "alice",
+            created.ProcedureId,
+            created.Revision,
+            [new ProcedureModuleSelection(GenericProcedureCatalog.EncounterCadenceModule, true)],
+            [new CampaignProcedureOverride(
+                "per-watch-encounters",
+                GenericProcedureCatalog.EncounterCadenceModule,
+                null,
+                null,
+                new Dictionary<string, string> { ["cadence"] = "PerWatch" })]);
+
+        Assert.Contains(customized.Procedure.Overrides, value =>
+            value.ModuleKey == GenericProcedureCatalog.EncounterCadenceModule);
+
+        var removed = await service.CreateRevisionAsync(
+            "alice",
+            customized.ProcedureId,
+            customized.Revision,
+            [new ProcedureModuleSelection(GenericProcedureCatalog.EncounterCadenceModule, false)],
+            []);
+
+        Assert.DoesNotContain(removed.Procedure.Modules, module =>
+            module.Module.Key == GenericProcedureCatalog.EncounterCadenceModule);
+        Assert.DoesNotContain(removed.Procedure.Overrides, value =>
+            value.ModuleKey == GenericProcedureCatalog.EncounterCadenceModule);
+
+        var reAdded = await service.CreateRevisionAsync(
+            "alice",
+            removed.ProcedureId,
+            removed.Revision,
+            [new ProcedureModuleSelection(GenericProcedureCatalog.EncounterCadenceModule, true)],
+            []);
+        var cadence = reAdded.Procedure.Modules.Single(module =>
+            module.Module.Key == GenericProcedureCatalog.EncounterCadenceModule);
+
+        Assert.Equal("None", cadence.Parameters["cadence"]);
+        Assert.DoesNotContain(reAdded.Procedure.Overrides, value =>
+            value.ModuleKey == GenericProcedureCatalog.EncounterCadenceModule);
+    }
+
+    [Fact]
     public async Task RemovingRequiredProducerRemainsDraftableButCanNotBeSaved()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
