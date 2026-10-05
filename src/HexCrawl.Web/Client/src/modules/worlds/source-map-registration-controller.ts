@@ -47,9 +47,9 @@ export class SourceMapRegistrationController {
     }
 
     public begin(sourceMap: SourceMapDetail | null): void {
-        if (!sourceMap) throw new Error("Select a raster map first.");
+        if (!sourceMap) throw new Error("Select a reference map first.");
         if (sourceMap.pixelWidth <= 0 || sourceMap.pixelHeight <= 0) {
-            throw new Error("This source map has no raster dimensions and must be re-imported before registration.");
+            throw new Error("This map image has no usable image dimensions and must be re-imported before manual placement.");
         }
 
         this.registration = { map: sourceMap, pairs: [], pendingSource: null };
@@ -58,13 +58,17 @@ export class SourceMapRegistrationController {
         this.map.renderer.hiddenSourceMapIds.delete(sourceMap.id);
         this.map.renderer.registrationPreview = null;
         this.mapHint.textContent =
-            "Registration mode: click a landmark in the source image first, then click the same landmark on the overworld.";
+            "Manual placement: click a landmark in the reference image first, then click the same landmark on the world map.";
         this.renderStatus();
         this.map.requestRender();
     }
 
     public cancelIfMap(sourceMapId: string): void {
         if (this.registration?.map.id === sourceMapId) this.cancel();
+    }
+
+    public cancelActive(): void {
+        if (this.registration) this.cancel();
     }
 
     public dispose(): void {
@@ -86,7 +90,7 @@ export class SourceMapRegistrationController {
         };
         this.registration.pendingSource = sourcePixel;
         this.mapHint.textContent =
-            `Registration mode: source point ${this.registration.pairs.length + 1} selected at ${sourcePixel.x.toFixed(1)}, ${sourcePixel.y.toFixed(1)}. Click the corresponding overworld point.`;
+            `Manual placement: image point ${this.registration.pairs.length + 1} selected at ${sourcePixel.x.toFixed(1)}, ${sourcePixel.y.toFixed(1)}. Click the corresponding world-map point.`;
         this.renderStatus();
     }
 
@@ -94,7 +98,7 @@ export class SourceMapRegistrationController {
         if (!this.registration) return false;
         if (!this.registration.pendingSource) {
             this.mapHint.textContent =
-                "Registration mode is active. Choose a source-image point before clicking the overworld.";
+                "Manual placement is active. Choose an image point before clicking the world map.";
             return true;
         }
 
@@ -112,7 +116,7 @@ export class SourceMapRegistrationController {
                     transform
                 };
                 this.mapHint.textContent =
-                    "Registration preview is active. Inspect the raster overlay, then save or clear the control points.";
+                    "Placement preview is active. Inspect the map overlay, then save the placement or clear the points.";
                 this.map.requestRender();
             } catch (value) {
                 this.map.renderer.registrationPreview = null;
@@ -120,7 +124,7 @@ export class SourceMapRegistrationController {
             }
         } else {
             this.mapHint.textContent =
-                `Registration mode: ${this.registration.pairs.length} of 3 pairs captured. Choose the next source-image point.`;
+                `Manual placement: ${this.registration.pairs.length} of 3 landmark pairs captured. Choose the next image point.`;
         }
 
         this.renderStatus();
@@ -133,7 +137,7 @@ export class SourceMapRegistrationController {
         this.registration.pendingSource = null;
         this.map.renderer.registrationPreview = null;
         this.mapHint.textContent =
-            "Registration points cleared. Choose a source-image point to begin again.";
+            "Placement points cleared. Choose an image point to begin again.";
         this.renderStatus();
         this.map.requestRender();
     }
@@ -144,7 +148,7 @@ export class SourceMapRegistrationController {
         this.image.removeAttribute("src");
         this.map.renderer.registrationPreview = null;
         this.mapHint.textContent =
-            "Use the authoring controls to place geometry. Shift-drag or middle-drag pans; wheel zooms.";
+            "Use the authoring controls to place geometry. Drag to pan; wheel zooms.";
         this.map.requestRender();
     }
 
@@ -153,7 +157,7 @@ export class SourceMapRegistrationController {
             || this.registration.pairs.length !== 3
             || !this.map.renderer.registrationPreview) {
             throw new Error(
-                "Three valid source/world control-point pairs are required before registration can be saved.");
+                "Three valid image/world landmark pairs are required before placement can be saved.");
         }
 
         const world = this.getWorld();
@@ -171,10 +175,10 @@ export class SourceMapRegistrationController {
     private renderStatus(): void {
         if (!this.registration) return;
         const pending = this.registration.pendingSource
-            ? ` Pending source: ${this.registration.pendingSource.x.toFixed(1)}, ${this.registration.pendingSource.y.toFixed(1)}.`
+            ? ` Pending image point: ${this.registration.pendingSource.x.toFixed(1)}, ${this.registration.pendingSource.y.toFixed(1)}.`
             : "";
         this.status.textContent =
-            `${this.registration.pairs.length}/3 pairs captured.${pending}`;
+            `${this.registration.pairs.length}/3 landmark pairs captured.${pending}`;
         required<HTMLButtonElement>(this.host, "[data-save-registration]").disabled =
             this.registration.pairs.length !== 3 || !this.map.renderer.registrationPreview;
     }
