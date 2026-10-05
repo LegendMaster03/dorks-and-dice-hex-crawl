@@ -28,6 +28,12 @@ test("Phase 15 expedition workspace derives the next action from authoritative r
     const workspace = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/phase15-expedition-workspace.ts"),
         "utf8");
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+    const signal = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-runtime-events.ts"),
+        "utf8");
 
     assert.match(workspace, /Current action/);
     assert.match(workspace, /runtime\.pauseReason === "EncounterTriggered"/);
@@ -38,8 +44,27 @@ test("Phase 15 expedition workspace derives the next action from authoritative r
     assert.match(workspace, /no map or interval bookkeeping is fabricated/);
     assert.match(workspace, /focusedIntervalPolicy\.support === "Supported"/);
     assert.match(workspace, /Resources & effects/);
-    assert.match(workspace, /installRuntimeHooks/);
+    assert.match(workspace, /subscribeExpeditionRuntimeChanged/);
+    assert.match(view, /publishExpeditionRuntimeChanged\(root, next\)/);
+    assert.match(signal, /root\.dispatchEvent\(new CustomEvent/);
+    assert.match(signal, /root\.addEventListener/);
+    assert.match(signal, /root\.removeEventListener/);
+    assert.doesNotMatch(workspace, /installRuntimeHooks/);
+    assert.doesNotMatch(workspace, /api\.getExpedition\s*=/);
+    assert.doesNotMatch(workspace, /api\.advanceExpedition\s*=/);
     assert.doesNotMatch(workspace, /MutationObserver/);
+});
+
+test("Phase 15 map selection stays contextual instead of becoming an implicit mutation", () => {
+    const workspace = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/phase15-expedition-workspace.ts"),
+        "utf8");
+
+    assert.match(workspace, /Selecting map context does not mutate expedition state/);
+    assert.match(workspace, /Selected hex q/);
+    assert.match(workspace, /mapCanvas\?\.addEventListener\("click"/);
+    assert.match(workspace, /mapCanvas\?\.addEventListener\("keydown"/);
+    assert.doesNotMatch(workspace, /readMapSelection[\s\S]*advanceExpedition/);
 });
 
 test("Phase 15 shared workspace primitives retain accessible drawer behavior", () => {
