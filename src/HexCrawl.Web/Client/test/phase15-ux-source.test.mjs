@@ -34,6 +34,21 @@ test("Phase 15 procedure authoring separates entry choice from one shared Campai
     assert.doesNotMatch(factory, /GenericProcedureCatalog\.Catalog\.Select/);
 });
 
+test("Compact procedure edits keep their focused workspace across draft recomposition", () => {
+    const workspace = fs.readFileSync(
+        path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"),
+        "utf8");
+
+    assert.match(workspace, /let activeDrawer: WorkspaceDrawer \| null = null/);
+    assert.match(workspace, /if \(!refreshCompactDrawer\(next\)\) render\(\)/);
+    assert.match(workspace, /const refreshCompactDrawer = \(current: ProcedureComposer\): boolean =>/);
+    assert.match(workspace, /populateCompactArea\(body, group\.modules\)/);
+    assert.match(workspace, /control\.dataset\.compactModule = module\.moduleKey/);
+    assert.match(workspace, /control\.dataset\.compactField = key/);
+    assert.match(workspace, /replacement\?\.focus\(\)/);
+    assert.match(workspace, /open\.dataset\.compactArea = group\.section/);
+});
+
 test("Phase 15 procedure authoring keeps save and canonical-load failures visible after busy state clears", () => {
     const workspace = fs.readFileSync(
         path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"),
@@ -43,7 +58,7 @@ test("Phase 15 procedure authoring keeps save and canonical-load failures visibl
     assert.match(workspace, /savePending = false;\s*if \(!disposed\) \{\s*render\(\);\s*if \(failure !== null\)/);
     assert.match(workspace, /jsonBusy = false;\s*if \(!disposed\) \{\s*render\(\);\s*if \(failure !== null\)/);
     assert.match(workspace, /Retry canonical JSON/);
-    assert.match(workspace, /data-json-retry/);
+    assert.match(workspace, /retry\.dataset\.jsonRetry/);
     assert.doesNotMatch(workspace, /catch \(value\) \{\s*if \(!disposed\) \{\s*render\(\);[\s\S]{0,220}finally \{\s*(?:savePending|jsonBusy) = false;\s*if \(!disposed\) render\(\);/);
 });
 
