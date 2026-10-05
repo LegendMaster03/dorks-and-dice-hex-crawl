@@ -36,6 +36,38 @@ test("Phase 15 procedure authoring separates entry choice from one shared Campai
     assert.doesNotMatch(factory, /GenericProcedureCatalog\.Catalog\.Select/);
 });
 
+test("Compact presentation covers all current generic procedure parameter labels", () => {
+    const presentation = fs.readFileSync(
+        path.join(sourceDir, "modules/procedures/procedure-presentation.ts"),
+        "utf8");
+    const generic = fs.readFileSync(
+        path.join(repositoryRoot, "src/HexCrawl.Application/Expeditions/GenericProcedureCatalog.cs"),
+        "utf8");
+    const journey = fs.readFileSync(
+        path.join(repositoryRoot, "src/HexCrawl.Application/Expeditions/JourneyProcedureContractSchema.cs"),
+        "utf8");
+    const survival = fs.readFileSync(
+        path.join(repositoryRoot, "src/HexCrawl.Application/Expeditions/Phase11ProcedurePolicies.cs"),
+        "utf8");
+
+    const parameterKeys = new Set();
+    for (const source of [generic, journey, survival]) {
+        for (const match of source.matchAll(/\["([^"]+)"\]\s*=\s*new\("(?:enum|boolean|number|integer|decimal|string|key-list|map<string>)"/g)) {
+            parameterKeys.add(match[1]);
+        }
+        for (const match of source.matchAll(/\("([^"]+)",\s*"(?:enum|boolean|number|integer|decimal|string|key-list|map<string>)",/g)) {
+            parameterKeys.add(match[1]);
+        }
+    }
+
+    const labelBlock = presentation.slice(
+        presentation.indexOf("const labels"),
+        presentation.indexOf("const choiceSets"));
+    for (const key of parameterKeys) {
+        assert.match(labelBlock, new RegExp("\\b" + key + ":\\s*\""), key);
+    }
+});
+
 test("Compact procedure edits keep their focused workspace across draft recomposition", () => {
     const workspace = fs.readFileSync(
         path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"),

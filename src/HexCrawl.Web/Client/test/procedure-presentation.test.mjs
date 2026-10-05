@@ -29,7 +29,9 @@ test("Compact exposes current ordinary enum domains as editable selects", () => 
         ["navigation.outcome", "recognitionModel", "procedure-check"],
         ["time.forced-travel", "checkModel", "escalating-constitution-save"],
         ["survival.resources", "inventoryModel", "supply-die"],
+        ["journey.events", "linkMode", "both"],
         ["journey.process", "stageTransitionModel", "sequential"],
+        ["journey.process", "completionModel", "reach-destination"],
         ["survival.exposure", "targetScope", "party"]
     ];
 
@@ -40,6 +42,31 @@ test("Compact exposes current ordinary enum domains as editable selects", () => 
             presentation?.choices?.some(choice => choice.value === expectedValue),
             `${moduleKey}.${key} should include ${expectedValue}`);
     }
+});
+
+test("Compact exposes Phase 12 journey stage and progress controls", () => {
+    const stageKeys = compactParameter("stageKeys", {
+        type: "key-list",
+        required: false,
+        description: null,
+        defaultValue: null
+    }, "journey.process");
+    const progressFloor = compactParameter("progressFloor", {
+        type: "number",
+        required: false,
+        description: null,
+        defaultValue: null
+    }, "journey.process");
+    const progressCeiling = compactParameter("progressCeiling", {
+        type: "number",
+        required: false,
+        description: null,
+        defaultValue: null
+    }, "journey.process");
+
+    assert.equal(stageKeys?.control, "key-list");
+    assert.equal(progressFloor?.control, "number");
+    assert.equal(progressCeiling?.control, "number");
 });
 
 test("Compact includes environmental exposure as a survival rule", () => {

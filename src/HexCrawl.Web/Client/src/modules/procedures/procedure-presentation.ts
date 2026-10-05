@@ -107,6 +107,9 @@ const labels: Record<string, string> = {
     stageTransitionModel: "Stage transitions",
     progressKind: "Progress type",
     progressUnit: "Progress unit",
+    stageKeys: "Journey stages",
+    progressFloor: "Minimum progress",
+    progressCeiling: "Maximum progress",
     allowNegativeProgress: "Allow lost progress",
     roleAssignmentModel: "Role assignment",
     intervalIntegrationModel: "Travel integration",
@@ -174,12 +177,13 @@ const choiceSets: Record<string, Array<{ value: string; label: string }>> = {
         "rest", "rest-and-sleep", "rules-defined-rest", "safe-prolonged-rest", "safe-rest"),
     "effects.expedition.scope": choices("participant", "party", "mount", "vehicle", "expedition"),
     "journey.events.triggerModel": choices("manual-or-landmark", "per-watch-or-landmark", "guide-progress-test"),
+    "journey.events.linkMode": choices("standalone", "process-linked", "both"),
     "journey.events.targetingModel": choices("explicit-target", "travel-role"),
     "journey.events.terrainInfluence": choices("manual", "difficulty", "difficulty-and-road"),
     "journey.events.consequenceModel": choices("event", "event-and-fatigue"),
     "journey.process.stageModel": choices("manual-stages", "route-then-events-then-arrival"),
     "journey.process.progressModel": choices("progress-points", "guide-marching-progress"),
-    "journey.process.completionModel": choices("explicit-completion", "final-stage-completion"),
+    "journey.process.completionModel": choices("explicit-completion", "reach-destination", "final-stage-completion"),
     "journey.process.stageTransitionModel": choices("explicit", "sequential"),
     "journey.process.progressKind": choices("numeric"),
     "journey.process.progressUnit": choices("progress-points", "journey-progress"),
@@ -198,10 +202,13 @@ const booleanKeys = new Set([
 
 const numberKeys = new Set([
     "startingExitProgressFactor", "nearExitProgressFactor", "farExitProgressFactor", "backExitProgressFactor",
-    "directionChangeProgressCostFactor", "baseBudget", "travelChecksPerInterval", "timeCost", "normalTravelLimit"
+    "directionChangeProgressCostFactor", "baseBudget", "travelChecksPerInterval", "timeCost", "normalTravelLimit",
+    "progressFloor", "progressCeiling"
 ]);
 
-const keyListKeys = new Set(["activityKeys", "roleKeys", "resourceKinds", "effectKinds", "triggerSources", "dimensions"]);
+const keyListKeys = new Set([
+    "activityKeys", "roleKeys", "resourceKinds", "effectKinds", "triggerSources", "dimensions", "stageKeys"
+]);
 const mappingKeys = new Set(["terrainAdjustments"]);
 const textKeys = new Set(["evaluationInterval"]);
 
