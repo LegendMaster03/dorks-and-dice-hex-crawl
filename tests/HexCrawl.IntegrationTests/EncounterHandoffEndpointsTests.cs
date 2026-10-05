@@ -350,7 +350,7 @@ public sealed class EncounterHandoffEndpointsTests
                                triggerReference = "landmark:broken-tower",
                                targetKind = "Role",
                                targetRoleKey = "scout",
-                               targetId = scoutId,
+                               targetId = (Guid?)null,
                                environment = Array.Empty<object>(),
                                provenance = Provenance("Dm", "handoff-landmark-opportunity"),
                                note = (string?)null
