@@ -102,7 +102,7 @@ Journey processes and events do not own resource, survival, movement-effect, or 
 
 Resolved `ExpeditionConsequence` values flow through `ExpeditionConsequenceAggregateTransition`, which delegates to the existing Phase 10 effect pipeline and Phase 11 resource/survival consumers. This preserves one consequence identity/idempotency boundary and one owner for each durable subsystem.
 
-Encounter circumstances remain structured/deferred consequences for the later encounter-runtime phase rather than being interpreted as tactical combat state inside Phase 12.
+Phase 12 retained encounter circumstances as structured deferred consequences rather than interpreting them as tactical combat state. Phase 14 subsequently added server-authoritative v2 encounter handoff projection for relevant pending circumstances and their linked effects, resources, journey provenance, and scenes. Block Initiative remains authoritative for tactical combat and consumption decisions.
 
 ## Persistence
 
@@ -159,4 +159,4 @@ Phase 12 completes generic multi-stage journey/challenge state and journey-event
 - named-system runtime branches;
 - compatibility reconstruction for pre-release development databases.
 
-Phase 12.5 is the next testing-readiness gate for the complete Phase 0–12 vertical slice.
+Phase 14 subsequently added structured encounter handoff across the Hex Crawl/Block Initiative ownership boundary; it did not move tactical combat into Hex Crawl. Phase 14.5 is the next testing-readiness gate, while battle-map ownership remains deferred to Phase 15.
