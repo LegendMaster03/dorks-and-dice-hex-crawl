@@ -57,6 +57,16 @@ internal static class CampaignProcedureSnapshot
         return value with { Parameters = CopyStrings(value.Parameters) };
     }
 
+    public static CampaignProcedure Copy(CampaignProcedure value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        return value with
+        {
+            Modules = value.Modules.Select(Copy).ToArray(),
+            Overrides = value.Overrides.Select(Copy).ToArray()
+        };
+    }
+
     public static Dictionary<string, string> CopyStrings(IReadOnlyDictionary<string, string> values)
     {
         ArgumentNullException.ThrowIfNull(values);

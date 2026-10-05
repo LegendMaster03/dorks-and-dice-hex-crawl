@@ -37,7 +37,7 @@ public sealed class CampaignProcedureService(IHexCrawlStore store)
 
         return await store.CreateCampaignProcedureRevisionAsync(
             new StoredCampaignProcedureRevision(
-                procedure,
+                CampaignProcedureSnapshot.Copy(procedure),
                 owner,
                 campaignId,
                 origin,
@@ -71,6 +71,63 @@ public sealed class CampaignProcedureService(IHexCrawlStore store)
                 $"Campaign procedure revision {expectedRevision} is stale; the current revision is {current.Revision}.");
         }
         var next = CampaignProcedureMaterializer.CreateRevision(current.Procedure, overrides);
+        return await store.CreateCampaignProcedureRevisionAsync(
+            new StoredCampaignProcedureRevision(
+                next,
+                owner,
+                current.CampaignId,
+                current.ProcedureOrigin,
+                DateTimeOffset.UtcNow),
+            cancellationToken);
+    }
+
+    public async Task<StoredCampaignProcedureRevision> CreateCanonicalRevisionAsync(
+        string ownerUserId,
+        Guid procedureId,
+        int expectedRevision,
+        CampaignProcedure editedProcedure,
+        CancellationToken cancellationToken = default)
+    {
+        var owner = RequireOwner(ownerUserId);
+        if (procedureId == Guid.Empty)
+        {
+            throw new ArgumentException("Procedure id can not be empty.", nameof(procedureId));
+        }
+        if (expectedRevision <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(expectedRevision));
+        }
+        ArgumentNullException.ThrowIfNull(editedProcedure);
+
+        var current = await store.GetLatestCampaignProcedureRevisionAsync(procedureId, owner, cancellationToken)
+            ?? throw new HexCrawlNotFoundException("Campaign procedure was not found.");
+        if (current.Revision != expectedRevision)
+        {
+            throw new HexCrawlConcurrencyException(
+                $"Campaign procedure revision {expectedRevision} is stale; the current revision is {current.Revision}.");
+        }
+        if (editedProcedure.ProcedureId != procedureId)
+        {
+            throw new InvalidOperationException("Canonical JSON can not change the campaign procedure id.");
+        }
+        if (editedProcedure.Revision != expectedRevision)
+        {
+            throw new HexCrawlConcurrencyException(
+                $"Canonical JSON revision {editedProcedure.Revision} does not match expected revision {expectedRevision}.");
+        }
+
+        editedProcedure.Validate();
+        if (current.Procedure.Equals(editedProcedure))
+        {
+            throw new InvalidOperationException("The submitted canonical procedure does not change the current revision.");
+        }
+
+        var next = CampaignProcedureSnapshot.Copy(editedProcedure) with
+        {
+            Revision = checked(expectedRevision + 1)
+        };
+        next.Validate();
+
         return await store.CreateCampaignProcedureRevisionAsync(
             new StoredCampaignProcedureRevision(
                 next,
