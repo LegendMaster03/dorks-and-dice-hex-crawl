@@ -105,6 +105,19 @@ export type ProcedureComposer = {
     overrides: ProcedureOverride[];
 };
 
+export type SavedProcedureSummary = {
+    procedureId: string;
+    revision: number;
+    key: string;
+    name: string;
+    campaignId: string | null;
+    originPresetKey: string | null;
+    originPresetDisplayName: string | null;
+    isExecutable: boolean;
+    moduleCount: number;
+    createdAt: string;
+};
+
 export type ProcedureComposerModuleSelectionInput = {
     moduleKey: string;
     included: boolean;

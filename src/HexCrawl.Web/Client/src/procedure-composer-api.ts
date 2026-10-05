@@ -9,7 +9,8 @@ import type {
     ProcedureComposerCreateInput,
     ProcedureComposerDraftInput,
     ProcedureComposerRevisionInput,
-    ProcedureRevisionSummary
+    ProcedureRevisionSummary,
+    SavedProcedureSummary
 } from "./procedure-composer-types";
 import type { ProcedureReference } from "./procedure-reference-types";
 
@@ -24,6 +25,10 @@ export class ProcedureComposerApi {
         if (!response.ok) throw await apiError(response, "Tool Host context");
         const context = await response.json() as ToolHostContext;
         return new ProcedureComposerApi(backendBaseFromContext(context.apiBaseUrl));
+    }
+
+    public listProcedures(): Promise<SavedProcedureSummary[]> {
+        return this.getJson("/api/procedures", "Saved procedures");
     }
 
     public composeDraft(input: ProcedureComposerDraftInput): Promise<ProcedureComposer> {

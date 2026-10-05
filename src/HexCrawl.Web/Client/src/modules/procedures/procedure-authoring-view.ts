@@ -8,122 +8,29 @@ import type {
     ProcedureComposerOverrideInput,
     ProcedureMechanicOption,
     ProcedureModuleComposer,
-    ProcedureParameterDefinition,
-    ProcedureRevisionSummary
+    ProcedureRevisionSummary,
+    SavedProcedureSummary
 } from "../../procedure-composer-types";
 import type { ProcedurePreset } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
 import { badge, openWorkspaceDrawer, textElement, type WorkspaceDrawer } from "../../ui/workspace";
+import { executionSummary, inputSourceLabel, saveBlocked, withBehavior, withParameter } from "./procedure-composer-model";
 import {
-    executionSummary,
-    groupComposerModules,
-    inputSourceLabel,
+    compactModuleSummary,
+    compactParameter,
+    compactRule,
+    compactRuleCatalog,
+    durationToTicks,
+    formatDurationTicks,
+    friendlyStoredValue,
     parameterDefinitions,
-    saveBlocked,
-    withBehavior,
-    withParameter
-} from "./procedure-composer-model";
+    ticksToDuration
+} from "./procedure-presentation";
 
 export type ProcedureAuthoringMode = "compact" | "advanced" | "json";
-type EntryState = "landing" | "presets" | "workspace";
-
-type StructureArea = {
-    key: string;
-    title: string;
-    question: string;
-    usedLabel: string;
-    omittedLabel: string;
-    detail: string;
-    moduleKeys: string[];
-};
+type EntryState = "home" | "catalog" | "workspace";
 
 const modeStorageKey = "hex-crawl.procedure-authoring.mode";
-const structureAreas: StructureArea[] = [
-    {
-        key: "time",
-        title: "Time / structure",
-        question: "Does expedition play use repeating travel periods or watches?",
-        usedLabel: "Use repeating travel periods",
-        omittedLabel: "No repeating interval",
-        detail: "A journey/process can drive progress without a repeating travel interval.",
-        moduleKeys: ["time.interval"]
-    },
-    {
-        key: "movement",
-        title: "Movement",
-        question: "Does this procedure resolve ordinary travel movement?",
-        usedLabel: "Resolve travel movement",
-        omittedLabel: "Movement is manual or journey-driven",
-        detail: "Includes movement resolution, hex progress, movement budget, and terrain/route movement.",
-        moduleKeys: ["movement.resolution", "movement.hex-progress", "movement.budget", "movement.terrain"]
-    },
-    {
-        key: "navigation",
-        title: "Navigation",
-        question: "Does the expedition use navigation checks or persistent off-course state?",
-        usedLabel: "Use navigation procedure",
-        omittedLabel: "No navigation procedure",
-        detail: "Navigation behavior and failure/recovery state remain separate generic procedure parts.",
-        moduleKeys: ["navigation.check", "navigation.outcome"]
-    },
-    {
-        key: "activities",
-        title: "Activities / roles",
-        question: "Does the party assign expedition activities or roles?",
-        usedLabel: "Use party activities / roles",
-        omittedLabel: "No activity assignment procedure",
-        detail: "Assignments may be participant-, party-, or role-oriented depending on the selected behavior.",
-        moduleKeys: ["party.activities"]
-    },
-    {
-        key: "encounters",
-        title: "Encounters",
-        question: "Does the procedure schedule or require encounter checks?",
-        usedLabel: "Use encounter procedure",
-        omittedLabel: "No encounter procedure",
-        detail: "Cadence and the broader encounter schedule remain independently editable after inclusion.",
-        moduleKeys: ["encounters.cadence", "encounters.schedule"]
-    },
-    {
-        key: "survival",
-        title: "Survival / resources",
-        question: "Does expedition play track survival, resources, camping, foraging, or travel consequences?",
-        usedLabel: "Use survival / resource procedure",
-        omittedLabel: "Omit survival / resource procedure",
-        detail: "This area covers resources, foraging, camping, forced travel, and persistent expedition effects.",
-        moduleKeys: ["survival.resources", "exploration.foraging", "survival.camping", "time.forced-travel", "effects.expedition"]
-    },
-    {
-        key: "journey",
-        title: "Journeys",
-        question: "Is there a separate multi-stage journey process?",
-        usedLabel: "Use journey process",
-        omittedLabel: "No separate journey process",
-        detail: "Journey stages, progress, roles, events, and explicit resolution can operate without a fabricated map or watch.",
-        moduleKeys: ["journey.process", "journey.events"]
-    }
-];
-
-const moduleLabels = new Map<string, string>([
-    ["time.interval", "Travel interval"],
-    ["movement.resolution", "Movement resolution"],
-    ["movement.hex-progress", "Hex progress"],
-    ["movement.budget", "Movement budget"],
-    ["movement.terrain", "Terrain and route movement"],
-    ["navigation.check", "Navigation checks"],
-    ["navigation.outcome", "Navigation outcome"],
-    ["party.activities", "Participant activities"],
-    ["encounters.cadence", "Encounter cadence"],
-    ["encounters.schedule", "Encounter schedule"],
-    ["survival.resources", "Resource consumption"],
-    ["exploration.foraging", "Foraging"],
-    ["survival.camping", "Camping"],
-    ["time.forced-travel", "Forced travel"],
-    ["effects.expedition", "Persistent expedition effects"],
-    ["journey.process", "Multi-stage journey process"],
-    ["journey.events", "Journey events"],
-    ["procedure.helpers", "Resolution helpers"]
-]);
 
 export async function renderProcedureAuthoringWorkspace(
     root: HTMLElement,
@@ -135,7 +42,7 @@ export async function renderProcedureAuthoringWorkspace(
     root.classList.add("hc-phase15");
 
     let disposed = false;
-    let entry: EntryState = procedureId ? "workspace" : "landing";
+    let entry: EntryState = procedureId ? "workspace" : "home";
     let mode = readMode();
     let sourcePresetKey: string | null = null;
     let sourceProcedureId = procedureId;
@@ -143,24 +50,25 @@ export async function renderProcedureAuthoringWorkspace(
     let latestRevision: number | null = null;
     let draft: ProcedureComposer | null = null;
     let presets: ProcedurePreset[] = [];
+    let savedProcedures: SavedProcedureSummary[] = [];
     let revisions: ProcedureRevisionSummary[] = [];
     let savePending = false;
     let refreshSerial = 0;
-    let activeDrawer: WorkspaceDrawer | null = null;
-    let activeCompactArea: string | null = null;
-    let closingDrawerForRender = false;
+    let drawer: WorkspaceDrawer | null = null;
     const pending = new Map<string, ProcedureComposerOverrideInput>();
     const moduleSelections = new Map<string, boolean>();
 
     let jsonText = "";
     let jsonBaseline = "";
-    let jsonLoadedFor: string | null = null;
     let jsonBusy = false;
     let jsonValidation: ProcedureCanonicalValidation | null = null;
 
     root.replaceChildren(loadingPanel("Loading exploration procedures…"));
     const composerApi = await ProcedureComposerApi.create(root);
-    presets = await api.getProcedurePresets();
+    [presets, savedProcedures] = await Promise.all([
+        api.getProcedurePresets(),
+        composerApi.listProcedures()
+    ]);
     if (disposed) return () => {};
 
     const historical = (): boolean =>
@@ -177,685 +85,94 @@ export async function renderProcedureAuthoringWorkspace(
         overrides: [...pending.values()]
     });
 
-    const invalidateJson = (): void => {
+    const resetEdits = (): void => {
+        pending.clear();
+        moduleSelections.clear();
         jsonText = "";
         jsonBaseline = "";
-        jsonLoadedFor = null;
         jsonValidation = null;
     };
 
-    const closeActiveDrawerForRender = (): void => {
-        const current = activeDrawer;
-        activeDrawer = null;
-        activeCompactArea = null;
-        if (!current) return;
-        closingDrawerForRender = true;
-        try {
-            current.close();
-        } finally {
-            closingDrawerForRender = false;
-        }
+    const closeDrawer = (): void => {
+        const active = drawer;
+        drawer = null;
+        active?.close();
     };
 
     const loadWorkspace = async (): Promise<void> => {
         if (sourceProcedureId) {
             revisions = await composerApi.listRevisions(sourceProcedureId);
-            latestRevision = revisions.reduce((max, item) => Math.max(max, item.revision), 0) || null;
+            latestRevision = revisions.reduce((max, value) => Math.max(max, value.revision), 0) || null;
         } else {
             revisions = [];
             latestRevision = null;
         }
         draft = await composerApi.composeDraft(currentInput());
-        invalidateJson();
+        jsonText = "";
+        jsonBaseline = "";
+        jsonValidation = null;
+        if (mode === "json") await loadJson();
         if (!disposed) render();
     };
 
     const refreshDraft = async (): Promise<void> => {
         const serial = ++refreshSerial;
-        const error = root.querySelector<HTMLElement>("[data-error]");
-        if (error) clearUiError(error);
-        setControlsDisabled(true);
         try {
             const next = await composerApi.composeDraft(currentInput());
             if (disposed || serial !== refreshSerial) return;
             draft = next;
-            invalidateJson();
-            if (!refreshCompactDrawer(next)) render();
-        } catch (value) {
-            if (disposed || serial !== refreshSerial) return;
-            if (error) showUiError(error, value);
-            setControlsDisabled(false);
+            jsonText = "";
+            jsonBaseline = "";
+            jsonValidation = null;
+            render();
+        } catch (error) {
+            const target = root.querySelector<HTMLElement>("[data-error]");
+            if (target) showUiError(target, error);
         }
     };
 
-    const enterCustom = async (): Promise<void> => {
-        sourcePresetKey = null;
-        pending.clear();
-        moduleSelections.clear();
-        entry = "workspace";
-        mode = "compact";
-        await loadWorkspace();
-    };
-
-    const enterPreset = async (presetKey: string): Promise<void> => {
-        sourcePresetKey = presetKey;
-        pending.clear();
-        moduleSelections.clear();
-        entry = "workspace";
-        mode = "compact";
-        await loadWorkspace();
-    };
-
-    const changeStartingPoint = (): void => {
-        if (sourceProcedureId) return;
-        if ((pending.size > 0 || moduleSelections.size > 0)
-            && !globalThis.confirm("Discard unsaved procedure changes and choose a different starting point?")) return;
-        pending.clear();
-        moduleSelections.clear();
-        sourcePresetKey = null;
-        draft = null;
-        invalidateJson();
-        entry = "landing";
-        render();
-    };
-
-    const setMode = (next: ProcedureAuthoringMode): void => {
-        if (mode === next) return;
-        mode = next;
-        try { localStorage.setItem(modeStorageKey, mode); } catch { /* preference storage is optional */ }
-        render();
-        if (mode === "json") void ensureJsonLoaded();
-    };
-
-    const render = (): void => {
-        closeActiveDrawerForRender();
-        if (entry === "landing" && !sourceProcedureId) {
-            renderLanding();
-            return;
-        }
-        if (entry === "presets" && !sourceProcedureId) {
-            renderPresetBrowser();
-            return;
-        }
-        renderWorkspace();
-    };
-
-    const basePage = (title: string, subtitle: string): HTMLElement => {
-        const page = document.createElement("section");
-        page.className = "hc-page hc-phase15 hc-procedure-workspace";
-        const header = document.createElement("header");
-        header.className = "hc-page-header";
-        const copy = document.createElement("div");
-        copy.append(textElement("h1", title), textElement("p", subtitle));
-        const nav = document.createElement("nav");
-        nav.className = "hc-button-row";
-        const home = button("DM tools", () => navigate("/"));
-        nav.append(home);
-        if (sourceProcedureId) nav.append(button("New procedure", () => navigate("/procedures")));
-        header.append(copy, nav);
-        page.append(header);
-        const error = document.createElement("div");
-        error.className = "hc-error";
-        error.dataset.error = "";
-        error.hidden = true;
-        error.setAttribute("role", "alert");
-        page.append(error);
-        return page;
-    };
-
-    const renderLanding = (): void => {
-        const page = basePage(
-            "Create an exploration procedure",
-            "Choose a familiar starting point or define the expedition procedure directly in tabletop terms.");
-        const choices = document.createElement("div");
-        choices.className = "hc-preset-grid hc-procedure-entry-grid";
-        choices.append(
-            entryCard(
-                "Start from a known procedure",
-                "Browse familiar systems and published exploration procedures, then customize the materialized campaign copy.",
-                "Browse presets",
-                () => { entry = "presets"; render(); }),
-            entryCard(
-                "Build my own",
-                "Define time, movement, navigation, encounters, activities, survival, journeys, and other expedition procedures without inheriting a named system.",
-                "Build custom procedure",
-                () => void enterCustom()));
-        page.append(choices);
-        root.replaceChildren(page);
-    };
-
-    const renderPresetBrowser = (): void => {
-        const page = basePage(
-            "Choose a starting procedure",
-            "Presets are creation-time recipes. The saved procedure is an independent campaign-owned snapshot.");
-        const controls = document.createElement("div");
-        controls.className = "hc-button-row";
-        controls.append(
-            button("Back", () => { entry = "landing"; render(); }),
-            button("Build my own instead", () => void enterCustom()));
-        page.append(controls);
-        const grid = document.createElement("div");
-        grid.className = "hc-preset-grid";
-        for (const preset of presets) {
-            const card = document.createElement("article");
-            card.className = "hc-panel hc-preset-card";
-            card.append(
-                textElement("h2", preset.displayName),
-                textElement("p", preset.description),
-                preset.attribution ? textElement("p", preset.attribution, "hc-muted") : document.createTextNode(""));
-            const facts = document.createElement("dl");
-            facts.className = "hc-preset-facts";
-            appendFact(facts, "Workflow", presetWorkflow(preset));
-            appendFact(facts, "Travel", travelSummary(preset));
-            appendFact(facts, "Navigation", navigationSummary(preset));
-            appendFact(facts, "Journey", journeySummary(preset));
-            card.append(facts);
-            const use = button(`Use ${preset.displayName}`, () => void enterPreset(preset.presetKey));
-            use.className = "hc-primary-action";
-            card.append(use);
-            grid.append(card);
-        }
-        page.append(grid);
-        root.replaceChildren(page);
-    };
-
-    const renderWorkspace = (): void => {
-        if (!draft) {
-            root.replaceChildren(loadingPanel("Loading procedure workspace…"));
-            return;
-        }
-        const current = draft;
-        const page = basePage(
-            current.name,
-            sourceProcedureId ? `Campaign procedure · revision ${current.revision}` : "Unsaved campaign procedure");
-
-        const toolbar = document.createElement("div");
-        toolbar.className = "hc-view-switcher hc-procedure-mode-toolbar";
-        toolbar.setAttribute("aria-label", "Procedure editor mode");
-        for (const value of ["compact", "advanced", "json"] as const) {
-            const control = button(capitalize(value), () => setMode(value));
-            control.classList.toggle("hc-active-view", mode === value);
-            control.setAttribute("aria-current", mode === value ? "page" : "false");
-            toolbar.append(control);
-        }
-        if (!sourceProcedureId) {
-            toolbar.append(textElement("span", "", "hc-run-toolbar-divider"));
-            toolbar.append(button("Change starting point", changeStartingPoint));
-        }
-        page.append(toolbar, renderSummary(current));
-
-        if (historical()) page.append(historicalNotice(current));
-        if (mode === "compact") page.append(renderCompact(current));
-        else if (mode === "advanced") page.append(renderAdvanced(current));
-        else page.append(renderJson(current));
-        root.replaceChildren(page);
-    };
-
-    const renderSummary = (current: ProcedureComposer): HTMLElement => {
-        const summary = document.createElement("section");
-        summary.className = "hc-panel hc-procedure-summary";
-        const heading = document.createElement("div");
-        heading.className = "hc-area-card-heading";
-        heading.append(textElement("h2", "Procedure"), badge(statusLabel(current), statusTone(current)));
-        summary.append(heading);
-        const metrics = document.createElement("div");
-        metrics.className = "hc-summary-metrics";
-        metrics.append(
-            metric("Areas in use", String(current.modules.length)),
-            metric("Pending structure", String(moduleSelections.size)),
-            metric("Pending behavior", String(pending.size)),
-            metric("Runtime", current.isExecutable ? "Native" : "Assisted / structural"));
-        summary.append(metrics);
-        const origin = current.origin;
-        summary.append(textElement(
-            "p",
-            origin
-                ? `Started from ${origin.presetDisplayName ?? origin.presetKey ?? "a preset"}. The campaign copy is independent of the preset catalog.`
-                : "Custom procedure · no named preset origin.",
-            "hc-muted"));
-        if (current.dependencies.hasErrors) {
-            const list = document.createElement("div");
-            list.className = "hc-domain-diagnostics";
-            for (const issue of current.dependencies.issues.filter(issue => isBlocking(issue.kind))) {
-                list.append(domainDiagnostic(dependencyHeading(issue.kind), friendlyDiagnostic(issue.message), true));
-            }
-            summary.append(list);
-        }
-
-        const row = document.createElement("div");
-        row.className = "hc-button-row";
-        if (sourceProcedureId && revisions.length > 1) {
-            const select = document.createElement("select");
-            select.setAttribute("aria-label", "Procedure revision");
-            for (const revision of [...revisions].sort((a, b) => b.revision - a.revision)) {
-                const option = document.createElement("option");
-                option.value = String(revision.revision);
-                option.textContent = `Revision ${revision.revision}`;
-                select.append(option);
-            }
-            select.value = String(current.revision);
-            select.addEventListener("change", () => {
-                const selected = Number(select.value);
-                viewedRevision = latestRevision !== null && selected === latestRevision ? null : selected;
-                pending.clear();
-                moduleSelections.clear();
-                void loadWorkspace();
-            });
-            row.append(select);
-        }
-        if (!historical() && mode !== "json") {
-            const save = button(sourceProcedureId ? "Save new revision" : "Save procedure", () => void saveStructured());
-            save.className = "hc-primary-action";
-            save.dataset.composerControl = "";
-            save.disabled = savePending || structuredSaveBlocked(current)
-                || (sourceProcedureId !== null && pending.size === 0 && moduleSelections.size === 0);
-            row.append(save);
-        }
-        summary.append(row);
-        return summary;
-    };
-
-    const renderCompact = (current: ProcedureComposer): HTMLElement => {
-        const wrapper = document.createElement("section");
-        wrapper.className = "hc-compact-procedure";
-        wrapper.append(
-            textElement("h2", "Procedure structure"),
-            textElement("p", "Choose the expedition concepts this procedure actually uses. Areas you omit are absent from the materialized CampaignProcedure; they are not simulated with disabled mechanics.", "hc-muted"));
-        const structure = document.createElement("div");
-        structure.className = "hc-procedure-area-grid";
-        for (const area of structureAreas) structure.append(renderStructureArea(current, area));
-        wrapper.append(structure);
-
-        if (current.modules.length === 0) {
-            wrapper.append(domainDiagnostic("Choose at least one procedure area", "A saved CampaignProcedure must contain at least one generic procedure module.", true));
-            return wrapper;
-        }
-
-        wrapper.append(textElement("h2", "Current procedure areas"));
-        const areas = document.createElement("div");
-        areas.className = "hc-procedure-area-grid";
-        for (const group of groupComposerModules(current.modules)) {
-            const card = document.createElement("article");
-            card.className = "hc-panel hc-area-card";
-            const heading = document.createElement("div");
-            heading.className = "hc-area-card-heading";
-            heading.append(textElement("h3", group.section), badge(`${group.modules.length} part${group.modules.length === 1 ? "" : "s"}`, "neutral"));
-            card.append(heading, textElement("p", compactBehaviorSummary(group.modules), "hc-muted"));
-            const open = button("Edit area", () => openCompactArea(group.section, group.modules, open));
-            open.dataset.compactArea = group.section;
-            open.disabled = historical();
-            card.append(open);
-            areas.append(card);
-        }
-        wrapper.append(areas);
-        return wrapper;
-    };
-
-    const renderStructureArea = (current: ProcedureComposer, area: StructureArea): HTMLElement => {
-        const present = new Set(current.modules.map(module => module.moduleKey));
-        const count = area.moduleKeys.filter(key => present.has(key)).length;
-        const card = document.createElement("article");
-        card.className = "hc-panel hc-area-card hc-structure-card";
-        card.append(textElement("h3", area.title), textElement("p", area.question), textElement("p", area.detail, "hc-muted"));
-        const state = count === 0 ? "Not used" : count === area.moduleKeys.length ? "Used" : `${count} of ${area.moduleKeys.length} parts used`;
-        card.append(badge(state, count === 0 ? "neutral" : "info"));
-        const row = document.createElement("div");
-        row.className = "hc-button-row";
-        const include = button(area.usedLabel, () => void applyStructureArea(area, true));
-        const omit = button(area.omittedLabel, () => void applyStructureArea(area, false));
-        include.dataset.composerControl = "";
-        omit.dataset.composerControl = "";
-        include.disabled = historical() || count === area.moduleKeys.length;
-        omit.disabled = historical() || count === 0;
-        row.append(include, omit);
-        card.append(row);
-        return card;
-    };
-
-    const applyStructureArea = async (area: StructureArea, included: boolean): Promise<void> => {
-        if (historical()) return;
-        for (const moduleKey of area.moduleKeys) {
-            moduleSelections.set(moduleKey, included);
-            if (!included) pending.delete(moduleKey);
-        }
+    const setModule = async (moduleKey: string, included: boolean): Promise<void> => {
+        moduleSelections.set(moduleKey, included);
+        pending.delete(moduleKey);
+        closeDrawer();
         await refreshDraft();
     };
 
-    const openCompactArea = (
-        title: string,
-        modules: ProcedureModuleComposer[],
-        returnFocus: HTMLElement): void => {
-        closeActiveDrawerForRender();
-        activeCompactArea = title;
-        activeDrawer = openWorkspaceDrawer(root, title, body => {
-            populateCompactArea(body, modules);
-        }, returnFocus, () => {
-            if (closingDrawerForRender) return;
-            const area = activeCompactArea;
-            activeDrawer = null;
-            activeCompactArea = null;
-            if (disposed) return;
-            render();
-            if (area) {
-                queueMicrotask(() => {
-                    const replacement = [...root.querySelectorAll<HTMLButtonElement>("[data-compact-area]")]
-                        .find(control => control.dataset.compactArea === area);
-                    replacement?.focus();
-                });
-            }
-        });
+    const setOverride = async (value: ProcedureComposerOverrideInput): Promise<void> => {
+        pending.set(value.moduleKey, value);
+        await refreshDraft();
     };
 
-    const populateCompactArea = (body: HTMLElement, modules: ProcedureModuleComposer[]): void => {
-        const contents: Node[] = [
-            textElement("p", "Normal Compact editing uses tabletop concepts rather than mechanic IDs or dependency keys.", "hc-muted")
-        ];
-        for (const module of modules) contents.push(renderCompactModule(module));
-        body.replaceChildren(...contents);
-    };
-
-    const refreshCompactDrawer = (current: ProcedureComposer): boolean => {
-        if (!activeDrawer?.element.isConnected || !activeCompactArea) return false;
-        const group = groupComposerModules(current.modules)
-            .find(candidate => candidate.section === activeCompactArea);
-        const body = activeDrawer.element.querySelector<HTMLElement>(".hc-focus-workspace-body");
-        if (!group || !body) return false;
-
-        const focused = document.activeElement instanceof HTMLElement
-            && activeDrawer.element.contains(document.activeElement)
-            ? {
-                moduleKey: document.activeElement.dataset.compactModule,
-                fieldKey: document.activeElement.dataset.compactField
-            }
-            : null;
-
-        populateCompactArea(body, group.modules);
-        if (focused?.moduleKey && focused.fieldKey) {
-            queueMicrotask(() => {
-                const replacement = [...body.querySelectorAll<HTMLElement>("[data-compact-module]")]
-                    .find(control =>
-                        control.dataset.compactModule === focused.moduleKey
-                        && control.dataset.compactField === focused.fieldKey);
-                replacement?.focus();
-            });
-        }
-        return true;
-    };
-
-    const renderCompactModule = (module: ProcedureModuleComposer): HTMLElement => {
-        const section = document.createElement("section");
-        section.className = "hc-compact-module";
-        section.append(textElement("h3", module.displayName), textElement("p", module.purpose, "hc-muted"));
-        const alternatives = uniqueMechanics(module);
-        if (alternatives.length > 1) {
-            const label = document.createElement("label");
-            label.className = "hc-compact-field";
-            label.append(textElement("span", behaviorQuestion(module)));
-            const select = document.createElement("select");
-            select.dataset.composerControl = "";
-            select.dataset.compactModule = module.moduleKey;
-            select.dataset.compactField = "mechanic";
-            for (const mechanic of alternatives) {
-                const option = document.createElement("option");
-                option.value = `${mechanic.key}@${mechanic.version}`;
-                option.textContent = mechanic.displayName;
-                select.append(option);
-            }
-            select.value = `${module.mechanic.key}@${module.mechanic.version}`;
-            select.disabled = historical();
-            select.addEventListener("change", () => {
-                const selected = alternatives.find(item => `${item.key}@${item.version}` === select.value);
-                if (!selected) return;
-                pending.set(module.moduleKey, withBehavior(module, pending.get(module.moduleKey), selected.key, selected.version));
-                void refreshDraft();
-            });
-            label.append(select);
-            section.append(label);
-        }
-        const fields = document.createElement("div");
-        fields.className = "hc-compact-field-grid";
-        for (const [key, definition] of parameterDefinitions(module)) {
-            fields.append(renderParameter(module, key, definition, false));
-        }
-        if (fields.childElementCount > 0) section.append(fields);
-        for (const issue of module.dependencyIssues.filter(issue => issue.kind !== "ProducedButUnused")) {
-            section.append(domainDiagnostic(dependencyHeading(issue.kind), compactDependencyMessage(issue), isBlocking(issue.kind)));
-        }
-        return section;
-    };
-
-    const renderParameter = (
-        module: ProcedureModuleComposer,
-        key: string,
-        definition: ProcedureParameterDefinition,
-        rawLabel: boolean): HTMLElement => {
-        const label = document.createElement("label");
-        label.className = "hc-compact-field";
-        const display = rawLabel
-            ? key
-            : module.presentationMetadata[`parameter.${key}.label`]
-                ?? module.presentationMetadata[`label.${key}`]
-                ?? humanizeIdentifier(key);
-        label.append(textElement("span", `${display}${definition.required ? " *" : ""}`));
-        const value = module.parameters[key] ?? definition.defaultValue ?? "";
-        const control = parameterControl(definition, value, next => {
-            pending.set(module.moduleKey, withParameter(module, pending.get(module.moduleKey), key, next));
-            void refreshDraft();
-        }, historical());
-        control.dataset.compactModule = module.moduleKey;
-        control.dataset.compactField = key;
-        label.append(control);
-        if (definition.description) label.append(textElement("span", definition.description, "hc-muted"));
-        return label;
-    };
-
-    const renderAdvanced = (current: ProcedureComposer): HTMLElement => {
-        const wrapper = document.createElement("section");
-        wrapper.className = "hc-advanced-layout";
-        const index = document.createElement("aside");
-        index.className = "hc-panel hc-advanced-index";
-        index.append(textElement("h2", "Module composition"), textElement("p", "Advanced exposes exact generic module keys, mechanics, versions, parameters, and contracts.", "hc-muted"));
-        const allKeys = [...new Set(structureAreas.flatMap(area => area.moduleKeys).concat(["procedure.helpers"]))];
-        for (const moduleKey of allKeys) {
-            const row = document.createElement("label");
-            row.className = "hc-advanced-module-toggle";
-            const checkbox = document.createElement("input");
-            checkbox.type = "checkbox";
-            checkbox.checked = current.modules.some(module => module.moduleKey === moduleKey);
-            checkbox.disabled = historical();
-            checkbox.dataset.composerControl = "";
-            checkbox.addEventListener("change", () => {
-                moduleSelections.set(moduleKey, checkbox.checked);
-                if (!checkbox.checked) pending.delete(moduleKey);
-                void refreshDraft();
-            });
-            row.append(checkbox, document.createTextNode(` ${moduleLabels.get(moduleKey) ?? humanizeIdentifier(moduleKey)} · ${moduleKey}`));
-            index.append(row);
-        }
-
-        const main = document.createElement("main");
-        for (const group of groupComposerModules(current.modules)) {
-            const section = document.createElement("section");
-            section.className = "hc-composer-section";
-            section.append(textElement("h2", group.section));
-            for (const module of group.modules) section.append(renderAdvancedModule(module));
-            main.append(section);
-        }
-        wrapper.append(index, main);
-        return wrapper;
-    };
-
-    const renderAdvancedModule = (module: ProcedureModuleComposer): HTMLElement => {
-        const card = document.createElement("article");
-        card.className = "hc-panel hc-advanced-module";
-        card.append(textElement("h3", `${module.displayName} · ${module.moduleKey}`), textElement("p", module.purpose, "hc-muted"));
-        const behavior = document.createElement("label");
-        behavior.className = "hc-compact-field";
-        behavior.append(textElement("span", "Selected generic mechanic"));
-        const select = document.createElement("select");
-        select.dataset.composerControl = "";
-        const alternatives = uniqueMechanics(module);
-        for (const mechanic of alternatives) {
-            const option = document.createElement("option");
-            option.value = `${mechanic.key}@${mechanic.version}`;
-            option.textContent = `${mechanic.displayName} · ${mechanic.key} · v${mechanic.version}`;
-            select.append(option);
-        }
-        select.value = `${module.mechanic.key}@${module.mechanic.version}`;
-        select.disabled = historical();
-        select.addEventListener("change", () => {
-            const selected = alternatives.find(item => `${item.key}@${item.version}` === select.value);
-            if (!selected) return;
-            pending.set(module.moduleKey, withBehavior(module, pending.get(module.moduleKey), selected.key, selected.version));
-            void refreshDraft();
-        });
-        behavior.append(select);
-        card.append(behavior, textElement("p", executionSummary(module), "hc-muted"));
-        const fields = document.createElement("div");
-        fields.className = "hc-compact-field-grid";
-        for (const [key, definition] of parameterDefinitions(module)) fields.append(renderParameter(module, key, definition, true));
-        card.append(fields);
-        const contracts = document.createElement("details");
-        const summary = document.createElement("summary");
-        summary.textContent = "Inputs, outputs, dependencies, and diagnostics";
-        contracts.append(summary);
-        contracts.append(textElement("p", `Reads: ${module.reads.join(", ") || "none"}`));
-        contracts.append(textElement("p", `Produces: ${module.outputs.join(", ") || "none"}`));
-        contracts.append(textElement("p", `Required modules: ${module.requiredDependencies.join(", ") || "none"}`));
-        for (const issue of module.dependencyIssues) contracts.append(domainDiagnostic(issue.kind, issue.message, isBlocking(issue.kind)));
-        card.append(contracts);
-        return card;
-    };
-
-    const renderJson = (_current: ProcedureComposer): HTMLElement => {
-        const wrapper = document.createElement("section");
-        wrapper.className = "hc-panel hc-json-editor";
-        wrapper.append(textElement("h2", "Canonical procedure JSON"), textElement("p", "This is the exact same CampaignProcedure produced by Compact structural choices and Advanced edits.", "hc-muted"));
-        if (jsonBusy || !jsonLoadedFor) {
-            wrapper.append(loadingPanel("Loading canonical representation…"));
-            queueMicrotask(() => void ensureJsonLoaded());
-            return wrapper;
-        }
-        const textarea = document.createElement("textarea");
-        textarea.value = jsonText;
-        textarea.spellcheck = false;
-        textarea.disabled = historical() || jsonBusy;
-        textarea.setAttribute("aria-label", "Canonical campaign procedure JSON");
-        textarea.addEventListener("input", () => {
-            jsonText = textarea.value;
-            jsonValidation = null;
-            updateJsonStatus(wrapper);
-        });
-        wrapper.append(textarea);
-        const actions = document.createElement("div");
-        actions.className = "hc-json-actions";
-        actions.append(
-            button("Format", () => {
-                try {
-                    jsonText = JSON.stringify(JSON.parse(jsonText), null, 2);
-                    textarea.value = jsonText;
-                    jsonValidation = null;
-                } catch (value) {
-                    jsonValidation = { isValid: false, procedureId: null, revision: null, error: value instanceof Error ? value.message : String(value), lineNumber: null, bytePositionInLine: null };
-                }
-                updateJsonStatus(wrapper);
-            }),
-            button("Validate", () => void validateJson()),
-            button("Reload authoritative draft", () => {
-                if (jsonText !== jsonBaseline && !globalThis.confirm("Discard unsaved JSON changes?")) return;
-                invalidateJson();
-                render();
-                void ensureJsonLoaded();
-            }));
-        const save = button(sourceProcedureId ? "Save canonical revision" : "Save canonical procedure", () => void saveJsonProcedure());
-        save.className = "hc-primary-action";
-        save.dataset.jsonSave = "";
-        save.disabled = historical() || jsonBusy || jsonText === jsonBaseline;
-        actions.append(save);
-        wrapper.append(actions);
-        const status = document.createElement("p");
-        status.dataset.jsonStatus = "";
-        status.className = "hc-json-status";
-        wrapper.append(status);
-        updateJsonStatus(wrapper);
-        return wrapper;
-    };
-
-    const ensureJsonLoaded = async (): Promise<void> => {
-        if (jsonBusy) return;
-        const key = JSON.stringify(currentInput());
-        if (jsonLoadedFor === key) return;
+    const loadJson = async (): Promise<void> => {
+        if (!draft || jsonBusy || jsonText) return;
         jsonBusy = true;
-        let failure: unknown | null = null;
         try {
             const canonical = await composerApi.composeCanonicalDraft(currentInput());
             if (disposed) return;
             jsonText = canonical.canonicalJson;
             jsonBaseline = canonical.canonicalJson;
-            jsonLoadedFor = key;
-            jsonValidation = null;
-        } catch (value) {
-            failure = value;
+            jsonValidation = await composerApi.validateCanonical(jsonText);
         } finally {
             jsonBusy = false;
-            if (!disposed && mode === "json") {
-                if (failure === null) {
-                    render();
-                } else {
-                    const error = root.querySelector<HTMLElement>("[data-error]");
-                    if (error) showUiError(error, failure);
-                    const editor = root.querySelector<HTMLElement>(".hc-json-editor");
-                    if (editor && !editor.querySelector("[data-json-retry]")) {
-                        const retry = button("Retry canonical JSON", () => {
-                            const currentError = root.querySelector<HTMLElement>("[data-error]");
-                            if (currentError) clearUiError(currentError);
-                            render();
-                        });
-                        retry.dataset.jsonRetry = "";
-                        editor.append(retry);
-                    }
-                }
-            }
         }
     };
 
-    const updateJsonStatus = (host: ParentNode): void => {
-        const status = host.querySelector<HTMLElement>("[data-json-status]");
-        if (!status) return;
-        const dirty = jsonText !== jsonBaseline;
-        if (jsonValidation?.isValid) {
-            status.className = "hc-json-status is-valid";
-            status.textContent = `${dirty ? "Unsaved changes · " : ""}Server validation passed.`;
-        } else if (jsonValidation?.error) {
-            status.className = "hc-json-status is-error";
-            status.textContent = jsonValidation.error;
-        } else {
-            status.className = "hc-json-status";
-            status.textContent = dirty ? "Unsaved canonical changes." : "Matches the composed CampaignProcedure.";
-        }
-        const save = host.querySelector<HTMLButtonElement>("[data-json-save]");
-        if (save) save.disabled = historical() || jsonBusy || !dirty;
+    const selectPreset = async (preset: ProcedurePreset): Promise<void> => {
+        resetEdits();
+        sourcePresetKey = preset.presetKey;
+        sourceProcedureId = null;
+        viewedRevision = null;
+        entry = "workspace";
+        await loadWorkspace();
     };
 
-    const validateJson = async (): Promise<boolean> => {
-        if (jsonBusy) return false;
-        const validating = jsonText;
-        jsonBusy = true;
-        updateJsonStatus(root);
-        try {
-            const validation = await composerApi.validateCanonical(validating);
-            if (jsonText !== validating) return false;
-            jsonValidation = validation;
-            updateJsonStatus(root);
-            return validation.isValid;
-        } catch (value) {
-            const error = root.querySelector<HTMLElement>("[data-error]");
-            if (error) showUiError(error, value);
-            return false;
-        } finally {
-            jsonBusy = false;
-            updateJsonStatus(root);
-        }
+    const startCustom = async (): Promise<void> => {
+        resetEdits();
+        sourcePresetKey = null;
+        sourceProcedureId = null;
+        viewedRevision = null;
+        entry = "workspace";
+        await loadWorkspace();
     };
 
     const saveStructured = async (): Promise<void> => {
@@ -864,311 +181,842 @@ export async function renderProcedureAuthoringWorkspace(
         if (error) clearUiError(error);
         savePending = true;
         render();
-        const selections: ProcedureComposerModuleSelectionInput[] = [...moduleSelections.entries()]
-            .map(([moduleKey, included]) => ({ moduleKey, included }));
-        let failure: unknown | null = null;
         try {
             const saved = sourceProcedureId
                 ? await composerApi.createRevision(sourceProcedureId, {
-                    expectedRevision: draft.revision,
-                    moduleSelections: selections,
+                    expectedRevision: latestRevision ?? draft.revision,
+                    moduleSelections: moduleSelectionInputs(moduleSelections),
                     overrides: [...pending.values()]
                 })
                 : await composerApi.createProcedure({
                     presetKey: sourcePresetKey,
-                    moduleSelections: selections,
+                    moduleSelections: moduleSelectionInputs(moduleSelections),
                     overrides: [...pending.values()]
                 });
-            pending.clear();
-            moduleSelections.clear();
             sourceProcedureId = saved.procedureId;
             sourcePresetKey = null;
             viewedRevision = null;
-            latestRevision = saved.revision;
-            draft = saved;
-            revisions = await composerApi.listRevisions(saved.procedureId);
-            invalidateJson();
-            if (!disposed) navigate(`/procedures/${encodeURIComponent(saved.procedureId)}`, true);
-        } catch (value) {
-            failure = value;
+            resetEdits();
+            savedProcedures = await composerApi.listProcedures();
+            navigate(`/procedures/${encodeURIComponent(saved.procedureId)}`, true);
+            await loadWorkspace();
+        } catch (errorValue) {
+            const target = root.querySelector<HTMLElement>("[data-error]");
+            if (target) showUiError(target, errorValue);
         } finally {
             savePending = false;
-            if (!disposed) {
-                render();
-                if (failure !== null) {
-                    const current = root.querySelector<HTMLElement>("[data-error]");
-                    if (current) showUiError(current, failure);
-                }
-            }
+            if (!disposed) render();
         }
     };
 
-    const saveJsonProcedure = async (): Promise<void> => {
-        if (!draft || jsonBusy || historical()) return;
-        const error = root.querySelector<HTMLElement>("[data-error]");
-        if (error) clearUiError(error);
-        if (!await validateJson()) return;
-        jsonBusy = true;
+    const saveCanonical = async (): Promise<void> => {
+        if (!draft || !jsonText || savePending || historical()) return;
+        const validation = await composerApi.validateCanonical(jsonText);
+        jsonValidation = validation;
+        if (!validation.isValid) {
+            render();
+            return;
+        }
+        savePending = true;
         render();
-        let failure: unknown | null = null;
         try {
             const saved = sourceProcedureId
-                ? await composerApi.createCanonicalRevision(sourceProcedureId, { expectedRevision: draft.revision, canonicalJson: jsonText })
-                : await composerApi.createCanonicalProcedure({ canonicalJson: jsonText, presetKey: sourcePresetKey });
-            pending.clear();
-            moduleSelections.clear();
+                ? await composerApi.createCanonicalRevision(sourceProcedureId, {
+                    expectedRevision: latestRevision ?? draft.revision,
+                    canonicalJson: jsonText
+                })
+                : await composerApi.createCanonicalProcedure({
+                    canonicalJson: jsonText,
+                    presetKey: sourcePresetKey
+                });
             sourceProcedureId = saved.procedureId;
             sourcePresetKey = null;
             viewedRevision = null;
-            latestRevision = saved.revision;
-            draft = saved;
-            revisions = await composerApi.listRevisions(saved.procedureId);
-            invalidateJson();
-            if (!disposed) navigate(`/procedures/${encodeURIComponent(saved.procedureId)}`, true);
-        } catch (value) {
-            failure = value;
+            resetEdits();
+            savedProcedures = await composerApi.listProcedures();
+            navigate(`/procedures/${encodeURIComponent(saved.procedureId)}`, true);
+            await loadWorkspace();
+        } catch (errorValue) {
+            const target = root.querySelector<HTMLElement>("[data-error]");
+            if (target) showUiError(target, errorValue);
         } finally {
-            jsonBusy = false;
-            if (!disposed) {
-                render();
-                if (failure !== null) {
-                    const current = root.querySelector<HTMLElement>("[data-error]");
-                    if (current) showUiError(current, failure);
-                }
-            }
+            savePending = false;
+            if (!disposed) render();
         }
     };
 
-    try {
-        if (sourceProcedureId) await loadWorkspace();
-        else render();
-    } catch (value) {
-        const page = basePage("Exploration procedure", "Procedure workspace could not be loaded.");
+    const changeMode = async (next: ProcedureAuthoringMode): Promise<void> => {
+        mode = next;
+        localStorage.setItem(modeStorageKey, next);
+        closeDrawer();
+        if (mode === "json") await loadJson();
+        if (!disposed) render();
+    };
+
+    const render = (): void => {
+        closeDrawer();
+        if (entry === "home") {
+            renderHome();
+            return;
+        }
+        if (entry === "catalog") {
+            renderCatalog();
+            return;
+        }
+        renderWorkspace();
+    };
+
+    const renderHome = (): void => {
+        const page = pageShell("Exploration Procedures", "Choose an existing procedure, build your own, or start from a familiar method.");
+        const error = errorBox();
+        page.append(error);
+
+        const saved = document.createElement("section");
+        saved.className = "hc-procedure-home-section";
+        saved.append(sectionHeading("Saved procedures", "Campaign-owned procedures you can edit and use in an expedition."));
+        if (savedProcedures.length === 0) {
+            saved.append(emptyState("No saved procedures yet", "Create one below or start from a familiar procedure."));
+        } else {
+            const grid = document.createElement("div");
+            grid.className = "hc-saved-procedure-grid";
+            for (const value of savedProcedures) grid.append(savedProcedureCard(value));
+            saved.append(grid);
+        }
+        page.append(saved);
+
+        const build = document.createElement("section");
+        build.className = "hc-procedure-home-section hc-build-custom";
+        const copy = document.createElement("div");
+        copy.append(
+            textElement("h2", "Build your own"),
+            textElement("p", "Start without hidden timing or movement assumptions. Add only the rules your table uses."));
+        const action = button("Build a custom procedure", "primary");
+        action.addEventListener("click", () => void startCustom());
+        build.append(copy, action);
+        page.append(build);
+
+        const familiar = document.createElement("section");
+        familiar.className = "hc-procedure-home-section";
+        const heading = sectionHeading("Start from a familiar procedure", "Inspect the rules first, then materialize an editable campaign-owned copy.");
+        const browse = button("Browse all presets", "secondary");
+        browse.addEventListener("click", () => { entry = "catalog"; render(); });
+        heading.append(browse);
+        familiar.append(heading);
+        const grid = document.createElement("div");
+        grid.className = "hc-preset-grid hc-preset-grid-featured";
+        for (const preset of familiarPresets(presets).slice(0, 4)) grid.append(presetCard(preset));
+        familiar.append(grid);
+        page.append(familiar);
         root.replaceChildren(page);
-        const error = page.querySelector<HTMLElement>("[data-error]");
-        if (error) showUiError(error, value);
-    }
+    };
+
+    const savedProcedureCard = (value: SavedProcedureSummary): HTMLElement => {
+        const card = document.createElement("article");
+        card.className = "hc-panel hc-saved-procedure-card";
+        const meta = document.createElement("div");
+        meta.className = "hc-card-meta";
+        meta.append(
+            badge(`Revision ${value.revision}`, "info"),
+            badge(value.isExecutable ? "Executable" : "Structured", value.isExecutable ? "good" : "warning"));
+        card.append(textElement("h3", value.name), meta);
+        const origin = value.originPresetDisplayName
+            ? `Started from ${value.originPresetDisplayName}`
+            : "Built as a custom procedure";
+        card.append(textElement("p", `${origin} · ${value.moduleCount} rule ${value.moduleCount === 1 ? "block" : "blocks"}`));
+        const open = button("Open procedure", "secondary");
+        open.addEventListener("click", () => navigate(`/procedures/${encodeURIComponent(value.procedureId)}`));
+        card.append(open);
+        return card;
+    };
+
+    const renderCatalog = (): void => {
+        const page = pageShell("Procedure starting points", "Compare behavior using the same fields, inspect details, then choose a starting point.");
+        const toolbar = document.createElement("div");
+        toolbar.className = "hc-procedure-toolbar";
+        const back = button("Back to procedures", "secondary");
+        back.addEventListener("click", () => { entry = "home"; render(); });
+        toolbar.append(back);
+        page.append(toolbar, errorBox());
+
+        const familiar = familiarPresets(presets);
+        if (familiar.length > 0) page.append(presetSection("Familiar procedures", familiar));
+        const generic = genericPresets(presets);
+        if (generic.length > 0) page.append(presetSection("Generic starting points", generic,
+            "Small generic procedures useful when you want a minimal foundation rather than a named methodology."));
+        root.replaceChildren(page);
+    };
+
+    const presetSection = (title: string, values: ProcedurePreset[], description?: string): HTMLElement => {
+        const section = document.createElement("section");
+        section.className = "hc-procedure-home-section";
+        section.append(sectionHeading(title, description ?? "Creation-time recipes. Saved procedures remain independent after materialization."));
+        const grid = document.createElement("div");
+        grid.className = "hc-preset-grid";
+        for (const preset of values) grid.append(presetCard(preset));
+        section.append(grid);
+        return section;
+    };
+
+    const presetCard = (preset: ProcedurePreset): HTMLElement => {
+        const card = document.createElement("article");
+        card.className = "hc-panel hc-preset-card";
+        const head = document.createElement("div");
+        head.className = "hc-preset-card-head";
+        head.append(textElement("h3", preset.displayName), textElement("p", presetTagline(preset)));
+        card.append(head, presetFacts(preset));
+        const provenance = document.createElement("details");
+        provenance.className = "hc-ux-disclosure hc-preset-provenance";
+        provenance.innerHTML = `<summary>Source and provenance</summary>`;
+        provenance.append(textElement("p", preset.attribution ?? "Generic Dorks & Dice procedure starting point."));
+        if (preset.disclaimer) provenance.append(textElement("p", preset.disclaimer));
+        card.append(provenance);
+        const actions = document.createElement("footer");
+        actions.className = "hc-preset-actions";
+        const inspect = button("Inspect", "secondary");
+        inspect.addEventListener("click", () => inspectPreset(preset));
+        const use = button("Use as starting point", "primary");
+        use.addEventListener("click", () => void selectPreset(preset));
+        actions.append(inspect, use);
+        card.append(actions);
+        return card;
+    };
+
+    const inspectPreset = (preset: ProcedurePreset): void => {
+        closeDrawer();
+        drawer = openWorkspaceDrawer(root, {
+            title: preset.displayName,
+            description: "Inspect this creation-time recipe before materializing a campaign-owned procedure.",
+            onClose: () => { drawer = null; }
+        });
+        drawer.body.append(presetFacts(preset));
+        const behavior = document.createElement("section");
+        behavior.className = "hc-focus-workspace-module";
+        behavior.append(textElement("h3", "Procedure rules"));
+        for (const module of preset.procedure.modules) {
+            const row = document.createElement("div");
+            row.className = "hc-inspect-rule";
+            row.append(textElement("strong", module.moduleName), textElement("span", presetModuleSummary(module)));
+            behavior.append(row);
+        }
+        drawer.body.append(behavior);
+        if (preset.attribution || preset.disclaimer) {
+            const source = document.createElement("section");
+            source.className = "hc-focus-workspace-module";
+            source.append(textElement("h3", "Source and provenance"));
+            if (preset.attribution) source.append(textElement("p", preset.attribution));
+            if (preset.disclaimer) source.append(textElement("p", preset.disclaimer));
+            drawer.body.append(source);
+        }
+        const use = button("Use as starting point", "primary");
+        use.addEventListener("click", () => void selectPreset(preset));
+        drawer.body.append(use);
+    };
+
+    const renderWorkspace = (): void => {
+        if (!draft) {
+            root.replaceChildren(loadingPanel("Loading procedure…"));
+            return;
+        }
+        const page = pageShell(draft.name, "Edit the rules the DM will actually run. Compact, Advanced, and JSON edit the same campaign procedure.");
+        const toolbar = document.createElement("section");
+        toolbar.className = "hc-panel hc-procedure-toolbar";
+        const left = document.createElement("div");
+        left.className = "hc-mode-switcher";
+        for (const value of ["compact", "advanced", "json"] as ProcedureAuthoringMode[]) {
+            const control = button(value === "compact" ? "Compact" : value === "advanced" ? "Advanced" : "JSON", "secondary");
+            control.setAttribute("aria-pressed", String(mode === value));
+            control.addEventListener("click", () => void changeMode(value));
+            left.append(control);
+        }
+        const right = document.createElement("div");
+        right.className = "hc-preset-actions";
+        const home = button("Procedure home", "secondary");
+        home.addEventListener("click", () => { entry = "home"; render(); });
+        const save = button(savePending ? "Saving…" : sourceProcedureId ? "Save new revision" : "Save procedure", "primary");
+        save.disabled = savePending || historical() || (mode !== "json" && !hasStructuredChanges());
+        save.addEventListener("click", () => void (mode === "json" ? saveCanonical() : saveStructured()));
+        right.append(home, save);
+        toolbar.append(left, right);
+        page.append(toolbar, errorBox());
+
+        const strip = document.createElement("div");
+        strip.className = "hc-procedure-summary-strip";
+        strip.append(
+            metric("Revision", historical() ? `${draft.revision} of ${latestRevision}` : String(draft.revision)),
+            metric("Rules", String(draft.modules.length)),
+            metric("Status", draft.isExecutable ? "Executable" : draft.modules.length === 0 ? "Choose structure" : "Structured / assisted"),
+            metric("Origin", draft.origin?.presetDisplayName ?? "Custom"));
+        page.append(strip);
+        if (historical()) {
+            page.append(notice("You are viewing a historical revision. Open the latest revision before saving further changes."));
+        }
+
+        if (mode === "compact") page.append(renderCompact());
+        else if (mode === "advanced") page.append(renderAdvanced());
+        else page.append(renderJson());
+        root.replaceChildren(page);
+    };
+
+    const hasStructuredChanges = (): boolean =>
+        pending.size > 0 || moduleSelections.size > 0 || sourceProcedureId === null;
+
+    const renderCompact = (): HTMLElement => {
+        const shell = document.createElement("div");
+        shell.className = "hc-procedure-shell hc-compact-procedure";
+        if (!draft) return shell;
+
+        if (draft.modules.length === 0) {
+            const neutral = document.createElement("section");
+            neutral.className = "hc-panel hc-neutral-procedure";
+            neutral.append(
+                textElement("h2", "Choose how expedition play is structured"),
+                textElement("p", "Nothing is assumed yet. Add a repeating travel period, a journey process, movement rules, or any combination your table actually uses."));
+            const choices = document.createElement("div");
+            choices.className = "hc-add-rule-grid";
+            for (const rule of compactRuleCatalog().filter(value => value.moduleKey === "time.interval" || value.moduleKey === "journey.process" || value.moduleKey === "movement.resolution")) {
+                choices.append(addRuleCard(rule.moduleKey));
+            }
+            neutral.append(choices);
+            shell.append(neutral);
+        }
+
+        const travel = activeRules("Travel flow");
+        if (travel.length > 0) {
+            const section = document.createElement("section");
+            section.className = "hc-panel hc-table-procedure";
+            section.append(textElement("h2", "At the table"), textElement("p", "Run these procedure steps in order when they apply."));
+            const list = document.createElement("ol");
+            list.className = "hc-procedure-step-list";
+            for (const module of travel) list.append(compactRuleCard(module, true));
+            section.append(list);
+            shell.append(section);
+        }
+
+        for (const group of ["Survival & resources", "Journey process", "Procedure support"]) {
+            const active = activeRules(group);
+            const available = missingRules(group);
+            if (active.length === 0 && available.length === 0) continue;
+            const section = document.createElement("section");
+            section.className = "hc-panel hc-rule-group";
+            section.append(textElement("h2", group));
+            if (group === "Survival & resources") {
+                section.append(textElement("p", "Resource tracking, foraging, camping, forced travel, and persistent effects are independent rules. Use only the ones your table needs."));
+            }
+            const grid = document.createElement("div");
+            grid.className = "hc-procedure-area-grid";
+            for (const module of active) grid.append(compactRuleCard(module, false));
+            section.append(grid);
+            if (available.length > 0) {
+                const add = document.createElement("div");
+                add.className = "hc-add-rule-strip";
+                add.append(textElement("strong", "Add rule"));
+                for (const rule of available) {
+                    const control = button(rule.label, "secondary");
+                    control.addEventListener("click", () => void setModule(rule.moduleKey, true));
+                    add.append(control);
+                }
+                section.append(add);
+            }
+            shell.append(section);
+        }
+
+        const remaining = compactRuleCatalog().filter(rule =>
+            !draft!.modules.some(module => module.moduleKey === rule.moduleKey)
+            && !["Survival & resources", "Journey process", "Procedure support"].includes(rule.group));
+        if (remaining.length > 0 && draft.modules.length > 0) {
+            const section = document.createElement("section");
+            section.className = "hc-panel hc-additional-rules";
+            section.append(textElement("h2", "Add another rule"));
+            const strip = document.createElement("div");
+            strip.className = "hc-add-rule-strip";
+            for (const rule of remaining) {
+                const control = button(rule.label, "secondary");
+                control.addEventListener("click", () => void setModule(rule.moduleKey, true));
+                strip.append(control);
+            }
+            section.append(strip);
+            shell.append(section);
+        }
+        return shell;
+    };
+
+    const activeRules = (group: string): ProcedureModuleComposer[] =>
+        (draft?.modules ?? [])
+            .filter(module => compactRule(module.moduleKey)?.group === group)
+            .sort((left, right) => (compactRule(left.moduleKey)?.order ?? 999) - (compactRule(right.moduleKey)?.order ?? 999));
+
+    const missingRules = (group: string) => compactRuleCatalog().filter(rule =>
+        rule.group === group && !draft?.modules.some(module => module.moduleKey === rule.moduleKey));
+
+    const addRuleCard = (moduleKey: string): HTMLElement => {
+        const rule = compactRule(moduleKey)!;
+        const card = document.createElement("article");
+        card.className = "hc-area-card hc-add-rule-card";
+        card.append(textElement("h3", rule.label), textElement("p", rule.description));
+        const action = button(`Add ${rule.label.toLowerCase()}`, "primary");
+        action.addEventListener("click", () => void setModule(moduleKey, true));
+        card.append(action);
+        return card;
+    };
+
+    const compactRuleCard = (module: ProcedureModuleComposer, listItem: boolean): HTMLElement => {
+        const descriptor = compactRule(module.moduleKey);
+        const card = document.createElement(listItem ? "li" : "article");
+        card.className = "hc-area-card hc-rule-card";
+        const heading = document.createElement("div");
+        heading.className = "hc-area-card-heading";
+        heading.append(textElement("h3", descriptor?.label ?? module.displayName));
+        if (module.isModified) heading.append(badge("Edited", "info"));
+        card.append(heading, textElement("p", compactModuleSummary(module)));
+        const facts = compactFacts(module);
+        if (facts.childElementCount > 0) card.append(facts);
+        const actions = document.createElement("div");
+        actions.className = "hc-area-actions";
+        const edit = button(`Edit ${descriptor?.label?.toLowerCase() ?? "rule"}`, "secondary");
+        edit.addEventListener("click", () => editCompactModule(module));
+        const remove = button("Remove", "secondary");
+        remove.addEventListener("click", () => void setModule(module.moduleKey, false));
+        actions.append(edit, remove);
+        card.append(actions);
+        return card;
+    };
+
+    const compactFacts = (module: ProcedureModuleComposer): HTMLElement => {
+        const facts = document.createElement("dl");
+        facts.className = "hc-rule-facts";
+        let count = 0;
+        for (const [key, definition] of parameterDefinitions(module)) {
+            const presentation = compactParameter(key, definition);
+            if (!presentation) continue;
+            const value = module.parameters[key] ?? definition.defaultValue;
+            if (value == null || value === "") continue;
+            if (presentation.control === "boolean" && value === "false") continue;
+            facts.append(textElement("dt", presentation.label), textElement("dd", key === "durationTicks" ? formatDurationTicks(value) : friendlyStoredValue(key, value)));
+            count++;
+            if (count >= 4) break;
+        }
+        return facts;
+    };
+
+    const editCompactModule = (module: ProcedureModuleComposer): void => {
+        closeDrawer();
+        const descriptor = compactRule(module.moduleKey);
+        drawer = openWorkspaceDrawer(root, {
+            title: descriptor?.label ?? module.displayName,
+            description: descriptor?.description ?? module.purpose,
+            onClose: () => { drawer = null; }
+        });
+
+        if (module.alternatives.length > 1) {
+            const field = document.createElement("label");
+            field.className = "hc-compact-field";
+            field.append(textElement("span", "Behavior"));
+            const select = document.createElement("select");
+            for (const option of module.alternatives) {
+                const item = document.createElement("option");
+                item.value = `${option.key}|${option.version}`;
+                item.textContent = option.displayName;
+                item.selected = option.key === module.mechanic.key && option.version === module.mechanic.version;
+                select.append(item);
+            }
+            select.addEventListener("change", () => {
+                const [key, version] = select.value.split("|");
+                void setOverride(withBehavior(module, pending.get(module.moduleKey), key, Number(version)));
+            });
+            field.append(select);
+            drawer.body.append(field);
+        }
+
+        const grid = document.createElement("div");
+        grid.className = "hc-compact-field-grid";
+        for (const [key, definition] of parameterDefinitions(module)) {
+            const presentation = compactParameter(key, definition);
+            if (!presentation) continue;
+            const value = module.parameters[key] ?? definition.defaultValue ?? "";
+            grid.append(compactEditor(module, key, value, presentation));
+        }
+        drawer.body.append(grid);
+        const remove = button("Remove this rule", "secondary");
+        remove.addEventListener("click", () => void setModule(module.moduleKey, false));
+        drawer.body.append(remove);
+    };
+
+    const compactEditor = (
+        module: ProcedureModuleComposer,
+        key: string,
+        value: string,
+        presentation: ReturnType<typeof compactParameter> extends infer T ? Exclude<T, null> : never): HTMLElement => {
+        const field = document.createElement("label");
+        field.className = "hc-compact-field";
+        field.append(textElement("span", presentation.label));
+        const commit = (next: string): void => {
+            void setOverride(withParameter(module, pending.get(module.moduleKey), key, next));
+        };
+
+        if (presentation.control === "summary") {
+            const output = document.createElement("div");
+            output.className = "hc-readonly-domain-value";
+            output.textContent = friendlyStoredValue(key, value);
+            field.append(output, textElement("small", "Use Advanced to edit the exact structured value."));
+            return field;
+        }
+        if (presentation.control === "duration") {
+            const parsed = ticksToDuration(value) ?? { amount: 1, unit: "hours" as const };
+            const row = document.createElement("div");
+            row.className = "hc-duration-control";
+            const amount = document.createElement("input");
+            amount.type = "number";
+            amount.min = "0.01";
+            amount.step = "any";
+            amount.value = String(parsed.amount);
+            const unit = document.createElement("select");
+            for (const name of ["minutes", "hours", "days"] as const) {
+                const option = document.createElement("option");
+                option.value = name;
+                option.textContent = name;
+                option.selected = name === parsed.unit;
+                unit.append(option);
+            }
+            const update = () => commit(durationToTicks(Number(amount.value), unit.value as "minutes" | "hours" | "days"));
+            amount.addEventListener("change", update);
+            unit.addEventListener("change", update);
+            row.append(amount, unit);
+            field.append(row);
+        } else if (presentation.control === "boolean") {
+            const input = document.createElement("input");
+            input.type = "checkbox";
+            input.checked = value.toLowerCase() === "true";
+            input.addEventListener("change", () => commit(String(input.checked)));
+            field.append(input);
+        } else if (presentation.control === "select") {
+            const select = document.createElement("select");
+            const choices = presentation.choices ?? [];
+            if (!choices.some(choice => choice.value === value) && value) {
+                choices.unshift({ value, label: friendlyStoredValue(key, value) });
+            }
+            for (const choice of choices) {
+                const option = document.createElement("option");
+                option.value = choice.value;
+                option.textContent = choice.label;
+                option.selected = choice.value === value;
+                select.append(option);
+            }
+            select.addEventListener("change", () => commit(select.value));
+            field.append(select);
+        } else if (presentation.control === "key-list") {
+            const input = document.createElement("textarea");
+            input.rows = 3;
+            input.value = value.split(";").join(", ");
+            input.addEventListener("change", () => commit(input.value.split(",").map(item => item.trim()).filter(Boolean).join(";")));
+            field.append(input);
+        } else if (presentation.control === "mapping") {
+            const input = document.createElement("textarea");
+            input.rows = 4;
+            input.value = value.split(";").map(item => item.replace("=", ": ")).join("\n");
+            input.addEventListener("change", () => commit(input.value.split(/\r?\n/).map(line => {
+                const separator = line.indexOf(":");
+                return separator < 0 ? line.trim() : `${line.slice(0, separator).trim()}=${line.slice(separator + 1).trim()}`;
+            }).filter(Boolean).join(";")));
+            field.append(input);
+        } else {
+            const input = document.createElement("input");
+            input.type = presentation.control === "number" ? "number" : "text";
+            input.value = value;
+            input.addEventListener("change", () => commit(input.value));
+            field.append(input);
+        }
+        if (presentation.help) field.append(textElement("small", presentation.help));
+        return field;
+    };
+
+    const renderAdvanced = (): HTMLElement => {
+        const layout = document.createElement("div");
+        layout.className = "hc-advanced-layout";
+        const index = document.createElement("aside");
+        index.className = "hc-panel hc-advanced-index";
+        index.append(textElement("h2", "Procedure structure"), textElement("p", "Exact generic modules selected for this CampaignProcedure."));
+        for (const rule of compactRuleCatalog()) {
+            const label = document.createElement("label");
+            label.className = "hc-advanced-module-toggle";
+            const input = document.createElement("input");
+            input.type = "checkbox";
+            input.checked = draft?.modules.some(module => module.moduleKey === rule.moduleKey) ?? false;
+            input.addEventListener("change", () => void setModule(rule.moduleKey, input.checked));
+            label.append(input, textElement("span", rule.label), code(rule.moduleKey));
+            index.append(label);
+        }
+        layout.append(index);
+
+        const content = document.createElement("main");
+        content.className = "hc-procedure-shell";
+        for (const module of draft?.modules ?? []) content.append(advancedModule(module));
+        if ((draft?.modules.length ?? 0) === 0) content.append(emptyState("No modules selected", "Select modules in the structure inspector."));
+        layout.append(content);
+        return layout;
+    };
+
+    const advancedModule = (module: ProcedureModuleComposer): HTMLElement => {
+        const card = document.createElement("section");
+        card.className = "hc-panel hc-advanced-module";
+        const heading = document.createElement("header");
+        heading.className = "hc-advanced-module-heading";
+        const identity = document.createElement("div");
+        identity.append(textElement("h2", module.displayName), code(module.moduleKey));
+        identity.append(textElement("p", module.purpose));
+        heading.append(identity, badge(module.mechanic.executionSupport, module.mechanic.executionSupport === "Unsupported" ? "danger" : "info"));
+        card.append(heading);
+
+        const mechanic = document.createElement("section");
+        mechanic.className = "hc-advanced-section";
+        mechanic.append(textElement("h3", "Mechanic"));
+        const select = document.createElement("select");
+        for (const option of module.alternatives) {
+            const item = document.createElement("option");
+            item.value = `${option.key}|${option.version}`;
+            item.textContent = `${option.displayName} · ${option.key} · v${option.version}`;
+            item.selected = option.key === module.mechanic.key && option.version === module.mechanic.version;
+            select.append(item);
+        }
+        select.addEventListener("change", () => {
+            const [key, version] = select.value.split("|");
+            void setOverride(withBehavior(module, pending.get(module.moduleKey), key, Number(version)));
+        });
+        mechanic.append(select, textElement("p", `${module.mechanic.key} · v${module.mechanic.version} · ${module.mechanic.automationLevel}`), textElement("p", executionSummary(module)));
+        card.append(mechanic);
+
+        const parameters = document.createElement("section");
+        parameters.className = "hc-advanced-section";
+        parameters.append(textElement("h3", "Parameters"));
+        const grid = document.createElement("div");
+        grid.className = "hc-advanced-parameter-grid";
+        for (const [key, definition] of parameterDefinitions(module)) {
+            const field = document.createElement("label");
+            field.className = "hc-compact-field";
+            field.append(code(key));
+            const input = document.createElement("input");
+            input.type = "text";
+            input.value = module.parameters[key] ?? definition.defaultValue ?? "";
+            input.addEventListener("change", () => void setOverride(withParameter(module, pending.get(module.moduleKey), key, input.value)));
+            field.append(input);
+            if (definition.description) field.append(textElement("small", definition.description));
+            grid.append(field);
+        }
+        parameters.append(grid);
+        card.append(parameters);
+
+        const contracts = document.createElement("div");
+        contracts.className = "hc-advanced-contracts";
+        contracts.append(contractBlock("Inputs", module.requiredInputs.map(input => `${input.inputKey} — ${input.allowedSources.map(inputSourceLabel).join(", ")}`)),
+            contractBlock("Produces", module.outputs),
+            contractBlock("Dependencies", [...module.requiredDependencies.map(value => `Required: ${value}`), ...module.optionalDependencies.map(value => `Optional: ${value}`)]),
+            contractBlock("Diagnostics", [...module.validationIssues, ...module.dependencyIssues.map(issue => issue.message)]));
+        card.append(contracts);
+        return card;
+    };
+
+    const renderJson = (): HTMLElement => {
+        const section = document.createElement("section");
+        section.className = "hc-panel hc-json-editor";
+        section.append(textElement("h2", "Canonical CampaignProcedure JSON"), textElement("p", "Exact expert editor. Server parsing, domain validation, identity, revisions, and optimistic concurrency remain authoritative."));
+        if (jsonBusy || !jsonText) {
+            const load = button(jsonBusy ? "Loading…" : "Load canonical JSON", "secondary");
+            load.disabled = jsonBusy;
+            load.addEventListener("click", () => void loadJson().then(render));
+            section.append(load);
+            return section;
+        }
+        const textarea = document.createElement("textarea");
+        textarea.value = jsonText;
+        textarea.spellcheck = false;
+        textarea.addEventListener("input", () => { jsonText = textarea.value; jsonValidation = null; });
+        section.append(textarea);
+        const actions = document.createElement("div");
+        actions.className = "hc-json-actions";
+        const validate = button("Validate JSON", "secondary");
+        validate.addEventListener("click", () => void composerApi.validateCanonical(jsonText).then(value => { jsonValidation = value; render(); }));
+        const reset = button("Reset draft", "secondary");
+        reset.disabled = jsonText === jsonBaseline;
+        reset.addEventListener("click", () => { jsonText = jsonBaseline; jsonValidation = null; render(); });
+        actions.append(validate, reset);
+        section.append(actions);
+        const status = document.createElement("p");
+        status.className = `hc-json-status${jsonValidation?.isValid === false ? " is-error" : jsonValidation?.isValid ? " is-valid" : ""}`;
+        status.setAttribute("role", "status");
+        status.textContent = jsonValidation
+            ? jsonValidation.isValid
+                ? "Canonical JSON is valid."
+                : `${jsonValidation.error ?? "Canonical JSON is invalid."}${jsonValidation.lineNumber != null ? ` (line ${jsonValidation.lineNumber + 1})` : ""}`
+            : "Validate after editing before saving.";
+        section.append(status);
+        return section;
+    };
+
+    if (entry === "workspace") await loadWorkspace();
+    else render();
 
     return () => {
         disposed = true;
-        refreshSerial += 1;
-        activeDrawer?.close();
+        closeDrawer();
         root.classList.remove("hc-phase15");
     };
+}
 
-    function setControlsDisabled(disabled: boolean): void {
-        root.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | HTMLButtonElement>("[data-composer-control]")
-            .forEach(control => { control.disabled = disabled; });
+function presetFacts(preset: ProcedurePreset): HTMLElement {
+    const facts = document.createElement("dl");
+    facts.className = "hc-preset-facts";
+    const summary = presetComparison(preset);
+    for (const [label, value] of Object.entries(summary)) {
+        facts.append(textElement("dt", label), textElement("dd", value));
     }
+    return facts;
 }
 
-function readMode(): ProcedureAuthoringMode {
-    try {
-        const value = localStorage.getItem(modeStorageKey);
-        if (value === "compact" || value === "advanced" || value === "json") return value;
-    } catch { /* preference storage is optional */ }
-    return "compact";
+function presetComparison(preset: ProcedurePreset): Record<string, string> {
+    const modules = new Map(preset.procedure.modules.map(module => [module.moduleKey, module]));
+    const parameter = (moduleKey: string, key: string): string | null => modules.get(moduleKey)?.parameters[key] ?? null;
+    const interval = preset.procedure.runtime?.intervalHours;
+    const time = interval == null ? "No fixed interval" : interval === 24 ? "Daily" : interval === 1 ? "Hourly" : `${formatNumber(interval)} hours`;
+    const movement = modules.has("movement.terrain")
+        ? "Terrain-adjusted"
+        : parameter("movement.resolution", "travelResolution") === "HexSteps" ? "Whole cell steps"
+            : modules.has("movement.resolution") ? "Distance travel" : "Not used";
+    const navigation = modules.has("navigation.outcome")
+        ? "Getting lost / recovery"
+        : parameter("navigation.check", "usesNavigationChecks") === "true" ? "Route checks" : "Not used";
+    const encounters = modules.has("encounters.schedule")
+        ? "Scheduled / contextual"
+        : parameter("encounters.cadence", "cadence") === "PerWatch" ? "Each travel period"
+            : parameter("encounters.cadence", "cadence") === "PerDay" ? "Daily" : "Not used";
+    const resourceParts = [
+        modules.has("survival.resources") ? "food / water" : null,
+        modules.has("exploration.foraging") ? "foraging" : null,
+        modules.has("survival.camping") ? "camping" : null,
+        modules.has("time.forced-travel") ? "forced travel" : null
+    ].filter((value): value is string => value !== null);
+    return {
+        Workflow: modules.has("journey.process") ? "Journey / staged process" : modules.has("time.interval") ? "Interval travel" : "Procedure-driven",
+        Time: time,
+        Movement: movement,
+        Navigation: navigation,
+        Activities: modules.has("party.activities") ? "Party activities / roles" : "Not used",
+        Encounters: encounters,
+        Resources: resourceParts.length > 0 ? resourceParts.join(", ") : "Not used",
+        Journey: modules.has("journey.process") ? "Multi-stage journey" : modules.has("journey.events") ? "Journey events" : "Not used"
+    };
 }
 
-function entryCard(title: string, detail: string, actionLabel: string, action: () => void): HTMLElement {
-    const card = document.createElement("article");
-    card.className = "hc-panel hc-preset-card hc-procedure-entry-card";
-    card.append(textElement("h2", title), textElement("p", detail));
-    const control = button(actionLabel, action);
-    control.className = "hc-primary-action";
-    card.append(control);
-    return card;
+function presetTagline(preset: ProcedurePreset): string {
+    const summary = presetComparison(preset);
+    return `${summary.Workflow} · ${summary.Time}`;
 }
 
-function button(label: string, action: () => void): HTMLButtonElement {
-    const control = document.createElement("button");
-    control.type = "button";
-    control.textContent = label;
-    control.addEventListener("click", action);
-    return control;
+function presetModuleSummary(module: ProcedurePreset["procedure"]["modules"][number]): string {
+    const entries = Object.entries(module.parameters).slice(0, 3).map(([key, value]) => friendlyStoredValue(key, value));
+    return entries.length > 0 ? entries.join(" · ") : `${module.automationLevel} behavior`;
+}
+
+function familiarPresets(values: ProcedurePreset[]): ProcedurePreset[] {
+    return values.filter(value => !value.presetKey.startsWith("simple-"));
+}
+
+function genericPresets(values: ProcedurePreset[]): ProcedurePreset[] {
+    return values.filter(value => value.presetKey.startsWith("simple-"));
+}
+
+function moduleSelectionInputs(values: Map<string, boolean>): ProcedureComposerModuleSelectionInput[] {
+    return [...values.entries()].map(([moduleKey, included]) => ({ moduleKey, included }));
+}
+
+function pageShell(title: string, description: string): HTMLElement {
+    const page = document.createElement("div");
+    page.className = "hc-page hc-procedure-shell";
+    const header = document.createElement("header");
+    header.className = "hc-page-header";
+    const copy = document.createElement("div");
+    copy.append(textElement("h1", title), textElement("p", description));
+    header.append(copy);
+    page.append(header);
+    return page;
+}
+
+function sectionHeading(title: string, description: string): HTMLElement {
+    const heading = document.createElement("header");
+    heading.className = "hc-preset-browser-header";
+    const copy = document.createElement("div");
+    copy.append(textElement("h2", title), textElement("p", description));
+    heading.append(copy);
+    return heading;
+}
+
+function errorBox(): HTMLElement {
+    const error = document.createElement("div");
+    error.className = "hc-error";
+    error.dataset.error = "";
+    error.hidden = true;
+    error.setAttribute("role", "alert");
+    return error;
 }
 
 function loadingPanel(message: string): HTMLElement {
-    const panel = document.createElement("div");
+    const panel = document.createElement("section");
     panel.className = "hc-loading-panel";
-    panel.setAttribute("role", "status");
-    panel.setAttribute("aria-live", "polite");
-    panel.append(textElement("span", message));
+    panel.append(textElement("p", message));
     return panel;
 }
 
+function emptyState(title: string, detail: string): HTMLElement {
+    const state = document.createElement("div");
+    state.className = "hc-empty-state";
+    state.append(textElement("strong", title), textElement("span", detail));
+    return state;
+}
+
+function notice(message: string): HTMLElement {
+    const value = document.createElement("p");
+    value.className = "hc-domain-diagnostic";
+    value.textContent = message;
+    return value;
+}
+
 function metric(label: string, value: string): HTMLElement {
-    const element = document.createElement("div");
-    element.className = "hc-summary-metric";
-    element.append(textElement("span", label), textElement("strong", value));
-    return element;
+    const item = document.createElement("div");
+    item.className = "hc-summary-metric";
+    item.append(textElement("span", label), textElement("strong", value));
+    return item;
 }
 
-function appendFact(list: HTMLDListElement, label: string, value: string): void {
-    list.append(textElement("dt", label), textElement("dd", value));
-}
-
-function uniqueMechanics(module: ProcedureModuleComposer): ProcedureMechanicOption[] {
-    const values = [module.mechanic, ...module.alternatives];
-    const seen = new Set<string>();
-    return values.filter(value => {
-        const key = `${value.key}@${value.version}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-    });
-}
-
-function parameterControl(
-    definition: ProcedureParameterDefinition,
-    value: string,
-    commit: (next: string) => void,
-    disabled: boolean): HTMLElement {
-    if (definition.type === "boolean") {
-        const input = document.createElement("input");
-        input.type = "checkbox";
-        input.checked = value.toLowerCase() === "true";
-        input.disabled = disabled;
-        input.dataset.composerControl = "";
-        input.addEventListener("change", () => commit(input.checked ? "true" : "false"));
-        return input;
+function contractBlock(title: string, values: string[]): HTMLElement {
+    const block = document.createElement("section");
+    block.className = "hc-focus-workspace-module";
+    block.append(textElement("h4", title));
+    if (values.length === 0) block.append(textElement("p", "None"));
+    else {
+        const list = document.createElement("ul");
+        for (const value of values) list.append(textElement("li", value));
+        block.append(list);
     }
-    if (definition.type === "map<string>" || definition.type === "key-list") {
-        const textarea = document.createElement("textarea");
-        textarea.rows = definition.type === "map<string>" ? 4 : 3;
-        textarea.value = value.split(";").filter(Boolean).join("\n");
-        textarea.disabled = disabled;
-        textarea.dataset.composerControl = "";
-        textarea.addEventListener("change", () => commit(textarea.value.split(/\r?\n/).map(value => value.trim()).filter(Boolean).join(";")));
-        return textarea;
-    }
-    const input = document.createElement("input");
-    input.type = definition.type === "integer" || definition.type === "number" ? "number" : "text";
-    if (definition.type === "integer") input.step = "1";
-    if (definition.type === "number") input.step = "any";
-    input.value = value;
-    input.required = definition.required;
-    input.disabled = disabled;
-    input.dataset.composerControl = "";
-    input.addEventListener("change", () => commit(input.value));
-    return input;
+    return block;
 }
 
-function compactBehaviorSummary(modules: ProcedureModuleComposer[]): string {
-    const distinct = [...new Set(modules.map(module => module.mechanic.displayName).filter(Boolean))];
-    if (distinct.length === 0) return "No behavior selected.";
-    if (distinct.length <= 2) return distinct.join(" · ");
-    return `${distinct.slice(0, 2).join(" · ")} · ${distinct.length - 2} more`;
+function code(value: string): HTMLElement {
+    const output = document.createElement("code");
+    output.textContent = value;
+    return output;
 }
 
-function structuredSaveBlocked(current: ProcedureComposer): boolean {
-    return current.modules.length === 0
-        || current.dependencies.hasErrors
-        || current.modules.some(saveBlocked);
+function button(label: string, kind: "primary" | "secondary"): HTMLButtonElement {
+    const value = document.createElement("button");
+    value.type = "button";
+    value.className = kind === "primary" ? "hc-primary" : "hc-secondary";
+    value.textContent = label;
+    return value;
 }
 
-function statusLabel(current: ProcedureComposer): string {
-    if (current.modules.length === 0) return "Incomplete";
-    if (current.dependencies.hasErrors || current.modules.some(saveBlocked)) return "Needs attention";
-    return "Ready to save";
+function readMode(): ProcedureAuthoringMode {
+    const value = localStorage.getItem(modeStorageKey);
+    return value === "advanced" || value === "json" ? value : "compact";
 }
 
-function statusTone(current: ProcedureComposer): "neutral" | "good" | "warning" | "danger" | "info" {
-    if (current.modules.length === 0) return "warning";
-    if (current.dependencies.hasErrors || current.modules.some(saveBlocked)) return "warning";
-    return "good";
-}
-
-function historicalNotice(current: ProcedureComposer): HTMLElement {
-    const notice = document.createElement("section");
-    notice.className = "hc-panel";
-    notice.append(textElement("strong", `Revision ${current.revision} is historical.`), textElement("p", "Historical procedure snapshots are read-only. Select the latest revision to continue editing."));
-    return notice;
-}
-
-function behaviorQuestion(module: ProcedureModuleComposer): string {
-    const key = module.moduleKey;
-    if (key.includes("navigation")) return "How does navigation work?";
-    if (key.includes("encounter")) return "How are encounters handled?";
-    if (key.includes("movement")) return "How is travel progress resolved?";
-    if (key.includes("activities")) return "How are party activities assigned?";
-    if (key.includes("journey")) return "How does the journey process work?";
-    if (key.includes("resource") || key.includes("camp") || key.includes("forag")) return "How is this survival procedure resolved?";
-    return "How does this part work?";
-}
-
-function isBlocking(kind: string): boolean {
-    return kind === "MissingRequiredModule" || kind === "MissingRequiredProducer" || kind === "IncompatibleMechanic";
-}
-
-function dependencyHeading(kind: string): string {
-    switch (kind) {
-        case "UnresolvedInput": return "A result still needs a source";
-        case "MissingRequiredProducer": return "Required result is missing";
-        case "MissingRequiredModule": return "Required procedure part is missing";
-        case "IncompatibleMechanic": return "Selected behavior does not fit this area";
-        default: return humanizeIdentifier(kind);
-    }
-}
-
-function compactDependencyMessage(issue: { message: string; inputKey: string | null; allowedInputSources: string[] }): string {
-    const sources = issue.allowedInputSources.map(inputSourceLabel);
-    if (issue.inputKey && sources.length > 0) {
-        return `${humanizeIdentifier(issue.inputKey)} is not supplied by another selected procedure part. It may come from ${sources.join(", ")}.`;
-    }
-    return friendlyDiagnostic(issue.message);
-}
-
-function friendlyDiagnostic(message: string): string {
-    return message
-        .replace(/Module '[^']+' /g, "This procedure area ")
-        .replace(/input '([^']+)'/g, (_match, key: string) => `the ${humanizeIdentifier(key).toLowerCase()} result`)
-        .replace(/Parameter '([^']+)'/g, (_match, key: string) => humanizeIdentifier(key));
-}
-
-function domainDiagnostic(title: string, message: string, blocking: boolean): HTMLElement {
-    const element = document.createElement("p");
-    element.className = "hc-domain-diagnostic";
-    const strong = document.createElement("strong");
-    strong.textContent = `${title}: `;
-    element.append(strong, document.createTextNode(message));
-    if (blocking) element.dataset.blocking = "";
-    return element;
-}
-
-function humanizeIdentifier(value: string): string {
-    return value
-        .replace(/[._-]+/g, " ")
-        .replace(/([a-z])([A-Z])/g, "$1 $2")
-        .replace(/\b\w/g, match => match.toUpperCase());
-}
-
-function presetWorkflow(preset: ProcedurePreset): string {
-    const names = preset.procedure.modules.map(module => module.moduleName.toLowerCase());
-    const hasJourney = names.some(name => name.includes("journey") || name.includes("stage"));
-    if (hasJourney && !preset.procedure.runtime) return "Journey process";
-    if (hasJourney) return "Travel with journey processes";
-    return preset.procedure.runtime ? "Spatial / interval travel" : "Procedure-led exploration";
-}
-
-function travelSummary(preset: ProcedurePreset): string {
-    const runtime = preset.procedure.runtime;
-    if (!runtime) return preset.procedure.modules.some(module => /journey|stage|progress/i.test(module.moduleName)) ? "Journey / progress based" : "Procedure-defined";
-    return `${runtime.intervalHours >= 24 ? `${runtime.intervalHours / 24} day` : `${runtime.intervalHours} hour`} interval · ${humanizeIdentifier(runtime.travelResolution).toLowerCase()}`;
-}
-
-function navigationSummary(preset: ProcedurePreset): string {
-    if (!preset.procedure.runtime) return preset.procedure.modules.some(module => /navigation|route|guide/i.test(module.moduleName)) ? "Procedure-defined" : "Not emphasized";
-    return preset.procedure.runtime.usesNavigationChecks
-        ? preset.procedure.runtime.usesPersistentVeer ? "Checks with persistent off-course state" : "Navigation checks"
-        : "No routine navigation checks";
-}
-
-function journeySummary(preset: ProcedurePreset): string {
-    const count = preset.procedure.modules.filter(module => /journey|stage|event|progress/i.test(module.moduleName)).length;
-    return count === 0 ? "Not used" : count <= 2 ? "Available" : "Core workflow";
-}
-
-function capitalize(value: string): string {
-    return value.charAt(0).toUpperCase() + value.slice(1);
+function formatNumber(value: number): string {
+    return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
 }
