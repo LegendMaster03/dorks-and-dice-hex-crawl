@@ -34,6 +34,19 @@ test("Phase 15 procedure authoring separates entry choice from one shared Campai
     assert.doesNotMatch(factory, /GenericProcedureCatalog\.Catalog\.Select/);
 });
 
+test("Phase 15 procedure authoring keeps save and canonical-load failures visible after busy state clears", () => {
+    const workspace = fs.readFileSync(
+        path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"),
+        "utf8");
+
+    assert.match(workspace, /let failure: unknown \| null = null;/);
+    assert.match(workspace, /savePending = false;\s*if \(!disposed\) \{\s*render\(\);\s*if \(failure !== null\)/);
+    assert.match(workspace, /jsonBusy = false;\s*if \(!disposed\) \{\s*render\(\);\s*if \(failure !== null\)/);
+    assert.match(workspace, /Retry canonical JSON/);
+    assert.match(workspace, /data-json-retry/);
+    assert.doesNotMatch(workspace, /catch \(value\) \{\s*if \(!disposed\) \{\s*render\(\);[\s\S]{0,220}finally \{\s*(?:savePending|jsonBusy) = false;\s*if \(!disposed\) render\(\);/);
+});
+
 test("Phase 15 expedition workspace is one procedure-driven surface instead of map and tracker modes", () => {
     const model = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/expedition-workspace-model.ts"),
@@ -102,6 +115,23 @@ test("routine spatial travel reuses intent and suppresses fixed movement inputs 
     assert.match(movement, /composition\.status !== "Resolved"/);
     assert.match(movement, /composition\.status !== "ReferenceFallback"/);
     assert.doesNotMatch(view, /currentHex\s*=/);
+});
+
+test("automatic procedure helpers keep generated values and token in the focused drawer until watch submission", () => {
+    const controller = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-watch-controller.ts"),
+        "utf8");
+    const start = controller.indexOf("private generateProcedureResolution(): void");
+    const end = controller.indexOf("private applyGeneratedResolution", start);
+    assert.notEqual(start, -1);
+    assert.notEqual(end, -1);
+    const helper = controller.slice(start, end);
+
+    assert.match(helper, /generateProcedureResolutionInPlace/);
+    assert.match(helper, /this\.api\.resolveProcedureInputs/);
+    assert.match(helper, /this\.applyGeneratedResolution\(result\)/);
+    assert.doesNotMatch(helper, /this\.runMutation/);
+    assert.match(controller, /request\.generatedProcedureResolutionId = this\.generatedResolutionId/);
 });
 
 test("Phase 15 map selection is contextual and never directly mutates expedition position", () => {
