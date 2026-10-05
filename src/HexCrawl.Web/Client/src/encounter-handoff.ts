@@ -57,6 +57,9 @@ export type EncounterHandoffJourneyProvenance = {
     eventOccurrenceId: string;
     processId: string | null;
     processKey: string | null;
+    destinationReference: string | null;
+    routeReference: string | null;
+    locationReference: string | null;
     stageKey: string | null;
     eventKey: string;
     eventType: string | null;
