@@ -142,6 +142,7 @@ public sealed class EncounterHandoffEndpointsTests
                            displayName = "Road to refuge",
                            destinationReference = "refuge-A",
                            routeReference = "route-A",
+                           locationReference = "crossing-A",
                            provenance = Provenance("Dm", "handoff-process-start")
                        }))
             {
@@ -262,10 +263,14 @@ public sealed class EncounterHandoffEndpointsTests
             Assert.Equal(JsonValueKind.Null, handoff.GetProperty("worldContext").GetProperty("hex").ValueKind);
             Assert.Equal(JsonValueKind.Null, handoff.GetProperty("worldContext").GetProperty("location").ValueKind);
             Assert.Equal(JsonValueKind.Null, handoff.GetProperty("timeContext").GetProperty("watchNumber").ValueKind);
-            Assert.Equal(eventId, handoff.GetProperty("journeyProvenance").GetProperty("eventOccurrenceId").GetGuid());
-            Assert.Equal(processId, handoff.GetProperty("journeyProvenance").GetProperty("processId").GetGuid());
-            Assert.Equal("road-to-refuge", handoff.GetProperty("journeyProvenance").GetProperty("processKey").GetString());
-            Assert.Equal("ambush-at-crossing", handoff.GetProperty("journeyProvenance").GetProperty("eventKey").GetString());
+            var journeyProvenance = handoff.GetProperty("journeyProvenance");
+            Assert.Equal(eventId, journeyProvenance.GetProperty("eventOccurrenceId").GetGuid());
+            Assert.Equal(processId, journeyProvenance.GetProperty("processId").GetGuid());
+            Assert.Equal("road-to-refuge", journeyProvenance.GetProperty("processKey").GetString());
+            Assert.Equal("refuge-A", journeyProvenance.GetProperty("destinationReference").GetString());
+            Assert.Equal("route-A", journeyProvenance.GetProperty("routeReference").GetString());
+            Assert.Equal("crossing-A", journeyProvenance.GetProperty("locationReference").GetString());
+            Assert.Equal("ambush-at-crossing", journeyProvenance.GetProperty("eventKey").GetString());
             Assert.Equal(consequenceId, Assert.Single(handoff.GetProperty("circumstances").EnumerateArray())
                 .GetProperty("consequenceId").GetGuid());
             var linkedEffect = Assert.Single(handoff.GetProperty("effects").EnumerateArray());
