@@ -4,108 +4,116 @@ import path from "node:path";
 import test from "node:test";
 
 const sourceDir = path.resolve("src");
+const repositoryRoot = path.resolve("..", "..", "..");
 
-test("Phase 15 procedure workspace keeps Compact Advanced and JSON on one CampaignProcedure authority", () => {
+test("Phase 15 procedure authoring separates entry choice from one shared CampaignProcedure workspace", () => {
     const workspace = fs.readFileSync(
-        path.join(sourceDir, "modules/procedures/procedure-workspace-view.ts"),
+        path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"),
         "utf8");
-    const api = fs.readFileSync(path.join(sourceDir, "procedure-composer-api.ts"), "utf8");
+    const module = fs.readFileSync(path.join(sourceDir, "modules/procedures/module.ts"), "utf8");
+    const types = fs.readFileSync(path.join(sourceDir, "procedure-composer-types.ts"), "utf8");
+    const contracts = fs.readFileSync(
+        path.join(repositoryRoot, "src/HexCrawl.Web/Modules/Procedures/ProcedureComposerContracts.cs"),
+        "utf8");
+    const factory = fs.readFileSync(
+        path.join(repositoryRoot, "src/HexCrawl.Application/Expeditions/ProcedureComposerCustomProcedureFactory.cs"),
+        "utf8");
 
-    assert.match(workspace, /ProcedureWorkspaceMode = "compact" \| "advanced" \| "json"/);
-    assert.match(workspace, /Presets are copied once; the saved procedure does not depend on the catalog afterward/);
-    assert.match(workspace, /Normal Compact editing uses tabletop concepts rather than mechanic IDs or dependency keys/);
-    assert.match(workspace, /Advanced exposes exact generic mechanics and contracts/);
-    assert.match(workspace, /Canonical procedure JSON/);
-    assert.match(workspace, /same CampaignProcedure used by Compact and Advanced/);
-    assert.match(workspace, /server parsing, domain validation, and optimistic concurrency/);
-    assert.match(workspace, /createCanonicalRevision/);
-    assert.match(workspace, /if \(!sourceProcedureId\) presets = await api\.getProcedurePresets\(\)/);
-    assert.doesNotMatch(workspace, /exactOriginPreset/);
-    assert.match(workspace, /const validatingText = jsonText/);
-    assert.match(workspace, /jsonBusy = false;\s*updateJsonStatus\(root\)/);
-    assert.match(workspace, /mode !== "json" \|\| jsonBusy/);
-    assert.match(api, /composer\/canonical\/draft/);
-    assert.match(api, /composer\/canonical\/validate/);
-    assert.match(api, /canonical\/revisions/);
+    assert.match(workspace, /Start from a known procedure/);
+    assert.match(workspace, /Build my own/);
+    assert.match(workspace, /EntryState = "landing" \| "presets" \| "workspace"/);
+    assert.match(workspace, /ProcedureAuthoringMode = "compact" \| "advanced" \| "json"/);
+    assert.match(workspace, /Areas you omit are absent from the materialized CampaignProcedure/);
+    assert.match(workspace, /Advanced exposes exact generic module keys, mechanics, versions, parameters, and contracts/);
+    assert.match(workspace, /exact same CampaignProcedure produced by Compact structural choices and Advanced edits/);
+    assert.match(workspace, /moduleSelections/);
+    assert.match(types, /ProcedureComposerModuleSelectionInput/);
+    assert.match(contracts, /ProcedureComposerModuleSelectionRequest/);
+    assert.match(module, /renderProcedureAuthoringWorkspace/);
+    assert.match(factory, /Modules = \[CreateDefaultModule\(GenericProcedureCatalog\.TimeIntervalModule\)\]/);
+    assert.doesNotMatch(factory, /GenericProcedureCatalog\.Catalog\.Select/);
 });
 
-test("Phase 15 expedition workspace derives the next action from authoritative runtime and journey state", () => {
-    const workspace = fs.readFileSync(
-        path.join(sourceDir, "modules/expeditions/phase15-expedition-workspace.ts"),
+test("Phase 15 expedition workspace is one procedure-driven surface instead of map and tracker modes", () => {
+    const model = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-workspace-model.ts"),
         "utf8");
     const view = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
-        "utf8");
-    const signal = fs.readFileSync(
-        path.join(sourceDir, "modules/expeditions/expedition-runtime-events.ts"),
         "utf8");
     const module = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/module.ts"),
         "utf8");
 
-    assert.match(workspace, /Current action/);
-    assert.match(workspace, /runtime\.pauseReason === "EncounterTriggered"/);
-    assert.match(workspace, /runtime\.pauseReason === "LostRecognitionRequired"/);
-    assert.match(workspace, /eventOccurrences\.find\(event => event\.status === "ResolutionRequired"\)/);
-    assert.match(workspace, /activeProcesses\[0\]/);
-    assert.match(workspace, /No repeating watch is required by this procedure/);
-    assert.match(workspace, /no map or interval bookkeeping is fabricated/);
-    assert.match(workspace, /focusedIntervalPolicy\.support === "Supported"/);
-    assert.match(workspace, /Resources & effects/);
-    assert.match(workspace, /subscribeExpeditionRuntimeChanged/);
-    assert.match(view, /publishExpeditionRuntimeChanged\(root, next\)/);
-    assert.match(signal, /root\.dispatchEvent\(new CustomEvent/);
-    assert.match(signal, /root\.addEventListener/);
-    assert.match(signal, /root\.removeEventListener/);
-    assert.match(module, /publishExpeditionRuntimeChanged\(context\.root, panelRuntime\)/);
-    assert.match(module, /subscribeExpeditionRuntimeChanged\(context\.root, next => \{[\s\S]*panelRuntime = next;[\s\S]*environmentPanel\.sync\(\);[\s\S]*void survivalPanel\.sync\(\);[\s\S]*void journeyPanel\.sync\(\);/);
-    assert.match(module, /unsubscribePanelRuntime\(\)/);
-    assert.doesNotMatch(workspace, /document\.querySelector/);
-    assert.doesNotMatch(workspace, /installRuntimeHooks/);
-    assert.doesNotMatch(workspace, /api\.getExpedition\s*=/);
-    assert.doesNotMatch(workspace, /api\.advanceExpedition\s*=/);
-    assert.doesNotMatch(workspace, /MutationObserver/);
+    assert.match(model, /runtime\.pauseReason === "EncounterTriggered"/);
+    assert.match(model, /runtime\.pauseReason === "LostRecognitionRequired"/);
+    assert.match(model, /journey\?\.activeProcesses\.find/);
+    assert.match(model, /canUseFocusedNonSpatialWatch/);
+    assert.match(model, /expeditionWorkspaceCapabilities/);
+    assert.match(view, /hc-current-action/);
+    assert.match(view, /runtime\.expedition\.isSpatial/);
+    assert.match(view, /Journey \/ challenge/);
+    assert.match(view, /GM Tools/);
+    assert.match(view, /MapSurface/);
+    assert.doesNotMatch(view, /data-view-tracker/);
+    assert.doesNotMatch(view, /data-view-map/);
+    assert.doesNotMatch(module, /enhanceExpeditionWorkspace/);
+    assert.doesNotMatch(module, /ExpeditionEnvironmentPanel/);
+    assert.doesNotMatch(module, /subscribeExpeditionRuntimeChanged/);
 });
 
-test("Phase 15 secondary panels stay collapsed until requested", () => {
+test("routine spatial travel uses reusable intent and authoritative movement suggestions", () => {
     const view = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
         "utf8");
-    const environment = fs.readFileSync(
-        path.join(sourceDir, "modules/expeditions/environment-panel.ts"),
-        "utf8");
-    const presentation = fs.readFileSync(
-        path.join(sourceDir, "modules/expeditions/expedition-presentation.ts"),
+    const controller = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-watch-controller.ts"),
         "utf8");
 
-    assert.doesNotMatch(view, /<details open class="hc-sheet-controls"/);
-    assert.doesNotMatch(environment, /this\.panel\.open = true/);
-    assert.doesNotMatch(presentation, /<details open class="hc-party-editor-panel"><summary>Party & participant assignments/);
+    assert.match(view, /Adjacent hex travel direction/);
+    assert.match(view, /adjacentDirection/);
+    assert.match(view, /hex-crawl\.expedition\.\$\{runtime\.id\}\.travel-intent/);
+    assert.match(view, /Reusable course and pace stay filled until changed/);
+    assert.match(view, /movementComposition\.suggestedExpectedDistance/);
+    assert.match(controller, /suggestedWatchDistance\(runtime\)/);
+    assert.match(controller, /activePaceKey/);
+    assert.match(controller, /state\.intendedDirection/);
+    assert.doesNotMatch(view, /currentHex\s*=/);
 });
 
-test("Phase 15 map selection stays contextual instead of becoming an implicit mutation", () => {
-    const workspace = fs.readFileSync(
-        path.join(sourceDir, "modules/expeditions/phase15-expedition-workspace.ts"),
+test("Phase 15 map selection is contextual and never directly mutates expedition position", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
         "utf8");
+    const map = fs.readFileSync(path.join(sourceDir, "map-surface.ts"), "utf8");
 
-    assert.match(workspace, /Selecting map context does not mutate expedition state/);
-    assert.match(workspace, /Selected hex q/);
-    assert.match(workspace, /mapCanvas\?\.addEventListener\("click"/);
-    assert.match(workspace, /mapCanvas\?\.addEventListener\("keydown"/);
-    assert.doesNotMatch(workspace, /readMapSelection[\s\S]*advanceExpedition/);
+    assert.match(view, /Selecting a hex does not mutate expedition state/);
+    assert.match(view, /Travel \$\{directionLabel\(direction\)\}/);
+    assert.match(view, /map\.setHexSelectionHandler/);
+    assert.match(map, /setHexSelectionHandler/);
+    assert.match(map, /this\.hexSelectionHandler\?\.\(selected\)/);
+    assert.doesNotMatch(view, /setHexSelectionHandler[\s\S]{0,800}advanceExpedition/);
 });
 
-test("Phase 15 shared workspace primitives retain accessible drawer behavior", () => {
+test("Phase 15 focused editing uses accessible drawers and keeps secondary tools out of the primary surface", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
     const workspace = fs.readFileSync(path.join(sourceDir, "ui/workspace.ts"), "utf8");
     const styles = fs.readFileSync(path.join(sourceDir, "phase15-styles.ts"), "utf8");
 
+    assert.match(view, /openWorkspaceDrawer/);
+    assert.match(view, /disclosure\("GM Tools", false\)/);
+    assert.match(view, /openTravelWorkspace/);
+    assert.match(view, /openPartyWorkspace/);
+    assert.match(view, /openEnvironmentWorkspace/);
+    assert.match(view, /openSurvivalWorkspace/);
+    assert.match(view, /openJourneyWorkspace/);
     assert.match(workspace, /role", "dialog"/);
     assert.match(workspace, /aria-modal/);
     assert.match(workspace, /Escape/);
+    assert.match(workspace, /onClose\?\.\(\)/);
     assert.match(workspace, /returnFocus\?\.isConnected/);
-    assert.match(workspace, /returnFocus\.focus\(\)/);
-    assert.match(workspace, /drawerClosers\.get\(existing\)/);
-    assert.match(workspace, /drawerClosers\.delete\(panel\)/);
     assert.match(styles, /hc-focus-workspace/);
     assert.match(styles, /@media \(max-width: 760px\)/);
 });
