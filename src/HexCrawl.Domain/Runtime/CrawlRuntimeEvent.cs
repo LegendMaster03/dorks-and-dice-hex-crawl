@@ -41,7 +41,10 @@ public sealed record CrawlRuntimeEvent(
     double? DistanceValue = null,
     string? DistanceUnit = null,
     Guid? SubjectId = null,
-    KnowledgeSubjectType? SubjectType = null);
+    KnowledgeSubjectType? SubjectType = null,
+    EncounterOutcomeKind? EncounterOutcome = null,
+    string? EncounterNote = null,
+    ResolutionProvenance? EncounterProvenance = null);
 
 public sealed record WatchAdvanceResult(
     ExpeditionState Expedition,
