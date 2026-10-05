@@ -1,5 +1,9 @@
 import type { HexCrawlApi } from "../../api";
-import type { HexLatticeFit, SourceMapGridAnalysis } from "../../hex-grid-analysis";
+import {
+    isCanonicalSourceFit,
+    type HexLatticeFit,
+    type SourceMapGridAnalysis
+} from "../../hex-grid-analysis";
 import {
     buildRasterGridAlignmentProposal,
     selectPhysicalDistancePerHex,
@@ -24,7 +28,7 @@ export class SourceMapGridAlignmentController {
 
     public async detectAndApply(
         sourceMap: SourceMapDetail | null,
-        onProgress: (progress: GridAlignmentProgress) => void = () => {}): Promise<void> {
+        onProgress: (progress: GridAlignmentProgress) => void = () => {}): Promise<boolean> {
         if (!sourceMap) throw new Error("Select a reference map first.");
         if (sourceMap.pixelWidth <= 0 || sourceMap.pixelHeight <= 0) {
             throw new Error("This map image has no usable image dimensions.");
@@ -47,16 +51,18 @@ export class SourceMapGridAlignmentController {
                     sourceMap.id,
                     abortController.signal);
             } catch (error) {
-                if (!this.isCurrent(generation, sourceMap.id, abortController)) return;
+                if (!this.isCurrent(generation, sourceMap.id, abortController)) return false;
                 const detail = error instanceof Error ? ` ${error.message}` : "";
                 throw new Error(
-                    `Automatic grid detection is unavailable.${detail} The map remains visible; try again or use Advanced registration.`);
+                    `Automatic grid detection is unavailable.${detail} The map remains visible; try again or use Manual placement.`);
             }
 
-            if (!this.isCurrent(generation, sourceMap.id, abortController)) return;
-            if (!analyzed.fit) {
+            if (!this.isCurrent(generation, sourceMap.id, abortController)) return false;
+            if (!analyzed.fit
+                || !isCanonicalSourceFit(analyzed, analyzed.analysis.sourceResolutionVerified)) {
                 throw new Error(
-                    "A usable hex grid could not be detected. The map remains visible; use Advanced registration if needed.");
+                    "Hex Crawl could not verify this grid strongly enough to change the world automatically. "
+                    + "The map remains visible; try detection again or use Manual placement.");
             }
 
             const fit = analyzed.fit;
@@ -75,7 +81,7 @@ export class SourceMapGridAlignmentController {
                 fit,
                 world.grid,
                 abortController.signal);
-            if (!this.isCurrent(generation, sourceMap.id, abortController)) return;
+            if (!this.isCurrent(generation, sourceMap.id, abortController)) return false;
 
             if (detectedDistancePerHex != null) {
                 proposal = {
@@ -111,14 +117,16 @@ export class SourceMapGridAlignmentController {
                 proposal,
                 currentWorld.version,
                 abortController.signal);
-            if (!this.isCurrent(generation, sourceMap.id, abortController)) return;
+            if (!this.isCurrent(generation, sourceMap.id, abortController)) return false;
 
             this.applyWorld(updated);
             this.clearPreview();
-            this.selectedMapId = null;
             await this.onSaved();
+            if (!this.isCurrent(generation, sourceMap.id, abortController)) return false;
+            this.selectedMapId = null;
+            return true;
         } catch (error) {
-            if (!this.isCurrent(generation, sourceMap.id, abortController)) return;
+            if (!this.isCurrent(generation, sourceMap.id, abortController)) return false;
             this.clearPreview();
             throw error;
         } finally {
@@ -130,6 +138,10 @@ export class SourceMapGridAlignmentController {
 
     public cancelIfMap(sourceMapId: string): void {
         if (this.selectedMapId === sourceMapId) this.cancel();
+    }
+
+    public cancelActive(): void {
+        if (this.selectedMapId !== null) this.cancel();
     }
 
     public dispose(): void {
@@ -182,43 +194,48 @@ async function loadPhysicalDistancePerHex(
         && !!sourceMap.sourceArchive;
     if (!isWonderdraft) return null;
 
-    const endpoint = assetUrl.replace(/\/asset(?:\?.*)?$/, "/wonderdraft/alignment-context");
-    const response = await fetch(endpoint, {
-        headers: { Accept: "application/json" },
-        signal
-    });
-    if (!response.ok) return null;
+    try {
+        const endpoint = assetUrl.replace(/\/asset(?:\?.*)?$/, "/wonderdraft/alignment-context");
+        const response = await fetch(endpoint, {
+            headers: { Accept: "application/json" },
+            signal
+        });
+        if (!response.ok) return null;
 
-    const context = await response.json() as WonderdraftAlignmentContext;
-    if (!context.canMapProjectCoordinates || !context.uniformScale) return null;
+        const context = await response.json() as WonderdraftAlignmentContext;
+        if (!context.canMapProjectCoordinates || !context.uniformScale) return null;
 
-    const physicalScale = context.summary.physicalScale;
-    if (!physicalScale) return null;
-    const sourceMetersPerUnit = metersPerWonderdraftUnit(physicalScale.unitLabel);
-    const targetMetersPerUnit = grid.neighborCenterDistance.unit.metersPerUnit;
-    if (!sourceMetersPerUnit || !targetMetersPerUnit || targetMetersPerUnit <= 0) return null;
+        const physicalScale = context.summary.physicalScale;
+        if (!physicalScale) return null;
+        const sourceMetersPerUnit = metersPerWonderdraftUnit(physicalScale.unitLabel);
+        const targetMetersPerUnit = grid.neighborCenterDistance.unit.metersPerUnit;
+        if (!sourceMetersPerUnit || !targetMetersPerUnit || targetMetersPerUnit <= 0) return null;
 
-    const unitsPerRasterPixel = physicalScale.unitsPerPixel / context.uniformScale;
-    const directDistancePerHex = (
-        fit.centerSpacingPixels
-        * unitsPerRasterPixel
-        * sourceMetersPerUnit) / targetMetersPerUnit;
-    if (!Number.isFinite(directDistancePerHex) || directDistancePerHex <= 0) return null;
-
-    const trustedCenterSpacingPixels = trustedWonderdraftCenterSpacing(
-        context.summary.gridMetadata,
-        fit,
-        context.uniformScale);
-    const crossCheckDistancePerHex = trustedCenterSpacingPixels == null
-        ? null
-        : (trustedCenterSpacingPixels
+        const unitsPerRasterPixel = physicalScale.unitsPerPixel / context.uniformScale;
+        const directDistancePerHex = (
+            fit.centerSpacingPixels
             * unitsPerRasterPixel
             * sourceMetersPerUnit) / targetMetersPerUnit;
-    return selectPhysicalDistancePerHex({
-        directDistancePerHex,
-        crossCheckDistancePerHex,
-        considerWholeUnits: grid.neighborCenterDistance.unit.kind === "Mile"
-    }).distancePerHex;
+        if (!Number.isFinite(directDistancePerHex) || directDistancePerHex <= 0) return null;
+
+        const trustedCenterSpacingPixels = trustedWonderdraftCenterSpacing(
+            context.summary.gridMetadata,
+            fit,
+            context.uniformScale);
+        const crossCheckDistancePerHex = trustedCenterSpacingPixels == null
+            ? null
+            : (trustedCenterSpacingPixels
+                * unitsPerRasterPixel
+                * sourceMetersPerUnit) / targetMetersPerUnit;
+        return selectPhysicalDistancePerHex({
+            directDistancePerHex,
+            crossCheckDistancePerHex,
+            considerWholeUnits: grid.neighborCenterDistance.unit.kind === "Mile"
+        }).distancePerHex;
+    } catch (error) {
+        if (signal.aborted) throw error;
+        return null;
+    }
 }
 
 function trustedWonderdraftCenterSpacing(
