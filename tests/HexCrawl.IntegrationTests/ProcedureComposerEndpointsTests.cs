@@ -9,7 +9,7 @@ namespace HexCrawl.IntegrationTests;
 public sealed class ProcedureComposerEndpointsTests
 {
     [Fact]
-    public async Task DraftEndpointsExposePresetAndCustomGenericComposerContracts()
+    public async Task DraftEndpointsExposePresetMinimalCustomAndStructuralComposerContracts()
     {
         var database = TestWebHost.NewDatabasePath();
         try
@@ -57,12 +57,32 @@ public sealed class ProcedureComposerEndpointsTests
             customResponse.EnsureSuccessStatusCode();
             var custom = await customResponse.Content.ReadFromJsonAsync<JsonElement>();
             Assert.Equal(JsonValueKind.Null, custom.GetProperty("origin").ValueKind);
+            var customModule = Assert.Single(custom.GetProperty("modules").EnumerateArray());
+            Assert.Equal(
+                GenericProcedureCatalog.TimeIntervalModule,
+                customModule.GetProperty("moduleKey").GetString());
+            Assert.Empty(custom.GetProperty("dependencies").GetProperty("issues").EnumerateArray());
+
+            using var composedResponse = await client.PostAsJsonAsync("/api/procedures/composer/draft", new
+            {
+                presetKey = (string?)null,
+                procedureId = (Guid?)null,
+                revision = (int?)null,
+                overrides = Array.Empty<object>(),
+                moduleSelections = new[]
+                {
+                    new { moduleKey = GenericProcedureCatalog.JourneyProcessModule, included = true },
+                    new { moduleKey = GenericProcedureCatalog.NavigationOutcomeModule, included = true }
+                }
+            });
+            composedResponse.EnsureSuccessStatusCode();
+            var composed = await composedResponse.Content.ReadFromJsonAsync<JsonElement>();
             Assert.Contains(
-                custom.GetProperty("modules").EnumerateArray(),
+                composed.GetProperty("modules").EnumerateArray(),
                 module => module.GetProperty("category").GetString() == "Journey processes");
 
             var unresolved = Assert.Single(
-                custom.GetProperty("dependencies").GetProperty("issues").EnumerateArray(),
+                composed.GetProperty("dependencies").GetProperty("issues").EnumerateArray(),
                 issue => issue.GetProperty("kind").GetString() == "UnresolvedInput"
                     && issue.GetProperty("inputKey").GetString() == "navigation.check-result");
             var sources = unresolved.GetProperty("allowedInputSources")
