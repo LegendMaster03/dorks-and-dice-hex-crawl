@@ -129,6 +129,14 @@ internal static class ProcedureComposerCustomProcedureFactory
             ("accumulationModel", "levels"),
             ("recoveryModel", "rest"),
             ("scope", "participant")),
+        Phase11GenericProcedureCatalog.ExposureModule => Select(
+            Phase11GenericProcedureCatalog.ExposureModuleDefinition,
+            Phase11GenericProcedureCatalog.ExposureMechanicDefinition,
+            ("dimensions", "temperature;weather"),
+            ("evaluationModel", "resolved-check"),
+            ("evaluationInterval", "travel-day"),
+            ("targetScope", "party"),
+            ("consequenceModel", "resolved-structured-consequence")),
         GenericProcedureCatalog.JourneyEventsModule => Select(
             GenericProcedureCatalog.JourneyEventsModule,
             GenericProcedureCatalog.JourneyEventPolicyMechanic,
@@ -167,9 +175,15 @@ internal static class ProcedureComposerCustomProcedureFactory
         var mechanic = JourneyProcedureContractSchema.ExtendMechanic(
             moduleKey,
             GenericProcedureCatalog.ResolveMechanic(mechanicKey));
-        return new MaterializedProcedureModule(
+        return Select(module, mechanic, parameters);
+    }
+
+    private static MaterializedProcedureModule Select(
+        ProcedureModuleDefinition module,
+        MechanicDefinition mechanic,
+        params (string Key, string Value)[] parameters) =>
+        new(
             CampaignProcedureSnapshot.Copy(module),
             CampaignProcedureSnapshot.Copy(mechanic),
             parameters.ToDictionary(value => value.Key, value => value.Value, StringComparer.Ordinal));
-    }
 }

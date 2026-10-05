@@ -30,6 +30,7 @@ const rules: CompactRuleDescriptor[] = [
     { moduleKey: "exploration.foraging", group: "Survival & resources", label: "Foraging", description: "Defines how the party searches for expedition resources and what it costs.", order: 110 },
     { moduleKey: "survival.camping", group: "Survival & resources", label: "Camping", description: "Defines camp procedure, time cost, and watch behavior.", order: 120 },
     { moduleKey: "time.forced-travel", group: "Survival & resources", label: "Forced travel", description: "Defines when ordinary travel becomes forced and what resolves each extension.", order: 130 },
+    { moduleKey: "survival.exposure", group: "Survival & resources", label: "Environmental exposure", description: "Defines which environmental conditions require exposure resolution and who is affected.", order: 135 },
     { moduleKey: "effects.expedition", group: "Survival & resources", label: "Persistent effects", description: "Defines accumulating expedition conditions and how they recover.", order: 140 },
     { moduleKey: "journey.process", group: "Journey process", label: "Multi-stage journey", description: "Defines journey stages, progress, roles, transitions, and completion.", order: 200 },
     { moduleKey: "journey.events", group: "Journey process", label: "Journey events", description: "Defines when journey events occur and how they affect the expedition.", order: 210 },
@@ -108,28 +109,85 @@ const labels: Record<string, string> = {
     progressUnit: "Progress unit",
     allowNegativeProgress: "Allow lost progress",
     roleAssignmentModel: "Role assignment",
-    intervalIntegrationModel: "Travel integration"
+    intervalIntegrationModel: "Travel integration",
+    dimensions: "Exposure conditions",
+    evaluationModel: "Exposure resolution",
+    evaluationInterval: "Exposure cadence",
+    targetScope: "Who is affected"
 };
 
 const choiceSets: Record<string, Array<{ value: string; label: string }>> = {
-    travelResolution: [
-        { value: "ContinuousDistance", label: "Continuous distance" },
-        { value: "HexSteps", label: "Whole cell steps" }
-    ],
-    actualDistanceResolution: [
-        { value: "Fixed", label: "Fixed / authoritative distance" },
-        { value: "VariableResolved", label: "Resolve variable distance" }
-    ],
-    cadence: [
-        { value: "None", label: "No routine check" },
-        { value: "PerWatch", label: "Each travel period" },
-        { value: "PerDay", label: "Each day" }
-    ],
-    assignmentScope: [
-        { value: "participant", label: "Participant" },
-        { value: "party", label: "Party" },
-        { value: "role", label: "Role" }
-    ]
+    "movement.resolution.travelResolution": choices("ContinuousDistance", "HexSteps"),
+    "movement.resolution.actualDistanceResolution": choices("Fixed", "VariableResolved"),
+    "encounters.cadence.cadence": choices("None", "PerWatch", "PerDay"),
+    "movement.budget.budgetModel": choices(
+        "fixed-per-interval", "fixed-per-day", "distance-per-hour", "speed-and-pace",
+        "speed-derived-distance", "speed-derived-activities", "activity-and-distance",
+        "movement-points", "quarter-day-activities", "journey-progress"),
+    "movement.budget.budgetUnit": choices(
+        "interval", "hour", "watch", "travel-day", "travel-hours", "daily-movement-budget",
+        "hexploration-activity", "quarter-day", "journey-leg"),
+    "movement.budget.limitingScope": choices("party", "party-limiting", "slowest-traveler", "guide"),
+    "movement.terrain.adjustmentModel": choices(
+        "multiplier", "distance-per-hour-multiplier", "movement-points-per-distance",
+        "activity-cost", "hexes-per-quarter-day", "maximum-pace", "terrain-difficulty"),
+    "movement.terrain.routeAdjustmentModel": choices(
+        "none", "manual", "road-assistance", "road-multiplier", "road-improves-one-step",
+        "good-road-improves-one-step", "route-improves-cost", "route-may-ignore-terrain"),
+    "movement.terrain.weatherAdjustmentModel": choices(
+        "manual", "environment-specific", "movement-mode-specific", "weather-multiplier"),
+    "party.activities.assignmentScope": choices("participant", "party", "role"),
+    "party.activities.activityBudgetModel": choices(
+        "per-interval", "per-watch", "daily-activity-budget", "quarter-day", "travel-compatible", "journey-role"),
+    "navigation.outcome.checkTriggerModel": choices(
+        "manual-or-procedure", "contextual-getting-lost", "daily-terrain-or-context",
+        "hourly-poor-visibility-or-terrain", "lead-way-per-travel-activity", "per-watch-when-navigation-required"),
+    "navigation.outcome.failureStateModel": choices("lost-state", "lost-until-recognized", "mishap"),
+    "navigation.outcome.directionalErrorModel": choices(
+        "manual-off-course", "persistent-veer", "random-direction", "mishap-defined", "rules-defined"),
+    "navigation.outcome.recognitionModel": choices(
+        "manual", "boundary-check", "mapping-support", "periodic-check", "procedure-check", "procedure-defined"),
+    "navigation.outcome.reorientationModel": choices("manual", "procedure-check", "procedure-defined", "rules-defined"),
+    "encounters.schedule.scheduleModel": choices(
+        "cadence-backed", "daily-terrain-sensitive", "manual-contextual", "travel-and-camp"),
+    "encounters.schedule.terrainProbabilityModel": choices("none", "manual", "terrain-tagged"),
+    "survival.resources.inventoryModel": choices("counted", "abstract", "supply-die", "external/manual"),
+    "survival.resources.consumptionModel": choices("manual", "fixed-per-person", "daily-supplies", "usage-roll"),
+    "survival.resources.consumptionInterval": choices(
+        "interval", "watch", "travel-day", "expedition-day", "quarter-day-or-use"),
+    "exploration.foraging.resolutionModel": choices(
+        "manual-check", "procedure-check", "skill-check", "subsist-activity", "activity-check"),
+    "exploration.foraging.timeUnit": choices(
+        "activity", "hexploration-activity", "movement-rate", "quarter-day", "travel-day", "watch", "watch-activity"),
+    "exploration.foraging.movementTradeoff": choices("none", "half-speed", "half-or-full-day", "replaces-activity"),
+    "survival.camping.resolutionModel": choices("manual-camp", "fortify-camp-activity", "procedure-check"),
+    "survival.camping.timeUnit": choices("activity", "night", "quarter-day", "watch", "watch-activity"),
+    "survival.camping.watchModel": choices(
+        "manual", "assigned-lookout", "camp-encounter-check", "campaign-defined", "keep-watch-activity"),
+    "time.forced-travel.limitUnit": choices("hours", "intervals", "quarter-days", "watches"),
+    "time.forced-travel.checkModel": choices(
+        "manual-check", "endurance-check", "escalating-check", "escalating-constitution-save"),
+    "time.forced-travel.failureConsequence": choices(
+        "fatigue", "exhaustion", "fatigue-and-nonlethal-effect", "fatigue-or-mishap"),
+    "effects.expedition.accumulationModel": choices("levels", "per-failed-check", "journey-events", "procedure-defined"),
+    "effects.expedition.recoveryModel": choices(
+        "rest", "rest-and-sleep", "rules-defined-rest", "safe-prolonged-rest", "safe-rest"),
+    "effects.expedition.scope": choices("participant", "party", "mount", "vehicle", "expedition"),
+    "journey.events.triggerModel": choices("manual-or-landmark", "per-watch-or-landmark", "guide-progress-test"),
+    "journey.events.targetingModel": choices("explicit-target", "travel-role"),
+    "journey.events.terrainInfluence": choices("manual", "difficulty", "difficulty-and-road"),
+    "journey.events.consequenceModel": choices("event", "event-and-fatigue"),
+    "journey.process.stageModel": choices("manual-stages", "route-then-events-then-arrival"),
+    "journey.process.progressModel": choices("progress-points", "guide-marching-progress"),
+    "journey.process.completionModel": choices("explicit-completion", "final-stage-completion"),
+    "journey.process.stageTransitionModel": choices("explicit", "sequential"),
+    "journey.process.progressKind": choices("numeric"),
+    "journey.process.progressUnit": choices("progress-points", "journey-progress"),
+    "journey.process.roleAssignmentModel": choices("current-at-resolution"),
+    "journey.process.intervalIntegrationModel": choices("none", "completed-watch-resolution-opportunity"),
+    "survival.exposure.evaluationModel": choices("resolved-check"),
+    "survival.exposure.targetScope": choices("participant", "party", "mount", "vehicle", "expedition"),
+    "survival.exposure.consequenceModel": choices("resolved-structured-consequence")
 };
 
 const booleanKeys = new Set([
@@ -143,8 +201,9 @@ const numberKeys = new Set([
     "directionChangeProgressCostFactor", "baseBudget", "travelChecksPerInterval", "timeCost", "normalTravelLimit"
 ]);
 
-const keyListKeys = new Set(["activityKeys", "roleKeys", "resourceKinds", "effectKinds", "triggerSources"]);
+const keyListKeys = new Set(["activityKeys", "roleKeys", "resourceKinds", "effectKinds", "triggerSources", "dimensions"]);
 const mappingKeys = new Set(["terrainAdjustments"]);
+const textKeys = new Set(["evaluationInterval"]);
 
 export function compactRuleCatalog(): CompactRuleDescriptor[] {
     return [...rules];
@@ -156,7 +215,8 @@ export function compactRule(moduleKey: string): CompactRuleDescriptor | null {
 
 export function compactParameter(
     key: string,
-    definition: ProcedureParameterDefinition): CompactParameterPresentation | null {
+    definition: ProcedureParameterDefinition,
+    moduleKey: string | null = null): CompactParameterPresentation | null {
     const label = labels[key];
     if (!label) return null;
     if (key === "durationTicks") {
@@ -165,8 +225,9 @@ export function compactParameter(
     if (booleanKeys.has(key) || definition.type === "boolean") {
         return { label, help: definition.description, control: "boolean" };
     }
-    if (choiceSets[key]) {
-        return { label, help: definition.description, control: "select", choices: choiceSets[key] };
+    const moduleChoiceKey = moduleKey ? `${moduleKey}.${key}` : key;
+    if (choiceSets[moduleChoiceKey]) {
+        return { label, help: definition.description, control: "select", choices: choiceSets[moduleChoiceKey] };
     }
     if (numberKeys.has(key) || definition.type === "number" || definition.type === "integer" || definition.type === "decimal") {
         return { label, help: definition.description, control: "number" };
@@ -177,8 +238,11 @@ export function compactParameter(
     if (mappingKeys.has(key) || definition.type === "mapping") {
         return { label, help: definition.description, control: "mapping" };
     }
-    // Token/model fields remain readable in Compact but are intentionally edited in Advanced
-    // until the generic catalog declares a safe choice set. Compact never exposes the raw key.
+    if (textKeys.has(key)) {
+        return { label, help: definition.description, control: "text" };
+    }
+    // Unknown token/model fields remain readable without leaking implementation keys.
+    // Current ordinary tabletop enum domains are declared above and remain directly editable.
     return { label, help: definition.description, control: "summary" };
 }
 
@@ -186,7 +250,7 @@ export function compactModuleSummary(module: ProcedureModuleComposer): string {
     const descriptor = compactRule(module.moduleKey);
     const fragments: string[] = [];
     for (const [key, definition] of parameterDefinitions(module)) {
-        const presentation = compactParameter(key, definition);
+        const presentation = compactParameter(key, definition, module.moduleKey);
         if (!presentation) continue;
         const value = module.parameters[key] ?? definition.defaultValue ?? "";
         if (!value) continue;
@@ -244,6 +308,10 @@ export function formatDurationTicks(value: string): string {
     const duration = ticksToDuration(value);
     if (!duration) return "Configured travel period";
     return `${formatNumber(duration.amount)} ${duration.unit}`;
+}
+
+function choices(...values: string[]): Array<{ value: string; label: string }> {
+    return values.map(value => ({ value, label: friendlyToken(value) }));
 }
 
 function friendlyToken(value: string): string {

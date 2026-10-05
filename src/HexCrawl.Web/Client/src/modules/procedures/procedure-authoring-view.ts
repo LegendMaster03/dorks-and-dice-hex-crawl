@@ -691,7 +691,7 @@ export async function renderProcedureAuthoringWorkspace(
         facts.className = "hc-rule-facts";
         let count = 0;
         for (const [key, definition] of parameterDefinitions(module)) {
-            const presentation = compactParameter(key, definition);
+            const presentation = compactParameter(key, definition, module.moduleKey);
             if (!presentation) continue;
             const value = module.parameters[key] ?? definition.defaultValue;
             if (value == null || value === "") continue;
@@ -741,7 +741,7 @@ export async function renderProcedureAuthoringWorkspace(
         const grid = document.createElement("div");
         grid.className = "hc-compact-field-grid";
         for (const [key, definition] of parameterDefinitions(module)) {
-            const presentation = compactParameter(key, definition);
+            const presentation = compactParameter(key, definition, module.moduleKey);
             if (!presentation) continue;
             const value = module.parameters[key] ?? definition.defaultValue ?? "";
             grid.append(compactEditor(module, key, value, presentation));
@@ -849,7 +849,7 @@ export async function renderProcedureAuthoringWorkspace(
         } else if (presentation.control === "select") {
             const select = document.createElement("select");
             mark(select);
-            const choices = presentation.choices ?? [];
+            const choices = [...(presentation.choices ?? [])];
             if (!choices.some(choice => choice.value === value) && value) {
                 choices.unshift({ value, label: friendlyStoredValue(key, value) });
             }

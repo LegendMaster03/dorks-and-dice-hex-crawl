@@ -83,6 +83,30 @@ public sealed class ProcedureComposerStructuralCompositionTests
     }
 
     [Fact]
+    public async Task CustomProcedureCanAddAndPersistSurvivalExposure()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var store = new PostgresHexCrawlStore(database.ConnectionString);
+        await store.InitializeAsync();
+        var service = Composer(store);
+        ProcedureModuleSelection[] selections =
+        [
+            new(Phase11GenericProcedureCatalog.ExposureModule, true)
+        ];
+
+        var draft = await service.CreateDraftAsync("alice", null, null, null, selections, []);
+        var exposure = Assert.Single(draft.Procedure.Modules);
+        Assert.Equal(Phase11GenericProcedureCatalog.ExposureModule, exposure.Module.Key);
+        Assert.Equal("resolved-check", exposure.Parameters["evaluationModel"]);
+        Assert.Equal("party", exposure.Parameters["targetScope"]);
+
+        var stored = await service.CreateAsync("alice", null, selections, []);
+        var reloaded = await service.GetAsync("alice", stored.ProcedureId);
+        Assert.Contains(reloaded.Procedure.Modules, module =>
+            module.Module.Key == Phase11GenericProcedureCatalog.ExposureModule);
+    }
+
+    [Fact]
     public async Task SavedProcedureCanReAddPreviouslyOmittedGenericModule()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
