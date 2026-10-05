@@ -57,7 +57,7 @@ jobs:
           test.write_text(text)
           PY
 
-          node --test src/HexCrawl.Web/Client/test/phase15-ux-source.test.mjs
+          (cd src/HexCrawl.Web/Client && node --test test/phase15-ux-source.test.mjs)
           git diff --check
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
