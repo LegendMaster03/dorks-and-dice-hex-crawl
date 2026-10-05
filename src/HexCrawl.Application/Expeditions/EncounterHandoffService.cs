@@ -1,3 +1,4 @@
+using HexCrawl.Application.Persistence;
 using HexCrawl.Domain.Runtime;
 using HexCrawl.Domain.Spatial;
 using HexCrawl.Domain.World;
@@ -162,8 +163,8 @@ public sealed class EncounterHandoffService(HexCrawlService coreService)
     }
 
     private static EncounterHandoffV2 BuildFromRuntime(
-        Persistence.StoredExpedition expedition,
-        Persistence.StoredOverworld? world,
+        StoredExpedition expedition,
+        StoredOverworld? world,
         Guid handoffId,
         string? returnPath,
         long sequence)
@@ -180,7 +181,7 @@ public sealed class EncounterHandoffService(HexCrawlService coreService)
         var location = ResolveLocation(world, runtimeEvent.SubjectId);
         var linkedScenes = ProjectLinkedScenes(location);
         var elapsed = runtimeEvent.ExpeditionElapsedTime;
-        var watchNumber = expedition.Context.Kind == CrawlSessionContextKind.NonSpatial
+        int? watchNumber = expedition.Context.Kind == CrawlSessionContextKind.NonSpatial
             ? null
             : runtimeEvent.WatchNumber;
 
@@ -197,14 +198,14 @@ public sealed class EncounterHandoffService(HexCrawlService coreService)
             runtimeEvent.EncounterOutcome.Value.ToString(),
             runtimeEvent.Message,
             runtimeEvent.EncounterNote,
-            [],
+            new HashSet<Guid>(),
             null,
             linkedScenes);
     }
 
     private static EncounterHandoffV2 BuildFromJourney(
-        Persistence.StoredExpedition expedition,
-        Persistence.StoredOverworld? world,
+        StoredExpedition expedition,
+        StoredOverworld? world,
         Guid handoffId,
         string? returnPath,
         Guid eventOccurrenceId)
@@ -260,7 +261,7 @@ public sealed class EncounterHandoffService(HexCrawlService coreService)
     }
 
     private static EncounterHandoffV2 Build(
-        Persistence.StoredExpedition expedition,
+        StoredExpedition expedition,
         Guid handoffId,
         string encounterOccurrenceId,
         string? returnPath,
@@ -309,7 +310,7 @@ public sealed class EncounterHandoffService(HexCrawlService coreService)
     }
 
     private static IReadOnlyList<EncounterHandoffCircumstance> ProjectCircumstances(
-        Persistence.StoredExpedition expedition,
+        StoredExpedition expedition,
         IReadOnlySet<Guid> sourceConsequenceIds) =>
         expedition.Effects.PendingConsequences
             .Where(value => sourceConsequenceIds.Contains(value.Consequence.Id))
@@ -327,7 +328,7 @@ public sealed class EncounterHandoffService(HexCrawlService coreService)
             .ToArray();
 
     private static IReadOnlyList<EncounterHandoffEffect> ProjectEffects(
-        Persistence.StoredExpedition expedition,
+        StoredExpedition expedition,
         IReadOnlySet<Guid> sourceConsequenceIds)
     {
         if (sourceConsequenceIds.Count == 0) return [];
@@ -346,7 +347,7 @@ public sealed class EncounterHandoffService(HexCrawlService coreService)
     }
 
     private static IReadOnlyList<EncounterHandoffResource> ProjectResources(
-        Persistence.StoredExpedition expedition,
+        StoredExpedition expedition,
         IReadOnlySet<Guid> sourceConsequenceIds)
     {
         if (sourceConsequenceIds.Count == 0) return [];
@@ -369,7 +370,7 @@ public sealed class EncounterHandoffService(HexCrawlService coreService)
             .ToArray();
     }
 
-    private static Location? ResolveLocation(Persistence.StoredOverworld? world, Guid? locationId)
+    private static Location? ResolveLocation(StoredOverworld? world, Guid? locationId)
     {
         if (world is null || !locationId.HasValue) return null;
         return world.World.Locations.SingleOrDefault(value => value.Id == locationId.Value)
@@ -388,13 +389,16 @@ public sealed class EncounterHandoffService(HexCrawlService coreService)
         if (value is null) return null;
         if (string.IsNullOrWhiteSpace(value) || value.Length > 2048
             || value.Contains('\\') || value.Contains('\r') || value.Contains('\n')
-            || !value.StartsWith('/', StringComparison.Ordinal)
+            || !value.StartsWith("/", StringComparison.Ordinal)
             || value.StartsWith("//", StringComparison.Ordinal))
         {
             throw new ArgumentException("Encounter handoff return path is not safe.");
         }
 
-        var pathOnly = value.Split('?', '#', 2)[0];
+        var question = value.IndexOf('?');
+        var fragment = value.IndexOf('#');
+        var end = question < 0 ? fragment : fragment < 0 ? question : Math.Min(question, fragment);
+        var pathOnly = end < 0 ? value : value[..end];
         if (!string.Equals(pathOnly, "/tools/hex-crawl", StringComparison.Ordinal)
             && !pathOnly.StartsWith("/tools/hex-crawl/", StringComparison.Ordinal))
         {
