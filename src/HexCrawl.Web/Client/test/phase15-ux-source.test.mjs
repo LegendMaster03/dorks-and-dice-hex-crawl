@@ -19,6 +19,7 @@ test("Phase 15 procedure workspace keeps Compact Advanced and JSON on one Campai
     assert.match(workspace, /same CampaignProcedure used by Compact and Advanced/);
     assert.match(workspace, /server parsing, domain validation, and optimistic concurrency/);
     assert.match(workspace, /createCanonicalRevision/);
+    assert.match(workspace, /mode !== "json" \|\| jsonBusy/);
     assert.match(api, /composer\/canonical\/draft/);
     assert.match(api, /composer\/canonical\/validate/);
     assert.match(api, /canonical\/revisions/);

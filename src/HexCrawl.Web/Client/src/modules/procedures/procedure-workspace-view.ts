@@ -134,7 +134,7 @@ export async function renderProcedureWorkspace(
     };
 
     const ensureJsonLoaded = async (force = false): Promise<void> => {
-        if (!draft || mode !== "json") return;
+        if (!draft || mode !== "json" || jsonBusy) return;
         const identity = `${draft.procedureId}:${draft.revision}:${pending.size}:${viewedRevision ?? "latest"}`;
         if (!force && jsonLoadedFor === identity) return;
         jsonBusy = true;
