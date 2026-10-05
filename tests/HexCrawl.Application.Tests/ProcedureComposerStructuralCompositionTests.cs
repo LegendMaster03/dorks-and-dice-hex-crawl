@@ -40,9 +40,9 @@ public sealed class ProcedureComposerStructuralCompositionTests
 
         var draft = await service.CreateDraftAsync("alice", null, null, null, selections, []);
 
-        Assert.Empty(draft.Dependencies.Issues.Where(issue => issue.Kind is
+        Assert.DoesNotContain(draft.Dependencies.Issues, issue => issue.Kind is
             ProcedureDependencyIssueKind.MissingRequiredModule
-            or ProcedureDependencyIssueKind.MissingRequiredProducer));
+            or ProcedureDependencyIssueKind.MissingRequiredProducer);
         Assert.DoesNotContain(draft.Procedure.Modules, module =>
             module.Module.Key == GenericProcedureCatalog.TimeIntervalModule);
         Assert.Contains(draft.Procedure.Modules, module =>
