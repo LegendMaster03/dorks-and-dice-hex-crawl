@@ -138,7 +138,7 @@ try {
         width: 1280,
         height: 800,
         setup: `localStorage.setItem("hex-crawl.procedure-mode", "compact"); location.reload();`,
-        ready: ".hc-compact-procedure"
+        ready: "[data-procedure-mode-content]"
     });
     await capture({
         name: "procedure-advanced-laptop",
@@ -146,7 +146,7 @@ try {
         width: 1280,
         height: 800,
         setup: `localStorage.setItem("hex-crawl.procedure-mode", "advanced"); location.reload();`,
-        ready: ".hc-advanced-procedure"
+        ready: "[data-procedure-mode-content]"
     });
     await capture({
         name: "procedure-json-laptop",
