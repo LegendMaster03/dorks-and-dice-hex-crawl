@@ -57,15 +57,8 @@ public sealed class ProcedureComposerEndpointsTests
             customResponse.EnsureSuccessStatusCode();
             var custom = await customResponse.Content.ReadFromJsonAsync<JsonElement>();
             Assert.Equal(JsonValueKind.Null, custom.GetProperty("origin").ValueKind);
-            var customModule = Assert.Single(custom.GetProperty("modules").EnumerateArray());
-            Assert.Equal(
-                GenericProcedureCatalog.TimeIntervalModule,
-                customModule.GetProperty("moduleKey").GetString());
-            var customIssue = Assert.Single(custom.GetProperty("dependencies").GetProperty("issues").EnumerateArray());
-            Assert.Equal("ProducedButUnused", customIssue.GetProperty("kind").GetString());
-            Assert.Equal(
-                GenericProcedureCatalog.TimeIntervalModule,
-                customIssue.GetProperty("moduleKey").GetString());
+            Assert.Empty(custom.GetProperty("modules").EnumerateArray());
+            Assert.Empty(custom.GetProperty("dependencies").GetProperty("issues").EnumerateArray());
 
             using var composedResponse = await client.PostAsJsonAsync("/api/procedures/composer/draft", new
             {
@@ -174,6 +167,10 @@ public sealed class ProcedureComposerEndpointsTests
             {
                 presetKey = (string?)null,
                 campaignId = (Guid?)null,
+                moduleSelections = new[]
+                {
+                    new { moduleKey = GenericProcedureCatalog.TimeIntervalModule, included = true }
+                },
                 overrides = Array.Empty<object>()
             });
             Assert.Equal(HttpStatusCode.Created, customResponse.StatusCode);
