@@ -134,7 +134,7 @@ public sealed class ProcedureComposerEndpointsTests
     }
 
     [Fact]
-    public async Task ExtensionMechanicRemainsPresentInComposerAlternatives()
+    public async Task ExtensionMechanicRemainsVisibleAsSelectedComposerMechanic()
     {
         var database = TestWebHost.NewDatabasePath();
         try
@@ -159,7 +159,10 @@ public sealed class ProcedureComposerEndpointsTests
                 draft.GetProperty("modules").EnumerateArray(),
                 module => module.GetProperty("moduleKey").GetString() == Phase11GenericProcedureCatalog.ExposureModule);
 
-            Assert.Contains(
+            Assert.Equal(
+                Phase11GenericProcedureCatalog.ExposurePolicyMechanic,
+                exposure.GetProperty("mechanic").GetProperty("key").GetString());
+            Assert.DoesNotContain(
                 exposure.GetProperty("alternatives").EnumerateArray(),
                 mechanic => mechanic.GetProperty("key").GetString() == Phase11GenericProcedureCatalog.ExposurePolicyMechanic);
         }

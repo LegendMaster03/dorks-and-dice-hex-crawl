@@ -985,7 +985,12 @@ export async function renderProcedureAuthoringWorkspace(
         mechanic.className = "hc-advanced-section";
         mechanic.append(textElement("h3", "Mechanic"));
         const select = document.createElement("select");
-        for (const option of module.alternatives) {
+        const mechanicOptions = [
+            module.mechanic,
+            ...module.alternatives.filter(option =>
+                option.key !== module.mechanic.key || option.version !== module.mechanic.version)
+        ];
+        for (const option of mechanicOptions) {
             const item = document.createElement("option");
             item.value = `${option.key}|${option.version}`;
             item.textContent = `${option.displayName} · ${option.key} · v${option.version}`;

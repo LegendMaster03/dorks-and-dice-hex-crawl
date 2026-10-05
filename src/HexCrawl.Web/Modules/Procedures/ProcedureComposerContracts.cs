@@ -201,9 +201,6 @@ public sealed record ProcedureModuleComposerContract(
             .ToArray();
         var alternatives = GenericProcedureCatalog.Mechanics
             .Where(mechanic => selected.Module.CompatibleMechanicTypes.Contains(mechanic.Key, StringComparer.Ordinal))
-            .Append(selected.Mechanic)
-            .GroupBy(mechanic => (mechanic.Key, mechanic.Version))
-            .Select(group => group.First())
             .Select(ProcedureMechanicComposerContract.From)
             .ToArray();
         var requiredInputs = selected.Module.Reads

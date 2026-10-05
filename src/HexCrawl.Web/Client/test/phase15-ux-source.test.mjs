@@ -86,6 +86,18 @@ test("Compact procedure edits keep their focused workspace across draft recompos
     assert.match(workspace, /save\.disabled = savePending \|\| historical\(\) \|\| !hasStructuredChanges\(\)/);
 });
 
+test("Advanced always renders the pinned mechanic without polluting catalog alternatives", () => {
+    const workspace = fs.readFileSync(
+        path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"),
+        "utf8");
+    const contracts = fs.readFileSync(
+        path.join(repositoryRoot, "src/HexCrawl.Web/Modules/Procedures/ProcedureComposerContracts.cs"),
+        "utf8");
+
+    assert.match(workspace, /module\.mechanic,\s*\.\.\.module\.alternatives\.filter/);
+    assert.doesNotMatch(contracts, /\.Append\(selected\.Mechanic\)/);
+});
+
 test("structured procedure authoring exposes human-readable procedure naming", () => {
     const workspace = fs.readFileSync(
         path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"),
