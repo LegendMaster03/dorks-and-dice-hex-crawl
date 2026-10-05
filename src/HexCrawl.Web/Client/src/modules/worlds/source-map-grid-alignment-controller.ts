@@ -25,9 +25,9 @@ export class SourceMapGridAlignmentController {
     public async detectAndApply(
         sourceMap: SourceMapDetail | null,
         onProgress: (progress: GridAlignmentProgress) => void = () => {}): Promise<void> {
-        if (!sourceMap) throw new Error("Select a raster map first.");
+        if (!sourceMap) throw new Error("Select a reference map first.");
         if (sourceMap.pixelWidth <= 0 || sourceMap.pixelHeight <= 0) {
-            throw new Error("This source map has no usable raster dimensions.");
+            throw new Error("This map image has no usable image dimensions.");
         }
 
         this.analysisAbortController?.abort();
