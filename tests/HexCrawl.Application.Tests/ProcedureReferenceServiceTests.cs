@@ -267,14 +267,32 @@ public sealed class ProcedureReferenceServiceTests
 
     private static CampaignProcedure ProcedureComposerFixture()
     {
-        var factory = typeof(ProcedureComposerService).Assembly
-            .GetType("HexCrawl.Application.ProcedureComposerCustomProcedureFactory", throwOnError: true)!;
-        var create = factory.GetMethod(
-            "Create",
-            System.Reflection.BindingFlags.Static
-            | System.Reflection.BindingFlags.Public
-            | System.Reflection.BindingFlags.NonPublic)!;
-        return (CampaignProcedure)create.Invoke(null, null)!;
+        var module = GenericProcedureCatalog.ResolveModule(GenericProcedureCatalog.NavigationOutcomeModule);
+        var mechanic = GenericProcedureCatalog.ResolveMechanic(GenericProcedureCatalog.NavigationOutcomePolicyMechanic);
+        var procedure = new CampaignProcedure
+        {
+            ProcedureId = Guid.NewGuid(),
+            Revision = 1,
+            Key = "reference-input-sources",
+            Name = "Reference input sources",
+            Modules =
+            [
+                new MaterializedProcedureModule(
+                    module,
+                    mechanic,
+                    new Dictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["checkTriggerModel"] = "manual-or-procedure",
+                        ["failureStateModel"] = "lost-state",
+                        ["directionalErrorModel"] = "manual-off-course",
+                        ["recognitionModel"] = "manual",
+                        ["reorientationModel"] = "manual"
+                    })
+            ],
+            Overrides = []
+        };
+        procedure.Validate();
+        return procedure;
     }
 
     private static string BehaviorFingerprint(ProcedureReference reference) =>
