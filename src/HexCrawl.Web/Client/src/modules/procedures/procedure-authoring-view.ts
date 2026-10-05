@@ -713,6 +713,7 @@ export async function renderProcedureAuthoringWorkspace(
         const key = JSON.stringify(currentInput());
         if (jsonLoadedFor === key) return;
         jsonBusy = true;
+        let failure: unknown | null = null;
         try {
             const canonical = await composerApi.composeCanonicalDraft(currentInput());
             if (disposed) return;
@@ -721,11 +722,27 @@ export async function renderProcedureAuthoringWorkspace(
             jsonLoadedFor = key;
             jsonValidation = null;
         } catch (value) {
-            const error = root.querySelector<HTMLElement>("[data-error]");
-            if (error) showUiError(error, value);
+            failure = value;
         } finally {
             jsonBusy = false;
-            if (!disposed && mode === "json") render();
+            if (!disposed && mode === "json") {
+                if (failure === null) {
+                    render();
+                } else {
+                    const error = root.querySelector<HTMLElement>("[data-error]");
+                    if (error) showUiError(error, failure);
+                    const editor = root.querySelector<HTMLElement>(".hc-json-editor");
+                    if (editor && !editor.querySelector("[data-json-retry]")) {
+                        const retry = button("Retry canonical JSON", () => {
+                            const currentError = root.querySelector<HTMLElement>("[data-error]");
+                            if (currentError) clearUiError(currentError);
+                            render();
+                        });
+                        retry.dataset.jsonRetry = "";
+                        editor.append(retry);
+                    }
+                }
+            }
         }
     };
 
@@ -776,6 +793,7 @@ export async function renderProcedureAuthoringWorkspace(
         render();
         const selections: ProcedureComposerModuleSelectionInput[] = [...moduleSelections.entries()]
             .map(([moduleKey, included]) => ({ moduleKey, included }));
+        let failure: unknown | null = null;
         try {
             const saved = sourceProcedureId
                 ? await composerApi.createRevision(sourceProcedureId, {
@@ -799,14 +817,16 @@ export async function renderProcedureAuthoringWorkspace(
             invalidateJson();
             if (!disposed) navigate(`/procedures/${encodeURIComponent(saved.procedureId)}`, true);
         } catch (value) {
-            if (!disposed) {
-                render();
-                const current = root.querySelector<HTMLElement>("[data-error]");
-                if (current) showUiError(current, value);
-            }
+            failure = value;
         } finally {
             savePending = false;
-            if (!disposed) render();
+            if (!disposed) {
+                render();
+                if (failure !== null) {
+                    const current = root.querySelector<HTMLElement>("[data-error]");
+                    if (current) showUiError(current, failure);
+                }
+            }
         }
     };
 
@@ -817,6 +837,7 @@ export async function renderProcedureAuthoringWorkspace(
         if (!await validateJson()) return;
         jsonBusy = true;
         render();
+        let failure: unknown | null = null;
         try {
             const saved = sourceProcedureId
                 ? await composerApi.createCanonicalRevision(sourceProcedureId, { expectedRevision: draft.revision, canonicalJson: jsonText })
@@ -832,14 +853,16 @@ export async function renderProcedureAuthoringWorkspace(
             invalidateJson();
             if (!disposed) navigate(`/procedures/${encodeURIComponent(saved.procedureId)}`, true);
         } catch (value) {
-            if (!disposed) {
-                render();
-                const current = root.querySelector<HTMLElement>("[data-error]");
-                if (current) showUiError(current, value);
-            }
+            failure = value;
         } finally {
             jsonBusy = false;
-            if (!disposed) render();
+            if (!disposed) {
+                render();
+                if (failure !== null) {
+                    const current = root.querySelector<HTMLElement>("[data-error]");
+                    if (current) showUiError(current, failure);
+                }
+            }
         }
     };
 
