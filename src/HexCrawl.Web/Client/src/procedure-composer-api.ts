@@ -1,6 +1,10 @@
 import { apiError, backendBaseFromContext } from "./api";
 import type { ToolHostContext } from "./types";
 import type {
+    ProcedureCanonicalCreateInput,
+    ProcedureCanonicalJson,
+    ProcedureCanonicalRevisionInput,
+    ProcedureCanonicalValidation,
     ProcedureComposer,
     ProcedureComposerCreateInput,
     ProcedureComposerDraftInput,
@@ -26,8 +30,28 @@ export class ProcedureComposerApi {
         return this.sendJson("POST", "/api/procedures/composer/draft", input, "Procedure draft");
     }
 
+    public composeCanonicalDraft(input: ProcedureComposerDraftInput): Promise<ProcedureCanonicalJson> {
+        return this.sendJson(
+            "POST",
+            "/api/procedures/composer/canonical/draft",
+            input,
+            "Canonical procedure draft");
+    }
+
+    public validateCanonical(canonicalJson: string): Promise<ProcedureCanonicalValidation> {
+        return this.sendJson(
+            "POST",
+            "/api/procedures/composer/canonical/validate",
+            { canonicalJson },
+            "Canonical procedure validation");
+    }
+
     public createProcedure(input: ProcedureComposerCreateInput): Promise<ProcedureComposer> {
         return this.sendJson("POST", "/api/procedures", input, "Save procedure");
+    }
+
+    public createCanonicalProcedure(input: ProcedureCanonicalCreateInput): Promise<ProcedureComposer> {
+        return this.sendJson("POST", "/api/procedures/canonical", input, "Save canonical procedure");
     }
 
     public getProcedure(procedureId: string, revision?: number | null): Promise<ProcedureComposer> {
@@ -61,6 +85,16 @@ export class ProcedureComposerApi {
             `/api/procedures/${encodeURIComponent(procedureId)}/revisions`,
             input,
             "Save procedure revision");
+    }
+
+    public createCanonicalRevision(
+        procedureId: string,
+        input: ProcedureCanonicalRevisionInput): Promise<ProcedureComposer> {
+        return this.sendJson(
+            "POST",
+            `/api/procedures/${encodeURIComponent(procedureId)}/canonical/revisions`,
+            input,
+            "Save canonical procedure revision");
     }
 
     private async getJson<T>(path: string, label: string): Promise<T> {

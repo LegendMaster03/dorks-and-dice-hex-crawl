@@ -1,5 +1,5 @@
 import type { HexCrawlClientModule } from "../../client-module";
-import { renderProcedureComposer } from "./procedure-composer-view";
+import { renderProcedureWorkspace } from "./procedure-workspace-view";
 import { renderProcedureReference } from "./procedure-reference-view";
 
 export const proceduresModule: HexCrawlClientModule = {
@@ -7,10 +7,10 @@ export const proceduresModule: HexCrawlClientModule = {
     routeKinds: ["procedures", "procedure", "procedure-revision", "procedure-reference"],
     loadingMessage: route => route.kind === "procedure-reference"
         ? "Loading procedure reference…"
-        : "Loading Procedure Composer…",
+        : "Loading exploration procedure…",
     async render(route, context) {
         if (route.kind === "procedures") {
-            return await renderProcedureComposer(context.root, context.api, null, context.navigate);
+            return await renderProcedureWorkspace(context.root, context.api, null, context.navigate);
         }
         if (route.kind === "procedure-reference") {
             return await renderProcedureReference(
@@ -20,25 +20,22 @@ export const proceduresModule: HexCrawlClientModule = {
                 context.navigate);
         }
         if (route.kind === "procedure" || route.kind === "procedure-revision") {
-            const disposeComposer = await renderProcedureComposer(
+            const activeRevision = route.kind === "procedure-revision" ? route.revision : null;
+            const disposeWorkspace = await renderProcedureWorkspace(
                 context.root,
                 context.api,
                 route.procedureId,
-                context.navigate);
+                context.navigate,
+                activeRevision);
             const disposeReferenceAction = attachReferenceAction(
                 context.root,
                 route.procedureId,
+                activeRevision,
                 context.navigate);
-
-            if (route.kind === "procedure-revision") {
-                const revision = context.root.querySelector<HTMLButtonElement>(
-                    `button[data-revision="${route.revision}"]`);
-                if (revision && !revision.disabled) revision.click();
-            }
 
             return () => {
                 disposeReferenceAction();
-                disposeComposer();
+                disposeWorkspace();
             };
         }
         throw new Error(`Unsupported procedures route: ${route.kind}`);
@@ -48,6 +45,7 @@ export const proceduresModule: HexCrawlClientModule = {
 function attachReferenceAction(
     root: HTMLElement,
     procedureId: string,
+    revision: number | null,
     navigate: (route: string, replace?: boolean) => void): () => void {
     ensureReferenceActionStyles();
     const button = document.createElement("button");
@@ -56,12 +54,10 @@ function attachReferenceAction(
     button.dataset.procedureReference = "";
     button.textContent = "View procedure reference";
     button.addEventListener("click", () => {
-        const activeRevision = root.querySelector<HTMLButtonElement>("button[data-revision]:disabled")
-            ?.dataset.revision;
         const base = `/procedures/${encodeURIComponent(procedureId)}`;
-        navigate(activeRevision
-            ? `${base}/revisions/${encodeURIComponent(activeRevision)}/reference`
-            : `${base}/reference`);
+        navigate(revision === null
+            ? `${base}/reference`
+            : `${base}/revisions/${encodeURIComponent(String(revision))}/reference`);
     });
     document.body.append(button);
     return () => button.remove();
