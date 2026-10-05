@@ -1,0 +1,132 @@
+name: Phase 15 Visual Review
+
+on:
+  push:
+    branches: [ "feature/phase-15-core-ux" ]
+
+concurrency:
+  group: phase15-visual-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.x"
+
+      - name: Build application container
+        run: docker build -t dorks-and-dice-hex-crawl:phase15-visual -f src/HexCrawl.Web/Dockerfile .
+
+      - name: Start visual-review PostgreSQL and app
+        run: |
+          set -euo pipefail
+          docker network create phase15-visual 2>/dev/null || true
+          docker run -d --name phase15-visual-postgres \
+            --network phase15-visual \
+            -e POSTGRES_DB=postgres \
+            -e POSTGRES_USER=hex_crawl_visual \
+            -e POSTGRES_PASSWORD=hex_crawl_visual \
+            postgres:18 >/dev/null
+
+          for i in {1..45}; do
+            if [ "$(docker exec phase15-visual-postgres psql -U hex_crawl_visual -d postgres -tAc 'SELECT 1' 2>/dev/null | tr -d '[:space:]')" = "1" ]; then break; fi
+            sleep 1
+          done
+          docker exec phase15-visual-postgres psql -v ON_ERROR_STOP=1 -U hex_crawl_visual -d postgres \
+            -c 'CREATE SCHEMA phase15_visual;' >/dev/null
+
+          docker run -d --name phase15-visual-app \
+            --network phase15-visual \
+            -p 127.0.0.1:18094:8080 \
+            -e 'ConnectionStrings__HexCrawl=Host=phase15-visual-postgres;Port=5432;Database=postgres;Username=hex_crawl_visual;Password=hex_crawl_visual;Search Path=phase15_visual' \
+            -e 'MapAssets__RootPath=/data/assets' \
+            -e 'ToolHost__StandaloneIdentity__Enabled=true' \
+            -e 'ToolHost__StandaloneIdentity__UserId=phase15-visual-dm' \
+            -e 'ToolHost__StandaloneIdentity__DisplayName=Phase 15 Visual DM' \
+            dorks-and-dice-hex-crawl:phase15-visual >/dev/null
+
+          for i in {1..60}; do
+            if curl -fsS http://127.0.0.1:18094/ready | grep -q '"status":"ready"'; then exit 0; fi
+            sleep 1
+          done
+          docker logs phase15-visual-app
+          exit 1
+
+      - name: Seed representative Phase 15 states
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/phase15-seed"
+
+          curl -fsS -X POST http://127.0.0.1:18094/api/overworlds \
+            -H 'Content-Type: application/json' \
+            --data '{"name":"Phase 15 Visual Overworld","orientation":"PointyTop","origin":{"x":0,"y":0},"rotationDegrees":0,"hexRadiusWorldUnits":1,"neighborCenterDistance":12,"distanceUnit":{"kind":"Mile","symbol":"mi","metersPerUnit":1609.344}}' \
+            -o "$RUNNER_TEMP/phase15-seed/world.json"
+          world_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$RUNNER_TEMP/phase15-seed/world.json")"
+
+          curl -fsS -X POST "http://127.0.0.1:18094/api/overworlds/$world_id/expeditions" \
+            -H 'Content-Type: application/json' \
+            --data '{"name":"Spatial compact acceptance expedition","procedureKey":"simple-fixed-distance","presentationKey":"exploration-map","startHex":{"q":0,"r":0}}' \
+            -o "$RUNNER_TEMP/phase15-seed/spatial.json"
+          expedition_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$RUNNER_TEMP/phase15-seed/spatial.json")"
+
+          curl -fsS -X POST http://127.0.0.1:18094/api/expeditions \
+            -H 'Content-Type: application/json' \
+            --data '{"name":"One Ring no-interval visual proof","procedureKey":"the-one-ring-2e","context":{"kind":"NonSpatial","name":"Journey procedure"}}' \
+            -o "$RUNNER_TEMP/phase15-seed/journey.json"
+          journey_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$RUNNER_TEMP/phase15-seed/journey.json")"
+
+          curl -fsS -X POST http://127.0.0.1:18094/api/procedures \
+            -H 'Content-Type: application/json' \
+            --data '{"presetKey":"bx","overrides":[]}' \
+            -o "$RUNNER_TEMP/phase15-seed/procedure.json"
+          procedure_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["procedureId"])' "$RUNNER_TEMP/phase15-seed/procedure.json")"
+
+          printf '%s\n' "$world_id" "$expedition_id" "$journey_id" "$procedure_id" > "$RUNNER_TEMP/phase15-seed/ids.txt"
+
+      - name: Capture rendered Phase 15 states
+        run: |
+          set -euo pipefail
+          chrome_bin="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser || true)"
+          if [ -z "$chrome_bin" ]; then
+            echo 'No Chrome/Chromium executable is available on the runner.' >&2
+            exit 1
+          fi
+          mapfile -t ids < "$RUNNER_TEMP/phase15-seed/ids.txt"
+          world_id="${ids[0]}"
+          expedition_id="${ids[1]}"
+          journey_id="${ids[2]}"
+          procedure_id="${ids[3]}"
+          output="$RUNNER_TEMP/phase15-visual-review"
+          mkdir -p "$output"
+          node .github/scripts/capture-phase15-visual-review.mjs \
+            "$chrome_bin" \
+            http://127.0.0.1:18094 \
+            "$output" \
+            "$procedure_id" \
+            "$world_id" \
+            "$expedition_id" \
+            "$journey_id"
+          cat "$output/layout-metrics.json"
+
+      - name: Upload Phase 15 visual review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase15-visual-review
+          path: |
+            ${{ runner.temp }}/phase15-visual-review/*.png
+            ${{ runner.temp }}/phase15-visual-review/layout-metrics.json
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker rm -f phase15-visual-app 2>/dev/null || true
+          docker rm -f phase15-visual-postgres 2>/dev/null || true
+          docker network rm phase15-visual 2>/dev/null || true
