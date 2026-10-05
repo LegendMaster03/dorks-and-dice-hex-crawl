@@ -9,16 +9,24 @@ public sealed record ProcedureComposerDraftRequest(
     string? PresetKey,
     Guid? ProcedureId,
     int? Revision,
+    IReadOnlyList<ProcedureComposerModuleSelectionRequest>? ModuleSelections,
     IReadOnlyList<ProcedureComposerOverrideRequest>? Overrides);
 
 public sealed record ProcedureComposerCreateRequest(
     string? PresetKey,
     Guid? CampaignId,
+    IReadOnlyList<ProcedureComposerModuleSelectionRequest>? ModuleSelections,
     IReadOnlyList<ProcedureComposerOverrideRequest>? Overrides);
 
 public sealed record ProcedureComposerRevisionRequest(
     int ExpectedRevision,
+    IReadOnlyList<ProcedureComposerModuleSelectionRequest>? ModuleSelections,
     IReadOnlyList<ProcedureComposerOverrideRequest>? Overrides);
+
+public sealed record ProcedureComposerModuleSelectionRequest(string ModuleKey, bool Included)
+{
+    public ProcedureModuleSelection ToDomain() => new(ModuleKey, Included);
+}
 
 public sealed record ProcedureComposerOverrideRequest(
     string? OverrideId,

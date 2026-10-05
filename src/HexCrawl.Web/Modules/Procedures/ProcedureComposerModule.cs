@@ -47,6 +47,7 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
             request.PresetKey,
             request.ProcedureId,
             request.Revision,
+            ModuleSelections(request.ModuleSelections),
             Overrides(request.Overrides),
             cancellationToken);
         return Results.Ok(ProcedureComposerContract.From(draft));
@@ -63,6 +64,7 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
             request.PresetKey,
             request.ProcedureId,
             request.Revision,
+            ModuleSelections(request.ModuleSelections),
             Overrides(request.Overrides),
             cancellationToken);
         var validation = service.Validate(canonicalJson);
@@ -101,6 +103,7 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
         var stored = await service.CreateAsync(
             owner,
             request.PresetKey,
+            ModuleSelections(request.ModuleSelections),
             Overrides(request.Overrides),
             request.CampaignId,
             cancellationToken);
@@ -226,6 +229,7 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
             owner,
             procedureId,
             request.ExpectedRevision,
+            ModuleSelections(request.ModuleSelections),
             Overrides(request.Overrides),
             cancellationToken);
         var draft = await service.CreateDraftAsync(
@@ -262,6 +266,11 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
             cancellationToken);
         return Results.Ok(ProcedureComposerContract.From(draft));
     }
+
+    private static IReadOnlyList<ProcedureModuleSelection> ModuleSelections(
+        IReadOnlyList<ProcedureComposerModuleSelectionRequest>? values) =>
+        values?.Select(value => value.ToDomain()).ToArray()
+        ?? [];
 
     private static IReadOnlyList<HexCrawl.Domain.Procedure.CampaignProcedureOverride> Overrides(
         IReadOnlyList<ProcedureComposerOverrideRequest>? values) =>
