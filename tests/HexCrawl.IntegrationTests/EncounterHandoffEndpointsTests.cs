@@ -124,12 +124,34 @@ public sealed class EncounterHandoffEndpointsTests
             using var client = factory.CreateClient();
             var guideId = Guid.NewGuid();
             var assignmentId = Guid.NewGuid();
+            var resourceId = Guid.NewGuid();
 
             var expedition = await StartNonSpatialAsync(client, "the-one-ring-2e", "Mapless handoff journey");
             var expeditionId = expedition.GetProperty("id").GetGuid();
             var party = await PutGuideAsync(
                 client, expeditionId, expedition.GetProperty("version").GetInt64(), guideId, assignmentId);
             var version = party.GetProperty("version").GetInt64();
+
+            using (var resourceResponse = await client.PutAsJsonAsync(
+                       $"/api/expeditions/{expeditionId:D}/survival/resources/{resourceId:D}",
+                       new
+                       {
+                           expectedVersion = version,
+                           resourceKey = "torches",
+                           target = new { scope = "Party", targetId = (Guid?)null },
+                           inventoryModel = "Counted",
+                           quantity = 2.0,
+                           unit = "torch",
+                           symbolicState = (string?)null,
+                           supplyDieSides = (int?)null,
+                           note = (string?)null,
+                           provenance = Provenance("Dm", "handoff-resource-seed")
+                       }))
+            {
+                resourceResponse.EnsureSuccessStatusCode();
+                var operation = await resourceResponse.Content.ReadFromJsonAsync<JsonElement>();
+                version = operation.GetProperty("expeditionVersion").GetInt64();
+            }
 
             var processId = Guid.NewGuid();
             using (var startProcess = await client.PostAsJsonAsync(
@@ -204,7 +226,7 @@ public sealed class EncounterHandoffEndpointsTests
                                    new
                                    {
                                        id = consequenceId,
-                                       consequenceKey = "fatigue-and-bad-position",
+                                       consequenceKey = "fatigue-resource-and-bad-position",
                                        category = "PersistentEffectChange",
                                        target = new { scope = "Participant", targetId = guideId },
                                        components = new object[]
@@ -217,6 +239,17 @@ public sealed class EncounterHandoffEndpointsTests
                                                levelDelta = 1,
                                                explicitlyResolved = true,
                                                movementComponents = Array.Empty<object>()
+                                           },
+                                           new
+                                           {
+                                               kind = "resourceChange",
+                                               resourceKey = "torches",
+                                               resourceId,
+                                               operation = "Deplete",
+                                               quantity = (double?)null,
+                                               unit = (string?)null,
+                                               state = (string?)null,
+                                               supplyDieSides = (int?)null
                                            },
                                            new
                                            {
@@ -243,6 +276,10 @@ public sealed class EncounterHandoffEndpointsTests
                 value => value.GetProperty("consequence").GetProperty("id").GetGuid() == consequenceId);
             Assert.Contains(effectsBefore.GetProperty("activeEffects").EnumerateArray(),
                 value => value.GetProperty("sourceConsequenceIds").EnumerateArray().Any(id => id.GetGuid() == consequenceId));
+            var survivalBefore = await client.GetFromJsonAsync<JsonElement>($"/api/expeditions/{expeditionId:D}/survival");
+            var depletedResource = survivalBefore.GetProperty("resources").EnumerateArray()
+                .Single(value => value.GetProperty("id").GetGuid() == resourceId);
+            Assert.True(depletedResource.GetProperty("isDepleted").GetBoolean());
 
             var handoffId = Guid.NewGuid();
             using var response = await client.PostAsJsonAsync(
@@ -275,6 +312,10 @@ public sealed class EncounterHandoffEndpointsTests
                 .GetProperty("consequenceId").GetGuid());
             var linkedEffect = Assert.Single(handoff.GetProperty("effects").EnumerateArray());
             Assert.Contains(linkedEffect.GetProperty("sourceConsequenceIds").EnumerateArray(), id => id.GetGuid() == consequenceId);
+            var handoffResource = Assert.Single(handoff.GetProperty("resources").EnumerateArray());
+            Assert.Equal(resourceId, handoffResource.GetProperty("id").GetGuid());
+            Assert.Equal("torches", handoffResource.GetProperty("resourceKey").GetString());
+            Assert.True(handoffResource.GetProperty("isDepleted").GetBoolean());
 
             var effectsAfter = await client.GetFromJsonAsync<JsonElement>($"/api/expeditions/{expeditionId:D}/effects");
             Assert.Contains(effectsAfter.GetProperty("pendingConsequences").EnumerateArray(),
