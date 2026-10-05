@@ -48,7 +48,7 @@ export function expeditionWorkspacePresentation(
     return {
         action: expeditionWorkspaceAction(runtime, journey),
         capabilities,
-        timeLabel: timeLabel(runtime),
+        timeLabel: timeLabel(runtime, capabilities.interval),
         routeLabel: runtime.expedition.isSpatial ? routeLabel(runtime.expedition) : null,
         navigationLabel: runtime.expedition.isSpatial && capabilities.navigation
             ? navigationLabel(runtime.expedition)
@@ -120,7 +120,9 @@ export function expeditionWorkspaceAction(
         };
     }
 
-    if (runtime.expedition.activeWatchNumber !== null && runtime.procedure.runtime !== null) {
+    if (runtime.expedition.isSpatial
+        && runtime.expedition.activeWatchNumber !== null
+        && runtime.procedure.runtime !== null) {
         return {
             kind: "travel",
             label: `Resume watch ${runtime.expedition.activeWatchNumber}`,
@@ -139,10 +141,15 @@ export function expeditionWorkspaceAction(
     }
 
     if (!runtime.expedition.isSpatial && canUseFocusedNonSpatialWatch(runtime)) {
+        const activeWatch = runtime.expedition.activeWatchNumber;
         return {
             kind: "watch",
-            label: `Run watch ${runtime.expedition.completedWatches + 1}`,
-            detail: "Advance the configured interval without fabricating spatial state.",
+            label: activeWatch === null
+                ? `Run watch ${runtime.expedition.completedWatches + 1}`
+                : `Resume watch ${activeWatch}`,
+            detail: activeWatch === null
+                ? "Advance the configured interval without fabricating spatial state."
+                : "Continue the active configured interval without fabricating spatial travel state.",
             urgent: false
         };
     }
@@ -174,8 +181,11 @@ export function expeditionWorkspaceAction(
     };
 }
 
-function timeLabel(runtime: ExpeditionDetail): string {
+function timeLabel(runtime: ExpeditionDetail, hasInterval: boolean): string {
     const state = runtime.expedition;
+    if (!hasInterval) {
+        return `Day ${state.currentDay} · ${formatNumber(state.elapsedTravelHours)} h elapsed`;
+    }
     if (state.activeWatchNumber !== null) {
         const remaining = state.activeWatchRemainingHours;
         return remaining === null
