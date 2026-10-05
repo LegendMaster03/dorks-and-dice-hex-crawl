@@ -1,4 +1,5 @@
 import { renderExpedition } from "./expedition-view";
+import { ensureExpeditionWorkspaceStyles } from "./expedition-workspace-styles";
 import type { HexCrawlClientModule } from "../../client-module";
 
 export const expeditionsModule: HexCrawlClientModule = {
@@ -13,6 +14,7 @@ export const expeditionsModule: HexCrawlClientModule = {
         if (route.kind !== "expedition" && route.kind !== "tracker") {
             throw new Error("Expeditions module received an unsupported route.");
         }
+        ensureExpeditionWorkspaceStyles();
 
         return route.kind === "expedition"
             ? await renderExpedition(
