@@ -1,7 +1,7 @@
 import { CanvasMapRenderer } from "./canvas-renderer";
 import { worldToHex } from "./hex-math";
 import { RenderLifecycle } from "./render-lifecycle";
-import type { Overworld, WorldPoint } from "./types";
+import type { HexCoordinate, Overworld, WorldPoint } from "./types";
 import { Viewport } from "./viewport";
 
 export class MapSurface {
@@ -12,20 +12,22 @@ export class MapSurface {
     private readonly viewport = new Viewport();
     private readonly lifecycle = new RenderLifecycle();
     private readonly resizeObserver: ResizeObserver;
+    private readonly accessibilityHelp: HTMLElement;
     private readonly accessibilityStatus: HTMLElement;
     private disposed = false;
     private clickInterceptor: ((point: WorldPoint) => boolean) | null = null;
     private reviewSelectionHandler: ((id: string) => void) | null = null;
+    private hexSelectionHandler: ((hex: HexCoordinate | null) => void) | null = null;
 
     public constructor(
         host: HTMLElement,
         private readonly getWorld: () => Overworld | null,
         private readonly onWorldClick?: (point: WorldPoint) => void) {
         const accessibilityId = ++MapSurface.nextAccessibilityId;
-        const help = document.createElement("p");
-        help.id = `hc-map-help-${accessibilityId}`;
-        help.className = "hc-sr-only";
-        help.textContent = "Interactive hex map. Drag to pan, use the wheel to zoom, arrow keys pan, plus and minus zoom, Home resets the view, Enter or Space selects and activates the point at the center of the map, and Escape clears the selected hex.";
+        this.accessibilityHelp = document.createElement("p");
+        this.accessibilityHelp.id = `hc-map-help-${accessibilityId}`;
+        this.accessibilityHelp.className = "hc-sr-only";
+        this.accessibilityHelp.textContent = "Interactive hex map. Drag to pan, use the wheel to zoom, arrow keys pan, plus and minus zoom, Home resets the view, Enter or Space selects and activates the point at the center of the map, and Escape clears the selected hex.";
 
         this.accessibilityStatus = document.createElement("p");
         this.accessibilityStatus.id = `hc-map-status-${accessibilityId}`;
@@ -38,9 +40,9 @@ export class MapSurface {
         this.canvas.className = "hc-map-canvas";
         this.canvas.tabIndex = 0;
         this.canvas.setAttribute("role", "region");
-        this.canvas.setAttribute("aria-describedby", `${help.id} ${this.accessibilityStatus.id}`);
+        this.canvas.setAttribute("aria-describedby", `${this.accessibilityHelp.id} ${this.accessibilityStatus.id}`);
         this.canvas.setAttribute("aria-keyshortcuts", "ArrowUp ArrowDown ArrowLeft ArrowRight + - Home Enter Space Escape");
-        host.replaceChildren(this.canvas, help, this.accessibilityStatus);
+        host.replaceChildren(this.canvas, this.accessibilityHelp, this.accessibilityStatus);
 
         this.renderer = new CanvasMapRenderer(this.canvas, this.viewport, this.getWorld, () => this.requestRender());
         this.lifecycle.register("map", () => {
@@ -131,12 +133,24 @@ export class MapSurface {
         this.requestRender();
     }
 
+    public attach(host: HTMLElement): void {
+        if (this.disposed) throw new Error("Can not attach a disposed map surface.");
+        this.resizeObserver.disconnect();
+        host.replaceChildren(this.canvas, this.accessibilityHelp, this.accessibilityStatus);
+        this.resizeObserver.observe(host);
+        this.requestRender();
+    }
+
     public setClickInterceptor(interceptor: ((point: WorldPoint) => boolean) | null): void {
         this.clickInterceptor = interceptor;
     }
 
     public setReviewSelectionHandler(handler: ((id: string) => void) | null): void {
         this.reviewSelectionHandler = handler;
+    }
+
+    public setHexSelectionHandler(handler: ((hex: HexCoordinate | null) => void) | null): void {
+        this.hexSelectionHandler = handler;
     }
 
     public requestRender(): void {
@@ -154,6 +168,7 @@ export class MapSurface {
         this.disposed = true;
         this.clickInterceptor = null;
         this.reviewSelectionHandler = null;
+        this.hexSelectionHandler = null;
         this.resizeObserver.disconnect();
         this.renderer.dispose();
     }
@@ -173,6 +188,7 @@ export class MapSurface {
             const selected = worldToHex(grid, point);
             this.renderer.selectedHex = selected;
             this.accessibilityStatus.textContent = `Selected hex q ${selected.q}, r ${selected.r}.`;
+            this.hexSelectionHandler?.(selected);
             this.requestRender();
         } else {
             this.accessibilityStatus.textContent = `Selected map position ${point.x.toFixed(2)}, ${point.y.toFixed(2)}.`;
@@ -195,6 +211,7 @@ export class MapSurface {
         } else if (event.key === "Escape") {
             this.renderer.selectedHex = null;
             this.accessibilityStatus.textContent = "Selected hex cleared.";
+            this.hexSelectionHandler?.(null);
             this.requestRender();
         } else {
             return;

@@ -1,6 +1,6 @@
 import type { HexCrawlApi } from "../../api";
 import { manualEntryResolutionSources } from "./expedition-input-policy";
-import { suggestedWatchDistance } from "./expedition-party-movement";
+import { authoritativeFixedWatchDistance, suggestedWatchDistance } from "./expedition-party-movement";
 import { encounterCheckDue, navigationResolutionDue, watchActionLabel } from "./expedition-workflow";
 import { formatHours } from "../../runtime-view";
 import { procedureHelperMechanics } from "../../campaign-procedure-view";
@@ -34,6 +34,10 @@ export class ExpeditionWatchController {
     private readonly advanceButton: HTMLButtonElement;
     private readonly locationSelect: HTMLSelectElement;
     private readonly providerTravelUi: TravelEnvironmentProviderUi;
+    private readonly travelResolutionHint: HTMLElement;
+    private readonly travelSourceRow: HTMLLabelElement;
+    private readonly travelNoteRow: HTMLLabelElement;
+    private readonly travelOverrideButton: HTMLButtonElement;
     private disposed = false;
     private advancePending = false;
     private resolutionPending = false;
@@ -41,6 +45,7 @@ export class ExpeditionWatchController {
     private generatedResolutionVersion: number | null = null;
     private generatedEncounterLocationId: string | null | undefined;
     private segmentStateKey: string | null = null;
+    private travelOverrideOpen = false;
 
     public constructor(
         private readonly root: HTMLElement,
@@ -54,6 +59,35 @@ export class ExpeditionWatchController {
         this.locationSelect = select(this.form, "locationId");
         this.providerTravelUi = new TravelEnvironmentProviderUi(root, api);
         void this.providerTravelUi.load(this.getRuntime().id);
+
+        const travelResolution = required<HTMLElement>(this.form, "[data-travel-resolution]");
+        const travelHint = travelResolution.querySelector<HTMLElement>(".hc-hint");
+        const travelSourceRow = select(this.form, "travelSource").closest("label");
+        const travelNoteRow = input(this.form, "travelNote").closest("label");
+        if (!travelHint || !travelSourceRow || !travelNoteRow) {
+            throw new Error("Travel resolution workspace is missing required controls.");
+        }
+        this.travelResolutionHint = travelHint;
+        this.travelSourceRow = travelSourceRow;
+        this.travelNoteRow = travelNoteRow;
+        this.travelOverrideButton = document.createElement("button");
+        this.travelOverrideButton.type = "button";
+        this.travelOverrideButton.hidden = true;
+        this.travelOverrideButton.dataset.travelOverride = "";
+        this.travelResolutionHint.insertAdjacentElement("afterend", this.travelOverrideButton);
+        this.travelOverrideButton.addEventListener("click", () => {
+            const runtime = this.getRuntime();
+            const execution = requireProcedureRuntime(runtime);
+            const derived = authoritativeFixedWatchDistance(runtime);
+            if (derived === null) return;
+            this.travelOverrideOpen = !this.travelOverrideOpen;
+            if (!this.travelOverrideOpen) {
+                input(this.form, "effectiveDistance").value = String(derived);
+                select(this.form, "travelSource").value = "ProcedureDefault";
+                input(this.form, "travelNote").value = "";
+            }
+            this.syncTravelInputVisibility(runtime, execution);
+        });
 
         for (const name of [
             "travelSource",
@@ -113,6 +147,8 @@ export class ExpeditionWatchController {
         input(this.form, "encounterHour")
             .addEventListener("input", () => this.markGeneratedComponentEdited("encounter"));
         this.locationSelect.addEventListener("change", () => this.handleGeneratedLocationEdit());
+        input(this.form, "effectiveDistance")
+            .addEventListener("input", () => this.markDerivedTravelEdited());
         for (const name of ["expectedDistance", "actualDistance"] as const) {
             input(this.form, name)
                 .addEventListener("input", () => this.markGeneratedComponentEdited("travel"));
@@ -145,12 +181,18 @@ export class ExpeditionWatchController {
                 `Continue watch ${state.activeWatchNumber} with ${formatHours(state.activeWatchRemainingHours ?? runtime.remainingWatchHours)} remaining.`);
         }
 
+        const authoritativeDistance = authoritativeFixedWatchDistance(runtime);
         if (execution.actualDistanceResolution === "VariableResolved"
             && execution.travelResolution === "ContinuousDistance") {
             requirementLines.push(
                 "A resolved expected and actual distance are required for this segment.");
         } else if (execution.travelResolution === "ContinuousDistance") {
-            requirementLines.push("An effective travel distance is required for this segment.");
+            if (authoritativeDistance === null) {
+                requirementLines.push("An effective travel distance is required for this segment.");
+            } else {
+                requirementLines.push(
+                    `Party movement supplies ${formatNumber(authoritativeDistance)} ${state.distanceTraveled.unit.symbol} for this segment.`);
+            }
         } else {
             requirementLines.push("A resolved hex-step count is required for this segment.");
         }
@@ -164,13 +206,6 @@ export class ExpeditionWatchController {
                 `An encounter check is due (${prettyEnum(execution.encounterCadence)} cadence).`);
         }
         requirements.replaceChildren(...requirementLines.map(text => paragraph(text)));
-
-        const continuous = execution.travelResolution === "ContinuousDistance";
-        required<HTMLElement>(this.form, "[data-fixed-distance]").hidden =
-            !(continuous && execution.actualDistanceResolution === "Fixed");
-        required<HTMLElement>(this.form, "[data-variable-distance]").hidden =
-            !(continuous && execution.actualDistanceResolution === "VariableResolved");
-        required<HTMLElement>(this.form, "[data-step-distance]").hidden = continuous;
 
         required<HTMLElement>(this.form, "[data-encounter-resolution]").hidden =
             !encounterCheckDue(runtime);
@@ -209,6 +244,7 @@ export class ExpeditionWatchController {
                 input(this.form, "expectedDistance").value = String(suggestedDistance);
             }
         }
+        this.syncTravelInputVisibility(runtime, execution);
 
         this.syncNavigationVisibility();
         this.syncEncounterFields();
@@ -271,8 +307,59 @@ export class ExpeditionWatchController {
         this.generatedResolutionId = null;
         this.generatedResolutionVersion = null;
         this.generatedEncounterLocationId = undefined;
+        this.travelOverrideOpen = false;
         const helperResult = this.root.querySelector<HTMLElement>("[data-resolution-helper-result]");
         if (helperResult) helperResult.textContent = "";
+    }
+
+    private syncTravelInputVisibility(runtime: ExpeditionDetail, execution: ProcedureRuntime): void {
+        const continuous = execution.travelResolution === "ContinuousDistance";
+        const fixed = continuous && execution.actualDistanceResolution === "Fixed";
+        const variable = continuous && execution.actualDistanceResolution === "VariableResolved";
+        const derived = authoritativeFixedWatchDistance(runtime);
+        const useDerived = derived !== null && !this.travelOverrideOpen;
+        const fixedDistance = required<HTMLElement>(this.form, "[data-fixed-distance]");
+        const variableDistance = required<HTMLElement>(this.form, "[data-variable-distance]");
+        const stepDistance = required<HTMLElement>(this.form, "[data-step-distance]");
+
+        if (useDerived) {
+            input(this.form, "effectiveDistance").value = String(derived);
+            select(this.form, "travelSource").value = "ProcedureDefault";
+            input(this.form, "travelNote").value = "";
+            fixedDistance.hidden = true;
+            variableDistance.hidden = true;
+            stepDistance.hidden = true;
+            this.travelSourceRow.hidden = true;
+            this.travelNoteRow.hidden = true;
+            this.travelOverrideButton.hidden = false;
+            this.travelOverrideButton.textContent = "Override movement";
+            this.travelResolutionHint.textContent =
+                `Using authoritative party movement: ${formatNumber(derived)} ${spatialState(runtime).distanceTraveled.unit.symbol}. No movement value or provenance needs to be re-entered.`;
+            return;
+        }
+
+        fixedDistance.hidden = !fixed;
+        variableDistance.hidden = !variable;
+        stepDistance.hidden = continuous;
+        this.travelSourceRow.hidden = false;
+        this.travelNoteRow.hidden = false;
+        this.travelOverrideButton.hidden = derived === null;
+        this.travelOverrideButton.textContent = "Use derived movement";
+        this.travelResolutionHint.textContent = derived === null
+            ? "Authoritative party movement is prefilled when available. Enter only movement information the runtime can not derive."
+            : `Authoritative party movement is ${formatNumber(derived)} ${spatialState(runtime).distanceTraveled.unit.symbol}. Edit only to record an explicit override.`;
+    }
+
+    private markDerivedTravelEdited(): void {
+        const runtime = this.getRuntime();
+        if (authoritativeFixedWatchDistance(runtime) === null) return;
+        const source = select(this.form, "travelSource");
+        if (source.value !== "ProcedureDefault") return;
+        source.value = "DmOverride";
+        const note = input(this.form, "travelNote");
+        if (!note.value.trim()) {
+            note.value = "Overrides authoritative party movement.";
+        }
     }
 
     private syncNavigationVisibility(): void {
@@ -347,59 +434,70 @@ export class ExpeditionWatchController {
         button.disabled = true;
         button.textContent = "Rolling…";
 
-        void this.runMutation(async () => {
-            try {
-                const runtime = this.getRuntime();
-                const execution = requireProcedureRuntime(runtime);
-                const applicability = this.helperApplicability(runtime);
-                if (!applicability.travel && !applicability.navigation && !applicability.encounter) {
-                    throw new Error("No automatic procedure helper is applicable to the current watch state.");
-                }
+        void this.generateProcedureResolutionInPlace(button, idleText);
+    }
 
-                const request: SourceBackedProcedureResolutionHelperRequest = {
-                    expectedVersion: runtime.version,
-                    suppressesNavigationCheck: checkbox(this.form, "suppressNav").checked,
-                    deliberateDoubleBack:
-                        execution.supportsDeliberateDoubleBack
-                        && checkbox(this.form, "doubleBack").checked,
-                    navigationModifier: applicability.navigation
-                        ? integer(input(this.form, "helperNavigationModifier"))
-                        : 0,
-                    expectedDistance: applicability.travel
-                        ? optionalNumeric(input(this.form, "expectedDistance"))
-                        : undefined,
-                    navigationDifficultyClass: applicability.navigation
-                        ? optionalInteger(input(this.form, "helperNavigationDc"))
-                        : undefined,
-                    failureVeerSteps: applicability.navigation
-                        ? nonZeroInteger(input(this.form, "helperFailureVeer"))
-                        : undefined,
-                    keyedLocationId: applicability.encounter && this.locationSelect.value
-                        ? this.locationSelect.value
-                        : undefined
-                };
-                this.providerTravelUi.applySourceInputs(request, applicability);
-
-                const result = await this.api.resolveProcedureInputs(runtime.id, request);
-                if (result.generatedResolutionId !== null) {
-                    const refreshed = await this.api.getExpedition(runtime.id);
-                    if (refreshed.version !== result.expeditionVersion) {
-                        throw new Error(
-                            "The crawl session changed after procedure inputs were generated. Generate them again for the current version.");
-                    }
-                    this.applyRuntime(refreshed);
-                }
-                this.applyGeneratedResolution(result);
-            } finally {
-                this.resolutionPending = false;
-                if (!this.disposed) {
-                    button.textContent = idleText;
-                    this.advanceButton.disabled = false;
-                    this.advanceButton.textContent = watchActionLabel(this.getRuntime());
-                    this.syncResolutionHelperVisibility();
-                }
+    private async generateProcedureResolutionInPlace(
+        button: HTMLButtonElement,
+        idleText: string): Promise<void> {
+        const summary = required<HTMLElement>(this.root, "[data-resolution-helper-result]");
+        try {
+            const runtime = this.getRuntime();
+            const execution = requireProcedureRuntime(runtime);
+            const applicability = this.helperApplicability(runtime);
+            if (!applicability.travel && !applicability.navigation && !applicability.encounter) {
+                throw new Error("No automatic procedure helper is applicable to the current watch state.");
             }
-        });
+
+            const request: SourceBackedProcedureResolutionHelperRequest = {
+                expectedVersion: runtime.version,
+                suppressesNavigationCheck: checkbox(this.form, "suppressNav").checked,
+                deliberateDoubleBack:
+                    execution.supportsDeliberateDoubleBack
+                    && checkbox(this.form, "doubleBack").checked,
+                navigationModifier: applicability.navigation
+                    ? integer(input(this.form, "helperNavigationModifier"))
+                    : 0,
+                expectedDistance: applicability.travel
+                    ? optionalNumeric(input(this.form, "expectedDistance"))
+                    : undefined,
+                navigationDifficultyClass: applicability.navigation
+                    ? optionalInteger(input(this.form, "helperNavigationDc"))
+                    : undefined,
+                failureVeerSteps: applicability.navigation
+                    ? nonZeroInteger(input(this.form, "helperFailureVeer"))
+                    : undefined,
+                keyedLocationId: applicability.encounter && this.locationSelect.value
+                    ? this.locationSelect.value
+                    : undefined
+            };
+            this.providerTravelUi.applySourceInputs(request, applicability);
+
+            const result = await this.api.resolveProcedureInputs(runtime.id, request);
+            if (result.generatedResolutionId !== null) {
+                const refreshed = await this.api.getExpedition(runtime.id);
+                if (refreshed.version !== result.expeditionVersion) {
+                    throw new Error(
+                        "The crawl session changed after procedure inputs were generated. Generate them again for the current version.");
+                }
+                this.applyRuntime(refreshed);
+            }
+            this.applyGeneratedResolution(result);
+        } catch (value) {
+            if (!this.disposed) {
+                summary.textContent = value instanceof Error
+                    ? value.message
+                    : String(value);
+            }
+        } finally {
+            this.resolutionPending = false;
+            if (!this.disposed) {
+                button.textContent = idleText;
+                this.advanceButton.disabled = false;
+                this.advanceButton.textContent = watchActionLabel(this.getRuntime());
+                this.syncResolutionHelperVisibility();
+            }
+        }
     }
 
     private applyGeneratedResolution(result: ProcedureResolutionHelperResult): void {
@@ -562,10 +660,25 @@ export class ExpeditionWatchController {
         return value as ResolutionSource;
     }
 
+    private clearAdvanceError(): void {
+        this.root.querySelector<HTMLElement>("[data-watch-advance-error]")?.remove();
+    }
+
+    private showAdvanceError(value: unknown): void {
+        this.clearAdvanceError();
+        const error = document.createElement("p");
+        error.className = "hc-error";
+        error.dataset.watchAdvanceError = "";
+        error.setAttribute("role", "alert");
+        error.textContent = value instanceof Error ? value.message : String(value);
+        this.form.insertAdjacentElement("beforebegin", error);
+    }
+
     private submit(event: SubmitEvent): void {
         event.preventDefault();
         if (this.advancePending || this.resolutionPending || this.disposed) return;
 
+        this.clearAdvanceError();
         this.advancePending = true;
         this.advanceButton.disabled = true;
         this.advanceButton.textContent = "Applying…";
@@ -684,6 +797,8 @@ export class ExpeditionWatchController {
                     this.syncResolutionHelperVisibility();
                 }
             }
+        }).catch(value => {
+            if (!this.disposed) this.showAdvanceError(value);
         });
     }
 }

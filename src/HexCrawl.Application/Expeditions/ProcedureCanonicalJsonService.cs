@@ -18,11 +18,21 @@ public sealed class ProcedureCanonicalJsonService(
 {
     private static readonly JsonSerializerOptions JsonOptions = CreateJsonOptions();
 
+    public Task<string> CreateDraftJsonAsync(
+        string ownerUserId,
+        string? presetKey,
+        Guid? procedureId,
+        int? revision,
+        IReadOnlyList<CampaignProcedureOverride> overrides,
+        CancellationToken cancellationToken = default) =>
+        CreateDraftJsonAsync(ownerUserId, presetKey, procedureId, revision, [], overrides, cancellationToken);
+
     public async Task<string> CreateDraftJsonAsync(
         string ownerUserId,
         string? presetKey,
         Guid? procedureId,
         int? revision,
+        IReadOnlyList<ProcedureModuleSelection> moduleSelections,
         IReadOnlyList<CampaignProcedureOverride> overrides,
         CancellationToken cancellationToken = default)
     {
@@ -31,6 +41,7 @@ public sealed class ProcedureCanonicalJsonService(
             presetKey,
             procedureId,
             revision,
+            moduleSelections,
             overrides,
             cancellationToken);
         return Serialize(draft.Procedure);

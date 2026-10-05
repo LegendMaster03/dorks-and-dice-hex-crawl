@@ -4,6 +4,7 @@ public sealed record ProcedureCanonicalDraftRequest(
     string? PresetKey,
     Guid? ProcedureId,
     int? Revision,
+    IReadOnlyList<ProcedureComposerModuleSelectionRequest>? ModuleSelections,
     IReadOnlyList<ProcedureComposerOverrideRequest>? Overrides);
 
 public sealed record ProcedureCanonicalValidationRequest(string CanonicalJson);

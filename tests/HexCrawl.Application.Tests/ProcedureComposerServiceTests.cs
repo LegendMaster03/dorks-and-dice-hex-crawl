@@ -28,24 +28,28 @@ public sealed class ProcedureComposerServiceTests
     }
 
     [Fact]
-    public async Task CustomDraftHasNoOriginAndCoversGenericComposerAreas()
+    public async Task CustomDraftHasNoOriginAndExplicitSelectionsExposeGenericDependencyDiagnostics()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = new PostgresHexCrawlStore(database.ConnectionString);
         await store.InitializeAsync();
         var service = Composer(store);
 
-        var draft = await service.CreateDraftAsync("alice", null, null, null, []);
+        var draft = await service.CreateDraftAsync(
+            "alice",
+            null,
+            null,
+            null,
+            [new ProcedureModuleSelection(GenericProcedureCatalog.NavigationOutcomeModule, true)],
+            []);
 
         Assert.Null(draft.Origin);
-        Assert.Contains(draft.Procedure.Modules, module => module.Module.Category == "Time");
-        Assert.Contains(draft.Procedure.Modules, module => module.Module.Category == "Movement");
-        Assert.Contains(draft.Procedure.Modules, module => module.Module.Category == "Party procedure");
-        Assert.Contains(draft.Procedure.Modules, module => module.Module.Category == "Navigation");
-        Assert.Contains(draft.Procedure.Modules, module => module.Module.Category == "Exploration");
-        Assert.Contains(draft.Procedure.Modules, module => module.Module.Category == "Encounters");
-        Assert.Contains(draft.Procedure.Modules, module => module.Module.Category == "Survival/resources");
-        Assert.Contains(draft.Procedure.Modules, module => module.Module.Category == "Journey processes");
+        Assert.Contains(draft.Procedure.Modules, module =>
+            module.Module.Key == GenericProcedureCatalog.TimeIntervalModule);
+        Assert.Contains(draft.Procedure.Modules, module =>
+            module.Module.Key == GenericProcedureCatalog.NavigationOutcomeModule);
+        Assert.DoesNotContain(draft.Procedure.Modules, module =>
+            module.Module.Key == GenericProcedureCatalog.JourneyProcessModule);
 
         var unresolved = Assert.Single(draft.Dependencies.Issues, issue =>
             issue.Kind == ProcedureDependencyIssueKind.UnresolvedInput

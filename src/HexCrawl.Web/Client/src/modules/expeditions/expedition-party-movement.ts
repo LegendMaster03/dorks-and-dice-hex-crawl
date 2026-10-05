@@ -14,6 +14,20 @@ export function suggestedWatchDistance(runtime: ExpeditionDetail): number | null
     return convertDistanceValue(suggestion, runtime.expedition.distanceTraveled.unit);
 }
 
+export function authoritativeFixedWatchDistance(runtime: ExpeditionDetail): number | null {
+    if (!runtime.expedition.isSpatial) return null;
+    const execution = runtime.procedure.runtime;
+    const composition = runtime.movementComposition;
+    if (!execution
+        || execution.travelResolution !== "ContinuousDistance"
+        || execution.actualDistanceResolution !== "Fixed"
+        || (composition.status !== "Resolved" && composition.status !== "ReferenceFallback")) {
+        return null;
+    }
+
+    return suggestedWatchDistance(runtime);
+}
+
 export function convertDistanceValue(
     distance: DistanceValue,
     targetUnit: DistanceUnit): number | null {

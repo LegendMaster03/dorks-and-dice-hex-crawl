@@ -84,7 +84,7 @@ public sealed class ProcedureReferenceEndpointsTests
     }
 
     [Fact]
-    public async Task CustomReferenceNeedsNoOriginAndExposesAllMaterializedModules()
+    public async Task CustomReferenceNeedsNoOriginAndExposesOnlyMaterializedModules()
     {
         var database = TestWebHost.NewDatabasePath();
         try
@@ -102,33 +102,24 @@ public sealed class ProcedureReferenceEndpointsTests
             var created = await createResponse.Content.ReadFromJsonAsync<JsonElement>();
             var procedureId = created.GetProperty("procedureId").GetGuid();
             var expectedModuleCount = created.GetProperty("modules").GetArrayLength();
+            Assert.Equal(1, expectedModuleCount);
 
             var reference = await client.GetFromJsonAsync<JsonElement>(
                 $"/api/procedures/{procedureId:D}/reference");
 
             Assert.Equal(JsonValueKind.Null, reference.GetProperty("origin").ValueKind);
-            Assert.Equal(
-                expectedModuleCount,
-                reference.GetProperty("sections").EnumerateArray()
-                    .Sum(section => section.GetProperty("modules").GetArrayLength()));
-            Assert.Contains(
-                reference.GetProperty("sections").EnumerateArray(),
-                section => section.GetProperty("name").GetString() == "Journey Processes");
-
-            var navigation = Module(reference, GenericProcedureCatalog.NavigationOutcomeModule);
-            var input = Assert.Single(
-                navigation.GetProperty("requiredInputs").EnumerateArray(),
-                value => value.GetProperty("key").GetString() == "navigation.check-result");
-            var sources = input.GetProperty("allowedSources").EnumerateArray()
-                .Select(value => value.GetProperty("key").GetString())
+            var sections = reference.GetProperty("sections").EnumerateArray().ToArray();
+            var modules = sections
+                .SelectMany(section => section.GetProperty("modules").EnumerateArray())
                 .ToArray();
-            Assert.Contains("SelectedModule", sources);
-            Assert.Contains("Dm", sources);
-            Assert.Contains("OptionalProvider", sources);
-            Assert.Contains("ExternalState", sources);
-            Assert.Contains(
-                navigation.GetProperty("diagnostics").EnumerateArray(),
-                value => value.GetProperty("kind").GetString() == "UnresolvedInput");
+            Assert.Equal(expectedModuleCount, modules.Length);
+            var time = Assert.Single(modules);
+            Assert.Equal(
+                GenericProcedureCatalog.TimeIntervalModule,
+                time.GetProperty("moduleKey").GetString());
+            Assert.DoesNotContain(
+                sections,
+                section => section.GetProperty("name").GetString() == "Journey Processes");
         }
         finally
         {
