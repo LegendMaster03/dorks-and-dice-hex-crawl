@@ -1,4 +1,5 @@
 import { backendBaseFromContext, HexCrawlApiError } from "./api";
+import type { CreateEncounterHandoffRequest, HexCrawlEncounterHandoffV2 } from "./encounter-handoff";
 import type { ToolHostContext } from "./types";
 import type {
     CloseJourneyProcessRequest,
@@ -49,6 +50,16 @@ export class JourneyApi {
         return this.sendJson("POST", `/api/expeditions/${encodeURIComponent(expeditionId)}/journeys/events/${encodeURIComponent(occurrenceId)}/resolve`, request, "Resolve journey event");
     }
 
+    public createEncounterHandoff(
+        expeditionId: string,
+        request: CreateEncounterHandoffRequest): Promise<HexCrawlEncounterHandoffV2> {
+        return this.sendJson(
+            "POST",
+            `/api/expeditions/${encodeURIComponent(expeditionId)}/encounter-handoff`,
+            request,
+            "Encounter handoff");
+    }
+
     private closeProcess(action: string, expeditionId: string, processId: string, request: CloseJourneyProcessRequest): Promise<JourneyOperation> {
         return this.sendJson("POST", `/api/expeditions/${encodeURIComponent(expeditionId)}/journeys/processes/${encodeURIComponent(processId)}/${action}`, request, `${action} journey process`);
     }
@@ -71,15 +82,15 @@ export class JourneyApi {
         if (!response.ok) {
             let detail = "";
             try {
-                const payload = await response.clone().json() as { detail?: string; title?: string };
-                detail = payload.detail ?? payload.title ?? "";
+                const payload = await response.clone().json() as { error?: string; detail?: string; title?: string };
+                detail = payload.error ?? payload.detail ?? payload.title ?? "";
             } catch {
                 detail = (await response.text()).trim();
             }
-            const kind = response.status === 400 ? "validation"
+            const kind = response.status === 400 || response.status === 422 ? "validation"
                 : response.status === 401 || response.status === 403 ? "auth"
                     : response.status === 404 ? "not-found"
-                        : response.status === 409 ? "conflict"
+                        : response.status === 409 || response.status === 412 ? "conflict"
                             : "server";
             throw new HexCrawlApiError(response.status, kind, `${label} failed${detail ? `: ${detail}` : "."}`);
         }
