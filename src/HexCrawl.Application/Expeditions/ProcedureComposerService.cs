@@ -113,7 +113,18 @@ public sealed class ProcedureComposerService(CampaignProcedureService procedures
 
         var draft = CampaignProcedureMaterializer.CreateDraft(current.Procedure, moduleSelections, overrides);
         draft.Validate();
-        if (CampaignProcedureSnapshot.Equivalent(current.Procedure, draft))
+
+        // Override records are audit/history metadata. A newly submitted override that resolves to
+        // the already-materialized mechanic and parameters is not a behavioral procedure change.
+        // Structural selections, mechanic changes, and parameter changes remain visible through
+        // Modules and are therefore included in the equivalence check.
+        var materializedChange = draft with
+        {
+            Overrides = current.Procedure.Overrides
+                .Select(CampaignProcedureSnapshot.Copy)
+                .ToArray()
+        };
+        if (CampaignProcedureSnapshot.Equivalent(current.Procedure, materializedChange))
         {
             throw new InvalidOperationException("The submitted procedure changes do not alter the current materialized procedure.");
         }
