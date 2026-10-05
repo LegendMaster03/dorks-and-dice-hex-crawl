@@ -43,6 +43,10 @@ export class SourceMapWorkspace {
         this.host.innerHTML = `
             <summary>Reference maps</summary>
             <p class="hc-hint">A map set is a collection of alternate source versions of the same map and geographic extent. Keep GM/player versions, grid/gridless exports, numbered/keyed references, and other evidence for that map in one set. A neighboring regional map belongs in a different set. These source images remain independent so future image comparison can derive a common base and true visual-difference layers.</p>
+            <details>
+                <summary>Technical details</summary>
+                <p class="hc-hint">Internally, these are stored as source-map representations. The map-set label is a user-facing way to organize versions of the same map without changing that underlying data model.</p>
+            </details>
             <label>Map view <select data-source-map-raster-view>
                 <option value="manual">Manual visibility</option>
                 <option value="gm-grid">GM · baked grid</option>
