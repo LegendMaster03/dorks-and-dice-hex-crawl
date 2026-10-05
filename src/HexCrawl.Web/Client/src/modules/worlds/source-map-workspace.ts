@@ -12,6 +12,7 @@ import { SourceMapRegistrationController } from "./source-map-registration-contr
 import { WonderdraftImportController } from "./wonderdraft-import-controller";
 
 const newGeographyValue = "__new_geography__";
+type CoordinatedRasterView = "manual" | "gm-grid" | "gm-gridless" | "player-grid" | "player-gridless";
 
 export class SourceMapWorkspace {
     private details: SourceMapDetail[] = [];
@@ -21,9 +22,13 @@ export class SourceMapWorkspace {
     private readonly wonderdraftController: WonderdraftImportController;
     private readonly list: HTMLElement;
     private readonly uploadForm: HTMLFormElement;
+    private readonly uploadFilesHost: HTMLElement;
     private readonly editForm: HTMLFormElement;
     private readonly geographySelect: HTMLSelectElement;
     private readonly newGeographyInput: HTMLInputElement;
+    private readonly editGeographySelect: HTMLSelectElement;
+    private readonly rasterViewSelect: HTMLSelectElement;
+    private readonly rasterViewStatus: HTMLElement;
     private disposed = false;
 
     public constructor(
@@ -37,17 +42,23 @@ export class SourceMapWorkspace {
         this.host.open = true;
         this.host.innerHTML = `
             <summary>Reference maps</summary>
-            <p class="hc-hint">Reference maps are alternate raster views of the same continuous overworld. Put maps of the same geographic extent in one map group, such as GM/player and grid/gridless versions of the same map. Use a different group for a different region or extent. Visibility switches let you layer or swap representations after they are registered.</p>
+            <p class="hc-hint">A map group is one geographic extent. Keep every useful source image for that extent together: GM/player versions, grid/gridless exports, numbered/keyed references, and other evidence. These source images remain independent so future image comparison can derive a common base and true visual-difference layers.</p>
+            <label>Raster view <select data-source-map-raster-view>
+                <option value="manual">Manual visibility</option>
+                <option value="gm-grid">GM · baked grid</option>
+                <option value="gm-gridless">GM · gridless</option>
+                <option value="player-grid">Player · baked grid</option>
+                <option value="player-gridless">Player · gridless</option>
+            </select><span class="hc-hint">This is a temporary whole-image view switch. It coordinates GM/Player source maps across all groups without treating the rasters themselves as the final layer model. Shared and auxiliary references keep their manual visibility.</span></label>
+            <p class="hc-hint" data-source-map-raster-view-status></p>
             <div data-source-map-list></div>
             <form class="hc-form" data-source-map-upload>
-                <p class="hc-subsection-title">Import raster map</p>
-                <label>Raster file <input name="file" type="file" accept="image/png,image/jpeg,image/webp" required></label>
-                <label>Map name <input name="name" required></label>
-                <label>Role <select name="role"><option value="Gm">GM</option><option value="Player">Player</option><option value="Neutral">Neutral</option><option value="Other">Other</option></select><span class="hc-hint">Use GM and Player for alternate audience versions of the same geography.</span></label>
-                <label>Map group <select name="geography"></select><span class="hc-hint">A map group means the same geographic extent, not merely the same campaign. A common group may contain GM/player and grid/gridless variants.</span></label>
-                <label data-new-geography>New map group <input name="newGeography" placeholder="Bellowing Wilds"><span class="hc-hint">For a separate regional map, create a separate group and register it into the shared overworld coordinate space.</span></label>
-                <label><input name="bakedGrid" type="checkbox"> Image contains a baked-in hex grid</label>
-                <button type="submit" class="hc-primary-action">Upload raster map</button>
+                <p class="hc-subsection-title">Import map group</p>
+                <label>Raster files <input name="file" type="file" accept="image/png,image/jpeg,image/webp" multiple required><span class="hc-hint">Select one image or a complete set for the same geographic extent.</span></label>
+                <label>Map group <select name="geography"></select><span class="hc-hint">Choose an existing group to avoid spelling variants. Create a new group only for a new geographic extent or neighboring region.</span></label>
+                <label data-new-geography>New map group <input name="newGeography" placeholder="Bellowing Wilds"><span class="hc-hint">Separate neighboring regions remain manually registered for now. Automatic landmark/road matching is future Surveyor work.</span></label>
+                <div data-source-map-upload-files></div>
+                <button type="submit" class="hc-primary-action">Upload reference maps</button>
             </form>
             <form class="hc-form" data-wonderdraft-inspect>
                 <p class="hc-subsection-title">Import Wonderdraft project</p>
@@ -61,9 +72,14 @@ export class SourceMapWorkspace {
                 <p class="hc-subsection-title">Selected raster map</p>
                 <p class="hc-hint" data-source-map-selected-meta></p>
                 <label>Name <input name="name" required></label>
-                <label>Map group <input name="geographyKey" required><span class="hc-hint">Maps in the same group represent the same geographic extent. This does not automatically copy registration between differently cropped images.</span></label>
-                <label>Role <select name="role"><option value="Gm">GM</option><option value="Player">Player</option><option value="Neutral">Neutral</option><option value="Other">Other</option></select></label>
-                <label><input name="bakedGrid" type="checkbox"> Image contains a baked-in hex grid</label>
+                <label>Map group <select name="geographyKey"></select><span class="hc-hint">Maps in the same group represent the same geographic extent. Registration remains per image so differently cropped exports are not guessed.</span></label>
+                <label>Source use <select name="role">
+                    <option value="Gm">GM view source</option>
+                    <option value="Player">Player view source</option>
+                    <option value="Neutral">Shared / neutral reference</option>
+                    <option value="Other">Auxiliary / reference only</option>
+                </select></label>
+                <label><input name="bakedGrid" type="checkbox"> Source image contains a baked-in hex grid</label>
                 <div class="hc-button-row">
                     <button type="submit" class="hc-primary-action">Save metadata</button>
                     <button type="button" data-align-grid>Detect / repair hex grid</button>
@@ -73,7 +89,7 @@ export class SourceMapWorkspace {
             </form>
             <section data-registration-panel hidden>
                 <p class="hc-subsection-title">Advanced map registration</p>
-                <p class="hc-hint">Manual placement uses three matching landmarks. This can align a gridless representation to an already established world grid, or place a different regional map into the same overworld. Choose a landmark in the raster, choose the same place on the world map, and repeat three times.</p>
+                <p class="hc-hint">Manual placement uses three matching landmarks. This can align a gridless representation to an established world grid or place a neighboring regional map into the same overworld. Automatic landmark/road-based regional alignment is not implemented yet.</p>
                 <img data-registration-image alt="Source map registration preview" style="display:block;max-width:100%;max-height:280px;object-fit:contain;cursor:crosshair;border:1px solid rgba(0,0,0,.2)">
                 <p class="hc-hint" data-registration-status></p>
                 <div class="hc-button-row">
@@ -85,11 +101,17 @@ export class SourceMapWorkspace {
 
         this.list = required(this.host, "[data-source-map-list]");
         this.uploadForm = required(this.host, "[data-source-map-upload]");
+        this.uploadFilesHost = required(this.uploadForm, "[data-source-map-upload-files]");
         this.editForm = required(this.host, "[data-source-map-edit]");
         this.geographySelect = select(this.uploadForm, "geography");
         this.newGeographyInput = input(this.uploadForm, "newGeography");
+        this.editGeographySelect = select(this.editForm, "geographyKey");
+        this.rasterViewSelect = required<HTMLSelectElement>(this.host, "[data-source-map-raster-view]");
+        this.rasterViewStatus = required<HTMLElement>(this.host, "[data-source-map-raster-view-status]");
 
         this.geographySelect.addEventListener("change", () => this.syncNewGeographyVisibility());
+        input(this.uploadForm, "file").addEventListener("change", () => this.renderUploadFiles());
+        this.rasterViewSelect.addEventListener("change", () => this.applyCoordinatedRasterView());
         this.uploadForm.addEventListener("submit", event => {
             event.preventDefault();
             void this.run(this.uploadForm, () => this.upload());
@@ -98,6 +120,7 @@ export class SourceMapWorkspace {
             event.preventDefault();
             void this.run(this.editForm, () => this.updateMetadata());
         });
+
         this.registrationController = new SourceMapRegistrationController(
             this.host,
             this.api,
@@ -128,6 +151,7 @@ export class SourceMapWorkspace {
                 const importedSourceMap = this.details.find(map => map.id === importedSourceMapId) ?? null;
                 if (importedSourceMap) {
                     this.selected = importedSourceMap;
+                    this.ensureVisibleForEditing(importedSourceMap);
                     this.renderSelected();
                 }
             });
@@ -136,7 +160,9 @@ export class SourceMapWorkspace {
         selectedAlignButton.addEventListener("click", () =>
             void this.run(null, () => this.detectGrid(this.selected, selectedAlignButton)));
         required<HTMLButtonElement>(this.host, "[data-register]").addEventListener("click", () => {
-            if (this.selected) this.gridAlignmentController.cancelIfMap(this.selected.id);
+            if (!this.selected) return;
+            this.gridAlignmentController.cancelIfMap(this.selected.id);
+            this.ensureVisibleForEditing(this.selected);
             this.registrationController.begin(this.selected);
         });
         required<HTMLButtonElement>(this.host, "[data-delete]").addEventListener("click", () =>
@@ -153,9 +179,11 @@ export class SourceMapWorkspace {
         this.details = result.sourceMaps;
         if (this.selected) this.selected = this.details.find(item => item.id === this.selected!.id) ?? null;
         this.renderGeographies();
+        this.renderEditGeographies();
         this.wonderdraftController.setSourceMaps(this.details);
         this.renderList();
         this.renderSelected();
+        this.applyCoordinatedRasterView();
     }
 
     public dispose(): void {
@@ -165,22 +193,39 @@ export class SourceMapWorkspace {
         this.wonderdraftController.dispose();
     }
 
+    private geographyGroups(): string[] {
+        return [...new Set(this.details.map(map => map.geographyKey))]
+            .sort((a, b) => a.localeCompare(b));
+    }
+
     private renderGeographies(): void {
         const previous = this.geographySelect.value;
-        const groups = [...new Set(this.details.map(map => map.geographyKey))].sort((a, b) => a.localeCompare(b));
+        const groups = this.geographyGroups();
         this.geographySelect.replaceChildren();
-        const create = document.createElement("option");
-        create.value = newGeographyValue;
-        create.textContent = "Create new map group";
-        this.geographySelect.append(create);
         for (const group of groups) {
             const option = document.createElement("option");
             option.value = group;
             option.textContent = group;
             this.geographySelect.append(option);
         }
-        this.geographySelect.value = groups.includes(previous) ? previous : newGeographyValue;
+        const create = document.createElement("option");
+        create.value = newGeographyValue;
+        create.textContent = "Create new map group";
+        this.geographySelect.append(create);
+
+        if (groups.includes(previous)) this.geographySelect.value = previous;
+        else this.geographySelect.value = groups[0] ?? newGeographyValue;
         this.syncNewGeographyVisibility();
+    }
+
+    private renderEditGeographies(): void {
+        this.editGeographySelect.replaceChildren();
+        for (const group of this.geographyGroups()) {
+            const option = document.createElement("option");
+            option.value = group;
+            option.textContent = group;
+            this.editGeographySelect.append(option);
+        }
     }
 
     private syncNewGeographyVisibility(): void {
@@ -188,6 +233,78 @@ export class SourceMapWorkspace {
         const creating = this.geographySelect.value === newGeographyValue;
         wrapper.hidden = !creating;
         this.newGeographyInput.required = creating;
+    }
+
+    private renderUploadFiles(): void {
+        this.uploadFilesHost.replaceChildren();
+        const files = [...(input(this.uploadForm, "file").files ?? [])];
+        for (const [index, file] of files.entries()) {
+            const row = document.createElement("section");
+            row.className = "hc-status-section";
+            row.dataset.sourceMapUploadIndex = String(index);
+
+            const heading = document.createElement("strong");
+            heading.textContent = file.name;
+
+            const nameLabel = document.createElement("label");
+            nameLabel.append(document.createTextNode("Map name "));
+            const name = document.createElement("input");
+            name.name = "mapName";
+            name.required = true;
+            name.value = displayNameFromFile(file.name);
+            nameLabel.append(name);
+
+            const roleLabelElement = document.createElement("label");
+            roleLabelElement.append(document.createTextNode("Source use "));
+            const role = document.createElement("select");
+            role.name = "mapRole";
+            role.innerHTML = sourceUseOptions();
+            role.value = "Other";
+            roleLabelElement.append(role);
+
+            const gridLabel = document.createElement("label");
+            const bakedGrid = document.createElement("input");
+            bakedGrid.type = "checkbox";
+            bakedGrid.name = "mapBakedGrid";
+            gridLabel.append(bakedGrid, document.createTextNode(" Source image contains a baked-in hex grid"));
+
+            row.append(heading, nameLabel, roleLabelElement, gridLabel);
+            this.uploadFilesHost.append(row);
+        }
+    }
+
+    private applyCoordinatedRasterView(): void {
+        const view = this.rasterViewSelect.value as CoordinatedRasterView;
+        if (view === "manual") {
+            this.rasterViewStatus.textContent = "Manual visibility is active. Each reference map can be shown or hidden independently.";
+            this.map.requestRender();
+            return;
+        }
+
+        const target = coordinatedViewTarget(view);
+        for (const sourceMap of this.details) {
+            if (sourceMap.role !== "Gm" && sourceMap.role !== "Player") continue;
+            const matches = sourceMap.role === target.role
+                && sourceMap.containsBakedGrid === target.containsBakedGrid;
+            if (matches) this.map.renderer.hiddenSourceMapIds.delete(sourceMap.id);
+            else this.map.renderer.hiddenSourceMapIds.add(sourceMap.id);
+        }
+
+        const missingGroups = this.geographyGroups().filter(group =>
+            !this.details.some(map =>
+                map.geographyKey === group
+                && map.role === target.role
+                && map.containsBakedGrid === target.containsBakedGrid));
+        this.rasterViewStatus.textContent = missingGroups.length === 0
+            ? `${coordinatedViewLabel(view)} is available in every map group.`
+            : `${coordinatedViewLabel(view)} is active. No matching source image exists in: ${missingGroups.join(", ")}.`;
+        this.map.requestRender();
+    }
+
+    private ensureVisibleForEditing(sourceMap: SourceMapDetail): void {
+        this.rasterViewSelect.value = "manual";
+        this.map.renderer.hiddenSourceMapIds.delete(sourceMap.id);
+        this.applyCoordinatedRasterView();
     }
 
     private renderList(): void {
@@ -198,41 +315,42 @@ export class SourceMapWorkspace {
             const heading = document.createElement("strong");
             heading.textContent = "No reference maps yet.";
             const detail = document.createElement("span");
-            detail.textContent = "Upload a PNG, JPEG, or WebP below. Maps appear immediately with temporary placement until registered.";
+            detail.textContent = "Upload one image or a complete map group below. Unregistered rasters appear immediately with temporary centered placement.";
             empty.append(heading, detail);
             this.list.append(empty);
             return;
         }
 
-        const groups = [...new Set(this.details.map(map => map.geographyKey))].sort((a, b) => a.localeCompare(b));
-        for (const groupName of groups) {
+        for (const groupName of this.geographyGroups()) {
             const group = document.createElement("section");
             group.className = "hc-status-section";
             const groupHeading = document.createElement("strong");
             groupHeading.textContent = `Map group: ${groupName}`;
             const groupHint = document.createElement("p");
             groupHint.className = "hc-hint";
-            groupHint.textContent = "Same geographic extent. Use visibility to layer or switch GM/player and grid/gridless representations. Registration remains per image so differently cropped exports are not guessed.";
+            groupHint.textContent = "Same geographic extent. Registration stays per source image. GM/Player view sources can switch together across groups; shared and auxiliary references remain independently visible.";
             group.append(groupHeading, groupHint);
 
-            for (const map of this.details.filter(item => item.geographyKey === groupName)) {
+            for (const sourceMap of this.details.filter(item => item.geographyKey === groupName)) {
                 const row = document.createElement("div");
                 row.className = "hc-status-section";
                 const heading = document.createElement("strong");
-                heading.textContent = map.name;
+                heading.textContent = sourceMap.name;
                 const metadata = document.createElement("p");
                 metadata.className = "hc-hint";
-                metadata.textContent = `${roleLabel(map.role)} · ${map.pixelWidth}×${map.pixelHeight} · ${map.containsBakedGrid ? "baked grid" : "gridless"} · ${map.alignment ? "registered" : "temporary centered placement"} · ${(map.importedContentCount ?? 0) > 0 ? `${map.importedContentCount} imported source records` : "no source records"}`;
+                metadata.textContent = `${sourceUseLabel(sourceMap.role)} · ${sourceMap.pixelWidth}×${sourceMap.pixelHeight} · ${sourceMap.containsBakedGrid ? "baked grid" : "gridless"} · ${sourceMap.alignment ? "registered" : "temporary centered placement"} · ${(sourceMap.importedContentCount ?? 0) > 0 ? `${sourceMap.importedContentCount} imported source records` : "no source records"}`;
+
                 const controls = document.createElement("div");
                 controls.className = "hc-button-row";
                 const visibleLabel = document.createElement("label");
                 const visible = document.createElement("input");
                 visible.type = "checkbox";
-                visible.checked = !this.map.renderer.hiddenSourceMapIds.has(map.id);
+                visible.checked = !this.map.renderer.hiddenSourceMapIds.has(sourceMap.id);
                 visible.addEventListener("change", () => {
-                    if (visible.checked) this.map.renderer.hiddenSourceMapIds.delete(map.id);
-                    else this.map.renderer.hiddenSourceMapIds.add(map.id);
-                    this.map.requestRender();
+                    this.rasterViewSelect.value = "manual";
+                    if (visible.checked) this.map.renderer.hiddenSourceMapIds.delete(sourceMap.id);
+                    else this.map.renderer.hiddenSourceMapIds.add(sourceMap.id);
+                    this.applyCoordinatedRasterView();
                 });
                 visibleLabel.append(visible, document.createTextNode(" Visible"));
 
@@ -240,43 +358,46 @@ export class SourceMapWorkspace {
                 selectButton.type = "button";
                 selectButton.textContent = "Edit";
                 selectButton.addEventListener("click", () => {
-                    this.selected = map;
+                    this.selected = sourceMap;
+                    this.ensureVisibleForEditing(sourceMap);
                     this.renderSelected();
                 });
 
                 const alignButton = document.createElement("button");
                 alignButton.type = "button";
-                alignButton.textContent = map.alignment ? "Repair grid alignment" : "Detect grid";
+                alignButton.textContent = sourceMap.alignment ? "Repair grid alignment" : "Detect grid";
                 alignButton.addEventListener("click", () =>
-                    void this.run(null, () => this.detectGrid(map, alignButton)));
+                    void this.run(null, () => this.detectGrid(sourceMap, alignButton)));
 
                 const registerButton = document.createElement("button");
                 registerButton.type = "button";
                 registerButton.textContent = "Advanced registration";
                 registerButton.addEventListener("click", () => {
-                    this.selected = map;
+                    this.selected = sourceMap;
+                    this.ensureVisibleForEditing(sourceMap);
                     this.renderSelected();
-                    this.gridAlignmentController.cancelIfMap(map.id);
+                    this.gridAlignmentController.cancelIfMap(sourceMap.id);
                     this.registrationController.begin(this.selected);
                 });
                 controls.append(visibleLabel, selectButton, alignButton, registerButton);
 
                 const hasRetainedWonderdraft =
-                    (map.importedContentCount ?? 0) > 0
-                    && map.importProvenance?.sourceType.toLocaleLowerCase() === "wonderdraft"
-                    && !!map.sourceArchive;
+                    (sourceMap.importedContentCount ?? 0) > 0
+                    && sourceMap.importProvenance?.sourceType.toLocaleLowerCase() === "wonderdraft"
+                    && !!sourceMap.sourceArchive;
                 if (hasRetainedWonderdraft) {
                     const reviewButton = document.createElement("button");
                     reviewButton.type = "button";
                     reviewButton.textContent = "Review source";
-                    reviewButton.disabled = !map.alignment;
-                    reviewButton.title = map.alignment
+                    reviewButton.disabled = !sourceMap.alignment;
+                    reviewButton.title = sourceMap.alignment
                         ? "Review the retained Wonderdraft source without uploading the project again."
                         : "Register the raster map before reviewing retained Wonderdraft source.";
                     reviewButton.addEventListener("click", () => {
-                        this.selected = map;
+                        this.selected = sourceMap;
+                        this.ensureVisibleForEditing(sourceMap);
                         this.renderSelected();
-                        void this.run(null, () => this.wonderdraftController.openStoredReview(map));
+                        void this.run(null, () => this.wonderdraftController.openStoredReview(sourceMap));
                     });
                     controls.append(reviewButton);
                 }
@@ -291,7 +412,7 @@ export class SourceMapWorkspace {
         this.editForm.hidden = !this.selected;
         if (!this.selected) return;
         input(this.editForm, "name").value = this.selected.name;
-        input(this.editForm, "geographyKey").value = this.selected.geographyKey;
+        this.editGeographySelect.value = this.selected.geographyKey;
         select(this.editForm, "role").value = this.selected.role;
         input(this.editForm, "bakedGrid").checked = this.selected.containsBakedGrid;
         required<HTMLElement>(this.editForm, "[data-source-map-selected-meta]").textContent =
@@ -301,6 +422,7 @@ export class SourceMapWorkspace {
     private async detectGrid(sourceMap: SourceMapDetail | null, button: HTMLButtonElement): Promise<void> {
         if (!sourceMap) throw new Error("Select a raster map first.");
         this.selected = sourceMap;
+        this.ensureVisibleForEditing(sourceMap);
         this.renderSelected();
         this.registrationController.cancelIfMap(sourceMap.id);
         const idleText = sourceMap.alignment ? "Repair grid alignment" : "Detect grid";
@@ -318,35 +440,46 @@ export class SourceMapWorkspace {
     }
 
     private async upload(): Promise<void> {
-        const fileInput = input(this.uploadForm, "file");
-        const file = fileInput.files?.[0];
-        if (!file) throw new Error("Choose a PNG, JPEG, or WebP raster file.");
+        const files = [...(input(this.uploadForm, "file").files ?? [])];
+        if (files.length === 0) throw new Error("Choose at least one PNG, JPEG, or WebP raster file.");
+        const rows = [...this.uploadFilesHost.querySelectorAll<HTMLElement>("[data-source-map-upload-index]")];
+        if (rows.length !== files.length) throw new Error("The selected raster list changed. Choose the files again.");
+
         const geographyKey = this.geographySelect.value === newGeographyValue
             ? this.newGeographyInput.value.trim()
             : this.geographySelect.value;
         if (!geographyKey) throw new Error("A map group is required.");
-        const world = this.getWorld();
+
+        let world = this.getWorld();
         const existingSourceMapIds = new Set(world.sourceMaps.map(map => map.id));
-        const containsBakedGrid = input(this.uploadForm, "bakedGrid").checked;
-        const updated = await this.api.uploadSourceMap(world.id, {
-            file,
-            name: input(this.uploadForm, "name").value.trim(),
-            geographyKey,
-            role: select(this.uploadForm, "role").value as SourceMapRole,
-            containsBakedGrid,
-            expectedVersion: world.version
-        });
-        this.applyWorld(updated);
+        for (const [index, file] of files.entries()) {
+            const row = rows.find(candidate => candidate.dataset.sourceMapUploadIndex === String(index));
+            if (!row) throw new Error(`Missing metadata for ${file.name}.`);
+            const updated = await this.api.uploadSourceMap(world.id, {
+                file,
+                name: input(row, "mapName").value.trim(),
+                geographyKey,
+                role: select(row, "mapRole").value as SourceMapRole,
+                containsBakedGrid: input(row, "mapBakedGrid").checked,
+                expectedVersion: world.version
+            });
+            this.applyWorld(updated);
+            world = updated;
+        }
+
         this.uploadForm.reset();
+        this.uploadFilesHost.replaceChildren();
         await this.refresh();
 
-        const uploadedSourceMap = this.details.find(map => !existingSourceMapIds.has(map.id)) ?? null;
-        if (!uploadedSourceMap) return;
-        this.selected = uploadedSourceMap;
+        const uploadedSourceMaps = this.details.filter(map => !existingSourceMapIds.has(map.id));
+        for (const sourceMap of uploadedSourceMaps) this.map.renderer.hiddenSourceMapIds.delete(sourceMap.id);
+        this.rasterViewSelect.value = "manual";
+        this.applyCoordinatedRasterView();
+        this.selected = uploadedSourceMaps[0] ?? null;
         this.renderSelected();
-        this.map.renderer.hiddenSourceMapIds.delete(uploadedSourceMap.id);
-        this.map.requestRender();
-        this.mapHint.textContent = `${uploadedSourceMap.name} is visible with temporary placement. Detect its baked grid or use Advanced registration when you are ready to place it.`;
+        if (uploadedSourceMaps.length > 0) {
+            this.mapHint.textContent = `${uploadedSourceMaps.length} reference map${uploadedSourceMaps.length === 1 ? "" : "s"} uploaded to ${geographyKey}. Unregistered rasters are visible with temporary placement until registered.`;
+        }
     }
 
     private async updateMetadata(): Promise<void> {
@@ -354,7 +487,7 @@ export class SourceMapWorkspace {
         const world = this.getWorld();
         const updated = await this.api.updateSourceMap(world.id, this.selected.id, {
             name: input(this.editForm, "name").value.trim(),
-            geographyKey: input(this.editForm, "geographyKey").value.trim(),
+            geographyKey: this.editGeographySelect.value,
             role: select(this.editForm, "role").value as SourceMapRole,
             containsBakedGrid: input(this.editForm, "bakedGrid").checked,
             expectedVersion: world.version
@@ -390,8 +523,42 @@ export class SourceMapWorkspace {
     }
 }
 
-function roleLabel(role: SourceMapRole): string {
-    return role === "Gm" ? "GM" : role;
+function sourceUseOptions(): string {
+    return [
+        '<option value="Gm">GM view source</option>',
+        '<option value="Player">Player view source</option>',
+        '<option value="Neutral">Shared / neutral reference</option>',
+        '<option value="Other">Auxiliary / reference only</option>'
+    ].join("");
+}
+
+function sourceUseLabel(role: SourceMapRole): string {
+    switch (role) {
+        case "Gm": return "GM view source";
+        case "Player": return "Player view source";
+        case "Neutral": return "shared / neutral reference";
+        case "Other": return "auxiliary / reference only";
+    }
+}
+
+function coordinatedViewTarget(view: Exclude<CoordinatedRasterView, "manual">): {
+    role: "Gm" | "Player";
+    containsBakedGrid: boolean;
+} {
+    return {
+        role: view.startsWith("gm-") ? "Gm" : "Player",
+        containsBakedGrid: view.endsWith("-grid")
+    };
+}
+
+function coordinatedViewLabel(view: Exclude<CoordinatedRasterView, "manual">): string {
+    const target = coordinatedViewTarget(view);
+    return `${target.role === "Gm" ? "GM" : "Player"} · ${target.containsBakedGrid ? "baked grid" : "gridless"}`;
+}
+
+function displayNameFromFile(fileName: string): string {
+    const withoutExtension = fileName.replace(/\.[^.]+$/, "");
+    return withoutExtension.trim() || fileName;
 }
 
 function setPending(form: HTMLFormElement, pending: boolean): void {
