@@ -1,9 +1,5 @@
 import type { HexCrawlApi } from "../../api";
-import {
-    isCanonicalSourceFit,
-    type HexLatticeFit,
-    type SourceMapGridAnalysis
-} from "../../hex-grid-analysis";
+import type { HexLatticeFit, SourceMapGridAnalysis } from "../../hex-grid-analysis";
 import {
     buildRasterGridAlignmentProposal,
     selectPhysicalDistancePerHex,
@@ -58,11 +54,9 @@ export class SourceMapGridAlignmentController {
             }
 
             if (!this.isCurrent(generation, sourceMap.id, abortController)) return false;
-            if (!analyzed.fit
-                || !isCanonicalSourceFit(analyzed, analyzed.analysis.sourceResolutionVerified)) {
+            if (!analyzed.fit || analyzed.status === "gridless") {
                 throw new Error(
-                    "Hex Crawl could not verify this grid strongly enough to change the world automatically. "
-                    + "The map remains visible; try detection again or use Manual placement.");
+                    "A usable hex grid could not be detected. The map remains visible; try again or use Manual placement.");
             }
 
             const fit = analyzed.fit;
