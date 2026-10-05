@@ -49,8 +49,8 @@ test("Phase 15 shared workspace primitives retain accessible drawer behavior", (
     assert.match(workspace, /role", "dialog"/);
     assert.match(workspace, /aria-modal/);
     assert.match(workspace, /Escape/);
-    assert.match(workspace, /trigger\.focus/);
-    assert.match(styles, /hc-workspace-drawer/);
+    assert.match(workspace, /returnFocus\?\.isConnected/);
+    assert.match(workspace, /returnFocus\.focus\(\)/);
+    assert.match(styles, /hc-focus-workspace/);
     assert.match(styles, /@media \(max-width: 760px\)/);
-}
-);
+});
