@@ -23,7 +23,8 @@ test("application-owned DOM does not use MutationObserver", () => {
 test("unified expedition workspace only loads an Overworld when the session has one", () => {
     const source = read("modules/expeditions/expedition-view.ts");
     assert.match(source, /let world: Overworld \| null = runtime\.overworldId \? await api\.getOverworld\(runtime\.overworldId\) : null/);
-    assert.match(source, /if \(!host \|\| !world \|\| !runtime\.expedition\.isSpatial\) return/);
+    assert.match(source, /if \(!host \|\| !world \|\| !runtime\.expedition\.isSpatial\) \{/);
+    assert.match(source, /map\?\.dispose\(\);\s*map = null;\s*return;/);
     assert.doesNotMatch(source, /showMap/);
 });
 
