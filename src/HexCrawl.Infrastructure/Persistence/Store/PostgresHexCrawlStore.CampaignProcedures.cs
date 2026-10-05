@@ -100,6 +100,33 @@ public sealed partial class PostgresHexCrawlStore
         return result;
     }
 
+    public async Task<IReadOnlyList<StoredCampaignProcedureRevision>> ListLatestCampaignProcedureRevisionsAsync(
+        string ownerUserId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT campaign_id, procedure_json::text, origin_json::text, created_at
+            FROM campaign_procedure_revisions revision
+            WHERE owner_user_id = @owner
+              AND revision.revision = (
+                  SELECT MAX(candidate.revision)
+                  FROM campaign_procedure_revisions candidate
+                  WHERE candidate.procedure_id = revision.procedure_id
+                    AND candidate.owner_user_id = revision.owner_user_id)
+            ORDER BY created_at DESC, procedure_id;
+            """;
+        command.Parameters.AddWithValue("owner", NpgsqlDbType.Text, ownerUserId);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var result = new List<StoredCampaignProcedureRevision>();
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            result.Add(ReadCampaignProcedure(reader, ownerUserId));
+        }
+        return result;
+    }
+
     private static StoredCampaignProcedureRevision ReadCampaignProcedure(Npgsql.NpgsqlDataReader reader, string ownerUserId)
     {
         Guid? campaignId = reader.IsDBNull(0) ? null : reader.GetGuid(0);

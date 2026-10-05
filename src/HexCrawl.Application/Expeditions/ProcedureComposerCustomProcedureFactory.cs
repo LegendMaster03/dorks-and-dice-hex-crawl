@@ -8,17 +8,17 @@ internal static class ProcedureComposerCustomProcedureFactory
 {
     public static CampaignProcedure Create()
     {
-        var procedure = new CampaignProcedure
+        // A blank custom procedure is an authoring draft, not a persisted CampaignProcedure.
+        // Persistence still requires at least one selected module and validates the final snapshot.
+        return new CampaignProcedure
         {
             ProcedureId = Guid.NewGuid(),
             Revision = 1,
             Key = "custom-expedition-procedure",
             Name = "Custom expedition procedure",
-            Modules = [CreateDefaultModule(GenericProcedureCatalog.TimeIntervalModule)],
+            Modules = [],
             Overrides = []
         };
-        procedure.Validate();
-        return procedure;
     }
 
     public static MaterializedProcedureModule CreateDefaultModule(string moduleKey) => moduleKey switch

@@ -25,6 +25,7 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
         api.MapPost("/procedures/composer/draft", ComposeDraftAsync);
         api.MapPost("/procedures/composer/canonical/draft", ComposeCanonicalDraftAsync);
         api.MapPost("/procedures/composer/canonical/validate", ValidateCanonicalAsync);
+        api.MapGet("/procedures", ListProceduresAsync);
         api.MapPost("/procedures", CreateProcedureAsync);
         api.MapPost("/procedures/canonical", CreateCanonicalProcedureAsync);
         api.MapGet("/procedures/{procedureId:guid}", GetLatestProcedureAsync);
@@ -91,6 +92,15 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
             validation.Error,
             validation.LineNumber,
             validation.BytePositionInLine));
+    }
+
+    private static async Task<IResult> ListProceduresAsync(
+        HttpContext context,
+        CampaignProcedureService service,
+        CancellationToken cancellationToken)
+    {
+        var procedures = await service.ListLatestAsync(UserId(context), cancellationToken);
+        return Results.Ok(procedures.Select(SavedProcedureSummaryContract.From).ToArray());
     }
 
     private static async Task<IResult> CreateProcedureAsync(
