@@ -33,7 +33,7 @@ test("reference-map grid detection is one operation that analyzes and persists",
     assert.match(api, /source-maps\/\$\{encodeURIComponent\(sourceMapId\)\}\/grid-analysis/);
 });
 
-test("one-click persistence keeps the existing canonical automatic-apply safety gate", () => {
+test("one-click alignment applies a returned usable fit without exposing detector thresholds", () => {
     const workspace = fs.readFileSync(
         path.join(sourceRoot, "modules/worlds/source-map-workspace.ts"),
         "utf8");
@@ -41,9 +41,11 @@ test("one-click persistence keeps the existing canonical automatic-apply safety 
         path.join(sourceRoot, "modules/worlds/source-map-grid-alignment-controller.ts"),
         "utf8");
 
-    assert.match(controller, /isCanonicalSourceFit/);
-    assert.match(controller, /isCanonicalSourceFit\(analyzed, analyzed\.analysis\.sourceResolutionVerified\)/);
-    assert.match(controller, /could not verify this grid strongly enough to change the world automatically/);
+    assert.match(controller, /if \(!analyzed\.fit \|\| analyzed\.status === "gridless"\)/);
+    assert.match(controller, /A usable hex grid could not be detected/);
+    assert.doesNotMatch(controller, /isCanonicalSourceFit/);
+    assert.doesNotMatch(controller, /sourceResolutionVerified/);
+    assert.doesNotMatch(controller, /confidence.*threshold|residual.*limit/i);
     assert.match(controller, /Promise<boolean>/);
     assert.match(controller, /return false/);
     assert.match(controller, /return true/);
@@ -58,7 +60,7 @@ test("automatic detection failures leave the source map available for manual pla
 
     assert.match(controller, /Automatic grid detection is unavailable/);
     assert.match(controller, /The map remains visible; try again or use Manual placement/);
-    assert.match(controller, /The map remains visible; try detection again or use Manual placement/);
+    assert.match(controller, /A usable hex grid could not be detected/);
 });
 
 test("switching maps or starting a newer analysis invalidates stale asynchronous work", () => {
