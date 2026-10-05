@@ -41,12 +41,24 @@ jobs:
 
           test = Path('src/HexCrawl.Web/Client/test/phase15-ux-source.test.mjs')
           text = test.read_text()
-          anchor = '    assert.doesNotMatch(workspace, /api\\.(getExpedition|advanceExpedition|updateExpeditionParty|discover|recordTravelAssistant|recordWatchAssistant|recordNavigationAssistant|recordEncounterAssistant)\\s*=/);\n'
-          addition = '    const expeditionView = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-view.ts"), "utf8");\n    const environmentPanel = fs.readFileSync(path.join(sourceDir, "modules/expeditions/environment-panel.ts"), "utf8");\n    assert.doesNotMatch(expeditionView, /<details open class="hc-sheet-controls"/);\n    assert.doesNotMatch(environmentPanel, /this\\.panel\\.open = true/);\n'
+          anchor = 'test("Phase 15 map selection stays contextual instead of becoming an implicit mutation", () => {\n'
+          addition = '''test("Phase 15 secondary panels stay collapsed until requested", () => {
+              const view = fs.readFileSync(
+                  path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+                  "utf8");
+              const environment = fs.readFileSync(
+                  path.join(sourceDir, "modules/expeditions/environment-panel.ts"),
+                  "utf8");
+
+              assert.doesNotMatch(view, /<details open class="hc-sheet-controls"/);
+              assert.doesNotMatch(environment, /this\\.panel\\.open = true/);
+          });
+
+          '''
           if anchor not in text:
-              raise SystemExit('Expected Phase 15 expedition source-test anchor was not found.')
+              raise SystemExit('Expected Phase 15 map-selection test anchor was not found.')
           if addition not in text:
-              text = text.replace(anchor, anchor + addition, 1)
+              text = text.replace(anchor, addition + anchor, 1)
           test.write_text(text)
           PY
 
