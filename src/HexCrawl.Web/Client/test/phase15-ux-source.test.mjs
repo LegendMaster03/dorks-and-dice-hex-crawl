@@ -58,6 +58,8 @@ test("Phase 15 expedition workspace derives the next action from authoritative r
     assert.match(signal, /root\.addEventListener/);
     assert.match(signal, /root\.removeEventListener/);
     assert.match(module, /publishExpeditionRuntimeChanged\(context\.root, panelRuntime\)/);
+    assert.match(module, /subscribeExpeditionRuntimeChanged\(context\.root, next => \{[\s\S]*panelRuntime = next;[\s\S]*environmentPanel\.sync\(\);[\s\S]*void survivalPanel\.sync\(\);[\s\S]*void journeyPanel\.sync\(\);/);
+    assert.match(module, /unsubscribePanelRuntime\(\)/);
     assert.doesNotMatch(workspace, /document\.querySelector/);
     assert.doesNotMatch(workspace, /installRuntimeHooks/);
     assert.doesNotMatch(workspace, /api\.getExpedition\s*=/);
