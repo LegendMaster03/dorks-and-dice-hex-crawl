@@ -78,10 +78,10 @@ test("map sets collect alternate source versions without becoming the future lay
     assert.match(workspace, /A map set is a collection of alternate source versions of the same map and geographic extent/);
     assert.match(workspace, /neighboring regional map belongs in a different set/);
     assert.match(workspace, /future image comparison can derive a common base and true visual-difference layers/);
-    assert.match(workspace, /temporary whole-image view switch/);
     assert.match(workspace, /without treating whole map images as the final layer model/);
     assert.match(workspace, /Shared \/ neutral reference/);
     assert.match(workspace, /Auxiliary \/ reference only/);
+    assert.doesNotMatch(workspace, /Bellowing Wilds|Kylandria/);
 });
 
 test("map-set import accepts several image versions and reuses an existing set by selection", () => {
@@ -99,6 +99,19 @@ test("map-set import accepts several image versions and reuses an existing set b
     assert.match(workspace, /containsBakedGrid: input\(row, "mapBakedGrid"\)\.checked/);
 });
 
+test("partial multi-image imports recover without encouraging duplicate retries", () => {
+    const workspace = fs.readFileSync(
+        path.join(sourceRoot, "modules/worlds/source-map-workspace.ts"),
+        "utf8");
+
+    assert.match(workspace, /let completed = 0/);
+    assert.match(workspace, /completed \+= 1/);
+    assert.match(workspace, /if \(completed === 0\) throw error/);
+    assert.match(workspace, /Those maps are already in \$\{geographyKey\}; re-select only the images that are still missing/);
+    assert.match(workspace, /this\.uploadForm\.reset\(\)/);
+    assert.match(workspace, /await this\.refresh\(\)/);
+});
+
 test("coordinated map views switch GM and player sources across sets but leave auxiliary references manual", () => {
     const workspace = fs.readFileSync(
         path.join(sourceRoot, "modules/worlds/source-map-workspace.ts"),
@@ -109,6 +122,9 @@ test("coordinated map views switch GM and player sources across sets but leave a
     assert.match(workspace, /sourceMap\.role === target\.role/);
     assert.match(workspace, /sourceMap\.containsBakedGrid === target\.containsBakedGrid/);
     assert.match(workspace, /Shared and auxiliary references keep their manual visibility/);
+    assert.match(workspace, /data\.sourceMapVisibleId = sourceMap\.id/);
+    assert.match(workspace, /private syncVisibilityControls\(\): void/);
+    assert.match(workspace, /this\.syncVisibilityControls\(\)/);
 });
 
 test("normal map-management UI does not require raster terminology", () => {
