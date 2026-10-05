@@ -17,10 +17,11 @@ export function suggestedWatchDistance(runtime: ExpeditionDetail): number | null
 export function authoritativeFixedWatchDistance(runtime: ExpeditionDetail): number | null {
     if (!runtime.expedition.isSpatial) return null;
     const execution = runtime.procedure.runtime;
+    const composition = runtime.movementComposition;
     if (!execution
         || execution.travelResolution !== "ContinuousDistance"
         || execution.actualDistanceResolution !== "Fixed"
-        || runtime.movementComposition.missingInputs.length > 0) {
+        || (composition.status !== "Resolved" && composition.status !== "ReferenceFallback")) {
         return null;
     }
 
