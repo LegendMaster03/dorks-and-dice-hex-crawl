@@ -133,6 +133,8 @@ public sealed class EncounterHandoffEndpointsTests
                 expedition.GetProperty("version").GetInt64(),
                 guideId,
                 assignmentId,
+                "Role",
+                "guide",
                 "guide");
             var version = party.GetProperty("version").GetInt64();
 
@@ -306,6 +308,8 @@ public sealed class EncounterHandoffEndpointsTests
                 expedition.GetProperty("version").GetInt64(),
                 scoutId,
                 assignmentId,
+                "Participant",
+                "lookout",
                 "scout");
             var version = party.GetProperty("version").GetInt64();
 
@@ -552,6 +556,8 @@ public sealed class EncounterHandoffEndpointsTests
         long expectedVersion,
         Guid participantId,
         Guid assignmentId,
+        string scope,
+        string? activityKey,
         string roleKey)
     {
         using var response = await client.PutAsJsonAsync(
@@ -574,9 +580,9 @@ public sealed class EncounterHandoffEndpointsTests
                     new
                     {
                         id = assignmentId,
-                        scope = "Role",
+                        scope,
                         participantId,
-                        activityKey = roleKey,
+                        activityKey,
                         roleKey,
                         note = (string?)null
                     }
