@@ -140,7 +140,10 @@ public sealed partial class CrawlRuntimeEngine
             string.IsNullOrWhiteSpace(encounter.Note)
                 ? $"{encounter.Kind} triggered."
                 : $"{encounter.Kind}: {encounter.Note}",
-            subjectId: encounter.LocationId);
+            subjectId: encounter.LocationId,
+            encounterOutcome: encounter.Kind,
+            encounterNote: encounter.Note,
+            encounterProvenance: encounter.Provenance);
 
         active = active with
         {
