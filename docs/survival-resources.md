@@ -168,20 +168,22 @@ Phase 11 introduced authoritative `resources_json` and `survival_json` in schema
 
 All Phase 11 changes use the existing expedition version for optimistic concurrency. Resource mutation and the matching Phase 10 consequence-state update are saved as one expedition aggregate operation. Journey-generated Phase 10/11 mutations are likewise committed with journey state in the same expedition optimistic-concurrency save.
 
-This remains a pre-Phase-14.5 development schema. Older development databases are reset rather than supported by duplicate legacy representations.
+Before Phase 15 acceptance, older development databases may still be reset rather than supported by duplicate legacy representations. After Phase 15 acceptance opens internal human testing, straightforward architecture-preserving migrations are preferred where practical before breaking tester data, without retaining obsolete parallel state models.
 
 ## UI and API
 
 The server exposes typed operations for resource administration, pending resource consequence consumption, resource consumption, foraging, forced-travel accounting/check/reset, exposure resolution, camp resolution, and explicit rest recovery.
 
-The expedition running sheet mounts a DM-facing **Survival and resources** panel. It displays focused policies and authoritative state without raw JSON, supports manual resource administration and pending operations, exposes forced-travel status and resolved checks, shows relevant environment facts without duplicating environment editing, accepts explicit foraging/exposure results, and records camp/rest qualification without treating camp as automatically safe.
+Phase 15 keeps those typed operations authoritative while presenting their state through the unified expedition workspace. Resources/effects and forced-travel status are reachable from compact current-state summaries; the detailed **Survival and resources** panel remains the focused workspace for explicit resource administration, pending operations, resolved checks, environment context, foraging/exposure results, and camp/rest qualification.
 
-Persistent effects remain visible through the existing Phase 10 effect state rather than a duplicate Phase 11 fatigue panel.
+Persistent effects remain Phase 10 state rather than a duplicate Phase 11 fatigue authority.
 
-Phase 12 adds a separate **Journey / Challenge** panel. That panel can create Phase 10 consequences which are consumed through these same Phase 11 resource/survival boundaries rather than implementing duplicate resource logic in the browser or journey service.
+Journey-generated Phase 10 consequences continue through these same Phase 11 resource/survival boundaries rather than implementing duplicate resource logic in the browser or journey service.
 
 ## Cross-phase boundaries
 
-Phase 12 now owns multi-stage journey execution, journey-event opportunities, journey completion/failure/abandonment, and journey-generated consequence handoff. Phase 11 remains the resource/survival owner for any resulting resource or survival mutation.
+Phase 12 owns multi-stage journey execution, journey-event opportunities, journey completion/failure/abandonment, and journey-generated consequence handoff. Phase 11 remains the resource/survival owner for any resulting resource or survival mutation.
 
-Phase 14 now projects encounter-relevant linked resource/effect context through the server-authoritative v2 handoff while Block Initiative remains authoritative for tactical combat. Battle-map ownership remains deferred to Phase 15.
+Phase 14 projects encounter-relevant linked resource/effect context through the server-authoritative v2 handoff while Block Initiative remains authoritative for tactical combat. Phase 15 changes presentation around those boundaries but does not move or duplicate their authority.
+
+Phase 15 is the internal-human-testing gate. After acceptance, testing begins, followed by Phase 15.1 Guided work and later Phase 15.5 stabilization. A future Battle Map tool and its cross-tool ownership/integration are outside the Hex Crawl roadmap.
