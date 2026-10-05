@@ -1,5 +1,5 @@
 import type { HexCrawlClientModule } from "../../client-module";
-import { renderProcedureWorkspace } from "./procedure-workspace-view";
+import { renderProcedureAuthoringWorkspace } from "./procedure-authoring-view";
 import { renderProcedureReference } from "./procedure-reference-view";
 
 export const proceduresModule: HexCrawlClientModule = {
@@ -10,7 +10,7 @@ export const proceduresModule: HexCrawlClientModule = {
         : "Loading exploration procedure…",
     async render(route, context) {
         if (route.kind === "procedures") {
-            return await renderProcedureWorkspace(context.root, context.api, null, context.navigate);
+            return await renderProcedureAuthoringWorkspace(context.root, context.api, null, context.navigate);
         }
         if (route.kind === "procedure-reference") {
             return await renderProcedureReference(
@@ -21,7 +21,7 @@ export const proceduresModule: HexCrawlClientModule = {
         }
         if (route.kind === "procedure" || route.kind === "procedure-revision") {
             const activeRevision = route.kind === "procedure-revision" ? route.revision : null;
-            const disposeWorkspace = await renderProcedureWorkspace(
+            const disposeWorkspace = await renderProcedureAuthoringWorkspace(
                 context.root,
                 context.api,
                 route.procedureId,
