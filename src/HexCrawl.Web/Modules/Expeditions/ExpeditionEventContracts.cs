@@ -26,7 +26,10 @@ public sealed record RuntimeEventContract(
     double? DistanceValue,
     string? DistanceUnit,
     Guid? SubjectId,
-    KnowledgeSubjectType? SubjectType)
+    KnowledgeSubjectType? SubjectType,
+    EncounterOutcomeKind? EncounterOutcome,
+    string? EncounterNote,
+    ResolutionProvenance? EncounterProvenance)
 {
     public static RuntimeEventContract From(CrawlRuntimeEvent runtimeEvent) => new(
         runtimeEvent.Sequence,
@@ -38,7 +41,10 @@ public sealed record RuntimeEventContract(
         runtimeEvent.DistanceValue,
         runtimeEvent.DistanceUnit,
         runtimeEvent.SubjectId,
-        runtimeEvent.SubjectType);
+        runtimeEvent.SubjectType,
+        runtimeEvent.EncounterOutcome,
+        runtimeEvent.EncounterNote,
+        runtimeEvent.EncounterProvenance);
 }
 
 public sealed record DiscoverSubjectRequest(
