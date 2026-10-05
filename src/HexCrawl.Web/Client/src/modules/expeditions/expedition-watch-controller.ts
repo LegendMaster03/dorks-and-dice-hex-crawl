@@ -660,10 +660,25 @@ export class ExpeditionWatchController {
         return value as ResolutionSource;
     }
 
+    private clearAdvanceError(): void {
+        this.root.querySelector<HTMLElement>("[data-watch-advance-error]")?.remove();
+    }
+
+    private showAdvanceError(value: unknown): void {
+        this.clearAdvanceError();
+        const error = document.createElement("p");
+        error.className = "hc-error";
+        error.dataset.watchAdvanceError = "";
+        error.setAttribute("role", "alert");
+        error.textContent = value instanceof Error ? value.message : String(value);
+        this.form.insertAdjacentElement("beforebegin", error);
+    }
+
     private submit(event: SubmitEvent): void {
         event.preventDefault();
         if (this.advancePending || this.resolutionPending || this.disposed) return;
 
+        this.clearAdvanceError();
         this.advancePending = true;
         this.advanceButton.disabled = true;
         this.advanceButton.textContent = "Applying…";
@@ -782,6 +797,8 @@ export class ExpeditionWatchController {
                     this.syncResolutionHelperVisibility();
                 }
             }
+        }).catch(value => {
+            if (!this.disposed) this.showAdvanceError(value);
         });
     }
 }
