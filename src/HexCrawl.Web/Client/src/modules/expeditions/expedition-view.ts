@@ -103,6 +103,14 @@ export async function renderExpedition(
         }
     };
 
+    const runUiMutation = async (action: () => Promise<void>): Promise<void> => {
+        try {
+            await mutate(action);
+        } catch {
+            // mutate already surfaced the failure in the workspace error region.
+        }
+    };
+
     const render = (): void => {
         cleanupDrawer();
         drawer = null;
@@ -386,7 +394,7 @@ export async function renderExpedition(
                 item.className = "hc-discovery-row";
                 item.append(textElement("span", `${subject.name} · ${subject.type}`));
                 if (!discovered.has(subject.id)) {
-                    item.append(button("Reveal / discover", () => void mutate(async () => {
+                    item.append(button("Reveal / discover", () => void runUiMutation(async () => {
                         applyRuntime(await api.discover(runtime.id, runtime.version, subject.id, subject.type));
                     })));
                 } else {
@@ -448,12 +456,12 @@ export async function renderExpedition(
                 api,
                 world,
                 () => runtime,
-                next => { runtime = next; },
+                applyRuntime,
                 async action => {
-                    await action();
-                    captureTravelPreferences(body);
-                    await refreshAuxiliary();
-                    if (!disposed) render();
+                    await mutate(async () => {
+                        await action();
+                        captureTravelPreferences(body);
+                    });
                 });
             controller.sync(runtime);
             applyTravelPreferences(body);
@@ -501,13 +509,9 @@ export async function renderExpedition(
                 body,
                 api,
                 () => runtime,
-                next => { runtime = next; },
+                applyRuntime,
                 async (_control, action) => {
-                    await action();
-                    const latest = await api.getExpedition(runtime.id);
-                    applyRuntime(latest);
-                    await refreshAuxiliary();
-                    if (!disposed) render();
+                    await runUiMutation(action);
                 });
             controller.sync(runtime);
         });
@@ -520,13 +524,9 @@ export async function renderExpedition(
                 body,
                 api,
                 () => runtime,
-                next => { runtime = next; },
+                applyRuntime,
                 async (_control, action) => {
-                    await action();
-                    const latest = await api.getExpedition(runtime.id);
-                    applyRuntime(latest);
-                    await refreshAuxiliary();
-                    if (!disposed) render();
+                    await runUiMutation(action);
                 });
             panel.sync();
             queueMicrotask(() => {
@@ -545,11 +545,7 @@ export async function renderExpedition(
                 survivalApi,
                 runtime.id,
                 async (_control, action) => {
-                    await action();
-                    const latest = await api.getExpedition(runtime.id);
-                    applyRuntime(latest);
-                    await refreshAuxiliary();
-                    if (!disposed) render();
+                    await runUiMutation(action);
                 });
             void panel.sync();
             queueMicrotask(() => {
@@ -569,11 +565,7 @@ export async function renderExpedition(
                 runtime.id,
                 () => runtime,
                 async (_control, action) => {
-                    await action();
-                    const latest = await api.getExpedition(runtime.id);
-                    applyRuntime(latest);
-                    await refreshAuxiliary();
-                    if (!disposed) render();
+                    await runUiMutation(action);
                 });
             void panel.sync();
             queueMicrotask(() => {
@@ -646,7 +638,7 @@ export async function renderExpedition(
             form.append(labelled("Note", note), submit);
             form.addEventListener("submit", event => {
                 event.preventDefault();
-                void mutate(async () => {
+                void runUiMutation(async () => {
                     const next = await api.recordWatchAssistant(runtime.id, {
                         expectedVersion: runtime.version,
                         elapsedHours: hours,
