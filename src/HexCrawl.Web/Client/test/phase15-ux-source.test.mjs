@@ -56,6 +56,18 @@ test("Phase 15 expedition workspace derives the next action from authoritative r
     assert.doesNotMatch(workspace, /MutationObserver/);
 });
 
+test("Phase 15 secondary panels stay collapsed until requested", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+    const environment = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/environment-panel.ts"),
+        "utf8");
+
+    assert.doesNotMatch(view, /<details open class="hc-sheet-controls"/);
+    assert.doesNotMatch(environment, /this\.panel\.open = true/);
+});
+
 test("Phase 15 map selection stays contextual instead of becoming an implicit mutation", () => {
     const workspace = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/phase15-expedition-workspace.ts"),

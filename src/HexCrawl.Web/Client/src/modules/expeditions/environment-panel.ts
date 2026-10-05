@@ -35,7 +35,6 @@ export class ExpeditionEnvironmentPanel {
 
         this.panel = document.createElement("details");
         this.panel.className = "hc-environment-panel";
-        this.panel.open = true;
         const summary = document.createElement("summary");
         summary.textContent = "Current environment";
         this.body = document.createElement("div");

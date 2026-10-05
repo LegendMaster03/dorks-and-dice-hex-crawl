@@ -113,7 +113,7 @@ export async function renderExpedition(
                 ${runSurfaceMarkup}
                 <aside class="hc-sidebar" aria-label="Expedition controls">
                     <details class="hc-party-editor-panel"><summary>Party & travel order</summary><div data-party-editor></div></details>
-                    <details open class="hc-sheet-controls"><summary data-watch-summary>Run watch</summary>
+                    <details class="hc-sheet-controls"><summary data-watch-summary>Run watch</summary>
                         <p class="hc-hint">Fill only the parts that apply to the procedure you are using. Hidden sections are not required.</p>
                         <div class="hc-form hc-watch-requirements" data-requirements></div>
                         <form class="hc-form" data-advance>
