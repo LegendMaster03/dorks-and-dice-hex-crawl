@@ -92,14 +92,15 @@ test("map navigation uses direct drag panning without redundant arrow controls",
     assert.doesNotMatch(surface, /Pan map left|Pan map right|Map controls/);
 });
 
-test("registration consumes map clicks through an explicit interaction interceptor", () => {
+test("manual placement consumes map clicks through an explicit interaction interceptor", () => {
     const surface = fs.readFileSync(path.join(sourceRoot, "map-surface.ts"), "utf8");
     const workspace = fs.readFileSync(path.join(sourceRoot, "modules/worlds/source-map-workspace.ts"), "utf8");
     const registration = fs.readFileSync(path.join(sourceRoot, "modules/worlds/source-map-registration-controller.ts"), "utf8");
     assert.match(surface, /clickInterceptor\?\.\(point\)/);
     assert.match(workspace, /SourceMapRegistrationController/);
     assert.match(registration, /if \(!this\.registration\) return false/);
-    assert.match(registration, /Registration mode is active/);
+    assert.match(registration, /Manual placement is active/);
+    assert.match(registration, /return true/);
 });
 
 test("Wonderdraft source import is automatic, scalable, and spatially reviewable", () => {
