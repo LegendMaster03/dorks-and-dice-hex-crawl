@@ -92,14 +92,15 @@ test("map navigation uses direct drag panning without redundant arrow controls",
     assert.doesNotMatch(surface, /Pan map left|Pan map right|Map controls/);
 });
 
-test("registration consumes map clicks through an explicit interaction interceptor", () => {
+test("manual placement consumes map clicks through an explicit interaction interceptor", () => {
     const surface = fs.readFileSync(path.join(sourceRoot, "map-surface.ts"), "utf8");
     const workspace = fs.readFileSync(path.join(sourceRoot, "modules/worlds/source-map-workspace.ts"), "utf8");
     const registration = fs.readFileSync(path.join(sourceRoot, "modules/worlds/source-map-registration-controller.ts"), "utf8");
     assert.match(surface, /clickInterceptor\?\.\(point\)/);
     assert.match(workspace, /SourceMapRegistrationController/);
     assert.match(registration, /if \(!this\.registration\) return false/);
-    assert.match(registration, /Registration mode is active/);
+    assert.match(registration, /Manual placement is active/);
+    assert.match(registration, /return true/);
 });
 
 test("Wonderdraft source import is automatic, scalable, and spatially reviewable", () => {
@@ -134,6 +135,18 @@ test("Wonderdraft source import is automatic, scalable, and spatially reviewable
         surface.indexOf("private handleKeyDown"));
     assert.ok(activatePoint.indexOf("clickInterceptor") < activatePoint.indexOf("worldToHex"));
     assert.ok(activatePoint.indexOf("hitTestReview") < activatePoint.indexOf("worldToHex"));
+});
+
+test("reference map image loading retries transient failures instead of staying blank forever", () => {
+    const cache = fs.readFileSync(path.join(sourceRoot, "raster-image-cache.ts"), "utf8");
+
+    assert.match(cache, /const MaximumLoadAttempts = 3/);
+    assert.match(cache, /entry\.attempts \+= 1/);
+    assert.match(cache, /entry\.attempts < MaximumLoadAttempts/);
+    assert.match(cache, /entry\.retryTimer = window\.setTimeout/);
+    assert.match(cache, /void this\.load\(url, entry, onReady\)/);
+    assert.match(cache, /window\.clearTimeout\(entry\.retryTimer\)/);
+    assert.match(cache, /console\.warn\(`Reference map image could not be loaded after/);
 });
 
 test("route cleanup disposes raster resources and application-owned DOM does not use MutationObserver", () => {
