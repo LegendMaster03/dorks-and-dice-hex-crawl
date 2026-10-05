@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { blockInitiativeHandoffHref } from "../.test-dist/encounter-handoff.js";
+import { blockInitiativeHandoffHref, encounterHandoffStoragePrefix } from "../.test-dist/encounter-handoff.js";
 
 function handoff() {
     return {
@@ -33,11 +33,17 @@ function handoff() {
     };
 }
 
-test("forwards the exact server-produced v2 encounter handoff to Block Initiative", () => {
+test("stages the exact server-produced v2 handoff and carries only its stable id in the URL", () => {
     const expected = handoff();
-    const href = blockInitiativeHandoffHref(expected);
+    const stored = new Map();
+    const storage = { setItem: (key, value) => stored.set(key, value) };
+    const href = blockInitiativeHandoffHref(expected, storage);
     const url = new URL(href, "https://dorks-and-dice.test");
 
     assert.equal(url.pathname, "/tools/block-initiative");
-    assert.deepEqual(JSON.parse(url.searchParams.get("hexEncounter")), expected);
+    assert.equal(url.searchParams.get("hexEncounterId"), expected.identity.handoffId);
+    assert.equal(url.searchParams.has("hexEncounter"), false);
+    assert.deepEqual(
+        JSON.parse(stored.get(`${encounterHandoffStoragePrefix}${expected.identity.handoffId}`)),
+        expected);
 });
