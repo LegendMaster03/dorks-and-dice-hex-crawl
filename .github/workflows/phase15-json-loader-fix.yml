@@ -1,0 +1,53 @@
+name: Phase 15 JSON Loader Repair
+
+on:
+  push:
+    branches:
+      - feature/phase-15-core-ux
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    if: github.actor != 'github-actions[bot]'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply focused JSON loader repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          workspace = Path('src/HexCrawl.Web/Client/src/modules/procedures/procedure-workspace-view.ts')
+          text = workspace.read_text()
+          old = '        if (!draft || mode !== "json") return;'
+          new = '        if (!draft || mode !== "json" || jsonBusy) return;'
+          if old not in text:
+              raise SystemExit('Expected JSON loader guard was not found.')
+          text = text.replace(old, new, 1)
+          workspace.write_text(text)
+
+          test = Path('src/HexCrawl.Web/Client/test/phase15-ux-source.test.mjs')
+          text = test.read_text()
+          anchor = '    assert.match(workspace, /createCanonicalRevision/);\n'
+          addition = '    assert.match(workspace, /mode !== "json" \\|\\| jsonBusy/);\n'
+          if anchor not in text:
+              raise SystemExit('Expected Phase 15 procedure source-test anchor was not found.')
+          if addition not in text:
+              text = text.replace(anchor, anchor + addition, 1)
+          test.write_text(text)
+          PY
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/HexCrawl.Web/Client/src/modules/procedures/procedure-workspace-view.ts \
+                  src/HexCrawl.Web/Client/test/phase15-ux-source.test.mjs
+          git diff --cached --check
+          git commit -m 'Prevent recursive Phase 15 JSON loading'
+          git push origin HEAD:feature/phase-15-core-ux
