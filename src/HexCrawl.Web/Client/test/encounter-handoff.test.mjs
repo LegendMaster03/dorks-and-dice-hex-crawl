@@ -1,46 +1,43 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { blockInitiativeHandoffHref, encounterHandoffFromRuntime } from "../.test-dist/encounter-handoff.js";
+import { blockInitiativeHandoffHref } from "../.test-dist/encounter-handoff.js";
 
-function runtime() {
+function handoff() {
     return {
-        id: "exp-1",
-        name: "Humblewood expedition",
-        overworldId: "world-1",
-        context: { kind: "WorldBound", name: "Humblewood", overworldId: "world-1", orientation: "PointyTop", hexCenterDistance: null },
-        expedition: {
-            isSpatial: true,
-            currentHex: { q: 2, r: -1 },
-            currentDay: 1,
-            completedWatches: 2,
-            activeWatchNumber: 3,
-            activeEncounterKind: "WanderingEncounter",
-            activeEncounterHour: 2
+        version: 2,
+        sourceTool: "hex-crawl",
+        identity: {
+            handoffId: "0e953165-42ca-48b5-9a74-d834ddfbcd73",
+            encounterOccurrenceId: "runtime:30",
+            expeditionId: "ef8ec6ef-41f9-47de-b9d1-3ed6e23f0867",
+            expeditionName: "Humblewood expedition"
         },
-        history: [{
-            sequence: 30,
-            watchNumber: 3,
-            kind: "EncounterTriggered",
-            expeditionElapsedHours: 10,
+        returnContext: { returnPath: "/tools/hex-crawl/expeditions/ef8ec6ef-41f9-47de-b9d1-3ed6e23f0867" },
+        timeContext: { day: 1, watchNumber: 3, expeditionElapsedHours: 10 },
+        worldContext: {
+            overworldId: "1da3a793-6b85-4472-b006-28969a60f5a2",
             hex: { q: 2, r: -1 },
-            message: "WanderingEncounter: owlbear patrol",
-            subjectId: null
-        }]
+            location: null
+        },
+        encounter: {
+            outcome: "WanderingEncounter",
+            summary: "WanderingEncounter: owlbear patrol",
+            dmNote: null
+        },
+        combatants: [],
+        circumstances: [],
+        effects: [],
+        resources: [],
+        journeyProvenance: null,
+        linkedScenes: []
     };
 }
 
-test("builds a versioned Block Initiative handoff from the authoritative triggered encounter", () => {
-    const handoff = encounterHandoffFromRuntime(runtime(), { returnPath: "/tools/hex-crawl/expeditions/exp-1" });
-    assert.equal(handoff.version, 1);
-    assert.equal(handoff.outcome, "WanderingEncounter");
-    assert.equal(handoff.watchNumber, 3);
-    assert.equal(handoff.occursAtHours, 2);
-    assert.deepEqual(handoff.hex, { q: 2, r: -1 });
-    assert.deepEqual(handoff.combatants, []);
-    const href = blockInitiativeHandoffHref(handoff);
-    assert.match(href, /^\/tools\/block-initiative\?hexEncounter=/);
-});
+test("forwards the exact server-produced v2 encounter handoff to Block Initiative", () => {
+    const expected = handoff();
+    const href = blockInitiativeHandoffHref(expected);
+    const url = new URL(href, "https://dorks-and-dice.test");
 
-test("does not hand off a no-encounter result", () => {
-    assert.equal(encounterHandoffFromRuntime(runtime(), { outcome: "None" }), null);
+    assert.equal(url.pathname, "/tools/block-initiative");
+    assert.deepEqual(JSON.parse(url.searchParams.get("hexEncounter")), expected);
 });
