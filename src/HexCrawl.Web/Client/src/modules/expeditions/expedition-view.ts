@@ -7,6 +7,7 @@ import type { ExpeditionDetail, Overworld, SpatialRuntimeExpedition } from "../.
 import { clearUiError, showUiError } from "../../ui-error";
 import { renderExpeditionHistory, renderExpeditionPause, renderExpeditionSnapshots, renderExpeditionStatus, renderNonSpatialTracker, renderPlayerKnowledgePreview } from "./expedition-presentation";
 import { ExpeditionPartySheetController } from "./expedition-party-sheet";
+import { publishExpeditionRuntimeChanged } from "./expedition-runtime-events";
 import { ExpeditionWatchController } from "./expedition-watch-controller";
 import { required } from "../../ui/dom";
 import { blockInitiativeHandoffHref } from "../../encounter-handoff";
@@ -296,6 +297,7 @@ export async function renderExpedition(
         renderExpeditionSnapshots(root, runtime, showMap);
         partyController.sync(next);
         watchController?.sync(next);
+        publishExpeditionRuntimeChanged(root, next);
     };
 
     partyController = new ExpeditionPartySheetController(
@@ -414,6 +416,7 @@ function bindNonSpatialParty(
     const apply = (next: ExpeditionDetail): void => {
         runtime = next;
         partyController.sync(next);
+        publishExpeditionRuntimeChanged(root, next);
     };
 
     partyController = new ExpeditionPartySheetController(
@@ -423,6 +426,7 @@ function bindNonSpatialParty(
         apply,
         mutate);
     partyController.sync(runtime);
+    publishExpeditionRuntimeChanged(root, runtime);
 
     return () => {
         disposed = true;
