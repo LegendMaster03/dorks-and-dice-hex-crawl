@@ -249,8 +249,7 @@ export async function renderExpedition(
         host.hidden = true;
         if (runtime.pauseReason !== "EncounterTriggered") return;
 
-        const triggered = [...runtime.history].reverse().find(event =>
-            event.kind === "EncounterTriggered" && event.encounterOutcome !== null);
+        const triggered = [...runtime.history].reverse().find(event => event.kind === "EncounterTriggered");
         if (!triggered) return;
 
         const text = document.createElement("span");
