@@ -20,6 +20,7 @@ public static class HexCrawlModuleCatalog
     [
         new WorldModule(),
         new ExpeditionModule(),
+        new EncounterHandoffModule(),
         new EnvironmentModule(),
         new SurvivalResourcesModule(),
         new JourneyProcessesModule(),
