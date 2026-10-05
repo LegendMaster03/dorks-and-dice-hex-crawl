@@ -61,7 +61,11 @@ public sealed class ProcedureComposerEndpointsTests
             Assert.Equal(
                 GenericProcedureCatalog.TimeIntervalModule,
                 customModule.GetProperty("moduleKey").GetString());
-            Assert.Empty(custom.GetProperty("dependencies").GetProperty("issues").EnumerateArray());
+            var customIssue = Assert.Single(custom.GetProperty("dependencies").GetProperty("issues").EnumerateArray());
+            Assert.Equal("ProducedButUnused", customIssue.GetProperty("kind").GetString());
+            Assert.Equal(
+                GenericProcedureCatalog.TimeIntervalModule,
+                customIssue.GetProperty("moduleKey").GetString());
 
             using var composedResponse = await client.PostAsJsonAsync("/api/procedures/composer/draft", new
             {
