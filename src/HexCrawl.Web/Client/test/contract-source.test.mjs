@@ -319,7 +319,9 @@ test("expedition setup accepts saved revisions and materializes preset selection
     assert.match(setup, /ProcedureComposerApi\.create/);
     assert.match(setup, /populateProcedureStartChoices/);
     assert.match(setup, /applyWorldProcedureChoice/);
-    assert.match(setup, /Saved procedures use the selected revision exactly/);
+    assert.match(setup, /Saved procedures use the selected revision/);
+    assert.match(setup, /applyWorldProcedureChoice/);
+    assert.match(setup, /choice\.revision/);
     assert.match(selection, /procedureKey: choice\.presetKey/);
     assert.match(selection, /procedureId: choice\.procedureId/);
     assert.match(selection, /procedureRevision: choice\.revision/);
