@@ -117,7 +117,7 @@ public sealed class CampaignProcedureService(IHexCrawlStore store)
         }
 
         editedProcedure.Validate();
-        if (current.Procedure.Equals(editedProcedure))
+        if (CampaignProcedureSnapshot.Equivalent(current.Procedure, editedProcedure))
         {
             throw new InvalidOperationException("The submitted canonical procedure does not change the current revision.");
         }
