@@ -13,14 +13,13 @@ export function populateProcedureStartChoices(
     saved: SavedProcedureSummary[],
     presets: ProcedurePreset[]): void {
     select.replaceChildren();
-    const runnableSaved = saved.filter(value => value.isExecutable);
-    if (runnableSaved.length > 0) {
+    if (saved.length > 0) {
         const group = document.createElement("optgroup");
         group.label = "Saved procedures";
-        for (const value of runnableSaved) {
+        for (const value of saved) {
             group.append(option(
                 `${SAVED_PREFIX}${value.procedureId}:${value.revision}`,
-                `${value.name} · revision ${value.revision}`));
+                `${value.name} · revision ${value.revision}${value.isExecutable ? "" : " · structural"}`));
         }
         select.append(group);
     }

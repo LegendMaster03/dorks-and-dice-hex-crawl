@@ -716,7 +716,7 @@ export async function renderProcedureAuthoringWorkspace(
         populateCompactArea(open, group.modules);
     };
 
-    const compactEditor = (    const compactEditor = (
+    const compactEditor = (
         module: ProcedureModuleComposer,
         key: string,
         value: string,
@@ -727,9 +727,9 @@ export async function renderProcedureAuthoringWorkspace(
         const commit = (next: string): void => {
             void setOverride(withParameter(module, pending.get(module.moduleKey), key, next));
         };
-        const mark = <T extends HTMLElement>(control: T, fieldKey = key): T => {
+        const mark = <T extends HTMLElement>(control: T): T => {
             control.dataset.compactModule = module.moduleKey;
-            control.dataset.compactField = fieldKey;
+            control.dataset.compactField = key;
             return control;
         };
 
@@ -751,7 +751,8 @@ export async function renderProcedureAuthoringWorkspace(
             amount.value = String(parsed.amount);
             mark(amount);
             const unit = document.createElement("select");
-            mark(unit, `${key}:unit`);
+            mark(unit);
+            unit.dataset.compactField = `${key}:unit`;
             for (const name of ["minutes", "hours", "days"] as const) {
                 const option = document.createElement("option");
                 option.value = name;

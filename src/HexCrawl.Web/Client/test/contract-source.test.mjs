@@ -323,6 +323,8 @@ test("expedition setup accepts saved revisions and materializes preset selection
     assert.match(selection, /procedureKey: choice\.presetKey/);
     assert.match(selection, /procedureId: choice\.procedureId/);
     assert.match(selection, /procedureRevision: choice\.revision/);
+    assert.match(selection, /for \(const value of saved\)/);
+    assert.doesNotMatch(selection, /saved\.filter\(value => value\.isExecutable\)/);
     assert.match(setup, /renderProcedureMechanicList/);
     assert.doesNotMatch(setup, /procedureSnapshot/);
     assert.doesNotMatch(setup, /name="customize"/);
