@@ -275,6 +275,17 @@ export async function renderProcedureAuthoringWorkspace(
     };
 
     const changeMode = async (next: ProcedureAuthoringMode): Promise<void> => {
+        if (mode === "json"
+            && next !== "json"
+            && jsonText.length > 0
+            && jsonText !== jsonBaseline) {
+            if (!window.confirm("Discard unsaved JSON changes?")) return;
+            jsonText = "";
+            jsonBaseline = "";
+            jsonValidation = null;
+            jsonLoadFailed = false;
+        }
+
         mode = next;
         localStorage.setItem(modeStorageKey, next);
         closeDrawer();

@@ -94,6 +94,8 @@ test("procedure authoring exposes revision navigation and protects unsaved work"
     assert.match(workspace, /dataset\.procedureRevision/);
     assert.match(workspace, /Choose the latest revision above before saving further changes/);
     assert.match(workspace, /Discard unsaved procedure changes\?/);
+    assert.match(workspace, /Discard unsaved JSON changes\?/);
+    assert.match(workspace, /mode === "json"[\s\S]*jsonText !== jsonBaseline[\s\S]*window\.confirm/);
     assert.match(workspace, /beforeunload/);
     assert.match(workspace, /window\.removeEventListener\("beforeunload"/);
     assert.match(workspace, /jsonText\.length > 0 && jsonText !== jsonBaseline/);
