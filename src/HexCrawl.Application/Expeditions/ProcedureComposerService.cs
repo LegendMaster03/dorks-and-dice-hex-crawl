@@ -12,18 +12,29 @@ public sealed record ProcedureComposerDraft(
 
 public sealed class ProcedureComposerService(CampaignProcedureService procedures)
 {
-    public async Task<ProcedureComposerDraft> CreateDraftAsync(
+    public Task<ProcedureComposerDraft> CreateDraftAsync(
         string ownerUserId,
         string? presetKey,
         Guid? procedureId,
         int? revision,
         IReadOnlyList<CampaignProcedureOverride> overrides,
+        CancellationToken cancellationToken = default) =>
+        CreateDraftAsync(ownerUserId, presetKey, procedureId, revision, [], overrides, cancellationToken);
+
+    public async Task<ProcedureComposerDraft> CreateDraftAsync(
+        string ownerUserId,
+        string? presetKey,
+        Guid? procedureId,
+        int? revision,
+        IReadOnlyList<ProcedureModuleSelection> moduleSelections,
+        IReadOnlyList<CampaignProcedureOverride> overrides,
         CancellationToken cancellationToken = default)
     {
         var owner = RequireOwner(ownerUserId);
+        ArgumentNullException.ThrowIfNull(moduleSelections);
         ArgumentNullException.ThrowIfNull(overrides);
         var source = await ResolveSourceAsync(owner, presetKey, procedureId, revision, cancellationToken);
-        var draft = CampaignProcedureMaterializer.CreateDraft(source.Procedure, overrides);
+        var draft = CampaignProcedureMaterializer.CreateDraft(source.Procedure, moduleSelections, overrides);
         return new ProcedureComposerDraft(
             draft,
             source.Origin,
@@ -32,17 +43,27 @@ public sealed class ProcedureComposerService(CampaignProcedureService procedures
             draft.EvaluateDependencies());
     }
 
+    public Task<StoredCampaignProcedureRevision> CreateAsync(
+        string ownerUserId,
+        string? presetKey,
+        IReadOnlyList<CampaignProcedureOverride> overrides,
+        Guid? campaignId = null,
+        CancellationToken cancellationToken = default) =>
+        CreateAsync(ownerUserId, presetKey, [], overrides, campaignId, cancellationToken);
+
     public async Task<StoredCampaignProcedureRevision> CreateAsync(
         string ownerUserId,
         string? presetKey,
+        IReadOnlyList<ProcedureModuleSelection> moduleSelections,
         IReadOnlyList<CampaignProcedureOverride> overrides,
         Guid? campaignId = null,
         CancellationToken cancellationToken = default)
     {
         var owner = RequireOwner(ownerUserId);
+        ArgumentNullException.ThrowIfNull(moduleSelections);
         ArgumentNullException.ThrowIfNull(overrides);
         var source = ResolveCreationSource(presetKey);
-        var procedure = CampaignProcedureMaterializer.CreateInitialRevision(source.Procedure, overrides);
+        var procedure = CampaignProcedureMaterializer.CreateInitialRevision(source.Procedure, moduleSelections, overrides);
         return await procedures.CreateAsync(
             owner,
             procedure,
@@ -51,10 +72,19 @@ public sealed class ProcedureComposerService(CampaignProcedureService procedures
             cancellationToken);
     }
 
+    public Task<StoredCampaignProcedureRevision> CreateRevisionAsync(
+        string ownerUserId,
+        Guid procedureId,
+        int expectedRevision,
+        IReadOnlyList<CampaignProcedureOverride> overrides,
+        CancellationToken cancellationToken = default) =>
+        CreateRevisionAsync(ownerUserId, procedureId, expectedRevision, [], overrides, cancellationToken);
+
     public async Task<StoredCampaignProcedureRevision> CreateRevisionAsync(
         string ownerUserId,
         Guid procedureId,
         int expectedRevision,
+        IReadOnlyList<ProcedureModuleSelection> moduleSelections,
         IReadOnlyList<CampaignProcedureOverride> overrides,
         CancellationToken cancellationToken = default)
     {
@@ -67,8 +97,9 @@ public sealed class ProcedureComposerService(CampaignProcedureService procedures
         {
             throw new ArgumentOutOfRangeException(nameof(expectedRevision));
         }
+        ArgumentNullException.ThrowIfNull(moduleSelections);
         ArgumentNullException.ThrowIfNull(overrides);
-        if (overrides.Count == 0)
+        if (moduleSelections.Count == 0 && overrides.Count == 0)
         {
             throw new InvalidOperationException("Saving a new procedure revision requires at least one explicit change.");
         }
@@ -80,17 +111,18 @@ public sealed class ProcedureComposerService(CampaignProcedureService procedures
                 $"Campaign procedure revision {expectedRevision} is stale; the current revision is {current.Revision}.");
         }
 
-        _ = CampaignProcedureMaterializer.CreateDraft(current.Procedure, overrides);
-        if (!OverridesChangeProcedure(current.Procedure, overrides))
+        var draft = CampaignProcedureMaterializer.CreateDraft(current.Procedure, moduleSelections, overrides);
+        draft.Validate();
+        if (CampaignProcedureSnapshot.Equivalent(current.Procedure, draft))
         {
             throw new InvalidOperationException("The submitted procedure changes do not alter the current materialized procedure.");
         }
 
-        return await procedures.CreateRevisionAsync(
+        return await procedures.CreateCanonicalRevisionAsync(
             owner,
             procedureId,
             expectedRevision,
-            overrides,
+            draft,
             cancellationToken);
     }
 
@@ -171,41 +203,6 @@ public sealed class ProcedureComposerService(CampaignProcedureService procedures
         return CrawlProcedureCatalog.Catalog.FirstOrDefault(value =>
             string.Equals(value.PresetKey, origin.PresetKey, StringComparison.OrdinalIgnoreCase)
             && (!origin.PresetRevision.HasValue || value.PresetRevision == origin.PresetRevision));
-    }
-
-    private static bool OverridesChangeProcedure(
-        CampaignProcedure current,
-        IReadOnlyList<CampaignProcedureOverride> overrides)
-    {
-        foreach (var value in overrides)
-        {
-            value.Validate();
-            var selected = current.Modules.SingleOrDefault(module =>
-                string.Equals(module.Module.Key, value.ModuleKey, StringComparison.Ordinal))
-                ?? throw new InvalidOperationException(
-                    $"Campaign override '{value.OverrideId}' targets unknown module '{value.ModuleKey}'.");
-
-            if (!string.IsNullOrWhiteSpace(value.ReplacementMechanicKey)
-                && (!string.Equals(
-                        selected.Mechanic.Key,
-                        value.ReplacementMechanicKey,
-                        StringComparison.Ordinal)
-                    || selected.Mechanic.Version != value.ReplacementMechanicVersion))
-            {
-                return true;
-            }
-
-            foreach (var parameter in value.Parameters)
-            {
-                if (!selected.Parameters.TryGetValue(parameter.Key, out var existing)
-                    || !string.Equals(existing, parameter.Value, StringComparison.Ordinal))
-                {
-                    return true;
-                }
-            }
-        }
-
-        return false;
     }
 
     private static void ValidateSource(string? presetKey, Guid? procedureId)

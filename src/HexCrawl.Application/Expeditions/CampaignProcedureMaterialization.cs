@@ -8,6 +8,17 @@ public sealed record ProcedureModuleRecipe(
     int MechanicVersion,
     IReadOnlyDictionary<string, string> Parameters);
 
+public sealed record ProcedureModuleSelection(string ModuleKey, bool Included)
+{
+    public void Validate()
+    {
+        if (string.IsNullOrWhiteSpace(ModuleKey))
+        {
+            throw new InvalidOperationException("Procedure module selection key can not be blank.");
+        }
+    }
+}
+
 public sealed record GenericProcedurePresetRecipe(
     string DefaultProcedureKey,
     string DefaultProcedureName,
@@ -60,50 +71,98 @@ public static class CampaignProcedureMaterializer
 
     public static CampaignProcedure CreateDraft(
         CampaignProcedure current,
+        IReadOnlyList<CampaignProcedureOverride> overrides) =>
+        CreateDraft(current, [], overrides);
+
+    public static CampaignProcedure CreateDraft(
+        CampaignProcedure current,
+        IReadOnlyList<ProcedureModuleSelection> moduleSelections,
         IReadOnlyList<CampaignProcedureOverride> overrides)
     {
         ArgumentNullException.ThrowIfNull(current);
+        ArgumentNullException.ThrowIfNull(moduleSelections);
         ArgumentNullException.ThrowIfNull(overrides);
         current.Validate();
-        return ApplyOverrides(current, overrides, current.Revision);
+        return ApplyChanges(current, moduleSelections, overrides, current.Revision);
     }
 
     public static CampaignProcedure CreateInitialRevision(
         CampaignProcedure current,
+        IReadOnlyList<CampaignProcedureOverride> overrides) =>
+        CreateInitialRevision(current, [], overrides);
+
+    public static CampaignProcedure CreateInitialRevision(
+        CampaignProcedure current,
+        IReadOnlyList<ProcedureModuleSelection> moduleSelections,
         IReadOnlyList<CampaignProcedureOverride> overrides)
     {
-        var revision = CreateDraft(current, overrides);
+        var revision = CreateDraft(current, moduleSelections, overrides);
         revision.Validate();
         return revision;
     }
 
     public static CampaignProcedure CreateRevision(
         CampaignProcedure current,
+        IReadOnlyList<CampaignProcedureOverride> overrides) =>
+        CreateRevision(current, [], overrides);
+
+    public static CampaignProcedure CreateRevision(
+        CampaignProcedure current,
+        IReadOnlyList<ProcedureModuleSelection> moduleSelections,
         IReadOnlyList<CampaignProcedureOverride> overrides)
     {
         ArgumentNullException.ThrowIfNull(current);
+        ArgumentNullException.ThrowIfNull(moduleSelections);
         ArgumentNullException.ThrowIfNull(overrides);
         current.Validate();
-        var revision = ApplyOverrides(current, overrides, checked(current.Revision + 1));
+        var revision = ApplyChanges(current, moduleSelections, overrides, checked(current.Revision + 1));
         revision.Validate();
         return revision;
     }
 
-    private static CampaignProcedure ApplyOverrides(
+    private static CampaignProcedure ApplyChanges(
         CampaignProcedure current,
+        IReadOnlyList<ProcedureModuleSelection> moduleSelections,
         IReadOnlyList<CampaignProcedureOverride> overrides,
         int revisionNumber)
     {
+        foreach (var selection in moduleSelections)
+        {
+            selection.Validate();
+        }
+        if (moduleSelections.Select(value => value.ModuleKey).Distinct(StringComparer.Ordinal).Count() != moduleSelections.Count)
+        {
+            throw new InvalidOperationException("Procedure module selections can not contain duplicate module keys.");
+        }
+
         var modules = current.Modules
             .Select(CampaignProcedureSnapshot.Copy)
             .ToDictionary(module => module.Module.Key, StringComparer.Ordinal);
+        var order = current.Modules.Select(module => module.Module.Key).ToList();
+
+        foreach (var selection in moduleSelections)
+        {
+            if (!selection.Included)
+            {
+                modules.Remove(selection.ModuleKey);
+                order.RemoveAll(key => string.Equals(key, selection.ModuleKey, StringComparison.Ordinal));
+                continue;
+            }
+
+            if (!modules.ContainsKey(selection.ModuleKey))
+            {
+                modules[selection.ModuleKey] = ProcedureComposerCustomProcedureFactory.CreateDefaultModule(selection.ModuleKey);
+                order.Add(selection.ModuleKey);
+            }
+        }
 
         foreach (var value in overrides)
         {
             value.Validate();
             if (!modules.TryGetValue(value.ModuleKey, out var selected))
             {
-                throw new InvalidOperationException($"Campaign override '{value.OverrideId}' targets unknown module '{value.ModuleKey}'.");
+                throw new InvalidOperationException(
+                    $"Campaign override '{value.OverrideId}' targets module '{value.ModuleKey}', but that module is not included in the composed procedure.");
             }
 
             var mechanic = selected.Mechanic;
@@ -129,7 +188,7 @@ public static class CampaignProcedureMaterializer
         return current with
         {
             Revision = revisionNumber,
-            Modules = current.Modules.Select(module => modules[module.Module.Key]).ToArray(),
+            Modules = order.Where(modules.ContainsKey).Select(key => modules[key]).ToArray(),
             Overrides = current.Overrides
                 .Select(CampaignProcedureSnapshot.Copy)
                 .Concat(overrides.Select(CampaignProcedureSnapshot.Copy))
