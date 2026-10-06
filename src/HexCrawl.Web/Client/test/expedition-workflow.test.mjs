@@ -81,6 +81,32 @@ test("spatial continuation routes each unresolved requirement before authoritati
     assert.equal(spatialTravelContinuationTarget(allChecksResolved, true, true), "advance");
 });
 
+test("forced travel and pending consequences block routine continuation without outranking encounter pauses", () => {
+    const base = runtime();
+
+    assert.equal(
+        spatialTravelContinuationTarget(base, true, true, true, false, true),
+        "survival");
+    assert.equal(
+        spatialTravelContinuationTarget(
+            { ...base, pauseReason: "EncounterTriggered" },
+            true,
+            true,
+            true,
+            false,
+            true),
+        "encounter");
+    assert.equal(
+        spatialTravelContinuationTarget(
+            { ...base, pauseReason: "LostRecognitionRequired" },
+            true,
+            true,
+            true,
+            false,
+            true),
+        "boundary");
+});
+
 test("spatial continuation respects blocking pauses and never fabricates spatial work", () => {
     const base = runtime();
     assert.equal(

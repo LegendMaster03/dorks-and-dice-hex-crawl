@@ -554,6 +554,7 @@ test("normal spatial travel has one primary continuation path and focused unreso
     assert.match(view, /case "encounter":[\s\S]*openTravelWorkspace\("encounter"\)/);
     assert.match(view, /case "movement":[\s\S]*openTravelWorkspace\("movement"\)/);
     assert.match(view, /case "boundary":[\s\S]*openTravelWorkspace\("boundary"\)/);
+    assert.match(view, /case "survival":[\s\S]*openSurvivalWorkspace\(\)/);
     assert.match(view, /ExpeditionWatchController\.continueResolvedTravel/);
     const controller = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/expedition-watch-controller.ts"),
@@ -635,7 +636,7 @@ test("travel-target map selection follows persisted course across authoritative 
     assert.match(view, /selectedHexTracksTravelIntent = true/);
     assert.match(view, /if \(selectedHexTracksTravelIntent && runtime\.expedition\.isSpatial && preferences\.direction !== null\)/);
     assert.match(view, /adjacencyEdgeForDirection\(adjacency, preferences\.direction\)\?\.targetCell/);
-    assert.match(view, /selectedHexTracksTravelIntent = false;\s*if \(hex\)/);
+    assert.match(view, /if \(hex\)[\s\S]*selectTravelIntent\(edge\.directionValue, edge\.targetCell\);[\s\S]*selectedHexTracksTravelIntent = false;/);
 });
 
 

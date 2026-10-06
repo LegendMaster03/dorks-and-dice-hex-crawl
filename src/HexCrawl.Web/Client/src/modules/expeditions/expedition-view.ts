@@ -1193,11 +1193,6 @@ export async function renderExpedition(
             openHistory();
             return;
         }
-        if (survivalAttention(survival)) {
-            openSurvivalWorkspace();
-            return;
-        }
-
         const adjacency = currentAdjacency();
         const edge = preferences.direction === null || !adjacency
             ? null
@@ -1212,7 +1207,8 @@ export async function renderExpedition(
             edge !== null,
             effectiveDistance !== null,
             suppressesNavigation,
-            deliberateDoubleBack);
+            deliberateDoubleBack,
+            survivalAttention(survival));
         switch (target) {
             case "course":
                 focusTravelCourse();
@@ -1229,6 +1225,9 @@ export async function renderExpedition(
                 return;
             case "boundary":
                 openTravelWorkspace("boundary");
+                return;
+            case "survival":
+                openSurvivalWorkspace();
                 return;
             case "unavailable":
                 openHistory();
