@@ -24,6 +24,22 @@ public sealed class ProcedurePresetIdentityTests
     }
 
     [Fact]
+    public void GenericStartingPointsAreExplicitProductionChoicesAndMixedProofIsNot()
+    {
+        var generic = CrawlProcedureCatalog.Catalog
+            .Where(preset => preset.Category == "Generic starting points")
+            .Select(preset => preset.PresetKey)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(["simple-fixed-distance", "simple-hex-step"], generic);
+        Assert.Equal("Generic starting points", CrawlProcedureCatalog.Resolve("simple-fixed-distance").Category);
+        Assert.Equal("Generic starting points", CrawlProcedureCatalog.Resolve("simple-hex-step").Category);
+        Assert.DoesNotContain(CrawlProcedureCatalog.Catalog, preset =>
+            preset.PresetKey == "mixed-house-rule");
+    }
+
+    [Fact]
     public void CampaignOwnedIdentityDoesNotRewritePresetOrigin()
     {
         var preset = CrawlProcedureCatalog.Resolve("simple-fixed-distance");
