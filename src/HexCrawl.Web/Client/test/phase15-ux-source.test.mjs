@@ -631,7 +631,7 @@ test("normal spatial travel has one primary continuation path and focused unreso
     assert.match(view, /case "encounter":[\s\S]*openTravelWorkspace\("encounter"\)/);
     assert.match(view, /case "movement":[\s\S]*openTravelWorkspace\("movement"\)/);
     assert.match(view, /case "boundary":[\s\S]*openBoundaryWorkspace\(\)/);
-    assert.match(view, /case "survival":[\s\S]*openSurvivalWorkspace\(\)/);
+    assert.match(view, /case "survival":[\s\S]*openSurvivalWorkspace\("attention"\)/);
     assert.match(view, /ExpeditionWatchController\.continueResolvedTravel/);
     const controller = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/expedition-watch-controller.ts"),
