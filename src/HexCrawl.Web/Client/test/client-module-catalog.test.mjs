@@ -22,7 +22,7 @@ test("client modules have stable, complete route ownership", async () => {
     assert.match(home, /id:\s*"home"[\s\S]*routeKinds:\s*\["home"\]/);
     assert.match(procedures, /id:\s*"procedures"[\s\S]*routeKinds:\s*\["procedures",\s*"procedure",\s*"procedure-revision",\s*"procedure-reference"\]/);
     assert.match(worlds, /id:\s*"worlds"[\s\S]*routeKinds:\s*\["worlds",\s*"world",\s*"edit"\]/);
-    assert.match(expeditions, /id:\s*"expeditions"[\s\S]*routeKinds:\s*\["expedition",\s*"tracker"\]/);
+    assert.match(expeditions, /id:\s*"expeditions"[\s\S]*routeKinds:\s*\["expedition"\]/);
     assert.match(assistants, /id:\s*"assistants"[\s\S]*routeKinds:\s*\["assistant",\s*"assistant-entry"\]/);
 
     for (const kind of [
@@ -35,7 +35,6 @@ test("client modules have stable, complete route ownership", async () => {
         "world",
         "edit",
         "expedition",
-        "tracker",
         "assistant",
         "assistant-entry"
     ]) {

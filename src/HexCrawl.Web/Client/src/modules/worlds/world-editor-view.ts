@@ -81,13 +81,13 @@ export async function renderWorldEditor(
                         </form>
                     </details>
 
-                    <details><summary>Running sheets for this world</summary><div data-expedition-list></div>
+                    <details><summary>Expeditions using this world</summary><div data-expedition-list></div>
                         <form class="hc-form" data-expedition-form>
                             <label>Name <input name="name" required value="Expedition"></label>
                             <label>Procedure <select name="procedure"></select></label>
                             <div class="hc-inline"><label>Start hex q <input name="q" type="number" step="1" value="0"></label><label>Start hex r <input name="r" type="number" step="1" value="0"></label></div>
                             <p class="hc-hint">Advanced: q/r are axial hex coordinates and remain the persisted coordinate format.</p>
-                            <button type="submit" class="hc-primary-action">Start running sheet</button>
+                            <button type="submit" class="hc-primary-action">Start expedition</button>
                         </form>
                     </details>
                     <details><summary>Source-map metadata</summary><p data-source-maps></p></details>
@@ -370,7 +370,7 @@ export async function renderWorldEditor(
         }
         for (const expedition of expeditions) {
             expeditionHost.append(resourceButton(`${expedition.name} · ${expedition.procedureName}`, () =>
-                navigate(`/worlds/${world.id}/expeditions/${expedition.id}`)));
+                navigate(`/expeditions/${expedition.id}`)));
         }
     };
     renderExpeditions();
@@ -383,7 +383,7 @@ export async function renderWorldEditor(
                 input(expeditionForm, "name").value,
                 procedure.value,
                 { q: integer(input(expeditionForm, "q")), r: integer(input(expeditionForm, "r")) });
-            navigate(`/worlds/${world.id}/expeditions/${expedition.id}`);
+            navigate(`/expeditions/${expedition.id}`);
         });
     });
 

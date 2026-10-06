@@ -376,7 +376,7 @@ export class HexCrawlApi {
     }
 
     public startStandaloneSession(input: StartStandaloneCrawlSessionInput): Promise<ExpeditionDetail> {
-        return this.sendJson("POST", "/api/expeditions", input, "Start crawl session");
+        return this.sendJson("POST", "/api/expeditions", input, "Start expedition");
     }
 
     public getExpedition(expeditionId: string): Promise<ExpeditionDetail> {
@@ -407,7 +407,7 @@ export class HexCrawlApi {
         const response = await fetch(
             `${this.backendBaseUrl}/api/expeditions/${encodeURIComponent(expeditionId)}?expectedVersion=${expectedVersion}`,
             { method: "DELETE", headers: { Accept: "application/json" } });
-        if (!response.ok) throw await apiError(response, "Delete running sheet");
+        if (!response.ok) throw await apiError(response, "Delete expedition");
     }
 
     public getTravelEnvironmentCatalog(expeditionId: string): Promise<TravelEnvironmentCatalog> {

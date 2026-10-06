@@ -228,6 +228,13 @@ export function ensurePhase15Styles(): void {
         .hc-context-card { display:grid; gap:.65rem; padding:.8rem; border:1px solid var(--hc-border); border-radius:.7rem; background:var(--hc-surface); color:var(--hc-text); }
         .hc-nonspatial-primary { display:grid; grid-template-columns:minmax(0,1.4fr) minmax(17rem,.75fr); gap:1rem; align-items:start; }
         .hc-journey-primary { border:1px solid var(--hc-border); border-radius:.85rem; padding:1rem; display:grid; gap:.65rem; background:var(--hc-surface); color:var(--hc-text); }
+        .hc-journey-primary-head { display:grid; gap:.3rem; }
+        .hc-journey-primary-head h3, .hc-journey-primary-head p { margin:0; }
+        .hc-journey-primary-head .hc-ux-badge { justify-self:start; }
+        .hc-journey-state-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.55rem; margin:0; }
+        .hc-journey-fact { min-width:0; display:grid; gap:.12rem; padding:.65rem .7rem; border:1px solid var(--hc-border); border-radius:.6rem; background:var(--hc-surface-elevated); }
+        .hc-journey-fact dt { font-size:.72rem; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:var(--hc-muted); }
+        .hc-journey-fact dd { margin:0; min-width:0; color:var(--hc-text-strong); overflow-wrap:anywhere; }
         .hc-phase15-empty { padding:1rem; border:1px dashed var(--hc-border); border-radius:.7rem; color:var(--hc-muted); background:var(--hc-surface); }
         @media (max-width: 1040px) {
             .hc-phase15-expedition .hc-workspace-grid,
@@ -263,6 +270,7 @@ export function ensurePhase15Styles(): void {
             .hc-adjacency-caption { width:3.4rem; font-size:.62rem; }
             .hc-adjacency-edge { min-width:2.75rem; min-height:2.75rem; font-size:.78rem; }
             .hc-current-travel-facts { grid-template-columns:auto minmax(0,1fr); }
+            .hc-journey-state-grid { grid-template-columns:1fr; }
             .hc-current-travel-pace-editor { grid-template-columns:1fr; }
             .hc-map-context-overlay { max-height:48%; right:.5rem; bottom:.5rem; width:calc(100% - 1rem); }
             .hc-table-rail { grid-template-columns:1fr; }

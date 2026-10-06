@@ -119,7 +119,7 @@ Authentication against the Dorks & Dice Tool Host, persistence implementation se
 
 ## Assistant domain locality
 
-The focused Travel/Watch, Navigation, and Encounter Cadence tools share the stable `CrawlAssistantActions` API, but their domain implementations live in separate partial files under `Domain/Runtime/Assistants/`. Shared event/provenance and distance helpers remain in one support partial. This mirrors the user-visible sub-tools without introducing separate runtime abstractions or changing deterministic state transitions.
+The focused travel/time, Navigation, and Encounter Cadence utilities share the stable `CrawlAssistantActions` API, but their domain implementations live in separate partial files under `Domain/Runtime/Assistants/`. Shared event/provenance and distance helpers remain in one support partial. This mirrors the user-visible sub-tools without introducing separate runtime abstractions or changing deterministic state transitions.
 
 ## Deterministic runtime locality
 
@@ -157,7 +157,7 @@ Client/src/modules/
     expeditions/
         module.ts
         expedition-view.ts
-        expedition-presentation.ts
+        expedition-workspace-model.ts
         expedition-watch-controller.ts
         expedition-setup.ts
         expedition-input-policy.ts
@@ -168,7 +168,7 @@ Client/src/modules/
         expedition-assistant-view.ts
 ```
 
-Shared client infrastructure such as API transport, routing, map rendering, viewport math, render lifecycle, runtime formatting, and generic DOM/form helpers remains at the client root or under `Client/src/ui/`. Cross-feature dependencies are visible as module-to-module imports rather than being obscured by a flat directory. Read-only expedition presentation is separated from watch mutation and discovery orchestration in `expedition-presentation.ts`. Stateful sub-workflows are isolated when they have a real lifecycle boundary: source-map affine registration owns its control-point state, preview lifecycle, map-click interception, and save flow in `source-map-registration-controller.ts`; Wonderdraft inspection, candidate review, and semantic import selection live in `wonderdraft-import-controller.ts`.
+Shared client infrastructure such as API transport, routing, map rendering, viewport math, render lifecycle, runtime formatting, and generic DOM/form helpers remains at the client root or under `Client/src/ui/`. Cross-feature dependencies are visible as module-to-module imports rather than being obscured by a flat directory. Expedition presentation/action derivation is separated from mutation orchestration in `expedition-workspace-model.ts`, while `expedition-view.ts` composes the unified workbench and `expedition-watch-controller.ts` owns watch submission. Stateful sub-workflows are isolated when they have a real lifecycle boundary: source-map affine registration owns its control-point state, preview lifecycle, map-click interception, and save flow in `source-map-registration-controller.ts`; Wonderdraft inspection, candidate review, and semantic import selection live in `wonderdraft-import-controller.ts`.
 
 ## Format-adapter locality
 

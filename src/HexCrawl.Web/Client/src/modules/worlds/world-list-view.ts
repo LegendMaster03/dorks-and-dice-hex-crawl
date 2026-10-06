@@ -10,8 +10,8 @@ export async function renderWorldList(
     root.innerHTML = `
         <section class="hc-page">
             <header class="hc-page-header">
-                <div><span class="hc-sheet-kicker">Map preparation</span><h1>Overworlds</h1><p>Create and manage persistent hex-crawl worlds separately from the running sheet.</p></div>
-                <nav><button type="button" data-home>Running sheets</button></nav>
+                <div><span class="hc-sheet-kicker">Map preparation</span><h1>Overworlds</h1><p>Create and manage persistent hex-crawl worlds separately from the expedition.</p></div>
+                <nav><button type="button" data-home>Expeditions</button></nav>
             </header>
             <div class="hc-error" data-error hidden role="alert"></div>
             <div class="hc-columns">

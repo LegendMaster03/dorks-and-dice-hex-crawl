@@ -654,7 +654,7 @@ test("narrow hierarchy keeps primary travel and the map ahead of status-card det
     assert.match(styles, /\.hc-phase15-expedition > \.hc-phase15-runtime-summary \{ order:3; \}/);
     assert.match(styles, /\.hc-phase15-expedition \.hc-map-panel > \.hc-map-frame \{ order:2; \}/);
     assert.match(styles, /\.hc-phase15-expedition \.hc-map-panel > \.hc-current-travel \{ order:3;/);
-    assert.match(capture, /narrow-selected-edge\|selected-edge\|light\|500\|844\|390/);
+    assert.match(capture, /24-responsive-narrow\|selected-edge\|light\|500\|844\|390/);
     assert.match(capture, /narrow map does not begin in the initial viewport/);
     assert.match(fixture, /mapTop:/);
 });
@@ -756,8 +756,9 @@ test("rendered review exercises focused forced travel and navigator focus", () =
         path.join(sourceDir, "..", "visual-review", "phase15.ts"),
         "utf8");
 
-    assert.match(capture, /forced-travel-pending.*drawerCount/);
-    assert.match(capture, /forced-travel-pending": "Forced travel"/);
+    assert.match(capture, /"forced-travel-pending": "Forced travel"/);
+    assert.match(capture, /metrics\["drawerCount"\] != 1/);
+    assert.match(capture, /forcedTravelPrimaryDomainFacing/);
     assert.match(fixture, /findButton\("Resolve forced travel"\)\?\.click\(\)/);
     assert.match(fixture, /focusedEdge:/);
 });
@@ -798,7 +799,7 @@ test("DM can reposition the party without routing through ordinary travel proced
     const api = fs.readFileSync(path.join(sourceDir, "api.ts"), "utf8");
 
     assert.match(view, /button\("Teleport party", \(\) => openRepositionWorkspace\(selectedHex\)\)/);
-    assert.match(view, /button\("Teleport party here", \(\) => openRepositionWorkspace\(selectedHex\)\)/);
+    assert.match(view, /if \(!edge && !sameHex\(runtime\.expedition\.currentHex, selectedHex\)\)[\s\S]*button\("Teleport party here", \(\) => openRepositionWorkspace\(selectedHex\)\)/);
     assert.match(view, /Teleport party directly repositions the party without resolving travel/);
     assert.match(view, /api\.repositionExpedition/);
     assert.match(view, /preferences\.direction = null/);
@@ -806,6 +807,55 @@ test("DM can reposition the party without routing through ordinary travel proced
     assert.match(view, /r\.required = true/);
     assert.match(view, /void runUiMutation\(async \(\) => \{\s*if \(!q\.value\.trim\(\) \|\| !r\.value\.trim\(\)\)/);
     assert.match(api, /\/api\/expeditions\/\$\{encodeURIComponent\(expeditionId\)\}\/reposition/);
+});
+
+test("journey-first primary workspace projects current process state without spatial controls", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+
+    assert.match(view, /main\.append\(textElement\("h2", "Journey"\)\)/);
+    assert.match(view, /journeyFact\("Current stage"/);
+    assert.match(view, /journeyFact\("Progress"/);
+    assert.match(view, /journeyFact\("Roles"/);
+    assert.match(view, /journeyFact\("Pending"/);
+    assert.match(view, /journeyFact\("Consequences \/ state"/);
+    assert.match(view, /No journey process is currently active/);
+    assert.match(view, /This procedure advances its configured interval without spatial position, course, pace, hex progress, or map state/);
+});
+
+test("nonspatial GM utilities do not expose spatial repositioning or travel-order controls", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+
+    assert.match(view, /runtime\.expedition\.isSpatial \? "Party & travel order" : "Party & roles"/);
+    assert.match(view, /if \(runtime\.expedition\.isSpatial\) \{\s*row\.append\(button\("Teleport party"/);
+    assert.match(view, /if \(presentation\.capabilities\.journey\) \{\s*row\.append\(button\("Journey"/);
+});
+
+test("nonspatial summary only renders movement when the materialized procedure exposes travel capability", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+
+    assert.match(view, /if \(presentation\.capabilities\.travel\) \{[\s\S]*stats\.append\(statAction\([\s\S]*"Movement"/);
+    assert.match(view, /state\.eventOccurrences\.some\(event => event\.status === "ResolutionRequired"\)/);
+});
+
+test("procedure-defined travel modes use bounded controls and focused movement labels authoritative units", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+    const types = fs.readFileSync(path.join(sourceDir, "types.ts"), "utf8");
+
+    assert.match(types, /travelModeKeys: string\[\]/);
+    assert.match(view, /const availableTravelModes = \(\): string\[\] => runtime\.movementComposition\.policy\.travelModeKeys/);
+    assert.match(view, /const createPaceControl =/);
+    assert.match(view, /document\.createElement\("select"\)/);
+    assert.match(view, /travelModeControlMarkup\(travelModes\)/);
+    assert.match(view, /distanceInputLabel\("Effective distance", distanceUnit\)/);
+    assert.match(view, /runtime\.context\.hexCenterDistance\?\.unit\.symbol/);
 });
 
 test("Compact procedure reference does not claim display order is authoritative", () => {
@@ -825,9 +875,12 @@ test("travel-target map selection follows persisted course across authoritative 
         "utf8");
 
     assert.match(view, /let selectedHexTracksTravelIntent = false/);
+    assert.match(view, /const synchronizeTravelTargetProjection = \(\): void =>/);
+    assert.match(view, /synchronizeTravelTargetProjection\(\);/);
     assert.match(view, /selectedHexTracksTravelIntent = true/);
-    assert.match(view, /if \(selectedHexTracksTravelIntent && runtime\.expedition\.isSpatial && preferences\.direction !== null\)/);
-    assert.match(view, /adjacencyEdgeForDirection\(adjacency, preferences\.direction\)\?\.targetCell/);
+    assert.match(view, /if \(selectedHex !== null && !selectedHexTracksTravelIntent\) return/);
+    assert.match(view, /selectedHex = adjacency[\s\S]*adjacencyEdgeForDirection\(adjacency, preferences\.direction\)\?\.targetCell/);
+    assert.match(view, /preferences = mergeRuntimeTravelPreferences\(runtime, preferences\);[\s\S]*synchronizeTravelTargetProjection\(\);/);
     assert.match(view, /if \(hex\)[\s\S]*selectTravelIntent\(edge\.directionValue, edge\.targetCell\);[\s\S]*selectedHexTracksTravelIntent = false;/);
 });
 

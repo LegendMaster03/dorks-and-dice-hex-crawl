@@ -35,13 +35,10 @@ import { canUseFocusedNonSpatialWatch, focusedIntervalHours } from "./focused-in
 import { navigationResolutionDue, pauseInstruction, spatialTravelContinuationTarget } from "./expedition-workflow";
 import { expeditionWorkspacePresentation } from "./expedition-workspace-model";
 
-export type ExpeditionViewMode = "map" | "tracker";
-
 export async function renderExpedition(
     root: HTMLElement,
     api: HexCrawlApi,
     expeditionId: string,
-    _mode: ExpeditionViewMode,
     navigate: (route: string, replace?: boolean) => void,
     routeWorldId?: string,
     toolContext: ToolHostContext | null = null): Promise<() => void> {
@@ -69,6 +66,39 @@ export async function renderExpedition(
     let selectedHex: HexCoordinate | null = null;
     let selectedHexTracksTravelIntent = false;
     let preferences = loadTravelPreferences(runtime);
+    const availableTravelModes = (): string[] => runtime.movementComposition.policy.travelModeKeys ?? [];
+    const normalizeTravelModePreference = (): void => {
+        const choices = availableTravelModes();
+        if (choices.length > 0 && !choices.includes(preferences.pace)) preferences.pace = choices[0];
+    };
+    const createPaceControl = (name?: string): HTMLInputElement | HTMLSelectElement => {
+        const choices = availableTravelModes();
+        if (choices.length === 0) {
+            const control = document.createElement("input");
+            control.type = "text";
+            control.value = preferences.pace;
+            if (name) control.name = name;
+            control.setAttribute("aria-label", "Pace or travel mode");
+            return control;
+        }
+        const control = document.createElement("select");
+        if (name) control.name = name;
+        for (const choice of choices) {
+            const item = document.createElement("option");
+            item.value = choice;
+            item.textContent = humanize(choice);
+            control.append(item);
+        }
+        control.value = choices.includes(preferences.pace) ? preferences.pace : choices[0];
+        control.setAttribute("aria-label", "Pace or travel mode");
+        return control;
+    };
+    const movementDistanceUnit = (): string | null =>
+        runtime.movementComposition.suggestedExpectedDistance?.unit.symbol
+        ?? runtime.movementComposition.effectiveDistanceUnit?.symbol
+        ?? runtime.context.hexCenterDistance?.unit.symbol
+        ?? null;
+    normalizeTravelModePreference();
     let adjacencyCache: {
         key: string;
         value: ReturnType<typeof currentHexAdjacency>;
@@ -104,6 +134,24 @@ export async function renderExpedition(
         };
     };
 
+    const synchronizeTravelTargetProjection = (): void => {
+        if (!runtime.expedition.isSpatial || preferences.direction === null) {
+            if (selectedHexTracksTravelIntent) {
+                selectedHex = null;
+                selectedHexTracksTravelIntent = false;
+            }
+            return;
+        }
+        // An arbitrary inspected cell remains independent from the intended travel target.
+        if (selectedHex !== null && !selectedHexTracksTravelIntent) return;
+        const adjacency = currentAdjacency();
+        selectedHex = adjacency
+            ? adjacencyEdgeForDirection(adjacency, preferences.direction)?.targetCell ?? null
+            : null;
+        selectedHexTracksTravelIntent = selectedHex !== null;
+    };
+    synchronizeTravelTargetProjection();
+
     const courseLabel = (direction: number | null): string => {
         const adjacency = currentAdjacency();
         if (direction === null || !adjacency) return directionLabel(direction);
@@ -132,12 +180,8 @@ export async function renderExpedition(
     const applyRuntime = (next: ExpeditionDetail): void => {
         runtime = next;
         preferences = mergeRuntimeTravelPreferences(runtime, preferences);
-        if (selectedHexTracksTravelIntent && runtime.expedition.isSpatial && preferences.direction !== null) {
-            const adjacency = currentAdjacency();
-            selectedHex = adjacency
-                ? adjacencyEdgeForDirection(adjacency, preferences.direction)?.targetCell ?? null
-                : null;
-        }
+        normalizeTravelModePreference();
+        synchronizeTravelTargetProjection();
         saveTravelPreferences(runtime.id, preferences);
         publishExpeditionRuntimeChanged(root, runtime);
     };
@@ -184,7 +228,7 @@ export async function renderExpedition(
             textElement("p", `${runtime.context.name} · ${runtime.procedure.name}`));
         const nav = document.createElement("nav");
         nav.className = "hc-button-row";
-        nav.append(button("DM tools", () => navigate("/")));
+        nav.append(button("Hex Crawl home", () => navigate("/")));
         if (runtime.overworldId) {
             nav.append(button("World authoring", () => navigate(`/worlds/${runtime.overworldId}/edit`)));
         }
@@ -218,8 +262,9 @@ export async function renderExpedition(
                 "Party",
                 `${runtime.party.members.length} member${runtime.party.members.length === 1 ? "" : "s"}`,
                 partyActivitySummary(runtime),
-                openPartyWorkspace),
-            statAction(
+                openPartyWorkspace));
+        if (presentation.capabilities.travel) {
+            stats.append(statAction(
                 "Movement",
                 movementSummary(runtime),
                 runtime.movementComposition.missingInputs.length > 0
@@ -227,6 +272,7 @@ export async function renderExpedition(
                     : movementSuggestionDetail(runtime),
                 runtime.expedition.isSpatial ? () => openTravelWorkspace("movement") : openPartyWorkspace,
                 runtime.movementComposition.missingInputs.length > 0 ? "warning" : "neutral"));
+        }
         if (presentation.capabilities.navigation && presentation.navigationLabel) {
             stats.append(statAction(
                 "Navigation",
@@ -238,9 +284,12 @@ export async function renderExpedition(
                 runtime.expedition.isSpatial && runtime.expedition.isLost ? "warning" : "neutral"));
         }
         if (presentation.capabilities.resources || presentation.capabilities.survival || presentation.capabilities.effects) {
+            const hasSurvivalOrResources = presentation.capabilities.resources || presentation.capabilities.survival;
             stats.append(statAction(
-                "Survival / resources",
-                presentation.resourceLabel ?? "Procedure active",
+                presentation.capabilities.effects
+                    ? hasSurvivalOrResources ? "Survival / resources / effects" : "Effects"
+                    : "Survival / resources",
+                presentation.resourceLabel ?? (presentation.capabilities.effects ? "Effect procedure active" : "Procedure active"),
                 survivalDetail(survival),
                 openSurvivalWorkspace,
                 survivalAttention(survival) ? "warning" : "neutral"));
@@ -364,31 +413,157 @@ export async function renderExpedition(
         section.className = "hc-nonspatial-primary";
         const main = document.createElement("article");
         main.className = "hc-panel hc-journey-primary";
-        main.append(textElement("h2", "Expedition procedure"));
+        const presentation = expeditionWorkspacePresentation(runtime, journey, survival);
+        const activeJourney = journey?.activeProcesses.find(process => !process.isTerminal) ?? null;
+
         if (journey?.processPolicy.support === "Supported") {
-            main.append(textElement("p", journeyDetail(journey)));
-            const control = button("Open journey workspace", openJourneyWorkspace);
-            control.className = "hc-primary-action";
-            main.append(control);
+            main.append(textElement("h2", "Journey"));
+            if (activeJourney) {
+                const stage = activeJourney.definition.stages.find(value => value.stageKey === activeJourney.currentStageKey) ?? null;
+                const stageState = activeJourney.stageStates.find(value => value.stageKey === activeJourney.currentStageKey) ?? null;
+                const heading = document.createElement("header");
+                heading.className = "hc-journey-primary-head";
+                heading.append(
+                    textElement("h3", activeJourney.definition.displayName),
+                    badge(humanize(activeJourney.status), journeyAttention(journey) ? "warning" : "good"));
+                if (activeJourney.definition.description) {
+                    heading.append(textElement("p", activeJourney.definition.description, "hc-muted"));
+                }
+                main.append(heading);
+
+                const facts = document.createElement("dl");
+                facts.className = "hc-journey-state-grid";
+                facts.append(
+                    journeyFact("Current stage", stage?.displayName ?? humanize(activeJourney.currentStageKey)),
+                    journeyFact("Progress", journeyProgressSummary(activeJourney, stage, stageState)),
+                    journeyFact("Roles", journeyRoleSummary(runtime)),
+                    journeyFact("Pending", journeyPendingSummary(journey, activeJourney)),
+                    journeyFact("Consequences / state", journeyStateSummary(stageState, survival)));
+                main.append(facts);
+
+                if (presentation.action.kind === "journey") {
+                    const copy = currentActionCopy(presentation.action);
+                    const control = button(copy.label, openJourneyWorkspace);
+                    control.className = "hc-primary-action";
+                    main.append(control);
+                } else {
+                    main.append(button("Open journey workspace", openJourneyWorkspace));
+                }
+            } else {
+                main.append(
+                    textElement("p", "No journey process is currently active.", "hc-muted"),
+                    textElement("p", journeyPendingEventSummary(journey), "hc-muted"));
+                const copy = currentActionCopy(presentation.action);
+                const control = button(
+                    presentation.action.kind === "journey" ? copy.label : "Start or manage journey",
+                    openJourneyWorkspace);
+                control.className = "hc-primary-action";
+                main.append(control);
+            }
         } else if (canUseFocusedNonSpatialWatch(runtime)) {
-            main.append(textElement("p", "This procedure advances time without fabricating map or direction state."));
-            const control = button("Run watch / time", openNonSpatialWatchWorkspace);
+            main.append(
+                textElement("h2", "Procedure interval"),
+                textElement("p", "This procedure advances its configured interval without spatial position, course, pace, hex progress, or map state.", "hc-muted"));
+            const control = button(currentActionCopy(presentation.action).label, openNonSpatialWatchWorkspace);
             control.className = "hc-primary-action";
             main.append(control);
         } else {
-            main.append(textElement("p", "This structural expedition has no executable spatial or interval action. Use the procedure reference and focused GM tools for manual play."));
+            main.append(
+                textElement("h2", "Procedure state"),
+                textElement("p", "This expedition has no executable spatial, journey, or interval action. Use the procedure reference and focused GM tools for manual play.", "hc-muted"));
         }
+
         const side = document.createElement("aside");
-        side.className = "hc-panel";
+        side.className = "hc-panel hc-sidebar hc-table-rail";
         side.append(
-            textElement("h2", "Campaign state"),
-            actionCard("Party & activities", partyCardDetail(runtime), openPartyWorkspace));
-        if (expeditionWorkspacePresentation(runtime, journey, survival).capabilities.resources
-            || expeditionWorkspacePresentation(runtime, journey, survival).capabilities.survival) {
-            side.append(actionCard("Survival & resources", survivalDetail(survival), openSurvivalWorkspace));
+            textElement("h2", "At the table"),
+            railAction("Party & roles", journeyRoleSummary(runtime), openPartyWorkspace));
+        if (presentation.capabilities.resources || presentation.capabilities.survival || presentation.capabilities.effects) {
+            side.append(railAction("Resources & effects", survivalDetail(survival), openSurvivalWorkspace));
         }
+        if (journey?.eventPolicy.support === "Supported") {
+            side.append(railAction("Journey events", journeyEventSummary(journey), openJourneyWorkspace));
+        }
+        side.append(railAction("Expedition history", presentation.timeLabel, openHistory));
         section.append(main, side);
         return section;
+    };
+
+    const journeyFact = (label: string, value: string): HTMLElement => {
+        const fragment = document.createDocumentFragment();
+        fragment.append(textElement("dt", label), textElement("dd", value));
+        const wrapper = document.createElement("div");
+        wrapper.className = "hc-journey-fact";
+        wrapper.append(fragment);
+        return wrapper;
+    };
+
+    const journeyProgressSummary = (
+        process: ExpeditionJourneyState["activeProcesses"][number],
+        stage: ExpeditionJourneyState["activeProcesses"][number]["definition"]["stages"][number] | null,
+        state: ExpeditionJourneyState["activeProcesses"][number]["stageStates"][number] | null): string => {
+        if (!state) return "Not recorded";
+        if (process.execution.progressKind === "Numeric") {
+            const current = state.numericProgress ?? 0;
+            if (stage?.progressTarget !== null && stage?.progressTarget !== undefined) {
+                return `${formatNumber(current)} / ${formatNumber(stage.progressTarget)}${process.execution.progressUnit ? ` ${process.execution.progressUnit}` : ""}`;
+            }
+            return `${formatNumber(current)}${process.execution.progressUnit ? ` ${process.execution.progressUnit}` : ""}`;
+        }
+        return state.explicitState ? humanize(state.explicitState) : "Not recorded";
+    };
+
+    const journeyRoleSummary = (state: ExpeditionDetail): string => {
+        const memberNames = new Map(state.party.members.map(member => [member.id, member.name]));
+        const roles = state.party.activityAssignments.filter(assignment => assignment.roleKey);
+        if (roles.length === 0) return "No journey roles assigned";
+        return roles
+            .map(assignment => `${humanize(assignment.roleKey!)} — ${assignment.participantId ? memberNames.get(assignment.participantId) ?? "Unknown participant" : "Party"}`)
+            .join(" · ");
+    };
+
+    const journeyPendingSummary = (
+        state: ExpeditionJourneyState,
+        process: ExpeditionJourneyState["activeProcesses"][number]): string => {
+        const parts = process.pendingActions.map(action =>
+            action.detail?.trim() || humanize(action.kind));
+        const events = state.eventOccurrences.filter(event =>
+            event.status === "ResolutionRequired"
+            && (event.processId === null || event.processId === process.id));
+        parts.push(...events.map(event =>
+            event.eventType ?? event.eventKey ?? "Journey event requires resolution"));
+        return parts.length > 0 ? parts.join(" · ") : "No unresolved journey action";
+    };
+
+    const journeyPendingEventSummary = (state: ExpeditionJourneyState): string => {
+        const pending = state.eventOccurrences.filter(event => event.status === "ResolutionRequired");
+        if (pending.length === 0) return "No unresolved journey event.";
+        return pending
+            .map(event => event.eventType ?? event.eventKey ?? "Journey event requires resolution")
+            .join(" · ");
+    };
+
+    const journeyEventSummary = (state: ExpeditionJourneyState): string => {
+        const pending = state.eventOccurrences.filter(event => event.status === "ResolutionRequired");
+        if (pending.length > 0) {
+            return `${pending.length} event${pending.length === 1 ? "" : "s"} require resolution`;
+        }
+        const resolved = state.eventOccurrences.filter(event => event.status === "Resolved").length;
+        return resolved > 0
+            ? `${resolved} resolved event${resolved === 1 ? "" : "s"}`
+            : "No recorded journey events";
+    };
+
+    const journeyStateSummary = (
+        state: ExpeditionJourneyState["activeProcesses"][number]["stageStates"][number] | null,
+        resources: SurvivalResources | null): string => {
+        const parts: string[] = [];
+        if (state && (state.failures > 0 || state.complications > 0)) {
+            if (state.failures > 0) parts.push(`${state.failures} failure${state.failures === 1 ? "" : "s"}`);
+            if (state.complications > 0) parts.push(`${state.complications} complication${state.complications === 1 ? "" : "s"}`);
+        }
+        if (resources && survivalAttention(resources)) parts.push(survivalDetail(resources));
+        return parts.length > 0 ? parts.join(" · ") : "No unresolved consequence";
     };
 
     const selectTravelIntent = (direction: number, target: HexCoordinate): void => {
@@ -562,10 +737,7 @@ export async function renderExpedition(
         const paceEditor = document.createElement("div");
         paceEditor.className = "hc-current-travel-pace-editor";
         paceEditor.hidden = true;
-        const pace = document.createElement("input");
-        pace.type = "text";
-        pace.value = preferences.pace;
-        pace.setAttribute("aria-label", "Pace or travel mode");
+        const pace = createPaceControl();
         const savePace = button("Save pace", () => {
             const value = pace.value.trim();
             if (!value) {
@@ -596,15 +768,30 @@ export async function renderExpedition(
     };
 
     const renderGmTools = (): HTMLElement => {
+        const presentation = expeditionWorkspacePresentation(runtime, journey, survival);
         const tools = disclosure("GM Tools", false);
         const row = document.createElement("div");
         row.className = "hc-button-row hc-gm-tools";
+        row.append(button(
+            runtime.expedition.isSpatial ? "Party & travel order" : "Party & roles",
+            openPartyWorkspace));
+        if (runtime.expedition.isSpatial) {
+            row.append(button("Teleport party", () => openRepositionWorkspace(selectedHex)));
+        }
+        row.append(button("Environment", openEnvironmentWorkspace));
+        if (presentation.capabilities.resources || presentation.capabilities.survival || presentation.capabilities.effects) {
+            row.append(button(
+                presentation.capabilities.effects
+                    ? presentation.capabilities.resources || presentation.capabilities.survival
+                        ? "Survival, resources & effects"
+                        : "Effects"
+                    : "Survival & resources",
+                openSurvivalWorkspace));
+        }
+        if (presentation.capabilities.journey) {
+            row.append(button("Journey", openJourneyWorkspace));
+        }
         row.append(
-            button("Party & travel order", openPartyWorkspace),
-            button("Teleport party", () => openRepositionWorkspace(selectedHex)),
-            button("Environment", openEnvironmentWorkspace),
-            button("Survival & resources", openSurvivalWorkspace),
-            button("Journey", openJourneyWorkspace),
             button("History", openHistory),
             button("Procedure reference", () =>
                 navigate(`/procedures/${encodeURIComponent(runtime.procedure.procedureId)}/revisions/${runtime.procedure.revision}/reference`)));
@@ -639,7 +826,7 @@ export async function renderExpedition(
             host.append(textElement("p", "Inspecting a non-adjacent cell does not change travel intent or expedition position.", "hc-muted"));
         }
 
-        if (!sameHex(runtime.expedition.currentHex, selectedHex)) {
+        if (!edge && !sameHex(runtime.expedition.currentHex, selectedHex)) {
             const move = button("Teleport party here", () => openRepositionWorkspace(selectedHex));
             move.className = "hc-secondary-action";
             host.append(move);
@@ -737,7 +924,7 @@ export async function renderExpedition(
                 ? "Encounter check"
                 : "Advanced travel controls";
         openDrawer(title, body => {
-            body.innerHTML = watchWorkspaceMarkup(currentAdjacency());
+            body.innerHTML = watchWorkspaceMarkup(currentAdjacency(), availableTravelModes(), movementDistanceUnit());
             const controller = new ExpeditionWatchController(
                 body,
                 api,
@@ -754,7 +941,7 @@ export async function renderExpedition(
             applyTravelPreferences(body);
             focusWatchWorkspace(body, focus);
             const directionControl = body.querySelector<HTMLSelectElement>('select[name="direction"]');
-            const paceControl = body.querySelector<HTMLInputElement>('input[name="pace"]');
+            const paceControl = body.querySelector<HTMLInputElement | HTMLSelectElement>('[name="pace"]');
             directionControl?.addEventListener("change", captureTravelPreferencesFromControls);
             paceControl?.addEventListener("change", captureTravelPreferencesFromControls);
             return () => {
@@ -927,10 +1114,8 @@ export async function renderExpedition(
             }
             if (preferences.direction !== null) course.value = String(preferences.direction);
 
-            const pace = document.createElement("input");
-            pace.value = preferences.pace;
+            const pace = createPaceControl();
             pace.required = true;
-            pace.setAttribute("aria-label", "Pace or travel mode");
 
             const submit = document.createElement("button");
             submit.type = "submit";
@@ -1112,7 +1297,7 @@ export async function renderExpedition(
     const applyTravelPreferences = (host: HTMLElement): void => {
         if (!runtime.expedition.isSpatial) return;
         const direction = host.querySelector<HTMLSelectElement>('select[name="direction"]');
-        const pace = host.querySelector<HTMLInputElement>('input[name="pace"]');
+        const pace = host.querySelector<HTMLInputElement | HTMLSelectElement>('[name="pace"]');
         const active = runtime.expedition.activeWatchNumber !== null;
         if (!active && direction && preferences.direction !== null) direction.value = String(preferences.direction);
         if (!active && pace && preferences.pace) pace.value = preferences.pace;
@@ -1120,7 +1305,7 @@ export async function renderExpedition(
 
     const captureTravelPreferences = (host: HTMLElement): void => {
         const direction = host.querySelector<HTMLSelectElement>('select[name="direction"]');
-        const pace = host.querySelector<HTMLInputElement>('input[name="pace"]');
+        const pace = host.querySelector<HTMLInputElement | HTMLSelectElement>('[name="pace"]');
         if (direction?.value !== undefined && direction.value !== "") {
             const parsed = Number(direction.value);
             const adjacency = currentAdjacency();
@@ -1347,7 +1532,7 @@ export async function renderExpedition(
             openHistory();
             return;
         }
-        openDrawer("Watch / time", body => {
+        openDrawer("Procedure interval", body => {
             body.append(
                 textElement("p", `Advance the configured ${formatHours(hours)} interval without adding spatial state.`, "hc-muted"));
             const form = document.createElement("form");
@@ -1597,7 +1782,9 @@ function journeyDetail(state: ExpeditionJourneyState | null): string {
 }
 
 function journeyAttention(state: ExpeditionJourneyState | null): boolean {
-    return Boolean(state?.activeProcesses.some(process => process.status === "ResolutionRequired" || process.pendingActions.length > 0));
+    return Boolean(state && (
+        state.activeProcesses.some(process => process.status === "ResolutionRequired" || process.pendingActions.length > 0)
+        || state.eventOccurrences.some(event => event.status === "ResolutionRequired")));
 }
 
 function encounterSummary(runtime: ExpeditionDetail): string {
@@ -1709,7 +1896,16 @@ function humanize(value: string): string {
         .replace(/\b\w/g, match => match.toUpperCase());
 }
 
-function watchWorkspaceMarkup(adjacency: ReturnType<typeof currentHexAdjacency> | null): string {
+function escapeHtml(value: string): string {
+    return value
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+}
+
+function watchWorkspaceMarkup(adjacency: ReturnType<typeof currentHexAdjacency> | null, travelModes: readonly string[], distanceUnit: string | null): string {
     return `
         <section class="hc-running-sheet hc-focused-watch-workspace">
             <div class="hc-sheet-ledger-heading">
@@ -1721,7 +1917,7 @@ function watchWorkspaceMarkup(adjacency: ReturnType<typeof currentHexAdjacency> 
                 <fieldset data-plan-fields data-focus-group="advanced">
                     <legend>Travel intent</legend>
                     <label>Adjacent cell <select name="direction" required><option value="">Select adjacent cell</option>${directionOptions(adjacency)}</select></label>
-                    <label>Pace / travel mode <input name="pace" value="normal"></label>
+                    <label>Pace / travel mode ${travelModeControlMarkup(travelModes)}</label>
                     <label>Navigation aid/context <input name="navigationAid" value="none"></label>
                     <label data-suppress-nav-row><input name="suppressNav" type="checkbox"> Navigation aid suppresses the check</label>
                     <label data-reset-veer-row><input name="resetVeer" type="checkbox"> Navigation aid resets veer at a boundary</label>
@@ -1751,8 +1947,8 @@ function watchWorkspaceMarkup(adjacency: ReturnType<typeof currentHexAdjacency> 
                 <fieldset data-travel-resolution data-focus-group="advanced movement">
                     <legend>Movement result</legend>
                     <p class="hc-hint">Authoritative party movement is prefilled when available. Enter only movement information the runtime can not derive.</p>
-                    <div data-fixed-distance><label>Effective distance <input name="effectiveDistance" type="number" min="0" step="any"></label></div>
-                    <div data-variable-distance><label>Expected distance <input name="expectedDistance" type="number" min="0" step="any"></label><label>Actual resolved distance <input name="actualDistance" type="number" min="0" step="any"></label></div>
+                    <div data-fixed-distance><label>${distanceInputLabel("Effective distance", distanceUnit)} <input name="effectiveDistance" type="number" min="0" step="any"></label></div>
+                    <div data-variable-distance><label>${distanceInputLabel("Expected distance", distanceUnit)} <input name="expectedDistance" type="number" min="0" step="any"></label><label>${distanceInputLabel("Actual resolved distance", distanceUnit)} <input name="actualDistance" type="number" min="0" step="any"></label></div>
                     <div data-step-distance><label>Resolved hex steps <input name="hexSteps" type="number" min="0" step="1"></label></div>
                     <label>Travel result source <select name="travelSource"></select></label>
                     <label>Travel source note <input name="travelNote" placeholder="optional"></label>
@@ -1790,6 +1986,17 @@ function watchWorkspaceMarkup(adjacency: ReturnType<typeof currentHexAdjacency> 
                 <button type="submit" class="hc-primary-action" data-advance-button>Run watch</button>
             </form>
         </section>`;
+}
+
+function travelModeControlMarkup(travelModes: readonly string[]): string {
+    if (travelModes.length === 0) return '<input name="pace" value="normal">';
+    return `<select name="pace">${travelModes
+        .map(mode => `<option value="${escapeHtml(mode)}">${escapeHtml(humanize(mode))}</option>`)
+        .join("")}</select>`;
+}
+
+function distanceInputLabel(label: string, unit: string | null): string {
+    return unit ? `${escapeHtml(label)} (${escapeHtml(unit)})` : escapeHtml(label);
 }
 
 function directionOptions(adjacency: ReturnType<typeof currentHexAdjacency> | null): string {

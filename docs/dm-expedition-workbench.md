@@ -146,7 +146,9 @@ World-bound spatial play uses one map-centered expedition workspace. A floating 
 
 The map and navigator share one semantic selection. Selecting an adjacent map cell selects the corresponding intended edge, and selecting an edge previews the corresponding adjacent cell. Selection is intent only: it does not assign the current hex, world position, progress, elapsed time, navigation result, encounter state, or any other durable runtime value. The explicit Continue/Run action remains the authoritative mutation boundary.
 
-Course and pace are reusable operating choices. The UI reconciles persisted active-watch course/pace into browser intent state and avoids asking for a deterministic movement value when the authoritative movement-composition projection already supplies it. Navigation failure preserves intended course separately from actual resolved course.
+Course and pace are reusable operating choices. The UI reconciles persisted active-watch course/pace into browser intent state and avoids asking for a deterministic movement value when the authoritative movement-composition projection already supplies it. A persisted course is projected immediately through current adjacency on load/rebind so the navigator and adjacent map-cell highlight agree with Current travel. An arbitrary inspected map cell remains separate from that intended target. Navigation failure preserves intended course separately from actual resolved course.
+
+If the materialized movement policy supplies finite `travelModeKeys`, the workbench renders pace/travel mode as a finite choice. The choice list comes from procedure/runtime metadata rather than preset identity. Focused movement values show the authoritative distance unit when one is available.
 
 Current-action routing presents the active blocker directly. Encounter interruption, navigation resolution, lost-boundary decisions, forced-travel/resource consequences, journey resolution, ordinary travel, and nonspatial interval work do not all route through one generic travel form. The existing runtime/application controllers remain authoritative underneath those focused presentations.
 
@@ -154,11 +156,29 @@ The navigator uses screen-relative edge descriptions and adjacent-cell identity 
 
 ### Direct DM repositioning
 
-The workbench distinguishes ordinary travel from authoritative DM repositioning. **Teleport party** is the user-facing operation for initial placement, corrections, teleportation, scene transitions, or other cases where the party should simply be placed in another spatial cell.
+The workbench distinguishes ordinary travel from authoritative DM repositioning. **Teleport party** is the user-facing operation for initial placement, corrections, teleportation, scene transitions, or other cases where the party should simply be placed in another spatial cell. Adjacent map-cell selection remains ordinary travel intent and does not advertise Teleport Party as a competing action. Teleport Party remains in GM Tools and may be offered for deliberately inspected non-adjacent cells.
 
 This operation does not simulate movement. It preserves accumulated elapsed travel, total distance, completed watches, and non-positional expedition state while resetting the local traversal context: intra-cell progress, entry/last-travel direction, intended/actual direction, and lost/veer state. Any active full-workbench travel watch is ended and pending pause/remaining-time state is cleared because those values belong to the prior local travel segment.
 
 For world-bound sessions the continuous map position is re-anchored to the destination cell. Presentation knowledge follows the configured automatic entered-hex policy, but unrelated locations/features are not automatically discovered. The reposition is persisted and audited as a DM override, and stale generated procedure-resolution tokens are discarded.
+
+## Journey-first and nonspatial workbench
+
+A nonspatial journey is not rendered as a mapless imitation of spatial travel. When the active materialized procedure defines journey/process capability, the primary workbench directly projects:
+
+- active journey/process name and description;
+- current stage;
+- numeric or explicit progress where defined;
+- current role assignments;
+- pending journey actions and unresolved journey events;
+- relevant stage failures/complications and resource/effect attention;
+- the specific current action, such as resolving an event or advancing a stage.
+
+The primary page explains current state; the journey drawer performs focused work. A no-spatial journey does not invent current-cell, course, pace, movement-distance, hex-progress, or map state. The general status strip likewise omits Movement when the materialized procedure does not expose travel capability.
+
+## Focused forced travel
+
+Forced-travel policy and consequence identifiers remain part of the generic runtime contract, but normal play is presented in domain terms. The focused panel shows the threshold/usage with procedure units, why a check is due, the check model, the failure consequence, and who is affected. Mechanic identifiers and exact persistent-effect/external-state contracts remain available under Advanced disclosures for technical adjudication.
 
 ## UI projections
 

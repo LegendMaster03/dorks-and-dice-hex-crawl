@@ -179,7 +179,7 @@ public static class CrawlProcedureCatalog
                 [
                     NativeTime(TimeSpan.FromHours(1)),
                     Structural(GenericProcedureCatalog.MovementBudgetModule, GenericProcedureCatalog.MovementBudgetMechanic,
-                        ("budgetModel", "speed-and-pace"), ("baseBudget", "1"), ("budgetUnit", "hour"), ("limitingScope", "slowest-traveler")),
+                        ("budgetModel", "speed-and-pace"), ("baseBudget", "1"), ("budgetUnit", "hour"), ("limitingScope", "slowest-traveler"), ("travelModeKeys", "normal;fast;slow")),
                     Structural(GenericProcedureCatalog.TerrainMovementModule, GenericProcedureCatalog.TerrainMovementPolicyMechanic,
                         ("adjustmentModel", "maximum-pace"),
                         ("terrainAdjustments", "arctic=fast-if-appropriately-equipped;coastal=normal;desert=normal;forest=normal;grassland=fast;hill=normal;mountain=slow;swamp=slow;underdark=normal;urban=normal;waterborne=special"),

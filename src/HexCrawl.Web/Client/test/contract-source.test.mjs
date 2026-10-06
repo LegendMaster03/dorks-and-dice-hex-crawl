@@ -99,7 +99,7 @@ test("non-spatial watch bookkeeping uses a dedicated non-spatial API", () => {
     const view = read("modules/assistants/expedition-assistant-view.ts");
     assert.match(api, /assistants\/watch/);
     assert.match(view, /recordWatchAssistant/);
-    assert.match(view, /Watch \/ time bookkeeping/);
+    assert.match(view, /Time \/ interval bookkeeping/);
     assert.equal(/recordWatchAssistant\([^)]*resultingHex/.test(view), false);
 });
 
@@ -206,19 +206,23 @@ test("direction controls retain numeric runtime values while current-cell adjace
     assert.match(watch, /Course labels identify the intended adjacent cell/);
 });
 
-test("non-spatial running-sheet ledger omits spatial-only route and navigation columns", () => {
-    const presentation = read("modules/expeditions/expedition-presentation.ts");
-    assert.match(presentation, /const spatial = runtime\.expedition\.isSpatial/);
-    assert.match(presentation, /\["Day", "Watch", "Travel \/ progress", "Encounter", "State"\]/);
-    assert.match(presentation, /if \(spatial\) cells\.push\(textCell\(entry\.route\)\)/);
-    assert.match(presentation, /if \(spatial\) cells\.push\(textCell\(entry\.navigation\)\)/);
+test("non-spatial primary workspace does not fabricate route, navigation, course, or pace state", () => {
+    const view = read("modules/expeditions/expedition-view.ts");
+    const start = view.indexOf("const renderNonSpatialWorkspace");
+    const end = view.indexOf("const selectTravelIntent", start);
+    const nonspatial = view.slice(start, end);
+    assert.match(nonspatial, /Current stage/);
+    assert.match(nonspatial, /Progress/);
+    assert.match(nonspatial, /Roles/);
+    assert.match(nonspatial, /Pending/);
+    assert.doesNotMatch(nonspatial, /currentHex|intendedDirection|selectedHex|Current travel|Pace \/ travel mode/);
 });
 
-test("non-spatial running sheet exposes the same persisted procedure mechanics reference", () => {
-    const presentation = read("modules/expeditions/expedition-presentation.ts");
-    assert.match(presentation, /<summary>Procedure reference<\/summary>/);
-    assert.match(presentation, /<div data-snapshots><\/div>/);
-    assert.match(presentation, /renderExpeditionHistory\(root, runtime\);\s*renderExpeditionSnapshots\(root, runtime, false\);/);
+test("unified non-spatial workspace keeps procedure and expedition history available as focused state", () => {
+    const view = read("modules/expeditions/expedition-view.ts");
+    assert.match(view, /railAction\("Expedition history", presentation\.timeLabel, openHistory\)/);
+    assert.match(view, /journey\?\.processPolicy\.support === "Supported"/);
+    assert.match(view, /No journey process is currently active/);
 });
 
 test("unified expedition workspace keeps presentation derivation separate from mutation orchestration", () => {
@@ -352,7 +356,7 @@ test("spatial structural procedures stay viewable without constructing executabl
     const view = read("modules/expeditions/expedition-view.ts");
     assert.match(view, /if \(!runtime\.expedition\.isSpatial \|\| runtime\.procedure\.runtime === null\) \{\s*openHistory\(\);\s*return;\s*\}/);
     assert.match(view, /const controller = new ExpeditionWatchController/);
-    assert.match(view, /This structural expedition has no executable spatial or interval action/);
+    assert.match(view, /This expedition has no executable spatial, journey, or interval action/);
     assert.doesNotMatch(view, /api\.advanceExpedition/);
 });
 
@@ -381,16 +385,17 @@ test("procedure selectors expose materialized procedure mechanics before a sessi
     assert.doesNotMatch(assistant, /Procedure preset/);
 });
 
-test("procedure mechanics use one shared presentation policy across setup, assistants, and running sheet", () => {
+test("procedure mechanics use shared presentation policy and the unified expedition links to the canonical reference", () => {
     const campaignProcedureView = read("campaign-procedure-view.ts");
     const setup = read("modules/expeditions/expedition-setup.ts");
     const assistant = read("modules/assistants/assistant-entry-view.ts");
     const home = read("modules/home/tool-home-view.ts");
-    const presentation = read("modules/expeditions/expedition-presentation.ts");
+    const expedition = read("modules/expeditions/expedition-view.ts");
     assert.match(setup, /campaignProcedureSummary/);
     assert.match(assistant, /campaignProcedureSummary/);
     assert.match(home, /campaignProcedureSummary/);
-    assert.match(presentation, /procedureMechanicLines/);
+    assert.match(expedition, /Procedure reference/);
+    assert.match(expedition, /\/procedures\/\$\{encodeURIComponent\(runtime\.procedure\.procedureId\)\}\/revisions\/\$\{runtime\.procedure\.revision\}\/reference/);
     assert.match(campaignProcedureView, /exit factors start/);
     assert.match(campaignProcedureView, /actual distance = expected distance/);
     assert.match(campaignProcedureView, /situational modifier vs\. the DM-confirmed DC/);

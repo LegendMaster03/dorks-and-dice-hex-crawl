@@ -149,11 +149,13 @@ public static class GenericProcedureCatalog
             [],
             [TimeIntervalModule],
             [MovementBudgetMechanic, JourneyProgressBudgetMechanic],
-            RequiredMany(
-                ("budgetModel", "enum", "How the travel budget is calculated."),
-                ("baseBudget", "number", "Base amount of travel budget."),
-                ("budgetUnit", "enum", "Unit used by the travel budget."),
-                ("limitingScope", "enum", "Whether the budget is party-wide, participant-limited, role-driven, or externally resolved.")),
+            WithOptional(
+                RequiredMany(
+                    ("budgetModel", "enum", "How the travel budget is calculated."),
+                    ("baseBudget", "number", "Base amount of travel budget."),
+                    ("budgetUnit", "enum", "Unit used by the travel budget."),
+                    ("limitingScope", "enum", "Whether the budget is party-wide, participant-limited, role-driven, or externally resolved.")),
+                ("travelModeKeys", "key-list", "Finite travel-mode or pace choices defined by this procedure, when applicable.")),
             phase: "3"),
         Module(
             TerrainMovementModule,
@@ -762,6 +764,18 @@ public static class GenericProcedureCatalog
             automation,
             version,
             inputRequirements);
+
+    private static IReadOnlyDictionary<string, ProcedureParameterDefinition> WithOptional(
+        IReadOnlyDictionary<string, ProcedureParameterDefinition> required,
+        params (string Key, string Type, string Description)[] values)
+    {
+        var result = required.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        foreach (var value in values)
+        {
+            result[value.Key] = new ProcedureParameterDefinition(value.Type, false, value.Description);
+        }
+        return result;
+    }
 
     private static IReadOnlyDictionary<string, ProcedureParameterDefinition> Required(
         string key,

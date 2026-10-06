@@ -158,9 +158,14 @@ public sealed class Phase3ProofMatrixTests
     {
         var procedure = CrawlProcedureCatalog.Resolve(CrawlProcedureCatalog.Dnd2024PresetKey)
             .MaterializeGeneric().Procedure;
+        var movement = procedure.Modules.Single(module =>
+            module.Module.Key == GenericProcedureCatalog.MovementBudgetModule);
         var terrain = procedure.Modules.Single(module =>
             module.Module.Key == GenericProcedureCatalog.TerrainMovementModule);
 
+        Assert.Equal("normal;fast;slow", movement.Parameters["travelModeKeys"]);
+        Assert.False(movement.Module.ConfigurationSchema["travelModeKeys"].Required);
+        Assert.Equal("key-list", movement.Module.ConfigurationSchema["travelModeKeys"].Type);
         Assert.Equal("maximum-pace", terrain.Parameters["adjustmentModel"]);
         var mapping = terrain.Parameters["terrainAdjustments"];
         Assert.Contains("arctic=fast-if-appropriately-equipped", mapping, StringComparison.Ordinal);

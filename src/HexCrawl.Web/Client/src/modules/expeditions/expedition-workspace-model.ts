@@ -1,8 +1,8 @@
 import type { ExpeditionJourneyState } from "../../journey-types";
 import type { SurvivalResources } from "../../survival-types";
 import type { ExpeditionDetail, ProcedureModule, SpatialRuntimeExpedition } from "../../types";
-import { canUseFocusedNonSpatialWatch } from "./focused-interval-policy";
-import { navigationResolutionDue } from "./expedition-workflow";
+import { canUseFocusedNonSpatialWatch } from "./focused-interval-policy.js";
+import { navigationResolutionDue } from "./expedition-workflow.js";
 
 export type ExpeditionWorkspaceActionKind =
     | "encounter"
@@ -133,13 +133,27 @@ export function expeditionWorkspaceAction(
         };
     }
 
+    const journeyEventPending = journey?.eventOccurrences.find(event => event.status === "ResolutionRequired");
+    if (journeyEventPending) {
+        const eventLabel = journeyEventPending.eventType ?? journeyEventPending.eventKey ?? "Journey event";
+        return {
+            kind: "journey",
+            label: "Resolve journey event",
+            detail: `${eventLabel} requires a table resolution before the journey continues.`,
+            urgent: true
+        };
+    }
+
     const journeyPending = journey?.activeProcesses.find(process =>
         process.status === "ResolutionRequired" || process.pendingActions.length > 0);
     if (journeyPending) {
+        const pending = journeyPending.pendingActions[0] ?? null;
         return {
             kind: "journey",
-            label: "Resolve journey stage",
-            detail: `${journeyPending.definition.displayName}: ${currentJourneyStageLabel(journeyPending)} needs a table resolution.`,
+            label: journeyPendingActionLabel(pending?.kind ?? null),
+            detail: pending?.detail?.trim()
+                ? `${journeyPending.definition.displayName}: ${pending.detail}`
+                : `${journeyPending.definition.displayName}: ${currentJourneyStageLabel(journeyPending)} needs a table resolution.`,
             urgent: true
         };
     }
@@ -175,6 +189,16 @@ export function expeditionWorkspaceAction(
         };
     }
 
+    const activeJourney = journey?.activeProcesses.find(process => !process.isTerminal);
+    if (activeJourney) {
+        return {
+            kind: "journey",
+            label: "Continue journey",
+            detail: `${activeJourney.definition.displayName}: ${currentJourneyStageLabel(activeJourney)}.`,
+            urgent: false
+        };
+    }
+
     if (!runtime.expedition.isSpatial && canUseFocusedNonSpatialWatch(runtime)) {
         const activeWatch = runtime.expedition.activeWatchNumber;
         return {
@@ -185,16 +209,6 @@ export function expeditionWorkspaceAction(
             detail: activeWatch === null
                 ? "Advance the configured interval without fabricating spatial state."
                 : "Continue the active configured interval without fabricating spatial travel state.",
-            urgent: false
-        };
-    }
-
-    const activeJourney = journey?.activeProcesses.find(process => !process.isTerminal);
-    if (activeJourney) {
-        return {
-            kind: "journey",
-            label: "Continue journey",
-            detail: `${activeJourney.definition.displayName}: ${currentJourneyStageLabel(activeJourney)}.`,
             urgent: false
         };
     }
@@ -214,6 +228,16 @@ export function expeditionWorkspaceAction(
         detail: "This expedition has no currently executable travel or journey action. The materialized procedure remains authoritative for reference and manual play.",
         urgent: false
     };
+}
+
+function journeyPendingActionLabel(kind: string | null): string {
+    switch (kind) {
+        case "ApproachSelection": return "Choose journey approach";
+        case "StageTransition": return "Advance journey stage";
+        case "WatchResolution": return "Resolve journey interval";
+        case "ProcessResolution": return "Resolve journey stage";
+        default: return "Resolve journey stage";
+    }
 }
 
 function timeLabel(runtime: ExpeditionDetail, hasInterval: boolean): string {

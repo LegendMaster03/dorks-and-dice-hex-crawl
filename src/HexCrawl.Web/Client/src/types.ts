@@ -451,6 +451,7 @@ export type MovementCompositionPolicy = {
     baseBudget: number | null;
     budgetUnit: string | null;
     limitingScope: string | null;
+    travelModeKeys: string[];
     terrainSupport: MovementTerrainPolicySupport;
     terrainAdjustmentModel: string | null;
     terrainAdjustments: Record<string, string>;

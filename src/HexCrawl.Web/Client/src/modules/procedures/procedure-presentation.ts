@@ -63,6 +63,7 @@ const labels: Record<string, string> = {
     baseBudget: "Base movement",
     budgetUnit: "Movement unit",
     limitingScope: "Whose movement limits the party",
+    travelModeKeys: "Pace / travel modes",
     adjustmentModel: "Terrain adjustment",
     terrainAdjustments: "Terrain costs",
     routeAdjustmentModel: "Route effect",

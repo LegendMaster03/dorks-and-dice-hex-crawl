@@ -9,7 +9,7 @@ public static partial class CrawlAssistantActions
     {
         if (state.ActiveWatch is not null)
         {
-            throw new InvalidOperationException("Focused assistant bookkeeping can not mutate an active full-workbench watch. Resume or finish that watch in the expedition tracker first.");
+            throw new InvalidOperationException("Focused assistant bookkeeping can not mutate an active full-workbench watch. Resume or finish that watch in the expedition workspace first.");
         }
     }
 

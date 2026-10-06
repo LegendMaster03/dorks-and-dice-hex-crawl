@@ -37,13 +37,12 @@ export async function renderExpeditionAssistant(
                     <p><span data-mode></span> · <span data-context></span></p>
                 </div>
                 <nav>
-                    <button type="button" data-home>DM tools</button>
-                    <button type="button" data-tracker>Expedition tracker</button>
-                    <button type="button" data-map>Full map</button>
+                    <button type="button" data-home>Hex Crawl home</button>
+                    <button type="button" data-expedition>Open expedition</button>
                 </nav>
             </header>
             <div class="hc-view-switcher" aria-label="Focused assistants">
-                <button type="button" data-travel>Travel / watch</button>
+                <button type="button" data-travel>Travel / time</button>
                 <button type="button" data-navigation>Navigation</button>
                 <button type="button" data-encounters>Encounter cadence</button>
             </div>
@@ -69,12 +68,7 @@ export async function renderExpeditionAssistant(
     const warning = required<HTMLElement>(root, "[data-active-watch-warning]");
 
     required<HTMLButtonElement>(root, "[data-home]").addEventListener("click", () => navigate("/"));
-    required<HTMLButtonElement>(root, "[data-tracker]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}`));
-    const mapButton = required<HTMLButtonElement>(root, "[data-map]");
-    mapButton.hidden = runtime.overworldId === null;
-    mapButton.addEventListener("click", () => {
-        if (runtime.overworldId) navigate(`/worlds/${runtime.overworldId}/expeditions/${runtime.id}`);
-    });
+    required<HTMLButtonElement>(root, "[data-expedition]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}`));
     required<HTMLButtonElement>(root, "[data-travel]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}/travel`));
     required<HTMLButtonElement>(root, "[data-navigation]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}/navigation`));
     required<HTMLButtonElement>(root, "[data-encounters]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}/encounters`));
@@ -86,10 +80,9 @@ export async function renderExpeditionAssistant(
         required<HTMLElement>(root, "[data-mode]").textContent = modeLabel(mode, next.expedition.isSpatial);
         const travelButton = required<HTMLButtonElement>(root, "[data-travel]");
         travelButton.hidden = false;
-        travelButton.textContent = next.expedition.isSpatial ? "Travel / watch" : "Watch / time";
+        travelButton.textContent = next.expedition.isSpatial ? "Travel / time" : "Time / interval";
         travelButton.disabled = !next.expedition.isSpatial && !canUseFocusedNonSpatialWatch(next);
         required<HTMLButtonElement>(root, "[data-navigation]").hidden = !next.expedition.isSpatial;
-        mapButton.hidden = next.overworldId === null;
         renderStatus();
         renderHistory();
         renderForm();
@@ -109,7 +102,7 @@ export async function renderExpeditionAssistant(
                 statusCell("Execution", "Not supported by the current runtime")
             ];
             if (mode === "travel" && !state.isSpatial) {
-                cells.push(statusCell("Watch / time", focusedIntervalUnavailableMessage(runtime)));
+                cells.push(statusCell("Time / interval", focusedIntervalUnavailableMessage(runtime)));
             }
             required<HTMLElement>(root, "[data-status]").replaceChildren(...cells);
             return;
@@ -206,7 +199,7 @@ export async function renderExpeditionAssistant(
         const activeFullWatch = state.isSpatial && state.activeWatchNumber !== null;
         warning.hidden = !activeFullWatch;
         warning.textContent = activeFullWatch
-            ? `A full-workbench watch is active. Finish or resume watch ${state.activeWatchNumber} in the expedition tracker before using independent assistant bookkeeping.`
+            ? `A full-workbench watch is active. Finish or resume watch ${state.activeWatchNumber} in the expedition workspace before using independent utility bookkeeping.`
             : "";
 
         required<HTMLElement>(root, "[data-assistant-heading]").textContent = heading(mode, state.isSpatial);
@@ -220,7 +213,7 @@ export async function renderExpeditionAssistant(
             const detail = mode === "travel" && !state.isSpatial
                 ? focusedIntervalUnavailableMessage(runtime)
                 : "This materialized procedure is structural and is not executable by the current runtime.";
-            form.innerHTML = `<p class="hc-hint">${escapeHtml(detail)} Its stored snapshot remains available on the running sheet for reference.</p>`;
+            form.innerHTML = `<p class="hc-hint">${escapeHtml(detail)} Its stored snapshot remains available on the expedition for reference.</p>`;
             warning.hidden = true;
             return;
         }
@@ -309,13 +302,13 @@ function travelForm(runtime: ExpeditionDetail): string {
         <label>Actual direction override <select name="actualDirection"><option value="">Derive from navigation state</option>${directionOptions(state.actualDirection)}</select></label>
         <label><input name="completeWatch" type="checkbox" checked> Mark one watch complete</label>
         ${provenanceFields("travel")}
-        <button type="submit" class="hc-primary-action">Record travel / watch</button>`;
+        <button type="submit" class="hc-primary-action">Record travel / time</button>`;
 }
 
 function nonSpatialWatchForm(runtime: ExpeditionDetail): string {
     const intervalHours = requireFocusedIntervalHours(runtime);
     const state = runtime.expedition;
-    if (state.isSpatial) throw new Error("Expected a non-spatial crawl session.");
+    if (state.isSpatial) throw new Error("Expected a non-spatial expedition.");
     const watchNumber = state.activeWatchNumber ?? state.completedWatches + 1;
     const total = state.activeWatchTotalHours ?? intervalHours;
     const elapsed = state.activeWatchElapsedHours ?? 0;
@@ -433,12 +426,12 @@ function relevantEvent(mode: ExpeditionAssistantMode, kind: string, message: str
 }
 
 function modeLabel(mode: ExpeditionAssistantMode, spatial: boolean): string {
-    if (mode === "travel") return spatial ? "Travel / watch assistant" : "Watch / time assistant";
+    if (mode === "travel") return spatial ? "Travel / time assistant" : "Time / interval assistant";
     return mode === "navigation" ? "Navigation assistant" : "Encounter cadence assistant";
 }
 
 function heading(mode: ExpeditionAssistantMode, spatial: boolean): string {
-    if (mode === "travel") return spatial ? "Travel / watch bookkeeping" : "Watch / time bookkeeping";
+    if (mode === "travel") return spatial ? "Travel / time bookkeeping" : "Time / interval bookkeeping";
     return mode === "navigation" ? "Navigation / lost / veer" : "Encounter cadence";
 }
 
@@ -477,7 +470,7 @@ function requireProcedureRuntime(runtime: ExpeditionDetail): ProcedureRuntime {
 
 function spatialState(runtime: ExpeditionDetail): SpatialRuntimeExpedition {
     if (!runtime.expedition.isSpatial) {
-        throw new Error("This assistant requires a spatial crawl session.");
+        throw new Error("This assistant requires a spatial expedition.");
     }
     return runtime.expedition;
 }
@@ -494,7 +487,7 @@ function travelStatus(state: SpatialRuntimeExpedition): HTMLElement[] {
 function nonSpatialWatchStatus(runtime: ExpeditionDetail): HTMLElement[] {
     const intervalHours = requireFocusedIntervalHours(runtime);
     const state = runtime.expedition;
-    if (state.isSpatial) throw new Error("Expected a non-spatial crawl session.");
+    if (state.isSpatial) throw new Error("Expected a non-spatial expedition.");
     const watch = state.activeWatchNumber === null
         ? `Ready for watch ${state.completedWatches + 1}`
         : `Watch ${state.activeWatchNumber}`;

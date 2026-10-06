@@ -9,8 +9,7 @@ export type ToolRoute =
     | { kind: "worlds" }
     | { kind: "world"; worldId: string }
     | { kind: "edit"; worldId: string }
-    | { kind: "expedition"; worldId: string; expeditionId: string }
-    | { kind: "tracker"; expeditionId: string }
+    | { kind: "expedition"; expeditionId: string; worldId?: string }
     | { kind: "assistant"; expeditionId: string; assistant: ExpeditionAssistant }
     | { kind: "assistant-entry"; assistant: ExpeditionAssistant }
     | { kind: "unknown"; path: string };
@@ -71,18 +70,14 @@ export function parseToolRoute(path: string): ToolRoute {
         assistant: match[2] as ExpeditionAssistant
     };
     match = normalized.match(/^\/expeditions\/([^/]+)$/);
-    if (match) return { kind: "tracker", expeditionId: decodeURIComponent(match[1]) };
+    if (match) return { kind: "expedition", expeditionId: decodeURIComponent(match[1]) };
     return { kind: "unknown", path: normalized };
 }
 
 export function canonicalExpeditionRoute(
-    routeWorldId: string,
-    expedition: { id: string; overworldId: string | null }): string | null {
-    if (expedition.overworldId === null) {
-        return `/expeditions/${encodeURIComponent(expedition.id)}`;
-    }
-    if (routeWorldId === expedition.overworldId) return null;
-    return `/worlds/${encodeURIComponent(expedition.overworldId)}/expeditions/${encodeURIComponent(expedition.id)}`;
+    _routeWorldId: string,
+    expedition: { id: string; overworldId: string | null }): string {
+    return `/expeditions/${encodeURIComponent(expedition.id)}`;
 }
 
 export function toolRelativeHref(basePath: string, route: string): string {
