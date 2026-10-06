@@ -6,10 +6,15 @@ import { renderExpedition } from "../src/modules/expeditions/expedition-view";
 const params = new URLSearchParams(window.location.search);
 const stateName = params.get("state") || "no-course";
 const theme = params.get("theme") === "dark" ? "dark" : "light";
+const containerWidth = Number(params.get("containerWidth") || "0");
 document.documentElement.dataset.bsTheme = theme;
 
 const root = document.getElementById("tool-root");
 if (!(root instanceof HTMLElement)) throw new Error("Missing visual-review root.");
+if (Number.isFinite(containerWidth) && containerWidth > 0) {
+    root.style.width = containerWidth + "px";
+    root.style.maxWidth = containerWidth + "px";
+}
 ensureStyles();
 ensurePartyResponsiveStyles();
 
@@ -443,11 +448,14 @@ const buttons = Array.from(root.querySelectorAll("button"));
 const mapHost = root.querySelector(".hc-map-host");
 const mapContext = root.querySelector("[data-map-context]");
 const rail = root.querySelector(".hc-table-rail");
+const currentTravel = root.querySelector("[data-current-travel]");
 const metrics = {
     state: stateName,
     theme,
     viewportWidth: window.innerWidth,
     viewportHeight: window.innerHeight,
+    reviewWidth: Math.round(root.getBoundingClientRect().width),
+    reviewScrollWidth: root.scrollWidth,
     scrollWidth: document.documentElement.scrollWidth,
     scrollHeight: document.documentElement.scrollHeight,
     navigatorButtons: root.querySelectorAll("[data-adjacency-edge]").length,
@@ -458,6 +466,8 @@ const metrics = {
     mapHeight: mapHost ? Math.round(mapHost.getBoundingClientRect().height) : 0,
     mapContextVisible: isVisible(mapContext),
     railVisible: isVisible(rail),
+    currentTravelVisible: isVisible(currentTravel),
+    currentTravelTop: currentTravel ? Math.round(currentTravel.getBoundingClientRect().top) : null,
     primaryAction: root.querySelector(".hc-current-action-primary")?.textContent?.trim() || null,
     focusedTitle: root.querySelector("[data-phase15-drawer] h2")?.textContent?.trim() || null
 };

@@ -31,16 +31,19 @@ cases=(
   "embedded-map-selected|map-selected|light|1120|820"
   "laptop-partial-progress|partial-progress|dark|1366|900"
   "tablet-navigation|navigation-pending|dark|820|980"
-  "narrow-movement|movement-input-pending|light|390|844"
-  "narrow-encounter|encounter-pending|dark|390|844"
+  "narrow-movement|movement-input-pending|light|500|844|390"
+  "narrow-encounter|encounter-pending|dark|500|844|390"
   "laptop-forced-travel|forced-travel-pending|light|1366|900"
   "laptop-more-options|more-options-open|dark|1366|900"
   "embedded-realistic-rail|rail-realistic|light|1120|820"
 )
 
 for spec in "${cases[@]}"; do
-  IFS='|' read -r name state theme width height <<<"$spec"
+  IFS='|' read -r name state theme width height container_width <<<"$spec"
   url="http://127.0.0.1:4173/visual-review/phase15.html?state=$state&theme=$theme"
+  if [[ -n "${container_width:-}" ]]; then
+    url="$url&containerWidth=$container_width"
+  fi
   profile="$(mktemp -d)"
   common=(
     --headless=new
@@ -70,7 +73,9 @@ with open(sys.argv[2], "w", encoding="utf-8") as handle:
     json.dump(metrics, handle, indent=2, sort_keys=True)
 
 if metrics["scrollWidth"] > metrics["viewportWidth"] + 2:
-    raise SystemExit(f'horizontal overflow: {metrics}')
+    raise SystemExit(f'horizontal viewport overflow: {metrics}')
+if metrics["reviewScrollWidth"] > metrics["reviewWidth"] + 2:
+    raise SystemExit(f'horizontal tool overflow: {metrics}')
 if metrics["navigatorButtons"] != 6:
     raise SystemExit(f'navigator edge count: {metrics}')
 if metrics["continueButtons"] > 1:
@@ -81,6 +86,11 @@ if metrics["mapHeight"] < 250:
     raise SystemExit(f'map too short to remain usable: {metrics}')
 if not metrics["railVisible"]:
     raise SystemExit(f'At the Table rail is not visible: {metrics}')
+if metrics["state"] in {"no-course", "selected-edge", "partial-progress", "map-selected", "rail-realistic"}:
+    if not metrics["currentTravelVisible"] or metrics["currentTravelTop"] >= metrics["viewportHeight"]:
+        raise SystemExit(f'Current travel is not discoverable in the initial viewport: {metrics}')
+if metrics["state"] in {"movement-input-pending", "encounter-pending"} and metrics["reviewWidth"] > 392:
+    raise SystemExit(f'narrow host did not render at mobile-like width: {metrics}')
 if metrics["state"] == "no-course" and metrics["selectedEdges"] != 0:
     raise SystemExit(f'no-course fixture unexpectedly selected an edge: {metrics}')
 if metrics["state"] in {"selected-edge", "partial-progress", "map-selected", "rail-realistic"} and metrics["selectedEdges"] != 1:
@@ -89,6 +99,14 @@ if metrics["state"] == "map-selected" and not metrics["mapContextVisible"]:
     raise SystemExit(f'map selection did not expose contextual detail: {metrics}')
 if metrics["state"] in {"navigation-pending", "movement-input-pending", "encounter-pending", "more-options-open"} and metrics["drawerCount"] != 1:
     raise SystemExit(f'focused workflow did not open exactly one drawer: {metrics}')
+expected_titles = {
+    "navigation-pending": "Navigation",
+    "movement-input-pending": "Movement resolution",
+    "encounter-pending": "Encounter",
+    "more-options-open": "Advanced travel controls"
+}
+if metrics["state"] in expected_titles and metrics["focusedTitle"] != expected_titles[metrics["state"]]:
+    raise SystemExit(f'wrong focused workflow: {metrics}')
 PY
 done
 
