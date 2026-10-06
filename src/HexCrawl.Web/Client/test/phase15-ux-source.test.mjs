@@ -64,7 +64,9 @@ test("Compact presentation covers all current generic procedure parameter labels
         presentation.indexOf("const labels"),
         presentation.indexOf("const choiceSets"));
     for (const key of parameterKeys) {
-        assert.match(labelBlock, new RegExp("\\b" + key + ":\\s*\""), key);
+        assert.ok(
+            labelBlock.includes(`${key}: "`) || labelBlock.includes(`"${key}": "`),
+            key);
     }
 });
 
@@ -83,7 +85,9 @@ test("Compact procedure edits keep their focused workspace across draft recompos
     assert.match(workspace, /open\.dataset\.compactArea = group\.section/);
     assert.match(workspace, /save\.dataset\.procedureSave = ""/);
     assert.match(workspace, /root\.querySelector<HTMLButtonElement>\("\[data-procedure-save\]"\)/);
-    assert.match(workspace, /save\.disabled = savePending \|\| historical\(\) \|\| !hasStructuredChanges\(\)/);
+    assert.match(
+        workspace,
+        /if \(save\) save\.disabled = savePending[\s\S]*!hasStructuredChanges\(\)[\s\S]*hasBlockingStructuredIssues\(\)/);
 });
 
 test("structured procedure save honors validation and dependency blockers", () => {
