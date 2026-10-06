@@ -741,26 +741,28 @@ export async function renderExpedition(
         const pace = createPaceControl();
         let paceEditor: HTMLDivElement | null = null;
         if (pace) {
+            const editablePace = pace;
             paceEditor = document.createElement("div");
             paceEditor.className = "hc-current-travel-pace-editor";
             paceEditor.hidden = true;
             const savePace = button("Save pace", () => {
-                preferences.pace = pace.value;
+                preferences.pace = editablePace.value;
                 saveTravelPreferences(runtime.id, preferences);
                 paceEditor!.hidden = true;
                 syncTravelIntentControls();
             });
-            paceEditor.append(labelled("Pace / travel mode", pace), savePace);
+            paceEditor.append(labelled("Pace / travel mode", editablePace), savePace);
             section.append(paceEditor);
         }
 
         if (runtime.procedure.runtime !== null) {
             const actions = document.createElement("div");
             actions.className = "hc-button-row hc-current-travel-actions";
-            if (paceEditor) {
+            if (paceEditor && pace) {
+                const editablePace = pace;
                 const changePace = button("Change pace", () => {
                     paceEditor!.hidden = !paceEditor!.hidden;
-                    if (!paceEditor!.hidden) pace.focus();
+                    if (!paceEditor!.hidden) editablePace.focus();
                 });
                 actions.append(changePace);
             }
@@ -1121,28 +1123,28 @@ export async function renderExpedition(
             if (preferences.direction !== null) course.value = String(preferences.direction);
 
             const pace = createPaceControl();
-            pace.required = true;
+            if (pace) pace.required = true;
 
             const submit = document.createElement("button");
             submit.type = "submit";
             submit.className = "hc-primary-action";
             submit.textContent = "Continue travel";
-            form.append(
-                labelled("Course", course),
-                labelled("Pace / travel mode", pace),
-                submit);
+            form.append(labelled("Course", course));
+            if (pace) {
+                form.append(labelled("Pace / travel mode", pace));
+            } else {
+                form.append(contextLine("Pace", humanize(preferences.pace)));
+            }
+            form.append(submit);
             form.addEventListener("submit", event => {
                 event.preventDefault();
                 const direction = Number(course.value);
                 const edge = course.value === ""
                     ? null
                     : adjacencyEdgeForDirection(adjacency, direction);
-                const nextPace = pace.value.trim();
+                const nextPace = pace?.value.trim() || preferences.pace;
                 if (!edge) {
                     throw new Error("Select an intended adjacent cell before continuing travel.");
-                }
-                if (!nextPace) {
-                    throw new Error("Enter a pace or travel mode before continuing travel.");
                 }
                 preferences.direction = edge.directionValue;
                 preferences.pace = nextPace;
