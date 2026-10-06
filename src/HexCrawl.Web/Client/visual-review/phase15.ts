@@ -822,10 +822,10 @@ function findButton(label) {
     return Array.from(root.querySelectorAll("button")).find(button => button.textContent?.trim() === label) || null;
 }
 
-async function waitForRootText(text, frames = 20) {
-    for (let index = 0; index < frames; index += 1) {
+async function waitForRootText(text, attempts = 20) {
+    for (let index = 0; index < attempts; index += 1) {
         if ((root.textContent || "").includes(text)) return;
-        await new Promise(resolve => requestAnimationFrame(resolve));
+        await new Promise(resolve => setTimeout(resolve, 0));
     }
     throw new Error(`Timed out waiting for rendered review text: ${text}`);
 }
