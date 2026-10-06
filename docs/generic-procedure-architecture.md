@@ -257,11 +257,11 @@ Examples include:
 - Forbidden Lands quarter-day activity budgets and supply-die resources;
 - AD&D-style movement-point semantics;
 - The One Ring role-driven journey progress without a fabricated repeating time interval;
-- Mixed House Rule watch travel with standalone journey-event opportunities;
+- a synthetic mixed procedure combining watch travel with standalone journey-event opportunities;
 - Worlds Without Number numeric party-rate composition without preset dispatch;
 - Custom procedures with no preset origin.
 
-The One Ring and Mixed House Rule recipes contain their complete generic journey parameter sets directly. Materialization does not identify them by preset key to finish their runtime contracts.
+The One Ring preset and the synthetic mixed-procedure fixture contain their complete generic journey parameter sets directly. Runtime behavior does not identify either composition by preset key to finish its contract; the synthetic mixed procedure has no production preset identity at all.
 
 ## Provenance and adjudication
 
