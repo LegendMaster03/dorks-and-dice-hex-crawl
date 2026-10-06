@@ -97,6 +97,15 @@ test("Phase 15 Compact keeps journey authoring singular and makes ordinary rules
     assert.doesNotMatch(presentation, /label: "Resolution helpers"/);
 });
 
+test("Phase 15 journey-first Compact runs journey rules before supporting survival effects", () => {
+    const workspace = fs.readFileSync(
+        path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"),
+        "utf8");
+
+    assert.match(workspace, /travel\.length === 0 && activeRules\("Journey & events"\)\.length > 0/);
+    assert.match(workspace, /\["Journey & events", "Survival & resources", "Automation"\]/);
+});
+
 test("Phase 15 Inspect and Compact consume one semantic fact formatter", () => {
     const workspace = fs.readFileSync(
         path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"),
