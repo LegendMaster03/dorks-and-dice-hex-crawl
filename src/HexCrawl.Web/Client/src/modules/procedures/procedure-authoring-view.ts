@@ -691,7 +691,10 @@ export async function renderProcedureAuthoringWorkspace(
             shell.append(section);
         }
 
-        for (const group of ["Survival & resources", "Journey & events", "Automation"]) {
+        const supportingGroups = travel.length === 0 && activeRules("Journey & events").length > 0
+            ? ["Journey & events", "Survival & resources", "Automation"]
+            : ["Survival & resources", "Journey & events", "Automation"];
+        for (const group of supportingGroups) {
             const active = activeRules(group);
             if (active.length === 0) continue;
             const available = missingRules(group);
