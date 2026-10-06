@@ -556,7 +556,7 @@ export async function renderExpedition(
         row.className = "hc-button-row hc-gm-tools";
         row.append(
             button("Party & travel order", openPartyWorkspace),
-            button("Move party", () => openRepositionWorkspace(selectedHex)),
+            button("Teleport party", () => openRepositionWorkspace(selectedHex)),
             button("Environment", openEnvironmentWorkspace),
             button("Survival & resources", openSurvivalWorkspace),
             button("Journey", openJourneyWorkspace),
@@ -595,7 +595,7 @@ export async function renderExpedition(
         }
 
         if (!sameHex(runtime.expedition.currentHex, selectedHex)) {
-            const move = button("Move party here", () => openRepositionWorkspace(selectedHex));
+            const move = button("Teleport party here", () => openRepositionWorkspace(selectedHex));
             move.className = "hc-secondary-action";
             host.append(move);
         }
@@ -945,11 +945,11 @@ export async function renderExpedition(
         }
 
         const initial = target ?? runtime.expedition.currentHex;
-        openDrawer("Move party", body => {
+        openDrawer("Teleport party", body => {
             body.append(
                 textElement(
                     "p",
-                    "Direct DM repositioning changes the current cell without resolving travel, navigation, encounters, survival, or journey progress. It resets in-cell progress and navigation drift; an active travel watch is ended.",
+                    "Teleport party directly repositions the party without resolving travel, navigation, encounters, survival, or journey progress. Use it for initial placement, teleportation, scene transitions, or corrections. It resets in-cell progress and navigation drift; an active travel watch is ended.",
                     "hc-muted"));
 
             const form = document.createElement("form");
@@ -965,11 +965,11 @@ export async function renderExpedition(
             r.required = true;
             r.value = String(initial.r);
             const note = document.createElement("input");
-            note.placeholder = "optional reason, such as teleportation or setup correction";
+            note.placeholder = "optional reason, such as setup, teleportation, or correction";
             const submit = document.createElement("button");
             submit.type = "submit";
             submit.className = "hc-primary-action";
-            submit.textContent = "Move party";
+            submit.textContent = "Teleport party";
             form.append(
                 labelled("Target q", q),
                 labelled("Target r", r),

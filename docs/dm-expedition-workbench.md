@@ -154,7 +154,7 @@ The navigator uses screen-relative edge descriptions and adjacent-cell identity 
 
 ### Direct DM repositioning
 
-The workbench distinguishes ordinary travel from authoritative DM repositioning. **Move party** is intended for initial-position corrections, teleportation, scene transitions, or other cases where the party should simply be placed in another spatial cell.
+The workbench distinguishes ordinary travel from authoritative DM repositioning. **Teleport party** is the user-facing operation for initial placement, corrections, teleportation, scene transitions, or other cases where the party should simply be placed in another spatial cell.
 
 This operation does not simulate movement. It preserves accumulated elapsed travel, total distance, completed watches, and non-positional expedition state while resetting the local traversal context: intra-cell progress, entry/last-travel direction, intended/actual direction, and lost/veer state. Any active full-workbench travel watch is ended and pending pause/remaining-time state is cleared because those values belong to the prior local travel segment.
 

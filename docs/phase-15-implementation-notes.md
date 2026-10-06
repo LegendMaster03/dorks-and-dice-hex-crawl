@@ -49,9 +49,9 @@ Routine travel expresses **intent** and always resolves through the existing pro
 
 ## Direct DM repositioning
 
-The DM also has an explicit **Move party** operation for setup corrections, teleportation, scene transitions, and other authoritative repositioning that is not ordinary overland travel.
+The DM also has an explicit **Teleport party** operation for setup corrections, teleportation, scene transitions, and other authoritative repositioning that is not ordinary overland travel.
 
-- Selecting any map cell can expose **Move party here**, and the same operation remains available from GM Tools with direct cell-coordinate entry.
+- Selecting any map cell can expose **Teleport party here**, and the same operation remains available from GM Tools with direct cell-coordinate entry.
 - Repositioning is a distinct server mutation. It does not invoke normal travel advancement, add distance or elapsed travel time, run navigation or encounter checks, consume resources, advance journey progress, or fabricate travel provenance.
 - The destination becomes the current cell and, for world-bound sessions, the map position is re-anchored to that cell. In-cell progress, entry/last-travel direction, intended/actual course, and lost/veer state are reset because they describe the previous local traversal context.
 - If a full travel watch is active, the explicit reposition ends that watch and clears its pending pause/remaining-time state rather than silently carrying an obsolete travel segment to the new location.

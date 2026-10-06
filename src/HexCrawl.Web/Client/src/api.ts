@@ -426,7 +426,7 @@ export class HexCrawlApi {
             "POST",
             `/api/expeditions/${encodeURIComponent(expeditionId)}/reposition`,
             input,
-            "Move party");
+            "Teleport party");
     }
 
     public updateExpeditionParty(expeditionId: string, input: UpdateExpeditionPartyRequest): Promise<ExpeditionDetail> {
