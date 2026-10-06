@@ -4,6 +4,7 @@ import test from "node:test";
 import {
     compactParameter,
     compactRuleCatalog,
+    parameterDefinitions,
     durationToTicks,
     formatDurationTicks,
     ticksToDuration
@@ -67,6 +68,38 @@ test("Compact exposes Phase 12 journey stage and progress controls", () => {
     assert.equal(stageKeys?.control, "key-list");
     assert.equal(progressFloor?.control, "number");
     assert.equal(progressCeiling?.control, "number");
+});
+
+test("Resolution helpers expose editable generic fields including legacy pinned parameters", () => {
+    const enabled = compactParameter("travel.enabled", {
+        type: "boolean",
+        required: true,
+        description: "Travel helper",
+        defaultValue: null
+    }, "procedure.helpers");
+    const resultSet = compactParameter("encounter.wanderingResults", {
+        type: "string",
+        required: false,
+        description: "Encounter results",
+        defaultValue: null
+    }, "procedure.helpers");
+
+    assert.equal(enabled?.control, "boolean");
+    assert.equal(resultSet?.control, "text");
+
+    const definitions = parameterDefinitions({
+        configurationSchema: {},
+        mechanic: { parameterSchema: {} },
+        parameters: {
+            "travel.enabled": "true",
+            "travel.diceCount": "2",
+            "travel.distanceFactor": "0.1"
+        }
+    });
+    const byKey = new Map(definitions);
+    assert.equal(byKey.get("travel.enabled")?.type, "boolean");
+    assert.equal(byKey.get("travel.diceCount")?.type, "integer");
+    assert.equal(byKey.get("travel.distanceFactor")?.type, "number");
 });
 
 test("Compact includes environmental exposure as a survival rule", () => {

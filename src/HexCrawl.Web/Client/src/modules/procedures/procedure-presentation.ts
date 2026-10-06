@@ -116,7 +116,23 @@ const labels: Record<string, string> = {
     dimensions: "Exposure conditions",
     evaluationModel: "Exposure resolution",
     evaluationInterval: "Exposure cadence",
-    targetScope: "Who is affected"
+    targetScope: "Who is affected",
+    "travel.enabled": "Resolve travel distance with a roll",
+    "travel.diceCount": "Travel dice count",
+    "travel.dieSides": "Travel die sides",
+    "travel.modifier": "Travel roll modifier",
+    "travel.distanceFactor": "Distance per travel-roll point",
+    "navigation.enabled": "Use a navigation roll helper",
+    "navigation.diceCount": "Navigation dice count",
+    "navigation.dieSides": "Navigation die sides",
+    "navigation.modifier": "Navigation roll modifier",
+    "encounter.enabled": "Use an encounter roll helper",
+    "encounter.diceCount": "Encounter dice count",
+    "encounter.dieSides": "Encounter die sides",
+    "encounter.modifier": "Encounter roll modifier",
+    "encounter.wanderingResults": "Wandering encounter results",
+    "encounter.keyedLocationResults": "Keyed-location encounter results",
+    "encounter.timingSlots": "Encounter timing slots"
 };
 
 const choiceSets: Record<string, Array<{ value: string; label: string }>> = {
@@ -245,7 +261,7 @@ export function compactParameter(
     if (mappingKeys.has(key) || definition.type === "mapping") {
         return { label, help: definition.description, control: "mapping" };
     }
-    if (textKeys.has(key)) {
+    if (textKeys.has(key) || definition.type === "string") {
         return { label, help: definition.description, control: "text" };
     }
     // Unknown token/model fields remain readable without leaking implementation keys.
@@ -283,7 +299,26 @@ export function parameterDefinitions(
     const definitions = new Map<string, ProcedureParameterDefinition>();
     for (const [key, value] of Object.entries(module.configurationSchema)) definitions.set(key, value);
     for (const [key, value] of Object.entries(module.mechanic.parameterSchema)) definitions.set(key, value);
+    for (const key of Object.keys(module.parameters)) {
+        if (!definitions.has(key)) {
+            definitions.set(key, {
+                type: storedParameterType(key, module.parameters[key]),
+                required: false,
+                description: "Stored parameter not described by the pinned schema. It is preserved losslessly.",
+                defaultValue: null
+            });
+        }
+    }
     return [...definitions.entries()];
+}
+
+function storedParameterType(key: string, value: string): string {
+    if (key.endsWith(".enabled") || value === "true" || value === "false") return "boolean";
+    if (key.endsWith(".diceCount") || key.endsWith(".dieSides") || key.endsWith(".modifier") || key.endsWith(".timingSlots")) {
+        return "integer";
+    }
+    if (key.endsWith(".distanceFactor")) return "number";
+    return "string";
 }
 
 export function friendlyStoredValue(key: string, value: string): string {

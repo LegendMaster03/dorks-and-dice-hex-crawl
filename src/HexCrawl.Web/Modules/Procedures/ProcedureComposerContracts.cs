@@ -1,3 +1,4 @@
+using System.Globalization;
 using HexCrawl.Application;
 using HexCrawl.Application.Persistence;
 using HexCrawl.Domain.Procedure;
@@ -261,7 +262,162 @@ public sealed record ProcedureModuleComposerContract(
             }
         }
 
+        if (string.Equals(selected.Module.Key, GenericProcedureCatalog.ResolutionHelpersModule, StringComparison.Ordinal)
+            && string.Equals(selected.Mechanic.Key, GenericProcedureCatalog.DeterministicResolutionHelpersMechanic, StringComparison.Ordinal))
+        {
+            AddResolutionHelperIssues(selected.Parameters, issues);
+        }
+
         return issues;
+    }
+
+    private static void AddResolutionHelperIssues(
+        IReadOnlyDictionary<string, string> parameters,
+        ICollection<string> issues)
+    {
+        ValidateHelperBoolean(parameters, "travel.enabled", issues, enabled =>
+        {
+            if (!enabled) return;
+            if (!TryRoll(parameters, "travel", issues, out var roll)) return;
+            if (!TryDouble(parameters, "travel.distanceFactor", issues, out var factor)) return;
+            try
+            {
+                new TravelResolutionHelperProfile(roll, factor).Validate();
+            }
+            catch (InvalidOperationException exception)
+            {
+                issues.Add(exception.Message);
+            }
+        });
+
+        ValidateHelperBoolean(parameters, "navigation.enabled", issues, enabled =>
+        {
+            if (!enabled) return;
+            if (!TryRoll(parameters, "navigation", issues, out var roll)) return;
+            try
+            {
+                new NavigationResolutionHelperProfile(roll).Validate();
+            }
+            catch (InvalidOperationException exception)
+            {
+                issues.Add(exception.Message);
+            }
+        });
+
+        ValidateHelperBoolean(parameters, "encounter.enabled", issues, enabled =>
+        {
+            if (!enabled) return;
+            if (!TryRoll(parameters, "encounter", issues, out var roll)
+                || !TryRequired(parameters, "encounter.wanderingResults", issues, out var wandering)
+                || !TryRequired(parameters, "encounter.keyedLocationResults", issues, out var keyed)
+                || !TryInt(parameters, "encounter.timingSlots", issues, out var timingSlots))
+            {
+                return;
+            }
+
+            try
+            {
+                new EncounterResolutionHelperProfile(
+                    roll,
+                    new DiceRollResultSet(wandering),
+                    new DiceRollResultSet(keyed),
+                    timingSlots).Validate();
+            }
+            catch (InvalidOperationException exception)
+            {
+                issues.Add(exception.Message);
+            }
+        });
+    }
+
+    private static void ValidateHelperBoolean(
+        IReadOnlyDictionary<string, string> parameters,
+        string key,
+        ICollection<string> issues,
+        Action<bool> validateEnabled)
+    {
+        if (!parameters.TryGetValue(key, out var raw) || string.IsNullOrWhiteSpace(raw))
+        {
+            return;
+        }
+        if (!bool.TryParse(raw, out var enabled))
+        {
+            issues.Add($"Parameter '{key}' must be true or false.");
+            return;
+        }
+        validateEnabled(enabled);
+    }
+
+    private static bool TryRoll(
+        IReadOnlyDictionary<string, string> parameters,
+        string prefix,
+        ICollection<string> issues,
+        out DiceRollFormula roll)
+    {
+        roll = default!;
+        if (!TryInt(parameters, $"{prefix}.diceCount", issues, out var diceCount)
+            || !TryInt(parameters, $"{prefix}.dieSides", issues, out var dieSides)
+            || !TryInt(parameters, $"{prefix}.modifier", issues, out var modifier))
+        {
+            return false;
+        }
+        roll = new DiceRollFormula(diceCount, dieSides, modifier);
+        return true;
+    }
+
+    private static bool TryInt(
+        IReadOnlyDictionary<string, string> parameters,
+        string key,
+        ICollection<string> issues,
+        out int value)
+    {
+        value = default;
+        if (!TryRequired(parameters, key, issues, out var raw))
+        {
+            return false;
+        }
+        if (int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out value))
+        {
+            return true;
+        }
+        issues.Add($"Parameter '{key}' must be an integer.");
+        return false;
+    }
+
+    private static bool TryDouble(
+        IReadOnlyDictionary<string, string> parameters,
+        string key,
+        ICollection<string> issues,
+        out double value)
+    {
+        value = default;
+        if (!TryRequired(parameters, key, issues, out var raw))
+        {
+            return false;
+        }
+        if (double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out value)
+            && double.IsFinite(value))
+        {
+            return true;
+        }
+        issues.Add($"Parameter '{key}' must be a finite number.");
+        return false;
+    }
+
+    private static bool TryRequired(
+        IReadOnlyDictionary<string, string> parameters,
+        string key,
+        ICollection<string> issues,
+        out string value)
+    {
+        if (parameters.TryGetValue(key, out var raw) && !string.IsNullOrWhiteSpace(raw))
+        {
+            value = raw.Trim();
+            return true;
+        }
+        issues.Add($"Parameter '{key}' is required when this helper is enabled.");
+        value = string.Empty;
+        return false;
     }
 }
 

@@ -86,6 +86,16 @@ test("Compact procedure edits keep their focused workspace across draft recompos
     assert.match(workspace, /save\.disabled = savePending \|\| historical\(\) \|\| !hasStructuredChanges\(\)/);
 });
 
+test("structured procedure save honors validation and dependency blockers", () => {
+    const workspace = fs.readFileSync(
+        path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"),
+        "utf8");
+
+    assert.match(workspace, /hasBlockingStructuredIssues/);
+    assert.match(workspace, /draft\?\.modules\.some\(saveBlocked\)/);
+    assert.match(workspace, /Fix the procedure validation or dependency issues shown below before saving/);
+});
+
 test("Advanced always renders the pinned mechanic without polluting catalog alternatives", () => {
     const workspace = fs.readFileSync(
         path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"),

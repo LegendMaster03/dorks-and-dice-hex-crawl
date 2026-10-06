@@ -314,6 +314,10 @@ export async function renderProcedureAuthoringWorkspace(
                 : jsonText.length > 0 && jsonText !== jsonBaseline
             : hasStructuredChanges();
 
+    const hasBlockingStructuredIssues = (): boolean =>
+        draft?.dependencies.hasErrors === true
+        || (draft?.modules.some(saveBlocked) ?? false);
+
     const confirmDiscardChanges = (): boolean =>
         !hasUnsavedChanges()
         || window.confirm("Discard unsaved procedure changes?");
@@ -558,7 +562,10 @@ export async function renderProcedureAuthoringWorkspace(
 
         const save = button(savePending ? "Saving…" : sourceProcedureId ? "Save new revision" : "Save procedure", "primary");
         save.dataset.procedureSave = "";
-        save.disabled = savePending || historical() || !hasSaveableChanges();
+        save.disabled = savePending
+            || historical()
+            || !hasSaveableChanges()
+            || (mode !== "json" && hasBlockingStructuredIssues());
         save.addEventListener("click", () => void (mode === "json" ? saveCanonical() : saveStructured()));
         right.append(home, save);
         toolbar.append(left, right);
@@ -603,6 +610,9 @@ export async function renderProcedureAuthoringWorkspace(
 
         if (historical()) {
             page.append(notice("You are viewing a historical revision. Choose the latest revision above before saving further changes."));
+        }
+        if (mode !== "json" && hasBlockingStructuredIssues()) {
+            page.append(notice("Fix the procedure validation or dependency issues shown below before saving."));
         }
 
         if (mode === "compact") page.append(renderCompact());
@@ -820,7 +830,10 @@ export async function renderProcedureAuthoringWorkspace(
         }
         populateCompactArea(body, group.modules);
         const save = root.querySelector<HTMLButtonElement>("[data-procedure-save]");
-        if (save) save.disabled = savePending || historical() || !hasStructuredChanges();
+        if (save) save.disabled = savePending
+            || historical()
+            || !hasStructuredChanges()
+            || hasBlockingStructuredIssues();
         if (moduleKey && fieldKey) {
             const replacement = [...body.querySelectorAll<HTMLElement>("[data-compact-module][data-compact-field]")]
                 .find(control => control.dataset.compactModule === moduleKey && control.dataset.compactField === fieldKey);

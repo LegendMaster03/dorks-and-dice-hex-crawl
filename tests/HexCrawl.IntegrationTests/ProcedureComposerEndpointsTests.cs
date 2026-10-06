@@ -134,6 +134,59 @@ public sealed class ProcedureComposerEndpointsTests
     }
 
     [Fact]
+    public async Task ResolutionHelperContractExposesFieldsAndFlagsIncompleteEnabledHelper()
+    {
+        var database = TestWebHost.NewDatabasePath();
+        try
+        {
+            using var factory = TestWebHost.Create(database);
+            using var client = factory.CreateClient();
+
+            using var response = await client.PostAsJsonAsync("/api/procedures/composer/draft", new
+            {
+                presetKey = (string?)null,
+                procedureId = (Guid?)null,
+                revision = (int?)null,
+                moduleSelections = new[]
+                {
+                    new { moduleKey = GenericProcedureCatalog.ResolutionHelpersModule, included = true }
+                },
+                overrides = new[]
+                {
+                    new
+                    {
+                        overrideId = "enable-travel-helper",
+                        moduleKey = GenericProcedureCatalog.ResolutionHelpersModule,
+                        replacementMechanicKey = (string?)null,
+                        replacementMechanicVersion = (int?)null,
+                        parameters = new Dictionary<string, string>
+                        {
+                            ["travel.enabled"] = "true"
+                        },
+                        note = (string?)null
+                    }
+                }
+            });
+            response.EnsureSuccessStatusCode();
+            var draft = await response.Content.ReadFromJsonAsync<JsonElement>();
+            var helper = Assert.Single(
+                draft.GetProperty("modules").EnumerateArray(),
+                module => module.GetProperty("moduleKey").GetString() == GenericProcedureCatalog.ResolutionHelpersModule);
+
+            var schema = helper.GetProperty("mechanic").GetProperty("parameterSchema");
+            Assert.True(schema.TryGetProperty("travel.diceCount", out _));
+            Assert.True(schema.TryGetProperty("encounter.wanderingResults", out _));
+            Assert.Contains(
+                helper.GetProperty("validationIssues").EnumerateArray(),
+                issue => issue.GetString()!.Contains("travel.diceCount", StringComparison.Ordinal));
+        }
+        finally
+        {
+            TestWebHost.DeleteDatabase(database);
+        }
+    }
+
+    [Fact]
     public async Task ExtensionMechanicRemainsVisibleAsSelectedComposerMechanic()
     {
         var database = TestWebHost.NewDatabasePath();
