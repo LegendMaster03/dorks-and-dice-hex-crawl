@@ -76,9 +76,14 @@ try {
             if (!metrics.text.includes("Journey & events") || !metrics.text.includes("Multi-stage journey")) {
                 throw new Error("journey-first Compact did not present journey rules");
             }
+            if (metrics.text.indexOf("Journey & events") > metrics.text.indexOf("Survival & resources")) {
+                throw new Error("journey-first Compact placed supporting survival rules before the journey process");
+            }
         }
-        if (scenario === "focus" && !(await page.locator(".hc-focus-workspace").count())) {
-            throw new Error("Compact focused editor did not open");
+        if (scenario === "focus") {
+            if (!(await page.locator(".hc-focus-workspace").count())) throw new Error("Compact focused editor did not open");
+            if (metrics.text.includes("durationTicks")) throw new Error("Compact focused editor leaked durationTicks");
+            if (!metrics.text.includes("Set the length of one travel period.")) throw new Error("Compact focused editor lacks domain-facing duration help");
         }
         if (scenario.startsWith("advanced")) {
             const nav = page.locator(".hc-advanced-module-select");
