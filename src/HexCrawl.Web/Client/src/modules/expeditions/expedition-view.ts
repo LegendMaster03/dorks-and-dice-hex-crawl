@@ -87,17 +87,21 @@ export async function renderExpedition(
             cell.q,
             cell.r,
             orientation,
-            rotation,
-            preferences.direction ?? "none"
+            rotation
         ].join(":");
-        if (adjacencyCache?.key === key) return adjacencyCache.value;
-        const value = currentHexAdjacency(
-            cell,
-            orientation,
-            preferences.direction,
-            rotation);
-        adjacencyCache = { key, value };
-        return value;
+        if (adjacencyCache?.key !== key) {
+            adjacencyCache = {
+                key,
+                value: currentHexAdjacency(cell, orientation, null, rotation)
+            };
+        }
+        const base = adjacencyCache.value;
+        if (preferences.direction === null) return base;
+        const selected = adjacencyEdgeForDirection(base, preferences.direction);
+        return {
+            ...base,
+            selectedEdgeId: selected?.id ?? null
+        };
     };
 
     const courseLabel = (direction: number | null): string => {

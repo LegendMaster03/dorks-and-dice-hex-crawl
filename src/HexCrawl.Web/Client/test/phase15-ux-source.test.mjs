@@ -395,9 +395,14 @@ test("current-cell adjacency is memoized across unchanged render and summary rea
         "utf8");
 
     assert.match(view, /let adjacencyCache:/);
-    assert.match(view, /preferences\.direction \?\? "none"/);
-    assert.match(view, /if \(adjacencyCache\?\.key === key\) return adjacencyCache\.value/);
-    assert.match(view, /adjacencyCache = \{ key, value \}/);
+    assert.match(view, /if \(adjacencyCache\?\.key !== key\)/);
+    assert.match(view, /currentHexAdjacency\(cell, orientation, null, rotation\)/);
+    assert.match(view, /const base = adjacencyCache\.value/);
+    assert.match(view, /selectedEdgeId: selected\?\.id \?\? null/);
+    const keyBlock = view.slice(
+        view.indexOf("const key = ["),
+        view.indexOf("].join", view.indexOf("const key = [")));
+    assert.doesNotMatch(keyBlock, /preferences\.direction/);
 });
 
 test("Phase 15 workspace rerenders preserve the existing map surface and viewport lifecycle", () => {
