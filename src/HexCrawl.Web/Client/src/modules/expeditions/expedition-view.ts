@@ -188,11 +188,9 @@ export async function renderExpedition(
         stats.append(
             statAction("Time", presentation.timeLabel, null, openHistory),
             statAction(
-                runtime.expedition.isSpatial ? "Position / course" : "Context",
-                runtime.expedition.isSpatial
-                    ? currentCourseLabel(preferences, currentAdjacency())
-                    : presentation.routeLabel ?? runtime.context.name,
-                runtime.expedition.isSpatial ? travelPreferenceDetail(runtime, preferences, currentAdjacency()) : "Non-spatial expedition",
+                runtime.expedition.isSpatial ? "Position" : "Context",
+                runtime.expedition.isSpatial ? "Current cell" : presentation.routeLabel ?? runtime.context.name,
+                runtime.expedition.isSpatial ? "Course and pace are shown with the map" : "Non-spatial expedition",
                 runtime.expedition.isSpatial ? focusTravelCourse : openHistory,
                 runtime.pauseReason ? "warning" : "neutral"),
             statAction(
@@ -1361,17 +1359,6 @@ function travelProgressDetail(runtime: ExpeditionDetail): string {
             : `Watch ${runtime.expedition.activeWatchNumber} · ${formatHours(remaining)} remaining`;
     }
     return movementSuggestionDetail(runtime) ?? "Ready for next segment";
-}
-
-function travelPreferenceDetail(
-    runtime: ExpeditionDetail,
-    preferences: TravelPreferences,
-    adjacency: ReturnType<typeof currentHexAdjacency> | null): string {
-    if (!runtime.expedition.isSpatial) return "";
-    const course = preferences.direction === null
-        ? "course not set"
-        : adjacencyCourseLabel(adjacency, preferences.direction);
-    return `${course} · ${preferences.pace} pace`;
 }
 
 function travelIntentSummary(
