@@ -938,7 +938,7 @@ const metrics = {
     focusedTitle: root.querySelector("[data-phase15-drawer] h2")?.textContent?.trim() || null,
     focusedEdge: document.activeElement?.matches?.("[data-adjacency-edge]") ?? false,
     journeyVisible: rootText.includes("Current stage") && rootText.includes("Progress") && rootText.includes("Roles") && rootText.includes("Pending"),
-    movementStatusVisible: Array.from(root.querySelectorAll(".hc-ux-stat")).some(item => item.textContent?.includes("Movement")),
+    movementStatusVisible: Array.from(root.querySelectorAll(".hc-stat-action-label")).some(label => label.textContent?.trim() === "Movement"),
     fakeSpatialStateVisible: !runtime.expedition.isSpatial && (
         rootText.includes("Current travel")
         || rootText.includes("Pace / travel mode")
