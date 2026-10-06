@@ -144,6 +144,114 @@ public sealed class ExpeditionWorkbenchTests
     }
 
     [Fact]
+    public async Task NavigationThenFocusedEncounterResolutionPreservesTravelUntilAdvance()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var (core, workbench) = await database.ServicesAsync();
+        var assistants = await database.AssistantServiceAsync();
+        var world = await core.CreateOverworldAsync("alice", WorldCommand());
+        var expedition = await workbench.StartAsync(
+            world.World.Id,
+            "alice",
+            new StartExpeditionWorkbenchCommand(
+                "Staged travel resolution",
+                "alexandrian-advanced",
+                "exploration-map",
+                new HexCoordinate(0, 0)));
+        var procedure = GenericProcedureRuntime.Bind(expedition.CampaignProcedure);
+        var originalDistance = expedition.State.DistanceTraveled;
+        var originalElapsed = expedition.State.ElapsedTravelTime;
+        var originalHex = expedition.State.CurrentHex;
+
+        Assert.True(
+            ExpeditionProcedureRequirements.IsNavigationResolutionPotentiallyRequired(
+                procedure,
+                expedition.State));
+        Assert.True(ExpeditionProcedureRequirements.IsEncounterCheckDue(procedure, expedition.State));
+
+        expedition = await assistants.RecordNavigationAsync(
+            expedition.State.Id,
+            "alice",
+            new NavigationAssistantCommand
+            {
+                ExpectedVersion = expedition.Version,
+                IsLost = false,
+                VeerSteps = 0,
+                IntendedDirection = 2,
+                ResolutionSource = ResolutionSource.ManualRoll,
+                ResolutionNote = "focused navigation"
+            });
+
+        Assert.Equal(new HexDirection(2), expedition.State.IntendedDirection);
+        Assert.Equal(originalDistance, expedition.State.DistanceTraveled);
+        Assert.Equal(originalElapsed, expedition.State.ElapsedTravelTime);
+        Assert.Equal(originalHex, expedition.State.CurrentHex);
+        Assert.False(
+            ExpeditionProcedureRequirements.IsNavigationResolutionPotentiallyRequired(
+                procedure,
+                expedition.State));
+        Assert.True(ExpeditionProcedureRequirements.IsEncounterCheckDue(procedure, expedition.State));
+
+        expedition = await assistants.RecordEncounterCadenceAsync(
+            expedition.State.Id,
+            "alice",
+            new EncounterCadenceAssistantCommand
+            {
+                ExpectedVersion = expedition.Version,
+                Outcome = EncounterOutcomeKind.None,
+                ResolutionSource = ResolutionSource.ManualRoll,
+                ResolutionNote = "focused encounter cadence"
+            });
+
+        Assert.Equal(new HexDirection(2), expedition.State.IntendedDirection);
+        Assert.Equal(originalDistance, expedition.State.DistanceTraveled);
+        Assert.Equal(originalElapsed, expedition.State.ElapsedTravelTime);
+        Assert.Equal(originalHex, expedition.State.CurrentHex);
+        Assert.False(ExpeditionProcedureRequirements.IsEncounterCheckDue(procedure, expedition.State));
+        Assert.Single(
+            expedition.State.History,
+            item => item.Kind == CrawlRuntimeEventKind.EncounterCheckPerformed
+                && item.WatchNumber == 1);
+        Assert.Single(
+            expedition.State.History,
+            item => item.Kind == CrawlRuntimeEventKind.NavigationCheckResolved
+                && item.WatchNumber == 1);
+
+        var reloaded = await core.GetExpeditionAsync(expedition.State.Id, "alice");
+        Assert.False(ExpeditionProcedureRequirements.IsEncounterCheckDue(procedure, reloaded.State));
+        Assert.Equal(new HexDirection(2), reloaded.State.IntendedDirection);
+        Assert.Single(
+            reloaded.State.History,
+            item => item.Kind == CrawlRuntimeEventKind.EncounterCheckPerformed
+                && item.WatchNumber == 1);
+
+        var advanced = await workbench.AdvanceAsync(
+            reloaded.State.Id,
+            "alice",
+            new AdvanceExpeditionWorkbenchCommand
+            {
+                ExpectedVersion = reloaded.Version,
+                IntendedDirection = 2,
+                PaceKey = "normal",
+                ExpectedDistance = 1,
+                ActualDistance = 1,
+                TravelResolutionSource = ResolutionSource.ManualRoll,
+                TravelResolutionNote = "resolved movement"
+            });
+
+        Assert.True(advanced.State.DistanceTraveled.Value > originalDistance.Value);
+        Assert.True(advanced.State.ElapsedTravelTime > originalElapsed);
+        Assert.Single(
+            advanced.State.History,
+            item => item.Kind == CrawlRuntimeEventKind.EncounterCheckPerformed
+                && item.WatchNumber == 1);
+        Assert.Single(
+            advanced.State.History,
+            item => item.Kind == CrawlRuntimeEventKind.NavigationCheckResolved
+                && item.WatchNumber == 1);
+    }
+
+    [Fact]
     public async Task ResolutionTypesKeepIndependentProvenance()
     {
         await using var database = await TestDatabase.CreateAsync();

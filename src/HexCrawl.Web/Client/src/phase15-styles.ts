@@ -159,6 +159,14 @@ export function ensurePhase15Styles(): void {
             .hc-current-travel > p { grid-column:1 / 3; grid-row:2; }
             .hc-current-travel-actions { grid-column:3; grid-row:1 / span 2; justify-content:flex-end; flex-wrap:nowrap; }
             .hc-current-travel-pace-editor { grid-column:1 / -1; grid-row:3; }
+            .hc-table-rail .hc-current-travel { grid-template-columns:1fr; align-items:stretch; }
+            .hc-table-rail .hc-current-travel > h3,
+            .hc-table-rail .hc-current-travel-facts,
+            .hc-table-rail .hc-current-travel > p,
+            .hc-table-rail .hc-current-travel-actions,
+            .hc-table-rail .hc-current-travel-pace-editor { grid-column:1; grid-row:auto; }
+            .hc-table-rail .hc-current-travel-facts { grid-template-columns:auto minmax(0,1fr); }
+            .hc-table-rail .hc-current-travel-actions { justify-content:flex-start; flex-wrap:wrap; }
             .hc-phase15-expedition .hc-stat-action-grid { grid-template-columns:repeat(8,minmax(0,1fr)); }
             .hc-phase15-expedition .hc-stat-action { padding:.58rem .62rem; }
             .hc-phase15-expedition .hc-stat-action-detail { font-size:.73rem; }
@@ -212,8 +220,11 @@ export function ensurePhase15Styles(): void {
         .hc-current-travel-actions { align-items:center; }
         .hc-current-travel-pace-editor { display:grid; grid-template-columns:minmax(12rem,1fr) auto; gap:.55rem; align-items:end; }
         .hc-current-travel-pace-editor label { display:grid; gap:.3rem; font-weight:600; }
-        .hc-current-travel-pace-editor input { width:100%; min-width:0; box-sizing:border-box; }
+        .hc-current-travel-pace-editor input,
+        .hc-current-travel-pace-editor select { width:100%; min-width:0; box-sizing:border-box; }
+        .hc-fixed-travel-mode { display:inline-flex; align-items:center; min-height:2.25rem; font-weight:600; color:var(--hc-text-strong); }
         .hc-table-rail { padding:.75rem; gap:.45rem !important; }
+        .hc-table-rail > .hc-current-travel { min-width:0; }
         .hc-table-rail > h2 { margin:0 0 .15rem; }
         .hc-rail-action { width:100%; min-width:0; display:grid; gap:.12rem; padding:.55rem .6rem; text-align:left; border-radius:.55rem; }
         .hc-rail-action strong, .hc-rail-action span { min-width:0; overflow-wrap:anywhere; }
@@ -243,7 +254,8 @@ export function ensurePhase15Styles(): void {
             .hc-phase15-expedition .hc-map-sheet-top { grid-template-columns:1fr; }
             .hc-phase15-expedition .hc-map-host { height:clamp(24rem,52vh,36rem); min-height:0; }
             .hc-table-rail { grid-template-columns:repeat(2,minmax(0,1fr)); }
-            .hc-table-rail > h2 { grid-column:1 / -1; }
+            .hc-table-rail > h2,
+            .hc-table-rail > .hc-current-travel { grid-column:1 / -1; }
         }
         @media (max-width: 760px) {
             .hc-phase15-expedition > .hc-current-action { order:1; }

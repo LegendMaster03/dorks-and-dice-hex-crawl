@@ -17,13 +17,26 @@ npx vite --host 127.0.0.1 --port 4173 >"$out_dir/vite.log" 2>&1 &
 vite_pid=$!
 trap 'kill "$vite_pid" 2>/dev/null || true' EXIT
 
+preview_url="http://127.0.0.1:4173/visual-review/phase15.html"
+preview_ready=false
 for _ in {1..40}; do
-  if curl -fsS http://127.0.0.1:4173/visual-review/phase15.html >/dev/null; then
+  if ! kill -0 "$vite_pid" 2>/dev/null; then
+    echo "Phase 15 preview server exited before becoming ready." >&2
+    cat "$out_dir/vite.log" >&2
+    exit 1
+  fi
+  if curl -fsS --max-time 1 "$preview_url" >/dev/null 2>&1; then
+    preview_ready=true
     break
   fi
   sleep 0.25
 done
-curl -fsS http://127.0.0.1:4173/visual-review/phase15.html >/dev/null
+if [[ "$preview_ready" != "true" ]]; then
+  echo "Phase 15 preview server did not become ready on 127.0.0.1:4173." >&2
+  cat "$out_dir/vite.log" >&2
+  exit 1
+fi
+echo "Phase 15 preview server ready."
 
 cases=(
   "01-home-desktop|home|light|1440|1000"
@@ -54,10 +67,13 @@ cases=(
   "26-theme-light-spatial|selected-edge|light|1366|900"
   "27-theme-dark-nonspatial|journey-normal|dark|1366|900"
   "28-theme-light-nonspatial|journey-normal|light|1366|900"
+  "29-spatial-fixed-pace|fixed-pace|light|1366|900"
+  "30-spatial-empty-party|empty-party|light|1366|900"
 )
 
 for spec in "${cases[@]}"; do
   IFS='|' read -r name state theme width height container_width <<<"$spec"
+  echo "Rendering $name ($state, $theme, ${width}x${height})..."
   url="http://127.0.0.1:4173/visual-review/phase15.html?state=$state&theme=$theme"
   if [[ -n "${container_width:-}" ]]; then
     url="$url&containerWidth=$container_width"
@@ -140,6 +156,10 @@ else:
             raise SystemExit(f'map too short to remain usable: {metrics}')
         if not metrics["railVisible"]:
             raise SystemExit(f'At the Table rail is not visible: {metrics}')
+        if metrics["currentTravelCount"] != 1 or not metrics["currentTravelInRail"]:
+            raise SystemExit(f'current travel is not using the table rail exactly once: {metrics}')
+        if metrics["partyActivitiesRailButtons"] != 0:
+            raise SystemExit(f'rail duplicated the top Party summary: {metrics}')
         if metrics["continueButtons"] > 1:
             raise SystemExit(f'duplicate Continue travel actions: {metrics}')
         if metrics["travelControlsButtons"] != 0:
@@ -162,6 +182,14 @@ else:
             raise SystemExit(f'forced-travel primary workflow is not domain-facing: {metrics}')
         if metrics["forcedTravelTechnicalExpanded"]:
             raise SystemExit(f'forced-travel advanced consequence details opened by default: {metrics}')
+    if state == "fixed-pace":
+        if metrics["changePaceButtons"] != 0 or metrics["paceTextInputs"] != 0:
+            raise SystemExit(f'fixed pace exposed an arbitrary normal-user editor: {metrics}')
+    if state == "selected-edge":
+        if metrics["changePaceButtons"] != 1 or metrics["paceSelects"] < 1:
+            raise SystemExit(f'finite travel modes did not expose a bounded pace choice: {metrics}')
+    if state == "empty-party" and not metrics["partySetupVisible"]:
+        raise SystemExit(f'empty party did not expose a useful setup action: {metrics}')
 
     expected_titles = {
         "navigation-pending": "Navigation",

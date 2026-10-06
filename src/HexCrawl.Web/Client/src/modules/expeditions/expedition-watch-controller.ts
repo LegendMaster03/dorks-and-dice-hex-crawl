@@ -99,7 +99,8 @@ export class ExpeditionWatchController {
         world: Overworld | null,
         private readonly getRuntime: () => ExpeditionDetail,
         private readonly applyRuntime: (runtime: ExpeditionDetail) => void,
-        private readonly runMutation: (action: () => Promise<void>) => Promise<void>) {
+        private readonly runMutation: (action: () => Promise<void>) => Promise<void>,
+        private readonly submissionMode: "advance" | "encounterCadence" = "advance") {
         this.form = required<HTMLFormElement>(root, "[data-advance]");
         this.advanceButton = required<HTMLButtonElement>(this.form, "[data-advance-button]");
         this.locationSelect = select(this.form, "locationId");
@@ -160,7 +161,8 @@ export class ExpeditionWatchController {
             for (const location of world.locations) {
                 this.locationSelect.append(option(location.id, location.name));
             }
-        } else {
+        }
+        if (!world || this.submissionMode === "encounterCadence") {
             select(this.form, "encounterOutcome")
                 .querySelector('option[value="KeyedLocationDiscovery"]')
                 ?.remove();
@@ -420,11 +422,17 @@ export class ExpeditionWatchController {
     }
 
     private syncEncounterFields(): void {
+        const encounterHour = required<HTMLElement>(this.form, "[data-encounter-hour]");
+        const encounterLocation = required<HTMLElement>(this.form, "[data-encounter-location]");
+        if (this.submissionMode === "encounterCadence") {
+            encounterHour.hidden = true;
+            encounterLocation.hidden = true;
+            return;
+        }
+
         const outcome = select(this.form, "encounterOutcome").value;
-        required<HTMLElement>(this.form, "[data-encounter-hour]").hidden =
-            outcome === "" || outcome === "None";
-        required<HTMLElement>(this.form, "[data-encounter-location]").hidden =
-            outcome !== "KeyedLocationDiscovery";
+        encounterHour.hidden = outcome === "" || outcome === "None";
+        encounterLocation.hidden = outcome !== "KeyedLocationDiscovery";
     }
 
     private helperApplicability(runtime: ExpeditionDetail): {
@@ -733,6 +741,30 @@ export class ExpeditionWatchController {
         void this.runMutation(async () => {
             try {
                 const runtime = this.getRuntime();
+                if (this.submissionMode === "encounterCadence") {
+                    if (!encounterCheckDue(runtime)) {
+                        throw new Error("No encounter check is currently due.");
+                    }
+                    const encounterOutcome = select(this.form, "encounterOutcome").value;
+                    if (!["None", "WanderingEncounter", "ManualCustom"].includes(encounterOutcome)) {
+                        throw new Error("Select the resolved encounter-check outcome.");
+                    }
+                    const recorded = await this.api.recordEncounterAssistant(runtime.id, {
+                        expectedVersion: runtime.version,
+                        outcome: encounterOutcome as "None" | "WanderingEncounter" | "ManualCustom",
+                        resolutionSource:
+                            this.readResolutionSource("encounterSource", "encounter", false),
+                        resolutionNote:
+                            optionalText(input(this.form, "encounterSourceNote")),
+                        note: optionalText(input(this.form, "encounterNote"))
+                    });
+                    this.generatedResolutionId = null;
+                    this.generatedResolutionVersion = null;
+                    this.generatedEncounterLocationId = undefined;
+                    this.applyRuntime(recorded);
+                    return;
+                }
+
                 const execution = requireProcedureRuntime(runtime);
                 const continuous = execution.travelResolution === "ContinuousDistance";
                 const navRequired = navigationResolutionDue(

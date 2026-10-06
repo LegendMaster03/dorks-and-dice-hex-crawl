@@ -321,7 +321,7 @@ function party() {
     };
 }
 
-function movement(resolved) {
+function movement(resolved, travelModeKeys = ["normal", "fast", "slow"]) {
     return {
         policy: {
             support: "Supported",
@@ -329,7 +329,7 @@ function movement(resolved) {
             baseBudget: 6,
             budgetUnit: "mi",
             limitingScope: "Party",
-            travelModeKeys: ["normal", "fast", "slow"],
+            travelModeKeys,
             terrainSupport: "Supported",
             terrainAdjustmentModel: "multiplier",
             terrainAdjustments: {},
@@ -719,6 +719,23 @@ switch (stateName) {
         runtime.expedition.intendedDirection = 1;
         runtime.expedition.actualDirection = 1;
         break;
+    case "fixed-pace":
+        runtime.expedition.intendedDirection = 1;
+        runtime.expedition.actualDirection = 1;
+        runtime.movementComposition = movement(true, []);
+        break;
+    case "empty-party":
+        runtime.expedition.intendedDirection = 1;
+        runtime.expedition.actualDirection = 1;
+        runtime.party = {
+            ...runtime.party,
+            members: [],
+            marchingOrder: [],
+            watchList: [],
+            activityAssignments: [],
+            baseMovement: null
+        };
+        break;
     case "persisted-course":
         break;
     case "partial-progress":
@@ -934,6 +951,13 @@ const metrics = {
     railVisible: isVisible(rail),
     currentTravelVisible: isVisible(currentTravel),
     currentTravelTop: currentTravel ? Math.round(currentTravel.getBoundingClientRect().top) : null,
+    currentTravelInRail: Boolean(currentTravel?.parentElement?.classList.contains("hc-table-rail")),
+    currentTravelCount: root.querySelectorAll("[data-current-travel]").length,
+    changePaceButtons: buttons.filter(button => isVisible(button) && button.textContent?.trim() === "Change pace").length,
+    paceTextInputs: root.querySelectorAll('input[name="pace"][type="text"]').length,
+    paceSelects: root.querySelectorAll(".hc-current-travel-pace-editor select").length,
+    partyActivitiesRailButtons: buttons.filter(button => isVisible(button) && button.textContent?.includes("Party & activities")).length,
+    partySetupVisible: rootText.includes("Party not configured"),
     primaryAction: root.querySelector(".hc-current-action-primary")?.textContent?.trim() || null,
     focusedTitle: root.querySelector("[data-phase15-drawer] h2")?.textContent?.trim() || null,
     focusedEdge: document.activeElement?.matches?.("[data-adjacency-edge]") ?? false,
