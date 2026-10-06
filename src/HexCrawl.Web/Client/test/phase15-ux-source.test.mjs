@@ -808,6 +808,21 @@ test("DM can reposition the party without routing through ordinary travel proced
     assert.match(api, /\/api\/expeditions\/\$\{encodeURIComponent\(expeditionId\)\}\/reposition/);
 });
 
+test("procedure-defined travel modes use bounded controls and focused movement labels authoritative units", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+    const types = fs.readFileSync(path.join(sourceDir, "types.ts"), "utf8");
+
+    assert.match(types, /travelModeKeys: string\\[\\]/);
+    assert.match(view, /const availableTravelModes = \\(\\): string\\[\\] => runtime\\.movementComposition\\.policy\\.travelModeKeys/);
+    assert.match(view, /const createPaceControl =/);
+    assert.match(view, /document\\.createElement\\("select"\\)/);
+    assert.match(view, /travelModeControlMarkup\\(travelModes\\)/);
+    assert.match(view, /distanceInputLabel\\("Effective distance", distanceUnit\\)/);
+    assert.match(view, /runtime\\.context\\.hexCenterDistance\\?\\.unit\\.symbol/);
+});
+
 test("Compact procedure reference does not claim display order is authoritative", () => {
     const workspace = fs.readFileSync(
         path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"),
@@ -825,6 +840,8 @@ test("travel-target map selection follows persisted course across authoritative 
         "utf8");
 
     assert.match(view, /let selectedHexTracksTravelIntent = false/);
+    assert.match(view, /const synchronizeTravelTargetProjection = \\(\\): void =>/);
+    assert.match(view, /synchronizeTravelTargetProjection\\(\\);/);
     assert.match(view, /selectedHexTracksTravelIntent = true/);
     assert.match(view, /if \(selectedHexTracksTravelIntent && runtime\.expedition\.isSpatial && preferences\.direction !== null\)/);
     assert.match(view, /adjacencyEdgeForDirection\(adjacency, preferences\.direction\)\?\.targetCell/);

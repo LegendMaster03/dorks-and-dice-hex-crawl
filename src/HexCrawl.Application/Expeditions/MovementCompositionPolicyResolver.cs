@@ -46,6 +46,7 @@ public sealed record MovementCompositionPolicy(
     double? BaseBudget,
     string? BudgetUnit,
     string? LimitingScope,
+    IReadOnlyList<string> TravelModeKeys,
     MovementTerrainPolicy Terrain,
     string? MechanicKey,
     int? MechanicVersion,
@@ -58,6 +59,7 @@ public sealed record MovementCompositionPolicy(
         null,
         null,
         null,
+        [],
         MovementTerrainPolicy.None,
         null,
         null,
@@ -150,12 +152,20 @@ public static class MovementCompositionPolicyResolver
             return Unsupported(budget, terrain, "The stored journey-progress mechanic does not declare the journey-progress budget model.");
         }
 
+        var travelModeKeys = budget.Parameters.TryGetValue("travelModeKeys", out var rawTravelModeKeys)
+            ? rawTravelModeKeys
+                .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray()
+            : [];
+
         return new MovementCompositionPolicy(
             MovementCompositionPolicySupport.Supported,
             budgetModel,
             baseBudget,
             budgetUnit.Trim(),
             limitingScope,
+            travelModeKeys,
             terrain,
             budget.Mechanic.Key,
             budget.Mechanic.Version,
@@ -231,6 +241,7 @@ public static class MovementCompositionPolicyResolver
             null,
             null,
             null,
+            [],
             terrain,
             selected.Mechanic.Key,
             selected.Mechanic.Version,

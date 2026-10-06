@@ -66,6 +66,39 @@ export async function renderExpedition(
     let selectedHex: HexCoordinate | null = null;
     let selectedHexTracksTravelIntent = false;
     let preferences = loadTravelPreferences(runtime);
+    const availableTravelModes = (): string[] => runtime.movementComposition.policy.travelModeKeys ?? [];
+    const normalizeTravelModePreference = (): void => {
+        const choices = availableTravelModes();
+        if (choices.length > 0 && !choices.includes(preferences.pace)) preferences.pace = choices[0];
+    };
+    const createPaceControl = (name?: string): HTMLInputElement | HTMLSelectElement => {
+        const choices = availableTravelModes();
+        if (choices.length === 0) {
+            const control = document.createElement("input");
+            control.type = "text";
+            control.value = preferences.pace;
+            if (name) control.name = name;
+            control.setAttribute("aria-label", "Pace or travel mode");
+            return control;
+        }
+        const control = document.createElement("select");
+        if (name) control.name = name;
+        for (const choice of choices) {
+            const item = document.createElement("option");
+            item.value = choice;
+            item.textContent = humanize(choice);
+            control.append(item);
+        }
+        control.value = choices.includes(preferences.pace) ? preferences.pace : choices[0];
+        control.setAttribute("aria-label", "Pace or travel mode");
+        return control;
+    };
+    const movementDistanceUnit = (): string | null =>
+        runtime.movementComposition.suggestedExpectedDistance?.unit.symbol
+        ?? runtime.movementComposition.effectiveDistanceUnit?.symbol
+        ?? runtime.context.hexCenterDistance?.unit.symbol
+        ?? null;
+    normalizeTravelModePreference();
     let adjacencyCache: {
         key: string;
         value: ReturnType<typeof currentHexAdjacency>;
@@ -101,6 +134,24 @@ export async function renderExpedition(
         };
     };
 
+    const synchronizeTravelTargetProjection = (): void => {
+        if (!runtime.expedition.isSpatial || preferences.direction === null) {
+            if (selectedHexTracksTravelIntent) {
+                selectedHex = null;
+                selectedHexTracksTravelIntent = false;
+            }
+            return;
+        }
+        // An arbitrary inspected cell remains independent from the intended travel target.
+        if (selectedHex !== null && !selectedHexTracksTravelIntent) return;
+        const adjacency = currentAdjacency();
+        selectedHex = adjacency
+            ? adjacencyEdgeForDirection(adjacency, preferences.direction)?.targetCell ?? null
+            : null;
+        selectedHexTracksTravelIntent = selectedHex !== null;
+    };
+    synchronizeTravelTargetProjection();
+
     const courseLabel = (direction: number | null): string => {
         const adjacency = currentAdjacency();
         if (direction === null || !adjacency) return directionLabel(direction);
@@ -129,12 +180,8 @@ export async function renderExpedition(
     const applyRuntime = (next: ExpeditionDetail): void => {
         runtime = next;
         preferences = mergeRuntimeTravelPreferences(runtime, preferences);
-        if (selectedHexTracksTravelIntent && runtime.expedition.isSpatial && preferences.direction !== null) {
-            const adjacency = currentAdjacency();
-            selectedHex = adjacency
-                ? adjacencyEdgeForDirection(adjacency, preferences.direction)?.targetCell ?? null
-                : null;
-        }
+        normalizeTravelModePreference();
+        synchronizeTravelTargetProjection();
         saveTravelPreferences(runtime.id, preferences);
         publishExpeditionRuntimeChanged(root, runtime);
     };
@@ -559,10 +606,7 @@ export async function renderExpedition(
         const paceEditor = document.createElement("div");
         paceEditor.className = "hc-current-travel-pace-editor";
         paceEditor.hidden = true;
-        const pace = document.createElement("input");
-        pace.type = "text";
-        pace.value = preferences.pace;
-        pace.setAttribute("aria-label", "Pace or travel mode");
+        const pace = createPaceControl();
         const savePace = button("Save pace", () => {
             const value = pace.value.trim();
             if (!value) {
@@ -636,7 +680,7 @@ export async function renderExpedition(
             host.append(textElement("p", "Inspecting a non-adjacent cell does not change travel intent or expedition position.", "hc-muted"));
         }
 
-        if (!sameHex(runtime.expedition.currentHex, selectedHex)) {
+        if (!edge && !sameHex(runtime.expedition.currentHex, selectedHex)) {
             const move = button("Teleport party here", () => openRepositionWorkspace(selectedHex));
             move.className = "hc-secondary-action";
             host.append(move);
@@ -734,7 +778,7 @@ export async function renderExpedition(
                 ? "Encounter check"
                 : "Advanced travel controls";
         openDrawer(title, body => {
-            body.innerHTML = watchWorkspaceMarkup(currentAdjacency());
+            body.innerHTML = watchWorkspaceMarkup(currentAdjacency(), availableTravelModes(), movementDistanceUnit());
             const controller = new ExpeditionWatchController(
                 body,
                 api,
@@ -751,7 +795,7 @@ export async function renderExpedition(
             applyTravelPreferences(body);
             focusWatchWorkspace(body, focus);
             const directionControl = body.querySelector<HTMLSelectElement>('select[name="direction"]');
-            const paceControl = body.querySelector<HTMLInputElement>('input[name="pace"]');
+            const paceControl = body.querySelector<HTMLInputElement | HTMLSelectElement>('[name="pace"]');
             directionControl?.addEventListener("change", captureTravelPreferencesFromControls);
             paceControl?.addEventListener("change", captureTravelPreferencesFromControls);
             return () => {
@@ -924,10 +968,8 @@ export async function renderExpedition(
             }
             if (preferences.direction !== null) course.value = String(preferences.direction);
 
-            const pace = document.createElement("input");
-            pace.value = preferences.pace;
+            const pace = createPaceControl();
             pace.required = true;
-            pace.setAttribute("aria-label", "Pace or travel mode");
 
             const submit = document.createElement("button");
             submit.type = "submit";
@@ -1109,7 +1151,7 @@ export async function renderExpedition(
     const applyTravelPreferences = (host: HTMLElement): void => {
         if (!runtime.expedition.isSpatial) return;
         const direction = host.querySelector<HTMLSelectElement>('select[name="direction"]');
-        const pace = host.querySelector<HTMLInputElement>('input[name="pace"]');
+        const pace = host.querySelector<HTMLInputElement | HTMLSelectElement>('[name="pace"]');
         const active = runtime.expedition.activeWatchNumber !== null;
         if (!active && direction && preferences.direction !== null) direction.value = String(preferences.direction);
         if (!active && pace && preferences.pace) pace.value = preferences.pace;
@@ -1117,7 +1159,7 @@ export async function renderExpedition(
 
     const captureTravelPreferences = (host: HTMLElement): void => {
         const direction = host.querySelector<HTMLSelectElement>('select[name="direction"]');
-        const pace = host.querySelector<HTMLInputElement>('input[name="pace"]');
+        const pace = host.querySelector<HTMLInputElement | HTMLSelectElement>('[name="pace"]');
         if (direction?.value !== undefined && direction.value !== "") {
             const parsed = Number(direction.value);
             const adjacency = currentAdjacency();
@@ -1706,7 +1748,7 @@ function humanize(value: string): string {
         .replace(/\b\w/g, match => match.toUpperCase());
 }
 
-function watchWorkspaceMarkup(adjacency: ReturnType<typeof currentHexAdjacency> | null): string {
+function watchWorkspaceMarkup(adjacency: ReturnType<typeof currentHexAdjacency> | null, travelModes: readonly string[], distanceUnit: string | null): string {
     return `
         <section class="hc-running-sheet hc-focused-watch-workspace">
             <div class="hc-sheet-ledger-heading">
@@ -1718,7 +1760,7 @@ function watchWorkspaceMarkup(adjacency: ReturnType<typeof currentHexAdjacency> 
                 <fieldset data-plan-fields data-focus-group="advanced">
                     <legend>Travel intent</legend>
                     <label>Adjacent cell <select name="direction" required><option value="">Select adjacent cell</option>${directionOptions(adjacency)}</select></label>
-                    <label>Pace / travel mode <input name="pace" value="normal"></label>
+                    <label>Pace / travel mode ${travelModeControlMarkup(travelModes)}</label>
                     <label>Navigation aid/context <input name="navigationAid" value="none"></label>
                     <label data-suppress-nav-row><input name="suppressNav" type="checkbox"> Navigation aid suppresses the check</label>
                     <label data-reset-veer-row><input name="resetVeer" type="checkbox"> Navigation aid resets veer at a boundary</label>
@@ -1748,8 +1790,8 @@ function watchWorkspaceMarkup(adjacency: ReturnType<typeof currentHexAdjacency> 
                 <fieldset data-travel-resolution data-focus-group="advanced movement">
                     <legend>Movement result</legend>
                     <p class="hc-hint">Authoritative party movement is prefilled when available. Enter only movement information the runtime can not derive.</p>
-                    <div data-fixed-distance><label>Effective distance <input name="effectiveDistance" type="number" min="0" step="any"></label></div>
-                    <div data-variable-distance><label>Expected distance <input name="expectedDistance" type="number" min="0" step="any"></label><label>Actual resolved distance <input name="actualDistance" type="number" min="0" step="any"></label></div>
+                    <div data-fixed-distance><label>${distanceInputLabel("Effective distance", distanceUnit)} <input name="effectiveDistance" type="number" min="0" step="any"></label></div>
+                    <div data-variable-distance><label>${distanceInputLabel("Expected distance", distanceUnit)} <input name="expectedDistance" type="number" min="0" step="any"></label><label>${distanceInputLabel("Actual resolved distance", distanceUnit)} <input name="actualDistance" type="number" min="0" step="any"></label></div>
                     <div data-step-distance><label>Resolved hex steps <input name="hexSteps" type="number" min="0" step="1"></label></div>
                     <label>Travel result source <select name="travelSource"></select></label>
                     <label>Travel source note <input name="travelNote" placeholder="optional"></label>
@@ -1787,6 +1829,17 @@ function watchWorkspaceMarkup(adjacency: ReturnType<typeof currentHexAdjacency> 
                 <button type="submit" class="hc-primary-action" data-advance-button>Run watch</button>
             </form>
         </section>`;
+}
+
+function travelModeControlMarkup(travelModes: readonly string[]): string {
+    if (travelModes.length === 0) return '<input name="pace" value="normal">';
+    return `<select name="pace">${travelModes
+        .map(mode => `<option value="${escapeHtml(mode)}">${escapeHtml(humanize(mode))}</option>`)
+        .join("")}</select>`;
+}
+
+function distanceInputLabel(label: string, unit: string | null): string {
+    return unit ? `${escapeHtml(label)} (${escapeHtml(unit)})` : escapeHtml(label);
 }
 
 function directionOptions(adjacency: ReturnType<typeof currentHexAdjacency> | null): string {

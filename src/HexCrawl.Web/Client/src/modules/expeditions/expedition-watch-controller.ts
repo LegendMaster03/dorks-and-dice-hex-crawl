@@ -268,7 +268,7 @@ export class ExpeditionWatchController {
         if (state.activeWatchNumber !== null) {
             direction.value =
                 state.intendedDirection === null ? "" : String(state.intendedDirection);
-            input(this.form, "pace").value = state.activePaceKey ?? "normal";
+            valueControl(this.form, "pace").value = state.activePaceKey ?? "normal";
             input(this.form, "navigationAid").value = state.activeNavigationAidKey ?? "none";
             checkbox(this.form, "suppressNav").checked = state.activeSuppressesNavigationCheck;
             checkbox(this.form, "resetVeer").checked = state.activeResetsVeerAtBoundary;
@@ -743,7 +743,7 @@ export class ExpeditionWatchController {
                 const request: RuntimeAdvanceRequest = {
                     expectedVersion: runtime.version,
                     intendedDirection: integer(select(this.form, "direction")),
-                    paceKey: input(this.form, "pace").value.trim() || "normal",
+                    paceKey: valueControl(this.form, "pace").value.trim() || "normal",
                     navigationAidKey: input(this.form, "navigationAid").value.trim() || "none",
                     suppressesNavigationCheck: checkbox(this.form, "suppressNav").checked,
                     resetsVeerAtBoundary: checkbox(this.form, "resetVeer").checked,
@@ -883,4 +883,10 @@ function formatNumber(value: number): string {
     return Number.isInteger(value)
         ? String(value)
         : value.toFixed(3).replace(/0+$/, "").replace(/\.$/, "");
+}
+
+function valueControl(form: HTMLFormElement, name: string): HTMLInputElement | HTMLSelectElement {
+    const control = form.elements.namedItem(name);
+    if (control instanceof HTMLInputElement || control instanceof HTMLSelectElement) return control;
+    throw new Error(`Expected form control '${name}'.`);
 }
