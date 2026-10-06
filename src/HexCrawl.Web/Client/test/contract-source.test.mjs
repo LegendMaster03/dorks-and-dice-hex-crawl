@@ -172,23 +172,26 @@ test("DM-facing world authoring copy explains empty states and keeps deeper map 
     assert.doesNotMatch(maps, /Semantic locations and features remain independent world truth/);
 });
 
-test("direction controls retain numeric values while the unified workspace exposes six accessible intent actions", () => {
+test("direction controls retain numeric runtime values while current-cell adjacency stays topology-derived", () => {
     const runtime = read("runtime-view.ts");
+    const adjacency = read("modules/expeditions/spatial-adjacency.ts");
     const expedition = read("modules/expeditions/expedition-view.ts");
     const watch = read("modules/expeditions/expedition-watch-controller.ts");
     const assistant = read("modules/assistants/expedition-assistant-view.ts");
-    assert.match(runtime, /"Toward \+q"/);
-    assert.match(runtime, /"Toward -q"/);
-    assert.match(expedition, /for \(let direction = 0; direction < 6; direction \+= 1\)/);
-    assert.match(expedition, /control\.dataset\.direction = String\(direction\)/);
-    assert.match(expedition, /openTravelWorkspace\(direction\)/);
-    assert.match(expedition, /aria-label", "Adjacent hex travel direction"/);
+    assert.match(runtime, /Edge \${direction \+ 1}/);
+    assert.doesNotMatch(runtime, /"North"|"South"|"East"|"West"/);
+    assert.match(adjacency, /createCurrentCellAdjacency/);
+    assert.match(adjacency, /edges: SpatialAdjacencyEdge/);
+    assert.doesNotMatch(expedition, /direction < 6/);
+    assert.match(expedition, /for \(const edge of adjacency\.edges\)/);
+    assert.match(expedition, /control\.dataset\.adjacencyEdge = String\(edge\.directionValue\)/);
+    assert.match(expedition, /aria-label", "Current-cell adjacent travel"/);
     assert.match(assistant, /<option value="">Select intended direction<\/option>/);
     assert.match(assistant, /\$\{directionLabel\(value\)\}<\/option>/);
     assert.match(watch, /state\.intendedDirection === null \? "" : String\(state\.intendedDirection\)/);
     assert.match(watch, /else if \(!direction\.value && state\.intendedDirection !== null\)/);
     assert.match(watch, /direction\.value = String\(state\.intendedDirection\)/);
-    assert.match(watch, /persisted runtime values remain 0–5/);
+    assert.match(watch, /Course labels identify the intended adjacent cell/);
 });
 
 test("non-spatial running-sheet ledger omits spatial-only route and navigation columns", () => {
@@ -224,7 +227,7 @@ test("expedition watch controller owns watch form policy and mutation submission
     assert.match(controller, /api\.advanceExpedition/);
     assert.match(controller, /navigationResolutionDue/);
     assert.match(controller, /encounterCheckDue/);
-    assert.match(controller, /persisted runtime values remain 0–5/);
+    assert.match(controller, /Course labels identify the intended adjacent cell/);
 });
 
 test("focused party workspace exposes the persisted party register through a dedicated controller", () => {

@@ -25,12 +25,12 @@ const rules: CompactRuleDescriptor[] = [
     { moduleKey: "party.activities", group: "Travel flow", label: "Travel activities", description: "Defines how party members or roles take on expedition activities.", order: 20 },
     { moduleKey: "movement.budget", group: "Travel flow", label: "Available movement", description: "Determines how much movement the party has before terrain and route adjustments.", order: 30 },
     { moduleKey: "movement.terrain", group: "Travel flow", label: "Terrain and routes", description: "Adjusts movement for terrain, routes, and weather.", order: 40 },
-    { moduleKey: "movement.resolution", group: "Travel flow", label: "Resolve movement", description: "Defines whether travel advances by distance or whole cells and how actual distance is resolved.", order: 50 },
-    { moduleKey: "movement.hex-progress", group: "Travel flow", label: "Cell progress", description: "Tracks partial progress and direction changes when movement crosses map cells.", order: 60 },
-    { moduleKey: "navigation.check", group: "Travel flow", label: "Navigation checks", description: "Determines whether route checks are required and whether an incorrect course persists.", order: 70 },
-    { moduleKey: "navigation.outcome", group: "Travel flow", label: "Getting lost and recovery", description: "Defines what happens when navigation fails and how the party recognizes or corrects its course.", order: 80 },
-    { moduleKey: "encounters.cadence", group: "Travel flow", label: "Encounter checks", description: "Sets the ordinary cadence for encounter checks.", order: 90 },
-    { moduleKey: "encounters.schedule", group: "Travel flow", label: "Encounter schedule", description: "Adds contextual or scheduled encounter checks beyond a simple cadence.", order: 95 },
+    { moduleKey: "movement.resolution", group: "Travel flow", label: "Resolve movement", description: "Defines whether travel advances by distance or whole cells and how actual distance is resolved.", order: 80 },
+    { moduleKey: "movement.hex-progress", group: "Travel flow", label: "Cell progress", description: "Tracks partial progress and direction changes when movement crosses map cells.", order: 90 },
+    { moduleKey: "navigation.check", group: "Travel flow", label: "Navigation checks", description: "Determines whether route checks are required and whether an incorrect course persists.", order: 50 },
+    { moduleKey: "navigation.outcome", group: "Travel flow", label: "Getting lost and recovery", description: "Defines what happens when navigation fails and how the party recognizes or corrects its course.", order: 60 },
+    { moduleKey: "encounters.cadence", group: "Travel flow", label: "Encounter checks", description: "Sets the ordinary cadence for encounter checks.", order: 70 },
+    { moduleKey: "encounters.schedule", group: "Travel flow", label: "Encounter schedule", description: "Adds contextual or scheduled encounter checks beyond a simple cadence.", order: 75 },
     { moduleKey: "survival.resources", group: "Survival & resources", label: "Food, water, and supplies", description: "Tracks resource consumption during expedition play.", order: 100 },
     { moduleKey: "exploration.foraging", group: "Survival & resources", label: "Foraging", description: "Defines how the party searches for expedition resources and what it costs.", order: 110 },
     { moduleKey: "survival.camping", group: "Survival & resources", label: "Camping", description: "Defines camp procedure, time cost, and watch behavior.", order: 120 },
@@ -374,12 +374,20 @@ function choices(...values: string[]): Array<{ value: string; label: string }> {
 }
 
 function friendlyToken(value: string): string {
-    const spaced = value
+    const trimmed = value.trim();
+    if (numericLiteral(trimmed)) return trimmed;
+
+    const spaced = trimmed
         .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
         .replace(/[._-]+/g, " ")
         .trim();
     if (!spaced) return "Not used";
     return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+function numericLiteral(value: string): boolean {
+    return /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(value)
+        && Number.isFinite(Number(value));
 }
 
 function formatNumber(value: number): string {

@@ -140,6 +140,18 @@ Server-generated helper results are persisted with a generated-resolution ID, au
 
 External tools can supply resolved inputs without becoming authoritative owners of expedition state. Participant activity state and movement-composition state are native Hex Crawl expedition state and do not require Rules Core or Character Sheet.
 
+## Phase 15 spatial interaction
+
+World-bound spatial play uses one map-centered expedition workspace. A floating current-cell adjacency navigator is rendered from presentation geometry for the party's current cell and its traversable adjacent edges. The current production adapter is regular-hex and translates selected adjacent cells back to the runtime's existing direction representation; the presentation contract itself does not require exactly six edges and does not implement alternate topology support.
+
+The map and navigator share one semantic selection. Selecting an adjacent map cell selects the corresponding intended edge, and selecting an edge previews the corresponding adjacent cell. Selection is intent only: it does not assign the current hex, world position, progress, elapsed time, navigation result, encounter state, or any other durable runtime value. The explicit Continue/Run action remains the authoritative mutation boundary.
+
+Course and pace are reusable operating choices. The UI reconciles persisted active-watch course/pace into browser intent state and avoids asking for a deterministic movement value when the authoritative movement-composition projection already supplies it. Navigation failure preserves intended course separately from actual resolved course.
+
+Current-action routing presents the active blocker directly. Encounter interruption, navigation resolution, lost-boundary decisions, forced-travel/resource consequences, journey resolution, ordinary travel, and nonspatial interval work do not all route through one generic travel form. The existing runtime/application controllers remain authoritative underneath those focused presentations.
+
+The navigator uses screen-relative edge descriptions and adjacent-cell identity rather than assuming map north. Compass terminology must only be introduced if authoritative map-orientation metadata supports it.
+
 ## UI projections
 
 The expedition UI derives its display from authoritative persisted state. Depending on context and executable policy it may show:

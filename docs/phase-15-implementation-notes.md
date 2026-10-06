@@ -13,6 +13,9 @@ Phase 15 uses one canonical `CampaignProcedure` across all authoring presentatio
 - Custom procedures may have no preset origin. Structural composition adds only explicitly selected generic procedure modules; omitted areas are absent rather than simulated with disabled mechanics.
 - Compact focused-area editing remains open while the server recomposes the draft, so changing one behavior or parameter does not force repeated navigation back into the same area.
 - Structured-save, canonical-save, and canonical-load failures remain visible after pending state clears. Canonical-load failure uses an explicit retry instead of an automatic retry loop.
+- Compact dependency repair stays tabletop-facing. When the application can prove one safe prerequisite closure, Compact names the required companion rules and offers a compound add action instead of requiring module-graph knowledge. Ambiguous dependency problems remain blocked without guessing.
+- Semantic value formatting recognizes numeric literals before identifier humanization, so decimal parameters and mappings such as `rough=0.5;severe=0.25` remain numeric.
+- Compact rule ordering is presentation organization only. The UI no longer claims the catalog display order is an authoritative execution sequence; actual triggers and dependencies remain authoritative.
 
 ## Unified expedition workspace
 
@@ -33,10 +36,12 @@ Nonspatial state is not coerced into spatial state. A real nonspatial interval c
 
 Routine travel expresses **intent** and always resolves through the existing procedure/runtime authority.
 
-- The workspace exposes an accessible six-direction control for adjacent travel intent.
-- Selecting an adjacent map hex exposes a corresponding travel-intent action. Selecting a hex by itself does not mutate expedition position.
+- The map carries a floating current-cell adjacency navigator in its upper-left control layer. Presentation consumes a generic current-cell polygon plus ordered traversable edges/adjacent cells; the current regular-hex adapter supplies six edges without making six-edge geometry part of the presentation contract.
+- Edge controls use geometry-derived outward arrows and screen-relative/adjacent-cell descriptions. Compass terminology is not inferred merely from hex orientation; it should only be introduced if authoritative map-orientation metadata eventually establishes it.
+- Map selection and navigator selection share the same semantic adjacent-cell state. Either input can select intended travel course and preview the neighboring cell without mutating expedition position.
+- Travel remains two-step by default: selecting an edge/cell changes reusable intent, while the explicit current action performs authoritative procedure advancement.
 - Course and pace are remembered as reusable browser preferences for the expedition. Active runtime course/pace remain server-authoritative and are reconciled back into those preferences.
-- Direction values remain the runtime's existing numeric 0–5 axial directions; presentation labels do not introduce a second direction model.
+- Direction values remain the runtime's existing numeric 0–5 representation underneath the regular-hex adapter; Compact interaction identifies the selected edge/adjacent cell instead of exposing axial steps as its primary model.
 - Fixed continuous movement that the authoritative movement-composition projection resolves deterministically is consumed directly. `Resolved` and `ReferenceFallback` movement suggestions can supply the routine movement value without making the DM re-enter distance or provenance.
 - Variable, step-based, unavailable, unsupported, adjudication-required, or otherwise unresolved movement is still requested explicitly rather than guessed in the browser.
 - The DM can deliberately override derived movement. Editing the derived value records DM-override provenance instead of silently replacing procedure-default provenance.
@@ -74,6 +79,7 @@ Phase 15 presentation does not add named-system runtime dispatch.
 - Materialized `CampaignProcedure` state remains authoritative.
 - Browser presentation consumes server/application projections for procedure, movement, environment, survival, journey, and consequence state rather than recreating those calculations solely for presentation.
 - Directional actions express intended travel; they do not bypass runtime navigation, progress, encounter, terrain, forced-travel, boundary, or consequence mechanics.
+- Current-action routing distinguishes encounter, navigation, boundary, forced-travel/resource consequence, journey, travel, and nonspatial-watch work. Navigation uses a focused navigation surface rather than routing through the whole travel/watch presentation; blocking encounter and survival/consequence state disables routine directional advancement.
 - Existing provider boundaries remain optional and capability-oriented.
 
 ## Validation boundary

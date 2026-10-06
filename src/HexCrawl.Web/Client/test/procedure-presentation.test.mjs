@@ -163,3 +163,22 @@ test("Compact terminology presents journeys and automation as tabletop concepts"
     assert.equal(automation?.label, "Automatic resolution");
     assert.match(automation?.description ?? "", /generate supported travel, navigation, and encounter results/i);
 });
+
+
+test("Compact travel catalog order is presentation-only rather than claimed execution authority", () => {
+    const travel = compactRuleCatalog()
+        .filter(rule => rule.group === "Travel flow")
+        .sort((left, right) => left.order - right.order);
+
+    assert.ok(travel.length > 0);
+    assert.equal(new Set(travel.map(rule => rule.order)).size, travel.length);
+});
+
+
+test("semantic value formatting preserves decimal numbers and decimal mappings", () => {
+    assert.equal(friendlyStoredValue("distanceFactor", "0.5"), "0.5");
+    assert.equal(
+        friendlyStoredValue("terrainAdjustments", "rough=0.5;severe=0.25"),
+        "Rough: 0.5, Severe: 0.25");
+    assert.equal(friendlyStoredValue("baseBudget", "1"), "1");
+});

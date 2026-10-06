@@ -254,7 +254,7 @@ export class ExpeditionWatchController {
             ? "Changing course can consume intra-hex progress under this procedure. The runtime applies the configured cost."
             : "Direction changes do not consume additional progress under this procedure.";
         required<HTMLElement>(this.form, "[data-direction-hint]").textContent =
-            `${directionHelp} Direction labels show the axial grid step; persisted runtime values remain 0–5.`;
+            `${directionHelp} Course labels identify the intended adjacent cell; the runtime remains authoritative for resolved movement.`;
     }
 
     public dispose(): void {

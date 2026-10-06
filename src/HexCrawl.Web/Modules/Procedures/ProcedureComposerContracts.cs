@@ -152,6 +152,13 @@ public sealed record ProcedureDependencyReportContract(
         new(report.HasErrors, report.Issues.Select(ProcedureDependencyIssueContract.From).ToArray());
 }
 
+public sealed record ProcedureDependencyFixContract(
+    IReadOnlyList<string> ModuleKeys)
+{
+    public static ProcedureDependencyFixContract From(ProcedureDependencyFixSuggestion value) =>
+        new(value.ModuleKeys.ToArray());
+}
+
 public sealed record ProcedureOverrideContract(
     string OverrideId,
     string ModuleKey,
@@ -453,6 +460,7 @@ public sealed record ProcedureComposerContract(
     ProcedureOriginContract? Origin,
     IReadOnlyList<ProcedureModuleComposerContract> Modules,
     ProcedureDependencyReportContract Dependencies,
+    IReadOnlyList<ProcedureDependencyFixContract> DependencyFixes,
     IReadOnlyList<ProcedureOverrideContract> Overrides)
 {
     public static ProcedureComposerContract From(ProcedureComposerDraft draft)
@@ -481,6 +489,9 @@ public sealed record ProcedureComposerContract(
                 .Select(module => ProcedureModuleComposerContract.From(module, draft.Procedure, draft.Dependencies))
                 .ToArray(),
             ProcedureDependencyReportContract.From(draft.Dependencies),
+            (draft.DependencyFixes ?? [])
+                .Select(ProcedureDependencyFixContract.From)
+                .ToArray(),
             draft.Procedure.Overrides.Select(ProcedureOverrideContract.From).ToArray());
     }
 }

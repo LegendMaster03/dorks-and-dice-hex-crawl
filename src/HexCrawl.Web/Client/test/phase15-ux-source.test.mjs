@@ -195,7 +195,9 @@ test("structured procedure save honors validation and dependency blockers", () =
 
     assert.match(workspace, /hasBlockingStructuredIssues/);
     assert.match(workspace, /draft\?\.modules\.some\(saveBlocked\)/);
-    assert.match(workspace, /Fix the procedure validation or dependency issues shown below before saving/);
+    assert.match(workspace, /need \${required\.join\(", "\)} before this procedure can be saved/);
+    assert.match(workspace, /Add required companion rules/);
+    assert.doesNotMatch(workspace, /Fix dependency issues/);
 });
 
 test("Advanced always renders the pinned mechanic without polluting catalog alternatives", () => {
@@ -305,8 +307,9 @@ test("routine spatial travel reuses intent and suppresses fixed movement inputs 
         path.join(sourceDir, "modules/expeditions/expedition-party-movement.ts"),
         "utf8");
 
-    assert.match(view, /Adjacent hex travel direction/);
-    assert.match(view, /adjacentDirection/);
+    assert.match(view, /hc-adjacency-navigator/);
+    assert.match(view, /currentHexAdjacency/);
+    assert.match(view, /adjacencyEdgeForCell/);
     assert.match(view, /hex-crawl\.expedition\.\$\{runtime\.id\}\.travel-intent/);
     assert.match(view, /Reusable course and pace stay filled until changed/);
     assert.match(view, /movementComposition\.suggestedExpectedDistance/);
@@ -372,9 +375,10 @@ test("Phase 15 map selection is contextual and never directly mutates expedition
         "utf8");
     const map = fs.readFileSync(path.join(sourceDir, "map-surface.ts"), "utf8");
 
-    assert.match(view, /Selecting a hex does not mutate expedition state/);
-    assert.match(view, /Travel \$\{directionLabel\(direction\)\}/);
+    assert.match(view, /Selecting an adjacent cell expresses travel intent only; it does not move the party/);
     assert.match(view, /map\.setHexSelectionHandler/);
+    assert.match(view, /preferences\.direction = edge\.directionValue/);
+    assert.match(view, /syncTravelIntentControls\(\)/);
     assert.match(map, /setHexSelectionHandler/);
     assert.match(map, /this\.hexSelectionHandler\?\.\(selected\)/);
     assert.doesNotMatch(view, /setHexSelectionHandler[\s\S]{0,800}advanceExpedition/);
@@ -422,4 +426,195 @@ test("Phase 15 focused editing uses accessible drawers and keeps secondary tools
     assert.match(workspace, /returnFocus\?\.isConnected/);
     assert.match(styles, /hc-focus-workspace/);
     assert.match(styles, /@media \(max-width: 760px\)/);
+});
+test("Phase 15 spatial travel uses semantic current-cell adjacency and focused navigation", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+    const adjacency = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/spatial-adjacency.ts"),
+        "utf8");
+    const model = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-workspace-model.ts"),
+        "utf8");
+    const obsolete = path.join(sourceDir, "modules/expeditions/phase15-expedition-workspace.ts");
+
+    assert.match(adjacency, /createCurrentCellAdjacency/);
+    assert.match(adjacency, /CurrentCellAdjacency/);
+    assert.match(adjacency, /currentHexAdjacency/);
+    assert.doesNotMatch(adjacency, /edges\.length === 6/);
+    assert.match(view, /aria-label", "Current-cell adjacent travel"/);
+    assert.match(view, /aria-pressed/);
+    assert.match(view, /current actual resolved course/);
+    assert.match(view, /recordNavigationAssistant/);
+    assert.match(view, /openNavigationWorkspace/);
+    assert.match(model, /navigationResolutionDue/);
+    assert.match(model, /kind: "boundary"/);
+    assert.match(model, /kind: "survival"/);
+    assert.equal(fs.existsSync(obsolete), false);
+    assert.doesNotMatch(view, /getAttribute\("aria-label"\)/);
+});
+
+
+test("Compact authoring offers generic one-click dependency repair", () => {
+    const workspace = fs.readFileSync(
+        path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"),
+        "utf8");
+    const service = fs.readFileSync(
+        path.join(repositoryRoot, "src/HexCrawl.Application/Expeditions/ProcedureComposerService.cs"),
+        "utf8");
+
+    assert.match(workspace, /draft\.dependencyFixes\[0\]/);
+    assert.match(workspace, /Add required companion rules/);
+    assert.match(workspace, /repairLabel = required\.length <= 2/);
+    assert.doesNotMatch(workspace, /Fix dependency issues/);
+    assert.match(workspace, /fix\.moduleKeys\.map\(moduleKey => \[moduleKey, true\]/);
+    assert.match(service, /SuggestDependencyFixes/);
+    assert.match(service, /candidates\.Length == 1/);
+    assert.match(service, /CurrentReport\(\)\.HasErrors/);
+    assert.doesNotMatch(service, /PresetKey.*dependency/i);
+});
+
+
+test("current-cell navigator stays orientation-neutral unless authoritative compass metadata exists", () => {
+    const adjacency = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/spatial-adjacency.ts"),
+        "utf8");
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+
+    assert.match(adjacency, /screenRelativeEdgeLabel/);
+    assert.match(adjacency, /outwardArrow/);
+    assert.match(adjacency, /rotationDegrees/);
+    assert.doesNotMatch(adjacency, /Northeast|Northwest|Southeast|Southwest/);
+    assert.match(view, /Set intended adjacent cell via/);
+    assert.match(view, /edgeCourseLabel/);
+    assert.doesNotMatch(view, /data-travel-primary/);
+});
+
+
+test("Compact procedure reference does not claim display order is authoritative", () => {
+    const workspace = fs.readFileSync(
+        path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"),
+        "utf8");
+
+    assert.match(workspace, /grouped for quick reference/);
+    assert.match(workspace, /configured trigger or dependency/);
+    assert.doesNotMatch(workspace, /Run these rules in watch order/);
+});
+
+
+test("travel-target map selection follows persisted course across authoritative runtime movement", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+
+    assert.match(view, /let selectedHexTracksTravelIntent = false/);
+    assert.match(view, /selectedHexTracksTravelIntent = true/);
+    assert.match(view, /if \(selectedHexTracksTravelIntent && runtime\.expedition\.isSpatial && preferences\.direction !== null\)/);
+    assert.match(view, /adjacencyEdgeForDirection\(adjacency, preferences\.direction\)\?\.targetCell/);
+    assert.match(view, /selectedHexTracksTravelIntent = false;\s*if \(hex\)/);
+});
+
+
+test("navigation summary can not record an out-of-sequence focused resolution", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+
+    assert.match(view, /const navigationDue = navigationResolutionDue\(runtime, false, false\)/);
+    assert.match(view, /navigationDue \? "Navigation required" : "Navigation status"/);
+    assert.match(view, /if \(!navigationDue\) \{/);
+    assert.match(view, /No navigation resolution is due for the current watch state/);
+    const guard = view.indexOf("if (!navigationDue)");
+    const form = view.indexOf('const form = document.createElement("form")', guard);
+    assert.ok(guard >= 0 && form > guard);
+});
+
+
+test("only lost recognition routes through explicit boundary-decision controls", () => {
+    const model = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-workspace-model.ts"),
+        "utf8");
+    const controller = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-watch-controller.ts"),
+        "utf8");
+
+    assert.match(model, /pauseReason === "LostRecognitionRequired"[\s\S]*kind: "boundary"/);
+    assert.match(model, /pauseReason === "BacktrackBoundaryReached"[\s\S]*kind: "travel"/);
+    assert.match(controller, /pauseReason !== "LostRecognitionRequired"/);
+    assert.match(controller, /if \(runtime\.pauseReason === "LostRecognitionRequired"\)/);
+});
+
+
+test("Compact spatial operation does not require axial coordinates", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+    const model = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-workspace-model.ts"),
+        "utf8");
+
+    assert.match(model, /Current cell ·/);
+    assert.doesNotMatch(model, /Hex \$\{state\.currentHex\.q\}/);
+    assert.match(view, /Selected map cell/);
+    assert.doesNotMatch(view, /Selected cell \$\{selectedHex\.q\}/);
+    assert.doesNotMatch(view, /return `Hex \$\{runtime\.expedition\.currentHex\.q\}/);
+});
+
+
+test("Compact travel reference does not imply sequence through numbered markup", () => {
+    const workspace = fs.readFileSync(
+        path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"),
+        "utf8");
+    const styles = fs.readFileSync(path.join(sourceDir, "phase15-styles.ts"), "utf8");
+
+    assert.match(workspace, /const list = document\.createElement\("div"\)/);
+    assert.match(workspace, /compactRuleCard\(module, false\)/);
+    assert.doesNotMatch(styles, /hc-procedure-step-list > li::marker/);
+});
+
+
+test("focused navigation retains access to the verified procedure-helper path", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+
+    const navigation = view.slice(
+        view.indexOf("const openNavigationWorkspace"),
+        view.indexOf("const applyTravelPreferences"));
+    assert.match(navigation, /More travel details/);
+    assert.match(navigation, /openTravelWorkspace\("travel"\)/);
+    assert.doesNotMatch(navigation, /resolutionSource:\s*"AutomaticRoll"/);
+});
+
+
+test("focused navigation does not silently choose the first edge", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+
+    const navigation = view.slice(
+        view.indexOf("const openNavigationWorkspace"),
+        view.indexOf("const applyTravelPreferences"));
+    assert.match(navigation, /unselectedCourse\.value = ""/);
+    assert.match(navigation, /Select intended adjacent cell/);
+    assert.match(navigation, /if \(course\.value === ""\)/);
+});
+
+
+test("secondary travel course changes synchronize navigator and map target", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+
+    const capture = view.slice(
+        view.indexOf("const captureTravelPreferences"),
+        view.indexOf("const openPartyWorkspace"));
+    assert.match(capture, /adjacencyEdgeForDirection\(adjacency, parsed\)/);
+    assert.match(capture, /selectedHex = edge\.targetCell/);
+    assert.match(capture, /selectedHexTracksTravelIntent = true/);
+    assert.match(capture, /map\.renderer\.selectedHex = edge\.targetCell/);
+    assert.match(capture, /syncTravelIntentControls\(\)/);
 });
