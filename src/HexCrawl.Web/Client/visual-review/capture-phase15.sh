@@ -98,8 +98,11 @@ if metrics["state"] == "no-course":
         raise SystemExit(f'no-course fixture does not identify the unresolved course: {metrics}')
 if metrics["state"] in {"selected-edge", "partial-progress", "map-selected", "rail-realistic"} and metrics["selectedEdges"] != 1:
     raise SystemExit(f'expected exactly one selected edge: {metrics}')
-if metrics["state"] == "map-selected" and not metrics["mapContextVisible"]:
-    raise SystemExit(f'map selection did not expose contextual detail: {metrics}')
+if metrics["state"] == "map-selected":
+    if not metrics["mapContextVisible"]:
+        raise SystemExit(f'map selection did not expose contextual detail: {metrics}')
+    if metrics["primaryAction"] != "Continue travel":
+        raise SystemExit(f'map selection did not update the shared travel action: {metrics}')
 if metrics["state"] == "selected-edge" and not metrics["focusedEdge"]:
     raise SystemExit(f'selected edge did not retain visible keyboard focus: {metrics}')
 if metrics["state"] in {"navigation-pending", "movement-input-pending", "encounter-pending", "forced-travel-pending", "more-options-open"} and metrics["drawerCount"] != 1:

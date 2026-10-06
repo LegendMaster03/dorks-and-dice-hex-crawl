@@ -276,33 +276,42 @@ export async function renderExpedition(
         bindMapIfPresent();
     };
 
+    const currentActionCopy = (
+        action: ReturnType<typeof expeditionWorkspacePresentation>["action"]): { label: string; detail: string } => {
+        const routineSpatialTravel = runtime.expedition.isSpatial
+            && action.kind === "travel"
+            && !action.urgent;
+        const courseRequired = routineSpatialTravel && preferences.direction === null;
+        return {
+            label: courseRequired
+                ? "Choose course"
+                : routineSpatialTravel
+                    ? "Continue travel"
+                    : action.label,
+            detail: courseRequired
+                ? "Choose an adjacent edge or map cell. Your pace stays reusable; selecting a course does not move the party."
+                : routineSpatialTravel
+                    ? "Use the selected course and pace. Only unresolved procedure inputs will be requested."
+                    : action.detail
+        };
+    };
+
     const renderCurrentAction = (action: ReturnType<typeof expeditionWorkspacePresentation>["action"]): HTMLElement => {
         const section = document.createElement("section");
         section.className = "hc-current-action";
         const header = document.createElement("header");
         header.append(textElement("h2", "Next action"), badge(action.urgent ? "Needs resolution" : "Ready", action.urgent ? "warning" : "good"));
-        const routineSpatialTravel = runtime.expedition.isSpatial
-            && action.kind === "travel"
-            && !action.urgent;
-        const courseRequired = routineSpatialTravel && preferences.direction === null;
-        const actionLabel = courseRequired
-            ? "Choose course"
-            : routineSpatialTravel
-                ? "Continue travel"
-                : action.label;
-        const actionDetail = courseRequired
-            ? "Choose an adjacent edge or map cell. Your pace stays reusable; selecting a course does not move the party."
-            : routineSpatialTravel
-                ? "Use the selected course and pace. Only unresolved procedure inputs will be requested."
-                : action.detail;
-        section.append(
-            header,
-            textElement("p", actionLabel, "hc-current-action-primary"),
-            textElement("p", actionDetail, "hc-current-action-detail"));
+        const copy = currentActionCopy(action);
+        const actionLabel = textElement("p", copy.label, "hc-current-action-primary");
+        actionLabel.dataset.currentActionLabel = "";
+        const actionDetail = textElement("p", copy.detail, "hc-current-action-detail");
+        actionDetail.dataset.currentActionDetail = "";
+        section.append(header, actionLabel, actionDetail);
         const row = document.createElement("div");
         row.className = "hc-button-row";
-        const primary = button(actionLabel, () => activateAction(action.kind));
+        const primary = button(copy.label, () => activateAction(action.kind));
         primary.className = "hc-primary-action";
+        primary.dataset.currentActionButton = "";
         row.append(primary);
         section.append(row);
         return section;
@@ -425,6 +434,15 @@ export async function renderExpedition(
         if (actual) actual.textContent = actualCourseLabel(runtime, adjacency);
         const progress = root.querySelector<HTMLElement>("[data-current-travel-progress]");
         if (progress) progress.textContent = travelProgressDetail(runtime);
+
+        const action = expeditionWorkspacePresentation(runtime, journey, survival).action;
+        const copy = currentActionCopy(action);
+        const nextLabel = root.querySelector<HTMLElement>("[data-current-action-label]");
+        if (nextLabel) nextLabel.textContent = copy.label;
+        const nextDetail = root.querySelector<HTMLElement>("[data-current-action-detail]");
+        if (nextDetail) nextDetail.textContent = copy.detail;
+        const nextButton = root.querySelector<HTMLButtonElement>("[data-current-action-button]");
+        if (nextButton) nextButton.textContent = copy.label;
     };
 
     const renderAdjacencyNavigator = (): HTMLElement => {

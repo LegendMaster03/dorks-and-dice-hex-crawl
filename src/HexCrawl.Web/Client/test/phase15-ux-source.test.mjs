@@ -678,6 +678,18 @@ test("current travel stays beside the map while selection detail is contextual o
     assert.match(styles, /\.hc-rail-action/);
 });
 
+test("course selection immediately updates the Next action copy without moving the party", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+
+    assert.match(view, /const currentActionCopy =/);
+    assert.match(view, /data-current-action-label/);
+    assert.match(view, /data-current-action-detail/);
+    assert.match(view, /data-current-action-button/);
+    assert.match(view, /const copy = currentActionCopy\(action\);[\s\S]*nextLabel\.textContent = copy\.label/);
+});
+
 test("no-course travel identifies course selection as the immediate task", () => {
     const view = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
