@@ -26,16 +26,16 @@ import { publishExpeditionRuntimeChanged } from "./expedition-runtime-events";
 import { ExpeditionSurvivalResourcesPanel } from "./survival-resources-panel";
 import { ExpeditionWatchController } from "./expedition-watch-controller";
 import { authoritativeFixedWatchDistance } from "./expedition-party-movement";
+import {
+    defaultTravelPreferences,
+    mergeRuntimeTravelPreferences,
+    type TravelPreferences
+} from "./expedition-travel-intent";
 import { canUseFocusedNonSpatialWatch, focusedIntervalHours } from "./focused-interval-policy";
 import { navigationResolutionDue, spatialTravelContinuationTarget } from "./expedition-workflow";
 import { expeditionWorkspacePresentation } from "./expedition-workspace-model";
 
 export type ExpeditionViewMode = "map" | "tracker";
-
-type TravelPreferences = {
-    direction: number | null;
-    pace: string;
-};
 
 export async function renderExpedition(
     root: HTMLElement,
@@ -110,7 +110,7 @@ export async function renderExpedition(
 
     const applyRuntime = (next: ExpeditionDetail): void => {
         runtime = next;
-        preferences = mergeRuntimePreferences(runtime, preferences);
+        preferences = mergeRuntimeTravelPreferences(runtime, preferences);
         if (selectedHexTracksTravelIntent && runtime.expedition.isSpatial && preferences.direction !== null) {
             const adjacency = currentAdjacency();
             selectedHex = adjacency
@@ -272,7 +272,7 @@ export async function renderExpedition(
             textElement("p", actionDetail, "hc-current-action-detail"));
         const row = document.createElement("div");
         row.className = "hc-button-row";
-        const primary = button(primaryActionLabel(action.kind), () => activateAction(action.kind));
+        const primary = button(actionLabel, () => activateAction(action.kind));
         primary.className = "hc-primary-action";
         row.append(primary);
         section.append(row);
@@ -641,19 +641,18 @@ export async function renderExpedition(
         } else {
             map = new MapSurface(host, () => world);
             map.setHexSelectionHandler(hex => {
-                selectedHex = hex;
-                selectedHexTracksTravelIntent = false;
                 if (hex) {
                     const adjacency = currentAdjacency();
                     const edge = adjacency
                         ? adjacencyEdgeForCell(adjacency, hex, sameHex)
                         : null;
                     if (edge) {
-                        preferences.direction = edge.directionValue;
-                        selectedHexTracksTravelIntent = true;
-                        saveTravelPreferences(runtime.id, preferences);
+                        selectTravelIntent(edge.directionValue, edge.targetCell);
+                        return;
                     }
                 }
+                selectedHex = hex;
+                selectedHexTracksTravelIntent = false;
                 syncTravelIntentControls();
                 renderMapContext();
             });
@@ -715,7 +714,11 @@ export async function renderExpedition(
             const paceControl = body.querySelector<HTMLInputElement>('input[name="pace"]');
             directionControl?.addEventListener("change", captureTravelPreferencesFromControls);
             paceControl?.addEventListener("change", captureTravelPreferencesFromControls);
-            return () => controller.dispose();
+            return () => {
+                directionControl?.removeEventListener("change", captureTravelPreferencesFromControls);
+                paceControl?.removeEventListener("change", captureTravelPreferencesFromControls);
+                controller.dispose();
+            };
 
             function captureTravelPreferencesFromControls(): void {
                 captureTravelPreferences(body);
@@ -1268,19 +1271,6 @@ export async function renderExpedition(
     };
 }
 
-function primaryActionLabel(kind: ReturnType<typeof expeditionWorkspacePresentation>["action"]["kind"]): string {
-    switch (kind) {
-        case "encounter": return "Resolve encounter";
-        case "navigation": return "Resolve navigation";
-        case "boundary": return "Resolve boundary";
-        case "survival": return "Resolve consequence";
-        case "journey": return "Open journey";
-        case "travel": return "Continue travel";
-        case "watch": return "Run watch";
-        default: return "View procedure";
-    }
-}
-
 function actionCard(title: string, detail: string, action: () => void): HTMLElement {
     const card = document.createElement("article");
     card.className = "hc-context-card";
@@ -1451,10 +1441,7 @@ function edgeCourseLabel(
 }
 
 function loadTravelPreferences(runtime: ExpeditionDetail): TravelPreferences {
-    const fallback: TravelPreferences = {
-        direction: runtime.expedition.isSpatial ? runtime.expedition.intendedDirection : null,
-        pace: runtime.expedition.isSpatial ? runtime.expedition.activePaceKey ?? "normal" : "normal"
-    };
+    const fallback = defaultTravelPreferences(runtime);
     try {
         const raw = localStorage.getItem(`hex-crawl.expedition.${runtime.id}.travel-intent`);
         if (!raw) return fallback;
@@ -1468,14 +1455,6 @@ function loadTravelPreferences(runtime: ExpeditionDetail): TravelPreferences {
     } catch {
         return fallback;
     }
-}
-
-function mergeRuntimePreferences(runtime: ExpeditionDetail, current: TravelPreferences): TravelPreferences {
-    if (!runtime.expedition.isSpatial) return current;
-    return {
-        direction: runtime.expedition.intendedDirection ?? current.direction,
-        pace: runtime.expedition.activePaceKey ?? current.pace
-    };
 }
 
 function saveTravelPreferences(expeditionId: string, preferences: TravelPreferences): void {

@@ -163,7 +163,7 @@ export function ensurePhase15Styles(): void {
         .hc-adjacency-edge-mark { stroke:color-mix(in srgb,var(--hc-text-strong) 70%,transparent); stroke-width:8; stroke-linecap:round; vector-effect:non-scaling-stroke; }
         .hc-adjacency-edge-mark.is-selected { stroke:var(--hc-focus); stroke-width:13; }
         .hc-adjacency-caption { position:absolute; inset:50% auto auto 50%; transform:translate(-50%,-50%); width:4.4rem; text-align:center; font-size:.7rem; font-weight:700; line-height:1.1; color:var(--hc-text-strong); pointer-events:none; }
-        .hc-adjacency-edge { position:absolute; pointer-events:auto; left:var(--hc-edge-x); top:var(--hc-edge-y); transform:translate(-50%,-50%); min-width:2.55rem; min-height:2.55rem; padding:.2rem .4rem; border:3px solid var(--hc-text-strong); border-radius:999px; background:var(--hc-surface); color:var(--hc-text-strong); font-weight:800; line-height:1; box-shadow:0 .12rem .35rem rgba(0,0,0,.22); }
+        .hc-adjacency-edge { position:absolute; pointer-events:auto; left:var(--hc-edge-x); top:var(--hc-edge-y); transform:translate(-50%,-50%); min-width:2.75rem; min-height:2.75rem; padding:.2rem .4rem; border:3px solid var(--hc-text-strong); border-radius:999px; background:var(--hc-surface); color:var(--hc-text-strong); font-weight:800; line-height:1; box-shadow:0 .12rem .35rem rgba(0,0,0,.22); }
         .hc-adjacency-edge:hover:not(:disabled) { transform:translate(-50%,-50%) scale(1.08); border-color:var(--hc-focus); background:var(--hc-surface-elevated); }
         .hc-adjacency-edge:focus-visible { transform:translate(-50%,-50%) scale(1.08); outline:4px solid var(--hc-focus); outline-offset:3px; z-index:2; }
         #tool-root.hex-crawl-app button.hc-adjacency-edge:active:not(:disabled) { transform:translate(calc(-50% + var(--hc-edge-feedback-x)),calc(-50% + var(--hc-edge-feedback-y))) scale(1.04); }
@@ -219,7 +219,7 @@ export function ensurePhase15Styles(): void {
             .hc-phase15-expedition .hc-map-host { height:clamp(20rem,48vh,30rem); min-height:0; }
             .hc-adjacency-navigator { width:7.5rem; top:.55rem; left:.55rem; }
             .hc-adjacency-caption { width:3.4rem; font-size:.62rem; }
-            .hc-adjacency-edge { min-width:2.25rem; min-height:2.25rem; font-size:.78rem; }
+            .hc-adjacency-edge { min-width:2.75rem; min-height:2.75rem; font-size:.78rem; }
             .hc-current-travel-facts { grid-template-columns:auto minmax(0,1fr); }
             .hc-current-travel-pace-editor { grid-template-columns:1fr; }
             .hc-map-context-overlay { max-height:48%; right:.5rem; bottom:.5rem; width:calc(100% - 1rem); }

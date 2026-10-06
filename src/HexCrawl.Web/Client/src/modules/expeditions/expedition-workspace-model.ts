@@ -160,8 +160,8 @@ export function expeditionWorkspaceAction(
         && runtime.procedure.runtime !== null) {
         return {
             kind: "travel",
-            label: `Resume watch ${runtime.expedition.activeWatchNumber}`,
-            detail: "Continue the current watch with its persisted course and reusable travel choices. Only unresolved procedure inputs need new values.",
+            label: "Continue travel",
+            detail: "Continue the current travel segment with its persisted course and reusable choices. Only unresolved procedure inputs need new values.",
             urgent: false
         };
     }
@@ -169,7 +169,7 @@ export function expeditionWorkspaceAction(
     if (runtime.expedition.isSpatial && runtime.procedure.runtime !== null) {
         return {
             kind: "travel",
-            label: `Run watch ${runtime.expedition.completedWatches + 1}`,
+            label: "Continue travel",
             detail: "Use the current travel intent and authoritative movement suggestion, then supply only procedure inputs that are still unresolved.",
             urgent: false
         };

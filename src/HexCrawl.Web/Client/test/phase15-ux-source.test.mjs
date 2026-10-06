@@ -377,7 +377,7 @@ test("Phase 15 map selection is contextual and never directly mutates expedition
 
     assert.match(view, /Selecting an adjacent cell expresses travel intent only; it does not move the party/);
     assert.match(view, /map\.setHexSelectionHandler/);
-    assert.match(view, /preferences\.direction = edge\.directionValue/);
+    assert.match(view, /selectTravelIntent\(edge\.directionValue, edge\.targetCell\)/);
     assert.match(view, /syncTravelIntentControls\(\)/);
     const selection = view.slice(
         view.indexOf("const selectTravelIntent"),
@@ -408,6 +408,25 @@ test("Phase 15 workspace rerenders preserve the existing map surface and viewpor
     assert.match(map, /this\.resizeObserver\.disconnect\(\)/);
     assert.match(map, /host\.replaceChildren\(this\.canvas, this\.accessibilityHelp, this\.accessibilityStatus\)/);
     assert.match(map, /this\.resizeObserver\.observe\(host\)/);
+});
+
+test("focused travel drawer explicitly removes its course and pace listeners on cleanup", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+
+    assert.match(view, /directionControl\?\.removeEventListener\("change", captureTravelPreferencesFromControls\)/);
+    assert.match(view, /paceControl\?\.removeEventListener\("change", captureTravelPreferencesFromControls\)/);
+    assert.match(view, /controller\.dispose\(\)/);
+});
+
+test("navigator controls keep visible focus and practical pointer targets at narrow widths", () => {
+    const styles = fs.readFileSync(path.join(sourceDir, "phase15-styles.ts"), "utf8");
+
+    assert.match(styles, /\.hc-adjacency-edge:focus-visible/);
+    assert.match(styles, /outline:4px solid var\(--hc-focus\)/);
+    assert.match(styles, /min-width:2\.75rem; min-height:2\.75rem/);
+    assert.match(styles, /@media \(max-width: 760px\)[\s\S]*\.hc-adjacency-edge \{ min-width:2\.75rem; min-height:2\.75rem/);
 });
 
 test("Phase 15 focused editing uses accessible drawers and keeps secondary tools out of the primary surface", () => {
