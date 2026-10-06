@@ -756,8 +756,9 @@ test("rendered review exercises focused forced travel and navigator focus", () =
         path.join(sourceDir, "..", "visual-review", "phase15.ts"),
         "utf8");
 
-    assert.match(capture, /forced-travel-pending.*drawerCount/);
-    assert.match(capture, /forced-travel-pending": "Forced travel"/);
+    assert.match(capture, /"forced-travel-pending": "Forced travel"/);
+    assert.match(capture, /metrics\["drawerCount"\] != 1/);
+    assert.match(capture, /forcedTravelPrimaryDomainFacing/);
     assert.match(fixture, /findButton\("Resolve forced travel"\)\?\.click\(\)/);
     assert.match(fixture, /focusedEdge:/);
 });
