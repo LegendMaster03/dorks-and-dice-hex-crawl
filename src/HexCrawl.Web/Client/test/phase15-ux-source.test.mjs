@@ -654,7 +654,7 @@ test("narrow hierarchy keeps primary travel and the map ahead of status-card det
     assert.match(styles, /\.hc-phase15-expedition > \.hc-phase15-runtime-summary \{ order:3; \}/);
     assert.match(styles, /\.hc-phase15-expedition \.hc-map-panel > \.hc-map-frame \{ order:2; \}/);
     assert.match(styles, /\.hc-phase15-expedition \.hc-map-panel > \.hc-current-travel \{ order:3;/);
-    assert.match(capture, /narrow-selected-edge\|selected-edge\|light\|500\|844\|390/);
+    assert.match(capture, /24-responsive-narrow\|selected-edge\|light\|500\|844\|390/);
     assert.match(capture, /narrow map does not begin in the initial viewport/);
     assert.match(fixture, /mapTop:/);
 });
