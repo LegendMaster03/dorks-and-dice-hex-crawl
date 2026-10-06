@@ -1,5 +1,6 @@
 using HexCrawl.Application.Persistence;
 using HexCrawl.Domain.Knowledge;
+using HexCrawl.Domain.Presentation;
 using HexCrawl.Domain.Runtime;
 using HexCrawl.Domain.Spatial;
 
@@ -142,6 +143,55 @@ public sealed partial class HexCrawlService
             Knowledge = projectedKnowledge,
             PauseReason = result.PauseReason,
             RemainingWatchTime = result.RemainingWatchTime
+        };
+        return await SaveExpeditionAsync(updated, command.ExpectedVersion, cancellationToken);
+    }
+
+    public async Task<StoredExpedition> RepositionExpeditionAsync(
+        Guid expeditionId,
+        string ownerUserId,
+        RepositionExpeditionCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        var expedition = await GetExpeditionAsync(expeditionId, ownerUserId, cancellationToken);
+        RequireVersion(command.ExpectedVersion, expedition.Version);
+        var state = expedition.Runtime as ExpeditionState
+            ?? throw new InvalidOperationException("Party repositioning requires a spatial crawl session.");
+
+        var (_, world) = await ResolveSpatialContextAsync(expedition, ownerUserId, cancellationToken);
+        var repositioned = CrawlRuntimeActions.Reposition(state, command.TargetHex, command.Note);
+        PlayerKnowledgeState? knowledge = expedition.Knowledge;
+        if (world is not null)
+        {
+            repositioned = repositioned with
+            {
+                Position = HexGeometry.HexToWorld(world.World.Grid, command.TargetHex),
+                PositionPrecision = WorldPositionPrecision.HexAnchor
+            };
+            if (knowledge?.PresentationPolicy is { } presentation)
+            {
+                knowledge = PresentationKnowledgeProjection.ApplyEnteredHexes(
+                    presentation,
+                    knowledge,
+                    [command.TargetHex]);
+            }
+        }
+        else
+        {
+            repositioned = repositioned with
+            {
+                Position = null,
+                PositionPrecision = null
+            };
+        }
+
+        var updated = expedition with
+        {
+            Runtime = repositioned,
+            Knowledge = knowledge,
+            PauseReason = null,
+            RemainingWatchTime = TimeSpan.Zero,
+            GeneratedProcedureResolutions = []
         };
         return await SaveExpeditionAsync(updated, command.ExpectedVersion, cancellationToken);
     }

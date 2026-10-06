@@ -42,6 +42,65 @@ public sealed class CrawlAssistantActionsTests
     }
 
     [Fact]
+    public void DmRepositionChangesOnlyLocalPositionStateAndEndsActiveWatch()
+    {
+        var state = State() with
+        {
+            Traversal = new HexTraversalState
+            {
+                CurrentHex = new HexCoordinate(1, -1),
+                EntryDirection = new HexDirection(2),
+                LastTravelDirection = new HexDirection(1),
+                Progress = Miles(5),
+                CurrentExitRequirement = Miles(12)
+            },
+            IntendedDirection = new HexDirection(1),
+            ActualDirection = new HexDirection(2),
+            Navigation = new NavigationRuntimeState(true, 1),
+            DistanceTraveled = Miles(18),
+            ElapsedTravelTime = TimeSpan.FromHours(7),
+            CompletedWatches = 1,
+            ActiveWatch = new ActiveWatchState(
+                2,
+                TimeSpan.FromHours(4),
+                TimeSpan.FromHours(1),
+                new WatchTravelPlan(
+                    new HexDirection(1),
+                    TravelModeSelection.Normal,
+                    NavigationAidSelection.None),
+                ResolvedEncounter.None,
+                true,
+                null)
+        };
+
+        var result = CrawlRuntimeActions.Reposition(
+            state,
+            new HexCoordinate(9, -4),
+            "Teleportation.");
+
+        Assert.Equal(new HexCoordinate(9, -4), result.CurrentHex);
+        Assert.Equal(0, result.Traversal.Progress.Value);
+        Assert.Equal(DistanceUnit.Miles, result.Traversal.Progress.Unit);
+        Assert.Null(result.Traversal.EntryDirection);
+        Assert.Null(result.Traversal.LastTravelDirection);
+        Assert.Null(result.Traversal.CurrentExitRequirement);
+        Assert.Null(result.IntendedDirection);
+        Assert.Null(result.ActualDirection);
+        Assert.False(result.Navigation.IsLost);
+        Assert.Equal(0, result.Navigation.VeerSteps);
+        Assert.Null(result.ActiveWatch);
+        Assert.Equal(state.DistanceTraveled, result.DistanceTraveled);
+        Assert.Equal(state.ElapsedTravelTime, result.ElapsedTravelTime);
+        Assert.Equal(state.CompletedWatches, result.CompletedWatches);
+        Assert.Contains(result.History, item =>
+            item.Kind == CrawlRuntimeEventKind.DmOverrideApplied
+            && item.Hex == new HexCoordinate(9, -4)
+            && item.Message.Contains("without recording travel", StringComparison.Ordinal)
+            && item.Message.Contains("Active watch 2 was ended", StringComparison.Ordinal)
+            && item.Message.Contains("Teleportation", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void NavigationAssistantMutatesNavigationWithoutAdvancingTravel()
     {
         var state = State();

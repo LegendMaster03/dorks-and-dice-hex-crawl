@@ -604,6 +604,12 @@ export type RuntimeAdvanceRequest = {
     generatedProcedureResolutionId?: string;
 };
 
+export type RepositionExpeditionRequest = {
+    expectedVersion: number;
+    targetHex: HexCoordinate;
+    note?: string;
+};
+
 export type ProcedureResolutionHelperRequest = {
     expectedVersion: number;
     expectedDistance?: number;

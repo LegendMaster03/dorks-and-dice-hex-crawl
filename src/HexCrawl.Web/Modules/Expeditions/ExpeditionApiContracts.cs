@@ -372,6 +372,17 @@ public sealed record AdvanceExpeditionWorkbenchRequest
     };
 }
 
+public sealed record RepositionExpeditionRequest(
+    long ExpectedVersion,
+    HexCoordinate TargetHex,
+    string? Note = null)
+{
+    public RepositionExpeditionCommand ToCommand() => new(
+        ExpectedVersion,
+        TargetHex,
+        Note);
+}
+
 public sealed record TravelWatchAssistantRequest(
     long ExpectedVersion,
     double ElapsedHours,

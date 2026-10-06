@@ -34,6 +34,11 @@ public sealed record AdvanceExpeditionCommand
     public string? DmOverrideNote { get; init; }
 }
 
+public sealed record RepositionExpeditionCommand(
+    long ExpectedVersion,
+    HexCoordinate TargetHex,
+    string? Note = null);
+
 public sealed record DiscoverSubjectCommand(
     long ExpectedVersion,
     Guid SubjectId,

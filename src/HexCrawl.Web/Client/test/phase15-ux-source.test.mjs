@@ -579,6 +579,20 @@ test("focused watch presentation hides unrelated exceptional controls outside Mo
     assert.match(view, /details data-focus-group="advanced"/);
 });
 
+test("DM can reposition the party without routing through ordinary travel procedure advancement", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+    const api = fs.readFileSync(path.join(sourceDir, "api.ts"), "utf8");
+
+    assert.match(view, /button\("Move party", \(\) => openRepositionWorkspace\(selectedHex\)\)/);
+    assert.match(view, /button\("Move party here", \(\) => openRepositionWorkspace\(selectedHex\)\)/);
+    assert.match(view, /Direct DM repositioning changes the current cell without resolving travel/);
+    assert.match(view, /api\.repositionExpedition/);
+    assert.match(view, /preferences\.direction = null/);
+    assert.match(api, /\/api\/expeditions\/\$\{encodeURIComponent\(expeditionId\)\}\/reposition/);
+});
+
 test("Compact procedure reference does not claim display order is authoritative", () => {
     const workspace = fs.readFileSync(
         path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"),

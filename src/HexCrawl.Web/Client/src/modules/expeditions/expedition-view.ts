@@ -556,6 +556,7 @@ export async function renderExpedition(
         row.className = "hc-button-row hc-gm-tools";
         row.append(
             button("Party & travel order", openPartyWorkspace),
+            button("Move party", () => openRepositionWorkspace(selectedHex)),
             button("Environment", openEnvironmentWorkspace),
             button("Survival & resources", openSurvivalWorkspace),
             button("Journey", openJourneyWorkspace),
@@ -591,6 +592,12 @@ export async function renderExpedition(
             host.append(textElement("p", "The party is currently in this cell.", "hc-muted"));
         } else {
             host.append(textElement("p", "Inspecting a non-adjacent cell does not change travel intent or expedition position.", "hc-muted"));
+        }
+
+        if (!sameHex(runtime.expedition.currentHex, selectedHex)) {
+            const move = button("Move party here", () => openRepositionWorkspace(selectedHex));
+            move.className = "hc-secondary-action";
+            host.append(move);
         }
 
         const subjects = [
@@ -929,6 +936,67 @@ export async function renderExpedition(
         }
         if (pace?.value.trim()) preferences.pace = pace.value.trim();
         saveTravelPreferences(runtime.id, preferences);
+    };
+
+    const openRepositionWorkspace = (target: HexCoordinate | null = selectedHex): void => {
+        if (!runtime.expedition.isSpatial) {
+            openHistory();
+            return;
+        }
+
+        const initial = target ?? runtime.expedition.currentHex;
+        openDrawer("Move party", body => {
+            body.append(
+                textElement(
+                    "p",
+                    "Direct DM repositioning changes the current cell without resolving travel, navigation, encounters, survival, or journey progress. It resets in-cell progress and navigation drift; an active travel watch is ended.",
+                    "hc-muted"));
+
+            const form = document.createElement("form");
+            form.className = "hc-form";
+            const q = document.createElement("input");
+            q.type = "number";
+            q.step = "1";
+            q.value = String(initial.q);
+            const r = document.createElement("input");
+            r.type = "number";
+            r.step = "1";
+            r.value = String(initial.r);
+            const note = document.createElement("input");
+            note.placeholder = "optional reason, such as teleportation or setup correction";
+            const submit = document.createElement("button");
+            submit.type = "submit";
+            submit.className = "hc-primary-action";
+            submit.textContent = "Move party";
+            form.append(
+                labelled("Target q", q),
+                labelled("Target r", r),
+                labelled("Reason / note", note),
+                submit);
+
+            form.addEventListener("submit", event => {
+                event.preventDefault();
+                const targetQ = Number(q.value);
+                const targetR = Number(r.value);
+                if (!Number.isInteger(targetQ) || !Number.isInteger(targetR)) {
+                    throw new Error("Party position requires whole axial cell coordinates.");
+                }
+                const destination = { q: targetQ, r: targetR };
+                void runUiMutation(async () => {
+                    const next = await api.repositionExpedition(runtime.id, {
+                        expectedVersion: runtime.version,
+                        targetHex: destination,
+                        note: note.value.trim() || undefined
+                    });
+                    preferences.direction = null;
+                    selectedHex = null;
+                    selectedHexTracksTravelIntent = false;
+                    saveTravelPreferences(runtime.id, preferences);
+                    applyRuntime(next);
+                });
+            });
+            body.append(form);
+        });
     };
 
     const openPartyWorkspace = (): void => {
