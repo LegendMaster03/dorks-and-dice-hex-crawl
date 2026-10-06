@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { manualEntryResolutionSources } from "../.test-dist/modules/expeditions/expedition-input-policy.js";
-import { assistantEncounterCheckDue, encounterCheckDue, navigationResolutionDue, pauseInstruction, watchActionLabel, watchPhase } from "../.test-dist/modules/expeditions/expedition-workflow.js";
+import { assistantEncounterCheckDue, encounterCheckDue, navigationResolutionDue, pauseInstruction, spatialTravelContinuationTarget, watchActionLabel, watchPhase } from "../.test-dist/modules/expeditions/expedition-workflow.js";
 
 function runtime(overrides = {}) {
     const base = {
@@ -56,6 +56,48 @@ test("conditional workflow hides resolutions that are not due", () => {
     assert.equal(navigationResolutionDue(nextNavigationWatch, false, false), true);
     assert.equal(navigationResolutionDue(watch, true, false), false);
     assert.equal(navigationResolutionDue(watch, false, true), false);
+});
+
+test("spatial continuation routes each unresolved requirement before authoritative advance", () => {
+    const base = runtime();
+    assert.equal(spatialTravelContinuationTarget(base, false, true), "course");
+    assert.equal(spatialTravelContinuationTarget(base, true, true), "navigation");
+    assert.equal(spatialTravelContinuationTarget(base, true, true, true), "encounter");
+
+    const navigationResolved = {
+        ...base,
+        history: [{ kind: "NavigationCheckResolved", watchNumber: 1, expeditionElapsedHours: 0 }]
+    };
+    assert.equal(spatialTravelContinuationTarget(navigationResolved, true, false), "encounter");
+
+    const allChecksResolved = {
+        ...navigationResolved,
+        history: [
+            ...navigationResolved.history,
+            { kind: "EncounterCheckPerformed", watchNumber: 1, expeditionElapsedHours: 0 }
+        ]
+    };
+    assert.equal(spatialTravelContinuationTarget(allChecksResolved, true, false), "movement");
+    assert.equal(spatialTravelContinuationTarget(allChecksResolved, true, true), "advance");
+});
+
+test("spatial continuation respects blocking pauses and never fabricates spatial work", () => {
+    const base = runtime();
+    assert.equal(
+        spatialTravelContinuationTarget({ ...base, pauseReason: "EncounterTriggered" }, true, true),
+        "encounter");
+    assert.equal(
+        spatialTravelContinuationTarget({ ...base, pauseReason: "LostRecognitionRequired" }, true, true),
+        "boundary");
+
+    const nonSpatial = {
+        ...base,
+        expedition: { ...base.expedition, isSpatial: false }
+    };
+    assert.equal(spatialTravelContinuationTarget(nonSpatial, true, true), "unavailable");
+
+    const structural = { ...base, procedure: { runtime: null } };
+    assert.equal(spatialTravelContinuationTarget(structural, true, true), "unavailable");
 });
 
 test("structural procedures do not expose executable watch resolutions", () => {
