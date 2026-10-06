@@ -655,6 +655,7 @@ test("desktop hierarchy exposes current travel before the map and compacts summa
     assert.match(styles, /@media \(min-width: 1041px\)[\s\S]*\.hc-current-travel \{ grid-template-columns:auto minmax\(0,1fr\) auto/);
     assert.match(styles, /\.hc-current-action header \.hc-ux-badge \{ justify-self:start; width:max-content; \}/);
     assert.match(styles, /@media \(min-width: 1041px\)[\s\S]*\.hc-phase15-expedition \.hc-stat-action-grid \{ grid-template-columns:repeat\(8,minmax\(0,1fr\)\)/);
+    assert.match(styles, /@media \(min-width: 1041px\) and \(max-width: 1199px\)[\s\S]*\.hc-current-travel-facts \{[\s\S]*grid-column:1 \/ -1;[\s\S]*grid-template-columns:repeat\(4,auto minmax\(0,1fr\)\)/);
     assert.match(styles, /@media \(min-width: 1200px\)[\s\S]*\.hc-current-travel-facts \{ grid-template-columns:repeat\(4,auto minmax\(0,1fr\)\)/);
 });
 
