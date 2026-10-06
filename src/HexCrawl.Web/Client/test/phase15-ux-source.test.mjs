@@ -592,6 +592,8 @@ test("focused watch presentation hides unrelated exceptional controls outside Mo
     assert.match(view, /focus: "advanced" \| "movement" \| "encounter" \| "boundary"/);
     assert.match(view, /if \(focus === "advanced"\) return/);
     assert.match(view, /group\.hidden = !keys\.includes\(focus\)/);
+    assert.match(view, /const genericHelper = body\.querySelector<HTMLElement>\("\[data-resolution-helper\]"\)/);
+    assert.match(view, /if \(genericHelper\) genericHelper\.hidden = true/);
     assert.match(view, /data-plan-fields data-focus-group="advanced"/);
     assert.match(view, /data-travel-resolution data-focus-group="advanced movement"/);
     assert.match(view, /data-encounter-resolution data-focus-group="advanced encounter"/);
