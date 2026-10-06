@@ -541,6 +541,19 @@ test("navigator feedback preserves edge centering and moves along geometry inste
         /translate\(calc\(-50% \+ var\(--hc-edge-feedback-x\)\),calc\(-50% \+ var\(--hc-edge-feedback-y\)\)\)/);
 });
 
+test("encounter resume requires an explicit resolved-at-table acknowledgement", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+    const controller = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-watch-controller.ts"),
+        "utf8");
+
+    assert.match(view, /Encounter resolved — continue travel/);
+    assert.match(view, /continueTravel\(true\)/);
+    assert.match(controller, /runtime\.pauseReason === "EncounterTriggered" && !resumeEncounter/);
+});
+
 test("normal spatial travel has one primary continuation path and focused unresolved workspaces", () => {
     const view = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/expedition-view.ts"),

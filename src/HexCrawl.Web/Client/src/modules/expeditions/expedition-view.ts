@@ -1105,7 +1105,7 @@ export async function renderExpedition(
             row.className = "hc-button-row";
             const handoff = button("Open in Block Initiative", () => void prepareEncounterHandoff(triggered.sequence, handoff));
             handoff.className = "hc-primary-action";
-            const resume = button("Resume travel after encounter", continueTravel);
+            const resume = button("Encounter resolved — continue travel", () => continueTravel(true));
             row.append(handoff, resume);
             body.append(row);
         });
@@ -1193,7 +1193,7 @@ export async function renderExpedition(
         target?.focus();
     };
 
-    const continueTravel = (): void => {
+    const continueTravel = (resumeEncounter = false): void => {
         if (!runtime.expedition.isSpatial || runtime.procedure.runtime === null) {
             openHistory();
             return;
@@ -1213,7 +1213,8 @@ export async function renderExpedition(
             effectiveDistance !== null,
             suppressesNavigation,
             deliberateDoubleBack,
-            survivalAttention(survival));
+            survivalAttention(survival),
+            resumeEncounter);
         switch (target) {
             case "course":
                 focusTravelCourse();
@@ -1245,7 +1246,8 @@ export async function renderExpedition(
                 api,
                 runtime,
                 edge.directionValue,
-                preferences.pace));
+                preferences.pace,
+                resumeEncounter));
         });
     };
 
