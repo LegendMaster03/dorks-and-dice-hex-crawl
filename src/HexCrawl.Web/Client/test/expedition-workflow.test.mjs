@@ -108,7 +108,15 @@ test("forced travel and pending consequences block routine continuation without 
 });
 
 test("encounter pause requires explicit post-encounter resume before travel can continue", () => {
-    const paused = { ...runtime(), pauseReason: "EncounterTriggered" };
+    const base = runtime();
+    const paused = {
+        ...base,
+        pauseReason: "EncounterTriggered",
+        expedition: {
+            ...base.expedition,
+            activeWatchNumber: 1
+        }
+    };
 
     assert.equal(
         spatialTravelContinuationTarget(paused, true, true, true, false, false, false),
