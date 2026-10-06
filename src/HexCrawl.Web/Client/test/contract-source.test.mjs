@@ -88,7 +88,7 @@ test("DM repositioning is a dedicated non-travel mutation", () => {
     assert.match(api, /repositionExpedition/);
     assert.match(api, /\/reposition/);
     assert.match(view, /openRepositionWorkspace/);
-    assert.match(view, /Move party here/);
+    assert.match(view, /Teleport party here/);
     assert.doesNotMatch(
         view.slice(view.indexOf("const openRepositionWorkspace"), view.indexOf("const openPartyWorkspace")),
         /recordTravelAssistant|advanceExpedition/);
