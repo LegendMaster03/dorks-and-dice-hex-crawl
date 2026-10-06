@@ -402,5 +402,9 @@ if(scenario==="focus"){
     [...root.querySelectorAll("button")].find(value=>value.textContent?.toLowerCase().includes("edit travel period"))?.click();
     await waitFrame();
 }
+if(scenario==="advanced-complex"){
+    root.querySelector('[data-module-key="movement.terrain"]')?.click();
+    await waitFrame();
+}
 await waitFrame();
 document.body.dataset.visualReady="true";
