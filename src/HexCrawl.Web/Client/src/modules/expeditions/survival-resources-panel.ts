@@ -277,36 +277,67 @@ export class ExpeditionSurvivalResourcesPanel {
 
     private forcedTravelView(state: SurvivalResources): HTMLElement {
         const container = document.createElement("div");
+        container.className = "hc-stack";
         const policy = state.forcedTravelPolicy;
-        container.append(this.policySummary("Forced-travel policy", policy));
-        const progress = document.createElement("p");
-        progress.textContent = `Usage ${state.forcedTravel.amountSinceReset} ${state.forcedTravel.unit ?? policy.limitUnit ?? "units"}; normal limit ${state.forcedTravel.normalLimit ?? "—"}. ${state.forcedTravel.forcedTravelBegun ? "Forced travel has begun." : state.forcedTravel.thresholdReached ? "Normal threshold reached." : "Normal travel remains."}${state.forcedTravel.checkDue ? " A check is due." : ""}`;
-        container.append(progress);
-        if (state.forcedTravel.lastResolution) {
-            container.append(this.muted(`Latest check: ${state.forcedTravel.lastResolution.success ? "success" : "failure"} at ${state.forcedTravel.lastResolution.amountAtResolution} ${state.forcedTravel.lastResolution.unit}; source ${state.forcedTravel.lastResolution.provenance.sourceKey}.`));
+
+        if (policy.support === "None") {
+            container.append(this.muted("This procedure does not define forced travel."));
+            return container;
         }
-        if (policy.support === "Supported") container.append(this.forcedTravelControls(policy));
+        if (policy.support === "Unsupported") {
+            container.append(this.muted(policy.unsupportedReason ?? "The stored forced-travel procedure is not supported by this runtime."));
+            container.append(this.forcedTravelTechnicalDetails(policy));
+            return container;
+        }
+
+        const unit = state.forcedTravel.unit ?? policy.limitUnit ?? "units";
+        const limit = state.forcedTravel.normalLimit ?? policy.normalTravelLimit;
+        const status = state.forcedTravel.checkDue
+            ? "A forced-travel check is required before routine travel continues."
+            : state.forcedTravel.forcedTravelBegun
+                ? "The party is in forced travel."
+                : state.forcedTravel.thresholdReached
+                    ? "The normal-travel threshold has been reached."
+                    : "The party remains within normal travel.";
+
+        container.append(
+            this.heading("Current requirement"),
+            this.muted(status),
+            this.muted(`Travel recorded: ${formatNumber(state.forcedTravel.amountSinceReset)} ${unit}${limit === null ? "" : `; normal limit ${formatNumber(limit)} ${policy.limitUnit ?? unit}`}.`),
+            this.muted(`Check: ${humanize(policy.checkModel ?? "DM-resolved check")}. Failure consequence: ${humanize(policy.failureConsequence ?? "procedure-defined consequence")}.`));
+
+        if (state.forcedTravel.lastResolution) {
+            container.append(this.muted(
+                `Latest check: ${state.forcedTravel.lastResolution.success ? "succeeded" : "failed"} at ${formatNumber(state.forcedTravel.lastResolution.amountAtResolution)} ${state.forcedTravel.lastResolution.unit}.`));
+        }
+
+        container.append(this.forcedTravelControls(policy), this.forcedTravelTechnicalDetails(policy));
         return container;
     }
 
     private forcedTravelControls(policy: ForcedTravelPolicy): HTMLElement {
         const container = document.createElement("div");
+        container.className = "hc-stack";
+
         const usage = document.createElement("form");
         usage.className = "hc-form hc-form-grid";
-        const amount = this.input("Resolved travel usage", "number");
+        const unitLabel = policy.limitUnit ? `Resolved travel usage (${policy.limitUnit})` : "Resolved travel usage";
+        const amount = this.input(unitLabel, "number");
         amount.control.step = "any";
-        const unit = this.input("Unit", "text");
-        unit.control.value = policy.limitUnit ?? "";
+        const unit = policy.limitUnit ? null : this.input("Travel unit", "text");
         const add = this.button("Record resolved usage");
-        usage.append(amount.wrapper, unit.wrapper, add);
+        usage.append(amount.wrapper);
+        if (unit) usage.append(unit.wrapper);
+        usage.append(add);
         usage.addEventListener("submit", event => {
             event.preventDefault();
             void this.mutate(add, async () => {
+                const resolvedUnit = policy.limitUnit ?? required(unit!.control.value, "Forced-travel unit");
                 const result = await this.api.recordForcedTravelUsage(this.expeditionId, {
                     expectedVersion: this.requireState().expeditionVersion,
                     occurrenceId: crypto.randomUUID(),
                     amount: finiteNumber(amount.control.value, "Travel usage"),
-                    unit: required(unit.control.value, "Forced-travel unit"),
+                    unit: resolvedUnit,
                     provenance: dmProvenance("forced-travel-manual-accounting")
                 });
                 this.apply(result.state);
@@ -318,18 +349,31 @@ export class ExpeditionSurvivalResourcesPanel {
         if (current.checkDue && current.pendingCheckId) {
             const form = document.createElement("form");
             form.className = "hc-form hc-form-grid";
+            form.append(
+                this.muted("Record the resolved check result. If it failed, identify who or what is affected; the configured consequence is shown above."));
+
             const success = this.checkbox("Check succeeded", true);
+            const scope = this.select("Affected target", ["Party", "Expedition", "Participant", "Mount", "Vehicle"]);
+            const target = this.input("Participant, mount, or vehicle ID when required", "text");
+
             const effectKey = this.input("Failure effect key", "text");
             effectKey.control.value = policy.failureConsequence ?? "";
             const levelDelta = this.input("Resolved effect level delta", "number");
             levelDelta.control.value = "1";
             const externalKey = this.input("External state key, optional", "text");
             const externalDelta = this.input("External state delta, optional", "number");
-            const scope = this.select("Failure target scope", ["Party", "Expedition", "Participant", "Mount", "Vehicle"]);
-            const target = this.input("Failure target ID when scope requires it", "text");
-            const resolve = this.button("Resolve forced-travel check");
-            form.append(success.wrapper, effectKey.wrapper, levelDelta.wrapper, externalKey.wrapper, externalDelta.wrapper,
-                scope.wrapper, target.wrapper, resolve);
+
+            const advanced = document.createElement("details");
+            advanced.className = "hc-ux-disclosure";
+            const advancedSummary = document.createElement("summary");
+            advancedSummary.textContent = "Advanced consequence details";
+            const advancedBody = document.createElement("div");
+            advancedBody.className = "hc-form hc-form-grid";
+            advancedBody.append(effectKey.wrapper, levelDelta.wrapper, externalKey.wrapper, externalDelta.wrapper);
+            advanced.append(advancedSummary, advancedBody);
+
+            const resolve = this.button("Record forced-travel result");
+            form.append(success.wrapper, scope.wrapper, target.wrapper, advanced, resolve);
             form.addEventListener("submit", event => {
                 event.preventDefault();
                 void this.mutate(resolve, async () => {
@@ -362,7 +406,8 @@ export class ExpeditionSurvivalResourcesPanel {
             });
             container.append(form);
         }
-        const reset = this.button("Explicitly reset forced travel");
+
+        const reset = this.button("Reset forced-travel progress");
         reset.type = "button";
         reset.addEventListener("click", () => {
             void this.mutate(reset, async () => {
@@ -375,6 +420,19 @@ export class ExpeditionSurvivalResourcesPanel {
         });
         container.append(reset);
         return container;
+    }
+
+    private forcedTravelTechnicalDetails(policy: ForcedTravelPolicy): HTMLElement {
+        const details = document.createElement("details");
+        details.className = "hc-ux-disclosure";
+        const summary = document.createElement("summary");
+        summary.textContent = "Advanced policy details";
+        const content = document.createElement("div");
+        content.className = "hc-stack";
+        content.append(this.muted(
+            `Support: ${policy.support}; mechanic: ${policy.mechanicKey ?? "none"}${policy.mechanicVersion === null ? "" : ` v${policy.mechanicVersion}`}; execution: ${policy.executionHandler ?? "none"}.`));
+        details.append(summary, content);
+        return details;
     }
 
     private exposureView(state: SurvivalResources): HTMLElement {
@@ -697,6 +755,17 @@ function triState(value: string): boolean | null {
 
 function csv(value: string): string[] {
     return value.split(",").map(item => item.trim()).filter(Boolean);
+}
+
+function humanize(value: string): string {
+    return value
+        .replace(/[_\.\-]+/g, " ")
+        .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+        .replace(/\b\w/g, match => match.toUpperCase());
+}
+
+function formatNumber(value: number): string {
+    return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
 }
 
 function required(value: string, label: string): string {

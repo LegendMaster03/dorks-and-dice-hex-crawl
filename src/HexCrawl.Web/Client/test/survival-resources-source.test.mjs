@@ -24,3 +24,20 @@ test("foraging does not silently turn a negative resolved gain positive", () => 
     assert.doesNotMatch(source, /Math\.abs\(/);
     assert.match(source, /negative input is not silently reinterpreted/);
 });
+
+test("focused forced-travel presentation keeps tabletop fields primary and technical contracts advanced", () => {
+    assert.match(source, /Current requirement/);
+    assert.match(source, /Check: \$\{humanize\(policy\.checkModel/);
+    assert.match(source, /Failure consequence: \$\{humanize\(policy\.failureConsequence/);
+    assert.match(source, /Resolved travel usage \(\$\{policy\.limitUnit\}\)/);
+    assert.match(source, /Affected target/);
+    assert.match(source, /Advanced consequence details/);
+    assert.match(source, /Advanced policy details/);
+
+    const advancedStart = source.indexOf('advancedSummary.textContent = "Advanced consequence details"');
+    const effectKey = source.indexOf('const effectKey = this.input("Failure effect key"');
+    const appendAdvanced = source.indexOf("advancedBody.append(effectKey.wrapper", advancedStart);
+    assert.ok(effectKey >= 0);
+    assert.ok(advancedStart >= 0);
+    assert.ok(appendAdvanced > advancedStart);
+});
