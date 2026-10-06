@@ -252,7 +252,7 @@ export function compactParameter(
     const label = labels[key];
     if (!label) return null;
     if (key === "durationTicks") {
-        return { label, help: definition.description, control: "duration" };
+        return { label, help: "Set the length of one travel period.", control: "duration" };
     }
     if (booleanKeys.has(key) || definition.type === "boolean") {
         return { label, help: definition.description, control: "boolean" };
@@ -365,7 +365,8 @@ export function durationToTicks(amount: number, unit: "minutes" | "hours" | "day
 export function formatDurationTicks(value: string): string {
     const duration = ticksToDuration(value);
     if (!duration) return "Configured travel period";
-    return `${formatNumber(duration.amount)} ${duration.unit}`;
+    const unit = duration.amount === 1 ? duration.unit.slice(0, -1) : duration.unit;
+    return `${formatNumber(duration.amount)} ${unit}`;
 }
 
 function choices(...values: string[]): Array<{ value: string; label: string }> {
