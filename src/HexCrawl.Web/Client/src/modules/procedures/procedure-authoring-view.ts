@@ -1349,11 +1349,11 @@ function presetTagline(preset: ProcedurePreset): string {
 }
 
 function familiarPresets(values: ProcedurePreset[]): ProcedurePreset[] {
-    return values.filter(value => !value.presetKey.startsWith("simple-"));
+    return values.filter(value => value.category !== "Generic starting points");
 }
 
 function genericPresets(values: ProcedurePreset[]): ProcedurePreset[] {
-    return values.filter(value => value.presetKey.startsWith("simple-"));
+    return values.filter(value => value.category === "Generic starting points");
 }
 
 function moduleSelectionInputs(values: Map<string, boolean>): ProcedureComposerModuleSelectionInput[] {
