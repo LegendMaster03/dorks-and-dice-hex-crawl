@@ -105,7 +105,8 @@ public static class CrawlProcedureCatalog
                     usesPersistentVeer: false,
                     tracksIntraHexProgress: true,
                     directionChangesCostProgress: false,
-                    supportsDeliberateDoubleBack: false)),
+                    supportsDeliberateDoubleBack: false),
+                category: "Generic starting points"),
             Preset(
                 "simple-hex-step",
                 "Simple Hex Step",
@@ -121,7 +122,8 @@ public static class CrawlProcedureCatalog
                     usesPersistentVeer: false,
                     tracksIntraHexProgress: false,
                     directionChangesCostProgress: false,
-                    supportsDeliberateDoubleBack: false)),
+                    supportsDeliberateDoubleBack: false),
+                category: "Generic starting points"),
 
             bx,
             ose,
@@ -319,7 +321,8 @@ public static class CrawlProcedureCatalog
         string procedureName,
         IReadOnlyList<ProcedureModuleRecipe> modules,
         string? attribution = null,
-        string? disclaimer = null) =>
+        string? disclaimer = null,
+        string category = "Familiar procedures") =>
         new(
             presetKey,
             displayName,
@@ -327,7 +330,8 @@ public static class CrawlProcedureCatalog
             1,
             new GenericProcedurePresetRecipe(procedureKey, procedureName, modules.ToArray()),
             attribution,
-            disclaimer);
+            disclaimer,
+            category);
 
     private static IReadOnlyList<ProcedureModuleRecipe> ExecutableCore(
         TimeSpan interval,
