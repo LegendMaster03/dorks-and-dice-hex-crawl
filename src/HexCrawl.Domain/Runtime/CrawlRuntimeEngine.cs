@@ -19,6 +19,26 @@ public sealed partial class CrawlRuntimeEngine
         return AdvanceCore(context, runtime, expedition, plan, inputs);
     }
 
+    public WatchAdvanceResult ResolveBoundaryDecision(
+        ExpeditionState expedition,
+        BoundaryNavigationDecision decision)
+    {
+        ArgumentNullException.ThrowIfNull(expedition);
+        ArgumentNullException.ThrowIfNull(decision);
+
+        var active = expedition.ActiveWatch
+            ?? throw new InvalidOperationException("A boundary decision requires an active travel watch.");
+        if (active.PendingDecision != RuntimePauseReason.LostRecognitionRequired)
+        {
+            throw new InvalidOperationException(
+                "No lost-recognition boundary decision is pending for this expedition.");
+        }
+
+        var events = new EventCollector(expedition.History);
+        var (state, resumed) = ResumePendingDecision(expedition, active, decision, events);
+        return Finish(state, null, resumed.Remaining, events);
+    }
+
     private static WatchAdvanceResult AdvanceCore(
         CrawlRuntimeContext context,
         GenericProcedureRuntime procedure,
@@ -40,7 +60,7 @@ public sealed partial class CrawlRuntimeEngine
 
         if (active is not null && active.PendingDecision is not null)
         {
-            (state, active) = ResumePendingDecision(state, active, inputs, events);
+            (state, active) = ResumePendingDecision(state, active, inputs.BoundaryDecision, events);
         }
 
         if (active is null)

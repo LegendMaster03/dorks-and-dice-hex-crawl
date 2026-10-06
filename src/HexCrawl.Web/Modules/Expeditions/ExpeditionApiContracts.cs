@@ -372,6 +372,21 @@ public sealed record AdvanceExpeditionWorkbenchRequest
     };
 }
 
+public sealed record ResolveBoundaryDecisionRequest(
+    long ExpectedVersion,
+    bool RecognizedLost,
+    bool Reorient,
+    ResolutionSource ResolutionSource = ResolutionSource.ManualRoll,
+    string? ResolutionNote = null)
+{
+    public ResolveBoundaryDecisionWorkbenchCommand ToCommand() => new(
+        ExpectedVersion,
+        RecognizedLost,
+        Reorient,
+        ResolutionSource,
+        ResolutionNote);
+}
+
 public sealed record RepositionExpeditionRequest(
     long ExpectedVersion,
     HexCoordinate TargetHex,

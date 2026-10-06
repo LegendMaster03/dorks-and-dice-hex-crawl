@@ -566,6 +566,24 @@ test("navigator feedback preserves edge centering and moves along geometry inste
         /translate\(calc\(-50% \+ var\(--hc-edge-feedback-x\)\),calc\(-50% \+ var\(--hc-edge-feedback-y\)\)\)/);
 });
 
+test("lost-boundary resolution is a dedicated focused mutation and does not require hidden travel input", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+    const api = fs.readFileSync(path.join(sourceDir, "api.ts"), "utf8");
+
+    assert.match(view, /const openBoundaryWorkspace = \(\): void =>/);
+    assert.match(view, /api\.resolveBoundaryDecision/);
+    assert.match(view, /case "boundary":[\s\S]*openBoundaryWorkspace\(\)/);
+    const boundary = view.slice(
+        view.indexOf("const openBoundaryWorkspace"),
+        view.indexOf("const openTravelReviewWorkspace"));
+    assert.match(boundary, /Party recognizes it is lost/);
+    assert.match(boundary, /Party reorients/);
+    assert.doesNotMatch(boundary, /effectiveDistance|expectedDistance|actualDistance|hexSteps/);
+    assert.match(api, /\/boundary-decision/);
+});
+
 test("urgent travel pauses preserve their task wording and use a focused course-and-pace review", () => {
     const view = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
@@ -647,7 +665,7 @@ test("focused watch presentation hides unrelated exceptional controls outside Mo
         "utf8");
     const styles = fs.readFileSync(path.join(sourceDir, "phase15-styles.ts"), "utf8");
 
-    assert.match(view, /focus: "advanced" \| "movement" \| "encounter" \| "boundary"/);
+    assert.match(view, /focus: "advanced" \| "movement" \| "encounter"/);
     assert.match(view, /if \(focus === "advanced"\) return/);
     assert.match(view, /group\.hidden = !keys\.includes\(focus\)/);
     assert.match(view, /const genericHelper = body\.querySelector<HTMLElement>\("\[data-resolution-helper\]"\)/);
@@ -656,7 +674,7 @@ test("focused watch presentation hides unrelated exceptional controls outside Mo
     assert.match(view, /data-plan-fields data-focus-group="advanced"/);
     assert.match(view, /data-travel-resolution data-focus-group="advanced movement"/);
     assert.match(view, /data-encounter-resolution data-focus-group="advanced encounter"/);
-    assert.match(view, /data-boundary-resolution data-focus-group="advanced boundary"/);
+    assert.match(view, /data-boundary-resolution data-focus-group="advanced"/);
     assert.match(view, /details data-focus-group="advanced"/);
 });
 

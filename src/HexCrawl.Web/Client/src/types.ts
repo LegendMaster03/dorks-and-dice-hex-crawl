@@ -660,6 +660,14 @@ export type ProcedureResolutionHelperResult = {
     notes: string[];
 };
 
+export type ResolveBoundaryDecisionRequest = {
+    expectedVersion: number;
+    recognizedLost: boolean;
+    reorient: boolean;
+    resolutionSource: ResolutionSource;
+    resolutionNote?: string;
+};
+
 export type TravelWatchAssistantRequest = {
     expectedVersion: number;
     elapsedHours: number;

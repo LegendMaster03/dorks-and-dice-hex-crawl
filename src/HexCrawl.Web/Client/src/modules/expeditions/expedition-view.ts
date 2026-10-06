@@ -698,7 +698,7 @@ export async function renderExpedition(
     };
 
     const openTravelWorkspace = (
-        focus: "advanced" | "movement" | "encounter" | "boundary" = "advanced",
+        focus: "advanced" | "movement" | "encounter" = "advanced",
         direction = preferences.direction): void => {
         if (!runtime.expedition.isSpatial || runtime.procedure.runtime === null) {
             openHistory();
@@ -712,9 +712,7 @@ export async function renderExpedition(
             ? "Movement resolution"
             : focus === "encounter"
                 ? "Encounter check"
-                : focus === "boundary"
-                    ? "Boundary crossing"
-                    : "Advanced travel controls";
+                : "Advanced travel controls";
         openDrawer(title, body => {
             body.innerHTML = watchWorkspaceMarkup(currentAdjacency());
             const controller = new ExpeditionWatchController(
@@ -750,7 +748,7 @@ export async function renderExpedition(
 
     const focusWatchWorkspace = (
         body: HTMLElement,
-        focus: "advanced" | "movement" | "encounter" | "boundary"): void => {
+        focus: "advanced" | "movement" | "encounter"): void => {
         if (focus === "advanced") return;
         const focusGroups = [...body.querySelectorAll<HTMLElement>("[data-focus-group]")];
         for (const group of focusGroups) {
@@ -771,7 +769,7 @@ export async function renderExpedition(
             ? "Movement resolution"
             : focus === "encounter"
                 ? "Encounter check"
-                : "Boundary crossing";
+                : "Encounter check";
         intro.append(
             textElement("h3", heading),
             textElement("p", travelIntentSummary(runtime, preferences, currentAdjacency()), "hc-muted"));
@@ -783,7 +781,7 @@ export async function renderExpedition(
         } else if (focus === "encounter") {
             intro.append(textElement("p", "Resolve the due encounter check, then continue the same travel intent.", "hc-muted"));
         } else {
-            intro.append(textElement("p", "Resolve only the pending boundary decision before travel continues.", "hc-muted"));
+            intro.append(textElement("p", "Resolve the due encounter check, then continue the same travel intent.", "hc-muted"));
         }
         body.prepend(intro);
 
@@ -793,8 +791,81 @@ export async function renderExpedition(
                 ? "Resolve movement and continue"
                 : focus === "encounter"
                     ? "Resolve encounter check and continue"
-                    : "Resolve boundary and continue";
+                    : "Resolve encounter check and continue";
         }
+    };
+
+    const openBoundaryWorkspace = (): void => {
+        if (!runtime.expedition.isSpatial
+            || runtime.pauseReason !== "LostRecognitionRequired") {
+            openHistory();
+            return;
+        }
+
+        openDrawer("Boundary crossing", body => {
+            body.append(textElement(
+                "p",
+                pauseInstruction(runtime)
+                    ?? "Resolve the pending lost-party boundary decision before travel continues.",
+                "hc-muted"));
+
+            const form = document.createElement("form");
+            form.className = "hc-form";
+            const recognized = document.createElement("input");
+            recognized.type = "checkbox";
+            recognized.name = "recognizedLost";
+            const reorient = document.createElement("input");
+            reorient.type = "checkbox";
+            reorient.name = "reorient";
+            const source = document.createElement("select");
+            for (const [value, label] of [
+                ["ManualRoll", "Manual roll"],
+                ["ExternalSystem", "External system"],
+                ["DmOverride", "DM ruling"],
+                ["ProcedureDefault", "Procedure default"]
+            ] as const) {
+                const option = document.createElement("option");
+                option.value = value;
+                option.textContent = label;
+                source.append(option);
+            }
+            const resolutionNote = document.createElement("input");
+            resolutionNote.placeholder = "optional source note";
+
+            const syncReorient = (): void => {
+                reorient.disabled = !recognized.checked;
+                if (!recognized.checked) reorient.checked = false;
+            };
+            recognized.addEventListener("change", syncReorient);
+            syncReorient();
+
+            const submit = document.createElement("button");
+            submit.type = "submit";
+            submit.className = "hc-primary-action";
+            submit.textContent = "Resolve boundary";
+            form.append(
+                labelled("Party recognizes it is lost", recognized),
+                labelled("Party reorients", reorient),
+                labelled("Resolution source", source),
+                labelled("Source note", resolutionNote),
+                submit);
+            form.addEventListener("submit", event => {
+                event.preventDefault();
+                void runUiMutation(async () => {
+                    applyRuntime(await api.resolveBoundaryDecision(runtime.id, {
+                        expectedVersion: runtime.version,
+                        recognizedLost: recognized.checked,
+                        reorient: recognized.checked && reorient.checked,
+                        resolutionSource: source.value as ResolutionSource,
+                        resolutionNote: resolutionNote.value.trim() || undefined
+                    }));
+                });
+            });
+
+            const more = button("More options", () => openTravelWorkspace("advanced"));
+            more.className = "hc-secondary-action";
+            body.append(form, more);
+        });
     };
 
     const openTravelReviewWorkspace = (): void => {
@@ -1330,7 +1401,7 @@ export async function renderExpedition(
                 openTravelWorkspace("movement");
                 return;
             case "boundary":
-                openTravelWorkspace("boundary");
+                openBoundaryWorkspace();
                 return;
             case "review":
                 openTravelReviewWorkspace();
@@ -1358,7 +1429,7 @@ export async function renderExpedition(
         switch (kind) {
             case "encounter": openEncounterWorkspace(); break;
             case "navigation": openNavigationWorkspace(); break;
-            case "boundary": openTravelWorkspace("boundary"); break;
+            case "boundary": openBoundaryWorkspace(); break;
             case "survival": openSurvivalWorkspace(); break;
             case "travel": continueTravel(); break;
             case "journey": openJourneyWorkspace(); break;
@@ -1666,7 +1737,7 @@ function watchWorkspaceMarkup(adjacency: ReturnType<typeof currentHexAdjacency> 
                     <label>Encounter source note <input name="encounterSourceNote" placeholder="optional"></label>
                 </fieldset>
 
-                <fieldset data-boundary-resolution data-focus-group="advanced boundary">
+                <fieldset data-boundary-resolution data-focus-group="advanced">
                     <legend>Boundary decision</legend>
                     <label><input name="recognizedLost" type="checkbox"> The party recognizes that it is lost</label>
                     <label><input name="reorient" type="checkbox"> The party reorients</label>

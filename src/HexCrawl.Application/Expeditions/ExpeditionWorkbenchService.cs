@@ -47,6 +47,13 @@ public sealed record AdvanceExpeditionWorkbenchCommand
     public Guid? GeneratedProcedureResolutionId { get; init; }
 }
 
+public sealed record ResolveBoundaryDecisionWorkbenchCommand(
+    long ExpectedVersion,
+    bool RecognizedLost,
+    bool Reorient,
+    ResolutionSource ResolutionSource = ResolutionSource.ManualRoll,
+    string? ResolutionNote = null);
+
 public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlService coreService, CrawlSessionContextResolver contextResolver)
 {
     private readonly CrawlRuntimeEngine _runtime = new();
@@ -245,6 +252,80 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
             Journey = journey
         };
         return await SaveAsync(updated, command.ExpectedVersion, cancellationToken);
+    }
+
+    public async Task<StoredExpedition> ResolveBoundaryDecisionAsync(
+        Guid expeditionId,
+        string ownerUserId,
+        ResolveBoundaryDecisionWorkbenchCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        var expedition = await coreService.GetExpeditionAsync(expeditionId, ownerUserId, cancellationToken);
+        RequireVersion(command.ExpectedVersion, expedition.Version);
+        var state = expedition.Runtime as ExpeditionState
+            ?? throw new InvalidOperationException("Boundary resolution requires a spatial crawl session.");
+        if (expedition.PauseReason != RuntimePauseReason.LostRecognitionRequired)
+        {
+            throw new InvalidOperationException("No lost-recognition boundary decision is pending.");
+        }
+        if (command.ResolutionSource == ResolutionSource.AutomaticRoll)
+        {
+            throw new InvalidOperationException(
+                "AutomaticRoll is not available for a DM boundary decision.");
+        }
+
+        var provenance = new ResolutionProvenance(
+            command.ResolutionSource,
+            string.IsNullOrWhiteSpace(command.ResolutionNote) ? null : command.ResolutionNote.Trim());
+        var decision = new BoundaryNavigationDecision(
+            command.RecognizedLost,
+            command.Reorient,
+            provenance);
+        var result = _runtime.ResolveBoundaryDecision(state, decision);
+        var audited = AppendFocusedBoundaryProvenance(result.Expedition, result.Events, provenance);
+
+        var updated = expedition with
+        {
+            Runtime = audited,
+            PauseReason = result.PauseReason,
+            RemainingWatchTime = result.RemainingWatchTime,
+            GeneratedProcedureResolutions = []
+        };
+        return await SaveAsync(updated, command.ExpectedVersion, cancellationToken);
+    }
+
+    private static ExpeditionState AppendFocusedBoundaryProvenance(
+        ExpeditionState state,
+        IReadOnlyList<CrawlRuntimeEvent> events,
+        ResolutionProvenance provenance)
+    {
+        var history = state.History.ToList();
+        var sequence = history.Count == 0 ? 1 : history[^1].Sequence + 1;
+        var watchNumber = events.Count > 0
+            ? events[^1].WatchNumber
+            : state.ActiveWatch?.WatchNumber ?? Math.Max(1, state.CompletedWatches);
+
+        if (provenance.Source == ResolutionSource.DmOverride)
+        {
+            history.Add(new CrawlRuntimeEvent(
+                sequence++,
+                watchNumber,
+                CrawlRuntimeEventKind.DmOverrideApplied,
+                state.ElapsedTravelTime,
+                state.CurrentHex,
+                string.IsNullOrWhiteSpace(provenance.Note)
+                    ? "DM supplied an authoritative boundary decision."
+                    : provenance.Note.Trim()));
+        }
+
+        history.Add(new CrawlRuntimeEvent(
+            sequence,
+            watchNumber,
+            CrawlRuntimeEventKind.ResolutionProvenanceRecorded,
+            state.ElapsedTravelTime,
+            state.CurrentHex,
+            $"Resolved input provenance: boundary={Describe(provenance)}."));
+        return state with { History = history };
     }
 
     private static ExpeditionState AppendProvenanceEvent(
