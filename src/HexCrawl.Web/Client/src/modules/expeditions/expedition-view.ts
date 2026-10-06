@@ -936,7 +936,8 @@ export async function renderExpedition(
                         await action();
                         captureTravelPreferences(body);
                     });
-                });
+                },
+                focus === "encounter" ? "encounterCadence" : "advance");
             controller.sync(runtime);
             applyTravelPreferences(body);
             focusWatchWorkspace(body, focus);
@@ -1004,7 +1005,7 @@ export async function renderExpedition(
             advance.textContent = focus === "movement"
                 ? "Resolve movement and continue"
                 : focus === "encounter"
-                    ? "Resolve encounter check and continue"
+                    ? "Record encounter check"
                     : "Resolve encounter check and continue";
         }
     };
