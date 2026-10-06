@@ -531,7 +531,10 @@ if (stateName === "selected-edge") {
     root.querySelector('[data-adjacency-edge][aria-pressed="true"]')?.focus();
 }
 
-await new Promise(resolve => setTimeout(resolve, 180));
+// Drawer opens, map selection, and focus changes above are synchronous. Do not
+// leave readiness behind a timer: headless DOM capture is allowed to finish once
+// the document is otherwise idle.
+await Promise.resolve();
 
 const isVisible = element => Boolean(element && !element.hidden && element.getClientRects().length);
 const buttons = Array.from(root.querySelectorAll("button"));
