@@ -623,7 +623,7 @@ test("normal spatial travel has one primary continuation path and focused unreso
 
     assert.match(view, /button\("Continue travel", continueTravel\)/);
     assert.doesNotMatch(view, /button\("Travel controls"/);
-    assert.match(view, /const continueTravel = \(resumeEncounter = false\): void =>/);
+    assert.match(view, /const continueTravel = \(resumeEncounter = false, resumeTravelReview = false\): void =>/);
     assert.match(view, /spatialTravelContinuationTarget/);
     assert.match(view, /case "navigation":[\s\S]*openNavigationWorkspace\(\)/);
     assert.match(view, /case "encounter":[\s\S]*openTravelWorkspace\("encounter"\)/);
