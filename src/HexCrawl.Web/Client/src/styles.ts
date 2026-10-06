@@ -210,7 +210,6 @@ export function ensureStyles(): void {
         .hc-form details[open] > summary, .hc-sidebar details[open] > summary { margin-bottom: .65rem; }
         .hc-custom-unit-fields { display: grid; gap: .65rem; padding: .1rem 0; }
         .hc-workspace-grid { display: grid; grid-template-columns: minmax(28rem, 1fr) minmax(18rem, 24rem); gap: .85rem; align-items: start; }
-        .hc-tracker-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(20rem, 28rem); gap: .85rem; align-items: start; }
         .hc-assistant-grid { display: grid; grid-template-columns: minmax(0, 44rem) minmax(18rem, 30rem); gap: .85rem; align-items: start; justify-content: start; }
         .hc-assistant-form { margin-top: .8rem; }
         .hc-assistant-warning { margin: .75rem 0; padding: .65rem .7rem; border: 1px solid var(--hc-warning-border); border-left: .28rem solid var(--hc-warning); border-radius: .45rem; background: var(--hc-warning-bg); color: var(--hc-warning-text); font-size: .86rem; }
@@ -360,7 +359,6 @@ export function ensureStyles(): void {
         }
         @media (max-width: 1050px) {
             .hc-workspace-grid { grid-template-columns: minmax(0, 1fr) minmax(17rem, 21rem); }
-            .hc-tracker-grid { grid-template-columns: minmax(0, 1fr) minmax(18rem, 24rem); }
             .hc-assistant-grid { grid-template-columns: minmax(0, 1fr) minmax(17rem, 24rem); }
             .hc-map-host, .hc-map-canvas { min-height: 470px; height: 60vh; }
         }

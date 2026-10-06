@@ -6,18 +6,18 @@ import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const sourceRoot = path.resolve(here, "../src");
-const presentation = fs.readFileSync(
-    path.join(sourceRoot, "modules/expeditions/expedition-presentation.ts"),
+const expedition = fs.readFileSync(
+    path.join(sourceRoot, "modules/expeditions/expedition-view.ts"),
     "utf8");
 const assistant = fs.readFileSync(
     path.join(sourceRoot, "modules/assistants/expedition-assistant-view.ts"),
     "utf8");
 
-test("non-spatial tracker gates Watch / Time on focused interval support instead of full runtime", () => {
-    assert.match(presentation, /const canUseWatch = canUseFocusedNonSpatialWatch\(runtime\)/);
-    assert.match(presentation, /data-watch \$\{canUseWatch \? "" : "disabled"\}/);
-    assert.match(presentation, /if \(canUseWatch\) \{[\s\S]*data-watch/);
-    assert.match(presentation, /data-encounters \$\{runtime\.procedure\.isExecutable \? "" : "disabled"\}/);
+test("unified non-spatial expedition gates interval work on focused interval support", () => {
+    assert.match(expedition, /else if \(canUseFocusedNonSpatialWatch\(runtime\)\)/);
+    assert.match(expedition, /This procedure advances its configured interval without spatial position, course, pace, hex progress, or map state/);
+    assert.match(expedition, /openNonSpatialWatchWorkspace/);
+    assert.doesNotMatch(expedition, /renderNonSpatialTracker/);
 });
 
 test("focused assistant separates non-spatial interval bookkeeping from full runtime execution", () => {

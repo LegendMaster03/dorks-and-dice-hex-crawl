@@ -206,19 +206,23 @@ test("direction controls retain numeric runtime values while current-cell adjace
     assert.match(watch, /Course labels identify the intended adjacent cell/);
 });
 
-test("non-spatial running-sheet ledger omits spatial-only route and navigation columns", () => {
-    const presentation = read("modules/expeditions/expedition-presentation.ts");
-    assert.match(presentation, /const spatial = runtime\.expedition\.isSpatial/);
-    assert.match(presentation, /\["Day", "Watch", "Travel \/ progress", "Encounter", "State"\]/);
-    assert.match(presentation, /if \(spatial\) cells\.push\(textCell\(entry\.route\)\)/);
-    assert.match(presentation, /if \(spatial\) cells\.push\(textCell\(entry\.navigation\)\)/);
+test("non-spatial primary workspace does not fabricate route, navigation, course, or pace state", () => {
+    const view = read("modules/expeditions/expedition-view.ts");
+    const start = view.indexOf("const renderNonSpatialWorkspace");
+    const end = view.indexOf("const selectTravelIntent", start);
+    const nonspatial = view.slice(start, end);
+    assert.match(nonspatial, /Current stage/);
+    assert.match(nonspatial, /Progress/);
+    assert.match(nonspatial, /Roles/);
+    assert.match(nonspatial, /Pending/);
+    assert.doesNotMatch(nonspatial, /currentHex|intendedDirection|selectedHex|Current travel|Pace \/ travel mode/);
 });
 
-test("non-spatial running sheet exposes the same persisted procedure mechanics reference", () => {
-    const presentation = read("modules/expeditions/expedition-presentation.ts");
-    assert.match(presentation, /<summary>Procedure reference<\/summary>/);
-    assert.match(presentation, /<div data-snapshots><\/div>/);
-    assert.match(presentation, /renderExpeditionHistory\(root, runtime\);\s*renderExpeditionSnapshots\(root, runtime, false\);/);
+test("unified non-spatial workspace keeps procedure and expedition history available as focused state", () => {
+    const view = read("modules/expeditions/expedition-view.ts");
+    assert.match(view, /railAction\("Expedition history", presentation\.timeLabel, openHistory\)/);
+    assert.match(view, /journey\.processPolicy\.support === "Supported"/);
+    assert.match(view, /No journey process is currently active/);
 });
 
 test("unified expedition workspace keeps presentation derivation separate from mutation orchestration", () => {
