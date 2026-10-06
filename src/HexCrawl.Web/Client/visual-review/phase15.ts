@@ -955,7 +955,7 @@ const metrics = {
     currentTravelCount: root.querySelectorAll("[data-current-travel]").length,
     changePaceButtons: buttons.filter(button => isVisible(button) && button.textContent?.trim() === "Change pace").length,
     paceTextInputs: root.querySelectorAll('input[name="pace"][type="text"]').length,
-    paceSelects: root.querySelectorAll('select[name="pace"]').length,
+    paceSelects: root.querySelectorAll(".hc-current-travel-pace-editor select").length,
     partyActivitiesRailButtons: buttons.filter(button => isVisible(button) && button.textContent?.includes("Party & activities")).length,
     partySetupVisible: rootText.includes("Party not configured"),
     primaryAction: root.querySelector(".hc-current-action-primary")?.textContent?.trim() || null,
