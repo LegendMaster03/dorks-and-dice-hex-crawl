@@ -52,7 +52,7 @@ for spec in "${cases[@]}"; do
     --hide-scrollbars
     --force-device-scale-factor=1
     --run-all-compositor-stages-before-draw
-    --virtual-time-budget=2200
+    --virtual-time-budget=5000
     --window-size="$width,$height"
     --user-data-dir="$profile"
   )
@@ -68,7 +68,10 @@ source = open(sys.argv[1], encoding="utf-8").read()
 match = re.search(r'<pre id="review-metrics"[^>]*>(.*?)</pre>', source, re.S)
 if not match:
     raise SystemExit("visual review metrics were not emitted")
-metrics = json.loads(html.unescape(match.group(1)))
+raw = html.unescape(match.group(1)).strip()
+if not raw:
+    raise SystemExit("visual review metrics were empty before the fixture finished")
+metrics = json.loads(raw)
 with open(sys.argv[2], "w", encoding="utf-8") as handle:
     json.dump(metrics, handle, indent=2, sort_keys=True)
 
