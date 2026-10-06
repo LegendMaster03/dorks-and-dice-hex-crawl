@@ -822,6 +822,14 @@ function findButton(label) {
     return Array.from(root.querySelectorAll("button")).find(button => button.textContent?.trim() === label) || null;
 }
 
+async function waitForRootText(text, frames = 20) {
+    for (let index = 0; index < frames; index += 1) {
+        if ((root.textContent || "").includes(text)) return;
+        await new Promise(resolve => requestAnimationFrame(resolve));
+    }
+    throw new Error(`Timed out waiting for rendered review text: ${text}`);
+}
+
 await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
 if (stateName === "map-selected" || stateName === "map-nonadjacent") {
@@ -843,6 +851,7 @@ if (stateName === "map-selected" || stateName === "map-nonadjacent") {
     findButton("Resolve encounter")?.click();
 } else if (stateName === "forced-travel-pending") {
     findButton("Resolve forced travel")?.click();
+    await waitForRootText("Current requirement");
 } else if (stateName === "boundary-pending") {
     findButton("Resolve lost-party boundary decision")?.click();
 } else if (stateName === "more-options-open") {
@@ -855,9 +864,8 @@ if (stateName === "selected-edge") {
     root.querySelector('[data-adjacency-edge][aria-pressed="true"]')?.focus({ preventScroll: true });
 }
 
-// Drawer opens, map selection, and focus changes above are synchronous. Do not
-// leave readiness behind a timer: headless DOM capture is allowed to finish once
-// the document is otherwise idle.
+// Synchronous interactions settle immediately. Async focused panels wait for a
+// concrete rendered condition above rather than using an arbitrary sleep.
 await Promise.resolve();
 
 const isVisible = element => Boolean(element && !element.hidden && element.getClientRects().length);
