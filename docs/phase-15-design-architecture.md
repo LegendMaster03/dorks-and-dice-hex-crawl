@@ -182,9 +182,9 @@ Adopted structurally: survival-heavy procedures need party activity assignment, 
 
 The usability lesson for the simpler modern-D&D proof is restraint: a procedure with fewer active hexcrawl concepts should not inherit the visual complexity of Alexandrian Advanced or a survival-heavy procedure. The same semantic workspace should collapse naturally to only the concepts the materialized procedure actually uses.
 
-### Mixed House Rule and Custom
+### Synthetic mixed procedure and Custom
 
-These are architecture proofs rather than tracking-sheet targets. Their purpose is to verify that presentation follows materialized behavior and semantic metadata rather than named-preset identity. A custom procedure with no origin must remain coherent.
+The deliberately mixed architecture proof is test-only rather than a production preset. Its purpose is to verify that presentation and runtime behavior follow materialized mechanics and semantic metadata rather than named-preset identity. A custom procedure with no origin must remain coherent.
 
 ## Accessibility
 

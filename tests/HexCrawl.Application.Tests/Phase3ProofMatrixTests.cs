@@ -17,14 +17,12 @@ public sealed class Phase3ProofMatrixTests
         CrawlProcedureCatalog.ForbiddenLandsPresetKey,
         CrawlProcedureCatalog.WorldsWithoutNumberPresetKey,
         CrawlProcedureCatalog.OneRing2ePresetKey,
-        "alexandrian-advanced",
-        CrawlProcedureCatalog.MixedHouseRulePresetKey
+        "alexandrian-advanced"
     ];
 
     private static readonly string[] FullyExecutableProofPresetKeys =
     [
-        "alexandrian-advanced",
-        CrawlProcedureCatalog.MixedHouseRulePresetKey
+        "alexandrian-advanced"
     ];
 
     private static readonly string[] NativeRuntimeModuleKeys =
@@ -49,8 +47,7 @@ public sealed class Phase3ProofMatrixTests
             [CrawlProcedureCatalog.ForbiddenLandsPresetKey] = [GenericProcedureCatalog.TimeIntervalModule],
             [CrawlProcedureCatalog.WorldsWithoutNumberPresetKey] = [GenericProcedureCatalog.TimeIntervalModule],
             [CrawlProcedureCatalog.OneRing2ePresetKey] = [],
-            ["alexandrian-advanced"] = NativeRuntimeModuleKeys,
-            [CrawlProcedureCatalog.MixedHouseRulePresetKey] = NativeRuntimeModuleKeys
+            ["alexandrian-advanced"] = NativeRuntimeModuleKeys
         };
 
     public static IEnumerable<object[]> RequiredProofPresets() =>
@@ -240,8 +237,7 @@ public sealed class Phase3ProofMatrixTests
             });
         });
 
-        var mixed = CrawlProcedureCatalog.Resolve(CrawlProcedureCatalog.MixedHouseRulePresetKey)
-            .MaterializeGeneric().Procedure;
+        var mixed = SyntheticProcedureFixtures.MixedProcedure();
         _ = GenericProcedureRuntime.Bind(mixed);
     }
 
@@ -270,8 +266,7 @@ public sealed class Phase3ProofMatrixTests
     [Fact]
     public void AutomaticMechanicCanNotUseDeclarativeContractHandler()
     {
-        var procedure = CrawlProcedureCatalog.Resolve(CrawlProcedureCatalog.MixedHouseRulePresetKey)
-            .MaterializeGeneric().Procedure;
+        var procedure = SyntheticProcedureFixtures.MixedProcedure();
         var invalid = procedure with
         {
             Modules = procedure.Modules.Select(module =>
@@ -342,6 +337,14 @@ public sealed class Phase3ProofMatrixTests
     }
 
     [Fact]
+    public void ProductionCatalogDoesNotExposeSyntheticMixedProofProcedure()
+    {
+        Assert.DoesNotContain(CrawlProcedureCatalog.Catalog, preset =>
+            string.Equals(preset.PresetKey, "mixed-house-rule", StringComparison.OrdinalIgnoreCase));
+        Assert.Throws<ArgumentException>(() => CrawlProcedureCatalog.Resolve("mixed-house-rule"));
+    }
+
+    [Fact]
     public void OseAliasUsesTheSameBxCreationRecipe()
     {
         var bx = CrawlProcedureCatalog.Resolve(CrawlProcedureCatalog.BxPresetKey);
@@ -357,10 +360,9 @@ public sealed class Phase3ProofMatrixTests
     }
 
     [Fact]
-    public void MixedHouseRuleCombinesIndependentGenericFamiliesAndRuntimeIgnoresPresetIdentity()
+    public void SyntheticMixedProcedureCombinesIndependentGenericFamiliesAndRuntimeIgnoresPresetIdentity()
     {
-        var procedure = CrawlProcedureCatalog.Resolve(CrawlProcedureCatalog.MixedHouseRulePresetKey)
-            .MaterializeGeneric().Procedure;
+        var procedure = SyntheticProcedureFixtures.MixedProcedure();
 
         string[] requiredStructuralModules =
         [

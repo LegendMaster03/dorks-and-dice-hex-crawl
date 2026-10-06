@@ -272,8 +272,7 @@ public sealed class Phase12JourneyReviewRegressionTests
     public void TravelRoleTargetingRejectsArbitraryPartyTarget()
     {
         var policy = JourneyProcedurePolicyResolver.ResolveEvents(
-            CrawlProcedureCatalog.Resolve(CrawlProcedureCatalog.MixedHouseRulePresetKey)
-                .MaterializeGeneric().Procedure);
+            SyntheticProcedureFixtures.MixedProcedure());
         var occurrenceId = Guid.NewGuid();
         var created = JourneyEventEngine.CreateOpportunity(
             ExpeditionJourneyState.Empty,
@@ -307,8 +306,7 @@ public sealed class Phase12JourneyReviewRegressionTests
     public void JourneyEventReplayMustMatchPreviouslyResolvedMeaning()
     {
         var policy = JourneyProcedurePolicyResolver.ResolveEvents(
-            CrawlProcedureCatalog.Resolve(CrawlProcedureCatalog.MixedHouseRulePresetKey)
-                .MaterializeGeneric().Procedure) with { TargetingModel = "explicit-target" };
+            SyntheticProcedureFixtures.MixedProcedure()) with { TargetingModel = "explicit-target" };
         var occurrenceId = Guid.NewGuid();
         var opportunity = new JourneyEventOpportunityInput
         {

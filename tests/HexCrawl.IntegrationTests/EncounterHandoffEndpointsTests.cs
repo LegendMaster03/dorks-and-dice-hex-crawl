@@ -289,7 +289,7 @@ public sealed class EncounterHandoffEndpointsTests
     }
 
     [Fact]
-    public async Task MixedHouseRuleJourneyHandoffProjectsLinkedDepletedResourceAndLeavesCircumstancePending()
+    public async Task SyntheticMixedProcedureJourneyHandoffProjectsLinkedDepletedResourceAndLeavesCircumstancePending()
     {
         var database = TestWebHost.NewDatabasePath();
         try
@@ -300,7 +300,8 @@ public sealed class EncounterHandoffEndpointsTests
             var assignmentId = Guid.NewGuid();
             var resourceId = Guid.NewGuid();
 
-            var expedition = await StartNonSpatialAsync(client, "mixed-house-rule", "Resource handoff journey");
+            var synthetic = await SyntheticProcedureApiFixture.CreateMixedAsync(client);
+            var expedition = await StartNonSpatialAsync(client, synthetic, "Resource handoff journey");
             var expeditionId = expedition.GetProperty("id").GetGuid();
             var party = await PutRoleAsync(
                 client,
@@ -544,6 +545,22 @@ public sealed class EncounterHandoffEndpointsTests
         {
             name,
             procedureKey,
+            context = new { kind = "NonSpatial", name = "Journey handoff" }
+        });
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<JsonElement>();
+    }
+
+    private static async Task<JsonElement> StartNonSpatialAsync(
+        HttpClient client,
+        SyntheticProcedureRevision procedure,
+        string name)
+    {
+        using var response = await client.PostAsJsonAsync("/api/expeditions", new
+        {
+            name,
+            procedureId = procedure.ProcedureId,
+            procedureRevision = procedure.Revision,
             context = new { kind = "NonSpatial", name = "Journey handoff" }
         });
         response.EnsureSuccessStatusCode();

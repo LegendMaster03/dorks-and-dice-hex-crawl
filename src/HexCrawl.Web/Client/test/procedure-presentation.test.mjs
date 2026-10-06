@@ -5,6 +5,8 @@ import {
     compactParameter,
     compactRuleCatalog,
     parameterDefinitions,
+    procedureParameterFacts,
+    friendlyStoredValue,
     durationToTicks,
     formatDurationTicks,
     ticksToDuration
@@ -22,6 +24,16 @@ test("Compact converts canonical interval ticks to tabletop duration controls", 
     assert.equal(ticks, "144000000000");
     assert.deepEqual(ticksToDuration(ticks), { amount: 4, unit: "hours" });
     assert.equal(formatDurationTicks(ticks), "4 hours");
+    assert.equal(formatDurationTicks(durationToTicks(1, "days")), "1 day");
+
+    const presentation = compactParameter("durationTicks", {
+        type: "integer",
+        required: true,
+        description: "Serialized duration ticks.",
+        defaultValue: ticks
+    }, "time.interval");
+    assert.equal(presentation?.control, "duration");
+    assert.equal(presentation?.help, "Set the length of one travel period.");
 });
 
 test("Compact exposes current ordinary enum domains as editable selects", () => {
@@ -107,4 +119,47 @@ test("Compact includes environmental exposure as a survival rule", () => {
     assert.ok(exposure);
     assert.equal(exposure.group, "Survival & resources");
     assert.equal(exposure.label, "Environmental exposure");
+});
+
+
+test("Inspect and Compact share semantic duration, boolean, progress, and enum formatting", () => {
+    assert.deepEqual(
+        procedureParameterFacts("time.interval", { durationTicks: "144000000000" }),
+        [{ label: "Travel period", value: "4 hours" }]);
+
+    assert.deepEqual(
+        procedureParameterFacts("navigation.check", {
+            usesNavigationChecks: "true",
+            usesPersistentVeer: "false"
+        }),
+        [
+            { label: "Checks required", value: "Yes" },
+            { label: "Persistent off-course state", value: "No" }
+        ]);
+
+    assert.deepEqual(
+        procedureParameterFacts("movement.hex-progress", {
+            startingExitProgressFactor: "0.5",
+            farExitProgressFactor: "1"
+        }),
+        [
+            { label: "Starting exit progress", value: "50% of a cell crossing" },
+            { label: "Far exit progress", value: "100% of a cell crossing" }
+        ]);
+
+    assert.equal(
+        friendlyStoredValue("budgetModel", "journey-progress", "movement.budget"),
+        "Journey progress");
+});
+
+test("Compact terminology presents journeys and automation as tabletop concepts", () => {
+    const journey = compactRuleCatalog().find(rule => rule.moduleKey === "journey.process");
+    const events = compactRuleCatalog().find(rule => rule.moduleKey === "journey.events");
+    const automation = compactRuleCatalog().find(rule => rule.moduleKey === "procedure.helpers");
+
+    assert.equal(journey?.group, "Journey & events");
+    assert.equal(events?.group, "Journey & events");
+    assert.equal(automation?.group, "Automation");
+    assert.equal(automation?.label, "Automatic resolution");
+    assert.match(automation?.description ?? "", /generate supported travel, navigation, and encounter results/i);
 });

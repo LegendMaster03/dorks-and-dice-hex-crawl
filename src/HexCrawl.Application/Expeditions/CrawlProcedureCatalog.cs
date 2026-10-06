@@ -14,7 +14,6 @@ public static class CrawlProcedureCatalog
     public const string ForbiddenLandsPresetKey = "forbidden-lands";
     public const string WorldsWithoutNumberPresetKey = "worlds-without-number";
     public const string OneRing2ePresetKey = "the-one-ring-2e";
-    public const string MixedHouseRulePresetKey = "mixed-house-rule";
 
     private static IReadOnlyList<CrawlProcedurePresetDefinition> FullCatalog { get; } = BuildCatalog();
 
@@ -94,7 +93,7 @@ public static class CrawlProcedureCatalog
             Preset(
                 "simple-fixed-distance",
                 "Simple Fixed Distance",
-                "Four-hour continuous-distance travel using fixed resolved distance without navigation or encounter checks.",
+                "A minimal four-hour distance-travel procedure for tables that want fixed movement with partial cell progress, but no navigation or encounter checks.",
                 "simple-fixed-distance",
                 "Simple Fixed Distance",
                 ExecutableCore(
@@ -106,11 +105,12 @@ public static class CrawlProcedureCatalog
                     usesPersistentVeer: false,
                     tracksIntraHexProgress: true,
                     directionChangesCostProgress: false,
-                    supportsDeliberateDoubleBack: false)),
+                    supportsDeliberateDoubleBack: false),
+                category: "Generic starting points"),
             Preset(
                 "simple-hex-step",
                 "Simple Hex Step",
-                "Four-hour travel resolved as whole hex steps without intra-hex progress, navigation, or encounter checks.",
+                "A minimal four-hour whole-cell procedure for tables that want discrete hex steps with no partial progress, navigation, or encounter checks.",
                 "simple-hex-step",
                 "Simple Hex Step",
                 ExecutableCore(
@@ -122,7 +122,8 @@ public static class CrawlProcedureCatalog
                     usesPersistentVeer: false,
                     tracksIntraHexProgress: false,
                     directionChangesCostProgress: false,
-                    supportsDeliberateDoubleBack: false)),
+                    supportsDeliberateDoubleBack: false),
+                category: "Generic starting points"),
 
             bx,
             ose,
@@ -308,54 +309,7 @@ public static class CrawlProcedureCatalog
                         ("effectKinds", "fatigue"), ("accumulationModel", "journey-events"), ("recoveryModel", "safe-prolonged-rest"), ("scope", "participant"))
                 ],
                 attribution: "The One Ring 2e journey procedure research from publisher materials and secondary summaries.",
-                disclaimer: "Exact event tables, distances, modifiers, and fatigue values are intentionally not encoded; resolved journey details remain explicit DM/provider input."),
-
-            Preset(
-                MixedHouseRulePresetKey,
-                "Mixed House Rule",
-                "Deliberately mixes a four-hour native travel core with participant activity budgeting, supply-die resources, forced travel, assisted navigation outcomes, and role-targeted journey events.",
-                "mixed-modular-expedition",
-                "Mixed modular expedition",
-                [
-                    .. ExecutableCore(
-                        TimeSpan.FromHours(4),
-                        TravelResolutionMode.ContinuousDistance,
-                        ActualDistanceResolutionMode.Fixed,
-                        EncounterCheckCadence.None,
-                        usesNavigationChecks: false,
-                        usesPersistentVeer: false,
-                        tracksIntraHexProgress: true,
-                        directionChangesCostProgress: false,
-                        supportsDeliberateDoubleBack: false),
-                    Structural(GenericProcedureCatalog.MovementBudgetModule, GenericProcedureCatalog.MovementBudgetMechanic,
-                        ("budgetModel", "activity-and-distance"), ("baseBudget", "1"), ("budgetUnit", "watch"), ("limitingScope", "party-limiting")),
-                    Structural(GenericProcedureCatalog.TerrainMovementModule, GenericProcedureCatalog.TerrainMovementPolicyMechanic,
-                        ("adjustmentModel", "activity-cost"), ("terrainAdjustments", "open=1;difficult=2;severe=3"), ("routeAdjustmentModel", "road-improves-one-step"), ("weatherAdjustmentModel", "manual")),
-                    Structural(GenericProcedureCatalog.PartyActivitiesModule, GenericProcedureCatalog.ParticipantActivityPolicyMechanic,
-                        ("assignmentScope", "participant"), ("activityBudgetModel", "per-watch"), ("activityKeys", "travel;reconnoiter;forage;make-camp;lookout"), ("roleKeys", "navigator;lookout;forager;scout")),
-                    Structural(GenericProcedureCatalog.NavigationOutcomeModule, GenericProcedureCatalog.NavigationOutcomePolicyMechanic,
-                        ("checkTriggerModel", "per-watch-when-navigation-required"), ("failureStateModel", "lost-until-recognized"), ("directionalErrorModel", "persistent-veer"), ("recognitionModel", "boundary-check"), ("reorientationModel", "procedure-check")),
-                    Structural(GenericProcedureCatalog.ResourceConsumptionModule, GenericProcedureCatalog.ResourceConsumptionPolicyMechanic,
-                        ("resourceKinds", "food;water;light"), ("inventoryModel", "supply-die"), ("consumptionModel", "usage-roll"), ("consumptionInterval", "watch")),
-                    Structural(GenericProcedureCatalog.ForagingModule, GenericProcedureCatalog.ActivityForagingPolicyMechanic,
-                        ("resolutionModel", "activity-check"), ("timeCost", "1"), ("timeUnit", "watch-activity"), ("movementTradeoff", "replaces-activity")),
-                    Structural(GenericProcedureCatalog.CampingModule, GenericProcedureCatalog.ActivityCampingPolicyMechanic,
-                        ("resolutionModel", "activity-check"), ("timeCost", "1"), ("timeUnit", "watch"), ("watchModel", "assigned-lookout")),
-                    Structural(GenericProcedureCatalog.ForcedTravelModule, GenericProcedureCatalog.ForcedTravelPolicyMechanic,
-                        ("normalTravelLimit", "2"), ("limitUnit", "watches"), ("checkModel", "escalating-check"), ("failureConsequence", "fatigue")),
-                    Structural(GenericProcedureCatalog.PersistentEffectsModule, GenericProcedureCatalog.ProgressiveExpeditionEffectMechanic,
-                        ("effectKinds", "fatigue"), ("accumulationModel", "levels"), ("recoveryModel", "safe-rest"), ("scope", "participant")),
-                    Structural(GenericProcedureCatalog.JourneyEventsModule, GenericProcedureCatalog.JourneyEventPolicyMechanic,
-                        ("triggerModel", "per-watch-or-landmark"),
-                        ("triggerSources", "watch-completed;landmark;explicit"),
-                        ("linkMode", "standalone"),
-                        ("targetingModel", "travel-role"),
-                        ("terrainInfluence", "difficulty"),
-                        ("consequenceModel", "event-and-fatigue"),
-                        ("requiresResolvedTrigger", "true"),
-                        ("blocksRelevantTravelWhileResolutionRequired", "false"))
-                ],
-                attribution: "Original Dorks & Dice house-rule composition used to prove cross-preset generic composition.")
+                disclaimer: "Exact event tables, distances, modifiers, and fatigue values are intentionally not encoded; resolved journey details remain explicit DM/provider input.")
         ];
     }
 
@@ -367,7 +321,8 @@ public static class CrawlProcedureCatalog
         string procedureName,
         IReadOnlyList<ProcedureModuleRecipe> modules,
         string? attribution = null,
-        string? disclaimer = null) =>
+        string? disclaimer = null,
+        string category = "Familiar procedures") =>
         new(
             presetKey,
             displayName,
@@ -375,7 +330,8 @@ public static class CrawlProcedureCatalog
             1,
             new GenericProcedurePresetRecipe(procedureKey, procedureName, modules.ToArray()),
             attribution,
-            disclaimer);
+            disclaimer,
+            category);
 
     private static IReadOnlyList<ProcedureModuleRecipe> ExecutableCore(
         TimeSpan interval,

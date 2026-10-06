@@ -16,7 +16,6 @@ import { clearUiError, showUiError } from "../../ui-error";
 import { badge, openWorkspaceDrawer, textElement, type WorkspaceDrawer } from "../../ui/workspace";
 import { executionSummary, inputSourceLabel, saveBlocked, withBehavior, withParameter } from "./procedure-composer-model";
 import {
-    compactModuleSummary,
     compactParameter,
     compactRule,
     compactRuleCatalog,
@@ -24,6 +23,7 @@ import {
     formatDurationTicks,
     friendlyStoredValue,
     parameterDefinitions,
+    procedureParameterFacts,
     ticksToDuration
 } from "./procedure-presentation";
 
@@ -57,6 +57,7 @@ export async function renderProcedureAuthoringWorkspace(
     let savePending = false;
     let refreshSerial = 0;
     let activeDrawer: WorkspaceDrawer | null = null;
+    let advancedSelectedModuleKey: string | null = null;
     const pending = new Map<string, ProcedureComposerOverrideInput>();
     const moduleSelections = new Map<string, boolean>();
 
@@ -143,12 +144,17 @@ export async function renderProcedureAuthoringWorkspace(
         }
     };
 
-    const setModule = async (moduleKey: string, included: boolean): Promise<void> => {
-        moduleSelections.set(moduleKey, included);
-        pending.delete(moduleKey);
+    const setModules = async (values: Array<[string, boolean]>): Promise<void> => {
+        for (const [moduleKey, included] of values) {
+            moduleSelections.set(moduleKey, included);
+            pending.delete(moduleKey);
+        }
         closeDrawer();
         await refreshDraft();
     };
+
+    const setModule = async (moduleKey: string, included: boolean): Promise<void> =>
+        setModules([[moduleKey, included]]);
 
     const setOverride = async (value: ProcedureComposerOverrideInput): Promise<void> => {
         pending.set(value.moduleKey, value);
@@ -403,19 +409,31 @@ export async function renderProcedureAuthoringWorkspace(
     const savedProcedureCard = (value: SavedProcedureSummary): HTMLElement => {
         const card = document.createElement("article");
         card.className = "hc-panel hc-saved-procedure-card";
+        const head = document.createElement("header");
+        head.className = "hc-saved-procedure-head";
         const meta = document.createElement("div");
         meta.className = "hc-card-meta";
         meta.append(
             badge(`Revision ${value.revision}`, "info"),
             badge(value.isExecutable ? "Executable" : "Structured", value.isExecutable ? "good" : "warning"));
-        card.append(textElement("h3", value.name), meta);
-        const origin = value.originPresetDisplayName
-            ? `Started from ${value.originPresetDisplayName}`
-            : "Built as a custom procedure";
-        card.append(textElement("p", `${origin} · ${value.moduleCount} ${value.moduleCount === 1 ? "rule" : "rules"}`));
-        const open = button("Open procedure", "secondary");
+        head.append(textElement("h3", value.name), meta);
+        card.append(head);
+
+        const summary = document.createElement("dl");
+        summary.className = "hc-saved-procedure-summary";
+        summary.append(
+            textElement("dt", "Origin"),
+            textElement("dd", value.originPresetDisplayName ? `Started from ${value.originPresetDisplayName}` : "Custom"),
+            textElement("dt", "Rules"),
+            textElement("dd", `${value.moduleCount} ${value.moduleCount === 1 ? "rule" : "rules"}`));
+        card.append(summary);
+
+        const actions = document.createElement("footer");
+        actions.className = "hc-saved-procedure-actions";
+        const open = button("Open", "secondary");
         open.addEventListener("click", () => navigate(`/procedures/${encodeURIComponent(value.procedureId)}`));
-        card.append(open);
+        actions.append(open);
+        card.append(actions);
         return card;
     };
 
@@ -480,12 +498,22 @@ export async function renderProcedureAuthoringWorkspace(
         });
         activeDrawer.body.append(presetFacts(preset));
         const behavior = document.createElement("section");
-        behavior.className = "hc-focus-workspace-module";
+        behavior.className = "hc-focus-workspace-module hc-inspect-rules";
         behavior.append(textElement("h3", "Procedure rules"));
         for (const module of preset.procedure.modules) {
-            const row = document.createElement("div");
+            const row = document.createElement("article");
             row.className = "hc-inspect-rule";
-            row.append(textElement("strong", module.moduleName), textElement("span", presetModuleSummary(module)));
+            const descriptor = compactRule(module.moduleKey);
+            row.append(textElement("h4", descriptor?.label ?? module.moduleName));
+            if (descriptor?.description) row.append(textElement("p", descriptor.description));
+            const facts = document.createElement("dl");
+            facts.className = "hc-rule-facts hc-inspect-rule-facts";
+            const values = procedureParameterFacts(module.moduleKey, module.parameters);
+            for (const fact of values) {
+                facts.append(textElement("dt", fact.label), textElement("dd", fact.value));
+            }
+            if (values.length > 0) row.append(facts);
+            else row.append(textElement("p", "No additional table-facing values are configured."));
             behavior.append(row);
         }
         activeDrawer.body.append(behavior);
@@ -631,17 +659,18 @@ export async function renderProcedureAuthoringWorkspace(
         const shell = document.createElement("div");
         shell.className = "hc-procedure-shell hc-compact-procedure";
         if (!draft) return shell;
-        shell.append(textElement("p", "Only the rules shown here are part of this procedure. Add optional rules when your table uses them."));
+        shell.append(textElement("p", "These are the rules the DM runs. Add optional rules only when the table uses them."));
 
         if (draft.modules.length === 0) {
             const neutral = document.createElement("section");
             neutral.className = "hc-panel hc-neutral-procedure";
             neutral.append(
-                textElement("h2", "Choose how expedition play is structured"),
-                textElement("p", "Nothing is assumed yet. Add a repeating travel period, a journey process, movement rules, or any combination your table actually uses."));
+                textElement("h2", "Choose a starting rule"),
+                textElement("p", "Nothing is assumed yet. Start with a repeating travel period or spatial movement, or browse the grouped rule library below for a journey-first or nonspatial procedure."));
             const choices = document.createElement("div");
             choices.className = "hc-add-rule-grid";
-            for (const rule of compactRuleCatalog().filter(value => value.moduleKey === "time.interval" || value.moduleKey === "journey.process" || value.moduleKey === "movement.resolution")) {
+            for (const rule of compactRuleCatalog().filter(value =>
+                value.moduleKey === "time.interval" || value.moduleKey === "movement.resolution")) {
                 choices.append(addRuleCard(rule.moduleKey));
             }
             neutral.append(choices);
@@ -652,7 +681,9 @@ export async function renderProcedureAuthoringWorkspace(
         if (travel.length > 0) {
             const section = document.createElement("section");
             section.className = "hc-panel hc-table-procedure";
-            section.append(textElement("h2", "At the table"), textElement("p", "Run these procedure steps in order when they apply."));
+            section.append(
+                textElement("h2", "At the table"),
+                textElement("p", "Run these travel rules in order when their trigger applies. Each block states the configured behavior and values."));
             const list = document.createElement("ol");
             list.className = "hc-procedure-step-list";
             for (const module of travel) list.append(compactRuleCard(module, true));
@@ -660,15 +691,22 @@ export async function renderProcedureAuthoringWorkspace(
             shell.append(section);
         }
 
-        for (const group of ["Survival & resources", "Journey process", "Procedure support"]) {
+        const supportingGroups = travel.length === 0 && activeRules("Journey & events").length > 0
+            ? ["Journey & events", "Survival & resources", "Automation"]
+            : ["Survival & resources", "Journey & events", "Automation"];
+        for (const group of supportingGroups) {
             const active = activeRules(group);
+            if (active.length === 0) continue;
             const available = missingRules(group);
-            if (active.length === 0 && available.length === 0) continue;
             const section = document.createElement("section");
             section.className = "hc-panel hc-rule-group";
             section.append(textElement("h2", group));
             if (group === "Survival & resources") {
-                section.append(textElement("p", "Resource tracking, foraging, camping, forced travel, and persistent effects are independent rules. Use only the ones your table needs."));
+                section.append(textElement("p", "Apply these rules when their resource, rest, forced-travel, exposure, or persistent-effect trigger occurs."));
+            } else if (group === "Journey & events") {
+                section.append(textElement("p", "Run the configured stages and event triggers as one journey procedure."));
+            } else {
+                section.append(textElement("p", "Optional automatic generation supplements the procedure rules above; it does not replace them."));
             }
             const grid = document.createElement("div");
             grid.className = "hc-procedure-area-grid";
@@ -677,7 +715,7 @@ export async function renderProcedureAuthoringWorkspace(
             if (available.length > 0) {
                 const add = document.createElement("div");
                 add.className = "hc-add-rule-strip";
-                add.append(textElement("strong", "Add rule"));
+                add.append(textElement("strong", "Related rules"));
                 for (const rule of available) {
                     const control = button(rule.label, "secondary");
                     control.addEventListener("click", () => void setModule(rule.moduleKey, true));
@@ -688,24 +726,98 @@ export async function renderProcedureAuthoringWorkspace(
             shell.append(section);
         }
 
-        const remaining = compactRuleCatalog().filter(rule =>
-            !draft!.modules.some(module => module.moduleKey === rule.moduleKey)
-            && !["Survival & resources", "Journey process", "Procedure support"].includes(rule.group));
-        if (remaining.length > 0 && draft.modules.length > 0) {
+        const library = renderRuleLibrary();
+        if (library) shell.append(library);
+        return shell;
+    };
+
+    const renderRuleLibrary = (): HTMLElement | null => {
+        if (!draft) return null;
+        const missing = new Set(compactRuleCatalog()
+            .filter(rule => !draft!.modules.some(module => module.moduleKey === rule.moduleKey))
+            .map(rule => rule.moduleKey));
+        if (missing.size === 0) return null;
+
+        const details = document.createElement("details");
+        details.className = "hc-panel hc-rule-library";
+        details.open = draft.modules.length === 0;
+        const summary = document.createElement("summary");
+        summary.textContent = "Add exploration rules";
+        details.append(summary, textElement("p", "Browse by tabletop purpose. Dependencies are described here so you do not need to know the internal procedure graph."));
+
+        const groups: Array<{ title: string; description: string; keys: string[] }> = [
+            {
+                title: "Travel, course, and pace",
+                description: "Set travel periods, activities and roles, movement budget or pace, terrain and routes, movement resolution, and partial cell progress.",
+                keys: ["time.interval", "party.activities", "movement.budget", "movement.terrain", "movement.resolution", "movement.hex-progress"]
+            },
+            {
+                title: "Navigation",
+                description: "Add route checks and the rules for becoming lost, recognizing the error, and recovering the course.",
+                keys: ["navigation.check", "navigation.outcome"]
+            },
+            {
+                title: "Encounters",
+                description: "Set a regular encounter cadence and, when needed, a contextual encounter schedule.",
+                keys: ["encounters.cadence", "encounters.schedule"]
+            },
+            {
+                title: "Survival and recovery",
+                description: "Track supplies, foraging, camping, forced travel, environmental exposure, and persistent effects.",
+                keys: ["survival.resources", "exploration.foraging", "survival.camping", "time.forced-travel", "survival.exposure", "effects.expedition"]
+            },
+            {
+                title: "Journeys and events",
+                description: "Create a multi-stage journey, journey events, or both without requiring a spatial travel loop.",
+                keys: ["journey.process", "journey.events"]
+            },
+            {
+                title: "Automatic resolution",
+                description: "Let Hex Crawl generate supported travel, navigation, and encounter results.",
+                keys: ["procedure.helpers"]
+            }
+        ];
+
+        const grid = document.createElement("div");
+        grid.className = "hc-rule-library-groups";
+        const hasSpatialMovement = draft.modules.some(module =>
+            module.moduleKey === "movement.resolution"
+            || module.moduleKey === "movement.budget"
+            || module.moduleKey === "movement.terrain"
+            || module.moduleKey === "movement.hex-progress");
+
+        for (const group of groups) {
+            const rules = group.keys
+                .filter(key => missing.has(key))
+                .map(key => compactRule(key))
+                .filter((rule): rule is NonNullable<ReturnType<typeof compactRule>> => rule !== null);
+            if (rules.length === 0) continue;
             const section = document.createElement("section");
-            section.className = "hc-panel hc-additional-rules";
-            section.append(textElement("h2", "Add another rule"));
-            const strip = document.createElement("div");
-            strip.className = "hc-add-rule-strip";
-            for (const rule of remaining) {
+            section.className = "hc-rule-library-group";
+            section.append(textElement("h3", group.title), textElement("p", group.description));
+
+            if (group.title === "Navigation" && !hasSpatialMovement) {
+                section.append(notice("Navigation needs spatial movement when it is used for map travel."));
+                const combined = button("Add movement and navigation", "secondary");
+                combined.addEventListener("click", () => void setModules([
+                    ["movement.resolution", true],
+                    ["navigation.check", true]
+                ]));
+                section.append(combined);
+            }
+
+            const controls = document.createElement("div");
+            controls.className = "hc-add-rule-strip";
+            for (const rule of rules) {
                 const control = button(rule.label, "secondary");
                 control.addEventListener("click", () => void setModule(rule.moduleKey, true));
-                strip.append(control);
+                controls.append(control);
             }
-            section.append(strip);
-            shell.append(section);
+            section.append(controls);
+            grid.append(section);
         }
-        return shell;
+        details.append(grid);
+        return details;
     };
 
     const activeRules = (group: string): ProcedureModuleComposer[] =>
@@ -735,7 +847,7 @@ export async function renderProcedureAuthoringWorkspace(
         heading.className = "hc-area-card-heading";
         heading.append(textElement("h3", descriptor?.label ?? module.displayName));
         if (module.isModified) heading.append(badge("Edited", "info"));
-        card.append(heading, textElement("p", compactModuleSummary(module)));
+        card.append(heading, textElement("p", descriptor?.description ?? module.purpose));
         const facts = compactFacts(module);
         if (facts.childElementCount > 0) card.append(facts);
         const actions = document.createElement("div");
@@ -752,16 +864,11 @@ export async function renderProcedureAuthoringWorkspace(
     const compactFacts = (module: ProcedureModuleComposer): HTMLElement => {
         const facts = document.createElement("dl");
         facts.className = "hc-rule-facts";
-        let count = 0;
-        for (const [key, definition] of parameterDefinitions(module)) {
-            const presentation = compactParameter(key, definition, module.moduleKey);
-            if (!presentation) continue;
-            const value = module.parameters[key] ?? definition.defaultValue;
-            if (value == null || value === "") continue;
-            if (presentation.control === "boolean" && value === "false") continue;
-            facts.append(textElement("dt", presentation.label), textElement("dd", key === "durationTicks" ? formatDurationTicks(value) : friendlyStoredValue(key, value)));
-            count++;
-            if (count >= 4) break;
+        const values = Object.fromEntries(parameterDefinitions(module)
+            .map(([key, definition]) => [key, module.parameters[key] ?? definition.defaultValue ?? ""])
+            .filter(([, value]) => value !== ""));
+        for (const fact of procedureParameterFacts(module.moduleKey, values).slice(0, 5)) {
+            facts.append(textElement("dt", fact.label), textElement("dd", fact.value));
         }
         return facts;
     };
@@ -876,7 +983,7 @@ export async function renderProcedureAuthoringWorkspace(
         if (presentation.control === "summary") {
             const output = document.createElement("div");
             output.className = "hc-readonly-domain-value";
-            output.textContent = friendlyStoredValue(key, value);
+            output.textContent = friendlyStoredValue(key, value, module.moduleKey);
             field.append(output, textElement("small", "This specialized setting can be edited in Advanced."));
             return field;
         }
@@ -917,7 +1024,7 @@ export async function renderProcedureAuthoringWorkspace(
             mark(select);
             const choices = [...(presentation.choices ?? [])];
             if (!choices.some(choice => choice.value === value) && value) {
-                choices.unshift({ value, label: friendlyStoredValue(key, value) });
+                choices.unshift({ value, label: friendlyStoredValue(key, value, module.moduleKey) });
             }
             for (const choice of choices) {
                 const option = document.createElement("option");
@@ -962,23 +1069,88 @@ export async function renderProcedureAuthoringWorkspace(
         layout.className = "hc-advanced-layout";
         const index = document.createElement("aside");
         index.className = "hc-panel hc-advanced-index";
-        index.append(textElement("h2", "Procedure structure"), textElement("p", "Advanced exposes exact generic module keys, mechanics, versions, parameters, and contracts."));
-        for (const rule of compactRuleCatalog()) {
-            const label = document.createElement("label");
-            label.className = "hc-advanced-module-toggle";
-            const input = document.createElement("input");
-            input.type = "checkbox";
-            input.checked = draft?.modules.some(module => module.moduleKey === rule.moduleKey) ?? false;
-            input.addEventListener("change", () => void setModule(rule.moduleKey, input.checked));
-            label.append(input, textElement("span", rule.label), code(rule.moduleKey));
-            index.append(label);
+        index.append(
+            textElement("h2", "Procedure structure"),
+            textElement("p", "Select one module to inspect its exact generic structure. Inclusion is controlled independently."));
+
+        const catalog = compactRuleCatalog();
+        const includedKeys = new Set((draft?.modules ?? []).map(module => module.moduleKey));
+        const selectedKey = advancedSelectedModuleKey
+            ?? draft?.modules[0]?.moduleKey
+            ?? catalog[0]?.moduleKey
+            ?? null;
+        advancedSelectedModuleKey = selectedKey;
+
+        for (const group of [...new Set(catalog.map(rule => rule.group))]) {
+            const groupSection = document.createElement("section");
+            groupSection.className = "hc-advanced-index-group";
+            groupSection.append(textElement("h3", group));
+            for (const rule of catalog.filter(value => value.group === group)) {
+                const row = document.createElement("div");
+                row.className = `hc-advanced-module-row${selectedKey === rule.moduleKey ? " is-selected" : ""}${includedKeys.has(rule.moduleKey) ? " is-included" : ""}`;
+
+                const include = document.createElement("input");
+                include.type = "checkbox";
+                include.checked = includedKeys.has(rule.moduleKey);
+                include.setAttribute("aria-label", `Include ${rule.label}`);
+                include.addEventListener("change", () => {
+                    if (include.checked) advancedSelectedModuleKey = rule.moduleKey;
+                    void setModule(rule.moduleKey, include.checked);
+                });
+
+                const select = button(rule.label, "secondary");
+                select.classList.add("hc-advanced-module-select");
+                select.dataset.moduleKey = rule.moduleKey;
+                select.setAttribute("aria-current", selectedKey === rule.moduleKey ? "true" : "false");
+                select.replaceChildren(
+                    textElement("span", rule.label),
+                    code(rule.moduleKey));
+                select.addEventListener("click", () => {
+                    advancedSelectedModuleKey = rule.moduleKey;
+                    render();
+                });
+                row.append(include, select);
+                groupSection.append(row);
+            }
+            index.append(groupSection);
         }
+
+        const navigation = [...index.querySelectorAll<HTMLButtonElement>(".hc-advanced-module-select")];
+        navigation.forEach((control, position) => control.addEventListener("keydown", event => {
+            const next = event.key === "ArrowDown" ? position + 1
+                : event.key === "ArrowUp" ? position - 1
+                    : event.key === "Home" ? 0
+                        : event.key === "End" ? navigation.length - 1
+                            : -1;
+            if (next < 0 && !["ArrowUp"].includes(event.key)) return;
+            if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+            event.preventDefault();
+            navigation[Math.max(0, Math.min(navigation.length - 1, next))]?.focus();
+        }));
         layout.append(index);
 
         const content = document.createElement("main");
-        content.className = "hc-procedure-shell";
-        for (const module of draft?.modules ?? []) content.append(advancedModule(module));
-        if ((draft?.modules.length ?? 0) === 0) content.append(emptyState("No modules selected", "Select modules in the structure inspector."));
+        content.className = "hc-procedure-shell hc-advanced-content";
+        const selectedModule = selectedKey
+            ? draft?.modules.find(module => module.moduleKey === selectedKey)
+            : null;
+        if (selectedModule) {
+            content.append(advancedModule(selectedModule));
+        } else if (selectedKey) {
+            const rule = compactRule(selectedKey);
+            const empty = document.createElement("section");
+            empty.className = "hc-panel hc-advanced-module";
+            empty.append(
+                textElement("h2", rule?.label ?? selectedKey),
+                code(selectedKey),
+                textElement("p", rule?.description ?? "This module is not included in the procedure."));
+            const add = button("Include this module", "primary");
+            add.addEventListener("click", () => void setModule(selectedKey, true));
+            empty.append(add);
+            content.append(empty);
+        } else {
+            content.append(emptyState("No modules available", "No procedure modules are available to inspect."));
+        }
         layout.append(content);
         return layout;
     };
@@ -1014,7 +1186,20 @@ export async function renderProcedureAuthoringWorkspace(
             const [key, version] = select.value.split("|");
             void setOverride(withBehavior(module, pending.get(module.moduleKey), key, Number(version)));
         });
-        mechanic.append(select, textElement("p", `${module.mechanic.key} · v${module.mechanic.version} · ${module.mechanic.automationLevel}`), textElement("p", executionSummary(module)));
+        mechanic.append(select);
+
+        const mechanicFacts = document.createElement("dl");
+        mechanicFacts.className = "hc-advanced-facts";
+        mechanicFacts.append(
+            textElement("dt", "Mechanic"),
+            codeValue(`${module.mechanic.key} · v${module.mechanic.version}`),
+            textElement("dt", "Automation"),
+            textElement("dd", module.mechanic.automationLevel),
+            textElement("dt", "Execution handler"),
+            codeValue(module.mechanic.executionHandler),
+            textElement("dt", "Execution support"),
+            textElement("dd", module.mechanic.executionSupport));
+        mechanic.append(mechanicFacts, textElement("p", executionSummary(module)));
         card.append(mechanic);
 
         const parameters = document.createElement("section");
@@ -1039,10 +1224,16 @@ export async function renderProcedureAuthoringWorkspace(
 
         const contracts = document.createElement("div");
         contracts.className = "hc-advanced-contracts";
-        contracts.append(contractBlock("Inputs", module.requiredInputs.map(input => `${input.inputKey} — ${input.allowedSources.map(inputSourceLabel).join(", ")}`)),
+        contracts.append(
+            contractBlock("Inputs", module.requiredInputs.map(input =>
+                `${input.inputKey} — ${input.allowedSources.map(inputSourceLabel).join(", ")}`)),
             contractBlock("Produces", module.outputs),
-            contractBlock("Dependencies", [...module.requiredDependencies.map(value => `Required: ${value}`), ...module.optionalDependencies.map(value => `Optional: ${value}`)]),
-            contractBlock("Diagnostics", [...module.validationIssues, ...module.dependencyIssues.map(issue => issue.message)]));
+            contractBlock("Required dependencies", module.requiredDependencies),
+            contractBlock("Optional dependencies", module.optionalDependencies),
+            contractBlock("Diagnostics", [
+                ...module.validationIssues,
+                ...module.dependencyIssues.map(issue => issue.message)
+            ]));
         card.append(contracts);
         return card;
     };
@@ -1119,7 +1310,10 @@ function presetComparison(preset: ProcedurePreset): Record<string, string> {
     const modules = new Map(preset.procedure.modules.map(module => [module.moduleKey, module]));
     const parameter = (moduleKey: string, key: string): string | null => modules.get(moduleKey)?.parameters[key] ?? null;
     const interval = preset.procedure.runtime?.intervalHours;
-    const time = interval == null ? "No fixed interval" : interval === 24 ? "Daily" : interval === 1 ? "Hourly" : `${formatNumber(interval)} hours`;
+    const storedTicks = parameter("time.interval", "durationTicks");
+    const time = interval == null
+        ? storedTicks ? formatDurationTicks(storedTicks) : "No fixed interval"
+        : interval === 24 ? "Daily" : interval === 1 ? "Hourly" : `${formatNumber(interval)} hours`;
     const movement = modules.has("movement.terrain")
         ? "Terrain-adjusted"
         : parameter("movement.resolution", "travelResolution") === "HexSteps" ? "Whole cell steps"
@@ -1138,7 +1332,11 @@ function presetComparison(preset: ProcedurePreset): Record<string, string> {
         modules.has("time.forced-travel") ? "forced travel" : null
     ].filter((value): value is string => value !== null);
     return {
-        Workflow: modules.has("journey.process") ? "Journey / staged process" : modules.has("time.interval") ? "Interval travel" : "Procedure-driven",
+        Workflow: modules.has("journey.process")
+            ? "Journey / staged process"
+            : modules.has("movement.resolution") && modules.has("time.interval")
+                ? "Interval travel"
+                : modules.has("time.interval") ? "Repeating interval" : "Procedure-driven",
         Time: time,
         Movement: movement,
         Navigation: navigation,
@@ -1150,21 +1348,15 @@ function presetComparison(preset: ProcedurePreset): Record<string, string> {
 }
 
 function presetTagline(preset: ProcedurePreset): string {
-    const summary = presetComparison(preset);
-    return `${summary.Workflow} · ${summary.Time}`;
-}
-
-function presetModuleSummary(module: ProcedurePreset["procedure"]["modules"][number]): string {
-    const entries = Object.entries(module.parameters).slice(0, 3).map(([key, value]) => friendlyStoredValue(key, value));
-    return entries.length > 0 ? entries.join(" · ") : `${module.automationLevel} behavior`;
+    return preset.description;
 }
 
 function familiarPresets(values: ProcedurePreset[]): ProcedurePreset[] {
-    return values.filter(value => !value.presetKey.startsWith("simple-"));
+    return values.filter(value => value.category !== "Generic starting points");
 }
 
 function genericPresets(values: ProcedurePreset[]): ProcedurePreset[] {
-    return values.filter(value => value.presetKey.startsWith("simple-"));
+    return values.filter(value => value.category === "Generic starting points");
 }
 
 function moduleSelectionInputs(values: Map<string, boolean>): ProcedureComposerModuleSelectionInput[] {
@@ -1245,6 +1437,12 @@ function contractBlock(title: string, values: string[]): HTMLElement {
 function code(value: string): HTMLElement {
     const output = document.createElement("code");
     output.textContent = value;
+    return output;
+}
+
+function codeValue(value: string): HTMLElement {
+    const output = document.createElement("dd");
+    output.append(code(value));
     return output;
 }
 

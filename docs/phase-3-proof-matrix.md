@@ -106,7 +106,6 @@ The following table records which already-executable Phase 2 modules are selecte
 | Worlds Without Number | `time.interval` |
 | The One Ring 2e | none |
 | The Alexandrian | all six Phase 2 executable modules |
-| Mixed House Rule | all six Phase 2 executable modules |
 
 The matrix prevents a familiar system name from causing unverified movement, navigation, progress, encounter, helper, or time behavior to be invented.
 
@@ -214,13 +213,13 @@ Evidence basis: Free League publisher material plus a secondary Chapter 6 journe
 
 Evidence basis: The Alexandrian hexcrawl watch checklist and later 5E watch checklist.
 
-### Mixed House Rule
+### Synthetic mixed-procedure architecture proof
 
-The Dorks & Dice mixed preset intentionally combines a complete executable core with Phase 3 structural contracts from otherwise independent families: activity budgeting, terrain activity costs, participant activities, navigation outcomes, supply-die resources, activity-based foraging/camping, forced travel, persistent effects, and journey events.
+A test-only synthetic procedure intentionally combines a complete executable core with Phase 3 structural contracts from otherwise independent families: activity budgeting, terrain activity costs, participant activities, navigation outcomes, supply-die resources, activity-based foraging/camping, forced travel, persistent effects, and journey events.
 
 Forced travel is the selected source of transient fatigue consequences; the persistent-effect contract consumes that output. Journey events consume real participant/terrain state rather than persistent effects they would themselves help cause.
 
-It proves that a complete executable core can coexist with recognized non-executable structural contracts without runtime dispatch depending on preset identity.
+The synthetic composition proves that a complete executable core can coexist with recognized non-executable structural contracts without runtime dispatch depending on preset identity. It is deliberately not present in `CrawlProcedureCatalog` and is not available through production preset discovery or preset-start APIs.
 
 ## Persistence and current API behavior
 

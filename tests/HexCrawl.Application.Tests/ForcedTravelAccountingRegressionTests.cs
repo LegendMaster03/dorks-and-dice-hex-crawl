@@ -6,11 +6,9 @@ namespace HexCrawl.Application.Tests;
 public sealed class ForcedTravelAccountingRegressionTests
 {
     [Fact]
-    public void MixedHouseRuleConvertsWatchBudgetToWatchesForcedTravelUnit()
+    public void SyntheticMixedProcedureConvertsWatchBudgetToWatchesForcedTravelUnit()
     {
-        var procedure = CrawlProcedureCatalog.Resolve(CrawlProcedureCatalog.MixedHouseRulePresetKey)
-            .MaterializeGeneric()
-            .Procedure;
+        var procedure = SyntheticProcedureFixtures.MixedProcedure();
         var runtimeId = Guid.NewGuid();
         var before = new NonSpatialSessionState
         {

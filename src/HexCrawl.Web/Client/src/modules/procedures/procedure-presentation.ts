@@ -15,26 +15,31 @@ export type CompactParameterPresentation = {
     choices?: Array<{ value: string; label: string }>;
 };
 
+export type ProcedurePresentationFact = {
+    label: string;
+    value: string;
+};
+
 const rules: CompactRuleDescriptor[] = [
     { moduleKey: "time.interval", group: "Travel flow", label: "Travel period", description: "Sets the repeating turn, watch, or travel period used by the procedure.", order: 10 },
     { moduleKey: "party.activities", group: "Travel flow", label: "Travel activities", description: "Defines how party members or roles take on expedition activities.", order: 20 },
     { moduleKey: "movement.budget", group: "Travel flow", label: "Available movement", description: "Determines how much movement the party has before terrain and route adjustments.", order: 30 },
-    { moduleKey: "navigation.check", group: "Travel flow", label: "Navigation checks", description: "Determines whether and how route checks are made while traveling.", order: 40 },
-    { moduleKey: "navigation.outcome", group: "Travel flow", label: "Getting lost and recovery", description: "Defines what happens when navigation fails and how the party recognizes or corrects its course.", order: 45 },
-    { moduleKey: "movement.terrain", group: "Travel flow", label: "Terrain and routes", description: "Adjusts movement for terrain, routes, and weather.", order: 50 },
-    { moduleKey: "movement.resolution", group: "Travel flow", label: "Resolve movement", description: "Defines whether travel advances by distance or whole cells and how actual distance is resolved.", order: 60 },
-    { moduleKey: "movement.hex-progress", group: "Travel flow", label: "Cell progress", description: "Tracks partial progress and direction changes when movement crosses map cells.", order: 65 },
-    { moduleKey: "encounters.cadence", group: "Travel flow", label: "Encounter checks", description: "Sets the ordinary cadence for encounter checks.", order: 70 },
-    { moduleKey: "encounters.schedule", group: "Travel flow", label: "Encounter schedule", description: "Adds contextual or scheduled encounter checks beyond a simple cadence.", order: 75 },
+    { moduleKey: "movement.terrain", group: "Travel flow", label: "Terrain and routes", description: "Adjusts movement for terrain, routes, and weather.", order: 40 },
+    { moduleKey: "movement.resolution", group: "Travel flow", label: "Resolve movement", description: "Defines whether travel advances by distance or whole cells and how actual distance is resolved.", order: 50 },
+    { moduleKey: "movement.hex-progress", group: "Travel flow", label: "Cell progress", description: "Tracks partial progress and direction changes when movement crosses map cells.", order: 60 },
+    { moduleKey: "navigation.check", group: "Travel flow", label: "Navigation checks", description: "Determines whether route checks are required and whether an incorrect course persists.", order: 70 },
+    { moduleKey: "navigation.outcome", group: "Travel flow", label: "Getting lost and recovery", description: "Defines what happens when navigation fails and how the party recognizes or corrects its course.", order: 80 },
+    { moduleKey: "encounters.cadence", group: "Travel flow", label: "Encounter checks", description: "Sets the ordinary cadence for encounter checks.", order: 90 },
+    { moduleKey: "encounters.schedule", group: "Travel flow", label: "Encounter schedule", description: "Adds contextual or scheduled encounter checks beyond a simple cadence.", order: 95 },
     { moduleKey: "survival.resources", group: "Survival & resources", label: "Food, water, and supplies", description: "Tracks resource consumption during expedition play.", order: 100 },
     { moduleKey: "exploration.foraging", group: "Survival & resources", label: "Foraging", description: "Defines how the party searches for expedition resources and what it costs.", order: 110 },
     { moduleKey: "survival.camping", group: "Survival & resources", label: "Camping", description: "Defines camp procedure, time cost, and watch behavior.", order: 120 },
     { moduleKey: "time.forced-travel", group: "Survival & resources", label: "Forced travel", description: "Defines when ordinary travel becomes forced and what resolves each extension.", order: 130 },
     { moduleKey: "survival.exposure", group: "Survival & resources", label: "Environmental exposure", description: "Defines which environmental conditions require exposure resolution and who is affected.", order: 135 },
     { moduleKey: "effects.expedition", group: "Survival & resources", label: "Persistent effects", description: "Defines accumulating expedition conditions and how they recover.", order: 140 },
-    { moduleKey: "journey.process", group: "Journey process", label: "Multi-stage journey", description: "Defines journey stages, progress, roles, transitions, and completion.", order: 200 },
-    { moduleKey: "journey.events", group: "Journey process", label: "Journey events", description: "Defines when journey events occur and how they affect the expedition.", order: 210 },
-    { moduleKey: "procedure.helpers", group: "Procedure support", label: "Resolution helpers", description: "Optional procedure-defined assistance for travel, navigation, and encounters.", order: 300 }
+    { moduleKey: "journey.process", group: "Journey & events", label: "Multi-stage journey", description: "Defines journey stages, progress, roles, transitions, and completion.", order: 200 },
+    { moduleKey: "journey.events", group: "Journey & events", label: "Journey events", description: "Defines when journey events occur and how they affect the expedition.", order: 210 },
+    { moduleKey: "procedure.helpers", group: "Automation", label: "Automatic resolution", description: "Uses Hex Crawl to generate supported travel, navigation, and encounter results when configured.", order: 300 }
 ];
 
 const ruleMap = new Map(rules.map(rule => [rule.moduleKey, rule]));
@@ -51,8 +56,8 @@ const labels: Record<string, string> = {
     directionChangesCostProgress: "Direction changes cost progress",
     directionChangeProgressCostFactor: "Direction-change cost",
     supportsDeliberateDoubleBack: "Allow deliberate double-back",
-    usesNavigationChecks: "Use navigation checks",
-    usesPersistentVeer: "Keep an incorrect course until corrected",
+    usesNavigationChecks: "Checks required",
+    usesPersistentVeer: "Persistent off-course state",
     cadence: "Check cadence",
     budgetModel: "Movement budget",
     baseBudget: "Base movement",
@@ -117,16 +122,16 @@ const labels: Record<string, string> = {
     evaluationModel: "Exposure resolution",
     evaluationInterval: "Exposure cadence",
     targetScope: "Who is affected",
-    "travel.enabled": "Resolve travel distance with a roll",
+    "travel.enabled": "Generate travel distance",
     "travel.diceCount": "Travel dice count",
     "travel.dieSides": "Travel die sides",
     "travel.modifier": "Travel roll modifier",
     "travel.distanceFactor": "Distance per travel-roll point",
-    "navigation.enabled": "Use a navigation roll helper",
+    "navigation.enabled": "Generate navigation checks",
     "navigation.diceCount": "Navigation dice count",
     "navigation.dieSides": "Navigation die sides",
     "navigation.modifier": "Navigation roll modifier",
-    "encounter.enabled": "Use an encounter roll helper",
+    "encounter.enabled": "Generate encounter checks",
     "encounter.diceCount": "Encounter dice count",
     "encounter.dieSides": "Encounter die sides",
     "encounter.modifier": "Encounter roll modifier",
@@ -226,6 +231,10 @@ const keyListKeys = new Set([
     "activityKeys", "roleKeys", "resourceKinds", "effectKinds", "triggerSources", "dimensions", "stageKeys"
 ]);
 const mappingKeys = new Set(["terrainAdjustments"]);
+const progressFactorKeys = new Set([
+    "startingExitProgressFactor", "nearExitProgressFactor", "farExitProgressFactor",
+    "backExitProgressFactor", "directionChangeProgressCostFactor"
+]);
 const textKeys = new Set(["evaluationInterval"]);
 
 export function compactRuleCatalog(): CompactRuleDescriptor[] {
@@ -243,7 +252,7 @@ export function compactParameter(
     const label = labels[key];
     if (!label) return null;
     if (key === "durationTicks") {
-        return { label, help: definition.description, control: "duration" };
+        return { label, help: "Set the length of one travel period.", control: "duration" };
     }
     if (booleanKeys.has(key) || definition.type === "boolean") {
         return { label, help: definition.description, control: "boolean" };
@@ -271,26 +280,12 @@ export function compactParameter(
 
 export function compactModuleSummary(module: ProcedureModuleComposer): string {
     const descriptor = compactRule(module.moduleKey);
-    const fragments: string[] = [];
-    for (const [key, definition] of parameterDefinitions(module)) {
-        const presentation = compactParameter(key, definition, module.moduleKey);
-        if (!presentation) continue;
-        const value = module.parameters[key] ?? definition.defaultValue ?? "";
-        if (!value) continue;
-        if (key === "durationTicks") {
-            fragments.push(formatDurationTicks(value));
-            continue;
-        }
-        if (presentation.control === "boolean") {
-            if (value.toLowerCase() === "true") fragments.push(presentation.label);
-            continue;
-        }
-        if (fragments.length < 3) {
-            fragments.push(`${presentation.label}: ${friendlyStoredValue(key, value)}`);
-        }
-    }
-    return fragments.length > 0
-        ? fragments.join(" · ")
+    const facts = procedureParameterFacts(module.moduleKey, Object.fromEntries(
+        parameterDefinitions(module)
+            .map(([key, definition]) => [key, module.parameters[key] ?? definition.defaultValue ?? ""])
+            .filter(([, value]) => value !== "")));
+    return facts.length > 0
+        ? facts.slice(0, 3).map(fact => `${fact.label}: ${fact.value}`).join(" · ")
         : descriptor?.description ?? module.purpose;
 }
 
@@ -321,14 +316,35 @@ function storedParameterType(key: string, value: string): string {
     return "string";
 }
 
-export function friendlyStoredValue(key: string, value: string): string {
-    const choice = choiceSets[key]?.find(option => option.value === value);
+export function friendlyStoredValue(key: string, value: string, moduleKey: string | null = null): string {
+    const choiceKey = moduleKey ? `${moduleKey}.${key}` : key;
+    const choice = (choiceSets[choiceKey] ?? choiceSets[key])?.find(option => option.value === value);
     if (choice) return choice.label;
     if (value === "true") return "Yes";
     if (value === "false") return "No";
     if (keyListKeys.has(key)) return value.split(";").map(friendlyToken).join(", ");
-    if (mappingKeys.has(key)) return value.split(";").map(part => part.replace("=", ": ")).join(", ");
+    if (mappingKeys.has(key)) return value.split(";").map(part => {
+        const [storedKey, storedValue] = part.split("=", 2);
+        return storedValue === undefined ? friendlyToken(part) : `${friendlyToken(storedKey)}: ${friendlyToken(storedValue)}`;
+    }).join(", ");
+    if (progressFactorKeys.has(key)) {
+        const factor = Number(value);
+        if (Number.isFinite(factor)) return `${formatNumber(factor * 100)}% of a cell crossing`;
+    }
     return friendlyToken(value);
+}
+
+export function procedureParameterFacts(
+    moduleKey: string,
+    parameters: Record<string, string>): ProcedurePresentationFact[] {
+    return Object.entries(parameters)
+        .filter(([, value]) => value !== "")
+        .map(([key, value]) => ({
+            label: labels[key] ?? friendlyToken(key),
+            value: key === "durationTicks"
+                ? formatDurationTicks(value)
+                : friendlyStoredValue(key, value, moduleKey)
+        }));
 }
 
 export function ticksToDuration(value: string): { amount: number; unit: "minutes" | "hours" | "days" } | null {
@@ -349,7 +365,8 @@ export function durationToTicks(amount: number, unit: "minutes" | "hours" | "day
 export function formatDurationTicks(value: string): string {
     const duration = ticksToDuration(value);
     if (!duration) return "Configured travel period";
-    return `${formatNumber(duration.amount)} ${duration.unit}`;
+    const unit = duration.amount === 1 ? duration.unit.slice(0, -1) : duration.unit;
+    return `${formatNumber(duration.amount)} ${unit}`;
 }
 
 function choices(...values: string[]): Array<{ value: string; label: string }> {

@@ -77,7 +77,7 @@ A policy declares whether events are standalone, process-linked, or both. A trig
 
 Stable occurrence IDs make event creation idempotent. Event history can therefore survive request retries and expedition restart without repeating resolved work.
 
-The One Ring proof recipe uses process-linked progress events. The Mixed House Rule proof recipe uses standalone completed-watch, landmark, and explicit events. These are ordinary generic recipe parameters, not runtime branches on preset identity.
+The One Ring preset uses process-linked progress events. A synthetic mixed-procedure test fixture uses standalone completed-watch, landmark, and explicit events. These are ordinary generic procedure parameters, not runtime branches on preset identity.
 
 ## Completed-watch integration
 
@@ -134,7 +134,7 @@ Typed HTTP operations expose journey state and focused mutations for:
 
 The TypeScript client uses the same contracts through `JourneyApi`. Phase 15 presents journey state within the unified procedure-aware expedition workspace: journey-first/nonspatial procedures can make the active process, stage, progress, roles, and unresolved events the primary operating context, while spatial procedures keep journey state close at hand as relevant supporting context. The browser does not edit raw journey aggregate JSON or implement a second process engine.
 
-## Proof presets
+## Proof procedures
 
 ### The One Ring 2e
 
@@ -142,11 +142,11 @@ The proof recipe materializes a role-driven three-stage process (`route -> event
 
 No repeating `time.interval` is fabricated. Exact event tables, distances, modifiers, dice formulas, and fatigue amounts remain explicit resolved input because the recipe does not encode them.
 
-### Mixed House Rule
+### Synthetic mixed procedure
 
-The proof recipe retains its four-hour deterministic watch runtime and adds standalone journey events triggered by completed watches, landmarks, or explicit DM action. Completed-watch observation is additive and idempotent; it does not replace watch bookkeeping.
+The test-only synthetic composition retains a four-hour deterministic watch runtime and adds standalone journey events triggered by completed watches, landmarks, or explicit DM action. Completed-watch observation is additive and idempotent; it does not replace watch bookkeeping.
 
-The recipe also demonstrates Phase 11 forced-travel accounting using movement-budget unit `watch` and forced-travel unit `watches`; those open units are treated as the same simple singular/plural unit without general semantic conversion.
+The same fixture demonstrates Phase 11 forced-travel accounting using movement-budget unit `watch` and forced-travel unit `watches`; those open units are treated as the same simple singular/plural unit without general semantic conversion. It is not a production preset.
 
 ## Phase boundary
 

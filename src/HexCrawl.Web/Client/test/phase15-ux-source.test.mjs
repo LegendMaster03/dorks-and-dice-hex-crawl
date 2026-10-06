@@ -23,8 +23,8 @@ test("Phase 15 procedure authoring separates entry choice from one shared Campai
     assert.match(workspace, /Build my own/);
     assert.match(workspace, /EntryState = "landing" \| "presets" \| "workspace"/);
     assert.match(workspace, /ProcedureAuthoringMode = "compact" \| "advanced" \| "json"/);
-    assert.match(workspace, /Only the rules shown here are part of this procedure/);
-    assert.match(workspace, /Advanced exposes exact generic module keys, mechanics, versions, parameters, and contracts/);
+    assert.match(workspace, /These are the rules the DM runs/);
+    assert.match(workspace, /Select one module to inspect its exact generic structure/);
     assert.match(workspace, /exact same CampaignProcedure produced by Compact structural choices and Advanced edits/);
     assert.match(workspace, /sourceProcedureId === null && \(sourcePresetKey !== null \|\| \(draft\?\.modules\.length \?\? 0\) > 0\)/);
     assert.match(workspace, /moduleSelections/);
@@ -68,6 +68,104 @@ test("Compact presentation covers all current generic procedure parameter labels
             labelBlock.includes(`${key}: "`) || labelBlock.includes(`"${key}": "`),
             key);
     }
+});
+
+
+
+test("Phase 15 Compact keeps journey authoring singular and makes ordinary rules discoverable", () => {
+    const workspace = fs.readFileSync(
+        path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"),
+        "utf8");
+    const presentation = fs.readFileSync(
+        path.join(sourceDir, "modules/procedures/procedure-presentation.ts"),
+        "utf8");
+
+    const compactStart = workspace.indexOf("const renderCompact");
+    const libraryStart = workspace.indexOf("const renderRuleLibrary", compactStart);
+    assert.notEqual(compactStart, -1);
+    assert.notEqual(libraryStart, -1);
+    const neutral = workspace.slice(compactStart, libraryStart);
+    assert.doesNotMatch(neutral, /value\.moduleKey === "journey\.process"/);
+    assert.match(workspace, /Add exploration rules/);
+    assert.match(workspace, /Travel, course, and pace/);
+    assert.match(workspace, /Navigation needs spatial movement/);
+    assert.match(workspace, /Add movement and navigation/);
+    assert.match(workspace, /Encounters/);
+    assert.match(workspace, /Survival and recovery/);
+    assert.match(workspace, /Journeys and events/);
+    assert.doesNotMatch(presentation, /Procedure support/);
+    assert.doesNotMatch(presentation, /label: "Resolution helpers"/);
+});
+
+test("Phase 15 journey-first Compact runs journey rules before supporting survival effects", () => {
+    const workspace = fs.readFileSync(
+        path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"),
+        "utf8");
+
+    assert.match(workspace, /travel\.length === 0 && activeRules\("Journey & events"\)\.length > 0/);
+    assert.match(workspace, /\["Journey & events", "Survival & resources", "Automation"\]/);
+});
+
+test("Phase 15 Inspect and Compact consume one semantic fact formatter", () => {
+    const workspace = fs.readFileSync(
+        path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"),
+        "utf8");
+
+    assert.ok((workspace.match(/procedureParameterFacts\(/g) ?? []).length >= 2);
+    assert.match(workspace, /hc-inspect-rule-facts/);
+    assert.doesNotMatch(workspace, /presetModuleSummary/);
+});
+
+test("Phase 15 Advanced uses a grouped keyboard-navigable structure rail and focused inspector", () => {
+    const workspace = fs.readFileSync(
+        path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"),
+        "utf8");
+    const styles = fs.readFileSync(path.join(sourceDir, "phase15-styles.ts"), "utf8");
+
+    assert.match(workspace, /hc-advanced-index-group/);
+    assert.match(workspace, /hc-advanced-module-select/);
+    assert.match(workspace, /aria-current/);
+    assert.match(workspace, /ArrowDown/);
+    assert.match(workspace, /ArrowUp/);
+    assert.match(workspace, /Home/);
+    assert.match(workspace, /End/);
+    assert.match(workspace, /Required dependencies/);
+    assert.match(workspace, /Optional dependencies/);
+    assert.match(workspace, /Execution handler/);
+    assert.match(styles, /grid-template-columns:minmax\(20rem,24rem\) minmax\(0,1fr\)/);
+    assert.match(styles, /\.hc-advanced-module-select code/);
+    assert.doesNotMatch(styles, /hc-advanced-module-toggle/);
+});
+
+test("Phase 15 preset classification and saved procedure cards use explicit product metadata", () => {
+    const workspace = fs.readFileSync(
+        path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"),
+        "utf8");
+    const types = fs.readFileSync(path.join(sourceDir, "types.ts"), "utf8");
+
+    assert.match(types, /category: string/);
+    assert.match(workspace, /value\.category === "Generic starting points"/);
+    assert.doesNotMatch(workspace, /presetKey\.startsWith\("simple-"\)/);
+    assert.match(workspace, /hc-saved-procedure-summary/);
+    assert.match(workspace, /hc-saved-procedure-actions/);
+});
+
+test("Phase 15 procedure surfaces inherit shared theme tokens", () => {
+    const styles = fs.readFileSync(path.join(sourceDir, "phase15-styles.ts"), "utf8");
+
+    for (const selector of [
+        ".hc-preset-card",
+        ".hc-focus-workspace",
+        ".hc-area-card",
+        ".hc-rule-library-group",
+        ".hc-advanced-module-row.is-selected"
+    ]) {
+        assert.ok(styles.includes(selector), selector);
+    }
+    assert.match(styles, /background:var\(--hc-surface\)/);
+    assert.match(styles, /background:var\(--hc-surface-elevated\)/);
+    assert.match(styles, /color:var\(--hc-text\)/);
+    assert.match(styles, /outline:3px solid var\(--hc-focus\)/);
 });
 
 test("Compact procedure edits keep their focused workspace across draft recomposition", () => {
