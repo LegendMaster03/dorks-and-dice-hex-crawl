@@ -239,6 +239,11 @@ export function ensurePhase15Styles(): void {
             .hc-table-rail > h2 { grid-column:1 / -1; }
         }
         @media (max-width: 760px) {
+            .hc-phase15-expedition > .hc-current-action { order:1; }
+            .hc-phase15-expedition > .hc-workspace-grid,
+            .hc-phase15-expedition > .hc-nonspatial-primary { order:2; }
+            .hc-phase15-expedition > .hc-phase15-runtime-summary { order:3; }
+            .hc-phase15-expedition > .hc-ux-disclosure { order:4; }
             .hc-build-custom { grid-template-columns:1fr; }
             .hc-advanced-layout { grid-template-columns:1fr; }
             .hc-advanced-index { position:static; }

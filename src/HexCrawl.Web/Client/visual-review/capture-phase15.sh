@@ -31,6 +31,7 @@ cases=(
   "embedded-map-selected|map-selected|light|1120|820"
   "laptop-partial-progress|partial-progress|dark|1366|900"
   "tablet-navigation|navigation-pending|dark|820|980"
+  "narrow-selected-edge|selected-edge|light|500|844|390"
   "narrow-movement|movement-input-pending|light|500|844|390"
   "narrow-encounter|encounter-pending|dark|500|844|390"
   "laptop-forced-travel|forced-travel-pending|light|1366|900"
@@ -106,8 +107,11 @@ if metrics["state"] == "map-selected":
         raise SystemExit(f'map selection did not expose contextual detail: {metrics}')
     if metrics["primaryAction"] != "Continue travel":
         raise SystemExit(f'map selection did not update the shared travel action: {metrics}')
-if metrics["state"] == "selected-edge" and not metrics["focusedEdge"]:
-    raise SystemExit(f'selected edge did not retain visible keyboard focus: {metrics}')
+if metrics["state"] == "selected-edge":
+    if not metrics["focusedEdge"]:
+        raise SystemExit(f'selected edge did not retain visible keyboard focus: {metrics}')
+    if metrics["reviewWidth"] <= 392 and (metrics["mapTop"] is None or metrics["mapTop"] >= metrics["viewportHeight"]):
+        raise SystemExit(f'narrow map does not begin in the initial viewport: {metrics}')
 if metrics["state"] in {"navigation-pending", "movement-input-pending", "encounter-pending", "forced-travel-pending", "more-options-open"} and metrics["drawerCount"] != 1:
     raise SystemExit(f'focused workflow did not open exactly one drawer: {metrics}')
 expected_titles = {

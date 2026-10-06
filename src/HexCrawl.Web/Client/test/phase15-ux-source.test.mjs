@@ -641,6 +641,22 @@ test("normal spatial travel has one primary continuation path and focused unreso
     assert.doesNotMatch(view, /openTravelWorkspace\("travel"\)/);
 });
 
+test("narrow hierarchy keeps primary travel and the map ahead of status-card detail", () => {
+    const styles = fs.readFileSync(path.join(sourceDir, "phase15-styles.ts"), "utf8");
+    const capture = fs.readFileSync(
+        path.join(sourceDir, "..", "visual-review", "capture-phase15.sh"),
+        "utf8");
+    const fixture = fs.readFileSync(
+        path.join(sourceDir, "..", "visual-review", "phase15.ts"),
+        "utf8");
+
+    assert.match(styles, /@media \(max-width: 760px\)[\s\S]*\.hc-phase15-expedition > \.hc-workspace-grid,[\s\S]*order:2/);
+    assert.match(styles, /\.hc-phase15-expedition > \.hc-phase15-runtime-summary \{ order:3; \}/);
+    assert.match(capture, /narrow-selected-edge\|selected-edge\|light\|500\|844\|390/);
+    assert.match(capture, /narrow map does not begin in the initial viewport/);
+    assert.match(fixture, /mapTop:/);
+});
+
 test("desktop hierarchy exposes current travel before the map and compacts summary chrome", () => {
     const view = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/expedition-view.ts"),

@@ -554,6 +554,7 @@ const metrics = {
     travelControlsButtons: buttons.filter(button => isVisible(button) && button.textContent?.trim() === "Travel controls").length,
     drawerCount: root.querySelectorAll("[data-phase15-drawer]").length,
     mapHeight: mapHost ? Math.round(mapHost.getBoundingClientRect().height) : 0,
+    mapTop: mapHost ? Math.round(mapHost.getBoundingClientRect().top) : null,
     mapContextVisible: isVisible(mapContext),
     railVisible: isVisible(rail),
     currentTravelVisible: isVisible(currentTravel),
