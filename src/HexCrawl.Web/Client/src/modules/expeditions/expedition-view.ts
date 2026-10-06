@@ -9,7 +9,7 @@ import { discoveredSubjectIds, directionLabel, formatDistance, formatHours } fro
 import { SurvivalResourcesApi } from "../../survival-api";
 import type { SurvivalResources } from "../../survival-types";
 import { canonicalExpeditionRoute } from "../../tool-route";
-import type { ExpeditionDetail, HexCoordinate, HexOrientation, Overworld, ResolutionSource, RuntimeAdvanceRequest, ToolHostContext } from "../../types";
+import type { ExpeditionDetail, HexCoordinate, HexOrientation, Overworld, ResolutionSource, ToolHostContext } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
 import { badge, disclosure, openWorkspaceDrawer, statAction, textElement, type WorkspaceDrawer } from "../../ui/workspace";
 import { ExpeditionEnvironmentPanel } from "./environment-panel";
@@ -1160,22 +1160,12 @@ export async function renderExpedition(
         }
         if (!edge || effectiveDistance === null) return;
 
-        const request: RuntimeAdvanceRequest = {
-            expectedVersion: runtime.version,
-            intendedDirection: edge.directionValue,
-            paceKey: preferences.pace,
-            navigationAidKey: active ? state.activeNavigationAidKey ?? "none" : "none",
-            suppressesNavigationCheck: suppressesNavigation,
-            resetsVeerAtBoundary: active ? state.activeResetsVeerAtBoundary : false,
-            resolutionSource: "ManualRoll",
-            travelResolutionSource: "ProcedureDefault",
-            effectiveDistance,
-            deliberateDoubleBack:
-                runtime.procedure.runtime.supportsDeliberateDoubleBack && deliberateDoubleBack,
-            continueAcrossBoundaries: active ? state.activeContinueAcrossBoundaries : false
-        };
         void runUiMutation(async () => {
-            applyRuntime(await api.advanceExpedition(runtime.id, request));
+            applyRuntime(await ExpeditionWatchController.continueResolvedTravel(
+                api,
+                runtime,
+                edge.directionValue,
+                preferences.pace));
         });
     };
 
