@@ -957,10 +957,12 @@ export async function renderExpedition(
             const q = document.createElement("input");
             q.type = "number";
             q.step = "1";
+            q.required = true;
             q.value = String(initial.q);
             const r = document.createElement("input");
             r.type = "number";
             r.step = "1";
+            r.required = true;
             r.value = String(initial.r);
             const note = document.createElement("input");
             note.placeholder = "optional reason, such as teleportation or setup correction";
@@ -976,16 +978,16 @@ export async function renderExpedition(
 
             form.addEventListener("submit", event => {
                 event.preventDefault();
-                if (!q.value.trim() || !r.value.trim()) {
-                    throw new Error("Party position requires both axial cell coordinates.");
-                }
-                const targetQ = Number(q.value);
-                const targetR = Number(r.value);
-                if (!Number.isInteger(targetQ) || !Number.isInteger(targetR)) {
-                    throw new Error("Party position requires whole axial cell coordinates.");
-                }
-                const destination = { q: targetQ, r: targetR };
                 void runUiMutation(async () => {
+                    if (!q.value.trim() || !r.value.trim()) {
+                        throw new Error("Party position requires both axial cell coordinates.");
+                    }
+                    const targetQ = Number(q.value);
+                    const targetR = Number(r.value);
+                    if (!Number.isInteger(targetQ) || !Number.isInteger(targetR)) {
+                        throw new Error("Party position requires whole axial cell coordinates.");
+                    }
+                    const destination = { q: targetQ, r: targetR };
                     const next = await api.repositionExpedition(runtime.id, {
                         expectedVersion: runtime.version,
                         targetHex: destination,

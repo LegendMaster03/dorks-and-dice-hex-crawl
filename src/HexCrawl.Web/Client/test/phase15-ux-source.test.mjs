@@ -590,7 +590,9 @@ test("DM can reposition the party without routing through ordinary travel proced
     assert.match(view, /Direct DM repositioning changes the current cell without resolving travel/);
     assert.match(view, /api\.repositionExpedition/);
     assert.match(view, /preferences\.direction = null/);
-    assert.match(view, /if \(!q\.value\.trim\(\) \|\| !r\.value\.trim\(\)\)/);
+    assert.match(view, /q\.required = true/);
+    assert.match(view, /r\.required = true/);
+    assert.match(view, /void runUiMutation\(async \(\) => \{\s*if \(!q\.value\.trim\(\) \|\| !r\.value\.trim\(\)\)/);
     assert.match(api, /\/api\/expeditions\/\$\{encodeURIComponent\(expeditionId\)\}\/reposition/);
 });
 
