@@ -111,6 +111,16 @@ The current-action surface is derived from authoritative runtime/journey state. 
 
 The map is contextual rather than mandatory input. Selecting a hex can expose relevant authored locations and current-position context without mutating durable expedition state. Travel changes still require explicit actions. Keyboard/non-map alternatives remain available.
 
+### Current-cell adjacency presentation boundary
+
+Routine spatial travel uses a current-cell adjacency abstraction rather than a hardcoded compass widget. Presentation consumes the current cell's display polygon, ordered edges, traversable adjacent cells, and selected edge. A topology-specific adapter may translate that selection into the runtime representation; for the current regular-hex runtime this remains the existing numeric direction value.
+
+The floating navigator is positioned over the map, defaults to the upper-left, and places one semantic button on each traversable edge. Its visible arrow points outward from the cell geometry. Accessible names use screen-relative edge position and adjacent-cell identity. Hex orientation alone does not establish map north, so cardinal labels are not inferred by default.
+
+Map and navigator input are bidirectional views of the same intended adjacent-cell selection. Neither input mutates position. The explicit travel action remains the durable boundary where movement amount, navigation, partial progress, encounters, terrain/routes, forced travel, consequences, interruption, and boundary crossing resolve through application/runtime authority.
+
+The presentation contract permits a non-six-edge fixture so future topology work does not have to replace the interaction architecture. Phase 15 does **not** implement square, triangular, mixed, or other alternate runtime tilings.
+
 ## Nonspatial and journey adaptation
 
 The workspace adapts to the stored procedure instead of forcing every expedition through spatial watch travel.

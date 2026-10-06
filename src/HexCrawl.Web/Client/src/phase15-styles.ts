@@ -61,9 +61,7 @@ export function ensurePhase15Styles(): void {
         .hc-rule-card { grid-template-rows:auto auto 1fr auto; }
         .hc-rule-card > p { margin:0; color:var(--hc-muted); }
         .hc-table-procedure > p, .hc-rule-group > p { color:var(--hc-muted); }
-        .hc-procedure-step-list { display:grid; gap:.75rem; margin:.8rem 0 0; padding-left:2.15rem; }
-        .hc-procedure-step-list > li { padding-left:.15rem; }
-        .hc-procedure-step-list > li::marker { font-weight:700; color:var(--hc-text-strong); }
+        .hc-procedure-step-list { display:grid; gap:.75rem; margin:.8rem 0 0; }
         .hc-add-rule-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,15rem),1fr)); gap:.7rem; }
         .hc-add-rule-card { grid-template-rows:auto 1fr auto; }
         .hc-add-rule-card p { margin:0; color:var(--hc-muted); }
@@ -154,6 +152,23 @@ export function ensurePhase15Styles(): void {
         .hc-phase15-expedition .hc-sidebar { display:grid; gap:.7rem; align-content:start; }
         .hc-phase15-expedition .hc-running-sheet { display:grid; gap:.75rem; }
         .hc-phase15-expedition .hc-sheet-status { display:none; }
+        .hc-map-frame { position:relative; min-width:0; }
+        .hc-adjacency-navigator { position:absolute; z-index:6; top:.7rem; left:.7rem; width:10rem; aspect-ratio:1; border:1px solid var(--hc-border); border-radius:.85rem; background:color-mix(in srgb,var(--hc-surface) 88%,transparent); box-shadow:0 .35rem 1rem rgba(0,0,0,.2); }
+        .hc-adjacency-cell { position:absolute; inset:0; width:100%; height:100%; overflow:visible; pointer-events:none; }
+        .hc-adjacency-cell polygon { fill:color-mix(in srgb,var(--hc-surface) 78%,transparent); stroke:var(--hc-text-strong); stroke-width:7; stroke-linejoin:round; vector-effect:non-scaling-stroke; }
+        .hc-adjacency-edge { position:absolute; left:var(--hc-edge-x); top:var(--hc-edge-y); transform:translate(-50%,-50%); min-width:2.6rem; min-height:2.6rem; padding:.2rem .4rem; border:3px solid var(--hc-text-strong); border-radius:999px; background:var(--hc-surface); color:var(--hc-text-strong); font-weight:800; line-height:1; box-shadow:0 .12rem .35rem rgba(0,0,0,.22); }
+        .hc-adjacency-edge:hover:not(:disabled) { transform:translate(-50%,-50%) scale(1.08); border-color:var(--hc-focus); background:var(--hc-surface-elevated); }
+        .hc-adjacency-edge:focus-visible { transform:translate(-50%,-50%) scale(1.08); outline:4px solid var(--hc-focus); outline-offset:3px; z-index:2; }
+        .hc-adjacency-edge.is-selected { border-color:var(--hc-focus); background:var(--hc-text-strong); color:var(--hc-surface); box-shadow:0 0 0 3px var(--hc-focus),0 .18rem .45rem rgba(0,0,0,.3); }
+        .hc-adjacency-edge.is-actual-course:not(.is-selected) { border-style:dashed; border-color:var(--hc-warning); }
+        .hc-adjacency-edge:disabled { border-color:var(--hc-disabled-border); background:var(--hc-disabled-bg); color:var(--hc-disabled-text); cursor:not-allowed; }
+        .hc-adjacency-fallback { display:grid; gap:.65rem; margin-top:.75rem; padding-top:.75rem; border-top:1px solid var(--hc-border); }
+        .hc-adjacency-fallback h3, .hc-adjacency-fallback p { margin:0; }
+        .hc-travel-intent-fields { display:grid; grid-template-columns:minmax(10rem,1fr) minmax(10rem,1fr); gap:.6rem; }
+        .hc-travel-intent-fields label { display:grid; gap:.3rem; font-weight:600; }
+        .hc-travel-intent-fields select, .hc-travel-intent-fields input { width:100%; min-width:0; box-sizing:border-box; }
+        .hc-focused-resolution-summary { display:grid; gap:.45rem; padding:.8rem; border:1px solid var(--hc-border); border-radius:.7rem; background:var(--hc-surface-elevated); }
+        .hc-focused-resolution-summary h3, .hc-focused-resolution-summary p { margin:0; }
         .hc-phase15-runtime-summary { display:grid; gap:.65rem; }
         .hc-phase15-context-strip { display:flex; gap:.5rem; flex-wrap:wrap; }
         .hc-context-button { border-radius:999px; padding:.35rem .65rem; }
@@ -177,6 +192,9 @@ export function ensurePhase15Styles(): void {
             .hc-preset-card-head { min-height:0; }
             .hc-duration-control { grid-template-columns:1fr; }
             .hc-advanced-index { max-height:none; }
+            .hc-adjacency-navigator { width:8rem; top:.45rem; left:.45rem; }
+            .hc-adjacency-edge { min-width:2.15rem; min-height:2.15rem; font-size:.78rem; }
+            .hc-travel-intent-fields { grid-template-columns:1fr; }
             .hc-advanced-facts { grid-template-columns:1fr; gap:.15rem; }
             .hc-advanced-facts dd { margin-bottom:.35rem; }
         }

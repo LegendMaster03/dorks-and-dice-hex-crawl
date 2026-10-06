@@ -640,7 +640,32 @@ export async function renderProcedureAuthoringWorkspace(
             page.append(notice("You are viewing a historical revision. Choose the latest revision above before saving further changes."));
         }
         if (mode !== "json" && hasBlockingStructuredIssues()) {
-            page.append(notice("Fix the procedure validation or dependency issues shown below before saving."));
+            const blocking = draft.dependencies.issues.filter(issue =>
+                issue.kind === "MissingRequiredModule"
+                || issue.kind === "MissingRequiredProducer"
+                || issue.kind === "IncompatibleMechanic");
+            const affected = [...new Set(blocking
+                .map(issue => compactRule(issue.moduleKey)?.label)
+                .filter((label): label is string => Boolean(label)))];
+            const fix = draft.dependencyFixes[0] ?? null;
+            const required = fix?.moduleKeys
+                .map(moduleKey => compactRule(moduleKey)?.label ?? moduleKey)
+                ?? [];
+            const subject = affected.length > 0 ? affected.join(", ") : "The selected rules";
+            const warning = notice(required.length > 0
+                ? `${subject} need ${required.join(", ")} before this procedure can be saved.`
+                : `${subject} still need a compatible companion rule or input before this procedure can be saved.`);
+            if (fix && required.length > 0) {
+                const repairLabel = required.length <= 2
+                    ? `Add ${required.join(" + ")}`
+                    : "Add required companion rules";
+                const repair = button(repairLabel, "secondary");
+                repair.title = `Add required rules: ${required.join(", ")}`;
+                repair.addEventListener("click", () => void setModules(
+                    fix.moduleKeys.map(moduleKey => [moduleKey, true] as [string, boolean])));
+                warning.append(document.createTextNode(" "), repair);
+            }
+            page.append(warning);
         }
 
         if (mode === "compact") page.append(renderCompact());
@@ -683,10 +708,10 @@ export async function renderProcedureAuthoringWorkspace(
             section.className = "hc-panel hc-table-procedure";
             section.append(
                 textElement("h2", "At the table"),
-                textElement("p", "Run these travel rules in order when their trigger applies. Each block states the configured behavior and values."));
-            const list = document.createElement("ol");
+                textElement("p", "These travel rules are grouped for quick reference. Apply each when its configured trigger or dependency becomes relevant."));
+            const list = document.createElement("div");
             list.className = "hc-procedure-step-list";
-            for (const module of travel) list.append(compactRuleCard(module, true));
+            for (const module of travel) list.append(compactRuleCard(module, false));
             section.append(list);
             shell.append(section);
         }

@@ -9,16 +9,23 @@ import { discoveredSubjectIds, directionLabel, formatDistance, formatHours } fro
 import { SurvivalResourcesApi } from "../../survival-api";
 import type { SurvivalResources } from "../../survival-types";
 import { canonicalExpeditionRoute } from "../../tool-route";
-import type { ExpeditionDetail, HexCoordinate, Overworld, ToolHostContext } from "../../types";
+import type { ExpeditionDetail, HexCoordinate, HexOrientation, Overworld, ResolutionSource, ToolHostContext } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
 import { badge, disclosure, openWorkspaceDrawer, statAction, textElement, type WorkspaceDrawer } from "../../ui/workspace";
 import { ExpeditionEnvironmentPanel } from "./environment-panel";
 import { ExpeditionJourneyPanel } from "./journey-panel";
 import { ExpeditionPartySheetController } from "./expedition-party-sheet";
+import {
+    adjacencyEdgeForCell,
+    adjacencyEdgeForDirection,
+    currentHexAdjacency,
+    sameHex
+} from "./spatial-adjacency";
 import { publishExpeditionRuntimeChanged } from "./expedition-runtime-events";
 import { ExpeditionSurvivalResourcesPanel } from "./survival-resources-panel";
 import { ExpeditionWatchController } from "./expedition-watch-controller";
 import { canUseFocusedNonSpatialWatch, focusedIntervalHours } from "./focused-interval-policy";
+import { navigationResolutionDue } from "./expedition-workflow";
 import { expeditionWorkspacePresentation } from "./expedition-workspace-model";
 
 export type ExpeditionViewMode = "map" | "tracker";
@@ -58,7 +65,28 @@ export async function renderExpedition(
     let drawerCleanup: (() => void) | null = null;
     let disposed = false;
     let selectedHex: HexCoordinate | null = null;
+    let selectedHexTracksTravelIntent = false;
     let preferences = loadTravelPreferences(runtime);
+
+    const spatialOrientation = (): HexOrientation =>
+        runtime.context.orientation ?? world?.grid.orientation ?? "PointyTop";
+    const spatialRotation = (): number => world?.grid.rotationDegrees ?? 0;
+
+    const currentAdjacency = () =>
+        runtime.expedition.isSpatial
+            ? currentHexAdjacency(
+                runtime.expedition.currentHex,
+                spatialOrientation(),
+                preferences.direction,
+                spatialRotation())
+            : null;
+
+    const courseLabel = (direction: number | null): string => {
+        const adjacency = currentAdjacency();
+        if (direction === null || !adjacency) return directionLabel(direction);
+        const edge = adjacencyEdgeForDirection(adjacency, direction);
+        return edge ? edgeCourseLabel(edge) : directionLabel(direction);
+    };
 
     const closeDrawer = (): void => {
         drawer?.close();
@@ -81,6 +109,12 @@ export async function renderExpedition(
     const applyRuntime = (next: ExpeditionDetail): void => {
         runtime = next;
         preferences = mergeRuntimePreferences(runtime, preferences);
+        if (selectedHexTracksTravelIntent && runtime.expedition.isSpatial && preferences.direction !== null) {
+            const adjacency = currentAdjacency();
+            selectedHex = adjacency
+                ? adjacencyEdgeForDirection(adjacency, preferences.direction)?.targetCell ?? null
+                : null;
+        }
         saveTravelPreferences(runtime.id, preferences);
         publishExpeditionRuntimeChanged(root, runtime);
     };
@@ -154,8 +188,8 @@ export async function renderExpedition(
             statAction(
                 runtime.expedition.isSpatial ? "Position / course" : "Context",
                 presentation.routeLabel ?? runtime.context.name,
-                runtime.expedition.isSpatial ? travelPreferenceDetail(runtime, preferences) : "Non-spatial expedition",
-                runtime.expedition.isSpatial ? () => openTravelWorkspace() : openHistory,
+                runtime.expedition.isSpatial ? travelPreferenceDetail(runtime, preferences, currentAdjacency()) : "Non-spatial expedition",
+                runtime.expedition.isSpatial ? () => openTravelWorkspace("travel") : openHistory,
                 runtime.pauseReason ? "warning" : "neutral"),
             statAction(
                 "Party",
@@ -168,16 +202,16 @@ export async function renderExpedition(
                 runtime.movementComposition.missingInputs.length > 0
                     ? `${runtime.movementComposition.missingInputs.length} unresolved input${runtime.movementComposition.missingInputs.length === 1 ? "" : "s"}`
                     : movementSuggestionDetail(runtime),
-                runtime.expedition.isSpatial ? () => openTravelWorkspace() : openPartyWorkspace,
+                runtime.expedition.isSpatial ? () => openTravelWorkspace("travel") : openPartyWorkspace,
                 runtime.movementComposition.missingInputs.length > 0 ? "warning" : "neutral"));
         if (presentation.capabilities.navigation && presentation.navigationLabel) {
             stats.append(statAction(
                 "Navigation",
                 presentation.navigationLabel,
                 runtime.expedition.isSpatial && runtime.expedition.intendedDirection !== null
-                    ? `Intended ${directionLabel(runtime.expedition.intendedDirection)}`
+                    ? `Intended ${courseLabel(runtime.expedition.intendedDirection)}`
                     : null,
-                () => openTravelWorkspace(),
+                openNavigationWorkspace,
                 runtime.expedition.isSpatial && runtime.expedition.isLost ? "warning" : "neutral"));
         }
         if (presentation.capabilities.resources || presentation.capabilities.survival || presentation.capabilities.effects) {
@@ -231,7 +265,7 @@ export async function renderExpedition(
         primary.className = "hc-primary-action";
         row.append(primary);
         if (runtime.expedition.isSpatial && runtime.procedure.runtime !== null && action.kind !== "encounter") {
-            row.append(button("Travel controls", () => openTravelWorkspace()));
+            row.append(button("Travel controls", () => openTravelWorkspace("travel")));
         }
         section.append(row);
         return section;
@@ -245,18 +279,21 @@ export async function renderExpedition(
         primary.className = "hc-panel hc-map-panel";
         primary.append(textElement("h2", world ? "Expedition map" : "Spatial expedition"));
         if (world) {
+            const frame = document.createElement("div");
+            frame.className = "hc-map-frame";
             const host = document.createElement("div");
             host.className = "hc-map-host";
             host.dataset.map = "";
-            primary.append(host);
+            frame.append(host, renderAdjacencyNavigator());
+            primary.append(frame);
             const context = document.createElement("div");
             context.dataset.mapContext = "";
             context.className = "hc-context-card";
             primary.append(context);
         } else {
-            primary.append(textElement("p", "This crawl uses spatial hex state without a world map. Use the directional travel controls to set intent.", "hc-muted"));
+            primary.append(textElement("p", "This spatial crawl has no authored world map. Choose an adjacent cell from the accessible course control below.", "hc-muted"));
         }
-        primary.append(renderDirectionControls());
+        primary.append(renderTravelIntentControls());
 
         const secondary = document.createElement("aside");
         secondary.className = "hc-panel hc-sidebar";
@@ -307,31 +344,146 @@ export async function renderExpedition(
         return section;
     };
 
-    const renderDirectionControls = (): HTMLElement => {
-        const section = document.createElement("section");
-        section.className = "hc-direction-control";
-        section.append(
-            textElement("h3", "Travel direction"),
-            textElement("p", "Choose an adjacent direction to express travel intent. This does not move the party by itself; the existing procedure runtime still resolves distance, navigation, boundaries, encounters, terrain, and consequences.", "hc-muted"));
-        const grid = document.createElement("div");
-        grid.className = "hc-direction-grid";
-        grid.setAttribute("role", "group");
-        grid.setAttribute("aria-label", "Adjacent hex travel direction");
-        for (let direction = 0; direction < 6; direction += 1) {
-            const control = button(directionLabel(direction), () => {
-                preferences.direction = direction;
-                saveTravelPreferences(runtime.id, preferences);
-                openTravelWorkspace(direction);
-            });
-            control.dataset.direction = String(direction);
-            control.setAttribute("aria-pressed", preferences.direction === direction ? "true" : "false");
-            if (preferences.direction === direction) control.classList.add("hc-active-view");
-            grid.append(control);
+    const selectTravelIntent = (direction: number, target: HexCoordinate): void => {
+        if (!runtime.expedition.isSpatial) return;
+        preferences.direction = direction;
+        selectedHex = target;
+        selectedHexTracksTravelIntent = true;
+        saveTravelPreferences(runtime.id, preferences);
+        if (map) {
+            map.renderer.selectedHex = target;
+            map.requestRender();
         }
-        section.append(grid, textElement(
-            "p",
-            `Reusable intent: ${preferences.direction === null ? "no course selected" : directionLabel(preferences.direction)} · pace ${preferences.pace}.`,
-            "hc-muted"));
+        syncTravelIntentControls();
+        renderMapContext();
+    };
+
+    const syncTravelIntentControls = (): void => {
+        if (!runtime.expedition.isSpatial) return;
+        const adjacency = currentAdjacency();
+        if (!adjacency) return;
+
+        for (const control of root.querySelectorAll<HTMLButtonElement>("[data-adjacency-edge]")) {
+            const direction = Number(control.dataset.adjacencyEdge);
+            const selected = preferences.direction === direction;
+            control.setAttribute("aria-pressed", String(selected));
+            control.classList.toggle("is-selected", selected);
+        }
+
+        const selector = root.querySelector<HTMLSelectElement>("[data-adjacency-select]");
+        if (selector) selector.value = preferences.direction === null ? "" : String(preferences.direction);
+
+        const summary = root.querySelector<HTMLElement>("[data-travel-intent-summary]");
+        if (summary) summary.textContent = travelIntentSummary(runtime, preferences, adjacency);
+    };
+
+    const renderAdjacencyNavigator = (): HTMLElement => {
+        const adjacency = currentAdjacency();
+        const navigator = document.createElement("div");
+        navigator.className = "hc-adjacency-navigator";
+        navigator.setAttribute("role", "group");
+        navigator.setAttribute("aria-label", "Current-cell adjacent travel");
+        if (!adjacency) return navigator;
+
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute("viewBox", "0 0 100 100");
+        svg.setAttribute("aria-hidden", "true");
+        svg.classList.add("hc-adjacency-cell");
+        const polygon = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+        polygon.setAttribute("points", adjacency.polygon
+            .map(point => `${point.x * 100},${point.y * 100}`)
+            .join(" "));
+        svg.append(polygon);
+        navigator.append(svg);
+
+        const action = expeditionWorkspacePresentation(runtime, journey, survival).action;
+        const courseSelectable = action.kind === "travel" || action.kind === "navigation";
+        for (const edge of adjacency.edges) {
+            const control = button(edge.shortLabel, () => selectTravelIntent(edge.directionValue, edge.targetCell));
+            const identity = edgeCourseLabel(edge);
+            control.className = "hc-adjacency-edge";
+            control.dataset.adjacencyEdge = String(edge.directionValue);
+            control.style.setProperty("--hc-edge-x", `${edge.midpoint.x * 100}%`);
+            control.style.setProperty("--hc-edge-y", `${edge.midpoint.y * 100}%`);
+            const actualCourse = runtime.expedition.actualDirection === edge.directionValue
+                && runtime.expedition.actualDirection !== preferences.direction;
+            control.setAttribute(
+                "aria-label",
+                actualCourse
+                    ? `Set intended adjacent cell via ${identity}; this is the current actual resolved course`
+                    : `Set intended adjacent cell via ${identity}`);
+            control.setAttribute("aria-pressed", String(adjacency.selectedEdgeId === edge.id));
+            control.title = actualCourse ? `${identity} · actual course` : identity;
+            control.disabled = !courseSelectable || !edge.traversable;
+            if (adjacency.selectedEdgeId === edge.id) control.classList.add("is-selected");
+            if (actualCourse) {
+                control.classList.add("is-actual-course");
+            }
+            navigator.append(control);
+        }
+        return navigator;
+    };
+
+    const renderTravelIntentControls = (): HTMLElement => {
+        const adjacency = currentAdjacency();
+        const section = document.createElement("section");
+        section.className = "hc-direction-control hc-adjacency-fallback";
+        section.append(
+            textElement("h3", "Travel"),
+            textElement("p", "Choose the intended adjacent cell. Selection changes course intent only; authoritative travel resolves when you continue.", "hc-muted"));
+
+        if (!adjacency) return section;
+
+        const fields = document.createElement("div");
+        fields.className = "hc-travel-intent-fields";
+        const course = document.createElement("select");
+        course.dataset.adjacencySelect = "";
+        course.setAttribute("aria-label", "Intended course");
+        const empty = document.createElement("option");
+        empty.value = "";
+        empty.textContent = "Choose adjacent cell";
+        course.append(empty);
+        for (const edge of adjacency.edges) {
+            const option = document.createElement("option");
+            option.value = String(edge.directionValue);
+            option.textContent = edgeCourseLabel(edge);
+            course.append(option);
+        }
+        course.value = preferences.direction === null ? "" : String(preferences.direction);
+        course.addEventListener("change", () => {
+            if (!course.value) return;
+            const edge = adjacencyEdgeForDirection(adjacency, Number(course.value));
+            if (edge) selectTravelIntent(edge.directionValue, edge.targetCell);
+        });
+
+        const pace = document.createElement("input");
+        pace.type = "text";
+        pace.value = preferences.pace;
+        pace.setAttribute("aria-label", "Pace or travel mode");
+        pace.addEventListener("change", () => {
+            const value = pace.value.trim();
+            if (!value) {
+                pace.value = preferences.pace;
+                return;
+            }
+            preferences.pace = value;
+            saveTravelPreferences(runtime.id, preferences);
+            syncTravelIntentControls();
+        });
+
+        fields.append(labelled("Course", course), labelled("Pace / travel mode", pace));
+        section.append(fields);
+
+        const summary = textElement("p", travelIntentSummary(runtime, preferences, adjacency), "hc-muted");
+        summary.dataset.travelIntentSummary = "";
+        section.append(summary);
+
+        if (runtime.procedure.runtime !== null) {
+            const actions = document.createElement("div");
+            actions.className = "hc-button-row";
+            actions.append(button("More travel options", () => openTravelWorkspace("travel")));
+            section.append(actions);
+        }
         return section;
     };
 
@@ -361,20 +513,20 @@ export async function renderExpedition(
             return;
         }
 
-        host.append(textElement("h3", `Selected hex ${selectedHex.q}, ${selectedHex.r}`));
-        const direction = adjacentDirection(runtime.expedition.currentHex, selectedHex);
-        if (direction !== null) {
-            const travel = button(`Travel ${directionLabel(direction)}`, () => {
-                preferences.direction = direction;
-                saveTravelPreferences(runtime.id, preferences);
-                openTravelWorkspace(direction);
-            });
-            travel.className = "hc-primary-action";
-            host.append(
-                textElement("p", "This adjacent hex can be used as the intended course. The runtime will still resolve whether and how the party reaches it.", "hc-muted"),
-                travel);
-        } else if (!sameHex(runtime.expedition.currentHex, selectedHex)) {
-            host.append(textElement("p", "Travel intent is expressed one adjacent direction at a time so procedure mechanics can resolve partial progress and interruptions.", "hc-muted"));
+        host.append(textElement("h3", "Selected map cell"));
+        const adjacency = currentAdjacency();
+        const edge = adjacency
+            ? adjacencyEdgeForCell(adjacency, selectedHex, sameHex)
+            : null;
+        if (edge) {
+            host.append(textElement(
+                "p",
+                `Intended next cell · ${edgeCourseLabel(edge)}. Selecting an adjacent cell expresses travel intent only; it does not move the party.`,
+                "hc-muted"));
+        } else if (sameHex(runtime.expedition.currentHex, selectedHex)) {
+            host.append(textElement("p", "The party is currently in this cell.", "hc-muted"));
+        } else {
+            host.append(textElement("p", "Inspecting a non-adjacent cell does not change travel intent or expedition position.", "hc-muted"));
         }
 
         const subjects = [
@@ -419,6 +571,19 @@ export async function renderExpedition(
             map = new MapSurface(host, () => world);
             map.setHexSelectionHandler(hex => {
                 selectedHex = hex;
+                selectedHexTracksTravelIntent = false;
+                if (hex) {
+                    const adjacency = currentAdjacency();
+                    const edge = adjacency
+                        ? adjacencyEdgeForCell(adjacency, hex, sameHex)
+                        : null;
+                    if (edge) {
+                        preferences.direction = edge.directionValue;
+                        selectedHexTracksTravelIntent = true;
+                        saveTravelPreferences(runtime.id, preferences);
+                    }
+                }
+                syncTravelIntentControls();
                 renderMapContext();
             });
         }
@@ -440,7 +605,9 @@ export async function renderExpedition(
         }, null, cleanupDrawer);
     };
 
-    const openTravelWorkspace = (direction = preferences.direction): void => {
+    const openTravelWorkspace = (
+        focus: "travel" | "boundary" = "travel",
+        direction = preferences.direction): void => {
         if (!runtime.expedition.isSpatial || runtime.procedure.runtime === null) {
             openHistory();
             return;
@@ -449,8 +616,8 @@ export async function renderExpedition(
             preferences.direction = direction;
             saveTravelPreferences(runtime.id, preferences);
         }
-        openDrawer("Travel / watch", body => {
-            body.innerHTML = watchWorkspaceMarkup();
+        openDrawer(focus === "boundary" ? "Boundary decision" : "Travel", body => {
+            body.innerHTML = watchWorkspaceMarkup(currentAdjacency());
             const controller = new ExpeditionWatchController(
                 body,
                 api,
@@ -465,6 +632,7 @@ export async function renderExpedition(
                 });
             controller.sync(runtime);
             applyTravelPreferences(body);
+            focusWatchWorkspace(body, focus);
             const directionControl = body.querySelector<HTMLSelectElement>('select[name="direction"]');
             const paceControl = body.querySelector<HTMLInputElement>('input[name="pace"]');
             directionControl?.addEventListener("change", captureTravelPreferencesFromControls);
@@ -474,6 +642,165 @@ export async function renderExpedition(
             function captureTravelPreferencesFromControls(): void {
                 captureTravelPreferences(body);
             }
+        });
+    };
+
+    const focusWatchWorkspace = (body: HTMLElement, focus: "travel" | "boundary"): void => {
+        if (focus !== "boundary") return;
+        const focusGroups = [...body.querySelectorAll<HTMLElement>("[data-focus-group]")];
+        for (const group of focusGroups) {
+            const keys = (group.dataset.focusGroup ?? "").split(/\s+/).filter(Boolean);
+            group.hidden = !keys.includes("boundary");
+        }
+        const intro = document.createElement("section");
+        intro.className = "hc-focused-resolution-summary";
+        intro.append(
+            textElement("h3", "Boundary resolution"),
+            textElement("p", travelIntentSummary(runtime, preferences, currentAdjacency()), "hc-muted"));
+        body.prepend(intro);
+
+        const reveal = button("More travel details", () => {
+            for (const group of focusGroups) group.hidden = false;
+            reveal.remove();
+        });
+        reveal.className = "hc-secondary-action";
+        intro.append(reveal);
+    };
+
+    const openNavigationWorkspace = (): void => {
+        if (!runtime.expedition.isSpatial) {
+            openHistory();
+            return;
+        }
+        const adjacency = currentAdjacency();
+        if (!adjacency) return;
+        openDrawer("Navigation", body => {
+            const state = runtime.expedition;
+            const assigned = runtime.party.activityAssignments
+                .filter(assignment => (assignment.roleKey ?? "").toLowerCase().includes("navig"))
+                .map(assignment => runtime.party.members.find(member => member.id === assignment.participantId)?.name)
+                .filter((name): name is string => Boolean(name));
+            const navigationDue = navigationResolutionDue(runtime, false, false);
+            body.append(
+                textElement("h3", navigationDue ? "Navigation required" : "Navigation status"),
+                contextLine("Navigator", assigned.join(", ") || "No navigator role assigned"),
+                contextLine("Intended course", preferences.direction === null
+                    ? "Not selected"
+                    : courseLabel(preferences.direction)),
+                contextLine("Current navigation state", state.isLost
+                    ? `Lost / off course · actual ${courseLabel(state.actualDirection)}`
+                    : "On course"));
+
+            if (!navigationDue) {
+                body.append(textElement(
+                    "p",
+                    "No navigation resolution is due for the current watch state. Navigation changes remain tied to the procedure workflow.",
+                    "hc-muted"));
+                return;
+            }
+
+            const form = document.createElement("form");
+            form.className = "hc-form";
+
+            const course = document.createElement("select");
+            course.name = "intendedDirection";
+            course.required = true;
+            const unselectedCourse = document.createElement("option");
+            unselectedCourse.value = "";
+            unselectedCourse.textContent = "Select intended adjacent cell";
+            course.append(unselectedCourse);
+            for (const edge of adjacency.edges) {
+                const option = document.createElement("option");
+                option.value = String(edge.directionValue);
+                option.textContent = edgeCourseLabel(edge);
+                course.append(option);
+            }
+            if (preferences.direction !== null) course.value = String(preferences.direction);
+
+            const outcome = document.createElement("select");
+            outcome.name = "navigationOutcome";
+            outcome.innerHTML = '<option value="oriented">On course</option><option value="lost">Lost / off course</option>';
+            outcome.value = state.isLost ? "lost" : "oriented";
+
+            const veer = document.createElement("input");
+            veer.name = "veerSteps";
+            veer.type = "number";
+            veer.step = "1";
+            veer.value = state.isLost ? String(state.veerSteps) : "1";
+
+            const source = document.createElement("select");
+            source.name = "source";
+            for (const [value, label] of [
+                ["ManualRoll", "Manual roll"],
+                ["ExternalSystem", "External system"],
+                ["DmOverride", "DM ruling"],
+                ["ProcedureDefault", "Procedure default"]
+            ] as const) {
+                const option = document.createElement("option");
+                option.value = value;
+                option.textContent = label;
+                source.append(option);
+            }
+
+            const resolutionNote = document.createElement("input");
+            resolutionNote.name = "resolutionNote";
+            resolutionNote.placeholder = "optional source note";
+            const note = document.createElement("input");
+            note.name = "note";
+            note.placeholder = "optional table note";
+
+            const veerField = labelled("Resolved veer steps", veer);
+            const syncOutcome = (): void => {
+                const lost = outcome.value === "lost";
+                veerField.hidden = !lost;
+                if (!lost) veer.value = "0";
+                else if (Number(veer.value) === 0) veer.value = "1";
+            };
+            outcome.addEventListener("change", syncOutcome);
+            syncOutcome();
+
+            const submit = button("Resolve navigation", () => {});
+            submit.type = "submit";
+            submit.className = "hc-primary-action";
+            form.append(
+                labelled("Intended course", course),
+                labelled("Resolution", outcome),
+                veerField,
+                labelled("Resolution source", source),
+                labelled("Source note", resolutionNote),
+                labelled("Table note", note),
+                submit);
+            form.addEventListener("submit", event => {
+                event.preventDefault();
+                if (course.value === "") {
+                    throw new Error("Select an intended adjacent cell before resolving navigation.");
+                }
+                const direction = Number(course.value);
+                const lost = outcome.value === "lost";
+                const resolvedVeer = lost ? Number(veer.value) : 0;
+                if (!Number.isInteger(direction) || !adjacencyEdgeForDirection(adjacency, direction)) {
+                    throw new Error("Select a valid adjacent course.");
+                }
+                if (!Number.isInteger(resolvedVeer) || (lost && resolvedVeer === 0)) {
+                    throw new Error("A lost navigation result requires a non-zero whole-step veer.");
+                }
+                preferences.direction = direction;
+                saveTravelPreferences(runtime.id, preferences);
+                void runUiMutation(async () => {
+                    applyRuntime(await api.recordNavigationAssistant(runtime.id, {
+                        expectedVersion: runtime.version,
+                        isLost: lost,
+                        veerSteps: resolvedVeer,
+                        intendedDirection: direction,
+                        resolutionSource: source.value as ResolutionSource,
+                        resolutionNote: resolutionNote.value.trim() || undefined,
+                        note: note.value.trim() || undefined
+                    }));
+                });
+            });
+            const more = button("More travel details", () => openTravelWorkspace("travel"));
+            more.className = "hc-secondary-action";
+            body.append(form, more);
         });
     };
 
@@ -491,7 +818,21 @@ export async function renderExpedition(
         const pace = host.querySelector<HTMLInputElement>('input[name="pace"]');
         if (direction?.value !== undefined && direction.value !== "") {
             const parsed = Number(direction.value);
-            if (Number.isInteger(parsed) && parsed >= 0 && parsed <= 5) preferences.direction = parsed;
+            const adjacency = currentAdjacency();
+            const edge = Number.isInteger(parsed) && adjacency
+                ? adjacencyEdgeForDirection(adjacency, parsed)
+                : null;
+            if (edge) {
+                preferences.direction = parsed;
+                selectedHex = edge.targetCell;
+                selectedHexTracksTravelIntent = true;
+                if (map) {
+                    map.renderer.selectedHex = edge.targetCell;
+                    map.requestRender();
+                }
+                syncTravelIntentControls();
+                renderMapContext();
+            }
         }
         if (pace?.value.trim()) preferences.pace = pace.value.trim();
         saveTravelPreferences(runtime.id, preferences);
@@ -590,7 +931,7 @@ export async function renderExpedition(
             row.className = "hc-button-row";
             const handoff = button("Open in Block Initiative", () => void prepareEncounterHandoff(triggered.sequence, handoff));
             handoff.className = "hc-primary-action";
-            const resume = button("Resume travel after encounter", () => openTravelWorkspace());
+            const resume = button("Resume travel after encounter", () => openTravelWorkspace("travel"));
             row.append(handoff, resume);
             body.append(row);
         });
@@ -672,8 +1013,10 @@ export async function renderExpedition(
     const activateAction = (kind: ReturnType<typeof expeditionWorkspacePresentation>["action"]["kind"]): void => {
         switch (kind) {
             case "encounter": openEncounterWorkspace(); break;
-            case "navigation":
-            case "travel": openTravelWorkspace(); break;
+            case "navigation": openNavigationWorkspace(); break;
+            case "boundary": openTravelWorkspace("boundary"); break;
+            case "survival": openSurvivalWorkspace(); break;
+            case "travel": openTravelWorkspace("travel"); break;
             case "journey": openJourneyWorkspace(); break;
             case "watch": openNonSpatialWatchWorkspace(); break;
             default:
@@ -697,6 +1040,8 @@ function primaryActionLabel(kind: ReturnType<typeof expeditionWorkspacePresentat
     switch (kind) {
         case "encounter": return "Resolve encounter";
         case "navigation": return "Resolve navigation";
+        case "boundary": return "Resolve boundary";
+        case "survival": return "Resolve consequence";
         case "journey": return "Open journey";
         case "travel": return "Continue travel";
         case "watch": return "Run watch";
@@ -723,6 +1068,14 @@ function labelled(text: string, control: HTMLElement): HTMLLabelElement {
     const label = document.createElement("label");
     label.append(document.createTextNode(text), control);
     return label;
+}
+
+function contextLine(label: string, value: string): HTMLParagraphElement {
+    const row = document.createElement("p");
+    const strong = document.createElement("strong");
+    strong.textContent = `${label}: `;
+    row.append(strong, document.createTextNode(value));
+    return row;
 }
 
 function partyActivitySummary(runtime: ExpeditionDetail): string {
@@ -755,7 +1108,7 @@ function movementSuggestionDetail(runtime: ExpeditionDetail): string | null {
 
 function environmentCardDetail(runtime: ExpeditionDetail): string {
     if (!runtime.expedition.isSpatial) return "No spatial environment context.";
-    return `Hex ${runtime.expedition.currentHex.q}, ${runtime.expedition.currentHex.r} · edit resolved environment only when it matters to procedure inputs.`;
+    return "Current map cell · edit resolved environment only when it matters to procedure inputs.";
 }
 
 function survivalDetail(state: SurvivalResources | null): string {
@@ -789,10 +1142,41 @@ function encounterSummary(runtime: ExpeditionDetail): string {
     return latest ? latest.message : "No current encounter";
 }
 
-function travelPreferenceDetail(runtime: ExpeditionDetail, preferences: TravelPreferences): string {
+function travelPreferenceDetail(
+    runtime: ExpeditionDetail,
+    preferences: TravelPreferences,
+    adjacency: ReturnType<typeof currentHexAdjacency> | null): string {
     if (!runtime.expedition.isSpatial) return "";
-    const course = preferences.direction === null ? "course not set" : directionLabel(preferences.direction);
+    const course = preferences.direction === null
+        ? "course not set"
+        : adjacencyCourseLabel(adjacency, preferences.direction);
     return `${course} · ${preferences.pace} pace`;
+}
+
+function travelIntentSummary(
+    runtime: ExpeditionDetail,
+    preferences: TravelPreferences,
+    adjacency: ReturnType<typeof currentHexAdjacency> | null): string {
+    if (!runtime.expedition.isSpatial) return "";
+    const intended = preferences.direction === null
+        ? "No intended course"
+        : `Intended ${adjacencyCourseLabel(adjacency, preferences.direction)}`;
+    const actual = runtime.expedition.actualDirection === null
+        ? "actual course not yet resolved"
+        : `actual ${adjacencyCourseLabel(adjacency, runtime.expedition.actualDirection)}`;
+    return `${intended} · ${preferences.pace} pace · ${actual}`;
+}
+
+function adjacencyCourseLabel(
+    adjacency: ReturnType<typeof currentHexAdjacency> | null,
+    direction: number): string {
+    const edge = adjacency ? adjacencyEdgeForDirection(adjacency, direction) : null;
+    return edge ? edgeCourseLabel(edge) : directionLabel(direction);
+}
+
+function edgeCourseLabel(
+    edge: ReturnType<typeof currentHexAdjacency>["edges"][number]): string {
+    return edge.label;
 }
 
 function loadTravelPreferences(runtime: ExpeditionDetail): TravelPreferences {
@@ -831,25 +1215,6 @@ function saveTravelPreferences(expeditionId: string, preferences: TravelPreferen
     }
 }
 
-export function adjacentDirection(from: HexCoordinate, to: HexCoordinate): number | null {
-    const dq = to.q - from.q;
-    const dr = to.r - from.r;
-    const directions = [
-        [1, 0],
-        [1, -1],
-        [0, -1],
-        [-1, 0],
-        [-1, 1],
-        [0, 1]
-    ] as const;
-    const index = directions.findIndex(([q, r]) => q === dq && r === dr);
-    return index < 0 ? null : index;
-}
-
-function sameHex(left: HexCoordinate, right: HexCoordinate): boolean {
-    return left.q === right.q && left.r === right.r;
-}
-
 function safeCurrentReturnPath(): string | null {
     const path = window.location.pathname;
     if (path !== "/tools/hex-crawl" && !path.startsWith("/tools/hex-crawl/")) return null;
@@ -875,7 +1240,7 @@ function humanize(value: string): string {
         .replace(/\b\w/g, match => match.toUpperCase());
 }
 
-function watchWorkspaceMarkup(): string {
+function watchWorkspaceMarkup(adjacency: ReturnType<typeof currentHexAdjacency> | null): string {
     return `
         <section class="hc-running-sheet hc-focused-watch-workspace">
             <div class="hc-sheet-ledger-heading">
@@ -886,7 +1251,7 @@ function watchWorkspaceMarkup(): string {
             <form class="hc-form" data-advance>
                 <fieldset data-plan-fields data-focus-group="travel navigation">
                     <legend>Travel intent</legend>
-                    <label>Direction <select name="direction" required><option value="">Select direction</option>${directionOptions()}</select></label>
+                    <label>Adjacent cell <select name="direction" required><option value="">Select adjacent cell</option>${directionOptions(adjacency)}</select></label>
                     <label>Pace / travel mode <input name="pace" value="normal"></label>
                     <label>Navigation aid/context <input name="navigationAid" value="none"></label>
                     <label data-suppress-nav-row><input name="suppressNav" type="checkbox"> Navigation aid suppresses the check</label>
@@ -942,7 +1307,7 @@ function watchWorkspaceMarkup(): string {
                     <label>Encounter source note <input name="encounterSourceNote" placeholder="optional"></label>
                 </fieldset>
 
-                <fieldset data-boundary-resolution data-focus-group="navigation">
+                <fieldset data-boundary-resolution data-focus-group="boundary">
                     <legend>Boundary decision</legend>
                     <label><input name="recognizedLost" type="checkbox"> The party recognizes that it is lost</label>
                     <label><input name="reorient" type="checkbox"> The party reorients</label>
@@ -958,8 +1323,9 @@ function watchWorkspaceMarkup(): string {
         </section>`;
 }
 
-function directionOptions(): string {
-    return [0, 1, 2, 3, 4, 5]
-        .map(value => `<option value="${value}">${directionLabel(value)}</option>`)
+function directionOptions(adjacency: ReturnType<typeof currentHexAdjacency> | null): string {
+    if (!adjacency) return "";
+    return adjacency.edges
+        .map(edge => `<option value="${edge.directionValue}">${edgeCourseLabel(edge)}</option>`)
         .join("");
 }

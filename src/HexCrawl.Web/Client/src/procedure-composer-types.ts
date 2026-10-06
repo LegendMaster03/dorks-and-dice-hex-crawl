@@ -91,6 +91,10 @@ export type ProcedureDependencyReport = {
     issues: ProcedureDependencyIssue[];
 };
 
+export type ProcedureDependencyFix = {
+    moduleKeys: string[];
+};
+
 export type ProcedureComposer = {
     procedureId: string;
     revision: number;
@@ -102,6 +106,7 @@ export type ProcedureComposer = {
     origin: ProcedureOrigin | null;
     modules: ProcedureModuleComposer[];
     dependencies: ProcedureDependencyReport;
+    dependencyFixes: ProcedureDependencyFix[];
     overrides: ProcedureOverride[];
 };
 

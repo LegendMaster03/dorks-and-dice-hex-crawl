@@ -170,6 +170,53 @@ public sealed class ProcedureComposerStructuralCompositionTests
     }
 
     [Fact]
+    public async Task DraftOffersSafeTransitiveDependencyRepair()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var store = new PostgresHexCrawlStore(database.ConnectionString);
+        await store.InitializeAsync();
+        var service = Composer(store);
+
+        var draft = await service.CreateDraftAsync("alice", null, null, null, [
+            new ProcedureModuleSelection(GenericProcedureCatalog.NavigationModule, true)
+        ], []);
+
+        var fix = Assert.Single(draft.DependencyFixes!);
+        Assert.Contains(GenericProcedureCatalog.MovementResolutionModule, fix.ModuleKeys);
+        Assert.Contains(GenericProcedureCatalog.TimeIntervalModule, fix.ModuleKeys);
+
+        var repaired = await service.CreateDraftAsync(
+            "alice",
+            null,
+            null,
+            null,
+            fix.ModuleKeys
+                .Append(GenericProcedureCatalog.NavigationModule)
+                .Distinct(StringComparer.Ordinal)
+                .Select(moduleKey => new ProcedureModuleSelection(moduleKey, true))
+                .ToArray(),
+            []);
+
+        Assert.False(repaired.Dependencies.HasErrors);
+    }
+
+    [Fact]
+    public async Task DraftDoesNotGuessAmbiguousDependencyProducer()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var store = new PostgresHexCrawlStore(database.ConnectionString);
+        await store.InitializeAsync();
+        var service = Composer(store);
+
+        var draft = await service.CreateDraftAsync("alice", null, null, null, [
+            new ProcedureModuleSelection(GenericProcedureCatalog.PersistentEffectsModule, true)
+        ], []);
+
+        Assert.True(draft.Dependencies.HasErrors);
+        Assert.Empty(draft.DependencyFixes!);
+    }
+
+    [Fact]
     public async Task RemovedCustomizedModuleDoesNotLeakOldOverrideIntoLaterReAdd()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();

@@ -3,12 +3,16 @@ using HexCrawl.Domain.Procedure;
 
 namespace HexCrawl.Application;
 
+public sealed record ProcedureDependencyFixSuggestion(
+    IReadOnlyList<string> ModuleKeys);
+
 public sealed record ProcedureComposerDraft(
     CampaignProcedure Procedure,
     ProcedureOriginMetadata? Origin,
     string? Attribution,
     string? Disclaimer,
-    ProcedureDependencyReport Dependencies);
+    ProcedureDependencyReport Dependencies,
+    IReadOnlyList<ProcedureDependencyFixSuggestion>? DependencyFixes = null);
 
 public sealed class ProcedureComposerService(CampaignProcedureService procedures)
 {
@@ -38,12 +42,14 @@ public sealed class ProcedureComposerService(CampaignProcedureService procedures
         var draft = ApplyName(
             CampaignProcedureMaterializer.CreateDraft(source.Procedure, moduleSelections, overrides),
             name);
+        var dependencies = draft.EvaluateDependencies();
         return new ProcedureComposerDraft(
             draft,
             source.Origin,
             source.Attribution,
             source.Disclaimer,
-            draft.EvaluateDependencies());
+            dependencies,
+            SuggestDependencyFixes(draft, dependencies));
     }
 
     public Task<StoredCampaignProcedureRevision> CreateAsync(
@@ -232,6 +238,105 @@ public sealed class ProcedureComposerService(CampaignProcedureService procedures
         {
             throw new ArgumentException("A Composer draft can start from either a preset or a saved procedure, not both.");
         }
+    }
+
+    private static IReadOnlyList<ProcedureDependencyFixSuggestion> SuggestDependencyFixes(
+        CampaignProcedure procedure,
+        ProcedureDependencyReport dependencies)
+    {
+        if (!dependencies.HasErrors)
+        {
+            return [];
+        }
+
+        var defaults = ComposerDefaultModules()
+            .ToDictionary(module => module.Module.Key, StringComparer.Ordinal);
+        var selected = procedure.Modules
+            .ToDictionary(module => module.Module.Key, CampaignProcedureSnapshot.Copy, StringComparer.Ordinal);
+        var order = procedure.Modules.Select(module => module.Module.Key).ToList();
+        var added = new HashSet<string>(StringComparer.Ordinal);
+
+        bool AddDefault(string moduleKey)
+        {
+            if (selected.ContainsKey(moduleKey) || !defaults.TryGetValue(moduleKey, out var value))
+            {
+                return false;
+            }
+
+            selected[moduleKey] = CampaignProcedureSnapshot.Copy(value);
+            order.Add(moduleKey);
+            added.Add(moduleKey);
+            return true;
+        }
+
+        ProcedureDependencyReport CurrentReport() =>
+            (procedure with
+            {
+                Modules = order.Select(moduleKey => selected[moduleKey]).ToArray()
+            }).EvaluateDependencies();
+
+        for (var pass = 0; pass < defaults.Count; pass++)
+        {
+            var report = CurrentReport();
+            var changed = false;
+
+            foreach (var issue in report.Issues.Where(issue =>
+                         issue.Kind == ProcedureDependencyIssueKind.MissingRequiredModule))
+            {
+                if (!selected.TryGetValue(issue.ModuleKey, out var consumer))
+                {
+                    continue;
+                }
+
+                foreach (var required in consumer.Module.RequiredDependencies)
+                {
+                    changed |= AddDefault(required);
+                }
+            }
+
+            foreach (var issue in report.Issues.Where(issue =>
+                         issue.Kind == ProcedureDependencyIssueKind.MissingRequiredProducer
+                         && issue.InputKey is not null))
+            {
+                var candidates = defaults.Values
+                    .Where(candidate => !selected.ContainsKey(candidate.Module.Key))
+                    .Where(candidate =>
+                        candidate.Module.Produces.Contains(issue.InputKey!, StringComparer.Ordinal)
+                        || candidate.Mechanic.OutputContract.Contains(issue.InputKey!, StringComparer.Ordinal))
+                    .ToArray();
+                if (candidates.Length == 1)
+                {
+                    changed |= AddDefault(candidates[0].Module.Key);
+                }
+            }
+
+            if (!changed)
+            {
+                break;
+            }
+        }
+
+        if (added.Count == 0 || CurrentReport().HasErrors)
+        {
+            return [];
+        }
+
+        var ordered = defaults.Keys
+            .Where(added.Contains)
+            .ToArray();
+        return [new ProcedureDependencyFixSuggestion(ordered)];
+    }
+
+    private static IReadOnlyList<MaterializedProcedureModule> ComposerDefaultModules()
+    {
+        var keys = GenericProcedureCatalog.Modules
+            .Select(module => module.Key)
+            .Append(Phase11GenericProcedureCatalog.ExposureModule)
+            .Distinct(StringComparer.Ordinal);
+
+        return keys
+            .Select(ProcedureComposerCustomProcedureFactory.CreateDefaultModule)
+            .ToArray();
     }
 
     private static CampaignProcedure ApplyName(CampaignProcedure procedure, string? name)

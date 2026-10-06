@@ -2,10 +2,13 @@ import type { ExpeditionJourneyState } from "../../journey-types";
 import type { SurvivalResources } from "../../survival-types";
 import type { ExpeditionDetail, ProcedureModule, SpatialRuntimeExpedition } from "../../types";
 import { canUseFocusedNonSpatialWatch } from "./focused-interval-policy";
+import { navigationResolutionDue } from "./expedition-workflow";
 
 export type ExpeditionWorkspaceActionKind =
     | "encounter"
     | "navigation"
+    | "boundary"
+    | "survival"
     | "journey"
     | "travel"
     | "watch"
@@ -46,12 +49,12 @@ export function expeditionWorkspacePresentation(
     survival: SurvivalResources | null): ExpeditionWorkspacePresentation {
     const capabilities = expeditionWorkspaceCapabilities(runtime.procedure.modules);
     return {
-        action: expeditionWorkspaceAction(runtime, journey),
+        action: expeditionWorkspaceAction(runtime, journey, survival),
         capabilities,
         timeLabel: timeLabel(runtime, capabilities.interval),
-        routeLabel: runtime.expedition.isSpatial ? routeLabel(runtime.expedition) : null,
+        routeLabel: runtime.expedition.isSpatial ? routeLabel(runtime) : null,
         navigationLabel: runtime.expedition.isSpatial && capabilities.navigation
-            ? navigationLabel(runtime.expedition)
+            ? navigationLabel(runtime)
             : null,
         resourceLabel: resourceLabel(survival),
         journeyLabel: journeyLabel(journey)
@@ -81,7 +84,8 @@ export function expeditionWorkspaceCapabilities(modules: ProcedureModule[]): Exp
 
 export function expeditionWorkspaceAction(
     runtime: ExpeditionDetail,
-    journey: ExpeditionJourneyState | null): ExpeditionWorkspaceAction {
+    journey: ExpeditionJourneyState | null,
+    survival: SurvivalResources | null = null): ExpeditionWorkspaceAction {
     if (runtime.pauseReason === "EncounterTriggered") {
         return {
             kind: "encounter",
@@ -93,18 +97,38 @@ export function expeditionWorkspaceAction(
 
     if (runtime.pauseReason === "LostRecognitionRequired") {
         return {
-            kind: "navigation",
-            label: "Resolve navigation decision",
+            kind: "boundary",
+            label: "Resolve lost-party boundary decision",
             detail: "The party crossed a boundary while lost. Resolve recognition and reorientation before travel continues.",
             urgent: true
         };
     }
 
-    if (runtime.pauseReason === "ConditionsReviewRequired" || runtime.pauseReason === "BacktrackBoundaryReached") {
+    if (runtime.pauseReason === "BacktrackBoundaryReached") {
         return {
             kind: "travel",
-            label: "Review travel conditions",
-            detail: "The current travel segment reached a procedure boundary. Review only the inputs that changed, then resume the same watch.",
+            label: "Review backtrack boundary",
+            detail: "The deliberate double-back reached the known entry boundary. Review the resulting position and travel intent, then resume the same watch.",
+            urgent: true
+        };
+    }
+
+    if (runtime.pauseReason === "ConditionsReviewRequired") {
+        return {
+            kind: "travel",
+            label: "Review changed travel conditions",
+            detail: "The current travel segment reached a procedure boundary. Review only the travel inputs that changed, then resume the same watch.",
+            urgent: true
+        };
+    }
+
+    if (survival?.forcedTravel.checkDue || (survival?.pendingResourceConsequences.length ?? 0) > 0) {
+        return {
+            kind: "survival",
+            label: survival?.forcedTravel.checkDue ? "Resolve forced travel" : "Resolve travel consequence",
+            detail: survival?.forcedTravel.checkDue
+                ? "A forced-travel check is due. Resolve it before routine travel continues."
+                : "A resource or survival consequence is pending. Resolve it before routine travel continues.",
             urgent: true
         };
     }
@@ -116,6 +140,17 @@ export function expeditionWorkspaceAction(
             kind: "journey",
             label: "Resolve journey stage",
             detail: `${journeyPending.definition.displayName}: ${currentJourneyStageLabel(journeyPending)} needs a table resolution.`,
+            urgent: true
+        };
+    }
+
+    if (runtime.expedition.isSpatial
+        && runtime.procedure.runtime !== null
+        && navigationResolutionDue(runtime, false, false)) {
+        return {
+            kind: "navigation",
+            label: "Resolve navigation",
+            detail: "Navigation is due for the intended course. Resolve that check without advancing travel, then continue with the same course and pace.",
             urgent: true
         };
     }
@@ -195,15 +230,22 @@ function timeLabel(runtime: ExpeditionDetail, hasInterval: boolean): string {
     return `Day ${state.currentDay} · ${state.completedWatches} watch${state.completedWatches === 1 ? "" : "es"} complete`;
 }
 
-function routeLabel(state: SpatialRuntimeExpedition): string {
-    const intended = state.intendedDirection === null ? "No course selected" : `Course ${directionLabel(state.intendedDirection)}`;
-    return `Hex ${state.currentHex.q}, ${state.currentHex.r} · ${intended}`;
+function routeLabel(runtime: ExpeditionDetail): string {
+    const state = runtime.expedition as SpatialRuntimeExpedition;
+    const intended = state.intendedDirection === null ? "No course selected" : "Course selected";
+    return `Current cell · ${intended}`;
 }
 
-function navigationLabel(state: SpatialRuntimeExpedition): string {
-    if (state.isLost) return `Lost · veer ${state.veerSteps}`;
-    if (state.actualDirection !== null && state.intendedDirection !== null && state.actualDirection !== state.intendedDirection) {
-        return `Off course · actual ${directionLabel(state.actualDirection)}`;
+function navigationLabel(runtime: ExpeditionDetail): string {
+    const state = runtime.expedition as SpatialRuntimeExpedition;
+    const actualDiffers = state.actualDirection !== null
+        && state.intendedDirection !== null
+        && state.actualDirection !== state.intendedDirection;
+    if (state.isLost) {
+        return `Lost · veer ${state.veerSteps}${actualDiffers ? " · actual course differs" : ""}`;
+    }
+    if (actualDiffers) {
+        return "Off course · actual course differs";
     }
     return "On course";
 }
@@ -231,9 +273,6 @@ function currentJourneyStageLabel(process: ExpeditionJourneyState["activeProcess
         ?? process.currentStageKey;
 }
 
-function directionLabel(direction: number): string {
-    return ["+q", "+q / -r", "-r", "-q", "-q / +r", "+r"][direction] ?? String(direction);
-}
 
 function formatNumber(value: number): string {
     return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
