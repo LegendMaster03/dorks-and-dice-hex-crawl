@@ -838,13 +838,13 @@ test("procedure-defined travel modes use bounded controls and focused movement l
         "utf8");
     const types = fs.readFileSync(path.join(sourceDir, "types.ts"), "utf8");
 
-    assert.match(types, /travelModeKeys: string\\[\\]/);
-    assert.match(view, /const availableTravelModes = \\(\\): string\\[\\] => runtime\\.movementComposition\\.policy\\.travelModeKeys/);
+    assert.match(types, /travelModeKeys: string\[\]/);
+    assert.match(view, /const availableTravelModes = \(\): string\[\] => runtime\.movementComposition\.policy\.travelModeKeys/);
     assert.match(view, /const createPaceControl =/);
-    assert.match(view, /document\\.createElement\\("select"\\)/);
-    assert.match(view, /travelModeControlMarkup\\(travelModes\\)/);
-    assert.match(view, /distanceInputLabel\\("Effective distance", distanceUnit\\)/);
-    assert.match(view, /runtime\\.context\\.hexCenterDistance\\?\\.unit\\.symbol/);
+    assert.match(view, /document\.createElement\("select"\)/);
+    assert.match(view, /travelModeControlMarkup\(travelModes\)/);
+    assert.match(view, /distanceInputLabel\("Effective distance", distanceUnit\)/);
+    assert.match(view, /runtime\.context\.hexCenterDistance\?\.unit\.symbol/);
 });
 
 test("Compact procedure reference does not claim display order is authoritative", () => {
@@ -864,8 +864,8 @@ test("travel-target map selection follows persisted course across authoritative 
         "utf8");
 
     assert.match(view, /let selectedHexTracksTravelIntent = false/);
-    assert.match(view, /const synchronizeTravelTargetProjection = \\(\\): void =>/);
-    assert.match(view, /synchronizeTravelTargetProjection\\(\\);/);
+    assert.match(view, /const synchronizeTravelTargetProjection = \(\): void =>/);
+    assert.match(view, /synchronizeTravelTargetProjection\(\);/);
     assert.match(view, /selectedHexTracksTravelIntent = true/);
     assert.match(view, /if \(selectedHex !== null && !selectedHexTracksTravelIntent\) return/);
     assert.match(view, /selectedHex = adjacency[\s\S]*adjacencyEdgeForDirection\(adjacency, preferences\.direction\)\?\.targetCell/);
