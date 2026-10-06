@@ -99,7 +99,7 @@ test("non-spatial watch bookkeeping uses a dedicated non-spatial API", () => {
     const view = read("modules/assistants/expedition-assistant-view.ts");
     assert.match(api, /assistants\/watch/);
     assert.match(view, /recordWatchAssistant/);
-    assert.match(view, /Watch \/ time bookkeeping/);
+    assert.match(view, /Time \/ interval bookkeeping/);
     assert.equal(/recordWatchAssistant\([^)]*resultingHex/.test(view), false);
 });
 

@@ -1512,7 +1512,7 @@ export async function renderExpedition(
             openHistory();
             return;
         }
-        openDrawer("Watch / time", body => {
+        openDrawer("Procedure interval", body => {
             body.append(
                 textElement("p", `Advance the configured ${formatHours(hours)} interval without adding spatial state.`, "hc-muted"));
             const form = document.createElement("form");

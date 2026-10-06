@@ -139,13 +139,13 @@ function renderAnonymousAccess(rootElement: HTMLElement, routeRequiresSignIn: bo
             <header class="hc-page-header">
                 <div>
                     <h1>Hex Crawl</h1>
-                    <p>Hex Crawl is available through Dorks & Dice, but saved worlds and crawl sessions are account-owned.</p>
+                    <p>Hex Crawl is available through Dorks & Dice, but saved worlds and expeditions are account-owned.</p>
                 </div>
             </header>
             <section class="hc-panel hc-public-access">
                 <h2>${routeRequiresSignIn ? "Sign in to open this Hex Crawl route" : "Sign in to use persistent Hex Crawl tools"}</h2>
                 <p>Use the Dorks & Dice account controls to sign in. Once signed in, Hex Crawl can load your worlds, saved expeditions, procedures, and focused GM utilities.</p>
-                <p class="hc-muted">Anonymous access does not create a shared or placeholder owner. Temporary anonymous crawl sessions are not enabled.</p>
+                <p class="hc-muted">Anonymous access does not create a shared or placeholder owner. Temporary anonymous expeditions are not enabled.</p>
             </section>
         </section>`;
 }

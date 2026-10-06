@@ -376,7 +376,7 @@ export class HexCrawlApi {
     }
 
     public startStandaloneSession(input: StartStandaloneCrawlSessionInput): Promise<ExpeditionDetail> {
-        return this.sendJson("POST", "/api/expeditions", input, "Start crawl session");
+        return this.sendJson("POST", "/api/expeditions", input, "Start expedition");
     }
 
     public getExpedition(expeditionId: string): Promise<ExpeditionDetail> {

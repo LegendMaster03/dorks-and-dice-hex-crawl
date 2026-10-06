@@ -20,7 +20,7 @@ test("unified non-spatial expedition gates interval work on focused interval sup
     assert.doesNotMatch(expedition, /renderNonSpatialTracker/);
 });
 
-test("focused assistant separates non-spatial interval bookkeeping from full runtime execution", () => {
+test("focused utility separates non-spatial interval bookkeeping from full runtime execution", () => {
     assert.match(assistant, /mode === "travel" && !runtime\.expedition\.isSpatial/);
     assert.match(assistant, /return canUseFocusedNonSpatialWatch\(runtime\)/);
     assert.match(assistant, /function nonSpatialWatchForm[\s\S]*requireFocusedIntervalHours\(runtime\)/);
@@ -29,7 +29,7 @@ test("focused assistant separates non-spatial interval bookkeeping from full run
     assert.match(assistant, /function encounterForm[\s\S]*requireProcedureRuntime\(runtime\)/);
 });
 
-test("non-spatial assistant status distinguishes executable procedures from structural focused capability", () => {
+test("non-spatial utility status distinguishes executable procedures from structural focused capability", () => {
     assert.match(assistant, /focusedIntervalProcedurePresentation\(runtime\)/);
     assert.match(assistant, /statusCell\("Procedure", focusedPresentation\.procedureLabel\)/);
     assert.match(assistant, /execution\s*\? statusCell\("Execution", focusedPresentation\.executionLabel\)\s*:\s*statusCell\("Focused interval", "Supported"\)/);

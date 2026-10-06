@@ -60,7 +60,7 @@ export async function renderAssistantEntry(
                         ${assistant === "travel" ? `
                             <label>Bookkeeping mode
                                 <select name="mode">
-                                    <option value="nonspatial">Watch / time only</option>
+                                    <option value="nonspatial">Time / interval only</option>
                                     <option value="abstract">Spatial travel on an abstract hex grid</option>
                                 </select>
                             </label>
@@ -335,7 +335,7 @@ function chooseDefaultProcedure(
 }
 
 function title(assistant: ExpeditionAssistant): string {
-    if (assistant === "travel") return "Travel / Watch Assistant";
+    if (assistant === "travel") return "Travel / Time Utility";
     if (assistant === "navigation") return "Navigation Assistant";
     return "Encounter Cadence Assistant";
 }
@@ -382,8 +382,8 @@ function contextLabel(session: ExpeditionSummary): string {
 }
 
 function openLabel(assistant: ExpeditionAssistant, session: ExpeditionSummary): string {
-    if (assistant === "travel" && session.context.kind === "NonSpatial") return "Open watch / time";
-    if (assistant === "travel") return "Open travel / watch";
+    if (assistant === "travel" && session.context.kind === "NonSpatial") return "Open time / interval";
+    if (assistant === "travel") return "Open travel / time";
     if (assistant === "navigation") return "Open navigation";
     return "Open encounter cadence";
 }
