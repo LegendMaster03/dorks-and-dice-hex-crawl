@@ -21,7 +21,10 @@ internal static class TestWebHost
 
         var connectionString = new NpgsqlConnectionStringBuilder(adminConnectionString)
         {
-            SearchPath = schema
+            SearchPath = schema,
+            // Every test gets a unique search path, so pooling would create one long-lived
+            // pool per test schema and eventually exhaust PostgreSQL's client limit.
+            Pooling = false
         }.ConnectionString;
 
         var store = new PostgresHexCrawlStore(connectionString);
