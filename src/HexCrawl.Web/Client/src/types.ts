@@ -198,6 +198,7 @@ export type ProcedurePreset = {
     presetKey: string;
     displayName: string;
     description: string;
+    category: string;
     presetRevision: number;
     procedure: CampaignProcedure;
     attribution: string | null;
