@@ -790,9 +790,13 @@ export async function renderExpedition(
         intro.className = "hc-focused-resolution-summary";
         const heading = focus === "movement"
             ? "Movement resolution"
-            : focus === "encounter"
-                ? "Encounter check"
-                : "Encounter check";
+            : "Encounter check";
+        const watchSummary = body.querySelector<HTMLElement>("[data-watch-summary]");
+        if (watchSummary) {
+            watchSummary.textContent = focus === "movement"
+                ? "Travel segment"
+                : "Encounter resolution";
+        }
         intro.append(
             textElement("h3", heading),
             textElement("p", travelIntentSummary(runtime, preferences, currentAdjacency()), "hc-muted"));

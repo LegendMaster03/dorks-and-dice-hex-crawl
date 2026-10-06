@@ -743,6 +743,16 @@ test("rendered review exercises focused forced travel and navigator focus", () =
     assert.match(fixture, /focusedEdge:/);
 });
 
+test("focused travel workspaces replace raw Run watch wording with the current tabletop task", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+
+    assert.match(view, /const watchSummary = body\.querySelector<HTMLElement>\("\[data-watch-summary\]"\)/);
+    assert.match(view, /focus === "movement"\s*\? "Travel segment"\s*:\s*"Encounter resolution"/);
+    assert.match(view, /if \(focus === "advanced"\) return/);
+});
+
 test("focused watch presentation hides unrelated exceptional controls outside More options", () => {
     const view = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
