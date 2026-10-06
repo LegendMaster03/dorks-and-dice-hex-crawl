@@ -28,6 +28,42 @@ export function navigationResolutionDue(runtime: ExpeditionDetail, suppressesNav
         && event.watchNumber === watchNumber);
 }
 
+export type SpatialTravelContinuationTarget =
+    | "unavailable"
+    | "course"
+    | "navigation"
+    | "encounter"
+    | "movement"
+    | "boundary"
+    | "review"
+    | "survival"
+    | "advance";
+
+export function spatialTravelContinuationTarget(
+    runtime: ExpeditionDetail,
+    hasSelectedCourse: boolean,
+    hasResolvedMovement: boolean,
+    suppressesNavigationCheck = false,
+    deliberateDoubleBack = false,
+    hasBlockingSurvival = false,
+    resumeEncounter = false,
+    resumeTravelReview = false): SpatialTravelContinuationTarget {
+    if (!runtime.expedition.isSpatial || runtime.procedure.runtime === null) return "unavailable";
+    if (runtime.pauseReason === "EncounterTriggered" && !resumeEncounter) return "encounter";
+    if (runtime.pauseReason === "LostRecognitionRequired") return "boundary";
+    if ((runtime.pauseReason === "ConditionsReviewRequired"
+        || runtime.pauseReason === "BacktrackBoundaryReached")
+        && !resumeTravelReview) {
+        return "review";
+    }
+    if (hasBlockingSurvival) return "survival";
+    if (!hasSelectedCourse) return "course";
+    if (navigationResolutionDue(runtime, suppressesNavigationCheck, deliberateDoubleBack)) return "navigation";
+    if (encounterCheckDue(runtime)) return "encounter";
+    if (!hasResolvedMovement) return "movement";
+    return "advance";
+}
+
 export function watchActionLabel(runtime: ExpeditionDetail): string {
     if (runtime.procedure.runtime === null) return "Procedure not executable";
     if (runtime.expedition.activeWatchNumber === null) return "Run watch";

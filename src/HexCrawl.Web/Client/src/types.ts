@@ -604,6 +604,12 @@ export type RuntimeAdvanceRequest = {
     generatedProcedureResolutionId?: string;
 };
 
+export type RepositionExpeditionRequest = {
+    expectedVersion: number;
+    targetHex: HexCoordinate;
+    note?: string;
+};
+
 export type ProcedureResolutionHelperRequest = {
     expectedVersion: number;
     expectedDistance?: number;
@@ -652,6 +658,14 @@ export type ProcedureResolutionHelperResult = {
     encounter: ProcedureResolvedEncounter | null;
     rolls: ProcedureResolutionRoll[];
     notes: string[];
+};
+
+export type ResolveBoundaryDecisionRequest = {
+    expectedVersion: number;
+    recognizedLost: boolean;
+    reorient: boolean;
+    resolutionSource: ResolutionSource;
+    resolutionNote?: string;
 };
 
 export type TravelWatchAssistantRequest = {

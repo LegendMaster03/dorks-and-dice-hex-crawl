@@ -152,6 +152,14 @@ Current-action routing presents the active blocker directly. Encounter interrupt
 
 The navigator uses screen-relative edge descriptions and adjacent-cell identity rather than assuming map north. Compass terminology must only be introduced if authoritative map-orientation metadata supports it.
 
+### Direct DM repositioning
+
+The workbench distinguishes ordinary travel from authoritative DM repositioning. **Teleport party** is the user-facing operation for initial placement, corrections, teleportation, scene transitions, or other cases where the party should simply be placed in another spatial cell.
+
+This operation does not simulate movement. It preserves accumulated elapsed travel, total distance, completed watches, and non-positional expedition state while resetting the local traversal context: intra-cell progress, entry/last-travel direction, intended/actual direction, and lost/veer state. Any active full-workbench travel watch is ended and pending pause/remaining-time state is cleared because those values belong to the prior local travel segment.
+
+For world-bound sessions the continuous map position is re-anchored to the destination cell. Presentation knowledge follows the configured automatic entered-hex policy, but unrelated locations/features are not automatically discovered. The reposition is persisted and audited as a DM override, and stale generated procedure-resolution tokens are discarded.
+
 ## UI projections
 
 The expedition UI derives its display from authoritative persisted state. Depending on context and executable policy it may show:

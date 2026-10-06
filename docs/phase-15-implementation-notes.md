@@ -47,6 +47,17 @@ Routine travel expresses **intent** and always resolves through the existing pro
 - The DM can deliberately override derived movement. Editing the derived value records DM-override provenance instead of silently replacing procedure-default provenance.
 - Navigation, partial progress, encounters, terrain/environment effects, forced travel, boundaries, consequences, and position changes continue through the existing runtime advance operation. The presentation does not directly assign the current hex.
 
+## Direct DM repositioning
+
+The DM also has an explicit **Teleport party** operation for setup corrections, teleportation, scene transitions, and other authoritative repositioning that is not ordinary overland travel.
+
+- Selecting any map cell can expose **Teleport party here**, and the same operation remains available from GM Tools with direct cell-coordinate entry.
+- Repositioning is a distinct server mutation. It does not invoke normal travel advancement, add distance or elapsed travel time, run navigation or encounter checks, consume resources, advance journey progress, or fabricate travel provenance.
+- The destination becomes the current cell and, for world-bound sessions, the map position is re-anchored to that cell. In-cell progress, entry/last-travel direction, intended/actual course, and lost/veer state are reset because they describe the previous local traversal context.
+- If a full travel watch is active, the explicit reposition ends that watch and clears its pending pause/remaining-time state rather than silently carrying an obsolete travel segment to the new location.
+- Aggregate elapsed travel, total distance already traveled, completed-watch count, party/resources/effects/journey state, and history remain intact. The reposition is recorded as a DM override in runtime history.
+- Repositioning invalidates unconsumed generated procedure-resolution tokens. World-bound automatic presentation policy may mark the newly occupied hex known, but the operation does not automatically reveal unrelated locations or features.
+
 ## Automatic procedure resolution
 
 Procedure-defined automatic helpers remain server-backed.

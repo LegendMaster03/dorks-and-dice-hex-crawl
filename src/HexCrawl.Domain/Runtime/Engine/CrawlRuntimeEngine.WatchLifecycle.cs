@@ -72,12 +72,12 @@ public sealed partial class CrawlRuntimeEngine
     private static (ExpeditionState State, ActiveWatchState Active) ResumePendingDecision(
         ExpeditionState state,
         ActiveWatchState active,
-        WatchAdvanceInputs inputs,
+        BoundaryNavigationDecision? boundaryDecision,
         EventCollector events)
     {
         if (active.PendingDecision == RuntimePauseReason.LostRecognitionRequired)
         {
-            var decision = inputs.BoundaryDecision
+            var decision = boundaryDecision
                 ?? throw new InvalidOperationException("A lost-recognition boundary decision is required before travel can continue.");
             if (decision.RecognizedLost && decision.Reorient)
             {

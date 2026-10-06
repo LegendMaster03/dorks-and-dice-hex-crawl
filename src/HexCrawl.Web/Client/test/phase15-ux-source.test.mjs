@@ -377,11 +377,32 @@ test("Phase 15 map selection is contextual and never directly mutates expedition
 
     assert.match(view, /Selecting an adjacent cell expresses travel intent only; it does not move the party/);
     assert.match(view, /map\.setHexSelectionHandler/);
-    assert.match(view, /preferences\.direction = edge\.directionValue/);
+    assert.match(view, /selectTravelIntent\(edge\.directionValue, edge\.targetCell\)/);
     assert.match(view, /syncTravelIntentControls\(\)/);
+    const selection = view.slice(
+        view.indexOf("const selectTravelIntent"),
+        view.indexOf("const syncTravelIntentControls"));
+    assert.doesNotMatch(selection, /api\./);
+    assert.doesNotMatch(selection, /advanceExpedition/);
     assert.match(map, /setHexSelectionHandler/);
     assert.match(map, /this\.hexSelectionHandler\?\.\(selected\)/);
     assert.doesNotMatch(view, /setHexSelectionHandler[\s\S]{0,800}advanceExpedition/);
+});
+
+test("current-cell adjacency is memoized across unchanged render and summary reads", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+
+    assert.match(view, /let adjacencyCache:/);
+    assert.match(view, /if \(adjacencyCache\?\.key !== key\)/);
+    assert.match(view, /currentHexAdjacency\(cell, orientation, null, rotation\)/);
+    assert.match(view, /const base = adjacencyCache\.value/);
+    assert.match(view, /selectedEdgeId: selected\?\.id \?\? null/);
+    const keyBlock = view.slice(
+        view.indexOf("const key = ["),
+        view.indexOf("].join", view.indexOf("const key = [")));
+    assert.doesNotMatch(keyBlock, /preferences\.direction/);
 });
 
 test("Phase 15 workspace rerenders preserve the existing map surface and viewport lifecycle", () => {
@@ -403,6 +424,25 @@ test("Phase 15 workspace rerenders preserve the existing map surface and viewpor
     assert.match(map, /this\.resizeObserver\.disconnect\(\)/);
     assert.match(map, /host\.replaceChildren\(this\.canvas, this\.accessibilityHelp, this\.accessibilityStatus\)/);
     assert.match(map, /this\.resizeObserver\.observe\(host\)/);
+});
+
+test("focused travel drawer explicitly removes its course and pace listeners on cleanup", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+
+    assert.match(view, /directionControl\?\.removeEventListener\("change", captureTravelPreferencesFromControls\)/);
+    assert.match(view, /paceControl\?\.removeEventListener\("change", captureTravelPreferencesFromControls\)/);
+    assert.match(view, /controller\.dispose\(\)/);
+});
+
+test("navigator controls keep visible focus and practical pointer targets at narrow widths", () => {
+    const styles = fs.readFileSync(path.join(sourceDir, "phase15-styles.ts"), "utf8");
+
+    assert.match(styles, /\.hc-adjacency-edge:focus-visible/);
+    assert.match(styles, /outline:4px solid var\(--hc-focus\)/);
+    assert.match(styles, /min-width:2\.75rem; min-height:2\.75rem/);
+    assert.match(styles, /@media \(max-width: 760px\)[\s\S]*\.hc-adjacency-edge \{ min-width:2\.75rem; min-height:2\.75rem/);
 });
 
 test("Phase 15 focused editing uses accessible drawers and keeps secondary tools out of the primary surface", () => {
@@ -442,6 +482,8 @@ test("Phase 15 spatial travel uses semantic current-cell adjacency and focused n
     assert.match(adjacency, /createCurrentCellAdjacency/);
     assert.match(adjacency, /CurrentCellAdjacency/);
     assert.match(adjacency, /currentHexAdjacency/);
+    assert.match(adjacency, /center: polygonCenter\(polygon\)/);
+    assert.match(adjacency, /adjacencyFeedbackVector/);
     assert.doesNotMatch(adjacency, /edges\.length === 6/);
     assert.match(view, /aria-label", "Current-cell adjacent travel"/);
     assert.match(view, /aria-pressed/);
@@ -476,6 +518,15 @@ test("Compact authoring offers generic one-click dependency repair", () => {
 });
 
 
+test("persisted travel intent does not hardcode a six-edge direction range", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+
+    assert.match(view, /Number\.isInteger\(parsed\.direction\) && Number\(parsed\.direction\) >= 0/);
+    assert.doesNotMatch(view, /Number\(parsed\.direction\) <= 5/);
+});
+
 test("current-cell navigator stays orientation-neutral unless authoritative compass metadata exists", () => {
     const adjacency = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/spatial-adjacency.ts"),
@@ -488,11 +539,274 @@ test("current-cell navigator stays orientation-neutral unless authoritative comp
     assert.match(adjacency, /outwardArrow/);
     assert.match(adjacency, /rotationDegrees/);
     assert.doesNotMatch(adjacency, /Northeast|Northwest|Southeast|Southwest/);
-    assert.match(view, /Set intended adjacent cell via/);
+    assert.match(view, /Travel through \$\{identity\}/);
     assert.match(view, /edgeCourseLabel/);
     assert.doesNotMatch(view, /data-travel-primary/);
 });
 
+
+test("navigator feedback preserves edge centering and moves along geometry instead of the global button press direction", () => {
+    const adjacency = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/spatial-adjacency.ts"),
+        "utf8");
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+    const phaseStyles = fs.readFileSync(path.join(sourceDir, "phase15-styles.ts"), "utf8");
+    const baseStyles = fs.readFileSync(path.join(sourceDir, "styles.ts"), "utf8");
+
+    assert.match(baseStyles, /button:active:not\(:disabled\) \{ transform: translateY\(1px\); \}/);
+    assert.match(adjacency, /adjacencyFeedbackVector/);
+    assert.match(adjacency, /Math\.hypot\(dx, dy\)/);
+    assert.match(view, /--hc-edge-feedback-x/);
+    assert.match(view, /--hc-edge-feedback-y/);
+    assert.match(phaseStyles, /button\.hc-adjacency-edge:active:not\(:disabled\)/);
+    assert.match(
+        phaseStyles,
+        /translate\(calc\(-50% \+ var\(--hc-edge-feedback-x\)\),calc\(-50% \+ var\(--hc-edge-feedback-y\)\)\)/);
+});
+
+test("lost-boundary resolution is a dedicated focused mutation and does not require hidden travel input", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+    const api = fs.readFileSync(path.join(sourceDir, "api.ts"), "utf8");
+
+    assert.match(view, /const openBoundaryWorkspace = \(\): void =>/);
+    assert.match(view, /api\.resolveBoundaryDecision/);
+    assert.match(view, /case "boundary":[\s\S]*openBoundaryWorkspace\(\)/);
+    const boundary = view.slice(
+        view.indexOf("const openBoundaryWorkspace"),
+        view.indexOf("const openTravelReviewWorkspace"));
+    assert.match(boundary, /Party recognizes it is lost/);
+    assert.match(boundary, /Party reorients/);
+    assert.doesNotMatch(boundary, /effectiveDistance|expectedDistance|actualDistance|hexSteps/);
+    assert.match(api, /\/boundary-decision/);
+});
+
+test("urgent travel pauses preserve their task wording and use a focused course-and-pace review", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+
+    assert.match(view, /action\.kind === "travel"[\s\S]*&& !action\.urgent/);
+    assert.match(view, /const openTravelReviewWorkspace = \(\): void =>/);
+    assert.match(view, /"Changed travel conditions"/);
+    assert.match(view, /"Backtrack boundary"/);
+    assert.match(view, /continueTravel\(false, true\)/);
+    assert.match(view, /case "review":[\s\S]*openTravelReviewWorkspace\(\)/);
+    const review = view.slice(
+        view.indexOf("const openTravelReviewWorkspace"),
+        view.indexOf("const openNavigationWorkspace"));
+    assert.match(review, /labelled\("Course", course\)/);
+    assert.match(review, /labelled\("Pace \/ travel mode", pace\)/);
+    assert.doesNotMatch(review, /suppressNav|resetVeer|continueAcross|doubleBack/);
+});
+
+test("encounter resume requires an explicit resolved-at-table acknowledgement", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+    const controller = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-watch-controller.ts"),
+        "utf8");
+
+    assert.match(view, /Encounter resolved — continue travel/);
+    assert.match(view, /continueTravel\(true\)/);
+    assert.match(controller, /runtime\.pauseReason === "EncounterTriggered" && !resumeEncounter/);
+});
+
+test("normal spatial travel has one primary continuation path and focused unresolved workspaces", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+
+    assert.match(view, /const primary = button\(copy\.label, \(\) => activateAction\(action.kind\)\)/);
+    assert.doesNotMatch(view, /const continueControl = button\("Continue travel"/);
+    assert.match(view, /actions\.append\(changePace, more\)/);
+    assert.doesNotMatch(view, /button\("Travel controls"/);
+    assert.match(view, /const continueTravel = \(resumeEncounter = false, resumeTravelReview = false\): void =>/);
+    assert.match(view, /spatialTravelContinuationTarget/);
+    assert.match(view, /case "navigation":[\s\S]*openNavigationWorkspace\(\)/);
+    assert.match(view, /case "encounter":[\s\S]*openTravelWorkspace\("encounter"\)/);
+    assert.match(view, /case "movement":[\s\S]*openTravelWorkspace\("movement"\)/);
+    assert.match(view, /case "boundary":[\s\S]*openBoundaryWorkspace\(\)/);
+    assert.match(view, /case "survival":[\s\S]*openSurvivalWorkspace\("attention"\)/);
+    assert.match(view, /ExpeditionWatchController\.continueResolvedTravel/);
+    const controller = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-watch-controller.ts"),
+        "utf8");
+    assert.match(controller, /return api\.advanceExpedition\(runtime\.id, request\)/);
+    assert.match(view, /button\("More options", \(\) => openTravelWorkspace\("advanced"\)\)/);
+    assert.doesNotMatch(view, /openTravelWorkspace\("travel"\)/);
+});
+
+test("narrow hierarchy keeps primary travel and the map ahead of status-card detail", () => {
+    const styles = fs.readFileSync(path.join(sourceDir, "phase15-styles.ts"), "utf8");
+    const capture = fs.readFileSync(
+        path.join(sourceDir, "..", "visual-review", "capture-phase15.sh"),
+        "utf8");
+    const fixture = fs.readFileSync(
+        path.join(sourceDir, "..", "visual-review", "phase15.ts"),
+        "utf8");
+
+    assert.match(styles, /@media \(max-width: 760px\)[\s\S]*\.hc-phase15-expedition > \.hc-workspace-grid,[\s\S]*order:2/);
+    assert.match(styles, /\.hc-phase15-expedition > \.hc-phase15-runtime-summary \{ order:3; \}/);
+    assert.match(styles, /\.hc-phase15-expedition \.hc-map-panel > \.hc-map-frame \{ order:2; \}/);
+    assert.match(styles, /\.hc-phase15-expedition \.hc-map-panel > \.hc-current-travel \{ order:3;/);
+    assert.match(capture, /narrow-selected-edge\|selected-edge\|light\|500\|844\|390/);
+    assert.match(capture, /narrow map does not begin in the initial viewport/);
+    assert.match(fixture, /mapTop:/);
+});
+
+test("desktop hierarchy exposes current travel before the map and compacts summary chrome", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+    const styles = fs.readFileSync(path.join(sourceDir, "phase15-styles.ts"), "utf8");
+
+    const mapPanel = view.slice(
+        view.indexOf('primary.className = "hc-panel hc-map-panel"'),
+        view.indexOf('const secondary = document.createElement("aside")'));
+    assert.ok(mapPanel.indexOf("renderCurrentTravel()") < mapPanel.indexOf("primary.append(frame)"));
+    assert.match(styles, /@media \(min-width: 1041px\)[\s\S]*\.hc-current-action \{ grid-template-columns:/);
+    assert.match(styles, /@media \(min-width: 1041px\)[\s\S]*\.hc-current-travel \{ grid-template-columns:auto minmax\(0,1fr\) auto/);
+    assert.match(styles, /\.hc-current-action header \.hc-ux-badge \{ justify-self:start; width:max-content; \}/);
+    assert.match(styles, /@media \(min-width: 1041px\)[\s\S]*\.hc-phase15-expedition \.hc-stat-action-grid \{ grid-template-columns:repeat\(8,minmax\(0,1fr\)\)/);
+    assert.match(styles, /@media \(min-width: 1041px\) and \(max-width: 1199px\)[\s\S]*\.hc-current-travel-facts \{[\s\S]*grid-column:1 \/ -1;[\s\S]*grid-template-columns:repeat\(4,auto minmax\(0,1fr\)\)/);
+    assert.match(styles, /@media \(min-width: 1200px\)[\s\S]*\.hc-current-travel-facts \{ grid-template-columns:repeat\(4,auto minmax\(0,1fr\)\)/);
+});
+
+test("current travel stays beside the map while selection detail is contextual overlay", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+    const styles = fs.readFileSync(path.join(sourceDir, "phase15-styles.ts"), "utf8");
+
+    assert.match(view, /context\.className = "hc-map-context-overlay"/);
+    assert.match(view, /context\.hidden = true/);
+    assert.match(view, /frame\.append\(host, renderAdjacencyNavigator\(\), context\)/);
+    assert.match(view, /if \(!selectedHex\) \{\s*host\.hidden = true;/);
+    assert.match(view, /host\.hidden = false;\s*host\.append\(textElement\("h3", "Selected map cell"\)\)/);
+    assert.match(view, /section\.className = "hc-current-travel"/);
+    assert.match(view, /Current travel/);
+    assert.match(view, /Change pace/);
+    assert.match(styles, /\.hc-map-context-overlay \{ position:absolute/);
+    assert.match(styles, /\.hc-phase15-expedition \.hc-map-host \{ height:clamp\(28rem,58vh,46rem\); min-height:0; \}/);
+    assert.match(styles, /\.hc-phase15-expedition\.hc-page \{ max-width:none; \}/);
+    assert.match(styles, /\.hc-rail-action/);
+});
+
+test("course selection immediately updates the Next action copy without moving the party", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+
+    assert.match(view, /const currentActionCopy =/);
+    assert.match(view, /data-current-action-label/);
+    assert.match(view, /data-current-action-detail/);
+    assert.match(view, /data-current-action-button/);
+    assert.match(view, /const copy = currentActionCopy\(action\);[\s\S]*nextLabel\.textContent = copy\.label/);
+});
+
+test("no-course travel identifies course selection as the immediate task", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+
+    assert.match(view, /const courseRequired = routineSpatialTravel && preferences\.direction === null/);
+    assert.match(view, /courseRequired\s*\? "Choose course"/);
+    assert.match(view, /selecting a course does not move the party/);
+});
+
+test("focused expedition panels accept the drawer body itself as their page host", () => {
+    for (const file of [
+        "survival-resources-panel.ts",
+        "journey-panel.ts",
+        "environment-panel.ts"
+    ]) {
+        const source = fs.readFileSync(
+            path.join(sourceDir, "modules/expeditions", file),
+            "utf8");
+        assert.match(source, /root\.matches\("\.hc-page"\)/);
+    }
+});
+
+test("forced travel and pending consequences use focused survival workspaces", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+    const panel = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/survival-resources-panel.ts"),
+        "utf8");
+
+    assert.match(view, /openSurvivalWorkspace\("attention"\)/);
+    assert.match(view, /\? "forcedTravel"\s*:\s*"pendingResourceConsequences"/);
+    assert.match(view, /\? "Forced travel"\s*:\s*panelFocus === "pendingResourceConsequences"/);
+    assert.match(panel, /export type SurvivalResourcesPanelFocus/);
+    assert.match(panel, /this\.focus === "forcedTravel"/);
+    assert.match(panel, /this\.focus === "pendingResourceConsequences"/);
+});
+
+test("rendered review exercises focused forced travel and navigator focus", () => {
+    const capture = fs.readFileSync(
+        path.join(sourceDir, "..", "visual-review", "capture-phase15.sh"),
+        "utf8");
+    const fixture = fs.readFileSync(
+        path.join(sourceDir, "..", "visual-review", "phase15.ts"),
+        "utf8");
+
+    assert.match(capture, /forced-travel-pending.*drawerCount/);
+    assert.match(capture, /forced-travel-pending": "Forced travel"/);
+    assert.match(fixture, /findButton\("Resolve forced travel"\)\?\.click\(\)/);
+    assert.match(fixture, /focusedEdge:/);
+});
+
+test("focused travel workspaces replace raw Run watch wording with the current tabletop task", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+
+    assert.match(view, /const watchSummary = body\.querySelector<HTMLElement>\("\[data-watch-summary\]"\)/);
+    assert.match(view, /focus === "movement"\s*\? "Travel segment"\s*:\s*"Encounter resolution"/);
+    assert.match(view, /if \(focus === "advanced"\) return/);
+});
+
+test("focused watch presentation hides unrelated exceptional controls outside More options", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+    const styles = fs.readFileSync(path.join(sourceDir, "phase15-styles.ts"), "utf8");
+
+    assert.match(view, /focus: "advanced" \| "movement" \| "encounter"/);
+    assert.match(view, /if \(focus === "advanced"\) return/);
+    assert.match(view, /group\.hidden = !keys\.includes\(focus\)/);
+    assert.match(view, /const genericHelper = body\.querySelector<HTMLElement>\("\[data-resolution-helper\]"\)/);
+    assert.match(view, /genericHelper\.classList\.add\("hc-focused-hidden"\)/);
+    assert.match(styles, /\.hc-focused-hidden \{ display:none !important; \}/);
+    assert.match(view, /data-plan-fields data-focus-group="advanced"/);
+    assert.match(view, /data-travel-resolution data-focus-group="advanced movement"/);
+    assert.match(view, /data-encounter-resolution data-focus-group="advanced encounter"/);
+    assert.match(view, /data-boundary-resolution data-focus-group="advanced"/);
+    assert.match(view, /details data-focus-group="advanced"/);
+});
+
+test("DM can reposition the party without routing through ordinary travel procedure advancement", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+    const api = fs.readFileSync(path.join(sourceDir, "api.ts"), "utf8");
+
+    assert.match(view, /button\("Teleport party", \(\) => openRepositionWorkspace\(selectedHex\)\)/);
+    assert.match(view, /button\("Teleport party here", \(\) => openRepositionWorkspace\(selectedHex\)\)/);
+    assert.match(view, /Teleport party directly repositions the party without resolving travel/);
+    assert.match(view, /api\.repositionExpedition/);
+    assert.match(view, /preferences\.direction = null/);
+    assert.match(view, /q\.required = true/);
+    assert.match(view, /r\.required = true/);
+    assert.match(view, /void runUiMutation\(async \(\) => \{\s*if \(!q\.value\.trim\(\) \|\| !r\.value\.trim\(\)\)/);
+    assert.match(api, /\/api\/expeditions\/\$\{encodeURIComponent\(expeditionId\)\}\/reposition/);
+});
 
 test("Compact procedure reference does not claim display order is authoritative", () => {
     const workspace = fs.readFileSync(
@@ -514,7 +828,7 @@ test("travel-target map selection follows persisted course across authoritative 
     assert.match(view, /selectedHexTracksTravelIntent = true/);
     assert.match(view, /if \(selectedHexTracksTravelIntent && runtime\.expedition\.isSpatial && preferences\.direction !== null\)/);
     assert.match(view, /adjacencyEdgeForDirection\(adjacency, preferences\.direction\)\?\.targetCell/);
-    assert.match(view, /selectedHexTracksTravelIntent = false;\s*if \(hex\)/);
+    assert.match(view, /if \(hex\)[\s\S]*selectTravelIntent\(edge\.directionValue, edge\.targetCell\);[\s\S]*selectedHexTracksTravelIntent = false;/);
 });
 
 
@@ -584,8 +898,8 @@ test("focused navigation retains access to the verified procedure-helper path", 
     const navigation = view.slice(
         view.indexOf("const openNavigationWorkspace"),
         view.indexOf("const applyTravelPreferences"));
-    assert.match(navigation, /More travel details/);
-    assert.match(navigation, /openTravelWorkspace\("travel"\)/);
+    assert.match(navigation, /Advanced travel controls/);
+    assert.match(navigation, /openTravelWorkspace\("advanced"\)/);
     assert.doesNotMatch(navigation, /resolutionSource:\s*"AutomaticRoll"/);
 });
 

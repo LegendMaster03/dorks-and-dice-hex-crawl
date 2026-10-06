@@ -68,6 +68,79 @@ public sealed class ExpeditionWorkbenchEndpointsTests
     }
 
     [Fact]
+    public async Task DmCanRepositionPartyWithoutRecordingTravel()
+    {
+        var database = TestWebHost.NewDatabasePath();
+        try
+        {
+            Guid expeditionId;
+            using (var factory = TestWebHost.Create(database))
+            using (var client = factory.CreateClient())
+            {
+                var world = await CreateWorld(client);
+                var worldId = world.GetProperty("id").GetGuid();
+
+                using var startResponse = await client.PostAsJsonAsync($"/api/overworlds/{worldId:D}/expeditions", new
+                {
+                    name = "Reposition expedition",
+                    procedureKey = "simple-fixed-distance",
+                    presentationKey = "exploration-map",
+                    startHex = new { q = 0, r = 0 }
+                });
+                startResponse.EnsureSuccessStatusCode();
+                var started = await startResponse.Content.ReadFromJsonAsync<JsonElement>();
+                expeditionId = started.GetProperty("id").GetGuid();
+
+                using var moveResponse = await client.PostAsJsonAsync(
+                    $"/api/expeditions/{expeditionId:D}/reposition",
+                    new
+                    {
+                        expectedVersion = started.GetProperty("version").GetInt64(),
+                        targetHex = new { q = 7, r = -4 },
+                        note = "Teleportation test."
+                    });
+                moveResponse.EnsureSuccessStatusCode();
+                var moved = await moveResponse.Content.ReadFromJsonAsync<JsonElement>();
+                var state = moved.GetProperty("expedition");
+
+                Assert.Equal(7, state.GetProperty("currentHex").GetProperty("q").GetInt32());
+                Assert.Equal(-4, state.GetProperty("currentHex").GetProperty("r").GetInt32());
+                Assert.Equal(0, state.GetProperty("hexProgress").GetProperty("value").GetDouble());
+                Assert.Equal(0, state.GetProperty("distanceTraveled").GetProperty("value").GetDouble());
+                Assert.Equal(0, state.GetProperty("elapsedTravelHours").GetDouble());
+                Assert.Equal(JsonValueKind.Null, state.GetProperty("intendedDirection").ValueKind);
+                Assert.Equal(JsonValueKind.Null, state.GetProperty("actualDirection").ValueKind);
+                Assert.False(state.GetProperty("isLost").GetBoolean());
+                Assert.Equal(JsonValueKind.Null, state.GetProperty("activeWatchNumber").ValueKind);
+                Assert.Equal(JsonValueKind.Null, moved.GetProperty("pauseReason").ValueKind);
+                Assert.Contains(
+                    moved.GetProperty("knownHexes").EnumerateArray(),
+                    hex => hex.GetProperty("q").GetInt32() == 7
+                        && hex.GetProperty("r").GetInt32() == -4);
+                Assert.Contains(
+                    moved.GetProperty("history").EnumerateArray(),
+                    item => item.GetProperty("kind").GetString() == "DmOverrideApplied"
+                        && item.GetProperty("message").GetString()!.Contains("Teleportation test", StringComparison.Ordinal));
+            }
+
+            using (var restartedFactory = TestWebHost.Create(database))
+            using (var restartedClient = restartedFactory.CreateClient())
+            {
+                var reloaded = await restartedClient.GetFromJsonAsync<JsonElement>(
+                    $"/api/expeditions/{expeditionId:D}");
+                var state = reloaded.GetProperty("expedition");
+                Assert.Equal(7, state.GetProperty("currentHex").GetProperty("q").GetInt32());
+                Assert.Equal(-4, state.GetProperty("currentHex").GetProperty("r").GetInt32());
+                Assert.Equal(0, state.GetProperty("distanceTraveled").GetProperty("value").GetDouble());
+            }
+        }
+        finally
+        {
+            TestWebHost.DeleteDatabase(database);
+        }
+    }
+
+    [Fact]
     public async Task ProcedureRuntimeHelpersRoundTripThroughHttpAndRestart()
     {
         var database = TestWebHost.NewDatabasePath();

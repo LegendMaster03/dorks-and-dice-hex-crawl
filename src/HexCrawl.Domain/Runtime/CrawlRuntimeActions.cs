@@ -1,4 +1,5 @@
 using HexCrawl.Domain.Knowledge;
+using HexCrawl.Domain.Spatial;
 using HexCrawl.Domain.World;
 
 namespace HexCrawl.Domain.Runtime;
@@ -10,6 +11,48 @@ public sealed record ManualDiscoveryResult(
 
 public static class CrawlRuntimeActions
 {
+    public static ExpeditionState Reposition(
+        ExpeditionState expedition,
+        HexCoordinate destination,
+        string? note = null)
+    {
+        ArgumentNullException.ThrowIfNull(expedition);
+
+        var sequence = expedition.History.Count == 0 ? 1 : expedition.History[^1].Sequence + 1;
+        var watchNumber = expedition.ActiveWatch?.WatchNumber ?? expedition.CompletedWatches;
+        var priorHex = expedition.CurrentHex;
+        var activeWatch = expedition.ActiveWatch?.WatchNumber;
+        var message = priorHex == destination
+            ? $"DM reset the party position in hex {destination} without recording travel."
+            : $"DM repositioned the party from hex {priorHex} to hex {destination} without recording travel.";
+        if (activeWatch.HasValue)
+        {
+            message += $" Active watch {activeWatch.Value} was ended.";
+        }
+        if (!string.IsNullOrWhiteSpace(note))
+        {
+            message += $" {note.Trim()}";
+        }
+
+        var runtimeEvent = new CrawlRuntimeEvent(
+            sequence,
+            watchNumber,
+            CrawlRuntimeEventKind.DmOverrideApplied,
+            expedition.ElapsedTravelTime,
+            destination,
+            message);
+
+        return expedition with
+        {
+            Traversal = HexTraversalState.StartingIn(destination, expedition.Traversal.Progress.Unit),
+            IntendedDirection = null,
+            ActualDirection = null,
+            Navigation = new NavigationRuntimeState(false, 0),
+            ActiveWatch = null,
+            History = [.. expedition.History, runtimeEvent]
+        };
+    }
+
     public static ManualDiscoveryResult Discover(
         OverworldDefinition world,
         ExpeditionState expedition,

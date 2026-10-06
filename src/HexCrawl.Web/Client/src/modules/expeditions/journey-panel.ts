@@ -34,7 +34,10 @@ export class ExpeditionJourneyPanel {
         this.body = document.createElement("div");
         this.body.className = "hc-form";
         this.panel.append(summary, this.body);
-        root.querySelector<HTMLElement>(".hc-page")?.append(this.panel);
+        const page = root.matches(".hc-page")
+            ? root
+            : root.querySelector<HTMLElement>(".hc-page");
+        page?.append(this.panel);
     }
 
     public async sync(): Promise<void> {

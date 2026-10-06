@@ -82,6 +82,18 @@ test("standalone crawl sessions post directly to the expedition collection", () 
     assert.match(source, /sendJson\("POST", "\/api\/expeditions"/);
 });
 
+test("DM repositioning is a dedicated non-travel mutation", () => {
+    const api = read("api.ts");
+    const view = read("modules/expeditions/expedition-view.ts");
+    assert.match(api, /repositionExpedition/);
+    assert.match(api, /\/reposition/);
+    assert.match(view, /openRepositionWorkspace/);
+    assert.match(view, /Teleport party here/);
+    assert.doesNotMatch(
+        view.slice(view.indexOf("const openRepositionWorkspace"), view.indexOf("const openPartyWorkspace")),
+        /recordTravelAssistant|advanceExpedition/);
+});
+
 test("non-spatial watch bookkeeping uses a dedicated non-spatial API", () => {
     const api = read("api.ts");
     const view = read("modules/assistants/expedition-assistant-view.ts");

@@ -30,6 +30,52 @@ import {
 import { TravelEnvironmentProviderUi } from "./provider-travel-ui";
 
 export class ExpeditionWatchController {
+    public static async continueResolvedTravel(
+        api: HexCrawlApi,
+        runtime: ExpeditionDetail,
+        intendedDirection: number,
+        paceKey: string,
+        resumeEncounter = false): Promise<ExpeditionDetail> {
+        const execution = requireProcedureRuntime(runtime);
+        const state = spatialState(runtime);
+        if (runtime.pauseReason === "EncounterTriggered" && !resumeEncounter) {
+            throw new Error("Resolve the active encounter before continuing travel.");
+        }
+        if (runtime.pauseReason === "LostRecognitionRequired") {
+            throw new Error("Resolve the pending boundary decision before continuing travel.");
+        }
+
+        const active = state.activeWatchNumber !== null;
+        const suppressesNavigationCheck = active ? state.activeSuppressesNavigationCheck : false;
+        const deliberateDoubleBack = active ? state.activeDeliberateDoubleBack : false;
+        if (navigationResolutionDue(runtime, suppressesNavigationCheck, deliberateDoubleBack)) {
+            throw new Error("Resolve navigation before continuing travel.");
+        }
+        if (encounterCheckDue(runtime)) {
+            throw new Error("Resolve the due encounter check before continuing travel.");
+        }
+
+        const effectiveDistance = authoritativeFixedWatchDistance(runtime);
+        if (effectiveDistance === null) {
+            throw new Error("Movement requires focused resolution before travel can continue.");
+        }
+
+        const request: RuntimeAdvanceRequest = {
+            expectedVersion: runtime.version,
+            intendedDirection,
+            paceKey: paceKey.trim() || "normal",
+            navigationAidKey: active ? state.activeNavigationAidKey ?? "none" : "none",
+            suppressesNavigationCheck,
+            resetsVeerAtBoundary: active ? state.activeResetsVeerAtBoundary : false,
+            resolutionSource: "ManualRoll",
+            travelResolutionSource: "ProcedureDefault",
+            effectiveDistance,
+            deliberateDoubleBack: execution.supportsDeliberateDoubleBack && deliberateDoubleBack,
+            continueAcrossBoundaries: active ? state.activeContinueAcrossBoundaries : false
+        };
+        return api.advanceExpedition(runtime.id, request);
+    }
+
     private readonly form: HTMLFormElement;
     private readonly advanceButton: HTMLButtonElement;
     private readonly locationSelect: HTMLSelectElement;

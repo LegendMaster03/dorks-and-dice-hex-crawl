@@ -41,6 +41,8 @@ public sealed class ExpeditionModule : IHexCrawlModule
         api.MapGet("/expeditions/{expeditionId:guid}", GetExpeditionAsync);
         api.MapDelete("/expeditions/{expeditionId:guid}", DeleteExpeditionAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/advance", AdvanceExpeditionAsync);
+        api.MapPost("/expeditions/{expeditionId:guid}/boundary-decision", ResolveBoundaryDecisionAsync);
+        api.MapPost("/expeditions/{expeditionId:guid}/reposition", RepositionExpeditionAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/resolution-helper", ResolveProcedureInputsAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/discover", DiscoverAsync);
         api.MapPut("/expeditions/{expeditionId:guid}/party", UpdatePartyAsync);
@@ -149,6 +151,39 @@ public sealed class ExpeditionModule : IHexCrawlModule
     {
         var owner = UserId(context);
         var expedition = await workbench.AdvanceAsync(expeditionId, owner, request.ToCommand(), cancellationToken);
+        return Results.Ok(await ContractAsync(expedition, owner, service, cancellationToken));
+    }
+
+    private static async Task<IResult> ResolveBoundaryDecisionAsync(
+        Guid expeditionId,
+        ResolveBoundaryDecisionRequest request,
+        HttpContext context,
+        ExpeditionWorkbenchService workbench,
+        HexCrawlService service,
+        CancellationToken cancellationToken)
+    {
+        var owner = UserId(context);
+        var expedition = await workbench.ResolveBoundaryDecisionAsync(
+            expeditionId,
+            owner,
+            request.ToCommand(),
+            cancellationToken);
+        return Results.Ok(await ContractAsync(expedition, owner, service, cancellationToken));
+    }
+
+    private static async Task<IResult> RepositionExpeditionAsync(
+        Guid expeditionId,
+        RepositionExpeditionRequest request,
+        HttpContext context,
+        HexCrawlService service,
+        CancellationToken cancellationToken)
+    {
+        var owner = UserId(context);
+        var expedition = await service.RepositionExpeditionAsync(
+            expeditionId,
+            owner,
+            request.ToCommand(),
+            cancellationToken);
         return Results.Ok(await ContractAsync(expedition, owner, service, cancellationToken));
     }
 

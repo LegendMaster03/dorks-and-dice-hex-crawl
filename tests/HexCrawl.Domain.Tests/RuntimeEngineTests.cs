@@ -102,6 +102,37 @@ public sealed class RuntimeEngineTests
         Assert.Contains(resumed.Events, item => item.Kind == CrawlRuntimeEventKind.ExpeditionReoriented);
     }
 
+    [Fact]
+    public void LostBoundaryCanBeResolvedWithoutSupplyingAnotherTravelAmount()
+    {
+        var setup = CreateSetup();
+        var first = Advance(
+            setup,
+            TestProcedureProfiles.AdvancedContinuous(),
+            6,
+            navigation: NavigationCheckOutcome.Failed,
+            veerSteps: 1,
+            encounter: ResolvedEncounter.None,
+            continueAcrossBoundaries: true);
+
+        Assert.Equal(RuntimePauseReason.LostRecognitionRequired, first.PauseReason);
+        var resumed = _engine.ResolveBoundaryDecision(
+            first.Expedition,
+            new BoundaryNavigationDecision(
+                true,
+                true,
+                new ResolutionProvenance(ResolutionSource.ManualRoll, "recognized at boundary")));
+
+        Assert.Null(resumed.PauseReason);
+        Assert.Equal(first.RemainingWatchTime, resumed.RemainingWatchTime);
+        Assert.False(resumed.Expedition.Navigation.IsLost);
+        Assert.NotNull(resumed.Expedition.ActiveWatch);
+        Assert.Null(resumed.Expedition.ActiveWatch!.PendingDecision);
+        Assert.Equal(first.Expedition.DistanceTraveled, resumed.Expedition.DistanceTraveled);
+        Assert.Equal(first.Expedition.ElapsedTravelTime, resumed.Expedition.ElapsedTravelTime);
+        Assert.Contains(resumed.Events, item => item.Kind == CrawlRuntimeEventKind.ExpeditionReoriented);
+    }
+
     [Theory]
     [InlineData(0, 12)]
     [InlineData(1, 12)]
