@@ -528,7 +528,7 @@ if (stateName === "map-selected") {
 }
 
 if (stateName === "selected-edge") {
-    root.querySelector('[data-adjacency-edge][aria-pressed="true"]')?.focus();
+    root.querySelector('[data-adjacency-edge][aria-pressed="true"]')?.focus({ preventScroll: true });
 }
 
 // Drawer opens, map selection, and focus changes above are synchronous. Do not
