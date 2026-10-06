@@ -38,6 +38,20 @@ jobs:
         working-directory: src/HexCrawl.Web/Client
         run: npm run smoke:embedded
 
+      - name: Capture Phase 15 rendered review matrix
+        if: contains(github.event.head_commit.message, '[visual-review]')
+        working-directory: src/HexCrawl.Web/Client
+        run: bash visual-review/capture-phase15.sh
+
+      - name: Upload Phase 15 rendered review
+        if: contains(github.event.head_commit.message, '[visual-review]') && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase15-rendered-review
+          path: src/HexCrawl.Web/Client/visual-review/out
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Start PostgreSQL test service
         run: |
           set -euo pipefail
