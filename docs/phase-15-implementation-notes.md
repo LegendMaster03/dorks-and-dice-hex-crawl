@@ -52,7 +52,7 @@ Routine travel expresses **intent** and always resolves through the existing pro
 - Travel remains two-step by default: selecting an edge/cell changes reusable intent, while the explicit current action performs authoritative procedure advancement.
 - Course and pace are remembered as reusable browser preferences for the expedition. Active runtime course/pace remain server-authoritative and are reconciled back into those preferences. On initial render and authoritative rebind, a persisted course is projected through current adjacency immediately so Current travel, navigator selection, map highlight, Next action, and focused workspaces agree without another click.
 - Intended adjacent travel target and arbitrary inspected map cell are distinct presentation concepts. Inspecting an unrelated cell does not overwrite reusable travel intent.
-- When the materialized movement policy defines finite `travelModeKeys`, pace/travel mode is presented with a finite choice control. The UI does not infer choices from preset identity; procedures without a finite contract retain free-form adjudication.
+- Travel-mode presentation follows the materialized movement contract: multiple finite `travelModeKeys` use bounded choices, while zero/one choices are fixed in the normal runtime UI (default `normal` when none is declared). Arbitrary free-text pace is not exposed unless a procedure contract explicitly supports it; preset identity is never used to infer choices.
 - Focused movement distance inputs display the authoritative distance-unit symbol supplied by movement composition or spatial context rather than assuming miles.
 - Direction values remain the runtime's existing numeric 0–5 representation underneath the regular-hex adapter; Compact interaction identifies the selected edge/adjacent cell instead of exposing axial steps as its primary model.
 - Fixed continuous movement that the authoritative movement-composition projection resolves deterministically is consumed directly. `Resolved` and `ReferenceFallback` movement suggestions can supply the routine movement value without making the DM re-enter distance or provenance.
@@ -137,3 +137,9 @@ The next release step after managerial acceptance is comprehensive WorkChat test
 Automated validation covers frontend build/tests, Embedded Module smoke, .NET build and domain/application/integration tests, PostgreSQL persistence, render-lifecycle guards, container build, and restart smoke tests.
 
 Phase 15 acceptance also requires rendered visual review across the viewport/state matrix listed in `docs/generic-procedure-development-plan.md`. That visual review is an acceptance activity in addition to exact-head CI and is not replaced by source-contract tests.
+
+## Pre-human-test remediation
+
+- A focused due encounter cadence/check records only encounter outcome/provenance through the existing Encounter Assistant path. It does not read hidden travel provenance or advance movement; active `EncounterTriggered` interruptions remain on the tactical encounter handoff/resume path.
+- Focused resolution workspaces are required to submit only visible inputs or already-authoritative persisted state.
+- On wide spatial layouts, Current travel is placed in the right-hand table rail beside the map. The top strip remains glanceable summary state; the rail adds actions and detail instead of repeating summary values. Empty environment/resource/journey cards are omitted, and party rail content is shown only when it provides setup or assignment detail.

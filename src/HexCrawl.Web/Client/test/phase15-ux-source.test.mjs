@@ -641,7 +641,7 @@ test("normal spatial travel has one primary continuation path and focused unreso
     assert.doesNotMatch(view, /openTravelWorkspace\("travel"\)/);
 });
 
-test("narrow hierarchy keeps primary travel and the map ahead of status-card detail", () => {
+test("narrow hierarchy keeps the map primary while rail context stacks without disappearing", () => {
     const styles = fs.readFileSync(path.join(sourceDir, "phase15-styles.ts"), "utf8");
     const capture = fs.readFileSync(
         path.join(sourceDir, "..", "visual-review", "capture-phase15.sh"),
@@ -653,13 +653,14 @@ test("narrow hierarchy keeps primary travel and the map ahead of status-card det
     assert.match(styles, /@media \(max-width: 760px\)[\s\S]*\.hc-phase15-expedition > \.hc-workspace-grid,[\s\S]*order:2/);
     assert.match(styles, /\.hc-phase15-expedition > \.hc-phase15-runtime-summary \{ order:3; \}/);
     assert.match(styles, /\.hc-phase15-expedition \.hc-map-panel > \.hc-map-frame \{ order:2; \}/);
-    assert.match(styles, /\.hc-phase15-expedition \.hc-map-panel > \.hc-current-travel \{ order:3;/);
+    assert.match(styles, /\.hc-table-rail \{ grid-template-columns:1fr; \}/);
     assert.match(capture, /24-responsive-narrow\|selected-edge\|light\|500\|844\|390/);
     assert.match(capture, /narrow map does not begin in the initial viewport/);
     assert.match(fixture, /mapTop:/);
+    assert.match(fixture, /currentTravelInRail:/);
 });
 
-test("desktop hierarchy exposes current travel before the map and compacts summary chrome", () => {
+test("desktop hierarchy moves current travel into the actionable rail so the map begins higher", () => {
     const view = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
         "utf8");
@@ -668,13 +669,13 @@ test("desktop hierarchy exposes current travel before the map and compacts summa
     const mapPanel = view.slice(
         view.indexOf('primary.className = "hc-panel hc-map-panel"'),
         view.indexOf('const secondary = document.createElement("aside")'));
-    assert.ok(mapPanel.indexOf("renderCurrentTravel()") < mapPanel.indexOf("primary.append(frame)"));
-    assert.match(styles, /@media \(min-width: 1041px\)[\s\S]*\.hc-current-action \{ grid-template-columns:/);
-    assert.match(styles, /@media \(min-width: 1041px\)[\s\S]*\.hc-current-travel \{ grid-template-columns:auto minmax\(0,1fr\) auto/);
-    assert.match(styles, /\.hc-current-action header \.hc-ux-badge \{ justify-self:start; width:max-content; \}/);
-    assert.match(styles, /@media \(min-width: 1041px\)[\s\S]*\.hc-phase15-expedition \.hc-stat-action-grid \{ grid-template-columns:repeat\(8,minmax\(0,1fr\)\)/);
-    assert.match(styles, /@media \(min-width: 1041px\) and \(max-width: 1199px\)[\s\S]*\.hc-current-travel-facts \{[\s\S]*grid-column:1 \/ -1;[\s\S]*grid-template-columns:repeat\(4,auto minmax\(0,1fr\)\)/);
-    assert.match(styles, /@media \(min-width: 1200px\)[\s\S]*\.hc-current-travel-facts \{ grid-template-columns:repeat\(4,auto minmax\(0,1fr\)\)/);
+    assert.doesNotMatch(mapPanel, /world\) primary\.append\(renderCurrentTravel\(\)\)/);
+    assert.match(view, /if \(world\) secondary\.append\(renderCurrentTravel\(\)\)/);
+    assert.match(view, /partyRailContext\(runtime\)/);
+    assert.match(view, /environmentRailDetail\(survival\)/);
+    assert.doesNotMatch(view, /railAction\("Party & activities"/);
+    assert.match(styles, /@media \(min-width: 1041px\)[\s\S]*\.hc-table-rail \.hc-current-travel \{ grid-template-columns:1fr/);
+    assert.match(styles, /\.hc-table-rail > \.hc-current-travel \{ min-width:0; \}/);
 });
 
 test("current travel stays beside the map while selection detail is contextual overlay", () => {
@@ -843,7 +844,7 @@ test("nonspatial summary only renders movement when the materialized procedure e
     assert.match(view, /state\.eventOccurrences\.some\(event => event\.status === "ResolutionRequired"\)/);
 });
 
-test("procedure-defined travel modes use bounded controls and focused movement labels authoritative units", () => {
+test("procedure-defined travel modes use finite controls while no-choice pace stays fixed", () => {
     const view = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
         "utf8");
@@ -851,11 +852,27 @@ test("procedure-defined travel modes use bounded controls and focused movement l
 
     assert.match(types, /travelModeKeys: string\[\]/);
     assert.match(view, /const availableTravelModes = \(\): string\[\] => runtime\.movementComposition\.policy\.travelModeKeys/);
-    assert.match(view, /const createPaceControl =/);
+    assert.match(view, /if \(choices\.length <= 1\) return null/);
     assert.match(view, /document\.createElement\("select"\)/);
-    assert.match(view, /travelModeControlMarkup\(travelModes\)/);
+    assert.match(view, /if \(travelModes\.length <= 1\)[\s\S]*type="hidden"/);
+    assert.doesNotMatch(view, /control\.type = "text"/);
     assert.match(view, /distanceInputLabel\("Effective distance", distanceUnit\)/);
     assert.match(view, /runtime\.context\.hexCenterDistance\?\.unit\.symbol/);
+});
+
+test("focused encounter cadence uses its assistant instead of hidden travel provenance", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+    const controller = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-watch-controller.ts"),
+        "utf8");
+
+    assert.match(view, /focus === "encounter" \? "encounterCadence" : "advance"/);
+    assert.match(controller, /this\.submissionMode === "encounterCadence"/);
+    assert.match(controller, /recordEncounterAssistant/);
+    assert.match(controller, /readResolutionSource\("encounterSource", "encounter", false\)/);
+    assert.match(controller, /No encounter check is currently due/);
 });
 
 test("Compact procedure reference does not claim display order is authoritative", () => {
