@@ -14,7 +14,8 @@ public sealed record CrawlProcedurePresetDefinition(
     int PresetRevision,
     GenericProcedurePresetRecipe Recipe,
     string? Attribution = null,
-    string? Disclaimer = null)
+    string? Disclaimer = null,
+    string Category = "Familiar procedures")
 {
     public ProcedureOriginMetadata Origin => new(PresetKey, DisplayName, PresetRevision);
 
@@ -26,6 +27,7 @@ public sealed record CrawlProcedurePresetDefinition(
         if (string.IsNullOrWhiteSpace(PresetKey)
             || string.IsNullOrWhiteSpace(DisplayName)
             || string.IsNullOrWhiteSpace(Description)
+            || string.IsNullOrWhiteSpace(Category)
             || PresetRevision <= 0)
         {
             throw new InvalidOperationException("A crawl procedure preset requires a key, display name, description, and positive revision.");
