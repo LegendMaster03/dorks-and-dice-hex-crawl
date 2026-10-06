@@ -677,6 +677,46 @@ test("current travel stays beside the map while selection detail is contextual o
     assert.match(styles, /\.hc-rail-action/);
 });
 
+test("no-course travel identifies course selection as the immediate task", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+
+    assert.match(view, /const courseRequired = routineSpatialTravel && preferences\.direction === null/);
+    assert.match(view, /courseRequired\s*\? "Choose course"/);
+    assert.match(view, /selecting a course does not move the party/);
+});
+
+test("forced travel and pending consequences use focused survival workspaces", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+    const panel = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/survival-resources-panel.ts"),
+        "utf8");
+
+    assert.match(view, /openSurvivalWorkspace\("attention"\)/);
+    assert.match(view, /\? "forcedTravel"\s*:\s*"pendingResourceConsequences"/);
+    assert.match(view, /\? "Forced travel"\s*:\s*panelFocus === "pendingResourceConsequences"/);
+    assert.match(panel, /export type SurvivalResourcesPanelFocus/);
+    assert.match(panel, /this\.focus === "forcedTravel"/);
+    assert.match(panel, /this\.focus === "pendingResourceConsequences"/);
+});
+
+test("rendered review exercises focused forced travel and navigator focus", () => {
+    const capture = fs.readFileSync(
+        path.join(sourceDir, "..", "visual-review", "capture-phase15.sh"),
+        "utf8");
+    const fixture = fs.readFileSync(
+        path.join(sourceDir, "..", "visual-review", "phase15.ts"),
+        "utf8");
+
+    assert.match(capture, /forced-travel-pending.*drawerCount/);
+    assert.match(capture, /forced-travel-pending": "Forced travel"/);
+    assert.match(fixture, /findButton\("Resolve forced travel"\)\?\.click\(\)/);
+    assert.match(fixture, /focusedEdge:/);
+});
+
 test("focused watch presentation hides unrelated exceptional controls outside More options", () => {
     const view = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/expedition-view.ts"),

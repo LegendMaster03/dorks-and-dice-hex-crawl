@@ -29,7 +29,7 @@ const world = {
     grid: {
         id: "visual-grid",
         orientation: "PointyTop",
-        coordinateConvention: "Axial",
+        coordinateConvention: "AxialQr",
         origin: { x: 0, y: 0 },
         rotationDegrees: 0,
         hexRadiusWorldUnits: 1,
@@ -260,12 +260,86 @@ function runtimeFixture() {
 }
 
 function survivalFixture(forced) {
+    const unsupported = {
+        support: "None",
+        mechanicKey: null,
+        mechanicVersion: null,
+        executionHandler: null,
+        unsupportedReason: null
+    };
     return {
         expeditionVersion: 42,
-        resourcePolicy: { support: "Supported" },
+        resourcePolicy: {
+            support: "Supported",
+            resourceKinds: ["food", "water"],
+            inventoryModel: "Counted",
+            consumptionModel: "resolved-quantity",
+            consumptionInterval: "travel-day",
+            mechanicKey: "survival.resources",
+            mechanicVersion: 1,
+            executionHandler: "visual-review",
+            unsupportedReason: null
+        },
+        foragingPolicy: {
+            ...unsupported,
+            resolutionModel: null,
+            timeCost: null,
+            timeUnit: null,
+            movementTradeoff: null,
+            activityBacked: false
+        },
+        campingPolicy: {
+            ...unsupported,
+            resolutionModel: null,
+            timeCost: null,
+            timeUnit: null,
+            watchModel: null,
+            activityBacked: false
+        },
+        forcedTravelPolicy: {
+            support: "Supported",
+            normalTravelLimit: 8,
+            limitUnit: "Hours",
+            checkModel: "resolved-check",
+            failureConsequence: "fatigue",
+            mechanicKey: "time.forced-travel",
+            mechanicVersion: 1,
+            executionHandler: "visual-review",
+            unsupportedReason: null
+        },
+        exposurePolicy: {
+            ...unsupported,
+            dimensions: [],
+            evaluationModel: null,
+            evaluationInterval: null,
+            targetScope: null,
+            consequenceModel: null
+        },
         resources: [
-            { id: "food", resourceKey: "food", isDepleted: false },
-            { id: "water", resourceKey: "water", isDepleted: false }
+            {
+                id: "food",
+                resourceKey: "food",
+                target: { scope: "Party", targetId: null },
+                inventoryModel: "Counted",
+                quantity: 8,
+                unit: "ration",
+                symbolicState: null,
+                supplyDieSides: null,
+                isDepleted: false,
+                note: null
+            },
+            {
+                id: "water",
+                resourceKey: "water",
+                target: { scope: "Party", targetId: null },
+                inventoryModel: "Counted",
+                quantity: 10,
+                unit: "waterskin",
+                symbolicState: null,
+                supplyDieSides: null,
+                isDepleted: false,
+                note: null
+            }
         ],
         forcedTravel: {
             amountSinceReset: forced ? 10 : 4,
@@ -278,7 +352,16 @@ function survivalFixture(forced) {
             pendingConsequenceId: null,
             lastResolution: null
         },
-        exposure: [{ id: "cold", exposureKey: "cold", amount: 1, unit: "step" }],
+        exposure: [{
+            id: "cold",
+            exposureKey: "cold",
+            target: { scope: "Party", targetId: null },
+            amount: 1,
+            unit: "step",
+            sourceOccurrenceIds: ["visual-exposure"]
+        }],
+        camp: null,
+        environmentFacts: [],
         pendingResourceConsequences: []
     };
 }
@@ -346,7 +429,8 @@ switch (stateName) {
         runtime.expedition.activePaceKey = "normal";
         runtime.expedition.activeEncounterKind = "WanderingEncounter";
         runtime.expedition.activeEncounterHour = 1.5;
-        runtime.expedition.activeEncounterHandled = false;
+        runtime.expedition.activeEncounterHandled = true;
+        runtime.expedition.activeWatchPendingDecision = "EncounterTriggered";
         runtime.history.push({
             sequence: 2,
             watchNumber: 4,
@@ -437,11 +521,17 @@ if (stateName === "map-selected") {
     findButton("Continue travel")?.click();
 } else if (stateName === "encounter-pending") {
     findButton("Resolve encounter")?.click();
+} else if (stateName === "forced-travel-pending") {
+    findButton("Resolve forced travel")?.click();
 } else if (stateName === "more-options-open") {
     findButton("More options")?.click();
 }
 
-await new Promise(resolve => setTimeout(resolve, 120));
+if (stateName === "selected-edge") {
+    root.querySelector('[data-adjacency-edge][aria-pressed="true"]')?.focus();
+}
+
+await new Promise(resolve => setTimeout(resolve, 180));
 
 const isVisible = element => Boolean(element && !element.hidden && element.getClientRects().length);
 const buttons = Array.from(root.querySelectorAll("button"));
@@ -469,7 +559,8 @@ const metrics = {
     currentTravelVisible: isVisible(currentTravel),
     currentTravelTop: currentTravel ? Math.round(currentTravel.getBoundingClientRect().top) : null,
     primaryAction: root.querySelector(".hc-current-action-primary")?.textContent?.trim() || null,
-    focusedTitle: root.querySelector("[data-phase15-drawer] h2")?.textContent?.trim() || null
+    focusedTitle: root.querySelector("[data-phase15-drawer] h2")?.textContent?.trim() || null,
+    focusedEdge: document.activeElement?.matches?.("[data-adjacency-edge]") ?? false
 };
 document.getElementById("review-metrics").textContent = JSON.stringify(metrics);
 document.documentElement.dataset.visualReviewReady = "true";

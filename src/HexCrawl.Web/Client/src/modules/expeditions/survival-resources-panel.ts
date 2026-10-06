@@ -16,6 +16,11 @@ import type {
     SurvivalResources
 } from "../../survival-types";
 
+export type SurvivalResourcesPanelFocus =
+    | "all"
+    | "forcedTravel"
+    | "pendingResourceConsequences";
+
 export class ExpeditionSurvivalResourcesPanel {
     private readonly panel: HTMLDetailsElement;
     private readonly body: HTMLElement;
@@ -26,7 +31,8 @@ export class ExpeditionSurvivalResourcesPanel {
         root: HTMLElement,
         private readonly api: SurvivalResourcesApi,
         private readonly expeditionId: string,
-        private readonly mutate: (control: HTMLButtonElement | null, action: () => Promise<void>) => Promise<void>) {
+        private readonly mutate: (control: HTMLButtonElement | null, action: () => Promise<void>) => Promise<void>,
+        private readonly focus: SurvivalResourcesPanelFocus = "all") {
         this.panel = document.createElement("details");
         this.panel.className = "hc-panel";
         this.panel.dataset.survivalResourcesPanel = "";
@@ -52,6 +58,18 @@ export class ExpeditionSurvivalResourcesPanel {
     private render(): void {
         const state = this.state;
         if (!state) return;
+        if (this.focus === "forcedTravel") {
+            this.body.replaceChildren(
+                this.section("Forced travel", this.forcedTravelView(state)));
+            return;
+        }
+        if (this.focus === "pendingResourceConsequences") {
+            this.body.replaceChildren(
+                this.section(
+                    "Pending travel consequences",
+                    this.pendingResourceConsequencesView(state, true)));
+            return;
+        }
         this.body.replaceChildren(
             this.section("Resources", this.resourcesView(state)),
             this.section("Forced travel", this.forcedTravelView(state)),
@@ -110,29 +128,48 @@ export class ExpeditionSurvivalResourcesPanel {
         container.append(this.heading("Add expedition resource"), add);
 
         if (state.pendingResourceConsequences.length > 0) {
-            container.append(this.heading("Pending resource consequences"));
-            for (const pending of state.pendingResourceConsequences) {
-                const row = document.createElement("div");
-                row.className = "hc-button-row";
-                const text = document.createElement("span");
-                text.textContent = `${pending.consequenceKey}: ${pending.resourceKeys.join(", ")} — ${pending.reason}`;
-                const apply = this.button("Apply resolved resource change");
-                apply.type = "button";
-                apply.addEventListener("click", () => {
-                    void this.mutate(apply, async () => {
-                        const result = await this.api.applyPendingResource(this.expeditionId, pending.consequenceId, {
-                            expectedVersion: this.requireState().expeditionVersion,
-                            provenance: dmProvenance("pending-resource-apply")
-                        });
-                        this.apply(result.state);
-                    });
-                });
-                row.append(text, apply);
-                container.append(row);
-            }
+            container.append(
+                this.heading("Pending resource consequences"),
+                this.pendingResourceConsequencesView(state));
         }
 
         container.append(this.resourceConsumptionForm(state.resourcePolicy));
+        return container;
+    }
+
+    private pendingResourceConsequencesView(
+        state: SurvivalResources,
+        showEmpty = false): HTMLElement {
+        const container = document.createElement("div");
+        container.className = "hc-stack";
+        if (state.pendingResourceConsequences.length === 0) {
+            if (showEmpty) container.append(this.muted("No travel consequence is pending."));
+            return container;
+        }
+
+        for (const pending of state.pendingResourceConsequences) {
+            const card = document.createElement("div");
+            card.className = "hc-card";
+            card.append(
+                this.heading(pending.consequenceKey),
+                this.muted(`${pending.resourceKeys.join(", ") || "Resource state"} — ${pending.reason}`));
+            const apply = this.button("Apply resolved resource change");
+            apply.type = "button";
+            apply.addEventListener("click", () => {
+                void this.mutate(apply, async () => {
+                    const result = await this.api.applyPendingResource(
+                        this.expeditionId,
+                        pending.consequenceId,
+                        {
+                            expectedVersion: this.requireState().expeditionVersion,
+                            provenance: dmProvenance("pending-resource-apply")
+                        });
+                    this.apply(result.state);
+                });
+            });
+            card.append(apply);
+            container.append(card);
+        }
         return container;
     }
 

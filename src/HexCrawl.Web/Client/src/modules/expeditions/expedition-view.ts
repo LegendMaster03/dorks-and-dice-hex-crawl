@@ -284,10 +284,17 @@ export async function renderExpedition(
         const routineSpatialTravel = runtime.expedition.isSpatial
             && action.kind === "travel"
             && !action.urgent;
-        const actionLabel = routineSpatialTravel ? "Continue travel" : action.label;
-        const actionDetail = routineSpatialTravel
-            ? "Use the selected course and pace. Only unresolved procedure inputs will be requested."
-            : action.detail;
+        const courseRequired = routineSpatialTravel && preferences.direction === null;
+        const actionLabel = courseRequired
+            ? "Choose course"
+            : routineSpatialTravel
+                ? "Continue travel"
+                : action.label;
+        const actionDetail = courseRequired
+            ? "Choose an adjacent edge or map cell. Your pace stays reusable; selecting a course does not move the party."
+            : routineSpatialTravel
+                ? "Use the selected course and pace. Only unresolved procedure inputs will be requested."
+                : action.detail;
         section.append(
             header,
             textElement("p", actionLabel, "hc-current-action-primary"),
@@ -1220,8 +1227,19 @@ export async function renderExpedition(
         });
     };
 
-    const openSurvivalWorkspace = (): void => {
-        openDrawer("Survival & resources", body => {
+    const openSurvivalWorkspace = (
+        focus: "all" | "attention" = "all"): void => {
+        const panelFocus = focus === "attention"
+            ? survival?.forcedTravel.checkDue
+                ? "forcedTravel"
+                : "pendingResourceConsequences"
+            : "all";
+        const title = panelFocus === "forcedTravel"
+            ? "Forced travel"
+            : panelFocus === "pendingResourceConsequences"
+                ? "Travel consequence"
+                : "Survival & resources";
+        openDrawer(title, body => {
             body.classList.add("hc-page");
             const panel = new ExpeditionSurvivalResourcesPanel(
                 body,
@@ -1229,7 +1247,8 @@ export async function renderExpedition(
                 runtime.id,
                 async (_control, action) => {
                     await runUiMutation(action);
-                });
+                },
+                panelFocus);
             void panel.sync();
             queueMicrotask(() => {
                 const details = body.querySelector<HTMLDetailsElement>("[data-survival-resources-panel]");
@@ -1428,7 +1447,7 @@ export async function renderExpedition(
             case "encounter": openEncounterWorkspace(); break;
             case "navigation": openNavigationWorkspace(); break;
             case "boundary": openBoundaryWorkspace(); break;
-            case "survival": openSurvivalWorkspace(); break;
+            case "survival": openSurvivalWorkspace("attention"); break;
             case "travel": continueTravel(); break;
             case "journey": openJourneyWorkspace(); break;
             case "watch": openNonSpatialWatchWorkspace(); break;

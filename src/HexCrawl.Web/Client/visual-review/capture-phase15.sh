@@ -91,18 +91,24 @@ if metrics["state"] in {"no-course", "selected-edge", "partial-progress", "map-s
         raise SystemExit(f'Current travel is not discoverable in the initial viewport: {metrics}')
 if metrics["state"] in {"movement-input-pending", "encounter-pending"} and metrics["reviewWidth"] > 392:
     raise SystemExit(f'narrow host did not render at mobile-like width: {metrics}')
-if metrics["state"] == "no-course" and metrics["selectedEdges"] != 0:
-    raise SystemExit(f'no-course fixture unexpectedly selected an edge: {metrics}')
+if metrics["state"] == "no-course":
+    if metrics["selectedEdges"] != 0:
+        raise SystemExit(f'no-course fixture unexpectedly selected an edge: {metrics}')
+    if metrics["primaryAction"] != "Choose course":
+        raise SystemExit(f'no-course fixture does not identify the unresolved course: {metrics}')
 if metrics["state"] in {"selected-edge", "partial-progress", "map-selected", "rail-realistic"} and metrics["selectedEdges"] != 1:
     raise SystemExit(f'expected exactly one selected edge: {metrics}')
 if metrics["state"] == "map-selected" and not metrics["mapContextVisible"]:
     raise SystemExit(f'map selection did not expose contextual detail: {metrics}')
-if metrics["state"] in {"navigation-pending", "movement-input-pending", "encounter-pending", "more-options-open"} and metrics["drawerCount"] != 1:
+if metrics["state"] == "selected-edge" and not metrics["focusedEdge"]:
+    raise SystemExit(f'selected edge did not retain visible keyboard focus: {metrics}')
+if metrics["state"] in {"navigation-pending", "movement-input-pending", "encounter-pending", "forced-travel-pending", "more-options-open"} and metrics["drawerCount"] != 1:
     raise SystemExit(f'focused workflow did not open exactly one drawer: {metrics}')
 expected_titles = {
     "navigation-pending": "Navigation",
     "movement-input-pending": "Movement resolution",
     "encounter-pending": "Encounter",
+    "forced-travel-pending": "Forced travel",
     "more-options-open": "Advanced travel controls"
 }
 if metrics["state"] in expected_titles and metrics["focusedTitle"] != expected_titles[metrics["state"]]:
