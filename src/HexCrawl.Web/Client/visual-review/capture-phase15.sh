@@ -91,8 +91,10 @@ if metrics["mapHeight"] < 250:
 if not metrics["railVisible"]:
     raise SystemExit(f'At the Table rail is not visible: {metrics}')
 if metrics["state"] in {"no-course", "selected-edge", "partial-progress", "map-selected", "rail-realistic"}:
-    if not metrics["currentTravelVisible"] or metrics["currentTravelTop"] >= metrics["viewportHeight"]:
-        raise SystemExit(f'Current travel is not discoverable in the initial viewport: {metrics}')
+    if not metrics["currentTravelVisible"]:
+        raise SystemExit(f'Current travel is not discoverable: {metrics}')
+    if metrics["reviewWidth"] > 392 and metrics["currentTravelTop"] >= metrics["viewportHeight"]:
+        raise SystemExit(f'Current travel is not discoverable in the initial desktop/embedded viewport: {metrics}')
 if metrics["state"] in {"movement-input-pending", "encounter-pending"} and metrics["reviewWidth"] > 392:
     raise SystemExit(f'narrow host did not render at mobile-like width: {metrics}')
 if metrics["state"] == "no-course":

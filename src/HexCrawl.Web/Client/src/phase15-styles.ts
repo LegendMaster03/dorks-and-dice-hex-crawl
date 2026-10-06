@@ -244,6 +244,10 @@ export function ensurePhase15Styles(): void {
             .hc-phase15-expedition > .hc-nonspatial-primary { order:2; }
             .hc-phase15-expedition > .hc-phase15-runtime-summary { order:3; }
             .hc-phase15-expedition > .hc-ux-disclosure { order:4; }
+            .hc-phase15-expedition .hc-map-panel { display:grid; }
+            .hc-phase15-expedition .hc-map-panel > h2 { order:1; }
+            .hc-phase15-expedition .hc-map-panel > .hc-map-frame { order:2; }
+            .hc-phase15-expedition .hc-map-panel > .hc-current-travel { order:3; margin-top:.65rem; }
             .hc-build-custom { grid-template-columns:1fr; }
             .hc-advanced-layout { grid-template-columns:1fr; }
             .hc-advanced-index { position:static; }
