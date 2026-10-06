@@ -910,7 +910,7 @@ const metrics = {
     journeyConsequenceVisible: rootText.includes("1 failure") && rootText.includes("2 complications"),
     movementUnitVisible: rootText.includes("Effective distance (mi)"),
     forcedTravelPrimaryDomainFacing: rootText.includes("Current requirement") && rootText.includes("Failure consequence:"),
-    forcedTravelTechnicalExpanded: Array.from(root.querySelectorAll("details[open]")).some(item => item.textContent?.includes("Failure effect key"))
+    forcedTravelTechnicalExpanded: Array.from(root.querySelectorAll("details[open] > summary")).some(summary => summary.textContent?.trim() === "Advanced consequence details")
 };
 document.getElementById("review-metrics").textContent = JSON.stringify(metrics);
 document.documentElement.dataset.visualReviewReady = "true";
