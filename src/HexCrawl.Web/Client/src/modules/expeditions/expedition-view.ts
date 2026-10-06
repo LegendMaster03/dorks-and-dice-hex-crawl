@@ -408,31 +408,157 @@ export async function renderExpedition(
         section.className = "hc-nonspatial-primary";
         const main = document.createElement("article");
         main.className = "hc-panel hc-journey-primary";
-        main.append(textElement("h2", "Expedition procedure"));
+        const presentation = expeditionWorkspacePresentation(runtime, journey, survival);
+        const activeJourney = journey?.activeProcesses.find(process => !process.isTerminal) ?? null;
+
         if (journey?.processPolicy.support === "Supported") {
-            main.append(textElement("p", journeyDetail(journey)));
-            const control = button("Open journey workspace", openJourneyWorkspace);
-            control.className = "hc-primary-action";
-            main.append(control);
+            main.append(textElement("h2", "Journey"));
+            if (activeJourney) {
+                const stage = activeJourney.definition.stages.find(value => value.stageKey === activeJourney.currentStageKey) ?? null;
+                const stageState = activeJourney.stageStates.find(value => value.stageKey === activeJourney.currentStageKey) ?? null;
+                const heading = document.createElement("header");
+                heading.className = "hc-journey-primary-head";
+                heading.append(
+                    textElement("h3", activeJourney.definition.displayName),
+                    badge(humanize(activeJourney.status), journeyAttention(journey) ? "warning" : "good"));
+                if (activeJourney.definition.description) {
+                    heading.append(textElement("p", activeJourney.definition.description, "hc-muted"));
+                }
+                main.append(heading);
+
+                const facts = document.createElement("dl");
+                facts.className = "hc-journey-state-grid";
+                facts.append(
+                    journeyFact("Current stage", stage?.displayName ?? humanize(activeJourney.currentStageKey)),
+                    journeyFact("Progress", journeyProgressSummary(activeJourney, stage, stageState)),
+                    journeyFact("Roles", journeyRoleSummary(runtime)),
+                    journeyFact("Pending", journeyPendingSummary(journey, activeJourney)),
+                    journeyFact("Consequences / state", journeyStateSummary(stageState, survival)));
+                main.append(facts);
+
+                if (presentation.action.kind === "journey") {
+                    const copy = currentActionCopy(presentation.action);
+                    const control = button(copy.label, openJourneyWorkspace);
+                    control.className = "hc-primary-action";
+                    main.append(control);
+                } else {
+                    main.append(button("Open journey workspace", openJourneyWorkspace));
+                }
+            } else {
+                main.append(
+                    textElement("p", "No journey process is currently active.", "hc-muted"),
+                    textElement("p", journeyPendingEventSummary(journey), "hc-muted"));
+                const copy = currentActionCopy(presentation.action);
+                const control = button(
+                    presentation.action.kind === "journey" ? copy.label : "Start or manage journey",
+                    openJourneyWorkspace);
+                control.className = "hc-primary-action";
+                main.append(control);
+            }
         } else if (canUseFocusedNonSpatialWatch(runtime)) {
-            main.append(textElement("p", "This procedure advances time without fabricating map or direction state."));
-            const control = button("Run watch / time", openNonSpatialWatchWorkspace);
+            main.append(
+                textElement("h2", "Procedure interval"),
+                textElement("p", "This procedure advances its configured interval without spatial position, course, pace, hex progress, or map state.", "hc-muted"));
+            const control = button(currentActionCopy(presentation.action).label, openNonSpatialWatchWorkspace);
             control.className = "hc-primary-action";
             main.append(control);
         } else {
-            main.append(textElement("p", "This structural expedition has no executable spatial or interval action. Use the procedure reference and focused GM tools for manual play."));
+            main.append(
+                textElement("h2", "Procedure state"),
+                textElement("p", "This expedition has no executable spatial, journey, or interval action. Use the procedure reference and focused GM tools for manual play.", "hc-muted"));
         }
+
         const side = document.createElement("aside");
-        side.className = "hc-panel";
+        side.className = "hc-panel hc-sidebar hc-table-rail";
         side.append(
-            textElement("h2", "Campaign state"),
-            actionCard("Party & activities", partyCardDetail(runtime), openPartyWorkspace));
-        if (expeditionWorkspacePresentation(runtime, journey, survival).capabilities.resources
-            || expeditionWorkspacePresentation(runtime, journey, survival).capabilities.survival) {
-            side.append(actionCard("Survival & resources", survivalDetail(survival), openSurvivalWorkspace));
+            textElement("h2", "At the table"),
+            railAction("Party & roles", journeyRoleSummary(runtime), openPartyWorkspace));
+        if (presentation.capabilities.resources || presentation.capabilities.survival || presentation.capabilities.effects) {
+            side.append(railAction("Resources & effects", survivalDetail(survival), openSurvivalWorkspace));
         }
+        if (journey?.eventPolicy.support === "Supported") {
+            side.append(railAction("Journey events", journeyEventSummary(journey), openJourneyWorkspace));
+        }
+        side.append(railAction("Expedition history", presentation.timeLabel, openHistory));
         section.append(main, side);
         return section;
+    };
+
+    const journeyFact = (label: string, value: string): HTMLElement => {
+        const fragment = document.createDocumentFragment();
+        fragment.append(textElement("dt", label), textElement("dd", value));
+        const wrapper = document.createElement("div");
+        wrapper.className = "hc-journey-fact";
+        wrapper.append(fragment);
+        return wrapper;
+    };
+
+    const journeyProgressSummary = (
+        process: ExpeditionJourneyState["activeProcesses"][number],
+        stage: ExpeditionJourneyState["activeProcesses"][number]["definition"]["stages"][number] | null,
+        state: ExpeditionJourneyState["activeProcesses"][number]["stageStates"][number] | null): string => {
+        if (!state) return "Not recorded";
+        if (process.execution.progressKind === "Numeric") {
+            const current = state.numericProgress ?? 0;
+            if (stage?.progressTarget !== null && stage?.progressTarget !== undefined) {
+                return `${formatNumber(current)} / ${formatNumber(stage.progressTarget)}${process.execution.progressUnit ? ` ${process.execution.progressUnit}` : ""}`;
+            }
+            return `${formatNumber(current)}${process.execution.progressUnit ? ` ${process.execution.progressUnit}` : ""}`;
+        }
+        return state.explicitState ? humanize(state.explicitState) : "Not recorded";
+    };
+
+    const journeyRoleSummary = (state: ExpeditionDetail): string => {
+        const memberNames = new Map(state.party.members.map(member => [member.id, member.name]));
+        const roles = state.party.activityAssignments.filter(assignment => assignment.roleKey);
+        if (roles.length === 0) return "No journey roles assigned";
+        return roles
+            .map(assignment => `${humanize(assignment.roleKey!)} — ${assignment.participantId ? memberNames.get(assignment.participantId) ?? "Unknown participant" : "Party"}`)
+            .join(" · ");
+    };
+
+    const journeyPendingSummary = (
+        state: ExpeditionJourneyState,
+        process: ExpeditionJourneyState["activeProcesses"][number]): string => {
+        const parts = process.pendingActions.map(action =>
+            action.detail?.trim() || humanize(action.kind));
+        const events = state.eventOccurrences.filter(event =>
+            event.status === "ResolutionRequired"
+            && (event.processId === null || event.processId === process.id));
+        parts.push(...events.map(event =>
+            event.eventType ?? event.eventKey ?? "Journey event requires resolution"));
+        return parts.length > 0 ? parts.join(" · ") : "No unresolved journey action";
+    };
+
+    const journeyPendingEventSummary = (state: ExpeditionJourneyState): string => {
+        const pending = state.eventOccurrences.filter(event => event.status === "ResolutionRequired");
+        if (pending.length === 0) return "No unresolved journey event.";
+        return pending
+            .map(event => event.eventType ?? event.eventKey ?? "Journey event requires resolution")
+            .join(" · ");
+    };
+
+    const journeyEventSummary = (state: ExpeditionJourneyState): string => {
+        const pending = state.eventOccurrences.filter(event => event.status === "ResolutionRequired");
+        if (pending.length > 0) {
+            return `${pending.length} event${pending.length === 1 ? "" : "s"} require resolution`;
+        }
+        const resolved = state.eventOccurrences.filter(event => event.status === "Resolved").length;
+        return resolved > 0
+            ? `${resolved} resolved event${resolved === 1 ? "" : "s"}`
+            : "No recorded journey events";
+    };
+
+    const journeyStateSummary = (
+        state: ExpeditionJourneyState["activeProcesses"][number]["stageStates"][number] | null,
+        resources: SurvivalResources | null): string => {
+        const parts: string[] = [];
+        if (state && (state.failures > 0 || state.complications > 0)) {
+            if (state.failures > 0) parts.push(`${state.failures} failure${state.failures === 1 ? "" : "s"}`);
+            if (state.complications > 0) parts.push(`${state.complications} complication${state.complications === 1 ? "" : "s"}`);
+        }
+        if (resources && survivalAttention(resources)) parts.push(survivalDetail(resources));
+        return parts.length > 0 ? parts.join(" · ") : "No unresolved consequence";
     };
 
     const selectTravelIntent = (direction: number, target: HexCoordinate): void => {

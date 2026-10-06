@@ -808,6 +808,21 @@ test("DM can reposition the party without routing through ordinary travel proced
     assert.match(api, /\/api\/expeditions\/\$\{encodeURIComponent\(expeditionId\)\}\/reposition/);
 });
 
+test("journey-first primary workspace projects current process state without spatial controls", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+
+    assert.match(view, /main\.append\(textElement\("h2", "Journey"\)\)/);
+    assert.match(view, /journeyFact\("Current stage"/);
+    assert.match(view, /journeyFact\("Progress"/);
+    assert.match(view, /journeyFact\("Roles"/);
+    assert.match(view, /journeyFact\("Pending"/);
+    assert.match(view, /journeyFact\("Consequences \/ state"/);
+    assert.match(view, /No journey process is currently active/);
+    assert.match(view, /This procedure advances its configured interval without spatial position, course, pace, hex progress, or map state/);
+});
+
 test("procedure-defined travel modes use bounded controls and focused movement labels authoritative units", () => {
     const view = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
