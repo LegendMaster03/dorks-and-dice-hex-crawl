@@ -535,7 +535,11 @@ test("normal spatial travel has one primary continuation path and focused unreso
     assert.match(view, /case "encounter":[\s\S]*openTravelWorkspace\("encounter"\)/);
     assert.match(view, /case "movement":[\s\S]*openTravelWorkspace\("movement"\)/);
     assert.match(view, /case "boundary":[\s\S]*openTravelWorkspace\("boundary"\)/);
-    assert.match(view, /api\.advanceExpedition\(runtime\.id, request\)/);
+    assert.match(view, /ExpeditionWatchController\.continueResolvedTravel/);
+    const controller = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-watch-controller.ts"),
+        "utf8");
+    assert.match(controller, /return api\.advanceExpedition\(runtime\.id, request\)/);
     assert.match(view, /button\("More options", \(\) => openTravelWorkspace\("advanced"\)\)/);
     assert.doesNotMatch(view, /openTravelWorkspace\("travel"\)/);
 });
