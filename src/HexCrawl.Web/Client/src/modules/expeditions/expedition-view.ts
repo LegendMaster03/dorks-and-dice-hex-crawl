@@ -557,16 +557,13 @@ export async function renderExpedition(
         if (runtime.procedure.runtime !== null) {
             const actions = document.createElement("div");
             actions.className = "hc-button-row hc-current-travel-actions";
-            const continueControl = button("Continue travel", continueTravel);
-            continueControl.className = "hc-primary-action";
-            continueControl.disabled = expeditionWorkspacePresentation(runtime, journey, survival).action.kind !== "travel";
             const changePace = button("Change pace", () => {
                 paceEditor.hidden = !paceEditor.hidden;
                 if (!paceEditor.hidden) pace.focus();
             });
             const more = button("More options", () => openTravelWorkspace("advanced"));
             more.className = "hc-secondary-action";
-            actions.append(continueControl, changePace, more);
+            actions.append(changePace, more);
             section.append(actions);
         }
         return section;
