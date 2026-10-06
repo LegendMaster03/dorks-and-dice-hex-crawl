@@ -688,6 +688,19 @@ test("no-course travel identifies course selection as the immediate task", () =>
     assert.match(view, /selecting a course does not move the party/);
 });
 
+test("focused expedition panels accept the drawer body itself as their page host", () => {
+    for (const file of [
+        "survival-resources-panel.ts",
+        "journey-panel.ts",
+        "environment-panel.ts"
+    ]) {
+        const source = fs.readFileSync(
+            path.join(sourceDir, "modules/expeditions", file),
+            "utf8");
+        assert.match(source, /root\.matches\("\.hc-page"\)/);
+    }
+});
+
 test("forced travel and pending consequences use focused survival workspaces", () => {
     const view = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/expedition-view.ts"),

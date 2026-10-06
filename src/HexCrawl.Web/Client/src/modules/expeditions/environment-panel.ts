@@ -30,7 +30,7 @@ export class ExpeditionEnvironmentPanel {
         private readonly mutate: (control: HTMLButtonElement | null, action: () => Promise<void>) => Promise<void>) {
         const host = root.querySelector<HTMLElement>(".hc-sidebar")
             ?? root.querySelector<HTMLElement>(".hc-columns > .hc-panel:last-child")
-            ?? root.querySelector<HTMLElement>(".hc-page");
+            ?? (root.matches(".hc-page") ? root : root.querySelector<HTMLElement>(".hc-page"));
         if (!host) throw new Error("Expedition environment panel requires a running-sheet host.");
 
         this.panel = document.createElement("details");
