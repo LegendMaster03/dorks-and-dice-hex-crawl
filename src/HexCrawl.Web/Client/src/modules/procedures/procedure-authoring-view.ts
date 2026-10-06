@@ -16,12 +16,12 @@ import { clearUiError, showUiError } from "../../ui-error";
 import { badge, openWorkspaceDrawer, textElement, type WorkspaceDrawer } from "../../ui/workspace";
 import { executionSummary, inputSourceLabel, saveBlocked, withBehavior, withParameter } from "./procedure-composer-model";
 import {
-    compactModuleSummary,
     compactParameter,
     compactRule,
     compactRuleCatalog,
     durationToTicks,
     formatDurationTicks,
+    friendlyStoredValue,
     parameterDefinitions,
     procedureParameterFacts,
     ticksToDuration
@@ -844,7 +844,7 @@ export async function renderProcedureAuthoringWorkspace(
         heading.className = "hc-area-card-heading";
         heading.append(textElement("h3", descriptor?.label ?? module.displayName));
         if (module.isModified) heading.append(badge("Edited", "info"));
-        card.append(heading, textElement("p", compactModuleSummary(module)));
+        card.append(heading, textElement("p", descriptor?.description ?? module.purpose));
         const facts = compactFacts(module);
         if (facts.childElementCount > 0) card.append(facts);
         const actions = document.createElement("div");
@@ -861,16 +861,11 @@ export async function renderProcedureAuthoringWorkspace(
     const compactFacts = (module: ProcedureModuleComposer): HTMLElement => {
         const facts = document.createElement("dl");
         facts.className = "hc-rule-facts";
-        let count = 0;
-        for (const [key, definition] of parameterDefinitions(module)) {
-            const presentation = compactParameter(key, definition, module.moduleKey);
-            if (!presentation) continue;
-            const value = module.parameters[key] ?? definition.defaultValue;
-            if (value == null || value === "") continue;
-            if (presentation.control === "boolean" && value === "false") continue;
-            facts.append(textElement("dt", presentation.label), textElement("dd", key === "durationTicks" ? formatDurationTicks(value) : friendlyStoredValue(key, value)));
-            count++;
-            if (count >= 4) break;
+        const values = Object.fromEntries(parameterDefinitions(module)
+            .map(([key, definition]) => [key, module.parameters[key] ?? definition.defaultValue ?? ""])
+            .filter(([, value]) => value !== ""));
+        for (const fact of procedureParameterFacts(module.moduleKey, values).slice(0, 5)) {
+            facts.append(textElement("dt", fact.label), textElement("dd", fact.value));
         }
         return facts;
     };
@@ -985,7 +980,7 @@ export async function renderProcedureAuthoringWorkspace(
         if (presentation.control === "summary") {
             const output = document.createElement("div");
             output.className = "hc-readonly-domain-value";
-            output.textContent = friendlyStoredValue(key, value);
+            output.textContent = friendlyStoredValue(key, value, module.moduleKey);
             field.append(output, textElement("small", "This specialized setting can be edited in Advanced."));
             return field;
         }
@@ -1026,7 +1021,7 @@ export async function renderProcedureAuthoringWorkspace(
             mark(select);
             const choices = [...(presentation.choices ?? [])];
             if (!choices.some(choice => choice.value === value) && value) {
-                choices.unshift({ value, label: friendlyStoredValue(key, value) });
+                choices.unshift({ value, label: friendlyStoredValue(key, value, module.moduleKey) });
             }
             for (const choice of choices) {
                 const option = document.createElement("option");
