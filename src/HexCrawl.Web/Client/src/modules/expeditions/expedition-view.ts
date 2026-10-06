@@ -1474,7 +1474,7 @@ function loadTravelPreferences(runtime: ExpeditionDetail): TravelPreferences {
         if (!raw) return fallback;
         const parsed = JSON.parse(raw) as Partial<TravelPreferences>;
         return {
-            direction: Number.isInteger(parsed.direction) && Number(parsed.direction) >= 0 && Number(parsed.direction) <= 5
+            direction: Number.isInteger(parsed.direction) && Number(parsed.direction) >= 0
                 ? Number(parsed.direction)
                 : fallback.direction,
             pace: typeof parsed.pace === "string" && parsed.pace.trim() ? parsed.pace.trim() : fallback.pace

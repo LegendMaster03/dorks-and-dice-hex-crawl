@@ -518,6 +518,15 @@ test("Compact authoring offers generic one-click dependency repair", () => {
 });
 
 
+test("persisted travel intent does not hardcode a six-edge direction range", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+
+    assert.match(view, /Number\.isInteger\(parsed\.direction\) && Number\(parsed\.direction\) >= 0/);
+    assert.doesNotMatch(view, /Number\(parsed\.direction\) <= 5/);
+});
+
 test("current-cell navigator stays orientation-neutral unless authoritative compass metadata exists", () => {
     const adjacency = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/spatial-adjacency.ts"),
