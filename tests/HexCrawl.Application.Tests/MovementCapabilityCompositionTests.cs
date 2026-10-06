@@ -522,7 +522,6 @@ public sealed class MovementCapabilityCompositionTests
     [InlineData(CrawlProcedureCatalog.ForbiddenLandsPresetKey, "quarter-day-activities", "quarter-day")]
     [InlineData(CrawlProcedureCatalog.WorldsWithoutNumberPresetKey, "distance-per-hour", "travel-hours")]
     [InlineData(CrawlProcedureCatalog.OneRing2ePresetKey, "journey-progress", "journey-leg")]
-    [InlineData(CrawlProcedureCatalog.MixedHouseRulePresetKey, "activity-and-distance", "watch")]
     public void ProofMatrixMovementPolicyIsGeneric(string presetKey, string budgetModel, string budgetUnit)
     {
         var policy = MovementCompositionPolicyResolver.Resolve(Procedure(presetKey));
@@ -531,6 +530,18 @@ public sealed class MovementCapabilityCompositionTests
         Assert.Equal(budgetModel, policy.BudgetModel);
         Assert.Equal(budgetUnit, policy.BudgetUnit);
         Assert.DoesNotContain(presetKey, policy.MechanicKey ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void SyntheticMixedMovementPolicyIsGeneric()
+    {
+        var procedure = SyntheticProcedureFixtures.MixedProcedure();
+        var policy = MovementCompositionPolicyResolver.Resolve(procedure);
+
+        Assert.Equal(MovementCompositionPolicySupport.Supported, policy.Support);
+        Assert.Equal("activity-and-distance", policy.BudgetModel);
+        Assert.Equal("watch", policy.BudgetUnit);
+        Assert.DoesNotContain("synthetic-mixed-procedure", policy.MechanicKey ?? string.Empty, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
