@@ -35,6 +35,7 @@ export type SpatialTravelContinuationTarget =
     | "encounter"
     | "movement"
     | "boundary"
+    | "review"
     | "survival"
     | "advance";
 
@@ -45,10 +46,16 @@ export function spatialTravelContinuationTarget(
     suppressesNavigationCheck = false,
     deliberateDoubleBack = false,
     hasBlockingSurvival = false,
-    resumeEncounter = false): SpatialTravelContinuationTarget {
+    resumeEncounter = false,
+    resumeTravelReview = false): SpatialTravelContinuationTarget {
     if (!runtime.expedition.isSpatial || runtime.procedure.runtime === null) return "unavailable";
     if (runtime.pauseReason === "EncounterTriggered" && !resumeEncounter) return "encounter";
     if (runtime.pauseReason === "LostRecognitionRequired") return "boundary";
+    if ((runtime.pauseReason === "ConditionsReviewRequired"
+        || runtime.pauseReason === "BacktrackBoundaryReached")
+        && !resumeTravelReview) {
+        return "review";
+    }
     if (hasBlockingSurvival) return "survival";
     if (!hasSelectedCourse) return "course";
     if (navigationResolutionDue(runtime, suppressesNavigationCheck, deliberateDoubleBack)) return "navigation";

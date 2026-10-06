@@ -32,7 +32,7 @@ import {
     type TravelPreferences
 } from "./expedition-travel-intent";
 import { canUseFocusedNonSpatialWatch, focusedIntervalHours } from "./focused-interval-policy";
-import { navigationResolutionDue, spatialTravelContinuationTarget } from "./expedition-workflow";
+import { navigationResolutionDue, pauseInstruction, spatialTravelContinuationTarget } from "./expedition-workflow";
 import { expeditionWorkspacePresentation } from "./expedition-workspace-model";
 
 export type ExpeditionViewMode = "map" | "tracker";
@@ -281,10 +281,11 @@ export async function renderExpedition(
         section.className = "hc-current-action";
         const header = document.createElement("header");
         header.append(textElement("h2", "Next action"), badge(action.urgent ? "Needs resolution" : "Ready", action.urgent ? "warning" : "good"));
-        const actionLabel = runtime.expedition.isSpatial && action.kind === "travel"
-            ? "Continue travel"
-            : action.label;
-        const actionDetail = runtime.expedition.isSpatial && action.kind === "travel"
+        const routineSpatialTravel = runtime.expedition.isSpatial
+            && action.kind === "travel"
+            && !action.urgent;
+        const actionLabel = routineSpatialTravel ? "Continue travel" : action.label;
+        const actionDetail = routineSpatialTravel
             ? "Use the selected course and pace. Only unresolved procedure inputs will be requested."
             : action.detail;
         section.append(
@@ -796,6 +797,83 @@ export async function renderExpedition(
         }
     };
 
+    const openTravelReviewWorkspace = (): void => {
+        if (!runtime.expedition.isSpatial) {
+            openHistory();
+            return;
+        }
+        const adjacency = currentAdjacency();
+        if (!adjacency) return;
+        const title = runtime.pauseReason === "BacktrackBoundaryReached"
+            ? "Backtrack boundary"
+            : "Changed travel conditions";
+        openDrawer(title, body => {
+            body.append(textElement(
+                "p",
+                pauseInstruction(runtime) ?? "Review the current course and pace before travel continues.",
+                "hc-muted"));
+
+            const form = document.createElement("form");
+            form.className = "hc-form";
+            const course = document.createElement("select");
+            course.required = true;
+            const empty = document.createElement("option");
+            empty.value = "";
+            empty.textContent = "Select intended adjacent cell";
+            course.append(empty);
+            for (const edge of adjacency.edges) {
+                const option = document.createElement("option");
+                option.value = String(edge.directionValue);
+                option.textContent = edgeCourseLabel(edge);
+                course.append(option);
+            }
+            if (preferences.direction !== null) course.value = String(preferences.direction);
+
+            const pace = document.createElement("input");
+            pace.value = preferences.pace;
+            pace.required = true;
+            pace.setAttribute("aria-label", "Pace or travel mode");
+
+            const submit = document.createElement("button");
+            submit.type = "submit";
+            submit.className = "hc-primary-action";
+            submit.textContent = "Continue travel";
+            form.append(
+                labelled("Course", course),
+                labelled("Pace / travel mode", pace),
+                submit);
+            form.addEventListener("submit", event => {
+                event.preventDefault();
+                const direction = Number(course.value);
+                const edge = course.value === ""
+                    ? null
+                    : adjacencyEdgeForDirection(adjacency, direction);
+                const nextPace = pace.value.trim();
+                if (!edge) {
+                    throw new Error("Select an intended adjacent cell before continuing travel.");
+                }
+                if (!nextPace) {
+                    throw new Error("Enter a pace or travel mode before continuing travel.");
+                }
+                preferences.direction = edge.directionValue;
+                preferences.pace = nextPace;
+                selectedHex = edge.targetCell;
+                selectedHexTracksTravelIntent = true;
+                saveTravelPreferences(runtime.id, preferences);
+                if (map) {
+                    map.renderer.selectedHex = edge.targetCell;
+                    map.requestRender();
+                }
+                syncTravelIntentControls();
+                continueTravel(false, true);
+            });
+
+            const more = button("More options", () => openTravelWorkspace("advanced"));
+            more.className = "hc-secondary-action";
+            body.append(form, more);
+        });
+    };
+
     const openNavigationWorkspace = (): void => {
         if (!runtime.expedition.isSpatial) {
             openHistory();
@@ -1214,7 +1292,7 @@ export async function renderExpedition(
         target?.focus();
     };
 
-    const continueTravel = (resumeEncounter = false): void => {
+    const continueTravel = (resumeEncounter = false, resumeTravelReview = false): void => {
         if (!runtime.expedition.isSpatial || runtime.procedure.runtime === null) {
             openHistory();
             return;
@@ -1235,7 +1313,8 @@ export async function renderExpedition(
             suppressesNavigation,
             deliberateDoubleBack,
             survivalAttention(survival),
-            resumeEncounter);
+            resumeEncounter,
+            resumeTravelReview);
         switch (target) {
             case "course":
                 focusTravelCourse();
@@ -1252,6 +1331,9 @@ export async function renderExpedition(
                 return;
             case "boundary":
                 openTravelWorkspace("boundary");
+                return;
+            case "review":
+                openTravelReviewWorkspace();
                 return;
             case "survival":
                 openSurvivalWorkspace();

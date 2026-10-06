@@ -566,6 +566,25 @@ test("navigator feedback preserves edge centering and moves along geometry inste
         /translate\(calc\(-50% \+ var\(--hc-edge-feedback-x\)\),calc\(-50% \+ var\(--hc-edge-feedback-y\)\)\)/);
 });
 
+test("urgent travel pauses preserve their task wording and use a focused course-and-pace review", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+
+    assert.match(view, /action\.kind === "travel"[\s\S]*&& !action\.urgent/);
+    assert.match(view, /const openTravelReviewWorkspace = \(\): void =>/);
+    assert.match(view, /"Changed travel conditions"/);
+    assert.match(view, /"Backtrack boundary"/);
+    assert.match(view, /continueTravel\(false, true\)/);
+    assert.match(view, /case "review":[\s\S]*openTravelReviewWorkspace\(\)/);
+    const review = view.slice(
+        view.indexOf("const openTravelReviewWorkspace"),
+        view.indexOf("const openNavigationWorkspace"));
+    assert.match(review, /labelled\("Course", course\)/);
+    assert.match(review, /labelled\("Pace \/ travel mode", pace\)/);
+    assert.doesNotMatch(review, /suppressNav|resetVeer|continueAcross|doubleBack/);
+});
+
 test("encounter resume requires an explicit resolved-at-table acknowledgement", () => {
     const view = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/expedition-view.ts"),

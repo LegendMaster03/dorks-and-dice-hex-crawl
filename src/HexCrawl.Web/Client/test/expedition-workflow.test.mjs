@@ -107,6 +107,26 @@ test("forced travel and pending consequences block routine continuation without 
         "boundary");
 });
 
+test("changed-condition and backtrack pauses require explicit review acknowledgement", () => {
+    const base = runtime();
+    for (const pauseReason of ["ConditionsReviewRequired", "BacktrackBoundaryReached"]) {
+        const paused = {
+            ...base,
+            pauseReason,
+            expedition: {
+                ...base.expedition,
+                activeWatchNumber: 1
+            }
+        };
+        assert.equal(
+            spatialTravelContinuationTarget(paused, true, true, true, false, false, false, false),
+            "review");
+        assert.equal(
+            spatialTravelContinuationTarget(paused, true, true, true, false, false, false, true),
+            "advance");
+    }
+});
+
 test("encounter pause requires explicit post-encounter resume before travel can continue", () => {
     const base = runtime();
     const paused = {
