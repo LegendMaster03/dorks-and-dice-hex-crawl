@@ -1,0 +1,54 @@
+name: Phase 15 Visual Review
+
+on:
+  push:
+    branches:
+      - feature/phase-15-procedure-authoring-ux
+    paths:
+      - ".github/workflows/phase15-visual-review.yml"
+      - "src/HexCrawl.Web/Client/src/modules/procedures/**"
+      - "src/HexCrawl.Web/Client/src/phase15-styles.ts"
+      - "src/HexCrawl.Web/Client/src/styles.ts"
+      - "src/HexCrawl.Web/Client/test/phase15-visual-*"
+
+jobs:
+  visual:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: src/HexCrawl.Web/Client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/HexCrawl.Web/Client/package-lock.json
+      - name: Install client dependencies
+        run: npm ci
+      - name: Install temporary browser harness dependency
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Start visual harness
+        run: |
+          npx vite --host 127.0.0.1 --port 4173 >/tmp/phase15-vite.log 2>&1 &
+          echo $! >/tmp/phase15-vite.pid
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:4173/test/phase15-visual-harness.html >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/phase15-vite.log
+          exit 1
+      - name: Render and assert representative authoring states
+        run: node test/phase15-visual-capture.mjs
+      - name: Stop visual harness
+        if: always()
+        run: |
+          if [ -f /tmp/phase15-vite.pid ]; then
+            kill "$(cat /tmp/phase15-vite.pid)" || true
+          fi
+          cat /tmp/phase15-vite.log || true
