@@ -37,9 +37,8 @@ export async function renderExpeditionAssistant(
                     <p><span data-mode></span> · <span data-context></span></p>
                 </div>
                 <nav>
-                    <button type="button" data-home>DM tools</button>
-                    <button type="button" data-tracker>Expedition tracker</button>
-                    <button type="button" data-map>Full map</button>
+                    <button type="button" data-home>Hex Crawl home</button>
+                    <button type="button" data-expedition>Open expedition</button>
                 </nav>
             </header>
             <div class="hc-view-switcher" aria-label="Focused assistants">
@@ -69,12 +68,7 @@ export async function renderExpeditionAssistant(
     const warning = required<HTMLElement>(root, "[data-active-watch-warning]");
 
     required<HTMLButtonElement>(root, "[data-home]").addEventListener("click", () => navigate("/"));
-    required<HTMLButtonElement>(root, "[data-tracker]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}`));
-    const mapButton = required<HTMLButtonElement>(root, "[data-map]");
-    mapButton.hidden = runtime.overworldId === null;
-    mapButton.addEventListener("click", () => {
-        if (runtime.overworldId) navigate(`/worlds/${runtime.overworldId}/expeditions/${runtime.id}`);
-    });
+    required<HTMLButtonElement>(root, "[data-expedition]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}`));
     required<HTMLButtonElement>(root, "[data-travel]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}/travel`));
     required<HTMLButtonElement>(root, "[data-navigation]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}/navigation`));
     required<HTMLButtonElement>(root, "[data-encounters]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}/encounters`));
@@ -89,7 +83,6 @@ export async function renderExpeditionAssistant(
         travelButton.textContent = next.expedition.isSpatial ? "Travel / watch" : "Watch / time";
         travelButton.disabled = !next.expedition.isSpatial && !canUseFocusedNonSpatialWatch(next);
         required<HTMLButtonElement>(root, "[data-navigation]").hidden = !next.expedition.isSpatial;
-        mapButton.hidden = next.overworldId === null;
         renderStatus();
         renderHistory();
         renderForm();
@@ -206,7 +199,7 @@ export async function renderExpeditionAssistant(
         const activeFullWatch = state.isSpatial && state.activeWatchNumber !== null;
         warning.hidden = !activeFullWatch;
         warning.textContent = activeFullWatch
-            ? `A full-workbench watch is active. Finish or resume watch ${state.activeWatchNumber} in the expedition tracker before using independent assistant bookkeeping.`
+            ? `A full-workbench watch is active. Finish or resume watch ${state.activeWatchNumber} in the expedition workspace before using independent utility bookkeeping.`
             : "";
 
         required<HTMLElement>(root, "[data-assistant-heading]").textContent = heading(mode, state.isSpatial);
@@ -220,7 +213,7 @@ export async function renderExpeditionAssistant(
             const detail = mode === "travel" && !state.isSpatial
                 ? focusedIntervalUnavailableMessage(runtime)
                 : "This materialized procedure is structural and is not executable by the current runtime.";
-            form.innerHTML = `<p class="hc-hint">${escapeHtml(detail)} Its stored snapshot remains available on the running sheet for reference.</p>`;
+            form.innerHTML = `<p class="hc-hint">${escapeHtml(detail)} Its stored snapshot remains available on the expedition for reference.</p>`;
             warning.hidden = true;
             return;
         }

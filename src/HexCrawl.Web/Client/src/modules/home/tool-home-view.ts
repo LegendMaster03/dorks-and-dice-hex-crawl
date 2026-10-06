@@ -28,49 +28,27 @@ export async function renderToolHome(
             <header class="hc-page-header">
                 <div>
                     <h1>Hex Crawl</h1>
-                    <p>Running sheets for traditional hex-crawl procedure, with optional automation and map tools when you want them.</p>
+                    <p>Run expeditions with campaign-owned exploration procedures, spatial maps when needed, and focused GM utilities.</p>
                 </div>
-                <nav><button type="button" data-worlds>Overworlds & maps</button></nav>
             </header>
             <div class="hc-error" data-error hidden role="alert"></div>
-            <details class="hc-panel hc-home-optional-tools">
-                <summary id="hc-assistants-title">Optional focused tools</summary>
-                <p class="hc-muted">Use these independently when you want automation for one part of the crawl. They are not required to use a running sheet.</p>
-                <div class="hc-mode-grid hc-home-three-column-grid">
-                    <article class="hc-mode-card">
-                        <h3>Travel / Watch Assistant</h3>
-                        <p>Generic watch/time bookkeeping needs no grid. Spatial travel can opt into an abstract hex context.</p>
-                        <button type="button" class="hc-primary-action" data-assistant-travel>Open Travel / Watch</button>
-                    </article>
-                    <article class="hc-mode-card">
-                        <h3>Navigation Assistant</h3>
-                        <p>Use an existing spatial session or create the minimum abstract hex context required for direction.</p>
-                        <button type="button" class="hc-primary-action" data-assistant-navigation>Open Navigation</button>
-                    </article>
-                    <article class="hc-mode-card">
-                        <h3>Encounter Cadence Assistant</h3>
-                        <p>Track encounter checks and outcomes with a non-spatial procedure session. No Overworld is required.</p>
-                        <button type="button" class="hc-primary-action" data-assistant-encounters>Open Encounter Cadence</button>
-                    </article>
-                </div>
-            </details>
             <div class="hc-columns hc-home-three-column-grid hc-home-main-grid">
                 <section class="hc-panel">
                     <div class="hc-panel-heading">
-                        <div><h2>Running sheets</h2><p class="hc-muted">Continue an existing crawl record. A sheet can be world-bound, abstract-hex, or non-spatial.</p></div>
+                        <div><h2>Expeditions</h2><p class="hc-muted">Open or resume the expedition you are running at the table.</p></div>
                         <span class="hc-muted" data-expedition-count></span>
                     </div>
                     <div class="hc-expedition-list" data-expedition-list></div>
                 </section>
                 <section class="hc-panel">
-                    <h2>New running sheet</h2>
-                    <p class="hc-muted">Choose only the context your procedure needs. You can run without an Overworld or map.</p>
+                    <h2>Start expedition</h2>
+                    <p class="hc-muted">Choose the procedure and only the spatial context that procedure needs.</p>
                     <form class="hc-form" data-start-mapless>
-                        <label>Session name <input name="name" required value="Expedition" autocomplete="off"></label>
+                        <label>Expedition name <input name="name" required value="Expedition" autocomplete="off"></label>
                         <label>Procedure <select name="procedure"></select></label>
                         <p class="hc-hint" data-procedure-summary></p>
                         <details class="hc-optional-reference"><summary>Procedure details</summary><ul data-procedure-mechanics></ul></details>
-                        <label>Crawl context <select name="context"></select></label>
+                        <label>Expedition context <select name="context"></select></label>
                         <div class="hc-form" data-abstract-context hidden>
                             <label>Context name <input name="contextName" value="Mapless hex crawl" autocomplete="off"></label>
                             <label>Hex orientation <select name="orientation"><option value="PointyTop">Pointy top</option><option value="FlatTop">Flat top</option></select></label>
@@ -84,27 +62,55 @@ export async function renderToolHome(
                                 <label>Start q <input name="q" type="number" step="1" value="0"></label>
                                 <label>Start r <input name="r" type="number" step="1" value="0"></label>
                             </div>
-                            <p class="hc-hint">Abstract hex stores only crawl-scale context. It creates no Overworld, source map, location, feature, or world row.</p>
+                            <p class="hc-hint">Abstract hex stores crawl-scale context without creating a world or source map.</p>
                         </div>
                         <div data-nonspatial-context hidden>
                             <label>Context name <input name="nonSpatialName" value="Procedure session" autocomplete="off"></label>
-                            <p class="hc-hint">Non-spatial sessions persist procedure/history state without hex coordinates, distance scale, world position, or Overworld.</p>
+                            <p class="hc-hint">Non-spatial expeditions persist procedure and history state without fabricating coordinates, distance, course, pace, or map state.</p>
                         </div>
                         <p class="hc-hint">Saved procedures use the selected revision. A preset creates a new saved procedure when play begins.</p>
-                        <button type="submit" class="hc-primary-action" data-start-button>Start session</button>
+                        <button type="submit" class="hc-primary-action" data-start-button>Start expedition</button>
                     </form>
                 </section>
             </div>
-            <section class="hc-mode-section" aria-labelledby="hc-mode-title">
-                <h2 id="hc-mode-title">Available levels of map support</h2>
+            <section class="hc-mode-section" aria-label="Hex Crawl management">
                 <div class="hc-mode-grid hc-home-three-column-grid">
-                    <article class="hc-mode-card"><h3>World-bound</h3><p>Uses an authored Overworld and can add map rendering, discovery, and player knowledge.</p></article>
-                    <article class="hc-mode-card"><h3>Abstract hex</h3><p>Uses persisted hex scale and coordinates without creating or loading an Overworld.</p></article>
-                    <article class="hc-mode-card"><h3>Non-spatial</h3><p>Uses procedure/session bookkeeping without inventing map state.</p></article>
+                    <article class="hc-mode-card">
+                        <h2>Procedures</h2>
+                        <p>Create, inspect, and manage the exploration procedures used by expeditions.</p>
+                        <button type="button" class="hc-primary-action" data-procedures>Manage procedures</button>
+                    </article>
+                    <article class="hc-mode-card">
+                        <h2>Worlds / maps</h2>
+                        <p>Create and manage authored worlds and their spatial map data.</p>
+                        <button type="button" class="hc-primary-action" data-worlds>Manage worlds</button>
+                    </article>
                 </div>
             </section>
+            <details class="hc-panel hc-home-optional-tools">
+                <summary id="hc-assistants-title">GM utilities</summary>
+                <p class="hc-muted">Focused utilities are secondary tools for a specific table task. Normal expedition play starts by opening the expedition.</p>
+                <div class="hc-mode-grid hc-home-three-column-grid">
+                    <article class="hc-mode-card">
+                        <h3>Travel / time</h3>
+                        <p>Use focused travel or interval bookkeeping independently of the full expedition workspace.</p>
+                        <button type="button" data-assistant-travel>Open travel / time utility</button>
+                    </article>
+                    <article class="hc-mode-card">
+                        <h3>Navigation</h3>
+                        <p>Resolve a focused spatial navigation task without treating navigation as a separate product mode.</p>
+                        <button type="button" data-assistant-navigation>Open navigation utility</button>
+                    </article>
+                    <article class="hc-mode-card">
+                        <h3>Encounter cadence</h3>
+                        <p>Resolve focused encounter cadence when that is the only table task you need.</p>
+                        <button type="button" data-assistant-encounters>Open encounter utility</button>
+                    </article>
+                </div>
+            </details>
         </section>`;
 
+    required<HTMLButtonElement>(root, "[data-procedures]").addEventListener("click", () => navigate("/procedures"));
     required<HTMLButtonElement>(root, "[data-worlds]").addEventListener("click", () => navigate("/worlds"));
     required<HTMLButtonElement>(root, "[data-assistant-travel]").addEventListener("click", () => navigate("/assistants/travel"));
     required<HTMLButtonElement>(root, "[data-assistant-navigation]").addEventListener("click", () => navigate("/assistants/navigation"));
@@ -257,7 +263,7 @@ export async function renderToolHome(
                 startPending = false;
                 if (!disposed) {
                     startButton.disabled = !procedure.value;
-                    startButton.textContent = "Start session";
+                    startButton.textContent = "Start expedition";
                 }
             }
         })();
@@ -298,30 +304,16 @@ function renderExpeditions(
 
         const actions = document.createElement("div");
         actions.className = "hc-button-row";
-        actions.append(action("Open running sheet", () => navigate(`/expeditions/${expedition.id}`), true));
-
-        const spatial = expedition.context.kind !== "NonSpatial";
-        if (expedition.context.kind === "WorldBound" && expedition.context.overworldId) {
-            actions.append(action("Map + sheet", () => navigate(`/worlds/${expedition.context.overworldId}/expeditions/${expedition.id}`)));
-        }
-        if (spatial) {
-            actions.append(
-                action("Travel / watch", () => navigate(`/expeditions/${expedition.id}/travel`)),
-                action("Navigation", () => navigate(`/expeditions/${expedition.id}/navigation`))
-            );
-        } else {
-            actions.append(action("Watch / time", () => navigate(`/expeditions/${expedition.id}/travel`)));
-        }
-        actions.append(action("Encounters", () => navigate(`/expeditions/${expedition.id}/encounters`)));
+        actions.append(action("Open expedition", () => navigate(`/expeditions/${expedition.id}`), true));
 
         const deleteButton = document.createElement("button");
         deleteButton.type = "button";
         deleteButton.className = "hc-danger-action";
-        deleteButton.textContent = "Delete running sheet";
-        deleteButton.setAttribute("aria-label", `Delete running sheet ${expedition.name}`);
+        deleteButton.textContent = "Delete expedition";
+        deleteButton.setAttribute("aria-label", `Delete expedition ${expedition.name}`);
         deleteButton.addEventListener("click", () => {
             const confirmed = window.confirm(
-                `Delete running sheet “${expedition.name}”?\n\nThis permanently deletes the saved session, including its watch history and running-sheet state. The overworld itself will not be deleted.`);
+                `Delete expedition “${expedition.name}”?\n\nThis permanently deletes the saved expedition, including its history and expedition state. The overworld itself will not be deleted.`);
             if (!confirmed) return;
             void (async () => {
                 clearUiError(error);
@@ -336,7 +328,7 @@ function renderExpeditions(
                 } catch (value) {
                     showUiError(error, value);
                     deleteButton.disabled = false;
-                    deleteButton.textContent = "Delete running sheet";
+                    deleteButton.textContent = "Delete expedition";
                 }
             })();
         });
@@ -350,12 +342,12 @@ function renderExpeditions(
 function renderEmptyExpeditions(host: HTMLElement): void {
     const empty = document.createElement("div");
     empty.className = "hc-empty-state";
-    empty.innerHTML = "<strong>No crawl sessions yet.</strong><span>Start one without creating a world, or bind one to an authored Overworld.</span>";
+    empty.innerHTML = "<strong>No expeditions yet.</strong><span>Start an expedition here, with or without an authored world.</span>";
     host.append(empty);
 }
 
 function syncExpeditionCount(count: HTMLElement, value: number): void {
-    count.textContent = value === 1 ? "1 session" : `${value} sessions`;
+    count.textContent = value === 1 ? "1 expedition" : `${value} expeditions`;
 }
 
 function distanceUnit(kind: DistanceUnitKind, form: HTMLFormElement) {

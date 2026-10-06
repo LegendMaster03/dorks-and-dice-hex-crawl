@@ -35,13 +35,10 @@ import { canUseFocusedNonSpatialWatch, focusedIntervalHours } from "./focused-in
 import { navigationResolutionDue, pauseInstruction, spatialTravelContinuationTarget } from "./expedition-workflow";
 import { expeditionWorkspacePresentation } from "./expedition-workspace-model";
 
-export type ExpeditionViewMode = "map" | "tracker";
-
 export async function renderExpedition(
     root: HTMLElement,
     api: HexCrawlApi,
     expeditionId: string,
-    _mode: ExpeditionViewMode,
     navigate: (route: string, replace?: boolean) => void,
     routeWorldId?: string,
     toolContext: ToolHostContext | null = null): Promise<() => void> {
@@ -184,7 +181,7 @@ export async function renderExpedition(
             textElement("p", `${runtime.context.name} · ${runtime.procedure.name}`));
         const nav = document.createElement("nav");
         nav.className = "hc-button-row";
-        nav.append(button("DM tools", () => navigate("/")));
+        nav.append(button("Hex Crawl home", () => navigate("/")));
         if (runtime.overworldId) {
             nav.append(button("World authoring", () => navigate(`/worlds/${runtime.overworldId}/edit`)));
         }

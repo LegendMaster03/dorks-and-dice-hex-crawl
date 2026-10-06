@@ -34,14 +34,14 @@ export async function renderAssistantEntry(
                     <h1>${title(assistant)}</h1>
                     <p>${subtitle(assistant)}</p>
                 </div>
-                <nav><button type="button" data-home>DM tools</button></nav>
+                <nav><button type="button" data-home>Hex Crawl home</button></nav>
             </header>
             <div class="hc-error" data-error hidden role="alert"></div>
             <div class="hc-columns">
                 <section class="hc-panel">
                     <div class="hc-panel-heading">
                         <div>
-                            <h2>Use an existing running sheet</h2>
+                            <h2>Use an existing expedition</h2>
                             <p class="hc-muted">${existingHint(assistant)}</p>
                         </div>
                         <span class="hc-muted" data-count></span>

@@ -15,7 +15,6 @@ const requiredRouteKinds: readonly ClientRouteKind[] = [
     "world",
     "edit",
     "expedition",
-    "tracker",
     "assistant",
     "assistant-entry"
 ];

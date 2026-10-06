@@ -64,7 +64,7 @@ async function boot(rootElement: HTMLElement): Promise<void> {
                 detail.textContent = error.message;
                 const back = document.createElement("button");
                 back.type = "button";
-                back.textContent = "Return to DM tools";
+                back.textContent = "Return to Hex Crawl";
                 back.addEventListener("click", () => navigate("/"));
                 panel.append(heading, detail, back);
                 rootElement.replaceChildren(panel);
@@ -116,7 +116,7 @@ function injectProcedureComposerShortcut(
     const button = document.createElement("button");
     button.type = "button";
     button.dataset.procedureComposerShortcut = "";
-    button.textContent = "Procedure Composer";
+    button.textContent = "Procedures";
     button.addEventListener("click", () => navigate("/procedures"));
     nav.append(button);
 }
@@ -138,13 +138,13 @@ function renderAnonymousAccess(rootElement: HTMLElement, routeRequiresSignIn: bo
         <section class="hc-page">
             <header class="hc-page-header">
                 <div>
-                    <h1>Hex Crawl DM tools</h1>
+                    <h1>Hex Crawl</h1>
                     <p>Hex Crawl is available through Dorks & Dice, but saved worlds and crawl sessions are account-owned.</p>
                 </div>
             </header>
             <section class="hc-panel hc-public-access">
                 <h2>${routeRequiresSignIn ? "Sign in to open this Hex Crawl route" : "Sign in to use persistent Hex Crawl tools"}</h2>
-                <p>Use the Dorks & Dice account controls to sign in. Once signed in, Hex Crawl can load your Overworlds, saved crawl sessions, and focused DM assistants.</p>
+                <p>Use the Dorks & Dice account controls to sign in. Once signed in, Hex Crawl can load your worlds, saved expeditions, procedures, and focused GM utilities.</p>
                 <p class="hc-muted">Anonymous access does not create a shared or placeholder owner. Temporary anonymous crawl sessions are not enabled.</p>
             </section>
         </section>`;
