@@ -262,8 +262,9 @@ export async function renderExpedition(
                 "Party",
                 `${runtime.party.members.length} member${runtime.party.members.length === 1 ? "" : "s"}`,
                 partyActivitySummary(runtime),
-                openPartyWorkspace),
-            statAction(
+                openPartyWorkspace));
+        if (presentation.capabilities.travel) {
+            stats.append(statAction(
                 "Movement",
                 movementSummary(runtime),
                 runtime.movementComposition.missingInputs.length > 0
@@ -271,6 +272,7 @@ export async function renderExpedition(
                     : movementSuggestionDetail(runtime),
                 runtime.expedition.isSpatial ? () => openTravelWorkspace("movement") : openPartyWorkspace,
                 runtime.movementComposition.missingInputs.length > 0 ? "warning" : "neutral"));
+        }
         if (presentation.capabilities.navigation && presentation.navigationLabel) {
             stats.append(statAction(
                 "Navigation",
@@ -1762,7 +1764,9 @@ function journeyDetail(state: ExpeditionJourneyState | null): string {
 }
 
 function journeyAttention(state: ExpeditionJourneyState | null): boolean {
-    return Boolean(state?.activeProcesses.some(process => process.status === "ResolutionRequired" || process.pendingActions.length > 0));
+    return Boolean(state && (
+        state.activeProcesses.some(process => process.status === "ResolutionRequired" || process.pendingActions.length > 0)
+        || state.eventOccurrences.some(event => event.status === "ResolutionRequired")));
 }
 
 function encounterSummary(runtime: ExpeditionDetail): string {

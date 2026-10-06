@@ -17,6 +17,16 @@ Phase 15 uses one canonical `CampaignProcedure` across all authoring presentatio
 - Semantic value formatting recognizes numeric literals before identifier humanization, so decimal parameters and mappings such as `rough=0.5;severe=0.25` remain numeric.
 - Compact rule ordering is presentation organization only. The UI no longer claims the catalog display order is an authoritative execution sequence; actual triggers and dependencies remain authoritative.
 
+## Final product shell and expedition entry
+
+The Phase 15 candidate shell now teaches the current product model rather than the retired frontend architecture.
+
+- **Expeditions** are the dominant table workflow. A saved expedition has one normal **Open expedition** action.
+- **Procedures** and **Worlds / maps** are first-class management areas.
+- Focused travel/time, navigation, and encounter tools remain available deliberately under **GM utilities** rather than appearing as alternate ways to run the same expedition.
+- `/expeditions/{id}` is the canonical expedition route. The former world-scoped expedition route is only a redirect alias to the same workbench; there is no separate tracker route or tracker client-module ownership.
+- The superseded tracker/running-sheet renderer and tracker-only layout CSS were removed rather than retained as pre-testing compatibility burden.
+
 ## Unified expedition workspace
 
 Spatial and nonspatial expeditions use one procedure-driven expedition workspace rather than separate user-facing map and tracker modes.
@@ -40,7 +50,10 @@ Routine travel expresses **intent** and always resolves through the existing pro
 - Edge controls use geometry-derived outward arrows and screen-relative/adjacent-cell descriptions. Compass terminology is not inferred merely from hex orientation; it should only be introduced if authoritative map-orientation metadata eventually establishes it.
 - Map selection and navigator selection share the same semantic adjacent-cell state. Either input can select intended travel course and preview the neighboring cell without mutating expedition position.
 - Travel remains two-step by default: selecting an edge/cell changes reusable intent, while the explicit current action performs authoritative procedure advancement.
-- Course and pace are remembered as reusable browser preferences for the expedition. Active runtime course/pace remain server-authoritative and are reconciled back into those preferences.
+- Course and pace are remembered as reusable browser preferences for the expedition. Active runtime course/pace remain server-authoritative and are reconciled back into those preferences. On initial render and authoritative rebind, a persisted course is projected through current adjacency immediately so Current travel, navigator selection, map highlight, Next action, and focused workspaces agree without another click.
+- Intended adjacent travel target and arbitrary inspected map cell are distinct presentation concepts. Inspecting an unrelated cell does not overwrite reusable travel intent.
+- When the materialized movement policy defines finite `travelModeKeys`, pace/travel mode is presented with a finite choice control. The UI does not infer choices from preset identity; procedures without a finite contract retain free-form adjudication.
+- Focused movement distance inputs display the authoritative distance-unit symbol supplied by movement composition or spatial context rather than assuming miles.
 - Direction values remain the runtime's existing numeric 0–5 representation underneath the regular-hex adapter; Compact interaction identifies the selected edge/adjacent cell instead of exposing axial steps as its primary model.
 - Fixed continuous movement that the authoritative movement-composition projection resolves deterministically is consumed directly. `Resolved` and `ReferenceFallback` movement suggestions can supply the routine movement value without making the DM re-enter distance or provenance.
 - Variable, step-based, unavailable, unsupported, adjudication-required, or otherwise unresolved movement is still requested explicitly rather than guessed in the browser.
@@ -51,12 +64,30 @@ Routine travel expresses **intent** and always resolves through the existing pro
 
 The DM also has an explicit **Teleport party** operation for setup corrections, teleportation, scene transitions, and other authoritative repositioning that is not ordinary overland travel.
 
-- Selecting any map cell can expose **Teleport party here**, and the same operation remains available from GM Tools with direct cell-coordinate entry.
+- An adjacent selected cell means ordinary travel intent and does **not** present Teleport Party as a competing normal action. A deliberately inspected non-adjacent cell may expose **Teleport party here**, and the same explicit operation remains available from GM Tools with direct cell-coordinate entry.
 - Repositioning is a distinct server mutation. It does not invoke normal travel advancement, add distance or elapsed travel time, run navigation or encounter checks, consume resources, advance journey progress, or fabricate travel provenance.
 - The destination becomes the current cell and, for world-bound sessions, the map position is re-anchored to that cell. In-cell progress, entry/last-travel direction, intended/actual course, and lost/veer state are reset because they describe the previous local traversal context.
 - If a full travel watch is active, the explicit reposition ends that watch and clears its pending pause/remaining-time state rather than silently carrying an obsolete travel segment to the new location.
 - Aggregate elapsed travel, total distance already traveled, completed-watch count, party/resources/effects/journey state, and history remain intact. The reposition is recorded as a DM override in runtime history.
 - Repositioning invalidates unconsumed generated procedure-resolution tokens. World-bound automatic presentation policy may mark the newly occupied hex known, but the operation does not automatically reveal unrelated locations or features.
+
+## Journey-first and nonspatial operation
+
+Journey-first procedures use a process/state-dominant primary workbench rather than a reduced spatial layout.
+
+- The primary page projects the active journey/process, current stage, progress when defined, assigned roles, unresolved actions/events, relevant consequence state, and the actual next action.
+- An unresolved journey event is surfaced as **Resolve journey event**; pending stage work uses the most specific generic action known by the runtime rather than falling back to a generic Journey drawer.
+- The journey drawer remains the focused place to perform journey mutations. It is not required merely to discover what journey is active.
+- Nonspatial procedures do not fabricate current cells, course, pace, hex progress, map controls, or a Movement status card when the materialized procedure has no travel capability.
+- Generic interval bookkeeping remains available only when the materialized procedure actually defines a focused interval.
+
+## Forced-travel presentation
+
+The forced-travel focused workspace uses tabletop language by default while preserving the generalized consequence engine underneath.
+
+- The primary view explains whether a forced-travel check is required, the travel amount and normal limit with authoritative units, the check model, failure consequence, affected target, and next operation.
+- Exact mechanic/version/execution-handler information is behind **Advanced policy details**.
+- Failure effect keys, effect-level deltas, and external-state contracts are behind **Advanced consequence details** and remain available for technical adjudication without dominating normal play.
 
 ## Automatic procedure resolution
 
@@ -92,6 +123,14 @@ Phase 15 presentation does not add named-system runtime dispatch.
 - Directional actions express intended travel; they do not bypass runtime navigation, progress, encounter, terrain, forced-travel, boundary, or consequence mechanics.
 - Current-action routing distinguishes encounter, navigation, boundary, forced-travel/resource consequence, journey, travel, and nonspatial-watch work. Navigation uses a focused navigation surface rather than routing through the whole travel/watch presentation; blocking encounter and survival/consequence state disables routine directional advancement.
 - Existing provider boundaries remain optional and capability-oriented.
+
+## Final Phase 15 acceptance baseline
+
+This cleanup establishes the candidate build for comprehensive WorkChat testing, not a declaration of human-testing readiness.
+
+The rendered acceptance fixture covers the 28 required Phase 15 surfaces/states: product shell desktop/narrow; procedure home, Compact, Advanced, and JSON; spatial no-course, selected-course, persisted-course, movement, navigation, lost/boundary, encounter, forced-travel, More options, non-adjacent inspection, and Teleport Party; three journey-first states; laptop, embedded, tablet, and narrow layouts; and representative light/dark spatial and nonspatial themes.
+
+The next release step after managerial acceptance is comprehensive WorkChat testing and bounded remediation of its findings. Internal human testing remains later.
 
 ## Validation boundary
 

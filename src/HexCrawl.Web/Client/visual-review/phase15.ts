@@ -2,6 +2,8 @@
 import { ensurePartyResponsiveStyles } from "../src/party-responsive-styles";
 import { ensureStyles } from "../src/styles";
 import { renderExpedition } from "../src/modules/expeditions/expedition-view";
+import { renderToolHome } from "../src/modules/home/tool-home-view";
+import { renderProcedureAuthoringWorkspace } from "../src/modules/procedures/procedure-authoring-view";
 
 const params = new URLSearchParams(window.location.search);
 const stateName = params.get("state") || "no-course";
@@ -18,6 +20,185 @@ if (Number.isFinite(containerWidth) && containerWidth > 0) {
 ensureStyles();
 ensurePartyResponsiveStyles();
 
+const responseJson = value => new Response(JSON.stringify(value), {
+    status: 200,
+    headers: { "Content-Type": "application/json" }
+});
+
+function composerFixture() {
+    const duration = {
+        type: "duration",
+        required: true,
+        description: "Length of the repeating expedition interval.",
+        defaultValue: "4h"
+    };
+    const mechanic = {
+        key: "time.interval.standard",
+        displayName: "Repeating expedition interval",
+        description: "Advance expedition procedure state in a repeating interval.",
+        version: 1,
+        executionHandler: "visual-review",
+        automationLevel: "Assisted",
+        executionSupport: "Native",
+        inputs: [],
+        outputs: ["time.interval"],
+        parameterSchema: { durationTicks: duration },
+        compatibilityTags: []
+    };
+    return {
+        procedureId: "visual-procedure",
+        revision: 3,
+        key: "visual-procedure",
+        name: "Shattered Marches Procedure",
+        isExecutable: true,
+        modificationCount: 0,
+        modifiedModuleCount: 0,
+        origin: null,
+        modules: [{
+            moduleKey: "time.interval",
+            category: "Time",
+            displayName: "Travel period",
+            purpose: "Set the repeating expedition interval.",
+            executionStage: "Time",
+            reads: [],
+            produces: ["time.interval"],
+            requiredDependencies: [],
+            optionalDependencies: [],
+            presentationMetadata: {},
+            mechanic,
+            alternatives: [],
+            configurationSchema: { durationTicks: duration },
+            parameters: { durationTicks: "4h" },
+            requiredInputs: [],
+            outputs: ["time.interval"],
+            dependencyIssues: [],
+            isModified: false,
+            modificationCount: 0,
+            validationIssues: []
+        }],
+        dependencies: { hasErrors: false, issues: [] },
+        dependencyFixes: [],
+        overrides: []
+    };
+}
+
+const savedProcedure = {
+    procedureId: "visual-procedure",
+    revision: 3,
+    key: "visual-procedure",
+    name: "Shattered Marches Procedure",
+    campaignId: null,
+    originPresetKey: null,
+    originPresetDisplayName: null,
+    isExecutable: true,
+    moduleCount: 1,
+    createdAt: "2026-10-06T04:00:00Z"
+};
+
+function installProcedureFetch() {
+    const original = window.fetch.bind(window);
+    window.fetch = async input => {
+        const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+        if (url.endsWith("/api/procedures")) return responseJson([savedProcedure]);
+        if (url.endsWith("/api/procedures/visual-procedure/revisions")) {
+            return responseJson([{
+                procedureId: "visual-procedure",
+                revision: 3,
+                name: "Shattered Marches Procedure",
+                modificationCount: 0,
+                createdAt: "2026-10-06T04:00:00Z"
+            }]);
+        }
+        if (url.includes("/api/procedures/composer/canonical/draft")) {
+            return responseJson({
+                procedureId: "visual-procedure",
+                revision: 3,
+                canonicalJson: JSON.stringify({
+                    procedureId: "visual-procedure",
+                    revision: 3,
+                    name: "Shattered Marches Procedure",
+                    modules: [{ moduleKey: "time.interval", parameters: { durationTicks: "4h" } }]
+                }, null, 2)
+            });
+        }
+        if (url.includes("/api/procedures/composer/draft") || url.includes("/api/procedures/visual-procedure")) {
+            return responseJson(composerFixture());
+        }
+        return new Response(JSON.stringify({ detail: "visual-review procedure stub" }), {
+            status: 404,
+            headers: { "Content-Type": "application/json" }
+        });
+    };
+    return () => { window.fetch = original; };
+}
+
+function emitSpecialMetrics(surface) {
+    const buttons = Array.from(root.querySelectorAll("button"));
+    const text = root.textContent || "";
+    const metrics = {
+        state: stateName,
+        surface,
+        theme,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        reviewWidth: Math.round(root.getBoundingClientRect().width),
+        reviewScrollWidth: root.scrollWidth,
+        scrollWidth: document.documentElement.scrollWidth,
+        scrollHeight: document.documentElement.scrollHeight,
+        pageTitle: root.querySelector("h1")?.textContent?.trim() || null,
+        openExpeditionButtons: buttons.filter(button => button.textContent?.trim() === "Open expedition").length,
+        startExpeditionVisible: text.includes("Start expedition"),
+        manageProceduresVisible: text.includes("Manage procedures"),
+        manageWorldsVisible: text.includes("Manage worlds"),
+        gmUtilitiesVisible: text.includes("GM utilities"),
+        compactVisible: Boolean(root.querySelector(".hc-compact-procedure")),
+        advancedVisible: Boolean(root.querySelector(".hc-advanced-layout")),
+        jsonVisible: Boolean(root.querySelector(".hc-json-editor")),
+        procedureHomeVisible: text.includes("Saved procedures") && text.includes("Build my own"),
+        technicalModeLabels: ["Compact", "Advanced", "JSON"].filter(label => text.includes(label)).length
+    };
+    document.getElementById("review-metrics").textContent = JSON.stringify(metrics);
+    document.documentElement.dataset.visualReviewReady = "true";
+}
+
+if (stateName === "home") {
+    const restoreFetch = installProcedureFetch();
+    const api = {
+        listExpeditions: async () => [{
+            id: "visual-expedition",
+            context: { kind: "WorldBound", name: "The Shattered Marches", overworldId: "visual-world" },
+            name: "Crossing the Shattered Marches",
+            procedureName: "Shattered Marches Procedure",
+            version: 42,
+            createdAt: "2026-10-05T12:00:00Z",
+            updatedAt: "2026-10-06T04:00:00Z"
+        }],
+        listOverworlds: async () => [{
+            id: "visual-world",
+            name: "The Shattered Marches",
+            version: 8,
+            createdAt: "2026-10-01T12:00:00Z",
+            updatedAt: "2026-10-06T04:00:00Z"
+        }],
+        getProcedurePresets: async () => []
+    };
+    await renderToolHome(root, api, () => {});
+    emitSpecialMetrics("home");
+    restoreFetch();
+} else if (stateName.startsWith("procedure-")) {
+    const restoreFetch = installProcedureFetch();
+    const api = { getProcedurePresets: async () => [] };
+    if (stateName === "procedure-home") {
+        localStorage.removeItem("hex-crawl.procedure-authoring.mode");
+        await renderProcedureAuthoringWorkspace(root, api, null, () => {});
+    } else {
+        const mode = stateName.replace("procedure-", "");
+        localStorage.setItem("hex-crawl.procedure-authoring.mode", mode);
+        await renderProcedureAuthoringWorkspace(root, api, "visual-procedure", () => {});
+    }
+    emitSpecialMetrics("procedure");
+    restoreFetch();
+} else {
 const mile = { kind: "Mile", symbol: "mi", metersPerUnit: 1609.344 };
 const distance = value => ({ value, unit: mile });
 const world = {
@@ -148,6 +329,7 @@ function movement(resolved) {
             baseBudget: 6,
             budgetUnit: "mi",
             limitingScope: "Party",
+            travelModeKeys: ["normal", "fast", "slow"],
             terrainSupport: "Supported",
             terrainAdjustmentModel: "multiplier",
             terrainAdjustments: {},
@@ -257,6 +439,84 @@ function runtimeFixture() {
             subjectType: null
         }]
     };
+}
+
+function nonSpatialRuntimeFixture() {
+    const value = runtimeFixture();
+    value.overworldId = null;
+    value.context = {
+        kind: "NonSpatial",
+        name: "The Shattered Marches journey"
+    };
+    value.procedure = {
+        ...procedure(),
+        name: "Journey Procedure",
+        runtime: null,
+        focusedIntervalPolicy: {
+            support: "None",
+            intervalHours: null,
+            mechanicKey: null,
+            mechanicVersion: null,
+            executionHandler: null,
+            unsupportedReason: null
+        },
+        modules: [
+            "party.activities",
+            "journey.process",
+            "journey.events",
+            "effects.expedition"
+        ].map(moduleDef)
+    };
+    value.expedition = {
+        id: "visual-" + stateName,
+        isSpatial: false,
+        elapsedTravelHours: 18,
+        currentDay: 3,
+        completedWatches: 0,
+        activeWatchNumber: null,
+        activeWatchTotalHours: null,
+        activeWatchElapsedHours: null,
+        activeWatchRemainingHours: null,
+        activeWatchPendingDecision: null,
+        activePaceKey: null,
+        activeActivityAssignments: []
+    };
+    value.movementComposition = {
+        policy: {
+            support: "None",
+            budgetModel: null,
+            baseBudget: null,
+            budgetUnit: null,
+            limitingScope: null,
+            travelModeKeys: [],
+            terrainSupport: "None",
+            terrainAdjustmentModel: null,
+            terrainAdjustments: {},
+            routeAdjustmentModel: null,
+            weatherAdjustmentModel: null,
+            mechanicKey: null,
+            mechanicVersion: null,
+            executionHandler: null,
+            unsupportedReason: null
+        },
+        status: "NotApplicable",
+        effectiveValue: null,
+        effectiveUnit: null,
+        effectivePerUnit: null,
+        effectiveDistanceUnit: null,
+        limitingContributorKey: null,
+        limitingParticipantId: null,
+        preOverrideValue: null,
+        contributors: [],
+        provenance: [],
+        missingInputs: [],
+        diagnostics: [],
+        referenceUse: "None",
+        suggestedExpectedDistance: null
+    };
+    value.knownHexes = [];
+    value.knowledge = [];
+    return value;
 }
 
 function survivalFixture(forced) {
@@ -373,12 +633,35 @@ function journeyFixture() {
         eventPolicy: { support: "Supported" },
         activeProcesses: [{
             id: "journey-1",
+            processKey: "ashen-pass",
             status: "Active",
             definition: {
+                processKey: "ashen-pass",
                 displayName: "Cross the Ashen Pass",
-                stages: [{ stageKey: "pass", displayName: "Cross the pass" }]
+                description: "Guide the company through the flooded pass and into the high country.",
+                stages: [{
+                    stageKey: "pass",
+                    displayName: "Cross the pass",
+                    description: "Make progress through the broken highland route.",
+                    progressTarget: 6,
+                    roleKeys: ["navigator", "scout"]
+                }]
+            },
+            execution: {
+                progressKind: "Numeric",
+                progressUnit: "legs",
+                roleDriven: true
             },
             currentStageKey: "pass",
+            stageStates: [{
+                stageKey: "pass",
+                numericProgress: 3,
+                explicitState: null,
+                successes: 2,
+                failures: 0,
+                complications: 0,
+                completed: false
+            }],
             pendingActions: [],
             isTerminal: false
         }],
@@ -398,6 +681,8 @@ switch (stateName) {
         runtime.expedition.intendedDirection = 1;
         runtime.expedition.actualDirection = 1;
         break;
+    case "persisted-course":
+        break;
     case "partial-progress":
         runtime.expedition.intendedDirection = 2;
         runtime.expedition.actualDirection = 2;
@@ -412,6 +697,12 @@ switch (stateName) {
     case "navigation-pending":
         runtime.expedition.intendedDirection = 1;
         runtime.procedure.runtime.usesNavigationChecks = true;
+        break;
+    case "boundary-pending":
+        runtime.expedition.intendedDirection = 1;
+        runtime.expedition.actualDirection = 2;
+        runtime.expedition.isLost = true;
+        runtime.pauseReason = "LostRecognitionRequired";
         break;
     case "movement-input-pending":
         runtime.expedition.intendedDirection = 3;
@@ -457,23 +748,52 @@ switch (stateName) {
         runtime.expedition.actualDirection = 0;
         break;
     case "map-selected":
+    case "map-nonadjacent":
+    case "teleport-workspace":
     case "no-course":
+        break;
+    case "journey-normal":
+        runtime = nonSpatialRuntimeFixture();
+        survival = survivalFixture(false);
+        journey = journeyFixture();
+        break;
+    case "journey-pending":
+        runtime = nonSpatialRuntimeFixture();
+        survival = survivalFixture(false);
+        journey = journeyFixture();
+        journey.activeProcesses[0].status = "ResolutionRequired";
+        journey.eventOccurrences = [{
+            occurrenceId: "event-1",
+            processId: "journey-1",
+            status: "ResolutionRequired",
+            eventType: "Journey hazard",
+            eventKey: "hazard",
+            stageKey: "pass"
+        }];
+        break;
+    case "journey-consequence":
+        runtime = nonSpatialRuntimeFixture();
+        survival = survivalFixture(false);
+        journey = journeyFixture();
+        journey.activeProcesses[0].stageStates[0].failures = 1;
+        journey.activeProcesses[0].stageStates[0].complications = 2;
         break;
     default:
         throw new Error("Unknown visual state: " + stateName);
 }
 
-localStorage.removeItem("hex-crawl:travel-intent:" + runtime.id);
+localStorage.removeItem("hex-crawl.expedition." + runtime.id + ".travel-intent");
+if (stateName === "persisted-course") {
+    localStorage.setItem(
+        "hex-crawl.expedition." + runtime.id + ".travel-intent",
+        JSON.stringify({ direction: 2, pace: "fast" }));
+}
 
-const jsonResponse = value => new Response(JSON.stringify(value), {
-    status: 200,
-    headers: { "Content-Type": "application/json" }
-});
 const originalFetch = window.fetch.bind(window);
 window.fetch = async input => {
     const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
-    if (url.includes("/api/expeditions/" + runtime.id + "/survival")) return jsonResponse(survival);
-    if (url.includes("/api/expeditions/" + runtime.id + "/journeys")) return jsonResponse(journey);
+    if (url.includes("/api/expeditions/" + runtime.id + "/survival")) return responseJson(survival);
+    if (url.includes("/api/expeditions/" + runtime.id + "/journeys")) return responseJson(journey);
     return new Response(JSON.stringify({ detail: "visual-review stub" }), {
         status: 404,
         headers: { "Content-Type": "application/json" }
@@ -496,7 +816,7 @@ const api = new Proxy({
     }
 });
 
-await renderExpedition(root, api, runtime.id, "map", () => {}, world.id, null);
+await renderExpedition(root, api, runtime.id, () => {}, undefined, null);
 
 function findButton(label) {
     return Array.from(root.querySelectorAll("button")).find(button => button.textContent?.trim() === label) || null;
@@ -504,14 +824,14 @@ function findButton(label) {
 
 await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
-if (stateName === "map-selected") {
+if (stateName === "map-selected" || stateName === "map-nonadjacent") {
     const canvas = root.querySelector("canvas");
     if (canvas) {
         const rect = canvas.getBoundingClientRect();
         canvas.dispatchEvent(new MouseEvent("click", {
             bubbles: true,
             button: 0,
-            clientX: rect.left + rect.width / 2 + 90,
+            clientX: rect.left + rect.width / 2 + (stateName === "map-nonadjacent" ? 280 : 90),
             clientY: rect.top + rect.height / 2
         }));
     }
@@ -523,8 +843,12 @@ if (stateName === "map-selected") {
     findButton("Resolve encounter")?.click();
 } else if (stateName === "forced-travel-pending") {
     findButton("Resolve forced travel")?.click();
+} else if (stateName === "boundary-pending") {
+    root.querySelector(".hc-current-action-primary")?.click();
 } else if (stateName === "more-options-open") {
     findButton("More options")?.click();
+} else if (stateName === "teleport-workspace") {
+    findButton("Teleport party")?.click();
 }
 
 if (stateName === "selected-edge") {
@@ -542,8 +866,10 @@ const mapHost = root.querySelector(".hc-map-host");
 const mapContext = root.querySelector("[data-map-context]");
 const rail = root.querySelector(".hc-table-rail");
 const currentTravel = root.querySelector("[data-current-travel]");
+const rootText = root.textContent || "";
 const metrics = {
     state: stateName,
+    surface: "expedition",
     theme,
     viewportWidth: window.innerWidth,
     viewportHeight: window.innerHeight,
@@ -564,8 +890,22 @@ const metrics = {
     currentTravelTop: currentTravel ? Math.round(currentTravel.getBoundingClientRect().top) : null,
     primaryAction: root.querySelector(".hc-current-action-primary")?.textContent?.trim() || null,
     focusedTitle: root.querySelector("[data-phase15-drawer] h2")?.textContent?.trim() || null,
-    focusedEdge: document.activeElement?.matches?.("[data-adjacency-edge]") ?? false
+    focusedEdge: document.activeElement?.matches?.("[data-adjacency-edge]") ?? false,
+    journeyVisible: rootText.includes("Current stage") && rootText.includes("Progress") && rootText.includes("Roles") && rootText.includes("Pending"),
+    movementStatusVisible: Array.from(root.querySelectorAll(".hc-ux-stat")).some(item => item.textContent?.includes("Movement")),
+    fakeSpatialStateVisible: !runtime.expedition.isSpatial && (
+        rootText.includes("Current travel")
+        || rootText.includes("Pace / travel mode")
+        || rootText.includes("Current cell")
+        || rootText.includes("Hex progress")),
+    teleportContextVisible: Array.from(root.querySelectorAll("button")).some(button => isVisible(button) && button.textContent?.trim() === "Teleport party here"),
+    journeyConsequenceVisible: rootText.includes("1 failure") && rootText.includes("2 complications"),
+    movementUnitVisible: rootText.includes("Effective distance (mi)"),
+    forcedTravelPrimaryDomainFacing: rootText.includes("Current requirement") && rootText.includes("Failure consequence:"),
+    forcedTravelTechnicalExpanded: Array.from(root.querySelectorAll("details[open]")).some(item => item.textContent?.includes("Failure effect key"))
 };
 document.getElementById("review-metrics").textContent = JSON.stringify(metrics);
 document.documentElement.dataset.visualReviewReady = "true";
 window.fetch = originalFetch;
+
+}
