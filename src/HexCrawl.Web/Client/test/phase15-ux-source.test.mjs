@@ -389,6 +389,17 @@ test("Phase 15 map selection is contextual and never directly mutates expedition
     assert.doesNotMatch(view, /setHexSelectionHandler[\s\S]{0,800}advanceExpedition/);
 });
 
+test("current-cell adjacency is memoized across unchanged render and summary reads", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+
+    assert.match(view, /let adjacencyCache:/);
+    assert.match(view, /preferences\.direction \?\? "none"/);
+    assert.match(view, /if \(adjacencyCache\?\.key === key\) return adjacencyCache\.value/);
+    assert.match(view, /adjacencyCache = \{ key, value \}/);
+});
+
 test("Phase 15 workspace rerenders preserve the existing map surface and viewport lifecycle", () => {
     const view = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/expedition-view.ts"),

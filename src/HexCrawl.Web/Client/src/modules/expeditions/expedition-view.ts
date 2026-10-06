@@ -69,19 +69,36 @@ export async function renderExpedition(
     let selectedHex: HexCoordinate | null = null;
     let selectedHexTracksTravelIntent = false;
     let preferences = loadTravelPreferences(runtime);
+    let adjacencyCache: {
+        key: string;
+        value: ReturnType<typeof currentHexAdjacency>;
+    } | null = null;
 
     const spatialOrientation = (): HexOrientation =>
         runtime.context.orientation ?? world?.grid.orientation ?? "PointyTop";
     const spatialRotation = (): number => world?.grid.rotationDegrees ?? 0;
 
-    const currentAdjacency = () =>
-        runtime.expedition.isSpatial
-            ? currentHexAdjacency(
-                runtime.expedition.currentHex,
-                spatialOrientation(),
-                preferences.direction,
-                spatialRotation())
-            : null;
+    const currentAdjacency = () => {
+        if (!runtime.expedition.isSpatial) return null;
+        const cell = runtime.expedition.currentHex;
+        const orientation = spatialOrientation();
+        const rotation = spatialRotation();
+        const key = [
+            cell.q,
+            cell.r,
+            orientation,
+            rotation,
+            preferences.direction ?? "none"
+        ].join(":");
+        if (adjacencyCache?.key === key) return adjacencyCache.value;
+        const value = currentHexAdjacency(
+            cell,
+            orientation,
+            preferences.direction,
+            rotation);
+        adjacencyCache = { key, value };
+        return value;
+    };
 
     const courseLabel = (direction: number | null): string => {
         const adjacency = currentAdjacency();
