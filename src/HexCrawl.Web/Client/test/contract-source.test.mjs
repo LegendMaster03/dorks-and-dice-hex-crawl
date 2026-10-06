@@ -268,7 +268,8 @@ test("watch planning uses authoritative typed party assignments instead of a fre
     const controller = read("modules/expeditions/expedition-watch-controller.ts");
     const party = read("modules/expeditions/expedition-party-sheet.ts");
     assert.match(view, /partyActivitySummary\(runtime\)/);
-    assert.match(view, /Party & activities/);
+    assert.match(view, /partyRailContext\(runtime\)/);
+    assert.doesNotMatch(view, /railAction\("Party & activities"/);
     assert.doesNotMatch(view, /name="activities"/);
     assert.doesNotMatch(controller, /activities:/);
     assert.match(party, /activityAssignments/);
