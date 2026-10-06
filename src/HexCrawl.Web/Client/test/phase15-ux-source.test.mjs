@@ -588,6 +588,7 @@ test("focused watch presentation hides unrelated exceptional controls outside Mo
     const view = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
         "utf8");
+    const styles = fs.readFileSync(path.join(sourceDir, "phase15-styles.ts"), "utf8");
 
     assert.match(view, /focus: "advanced" \| "movement" \| "encounter" \| "boundary"/);
     assert.match(view, /if \(focus === "advanced"\) return/);
