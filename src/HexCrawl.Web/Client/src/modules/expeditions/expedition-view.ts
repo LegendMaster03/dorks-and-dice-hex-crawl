@@ -1878,6 +1878,15 @@ function humanize(value: string): string {
         .replace(/\b\w/g, match => match.toUpperCase());
 }
 
+function escapeHtml(value: string): string {
+    return value
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+}
+
 function watchWorkspaceMarkup(adjacency: ReturnType<typeof currentHexAdjacency> | null, travelModes: readonly string[], distanceUnit: string | null): string {
     return `
         <section class="hc-running-sheet hc-focused-watch-workspace">
