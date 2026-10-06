@@ -187,6 +187,7 @@ export function ensurePhase15Styles(): void {
         .hc-rail-action strong, .hc-rail-action span { min-width:0; overflow-wrap:anywhere; }
         .hc-rail-action span { font-size:.78rem; }
         .hc-gm-tools { opacity:.86; }
+        .hc-focused-hidden { display:none !important; }
         .hc-focused-resolution-summary { display:grid; gap:.45rem; padding:.8rem; border:1px solid var(--hc-border); border-radius:.7rem; background:var(--hc-surface-elevated); }
         .hc-focused-resolution-summary h3, .hc-focused-resolution-summary p { margin:0; }
         .hc-phase15-runtime-summary { display:grid; gap:.65rem; }
