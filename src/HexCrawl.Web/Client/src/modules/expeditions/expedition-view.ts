@@ -9,7 +9,7 @@ import { discoveredSubjectIds, directionLabel, formatDistance, formatHours } fro
 import { SurvivalResourcesApi } from "../../survival-api";
 import type { SurvivalResources } from "../../survival-types";
 import { canonicalExpeditionRoute } from "../../tool-route";
-import type { ExpeditionDetail, HexCoordinate, HexOrientation, Overworld, ResolutionSource, ToolHostContext } from "../../types";
+import type { ExpeditionDetail, HexCoordinate, HexOrientation, Overworld, ResolutionSource, RuntimeAdvanceRequest, ToolHostContext } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
 import { badge, disclosure, openWorkspaceDrawer, statAction, textElement, type WorkspaceDrawer } from "../../ui/workspace";
 import { ExpeditionEnvironmentPanel } from "./environment-panel";
@@ -18,14 +18,16 @@ import { ExpeditionPartySheetController } from "./expedition-party-sheet";
 import {
     adjacencyEdgeForCell,
     adjacencyEdgeForDirection,
+    adjacencyFeedbackVector,
     currentHexAdjacency,
     sameHex
 } from "./spatial-adjacency";
 import { publishExpeditionRuntimeChanged } from "./expedition-runtime-events";
 import { ExpeditionSurvivalResourcesPanel } from "./survival-resources-panel";
 import { ExpeditionWatchController } from "./expedition-watch-controller";
+import { authoritativeFixedWatchDistance } from "./expedition-party-movement";
 import { canUseFocusedNonSpatialWatch, focusedIntervalHours } from "./focused-interval-policy";
-import { navigationResolutionDue } from "./expedition-workflow";
+import { encounterCheckDue, navigationResolutionDue } from "./expedition-workflow";
 import { expeditionWorkspacePresentation } from "./expedition-workspace-model";
 
 export type ExpeditionViewMode = "map" | "tracker";
@@ -187,9 +189,11 @@ export async function renderExpedition(
             statAction("Time", presentation.timeLabel, null, openHistory),
             statAction(
                 runtime.expedition.isSpatial ? "Position / course" : "Context",
-                presentation.routeLabel ?? runtime.context.name,
+                runtime.expedition.isSpatial
+                    ? currentCourseLabel(preferences, currentAdjacency())
+                    : presentation.routeLabel ?? runtime.context.name,
                 runtime.expedition.isSpatial ? travelPreferenceDetail(runtime, preferences, currentAdjacency()) : "Non-spatial expedition",
-                runtime.expedition.isSpatial ? () => openTravelWorkspace("travel") : openHistory,
+                runtime.expedition.isSpatial ? focusTravelCourse : openHistory,
                 runtime.pauseReason ? "warning" : "neutral"),
             statAction(
                 "Party",
@@ -202,14 +206,14 @@ export async function renderExpedition(
                 runtime.movementComposition.missingInputs.length > 0
                     ? `${runtime.movementComposition.missingInputs.length} unresolved input${runtime.movementComposition.missingInputs.length === 1 ? "" : "s"}`
                     : movementSuggestionDetail(runtime),
-                runtime.expedition.isSpatial ? () => openTravelWorkspace("travel") : openPartyWorkspace,
+                runtime.expedition.isSpatial ? () => openTravelWorkspace("movement") : openPartyWorkspace,
                 runtime.movementComposition.missingInputs.length > 0 ? "warning" : "neutral"));
         if (presentation.capabilities.navigation && presentation.navigationLabel) {
             stats.append(statAction(
                 "Navigation",
                 presentation.navigationLabel,
-                runtime.expedition.isSpatial && runtime.expedition.intendedDirection !== null
-                    ? `Intended ${courseLabel(runtime.expedition.intendedDirection)}`
+                runtime.expedition.isSpatial && preferences.direction !== null
+                    ? `Intended ${courseLabel(preferences.direction)}`
                     : null,
                 openNavigationWorkspace,
                 runtime.expedition.isSpatial && runtime.expedition.isLost ? "warning" : "neutral"));
@@ -258,15 +262,21 @@ export async function renderExpedition(
         section.className = "hc-current-action";
         const header = document.createElement("header");
         header.append(textElement("h2", "Next action"), badge(action.urgent ? "Needs resolution" : "Ready", action.urgent ? "warning" : "good"));
-        section.append(header, textElement("p", action.label, "hc-current-action-primary"), textElement("p", action.detail, "hc-current-action-detail"));
+        const actionLabel = runtime.expedition.isSpatial && action.kind === "travel"
+            ? "Continue travel"
+            : action.label;
+        const actionDetail = runtime.expedition.isSpatial && action.kind === "travel"
+            ? "Use the selected course and pace. Only unresolved procedure inputs will be requested."
+            : action.detail;
+        section.append(
+            header,
+            textElement("p", actionLabel, "hc-current-action-primary"),
+            textElement("p", actionDetail, "hc-current-action-detail"));
         const row = document.createElement("div");
         row.className = "hc-button-row";
         const primary = button(primaryActionLabel(action.kind), () => activateAction(action.kind));
         primary.className = "hc-primary-action";
         row.append(primary);
-        if (runtime.expedition.isSpatial && runtime.procedure.runtime !== null && action.kind !== "encounter") {
-            row.append(button("Travel controls", () => openTravelWorkspace("travel")));
-        }
         section.append(row);
         return section;
     };
@@ -284,29 +294,29 @@ export async function renderExpedition(
             const host = document.createElement("div");
             host.className = "hc-map-host";
             host.dataset.map = "";
-            frame.append(host, renderAdjacencyNavigator());
-            primary.append(frame);
             const context = document.createElement("div");
             context.dataset.mapContext = "";
-            context.className = "hc-context-card";
-            primary.append(context);
+            context.className = "hc-map-context-overlay";
+            context.hidden = true;
+            frame.append(host, renderAdjacencyNavigator(), context);
+            primary.append(frame);
         } else {
             primary.append(textElement("p", "This spatial crawl has no authored world map. Choose an adjacent cell from the accessible course control below.", "hc-muted"));
         }
-        primary.append(renderTravelIntentControls());
+        primary.append(renderCurrentTravel());
 
         const secondary = document.createElement("aside");
-        secondary.className = "hc-panel hc-sidebar";
+        secondary.className = "hc-panel hc-sidebar hc-table-rail";
         secondary.append(
             textElement("h2", "At the table"),
-            actionCard("Party & activities", partyCardDetail(runtime), openPartyWorkspace),
-            actionCard("Current environment", environmentCardDetail(runtime), openEnvironmentWorkspace));
+            railAction("Party & activities", partyCardDetail(runtime), openPartyWorkspace),
+            railAction("Current environment", environmentCardDetail(runtime), openEnvironmentWorkspace));
         if (expeditionWorkspacePresentation(runtime, journey, survival).capabilities.journey) {
-            secondary.append(actionCard("Journey / challenge", journeyDetail(journey), openJourneyWorkspace));
+            secondary.append(railAction("Journey / challenge", journeyDetail(journey), openJourneyWorkspace));
         }
         if (expeditionWorkspacePresentation(runtime, journey, survival).capabilities.resources
             || expeditionWorkspacePresentation(runtime, journey, survival).capabilities.survival) {
-            secondary.append(actionCard("Survival & resources", survivalDetail(survival), openSurvivalWorkspace));
+            secondary.append(railAction("Survival & resources", survivalDetail(survival), openSurvivalWorkspace));
         }
         section.append(primary, secondary);
         return section;
@@ -369,12 +379,24 @@ export async function renderExpedition(
             control.setAttribute("aria-pressed", String(selected));
             control.classList.toggle("is-selected", selected);
         }
+        for (const mark of root.querySelectorAll<SVGLineElement>("[data-adjacency-edge-mark]")) {
+            const direction = Number(mark.getAttribute("data-adjacency-edge-mark"));
+            mark.classList.toggle("is-selected", preferences.direction === direction);
+        }
 
         const selector = root.querySelector<HTMLSelectElement>("[data-adjacency-select]");
         if (selector) selector.value = preferences.direction === null ? "" : String(preferences.direction);
 
         const summary = root.querySelector<HTMLElement>("[data-travel-intent-summary]");
         if (summary) summary.textContent = travelIntentSummary(runtime, preferences, adjacency);
+        const course = root.querySelector<HTMLElement>("[data-current-travel-course]");
+        if (course) course.textContent = currentCourseLabel(preferences, adjacency);
+        const pace = root.querySelector<HTMLElement>("[data-current-travel-pace]");
+        if (pace) pace.textContent = preferences.pace;
+        const actual = root.querySelector<HTMLElement>("[data-current-travel-actual]");
+        if (actual) actual.textContent = actualCourseLabel(runtime, adjacency);
+        const progress = root.querySelector<HTMLElement>("[data-current-travel-progress]");
+        if (progress) progress.textContent = travelProgressDetail(runtime);
     };
 
     const renderAdjacencyNavigator = (): HTMLElement => {
@@ -394,24 +416,43 @@ export async function renderExpedition(
             .map(point => `${point.x * 100},${point.y * 100}`)
             .join(" "));
         svg.append(polygon);
-        navigator.append(svg);
+
+        for (const edge of adjacency.edges) {
+            const vector = adjacencyFeedbackVector(adjacency.center, edge.midpoint);
+            const tangent = { x: -vector.y, y: vector.x };
+            const halfLength = 0.075;
+            const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            line.classList.add("hc-adjacency-edge-mark");
+            if (adjacency.selectedEdgeId === edge.id) line.classList.add("is-selected");
+            line.setAttribute("data-adjacency-edge-mark", String(edge.directionValue));
+            line.setAttribute("x1", String((edge.midpoint.x - tangent.x * halfLength) * 100));
+            line.setAttribute("y1", String((edge.midpoint.y - tangent.y * halfLength) * 100));
+            line.setAttribute("x2", String((edge.midpoint.x + tangent.x * halfLength) * 100));
+            line.setAttribute("y2", String((edge.midpoint.y + tangent.y * halfLength) * 100));
+            svg.append(line);
+        }
+        navigator.append(svg, textElement("span", "Current cell", "hc-adjacency-caption"));
 
         const action = expeditionWorkspacePresentation(runtime, journey, survival).action;
         const courseSelectable = action.kind === "travel" || action.kind === "navigation";
         for (const edge of adjacency.edges) {
+            const vector = adjacencyFeedbackVector(adjacency.center, edge.midpoint);
             const control = button(edge.shortLabel, () => selectTravelIntent(edge.directionValue, edge.targetCell));
             const identity = edgeCourseLabel(edge);
             control.className = "hc-adjacency-edge";
             control.dataset.adjacencyEdge = String(edge.directionValue);
-            control.style.setProperty("--hc-edge-x", `${edge.midpoint.x * 100}%`);
-            control.style.setProperty("--hc-edge-y", `${edge.midpoint.y * 100}%`);
+            control.dataset.adjacencyEdgeId = edge.id;
+            control.style.setProperty("--hc-edge-x", `${(edge.midpoint.x + vector.x * 0.095) * 100}%`);
+            control.style.setProperty("--hc-edge-y", `${(edge.midpoint.y + vector.y * 0.095) * 100}%`);
+            control.style.setProperty("--hc-edge-feedback-x", `${vector.x * 0.32}rem`);
+            control.style.setProperty("--hc-edge-feedback-y", `${vector.y * 0.32}rem`);
             const actualCourse = runtime.expedition.actualDirection === edge.directionValue
                 && runtime.expedition.actualDirection !== preferences.direction;
             control.setAttribute(
                 "aria-label",
                 actualCourse
-                    ? `Set intended adjacent cell via ${identity}; this is the current actual resolved course`
-                    : `Set intended adjacent cell via ${identity}`);
+                    ? `Travel through ${identity}; this is the current actual resolved course`
+                    : `Travel through ${identity}`);
             control.setAttribute("aria-pressed", String(adjacency.selectedEdgeId === edge.id));
             control.title = actualCourse ? `${identity} · actual course` : identity;
             control.disabled = !courseSelectable || !edge.traversable;
@@ -424,43 +465,62 @@ export async function renderExpedition(
         return navigator;
     };
 
-    const renderTravelIntentControls = (): HTMLElement => {
+    const renderCurrentTravel = (): HTMLElement => {
         const adjacency = currentAdjacency();
         const section = document.createElement("section");
-        section.className = "hc-direction-control hc-adjacency-fallback";
-        section.append(
-            textElement("h3", "Travel"),
-            textElement("p", "Choose the intended adjacent cell. Selection changes course intent only; authoritative travel resolves when you continue.", "hc-muted"));
+        section.className = "hc-current-travel";
+        section.dataset.currentTravel = "";
+        section.append(textElement("h3", "Current travel"));
 
-        if (!adjacency) return section;
-
-        const fields = document.createElement("div");
-        fields.className = "hc-travel-intent-fields";
-        const course = document.createElement("select");
-        course.dataset.adjacencySelect = "";
-        course.setAttribute("aria-label", "Intended course");
-        const empty = document.createElement("option");
-        empty.value = "";
-        empty.textContent = "Choose adjacent cell";
-        course.append(empty);
-        for (const edge of adjacency.edges) {
-            const option = document.createElement("option");
-            option.value = String(edge.directionValue);
-            option.textContent = edgeCourseLabel(edge);
-            course.append(option);
+        if (!adjacency) {
+            section.append(textElement("p", "Current-cell adjacency is unavailable.", "hc-muted"));
+            return section;
         }
-        course.value = preferences.direction === null ? "" : String(preferences.direction);
-        course.addEventListener("change", () => {
-            if (!course.value) return;
-            const edge = adjacencyEdgeForDirection(adjacency, Number(course.value));
-            if (edge) selectTravelIntent(edge.directionValue, edge.targetCell);
-        });
 
+        const facts = document.createElement("dl");
+        facts.className = "hc-current-travel-facts";
+        facts.append(
+            travelFact("Course", currentCourseLabel(preferences, adjacency), "currentTravelCourse"),
+            travelFact("Pace", preferences.pace, "currentTravelPace"),
+            travelFact("Actual", actualCourseLabel(runtime, adjacency), "currentTravelActual"),
+            travelFact("Progress", travelProgressDetail(runtime), "currentTravelProgress"));
+        section.append(facts);
+
+        if (!world) {
+            const course = document.createElement("select");
+            course.dataset.adjacencySelect = "";
+            course.setAttribute("aria-label", "Intended adjacent cell");
+            const empty = document.createElement("option");
+            empty.value = "";
+            empty.textContent = "Choose adjacent cell";
+            course.append(empty);
+            for (const edge of adjacency.edges) {
+                const option = document.createElement("option");
+                option.value = String(edge.directionValue);
+                option.textContent = edgeCourseLabel(edge);
+                course.append(option);
+            }
+            course.value = preferences.direction === null ? "" : String(preferences.direction);
+            course.addEventListener("change", () => {
+                if (!course.value) return;
+                const edge = adjacencyEdgeForDirection(adjacency, Number(course.value));
+                if (edge) selectTravelIntent(edge.directionValue, edge.targetCell);
+            });
+            section.append(labelled("Course", course));
+        }
+
+        const summary = textElement("p", travelIntentSummary(runtime, preferences, adjacency), "hc-muted");
+        summary.dataset.travelIntentSummary = "";
+        section.append(summary);
+
+        const paceEditor = document.createElement("div");
+        paceEditor.className = "hc-current-travel-pace-editor";
+        paceEditor.hidden = true;
         const pace = document.createElement("input");
         pace.type = "text";
         pace.value = preferences.pace;
         pace.setAttribute("aria-label", "Pace or travel mode");
-        pace.addEventListener("change", () => {
+        const savePace = button("Save pace", () => {
             const value = pace.value.trim();
             if (!value) {
                 pace.value = preferences.pace;
@@ -468,20 +528,25 @@ export async function renderExpedition(
             }
             preferences.pace = value;
             saveTravelPreferences(runtime.id, preferences);
+            paceEditor.hidden = true;
             syncTravelIntentControls();
         });
-
-        fields.append(labelled("Course", course), labelled("Pace / travel mode", pace));
-        section.append(fields);
-
-        const summary = textElement("p", travelIntentSummary(runtime, preferences, adjacency), "hc-muted");
-        summary.dataset.travelIntentSummary = "";
-        section.append(summary);
+        paceEditor.append(labelled("Pace / travel mode", pace), savePace);
+        section.append(paceEditor);
 
         if (runtime.procedure.runtime !== null) {
             const actions = document.createElement("div");
-            actions.className = "hc-button-row";
-            actions.append(button("More travel options", () => openTravelWorkspace("travel")));
+            actions.className = "hc-button-row hc-current-travel-actions";
+            const continueControl = button("Continue travel", continueTravel);
+            continueControl.className = "hc-primary-action";
+            continueControl.disabled = expeditionWorkspacePresentation(runtime, journey, survival).action.kind !== "travel";
+            const changePace = button("Change pace", () => {
+                paceEditor.hidden = !paceEditor.hidden;
+                if (!paceEditor.hidden) pace.focus();
+            });
+            const more = button("More options", () => openTravelWorkspace("advanced"));
+            more.className = "hc-secondary-action";
+            actions.append(continueControl, changePace, more);
             section.append(actions);
         }
         return section;
@@ -509,10 +574,11 @@ export async function renderExpedition(
         if (!host || !runtime.expedition.isSpatial || !currentWorld) return;
         host.replaceChildren();
         if (!selectedHex) {
-            host.append(textElement("p", "Select a hex to inspect it. Selecting a hex does not mutate expedition state.", "hc-muted"));
+            host.hidden = true;
             return;
         }
 
+        host.hidden = false;
         host.append(textElement("h3", "Selected map cell"));
         const adjacency = currentAdjacency();
         const edge = adjacency
@@ -606,7 +672,7 @@ export async function renderExpedition(
     };
 
     const openTravelWorkspace = (
-        focus: "travel" | "boundary" = "travel",
+        focus: "advanced" | "movement" | "encounter" | "boundary" = "advanced",
         direction = preferences.direction): void => {
         if (!runtime.expedition.isSpatial || runtime.procedure.runtime === null) {
             openHistory();
@@ -616,7 +682,14 @@ export async function renderExpedition(
             preferences.direction = direction;
             saveTravelPreferences(runtime.id, preferences);
         }
-        openDrawer(focus === "boundary" ? "Boundary decision" : "Travel", body => {
+        const title = focus === "movement"
+            ? "Movement resolution"
+            : focus === "encounter"
+                ? "Encounter check"
+                : focus === "boundary"
+                    ? "Boundary crossing"
+                    : "Advanced travel controls";
+        openDrawer(title, body => {
             body.innerHTML = watchWorkspaceMarkup(currentAdjacency());
             const controller = new ExpeditionWatchController(
                 body,
@@ -645,26 +718,48 @@ export async function renderExpedition(
         });
     };
 
-    const focusWatchWorkspace = (body: HTMLElement, focus: "travel" | "boundary"): void => {
-        if (focus !== "boundary") return;
+    const focusWatchWorkspace = (
+        body: HTMLElement,
+        focus: "advanced" | "movement" | "encounter" | "boundary"): void => {
+        if (focus === "advanced") return;
         const focusGroups = [...body.querySelectorAll<HTMLElement>("[data-focus-group]")];
         for (const group of focusGroups) {
             const keys = (group.dataset.focusGroup ?? "").split(/\s+/).filter(Boolean);
-            group.hidden = !keys.includes("boundary");
+            group.hidden = !keys.includes(focus);
         }
+        const requirements = body.querySelector<HTMLElement>("[data-requirements]");
+        if (requirements) requirements.hidden = true;
+
         const intro = document.createElement("section");
         intro.className = "hc-focused-resolution-summary";
+        const heading = focus === "movement"
+            ? "Movement resolution"
+            : focus === "encounter"
+                ? "Encounter check"
+                : "Boundary crossing";
         intro.append(
-            textElement("h3", "Boundary resolution"),
+            textElement("h3", heading),
             textElement("p", travelIntentSummary(runtime, preferences, currentAdjacency()), "hc-muted"));
+        if (focus === "movement") {
+            intro.append(textElement(
+                "p",
+                movementSuggestionDetail(runtime) ?? movementSummary(runtime),
+                "hc-muted"));
+        } else if (focus === "encounter") {
+            intro.append(textElement("p", "Resolve the due encounter check, then continue the same travel intent.", "hc-muted"));
+        } else {
+            intro.append(textElement("p", "Resolve only the pending boundary decision before travel continues.", "hc-muted"));
+        }
         body.prepend(intro);
 
-        const reveal = button("More travel details", () => {
-            for (const group of focusGroups) group.hidden = false;
-            reveal.remove();
-        });
-        reveal.className = "hc-secondary-action";
-        intro.append(reveal);
+        const advance = body.querySelector<HTMLButtonElement>("[data-advance-button]");
+        if (advance) {
+            advance.textContent = focus === "movement"
+                ? "Resolve movement and continue"
+                : focus === "encounter"
+                    ? "Resolve encounter check and continue"
+                    : "Resolve boundary and continue";
+        }
     };
 
     const openNavigationWorkspace = (): void => {
@@ -798,7 +893,7 @@ export async function renderExpedition(
                     }));
                 });
             });
-            const more = button("More travel details", () => openTravelWorkspace("travel"));
+            const more = button("Advanced travel controls", () => openTravelWorkspace("advanced"));
             more.className = "hc-secondary-action";
             body.append(form, more);
         });
@@ -931,7 +1026,7 @@ export async function renderExpedition(
             row.className = "hc-button-row";
             const handoff = button("Open in Block Initiative", () => void prepareEncounterHandoff(triggered.sequence, handoff));
             handoff.className = "hc-primary-action";
-            const resume = button("Resume travel after encounter", () => openTravelWorkspace("travel"));
+            const resume = button("Resume travel after encounter", continueTravel);
             row.append(handoff, resume);
             body.append(row);
         });
@@ -1010,13 +1105,87 @@ export async function renderExpedition(
         });
     };
 
+    const focusTravelCourse = (): void => {
+        const selected = root.querySelector<HTMLButtonElement>(".hc-adjacency-edge.is-selected:not(:disabled)");
+        const first = root.querySelector<HTMLButtonElement>(".hc-adjacency-edge:not(:disabled)");
+        const fallback = root.querySelector<HTMLSelectElement>("[data-adjacency-select]");
+        const target = selected ?? first ?? fallback;
+        target?.scrollIntoView({ block: "nearest", inline: "nearest" });
+        target?.focus();
+    };
+
+    const continueTravel = (): void => {
+        if (!runtime.expedition.isSpatial || runtime.procedure.runtime === null) {
+            openHistory();
+            return;
+        }
+        if (runtime.pauseReason === "EncounterTriggered") {
+            openEncounterWorkspace();
+            return;
+        }
+        if (runtime.pauseReason === "LostRecognitionRequired") {
+            openTravelWorkspace("boundary");
+            return;
+        }
+        if (survivalAttention(survival)) {
+            openSurvivalWorkspace();
+            return;
+        }
+
+        const adjacency = currentAdjacency();
+        const edge = preferences.direction === null || !adjacency
+            ? null
+            : adjacencyEdgeForDirection(adjacency, preferences.direction);
+        if (!edge) {
+            focusTravelCourse();
+            return;
+        }
+
+        const state = runtime.expedition;
+        const active = state.activeWatchNumber !== null;
+        const suppressesNavigation = active ? state.activeSuppressesNavigationCheck : false;
+        const deliberateDoubleBack = active ? state.activeDeliberateDoubleBack : false;
+        if (navigationResolutionDue(runtime, suppressesNavigation, deliberateDoubleBack)) {
+            openNavigationWorkspace();
+            return;
+        }
+        if (encounterCheckDue(runtime)) {
+            openTravelWorkspace("encounter");
+            return;
+        }
+
+        const effectiveDistance = authoritativeFixedWatchDistance(runtime);
+        if (effectiveDistance === null) {
+            openTravelWorkspace("movement");
+            return;
+        }
+
+        const request: RuntimeAdvanceRequest = {
+            expectedVersion: runtime.version,
+            intendedDirection: edge.directionValue,
+            paceKey: preferences.pace,
+            navigationAidKey: active ? state.activeNavigationAidKey ?? "none" : "none",
+            suppressesNavigationCheck: suppressesNavigation,
+            resetsVeerAtBoundary: active ? state.activeResetsVeerAtBoundary : false,
+            resolutionSource: "ManualRoll",
+            travelResolutionSource: "ProcedureDefault",
+            effectiveDistance,
+            deliberateDoubleBack:
+                runtime.procedure.runtime.supportsDeliberateDoubleBack && deliberateDoubleBack,
+            continueAcrossBoundaries: active ? state.activeContinueAcrossBoundaries : false
+        };
+        void runUiMutation(async () => {
+            applyRuntime(await api.advanceExpedition(runtime.id, request));
+        });
+    };
+
     const activateAction = (kind: ReturnType<typeof expeditionWorkspacePresentation>["action"]["kind"]): void => {
         switch (kind) {
             case "encounter": openEncounterWorkspace(); break;
             case "navigation": openNavigationWorkspace(); break;
             case "boundary": openTravelWorkspace("boundary"); break;
             case "survival": openSurvivalWorkspace(); break;
-            case "travel": openTravelWorkspace("travel"); break;
+            case "travel": continueTravel(); break;
             case "journey": openJourneyWorkspace(); break;
             case "watch": openNonSpatialWatchWorkspace(); break;
             default:
@@ -1054,6 +1223,28 @@ function actionCard(title: string, detail: string, action: () => void): HTMLElem
     card.className = "hc-context-card";
     card.append(textElement("h3", title), textElement("p", detail, "hc-muted"), button("Open", action));
     return card;
+}
+
+function railAction(title: string, detail: string, action: () => void): HTMLButtonElement {
+    const control = document.createElement("button");
+    control.type = "button";
+    control.className = "hc-rail-action";
+    control.append(
+        textElement("strong", title),
+        textElement("span", detail, "hc-muted"));
+    control.addEventListener("click", action);
+    return control;
+}
+
+function travelFact(label: string, value: string, dataKey: string): DocumentFragment {
+    const fragment = document.createDocumentFragment();
+    const term = document.createElement("dt");
+    term.textContent = label;
+    const detail = document.createElement("dd");
+    detail.textContent = value;
+    detail.dataset[dataKey] = "";
+    fragment.append(term, detail);
+    return fragment;
 }
 
 function button(label: string, action: () => void): HTMLButtonElement {
@@ -1140,6 +1331,34 @@ function journeyAttention(state: ExpeditionJourneyState | null): boolean {
 function encounterSummary(runtime: ExpeditionDetail): string {
     const latest = [...runtime.history].reverse().find(event => event.kind.includes("Encounter"));
     return latest ? latest.message : "No current encounter";
+}
+
+function currentCourseLabel(
+    preferences: TravelPreferences,
+    adjacency: ReturnType<typeof currentHexAdjacency> | null): string {
+    return preferences.direction === null
+        ? "No course selected"
+        : adjacencyCourseLabel(adjacency, preferences.direction);
+}
+
+function actualCourseLabel(
+    runtime: ExpeditionDetail,
+    adjacency: ReturnType<typeof currentHexAdjacency> | null): string {
+    if (!runtime.expedition.isSpatial || runtime.expedition.actualDirection === null) {
+        return "Not yet resolved";
+    }
+    return adjacencyCourseLabel(adjacency, runtime.expedition.actualDirection);
+}
+
+function travelProgressDetail(runtime: ExpeditionDetail): string {
+    if (!runtime.expedition.isSpatial) return "";
+    if (runtime.expedition.activeWatchNumber !== null) {
+        const remaining = runtime.expedition.activeWatchRemainingHours;
+        return remaining === null
+            ? `Watch ${runtime.expedition.activeWatchNumber} active`
+            : `Watch ${runtime.expedition.activeWatchNumber} · ${formatHours(remaining)} remaining`;
+    }
+    return movementSuggestionDetail(runtime) ?? "Ready for next segment";
 }
 
 function travelPreferenceDetail(
@@ -1249,7 +1468,7 @@ function watchWorkspaceMarkup(adjacency: ReturnType<typeof currentHexAdjacency> 
             </div>
             <div class="hc-form hc-watch-requirements" data-requirements></div>
             <form class="hc-form" data-advance>
-                <fieldset data-plan-fields data-focus-group="travel navigation">
+                <fieldset data-plan-fields data-focus-group="advanced">
                     <legend>Travel intent</legend>
                     <label>Adjacent cell <select name="direction" required><option value="">Select adjacent cell</option>${directionOptions(adjacency)}</select></label>
                     <label>Pace / travel mode <input name="pace" value="normal"></label>
@@ -1279,7 +1498,7 @@ function watchWorkspaceMarkup(adjacency: ReturnType<typeof currentHexAdjacency> 
                     <p class="hc-hint" data-resolution-helper-result aria-live="polite"></p>
                 </fieldset>
 
-                <fieldset data-travel-resolution data-focus-group="travel">
+                <fieldset data-travel-resolution data-focus-group="advanced movement">
                     <legend>Movement result</legend>
                     <p class="hc-hint">Authoritative party movement is prefilled when available. Enter only movement information the runtime can not derive.</p>
                     <div data-fixed-distance><label>Effective distance <input name="effectiveDistance" type="number" min="0" step="any"></label></div>
@@ -1289,7 +1508,7 @@ function watchWorkspaceMarkup(adjacency: ReturnType<typeof currentHexAdjacency> 
                     <label>Travel source note <input name="travelNote" placeholder="optional"></label>
                 </fieldset>
 
-                <fieldset data-navigation-resolution data-focus-group="navigation">
+                <fieldset data-navigation-resolution data-focus-group="advanced">
                     <legend>Navigation</legend>
                     <label>Result <select name="navigationOutcome"><option value="">Select resolved result</option><option value="Succeeded">Succeeded</option><option value="Failed">Failed / lost</option></select></label>
                     <label data-veer-row>Resolved veer steps <input name="veerSteps" type="number" step="1" placeholder="+1 or -1"></label>
@@ -1297,7 +1516,7 @@ function watchWorkspaceMarkup(adjacency: ReturnType<typeof currentHexAdjacency> 
                     <label>Navigation source note <input name="navigationNote" placeholder="optional"></label>
                 </fieldset>
 
-                <fieldset data-encounter-resolution data-focus-group="encounters">
+                <fieldset data-encounter-resolution data-focus-group="advanced encounter">
                     <legend>Encounter</legend>
                     <label>Resolved outcome <select name="encounterOutcome"><option value="">Select resolved outcome</option><option value="None">No encounter</option><option value="WanderingEncounter">Wandering encounter</option><option value="KeyedLocationDiscovery">Keyed location discovery</option><option value="ManualCustom">Manual / custom interruption</option></select></label>
                     <label data-encounter-hour>Occurs at hour within watch <input name="encounterHour" type="number" min="0" step="any"></label>
@@ -1307,7 +1526,7 @@ function watchWorkspaceMarkup(adjacency: ReturnType<typeof currentHexAdjacency> 
                     <label>Encounter source note <input name="encounterSourceNote" placeholder="optional"></label>
                 </fieldset>
 
-                <fieldset data-boundary-resolution data-focus-group="boundary">
+                <fieldset data-boundary-resolution data-focus-group="advanced boundary">
                     <legend>Boundary decision</legend>
                     <label><input name="recognizedLost" type="checkbox"> The party recognizes that it is lost</label>
                     <label><input name="reorient" type="checkbox"> The party reorients</label>
@@ -1315,7 +1534,7 @@ function watchWorkspaceMarkup(adjacency: ReturnType<typeof currentHexAdjacency> 
                     <label>Decision source note <input name="boundaryNote" placeholder="optional"></label>
                 </fieldset>
 
-                <details><summary>DM authority / override</summary><div class="hc-form">
+                <details data-focus-group="advanced"><summary>DM authority / override</summary><div class="hc-form">
                     <label>Override note <input name="dmOverrideNote" placeholder="record unusual ruling or authoritative override"></label>
                 </div></details>
                 <button type="submit" class="hc-primary-action" data-advance-button>Run watch</button>
