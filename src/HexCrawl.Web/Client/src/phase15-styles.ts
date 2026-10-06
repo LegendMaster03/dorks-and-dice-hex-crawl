@@ -163,6 +163,18 @@ export function ensurePhase15Styles(): void {
             .hc-phase15-expedition .hc-stat-action { padding:.58rem .62rem; }
             .hc-phase15-expedition .hc-stat-action-detail { font-size:.73rem; }
         }
+        @media (min-width: 1041px) and (max-width: 1199px) {
+            .hc-current-travel { grid-template-columns:minmax(0,1fr) auto; }
+            .hc-current-travel > h3 { grid-column:1; grid-row:1; }
+            .hc-current-travel-actions { grid-column:2; grid-row:1; justify-content:flex-end; }
+            .hc-current-travel-facts {
+                grid-column:1 / -1;
+                grid-row:2;
+                grid-template-columns:repeat(4,auto minmax(0,1fr));
+            }
+            .hc-current-travel > p { grid-column:1 / -1; grid-row:3; }
+            .hc-current-travel-pace-editor { grid-column:1 / -1; grid-row:4; }
+        }
         @media (min-width: 1200px) {
             .hc-current-travel-facts { grid-template-columns:repeat(4,auto minmax(0,1fr)); }
         }
