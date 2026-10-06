@@ -623,7 +623,8 @@ test("normal spatial travel has one primary continuation path and focused unreso
 
     assert.match(view, /const primary = button\(copy\.label, \(\) => activateAction\(action.kind\)\)/);
     assert.doesNotMatch(view, /const continueControl = button\("Continue travel"/);
-    assert.match(view, /actions\.append\(changePace, more\)/);
+    assert.match(view, /if \(paceEditor && pace\)[\s\S]*actions\.append\(changePace\)/);
+    assert.match(view, /actions\.append\(more\)/);
     assert.doesNotMatch(view, /button\("Travel controls"/);
     assert.match(view, /const continueTravel = \(resumeEncounter = false, resumeTravelReview = false\): void =>/);
     assert.match(view, /spatialTravelContinuationTarget/);
@@ -669,7 +670,8 @@ test("desktop hierarchy moves current travel into the actionable rail so the map
     const mapPanel = view.slice(
         view.indexOf('primary.className = "hc-panel hc-map-panel"'),
         view.indexOf('const secondary = document.createElement("aside")'));
-    assert.doesNotMatch(mapPanel, /world\) primary\.append\(renderCurrentTravel\(\)\)/);
+    assert.match(mapPanel, /if \(!world\) primary\.append\(renderCurrentTravel\(\)\)/);
+    assert.equal((mapPanel.match(/renderCurrentTravel\(\)/g) ?? []).length, 1);
     assert.match(view, /if \(world\) secondary\.append\(renderCurrentTravel\(\)\)/);
     assert.match(view, /partyRailContext\(runtime\)/);
     assert.match(view, /environmentRailDetail\(survival\)/);
