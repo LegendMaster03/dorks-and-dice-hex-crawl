@@ -1,8 +1,8 @@
 import type { ExpeditionJourneyState } from "../../journey-types";
 import type { SurvivalResources } from "../../survival-types";
 import type { ExpeditionDetail, ProcedureModule, SpatialRuntimeExpedition } from "../../types";
-import { canUseFocusedNonSpatialWatch } from "./focused-interval-policy";
-import { navigationResolutionDue } from "./expedition-workflow";
+import { canUseFocusedNonSpatialWatch } from "./focused-interval-policy.js";
+import { navigationResolutionDue } from "./expedition-workflow.js";
 
 export type ExpeditionWorkspaceActionKind =
     | "encounter"

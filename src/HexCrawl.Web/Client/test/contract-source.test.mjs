@@ -221,7 +221,7 @@ test("non-spatial primary workspace does not fabricate route, navigation, course
 test("unified non-spatial workspace keeps procedure and expedition history available as focused state", () => {
     const view = read("modules/expeditions/expedition-view.ts");
     assert.match(view, /railAction\("Expedition history", presentation\.timeLabel, openHistory\)/);
-    assert.match(view, /journey\.processPolicy\.support === "Supported"/);
+    assert.match(view, /journey\?\.processPolicy\.support === "Supported"/);
     assert.match(view, /No journey process is currently active/);
 });
 
@@ -356,7 +356,7 @@ test("spatial structural procedures stay viewable without constructing executabl
     const view = read("modules/expeditions/expedition-view.ts");
     assert.match(view, /if \(!runtime\.expedition\.isSpatial \|\| runtime\.procedure\.runtime === null\) \{\s*openHistory\(\);\s*return;\s*\}/);
     assert.match(view, /const controller = new ExpeditionWatchController/);
-    assert.match(view, /This structural expedition has no executable spatial or interval action/);
+    assert.match(view, /This expedition has no executable spatial, journey, or interval action/);
     assert.doesNotMatch(view, /api\.advanceExpedition/);
 });
 
@@ -385,16 +385,17 @@ test("procedure selectors expose materialized procedure mechanics before a sessi
     assert.doesNotMatch(assistant, /Procedure preset/);
 });
 
-test("procedure mechanics use one shared presentation policy across setup, assistants, and running sheet", () => {
+test("procedure mechanics use shared presentation policy and the unified expedition links to the canonical reference", () => {
     const campaignProcedureView = read("campaign-procedure-view.ts");
     const setup = read("modules/expeditions/expedition-setup.ts");
     const assistant = read("modules/assistants/assistant-entry-view.ts");
     const home = read("modules/home/tool-home-view.ts");
-    const presentation = read("modules/expeditions/expedition-presentation.ts");
+    const expedition = read("modules/expeditions/expedition-view.ts");
     assert.match(setup, /campaignProcedureSummary/);
     assert.match(assistant, /campaignProcedureSummary/);
     assert.match(home, /campaignProcedureSummary/);
-    assert.match(presentation, /procedureMechanicLines/);
+    assert.match(expedition, /Procedure reference/);
+    assert.match(expedition, /\/procedures\/\$\{encodeURIComponent\(runtime\.procedure\.procedureId\)\}\/revisions\/\$\{runtime\.procedure\.revision\}\/reference/);
     assert.match(campaignProcedureView, /exit factors start/);
     assert.match(campaignProcedureView, /actual distance = expected distance/);
     assert.match(campaignProcedureView, /situational modifier vs\. the DM-confirmed DC/);
