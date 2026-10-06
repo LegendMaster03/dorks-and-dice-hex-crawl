@@ -77,6 +77,8 @@ export async function renderExpedition(
             ? runtime.expedition.activePaceKey ?? "normal"
             : "normal";
     };
+    // Normal runtime pace editing exists only for an authoritative finite choice with alternatives.
+    // Zero/one-mode procedures are fixed here; arbitrary identifiers require an explicit procedure contract.
     const createPaceControl = (name?: string): HTMLSelectElement | null => {
         const choices = availableTravelModes();
         if (choices.length <= 1) return null;
