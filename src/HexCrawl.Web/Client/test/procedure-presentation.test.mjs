@@ -24,6 +24,16 @@ test("Compact converts canonical interval ticks to tabletop duration controls", 
     assert.equal(ticks, "144000000000");
     assert.deepEqual(ticksToDuration(ticks), { amount: 4, unit: "hours" });
     assert.equal(formatDurationTicks(ticks), "4 hours");
+    assert.equal(formatDurationTicks(durationToTicks(1, "days")), "1 day");
+
+    const presentation = compactParameter("durationTicks", {
+        type: "integer",
+        required: true,
+        description: "Serialized duration ticks.",
+        defaultValue: ticks
+    }, "time.interval");
+    assert.equal(presentation?.control, "duration");
+    assert.equal(presentation?.help, "Set the length of one travel period.");
 });
 
 test("Compact exposes current ordinary enum domains as editable selects", () => {
