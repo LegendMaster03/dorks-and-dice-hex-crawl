@@ -96,6 +96,10 @@ public sealed class ProcedureReferenceEndpointsTests
             {
                 presetKey = (string?)null,
                 campaignId = (Guid?)null,
+                moduleSelections = new[]
+                {
+                    new { moduleKey = GenericProcedureCatalog.TimeIntervalModule, included = true }
+                },
                 overrides = Array.Empty<object>()
             });
             createResponse.EnsureSuccessStatusCode();

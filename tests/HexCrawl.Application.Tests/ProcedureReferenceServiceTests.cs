@@ -227,7 +227,11 @@ public sealed class ProcedureReferenceServiceTests
         var composer = new ProcedureComposerService(procedures);
         var references = new ProcedureReferenceService(procedures);
 
-        var custom = await composer.CreateAsync("alice", null, []);
+        var custom = await composer.CreateAsync(
+            "alice",
+            null,
+            [new ProcedureModuleSelection(GenericProcedureCatalog.TimeIntervalModule, true)],
+            []);
         var customReference = await references.GetAsync("alice", custom.ProcedureId, custom.Revision);
         Assert.Null(customReference.Origin);
         Assert.Equal(custom.Procedure.Modules.Count, Modules(customReference).Count);

@@ -8,6 +8,9 @@ COPY ["src/HexCrawl.Web/Client/test", "./test"]
 COPY ["src/HexCrawl.Web/Modules/Expeditions/ExpeditionApiContracts.cs", "/src/src/HexCrawl.Web/Modules/Expeditions/ExpeditionApiContracts.cs"]
 COPY ["src/HexCrawl.Web/Modules/Procedures/ProcedureComposerContracts.cs", "/src/src/HexCrawl.Web/Modules/Procedures/ProcedureComposerContracts.cs"]
 COPY ["src/HexCrawl.Application/Expeditions/ProcedureComposerCustomProcedureFactory.cs", "/src/src/HexCrawl.Application/Expeditions/ProcedureComposerCustomProcedureFactory.cs"]
+COPY ["src/HexCrawl.Application/Expeditions/GenericProcedureCatalog.cs", "/src/src/HexCrawl.Application/Expeditions/GenericProcedureCatalog.cs"]
+COPY ["src/HexCrawl.Application/Expeditions/JourneyProcedureContractSchema.cs", "/src/src/HexCrawl.Application/Expeditions/JourneyProcedureContractSchema.cs"]
+COPY ["src/HexCrawl.Application/Expeditions/Phase11ProcedurePolicies.cs", "/src/src/HexCrawl.Application/Expeditions/Phase11ProcedurePolicies.cs"]
 RUN npm install --no-audit --no-fund && npm run build
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build

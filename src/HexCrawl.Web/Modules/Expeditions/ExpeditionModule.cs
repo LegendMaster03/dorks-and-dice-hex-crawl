@@ -16,13 +16,14 @@ public sealed class ExpeditionModule : IHexCrawlModule
         Id: "expeditions",
         DisplayName: "Expedition runtime and assistants")
     {
-        Dependencies = ["worlds"]
+        Dependencies = ["worlds", "procedure-composer"]
     };
 
     public void RegisterServices(IServiceCollection services)
     {
         services.AddScoped<CrawlSessionContextResolver>();
         services.AddScoped<CrawlSessionService>();
+        services.AddScoped<ExpeditionStartService>();
         services.AddScoped<ExpeditionWorkbenchService>();
         services.AddScoped<ExpeditionAssistantService>();
         services.AddScoped<ExpeditionPartyService>();
@@ -75,14 +76,20 @@ public sealed class ExpeditionModule : IHexCrawlModule
     }
 
     private static async Task<IResult> StartStandaloneSessionAsync(
-        StartStandaloneCrawlSessionRequest request,
+        StartProcedureSessionRequest request,
         HttpContext context,
-        CrawlSessionService sessions,
+        ExpeditionStartService starter,
         HexCrawlService service,
         CancellationToken cancellationToken)
     {
         var owner = UserId(context);
-        var expedition = await sessions.StartAsync(owner, request.ToCommand(), cancellationToken);
+        var expedition = await starter.StartStandaloneAsync(
+            owner,
+            request.Name,
+            request.ProcedureSelection(),
+            request.Context.ToDomain(),
+            request.StartHex,
+            cancellationToken);
         return Results.Created(
             $"/api/expeditions/{expedition.Id:D}",
             await ContractAsync(expedition, owner, service, cancellationToken));
@@ -90,17 +97,20 @@ public sealed class ExpeditionModule : IHexCrawlModule
 
     private static async Task<IResult> StartExpeditionAsync(
         Guid overworldId,
-        StartExpeditionWorkbenchRequest request,
+        StartProcedureExpeditionRequest request,
         HttpContext context,
-        ExpeditionWorkbenchService workbench,
+        ExpeditionStartService starter,
         HexCrawlService service,
         CancellationToken cancellationToken)
     {
         var owner = UserId(context);
-        var expedition = await workbench.StartAsync(
+        var expedition = await starter.StartWorldBoundAsync(
             overworldId,
             owner,
-            request.ToCommand(),
+            request.Name,
+            request.ProcedureSelection(),
+            request.ResolvedPresentationKey,
+            request.StartHex,
             cancellationToken);
         return Results.Created(
             $"/api/expeditions/{expedition.Id:D}",

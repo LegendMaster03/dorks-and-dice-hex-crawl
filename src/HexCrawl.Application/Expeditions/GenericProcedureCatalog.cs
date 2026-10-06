@@ -410,7 +410,25 @@ public static class GenericProcedureCatalog
             "Configures optional dice helpers that resolve runtime inputs without becoming runtime dependencies.",
             ["movement.resolution-mode", "navigation.policy", "encounter.check-cadence"],
             ["procedure.helper-configuration"],
-            new Dictionary<string, ProcedureParameterDefinition>(),
+            new Dictionary<string, ProcedureParameterDefinition>(StringComparer.Ordinal)
+            {
+                ["travel.enabled"] = new("boolean", true, "Whether a procedure-defined travel roll resolves variable travel distance."),
+                ["travel.diceCount"] = new("integer", false, "Number of dice rolled by the travel helper."),
+                ["travel.dieSides"] = new("integer", false, "Sides on each die rolled by the travel helper."),
+                ["travel.modifier"] = new("integer", false, "Modifier applied to the travel helper roll."),
+                ["travel.distanceFactor"] = new("number", false, "Distance multiplier represented by each travel-roll point."),
+                ["navigation.enabled"] = new("boolean", true, "Whether a procedure-defined navigation check roll is available."),
+                ["navigation.diceCount"] = new("integer", false, "Number of dice rolled by the navigation helper."),
+                ["navigation.dieSides"] = new("integer", false, "Sides on each die rolled by the navigation helper."),
+                ["navigation.modifier"] = new("integer", false, "Modifier applied to the navigation helper roll."),
+                ["encounter.enabled"] = new("boolean", true, "Whether a procedure-defined encounter roll is available."),
+                ["encounter.diceCount"] = new("integer", false, "Number of dice rolled by the encounter helper."),
+                ["encounter.dieSides"] = new("integer", false, "Sides on each die rolled by the encounter helper."),
+                ["encounter.modifier"] = new("integer", false, "Modifier applied to the encounter helper roll."),
+                ["encounter.wanderingResults"] = new("string", false, "Comma-separated roll totals that produce wandering encounters."),
+                ["encounter.keyedLocationResults"] = new("string", false, "Comma-separated roll totals that produce keyed-location encounters."),
+                ["encounter.timingSlots"] = new("integer", false, "Number of timing slots used to place an encounter within the interval.")
+            },
             GenericProcedureExecutionHandlers.DeterministicResolutionHelpers,
             ProcedureAutomationLevel.Assisted),
 

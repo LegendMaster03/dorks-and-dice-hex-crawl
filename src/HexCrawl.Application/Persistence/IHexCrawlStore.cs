@@ -152,6 +152,10 @@ public interface IHexCrawlStore
         string ownerUserId,
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<StoredCampaignProcedureRevision>> ListLatestCampaignProcedureRevisionsAsync(
+        string ownerUserId,
+        CancellationToken cancellationToken = default);
+
     Task<StoredExpedition> CreateExpeditionAsync(
         StoredExpedition expedition,
         CancellationToken cancellationToken = default);

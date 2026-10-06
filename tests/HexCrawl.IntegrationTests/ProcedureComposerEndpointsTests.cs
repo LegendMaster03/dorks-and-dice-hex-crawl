@@ -57,15 +57,8 @@ public sealed class ProcedureComposerEndpointsTests
             customResponse.EnsureSuccessStatusCode();
             var custom = await customResponse.Content.ReadFromJsonAsync<JsonElement>();
             Assert.Equal(JsonValueKind.Null, custom.GetProperty("origin").ValueKind);
-            var customModule = Assert.Single(custom.GetProperty("modules").EnumerateArray());
-            Assert.Equal(
-                GenericProcedureCatalog.TimeIntervalModule,
-                customModule.GetProperty("moduleKey").GetString());
-            var customIssue = Assert.Single(custom.GetProperty("dependencies").GetProperty("issues").EnumerateArray());
-            Assert.Equal("ProducedButUnused", customIssue.GetProperty("kind").GetString());
-            Assert.Equal(
-                GenericProcedureCatalog.TimeIntervalModule,
-                customIssue.GetProperty("moduleKey").GetString());
+            Assert.Empty(custom.GetProperty("modules").EnumerateArray());
+            Assert.Empty(custom.GetProperty("dependencies").GetProperty("issues").EnumerateArray());
 
             using var composedResponse = await client.PostAsJsonAsync("/api/procedures/composer/draft", new
             {
@@ -97,6 +90,134 @@ public sealed class ProcedureComposerEndpointsTests
             Assert.Contains("Dm", sources);
             Assert.Contains("OptionalProvider", sources);
             Assert.Contains("ExternalState", sources);
+        }
+        finally
+        {
+            TestWebHost.DeleteDatabase(database);
+        }
+    }
+
+    [Fact]
+    public async Task NeutralCustomCanonicalDraftCanBeEditedBeforeItIsPersistable()
+    {
+        var database = TestWebHost.NewDatabasePath();
+        try
+        {
+            using var factory = TestWebHost.Create(database);
+            using var client = factory.CreateClient();
+
+            using var draftResponse = await client.PostAsJsonAsync("/api/procedures/composer/canonical/draft", new
+            {
+                presetKey = (string?)null,
+                procedureId = (Guid?)null,
+                revision = (int?)null,
+                moduleSelections = Array.Empty<object>(),
+                overrides = Array.Empty<object>()
+            });
+            draftResponse.EnsureSuccessStatusCode();
+            var draft = await draftResponse.Content.ReadFromJsonAsync<JsonElement>();
+            var canonicalJson = draft.GetProperty("canonicalJson").GetString();
+            Assert.False(string.IsNullOrWhiteSpace(canonicalJson));
+
+            using var validationResponse = await client.PostAsJsonAsync(
+                "/api/procedures/composer/canonical/validate",
+                new { canonicalJson });
+            validationResponse.EnsureSuccessStatusCode();
+            var validation = await validationResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.False(validation.GetProperty("isValid").GetBoolean());
+            Assert.Contains("module", validation.GetProperty("error").GetString()!, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            TestWebHost.DeleteDatabase(database);
+        }
+    }
+
+    [Fact]
+    public async Task ResolutionHelperContractExposesFieldsAndFlagsIncompleteEnabledHelper()
+    {
+        var database = TestWebHost.NewDatabasePath();
+        try
+        {
+            using var factory = TestWebHost.Create(database);
+            using var client = factory.CreateClient();
+
+            using var response = await client.PostAsJsonAsync("/api/procedures/composer/draft", new
+            {
+                presetKey = (string?)null,
+                procedureId = (Guid?)null,
+                revision = (int?)null,
+                moduleSelections = new[]
+                {
+                    new { moduleKey = GenericProcedureCatalog.ResolutionHelpersModule, included = true }
+                },
+                overrides = new[]
+                {
+                    new
+                    {
+                        overrideId = "enable-travel-helper",
+                        moduleKey = GenericProcedureCatalog.ResolutionHelpersModule,
+                        replacementMechanicKey = (string?)null,
+                        replacementMechanicVersion = (int?)null,
+                        parameters = new Dictionary<string, string>
+                        {
+                            ["travel.enabled"] = "true"
+                        },
+                        note = (string?)null
+                    }
+                }
+            });
+            response.EnsureSuccessStatusCode();
+            var draft = await response.Content.ReadFromJsonAsync<JsonElement>();
+            var helper = Assert.Single(
+                draft.GetProperty("modules").EnumerateArray(),
+                module => module.GetProperty("moduleKey").GetString() == GenericProcedureCatalog.ResolutionHelpersModule);
+
+            var schema = helper.GetProperty("mechanic").GetProperty("parameterSchema");
+            Assert.True(schema.TryGetProperty("travel.diceCount", out _));
+            Assert.True(schema.TryGetProperty("encounter.wanderingResults", out _));
+            Assert.Contains(
+                helper.GetProperty("validationIssues").EnumerateArray(),
+                issue => issue.GetString()!.Contains("travel.diceCount", StringComparison.Ordinal));
+        }
+        finally
+        {
+            TestWebHost.DeleteDatabase(database);
+        }
+    }
+
+    [Fact]
+    public async Task ExtensionMechanicRemainsVisibleAsSelectedComposerMechanic()
+    {
+        var database = TestWebHost.NewDatabasePath();
+        try
+        {
+            using var factory = TestWebHost.Create(database);
+            using var client = factory.CreateClient();
+
+            using var response = await client.PostAsJsonAsync("/api/procedures/composer/draft", new
+            {
+                presetKey = (string?)null,
+                procedureId = (Guid?)null,
+                revision = (int?)null,
+                moduleSelections = new[]
+                {
+                    new { moduleKey = Phase11GenericProcedureCatalog.ExposureModule, included = true }
+                },
+                overrides = Array.Empty<object>()
+            });
+            response.EnsureSuccessStatusCode();
+            var draft = await response.Content.ReadFromJsonAsync<JsonElement>();
+            var exposure = Assert.Single(
+                draft.GetProperty("modules").EnumerateArray(),
+                module => module.GetProperty("moduleKey").GetString() == Phase11GenericProcedureCatalog.ExposureModule);
+
+            Assert.Equal(
+                Phase11GenericProcedureCatalog.ExposurePolicyMechanic,
+                exposure.GetProperty("mechanic").GetProperty("key").GetString());
+            Assert.DoesNotContain(
+                exposure.GetProperty("alternatives").EnumerateArray(),
+                mechanic => mechanic.GetProperty("key").GetString() == Phase11GenericProcedureCatalog.ExposurePolicyMechanic);
         }
         finally
         {
@@ -174,11 +295,36 @@ public sealed class ProcedureComposerEndpointsTests
             {
                 presetKey = (string?)null,
                 campaignId = (Guid?)null,
+                name = "North March procedure",
+                moduleSelections = new[]
+                {
+                    new { moduleKey = GenericProcedureCatalog.TimeIntervalModule, included = true }
+                },
                 overrides = Array.Empty<object>()
             });
             Assert.Equal(HttpStatusCode.Created, customResponse.StatusCode);
             var custom = await customResponse.Content.ReadFromJsonAsync<JsonElement>();
             Assert.Equal(JsonValueKind.Null, custom.GetProperty("origin").ValueKind);
+            Assert.Equal("North March procedure", custom.GetProperty("name").GetString());
+
+            var customId = custom.GetProperty("procedureId").GetGuid();
+            using var renameResponse = await client.PostAsJsonAsync(
+                $"/api/procedures/{customId:D}/revisions",
+                new
+                {
+                    expectedRevision = 1,
+                    name = "Winter North March",
+                    moduleSelections = Array.Empty<object>(),
+                    overrides = Array.Empty<object>()
+                });
+            renameResponse.EnsureSuccessStatusCode();
+            var renamedCustom = await renameResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(2, renamedCustom.GetProperty("revision").GetInt32());
+            Assert.Equal("Winter North March", renamedCustom.GetProperty("name").GetString());
+
+            var originalCustom = await client.GetFromJsonAsync<JsonElement>(
+                $"/api/procedures/{customId:D}/revisions/1");
+            Assert.Equal("North March procedure", originalCustom.GetProperty("name").GetString());
 
             using var createResponse = await client.PostAsJsonAsync("/api/procedures", new
             {

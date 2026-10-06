@@ -18,7 +18,7 @@ public sealed class ModuleArchitectureTests
             manifests.Select(manifest => manifest.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count());
 
         Assert.Equal(
-            ["worlds"],
+            ["worlds", "procedure-composer"],
             manifests.Single(manifest => manifest.Id == "expeditions").Dependencies);
 
         Assert.Equal(

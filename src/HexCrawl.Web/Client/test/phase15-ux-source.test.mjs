@@ -23,15 +23,51 @@ test("Phase 15 procedure authoring separates entry choice from one shared Campai
     assert.match(workspace, /Build my own/);
     assert.match(workspace, /EntryState = "landing" \| "presets" \| "workspace"/);
     assert.match(workspace, /ProcedureAuthoringMode = "compact" \| "advanced" \| "json"/);
-    assert.match(workspace, /Areas you omit are absent from the materialized CampaignProcedure/);
+    assert.match(workspace, /Only the rules shown here are part of this procedure/);
     assert.match(workspace, /Advanced exposes exact generic module keys, mechanics, versions, parameters, and contracts/);
     assert.match(workspace, /exact same CampaignProcedure produced by Compact structural choices and Advanced edits/);
+    assert.match(workspace, /sourceProcedureId === null && \(sourcePresetKey !== null \|\| \(draft\?\.modules\.length \?\? 0\) > 0\)/);
     assert.match(workspace, /moduleSelections/);
     assert.match(types, /ProcedureComposerModuleSelectionInput/);
     assert.match(contracts, /ProcedureComposerModuleSelectionRequest/);
     assert.match(module, /renderProcedureAuthoringWorkspace/);
-    assert.match(factory, /Modules = \[CreateDefaultModule\(GenericProcedureCatalog\.TimeIntervalModule\)\]/);
+    assert.match(factory, /Modules = \[\]/);
+    assert.doesNotMatch(factory, /Modules = \[CreateDefaultModule\(GenericProcedureCatalog\.TimeIntervalModule\)\]/);
     assert.doesNotMatch(factory, /GenericProcedureCatalog\.Catalog\.Select/);
+});
+
+test("Compact presentation covers all current generic procedure parameter labels", () => {
+    const presentation = fs.readFileSync(
+        path.join(sourceDir, "modules/procedures/procedure-presentation.ts"),
+        "utf8");
+    const generic = fs.readFileSync(
+        path.join(repositoryRoot, "src/HexCrawl.Application/Expeditions/GenericProcedureCatalog.cs"),
+        "utf8");
+    const journey = fs.readFileSync(
+        path.join(repositoryRoot, "src/HexCrawl.Application/Expeditions/JourneyProcedureContractSchema.cs"),
+        "utf8");
+    const survival = fs.readFileSync(
+        path.join(repositoryRoot, "src/HexCrawl.Application/Expeditions/Phase11ProcedurePolicies.cs"),
+        "utf8");
+
+    const parameterKeys = new Set();
+    for (const source of [generic, journey, survival]) {
+        for (const match of source.matchAll(/\["([^"]+)"\]\s*=\s*new\("(?:enum|boolean|number|integer|decimal|string|key-list|map<string>)"/g)) {
+            parameterKeys.add(match[1]);
+        }
+        for (const match of source.matchAll(/\("([^"]+)",\s*"(?:enum|boolean|number|integer|decimal|string|key-list|map<string>)",/g)) {
+            parameterKeys.add(match[1]);
+        }
+    }
+
+    const labelBlock = presentation.slice(
+        presentation.indexOf("const labels"),
+        presentation.indexOf("const choiceSets"));
+    for (const key of parameterKeys) {
+        assert.ok(
+            labelBlock.includes(`${key}: "`) || labelBlock.includes(`"${key}": "`),
+            key);
+    }
 });
 
 test("Compact procedure edits keep their focused workspace across draft recomposition", () => {
@@ -47,6 +83,63 @@ test("Compact procedure edits keep their focused workspace across draft recompos
     assert.match(workspace, /control\.dataset\.compactField = key/);
     assert.match(workspace, /replacement\?\.focus\(\)/);
     assert.match(workspace, /open\.dataset\.compactArea = group\.section/);
+    assert.match(workspace, /save\.dataset\.procedureSave = ""/);
+    assert.match(workspace, /root\.querySelector<HTMLButtonElement>\("\[data-procedure-save\]"\)/);
+    assert.match(
+        workspace,
+        /if \(save\) save\.disabled = savePending[\s\S]*!hasStructuredChanges\(\)[\s\S]*hasBlockingStructuredIssues\(\)/);
+});
+
+test("structured procedure save honors validation and dependency blockers", () => {
+    const workspace = fs.readFileSync(
+        path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"),
+        "utf8");
+
+    assert.match(workspace, /hasBlockingStructuredIssues/);
+    assert.match(workspace, /draft\?\.modules\.some\(saveBlocked\)/);
+    assert.match(workspace, /Fix the procedure validation or dependency issues shown below before saving/);
+});
+
+test("Advanced always renders the pinned mechanic without polluting catalog alternatives", () => {
+    const workspace = fs.readFileSync(
+        path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"),
+        "utf8");
+    const contracts = fs.readFileSync(
+        path.join(repositoryRoot, "src/HexCrawl.Web/Modules/Procedures/ProcedureComposerContracts.cs"),
+        "utf8");
+
+    assert.match(workspace, /module\.mechanic,\s*\.\.\.module\.alternatives\.filter/);
+    assert.doesNotMatch(contracts, /\.Append\(selected\.Mechanic\)/);
+});
+
+test("structured procedure authoring exposes human-readable procedure naming", () => {
+    const workspace = fs.readFileSync(
+        path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"),
+        "utf8");
+    const contracts = fs.readFileSync(
+        path.join(repositoryRoot, "src/HexCrawl.Web/Modules/Procedures/ProcedureComposerContracts.cs"),
+        "utf8");
+
+    assert.match(workspace, /Procedure name/);
+    assert.match(workspace, /nameInput\.name = "procedureName"/);
+    assert.match(workspace, /nameOverride/);
+    assert.match(workspace, /name: nameOverride/);
+    assert.match(contracts, /string\? Name/);
+});
+
+test("procedure authoring exposes revision navigation and protects unsaved work", () => {
+    const workspace = fs.readFileSync(
+        path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"),
+        "utf8");
+
+    assert.match(workspace, /dataset\.procedureRevision/);
+    assert.match(workspace, /Choose the latest revision above before saving further changes/);
+    assert.match(workspace, /Discard unsaved procedure changes\?/);
+    assert.match(workspace, /Discard unsaved JSON changes\?/);
+    assert.match(workspace, /mode === "json"[\s\S]*jsonText !== jsonBaseline[\s\S]*window\.confirm/);
+    assert.match(workspace, /beforeunload/);
+    assert.match(workspace, /window\.removeEventListener\("beforeunload"/);
+    assert.match(workspace, /jsonText\.length > 0 && jsonText !== jsonBaseline/);
 });
 
 test("Phase 15 procedure authoring keeps save and canonical-load failures visible after busy state clears", () => {

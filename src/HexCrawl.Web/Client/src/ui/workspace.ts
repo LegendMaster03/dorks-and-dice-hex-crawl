@@ -2,7 +2,14 @@ const drawerClosers = new WeakMap<HTMLElement, () => void>();
 
 export type WorkspaceDrawer = {
     element: HTMLElement;
+    body: HTMLElement;
     close: () => void;
+};
+
+export type WorkspaceDrawerOptions = {
+    title: string;
+    description?: string | null;
+    onClose?: () => void;
 };
 
 export function textElement<K extends keyof HTMLElementTagNameMap>(
@@ -41,8 +48,20 @@ export function openWorkspaceDrawer(
     root: HTMLElement,
     title: string,
     build: (body: HTMLElement, close: () => void) => void,
+    returnFocus?: HTMLElement | null,
+    onClose?: () => void): WorkspaceDrawer;
+export function openWorkspaceDrawer(
+    root: HTMLElement,
+    options: WorkspaceDrawerOptions): WorkspaceDrawer;
+export function openWorkspaceDrawer(
+    root: HTMLElement,
+    titleOrOptions: string | WorkspaceDrawerOptions,
+    build?: (body: HTMLElement, close: () => void) => void,
     returnFocus: HTMLElement | null = document.activeElement instanceof HTMLElement ? document.activeElement : null,
     onClose?: () => void): WorkspaceDrawer {
+    const options = typeof titleOrOptions === "string"
+        ? { title: titleOrOptions, description: null, onClose }
+        : titleOrOptions;
     const existing = root.querySelector<HTMLElement>("[data-phase15-drawer]");
     if (existing) {
         const closeExisting = drawerClosers.get(existing);
@@ -59,7 +78,7 @@ export function openWorkspaceDrawer(
 
     const header = document.createElement("header");
     header.className = "hc-focus-workspace-header";
-    const heading = textElement("h2", title);
+    const heading = textElement("h2", options.title);
     heading.id = panel.getAttribute("aria-labelledby")!;
     const closeButton = document.createElement("button");
     closeButton.type = "button";
@@ -83,7 +102,7 @@ export function openWorkspaceDrawer(
         closed = true;
         panel.removeEventListener("keydown", onKeyDown);
         drawerClosers.delete(panel);
-        onClose?.();
+        options.onClose?.();
         panel.remove();
         if (returnFocus?.isConnected) returnFocus.focus();
     };
@@ -92,9 +111,10 @@ export function openWorkspaceDrawer(
     closeButton.addEventListener("click", close);
     panel.addEventListener("keydown", onKeyDown);
     root.append(panel);
-    build(body, close);
+    if (options.description) body.append(textElement("p", options.description, "hc-muted"));
+    build?.(body, close);
     closeButton.focus();
-    return { element: panel, close };
+    return { element: panel, body, close };
 }
 
 export function disclosure(title: string, open = false): HTMLDetailsElement {

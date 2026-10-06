@@ -7,7 +7,7 @@ namespace HexCrawl.Application.Tests;
 public sealed class ProcedureComposerStructuralCompositionTests
 {
     [Fact]
-    public async Task CustomDraftStartsFromSmallGenericShapeInsteadOfEveryCatalogSubsystem()
+    public async Task CustomDraftStartsNeutralUntilTheDmChoosesProcedureStructure()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = new PostgresHexCrawlStore(database.ConnectionString);
@@ -17,12 +17,46 @@ public sealed class ProcedureComposerStructuralCompositionTests
         var draft = await service.CreateDraftAsync("alice", null, null, null, []);
 
         Assert.Null(draft.Origin);
-        var only = Assert.Single(draft.Procedure.Modules);
-        Assert.Equal(GenericProcedureCatalog.TimeIntervalModule, only.Module.Key);
-        Assert.DoesNotContain(draft.Procedure.Modules, module =>
-            module.Module.Key == GenericProcedureCatalog.ResourceConsumptionModule);
-        Assert.DoesNotContain(draft.Procedure.Modules, module =>
-            module.Module.Key == GenericProcedureCatalog.JourneyProcessModule);
+        Assert.Empty(draft.Procedure.Modules);
+        Assert.Empty(draft.Procedure.Overrides);
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.CreateAsync("alice", null, [], []));
+    }
+
+    [Fact]
+    public async Task StructuredAuthoringCanNameAndRenameProcedure()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var store = new PostgresHexCrawlStore(database.ConnectionString);
+        await store.InitializeAsync();
+        var service = Composer(store);
+        ProcedureModuleSelection[] selections =
+        [
+            new(GenericProcedureCatalog.TimeIntervalModule, true)
+        ];
+
+        var created = await service.CreateAsync(
+            "alice",
+            null,
+            selections,
+            [],
+            cancellationToken: default,
+            name: "North March procedure");
+        Assert.Equal("North March procedure", created.Procedure.Name);
+
+        var renamed = await service.CreateRevisionAsync(
+            "alice",
+            created.ProcedureId,
+            created.Revision,
+            [],
+            [],
+            cancellationToken: default,
+            name: "Winter North March");
+        Assert.Equal(2, renamed.Revision);
+        Assert.Equal("Winter North March", renamed.Procedure.Name);
+
+        var original = await service.GetAsync("alice", created.ProcedureId, 1);
+        Assert.Equal("North March procedure", original.Procedure.Name);
     }
 
     [Fact]
@@ -85,14 +119,42 @@ public sealed class ProcedureComposerStructuralCompositionTests
     }
 
     [Fact]
+    public async Task CustomProcedureCanAddAndPersistSurvivalExposure()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var store = new PostgresHexCrawlStore(database.ConnectionString);
+        await store.InitializeAsync();
+        var service = Composer(store);
+        ProcedureModuleSelection[] selections =
+        [
+            new(Phase11GenericProcedureCatalog.ExposureModule, true)
+        ];
+
+        var draft = await service.CreateDraftAsync("alice", null, null, null, selections, []);
+        var exposure = Assert.Single(draft.Procedure.Modules);
+        Assert.Equal(Phase11GenericProcedureCatalog.ExposureModule, exposure.Module.Key);
+        Assert.Equal("resolved-check", exposure.Parameters["evaluationModel"]);
+        Assert.Equal("party", exposure.Parameters["targetScope"]);
+
+        var stored = await service.CreateAsync("alice", null, selections, []);
+        var reloaded = await service.GetAsync("alice", stored.ProcedureId);
+        Assert.Contains(reloaded.Procedure.Modules, module =>
+            module.Module.Key == Phase11GenericProcedureCatalog.ExposureModule);
+    }
+
+    [Fact]
     public async Task SavedProcedureCanReAddPreviouslyOmittedGenericModule()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = new PostgresHexCrawlStore(database.ConnectionString);
         await store.InitializeAsync();
         var service = Composer(store);
-        var created = await service.CreateAsync("alice", null, [], []);
+        var created = await service.CreateAsync("alice", null, [
+            new ProcedureModuleSelection(GenericProcedureCatalog.TimeIntervalModule, true)
+        ], []);
 
+        Assert.Contains(created.Procedure.Modules, module =>
+            module.Module.Key == GenericProcedureCatalog.TimeIntervalModule);
         Assert.DoesNotContain(created.Procedure.Modules, module =>
             module.Module.Key == GenericProcedureCatalog.EncounterCadenceModule);
 
@@ -114,7 +176,9 @@ public sealed class ProcedureComposerStructuralCompositionTests
         var store = new PostgresHexCrawlStore(database.ConnectionString);
         await store.InitializeAsync();
         var service = Composer(store);
-        var created = await service.CreateAsync("alice", null, [], []);
+        var created = await service.CreateAsync("alice", null, [
+            new ProcedureModuleSelection(GenericProcedureCatalog.TimeIntervalModule, true)
+        ], []);
         var customized = await service.CreateRevisionAsync(
             "alice",
             created.ProcedureId,

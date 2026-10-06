@@ -187,6 +187,14 @@ public sealed class CampaignProcedureService(IHexCrawlStore store)
         return await store.ListCampaignProcedureRevisionsAsync(procedureId, owner, cancellationToken);
     }
 
+    public async Task<IReadOnlyList<StoredCampaignProcedureRevision>> ListLatestAsync(
+        string ownerUserId,
+        CancellationToken cancellationToken = default)
+    {
+        var owner = RequireOwner(ownerUserId);
+        return await store.ListLatestCampaignProcedureRevisionsAsync(owner, cancellationToken);
+    }
+
     private static string RequireOwner(string? ownerUserId) =>
         !string.IsNullOrWhiteSpace(ownerUserId)
             ? ownerUserId.Trim()

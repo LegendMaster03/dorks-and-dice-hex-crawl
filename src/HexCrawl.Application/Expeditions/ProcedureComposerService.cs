@@ -28,13 +28,16 @@ public sealed class ProcedureComposerService(CampaignProcedureService procedures
         int? revision,
         IReadOnlyList<ProcedureModuleSelection> moduleSelections,
         IReadOnlyList<CampaignProcedureOverride> overrides,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? name = null)
     {
         var owner = RequireOwner(ownerUserId);
         ArgumentNullException.ThrowIfNull(moduleSelections);
         ArgumentNullException.ThrowIfNull(overrides);
         var source = await ResolveSourceAsync(owner, presetKey, procedureId, revision, cancellationToken);
-        var draft = CampaignProcedureMaterializer.CreateDraft(source.Procedure, moduleSelections, overrides);
+        var draft = ApplyName(
+            CampaignProcedureMaterializer.CreateDraft(source.Procedure, moduleSelections, overrides),
+            name);
         return new ProcedureComposerDraft(
             draft,
             source.Origin,
@@ -57,13 +60,17 @@ public sealed class ProcedureComposerService(CampaignProcedureService procedures
         IReadOnlyList<ProcedureModuleSelection> moduleSelections,
         IReadOnlyList<CampaignProcedureOverride> overrides,
         Guid? campaignId = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? name = null)
     {
         var owner = RequireOwner(ownerUserId);
         ArgumentNullException.ThrowIfNull(moduleSelections);
         ArgumentNullException.ThrowIfNull(overrides);
         var source = ResolveCreationSource(presetKey);
-        var procedure = CampaignProcedureMaterializer.CreateInitialRevision(source.Procedure, moduleSelections, overrides);
+        var procedure = ApplyName(
+            CampaignProcedureMaterializer.CreateInitialRevision(source.Procedure, moduleSelections, overrides),
+            name);
+        procedure.Validate();
         return await procedures.CreateAsync(
             owner,
             procedure,
@@ -86,7 +93,8 @@ public sealed class ProcedureComposerService(CampaignProcedureService procedures
         int expectedRevision,
         IReadOnlyList<ProcedureModuleSelection> moduleSelections,
         IReadOnlyList<CampaignProcedureOverride> overrides,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? name = null)
     {
         var owner = RequireOwner(ownerUserId);
         if (procedureId == Guid.Empty)
@@ -99,7 +107,7 @@ public sealed class ProcedureComposerService(CampaignProcedureService procedures
         }
         ArgumentNullException.ThrowIfNull(moduleSelections);
         ArgumentNullException.ThrowIfNull(overrides);
-        if (moduleSelections.Count == 0 && overrides.Count == 0)
+        if (moduleSelections.Count == 0 && overrides.Count == 0 && name is null)
         {
             throw new InvalidOperationException("Saving a new procedure revision requires at least one explicit change.");
         }
@@ -111,7 +119,9 @@ public sealed class ProcedureComposerService(CampaignProcedureService procedures
                 $"Campaign procedure revision {expectedRevision} is stale; the current revision is {current.Revision}.");
         }
 
-        var draft = CampaignProcedureMaterializer.CreateDraft(current.Procedure, moduleSelections, overrides);
+        var draft = ApplyName(
+            CampaignProcedureMaterializer.CreateDraft(current.Procedure, moduleSelections, overrides),
+            name);
         draft.Validate();
 
         // Override records are audit/history metadata. A newly submitted override that resolves to
@@ -222,6 +232,20 @@ public sealed class ProcedureComposerService(CampaignProcedureService procedures
         {
             throw new ArgumentException("A Composer draft can start from either a preset or a saved procedure, not both.");
         }
+    }
+
+    private static CampaignProcedure ApplyName(CampaignProcedure procedure, string? name)
+    {
+        if (name is null)
+        {
+            return procedure;
+        }
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new ArgumentException("Procedure name can not be blank.", nameof(name));
+        }
+
+        return procedure with { Name = name.Trim() };
     }
 
     private static string RequireOwner(string? ownerUserId) =>

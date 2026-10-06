@@ -532,12 +532,23 @@ export type ExpeditionDetail = {
 
 export type RuntimeState = ExpeditionDetail;
 
+export type ProcedureStartSelectionInput =
+    | {
+        procedureKey: string;
+        procedureId?: never;
+        procedureRevision?: never;
+    }
+    | {
+        procedureKey?: never;
+        procedureId: string;
+        procedureRevision: number;
+    };
+
 export type StartExpeditionInput = {
     name: string;
-    procedureKey: string;
     presentationKey: string;
     startHex: HexCoordinate;
-};
+} & ProcedureStartSelectionInput;
 
 export type StandaloneCrawlContextInput =
     | {
@@ -554,10 +565,9 @@ export type StandaloneCrawlContextInput =
 
 export type StartStandaloneCrawlSessionInput = {
     name: string;
-    procedureKey: string;
     context: StandaloneCrawlContextInput;
     startHex?: HexCoordinate;
-};
+} & ProcedureStartSelectionInput;
 
 export type RuntimeAdvanceRequest = {
     expectedVersion: number;

@@ -1,10 +1,18 @@
 import type { HexCrawlApi } from "../../api";
+import { ProcedureComposerApi } from "../../procedure-composer-api";
 import { customUnitFieldsVisible } from "../worlds/world-form";
 import type { DistanceUnitKind } from "../worlds/world-form";
 import type { ExpeditionSummary, OverworldSummary, ProcedurePreset, StartStandaloneCrawlSessionInput } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
 import { campaignProcedureSummary, renderProcedureMechanicList } from "../../campaign-procedure-view";
 import { input, integer, numeric, option, required, select } from "../../ui/dom";
+import {
+    applyStandaloneProcedureChoice,
+    applyWorldProcedureChoice,
+    populateProcedureStartChoices,
+    readProcedureStartChoice,
+    startChoiceSummary
+} from "../expeditions/procedure-start-selection";
 
 const ABSTRACT_CONTEXT = "__abstract__";
 const NON_SPATIAL_CONTEXT = "__nonspatial__";
@@ -59,9 +67,9 @@ export async function renderToolHome(
                     <p class="hc-muted">Choose only the context your procedure needs. You can run without an Overworld or map.</p>
                     <form class="hc-form" data-start-mapless>
                         <label>Session name <input name="name" required value="Expedition" autocomplete="off"></label>
-                        <label>Procedure preset <select name="procedure"></select></label>
+                        <label>Procedure <select name="procedure"></select></label>
                         <p class="hc-hint" data-procedure-summary></p>
-                        <details class="hc-optional-reference"><summary>Materialized procedure</summary><ul data-procedure-mechanics></ul></details>
+                        <details class="hc-optional-reference"><summary>Procedure details</summary><ul data-procedure-mechanics></ul></details>
                         <label>Crawl context <select name="context"></select></label>
                         <div class="hc-form" data-abstract-context hidden>
                             <label>Context name <input name="contextName" value="Mapless hex crawl" autocomplete="off"></label>
@@ -82,6 +90,7 @@ export async function renderToolHome(
                             <label>Context name <input name="nonSpatialName" value="Procedure session" autocomplete="off"></label>
                             <p class="hc-hint">Non-spatial sessions persist procedure/history state without hex coordinates, distance scale, world position, or Overworld.</p>
                         </div>
+                        <p class="hc-hint">Saved procedures use the selected revision. A preset creates a new saved procedure when play begins.</p>
                         <button type="submit" class="hc-primary-action" data-start-button>Start session</button>
                     </form>
                 </section>
@@ -112,6 +121,8 @@ export async function renderToolHome(
     const customUnit = required<HTMLElement>(form, "[data-custom-unit]");
     const startButton = required<HTMLButtonElement>(form, "[data-start-button]");
     let presets: ProcedurePreset[] = [];
+    let savedProcedures = await Promise.resolve([] as Awaited<ReturnType<ProcedureComposerApi["listProcedures"]>>);
+    const composerApi = await ProcedureComposerApi.create(root);
 
     const syncContext = (): void => {
         const abstract = context.value === ABSTRACT_CONTEXT;
@@ -132,26 +143,45 @@ export async function renderToolHome(
         input(form, "symbol").required = custom;
         input(form, "meters").required = custom;
     };
-    const syncProcedure = (): void => {
-        const preset = presets.find(candidate => candidate.presetKey === procedure.value);
-        required<HTMLElement>(form, "[data-procedure-summary]").textContent = preset
-            ? `${preset.description} · ${campaignProcedureSummary(preset.procedure)}`
-            : "";
+    const syncProcedure = async (): Promise<void> => {
         const mechanics = required<HTMLElement>(form, "[data-procedure-mechanics]");
-        if (preset) renderProcedureMechanicList(mechanics, preset.procedure);
-        else mechanics.replaceChildren();
+        mechanics.replaceChildren();
+        if (!procedure.value) {
+            required<HTMLElement>(form, "[data-procedure-summary]").textContent = "No runnable procedure is available.";
+            return;
+        }
+        const choice = readProcedureStartChoice(procedure.value);
+        required<HTMLElement>(form, "[data-procedure-summary]").textContent =
+            startChoiceSummary(choice, savedProcedures, presets);
+        if (choice.kind === "preset") {
+            const preset = presets.find(candidate => candidate.presetKey === choice.presetKey);
+            if (preset) {
+                required<HTMLElement>(form, "[data-procedure-summary]").textContent =
+                    `${preset.description} · ${campaignProcedureSummary(preset.procedure)} · creates a new saved procedure when play begins`;
+                renderProcedureMechanicList(mechanics, preset.procedure);
+            }
+            return;
+        }
+        const saved = await composerApi.getProcedure(choice.procedureId, choice.revision);
+        for (const module of saved.modules) {
+            const item = document.createElement("li");
+            item.textContent = `${module.displayName}: ${module.mechanic.displayName}`;
+            mechanics.append(item);
+        }
     };
 
     try {
-        const [expeditions, worlds, procedurePresets] = await Promise.all([
+        const [expeditions, worlds, procedurePresets, procedures] = await Promise.all([
             api.listExpeditions(),
             api.listOverworlds(),
-            api.getProcedurePresets()
+            api.getProcedurePresets(),
+            composerApi.listProcedures()
         ]);
         if (disposed) return () => {};
 
         presets = procedurePresets;
-        for (const preset of presets) procedure.append(option(preset.presetKey, preset.displayName));
+        savedProcedures = procedures;
+        populateProcedureStartChoices(procedure, savedProcedures, presets);
         for (const world of worlds) context.append(option(world.id, `World: ${world.name}`));
         context.append(
             option(ABSTRACT_CONTEXT, "Abstract hex (no Overworld)"),
@@ -162,14 +192,15 @@ export async function renderToolHome(
         syncExpeditionCount(count, expeditions.length);
         renderExpeditions(list, expeditions, worlds, api, error, count, navigate);
         syncContext();
-        syncProcedure();
+        await syncProcedure();
+        startButton.disabled = !procedure.value;
     } catch (value) {
         if (!disposed) showUiError(error, value);
     }
 
     context.addEventListener("change", syncContext);
     unit.addEventListener("change", syncUnit);
-    procedure.addEventListener("change", syncProcedure);
+    procedure.addEventListener("change", () => void syncProcedure());
 
     form.addEventListener("submit", event => {
         event.preventDefault();
@@ -180,14 +211,13 @@ export async function renderToolHome(
             startButton.disabled = true;
             startButton.textContent = "Starting…";
             try {
-                if (!procedure.value) throw new Error("A procedure preset is required.");
+                const choice = readProcedureStartChoice(procedure.value);
                 const name = input(form, "name").value.trim();
                 let expedition;
                 if (context.value === ABSTRACT_CONTEXT) {
                     const unitKind = unit.value as DistanceUnitKind;
-                    const request: StartStandaloneCrawlSessionInput = {
+                    const base: Omit<StartStandaloneCrawlSessionInput, "procedureKey"> = {
                         name,
-                        procedureKey: procedure.value,
                         context: {
                             kind: "AbstractHex",
                             name: input(form, "contextName").value.trim(),
@@ -200,27 +230,25 @@ export async function renderToolHome(
                             r: integer(input(form, "r"))
                         }
                     };
-                    expedition = await api.startStandaloneSession(request);
+                    expedition = await api.startStandaloneSession(applyStandaloneProcedureChoice(base, choice));
                 } else if (context.value === NON_SPATIAL_CONTEXT) {
-                    expedition = await api.startStandaloneSession({
+                    expedition = await api.startStandaloneSession(applyStandaloneProcedureChoice({
                         name,
-                        procedureKey: procedure.value,
                         context: {
                             kind: "NonSpatial",
                             name: input(form, "nonSpatialName").value.trim()
                         }
-                    });
+                    }, choice));
                 } else {
                     if (!context.value) throw new Error("A crawl context is required.");
-                    expedition = await api.startConfiguredExpedition(context.value, {
+                    expedition = await api.startConfiguredExpedition(context.value, applyWorldProcedureChoice({
                         name,
-                        procedureKey: procedure.value,
                         presentationKey: "dm-controlled",
                         startHex: {
                             q: integer(input(form, "q")),
                             r: integer(input(form, "r"))
                         }
-                    });
+                    }, choice));
                 }
                 if (!disposed) navigate(`/expeditions/${expedition.id}`);
             } catch (value) {
@@ -228,7 +256,7 @@ export async function renderToolHome(
             } finally {
                 startPending = false;
                 if (!disposed) {
-                    startButton.disabled = false;
+                    startButton.disabled = !procedure.value;
                     startButton.textContent = "Start session";
                 }
             }

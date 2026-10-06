@@ -105,6 +105,19 @@ export type ProcedureComposer = {
     overrides: ProcedureOverride[];
 };
 
+export type SavedProcedureSummary = {
+    procedureId: string;
+    revision: number;
+    key: string;
+    name: string;
+    campaignId: string | null;
+    originPresetKey: string | null;
+    originPresetDisplayName: string | null;
+    isExecutable: boolean;
+    moduleCount: number;
+    createdAt: string;
+};
+
 export type ProcedureComposerModuleSelectionInput = {
     moduleKey: string;
     included: boolean;
@@ -123,6 +136,7 @@ export type ProcedureComposerDraftInput = {
     presetKey?: string | null;
     procedureId?: string | null;
     revision?: number | null;
+    name?: string | null;
     moduleSelections?: ProcedureComposerModuleSelectionInput[];
     overrides?: ProcedureComposerOverrideInput[];
 };
@@ -130,12 +144,14 @@ export type ProcedureComposerDraftInput = {
 export type ProcedureComposerCreateInput = {
     presetKey?: string | null;
     campaignId?: string | null;
+    name?: string | null;
     moduleSelections?: ProcedureComposerModuleSelectionInput[];
     overrides?: ProcedureComposerOverrideInput[];
 };
 
 export type ProcedureComposerRevisionInput = {
     expectedRevision: number;
+    name?: string | null;
     moduleSelections?: ProcedureComposerModuleSelectionInput[];
     overrides: ProcedureComposerOverrideInput[];
 };

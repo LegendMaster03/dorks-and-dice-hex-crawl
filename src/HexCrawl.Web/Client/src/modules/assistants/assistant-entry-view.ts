@@ -1,4 +1,5 @@
 import type { HexCrawlApi } from "../../api";
+import { ProcedureComposerApi } from "../../procedure-composer-api";
 import { customUnitFieldsVisible } from "../worlds/world-form";
 import type { DistanceUnitKind } from "../worlds/world-form";
 import type { ExpeditionAssistant } from "../../tool-route";
@@ -9,7 +10,13 @@ import type {
 } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
 import { campaignProcedureSummary, renderProcedureMechanicList } from "../../campaign-procedure-view";
-import { input, integer, numeric, option, required, select } from "../../ui/dom";
+import { input, integer, numeric, required, select } from "../../ui/dom";
+import {
+    applyStandaloneProcedureChoice,
+    populateProcedureStartChoices,
+    readProcedureStartChoice,
+    startChoiceSummary
+} from "../expeditions/procedure-start-selection";
 
 export async function renderAssistantEntry(
     root: HTMLElement,
@@ -46,9 +53,10 @@ export async function renderAssistantEntry(
                     <p class="hc-muted">${createHint(assistant)} This creates only the state this focused tool actually needs.</p>
                     <form class="hc-form" data-create>
                         <label>Session name <input name="name" required autocomplete="off"></label>
-                        <label>Procedure preset <select name="procedure"></select></label>
+                        <label>Procedure <select name="procedure"></select></label>
                         <p class="hc-hint" data-procedure-summary></p>
-                        <details class="hc-optional-reference"><summary>Materialized procedure</summary><ul data-procedure-mechanics></ul></details>
+                        <details class="hc-optional-reference"><summary>Procedure details</summary><ul data-procedure-mechanics></ul></details>
+                        <p class="hc-hint">Saved procedures use the selected revision. A preset creates a new saved procedure when the assistant session begins.</p>
                         ${assistant === "travel" ? `
                             <label>Bookkeeping mode
                                 <select name="mode">
@@ -106,9 +114,11 @@ export async function renderAssistantEntry(
     const submit = required<HTMLButtonElement>(form, "[data-submit]");
     input(form, "name").value = defaultSessionName(assistant);
 
-    const [sessions, presets] = await Promise.all([
+    const composerApi = await ProcedureComposerApi.create(root);
+    const [sessions, presets, savedProcedures] = await Promise.all([
         api.listExpeditions(),
-        api.getProcedurePresets()
+        api.getProcedurePresets(),
+        composerApi.listProcedures()
     ]);
     if (disposed) return () => {};
 
@@ -116,8 +126,9 @@ export async function renderAssistantEntry(
     renderSessions(list, compatible, assistant, navigate);
     count.textContent = compatible.length === 1 ? "1 compatible session" : `${compatible.length} compatible sessions`;
 
-    for (const preset of presets) procedure.append(option(preset.presetKey, preset.displayName));
+    populateProcedureStartChoices(procedure, savedProcedures, presets);
     chooseDefaultProcedure(procedure, presets, assistant);
+    submit.disabled = !procedure.value;
 
     const mode = form.querySelector<HTMLSelectElement>('select[name="mode"]');
     const unit = select(form, "unit");
@@ -145,21 +156,45 @@ export async function renderAssistantEntry(
         input(form, "meters").required = custom;
     };
 
-    const syncProcedure = (): void => {
-        const preset = presets.find(candidate => candidate.presetKey === procedure.value);
-        required<HTMLElement>(form, "[data-procedure-summary]").textContent = preset
-            ? `${preset.description} · ${campaignProcedureSummary(preset.procedure)}`
-            : "";
+    const syncProcedure = async (): Promise<void> => {
         const mechanics = required<HTMLElement>(form, "[data-procedure-mechanics]");
-        if (preset) renderProcedureMechanicList(mechanics, preset.procedure);
-        else mechanics.replaceChildren();
+        mechanics.replaceChildren();
+        if (!procedure.value) {
+            required<HTMLElement>(form, "[data-procedure-summary]").textContent = "No procedure is available.";
+            submit.disabled = true;
+            return;
+        }
+
+        const selectedValue = procedure.value;
+        const choice = readProcedureStartChoice(selectedValue);
+        required<HTMLElement>(form, "[data-procedure-summary]").textContent =
+            startChoiceSummary(choice, savedProcedures, presets);
+        if (choice.kind === "preset") {
+            const preset = presets.find(candidate => candidate.presetKey === choice.presetKey);
+            if (preset) {
+                required<HTMLElement>(form, "[data-procedure-summary]").textContent =
+                    `${preset.description} · ${campaignProcedureSummary(preset.procedure)} · creates a new saved procedure when the assistant session begins`;
+                renderProcedureMechanicList(mechanics, preset.procedure);
+            }
+            submit.disabled = false;
+            return;
+        }
+
+        const saved = await composerApi.getProcedure(choice.procedureId, choice.revision);
+        if (disposed || procedure.value !== selectedValue) return;
+        for (const module of saved.modules) {
+            const item = document.createElement("li");
+            item.textContent = `${module.displayName}: ${module.mechanic.displayName}`;
+            mechanics.append(item);
+        }
+        submit.disabled = false;
     };
 
     mode?.addEventListener("change", syncMode);
     unit.addEventListener("change", syncUnit);
-    procedure.addEventListener("change", syncProcedure);
+    procedure.addEventListener("change", () => void syncProcedure());
     syncMode();
-    syncProcedure();
+    await syncProcedure();
 
     form.addEventListener("submit", event => {
         event.preventDefault();
@@ -171,8 +206,10 @@ export async function renderAssistantEntry(
             const idle = submit.textContent ?? "Create";
             submit.textContent = "Creating…";
             try {
-                if (!procedure.value) throw new Error("A procedure preset is required.");
-                const request = buildRequest(form, assistant, usesAbstract(), procedure.value);
+                const choice = readProcedureStartChoice(procedure.value);
+                const request = applyStandaloneProcedureChoice(
+                    buildRequest(form, assistant, usesAbstract()),
+                    choice);
                 const session = await api.startStandaloneSession(request);
                 if (!disposed) navigate(`/expeditions/${session.id}/${assistant}`);
             } catch (value) {
@@ -180,7 +217,7 @@ export async function renderAssistantEntry(
             } finally {
                 pending = false;
                 if (!disposed) {
-                    submit.disabled = false;
+                    submit.disabled = !procedure.value;
                     submit.textContent = idle;
                 }
             }
@@ -237,15 +274,13 @@ function compatibleSession(assistant: ExpeditionAssistant, session: ExpeditionSu
 function buildRequest(
     form: HTMLFormElement,
     assistant: ExpeditionAssistant,
-    abstract: boolean,
-    procedureKey: string): StartStandaloneCrawlSessionInput {
+    abstract: boolean): Omit<StartStandaloneCrawlSessionInput, "procedureKey" | "procedureId" | "procedureRevision"> {
     const name = input(form, "name").value.trim();
     if (!name) throw new Error("Session name is required.");
 
     if (!abstract) {
         return {
             name,
-            procedureKey,
             context: {
                 kind: "NonSpatial",
                 name: input(form, "nonSpatialName").value.trim()
@@ -256,7 +291,6 @@ function buildRequest(
     const unitKind = select(form, "unit").value as DistanceUnitKind;
     return {
         name,
-        procedureKey,
         context: {
             kind: "AbstractHex",
             name: input(form, "contextName").value.trim(),
@@ -285,8 +319,19 @@ function chooseDefaultProcedure(
     selectElement: HTMLSelectElement,
     presets: ProcedurePreset[],
     assistant: ExpeditionAssistant): void {
+    if (selectElement.value) {
+        const current = readProcedureStartChoice(selectElement.value);
+        if (current.kind === "saved") return;
+    }
+
     const preferred = assistant === "travel" ? "simple-fixed-distance" : "alexandrian-advanced";
-    if (presets.some(preset => preset.presetKey === preferred)) selectElement.value = preferred;
+    if (!presets.some(preset => preset.presetKey === preferred)) return;
+    const option = [...selectElement.options].find(candidate => {
+        if (!candidate.value) return false;
+        const choice = readProcedureStartChoice(candidate.value);
+        return choice.kind === "preset" && choice.presetKey === preferred;
+    });
+    if (option) selectElement.value = option.value;
 }
 
 function title(assistant: ExpeditionAssistant): string {

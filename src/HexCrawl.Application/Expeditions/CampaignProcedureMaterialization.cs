@@ -82,7 +82,7 @@ public static class CampaignProcedureMaterializer
         ArgumentNullException.ThrowIfNull(current);
         ArgumentNullException.ThrowIfNull(moduleSelections);
         ArgumentNullException.ThrowIfNull(overrides);
-        current.Validate();
+        ValidateComposableSource(current);
         return ApplyChanges(current, moduleSelections, overrides, current.Revision);
     }
 
@@ -118,6 +118,27 @@ public static class CampaignProcedureMaterializer
         var revision = ApplyChanges(current, moduleSelections, overrides, checked(current.Revision + 1));
         revision.Validate();
         return revision;
+    }
+
+    private static void ValidateComposableSource(CampaignProcedure current)
+    {
+        if (current.Modules.Count > 0)
+        {
+            current.Validate();
+            return;
+        }
+
+        // The only intentionally incomplete source is a transient blank authoring draft.
+        // Keep identity/revision invariants here; CreateInitialRevision still calls the full
+        // domain validator so an empty procedure can never be persisted.
+        if (current.ProcedureId == Guid.Empty
+            || current.Revision <= 0
+            || string.IsNullOrWhiteSpace(current.Key)
+            || string.IsNullOrWhiteSpace(current.Name)
+            || current.Overrides.Count > 0)
+        {
+            throw new InvalidOperationException("An incomplete procedure source is not a valid authoring draft.");
+        }
     }
 
     private static CampaignProcedure ApplyChanges(
