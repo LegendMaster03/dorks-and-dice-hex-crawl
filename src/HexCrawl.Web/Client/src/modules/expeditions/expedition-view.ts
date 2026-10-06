@@ -27,7 +27,7 @@ import { ExpeditionSurvivalResourcesPanel } from "./survival-resources-panel";
 import { ExpeditionWatchController } from "./expedition-watch-controller";
 import { authoritativeFixedWatchDistance } from "./expedition-party-movement";
 import { canUseFocusedNonSpatialWatch, focusedIntervalHours } from "./focused-interval-policy";
-import { encounterCheckDue, navigationResolutionDue } from "./expedition-workflow";
+import { navigationResolutionDue, spatialTravelContinuationTarget } from "./expedition-workflow";
 import { expeditionWorkspacePresentation } from "./expedition-workspace-model";
 
 export type ExpeditionViewMode = "map" | "tracker";
@@ -1119,14 +1119,6 @@ export async function renderExpedition(
             openHistory();
             return;
         }
-        if (runtime.pauseReason === "EncounterTriggered") {
-            openEncounterWorkspace();
-            return;
-        }
-        if (runtime.pauseReason === "LostRecognitionRequired") {
-            openTravelWorkspace("boundary");
-            return;
-        }
         if (survivalAttention(survival)) {
             openSurvivalWorkspace();
             return;
@@ -1136,29 +1128,39 @@ export async function renderExpedition(
         const edge = preferences.direction === null || !adjacency
             ? null
             : adjacencyEdgeForDirection(adjacency, preferences.direction);
-        if (!edge) {
-            focusTravelCourse();
-            return;
-        }
-
         const state = runtime.expedition;
         const active = state.activeWatchNumber !== null;
         const suppressesNavigation = active ? state.activeSuppressesNavigationCheck : false;
         const deliberateDoubleBack = active ? state.activeDeliberateDoubleBack : false;
-        if (navigationResolutionDue(runtime, suppressesNavigation, deliberateDoubleBack)) {
-            openNavigationWorkspace();
-            return;
-        }
-        if (encounterCheckDue(runtime)) {
-            openTravelWorkspace("encounter");
-            return;
-        }
-
         const effectiveDistance = authoritativeFixedWatchDistance(runtime);
-        if (effectiveDistance === null) {
-            openTravelWorkspace("movement");
-            return;
+        const target = spatialTravelContinuationTarget(
+            runtime,
+            edge !== null,
+            effectiveDistance !== null,
+            suppressesNavigation,
+            deliberateDoubleBack);
+        switch (target) {
+            case "course":
+                focusTravelCourse();
+                return;
+            case "navigation":
+                openNavigationWorkspace();
+                return;
+            case "encounter":
+                if (runtime.pauseReason === "EncounterTriggered") openEncounterWorkspace();
+                else openTravelWorkspace("encounter");
+                return;
+            case "movement":
+                openTravelWorkspace("movement");
+                return;
+            case "boundary":
+                openTravelWorkspace("boundary");
+                return;
+            case "unavailable":
+                openHistory();
+                return;
         }
+        if (!edge || effectiveDistance === null) return;
 
         const request: RuntimeAdvanceRequest = {
             expectedVersion: runtime.version,
