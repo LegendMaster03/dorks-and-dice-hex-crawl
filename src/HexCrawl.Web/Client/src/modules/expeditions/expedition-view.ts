@@ -976,6 +976,9 @@ export async function renderExpedition(
 
             form.addEventListener("submit", event => {
                 event.preventDefault();
+                if (!q.value.trim() || !r.value.trim()) {
+                    throw new Error("Party position requires both axial cell coordinates.");
+                }
                 const targetQ = Number(q.value);
                 const targetR = Number(r.value);
                 if (!Number.isInteger(targetQ) || !Number.isInteger(targetR)) {
