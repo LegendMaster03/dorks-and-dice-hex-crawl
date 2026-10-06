@@ -626,6 +626,44 @@ function survivalFixture(forced) {
     };
 }
 
+function journeySurvivalFixture() {
+    const state = survivalFixture(false);
+    state.resourcePolicy = {
+        ...state.resourcePolicy,
+        support: "None",
+        resourceKinds: [],
+        mechanicKey: null,
+        mechanicVersion: null,
+        executionHandler: null
+    };
+    state.forcedTravelPolicy = {
+        ...state.forcedTravelPolicy,
+        support: "None",
+        normalTravelLimit: null,
+        limitUnit: null,
+        checkModel: null,
+        failureConsequence: null,
+        mechanicKey: null,
+        mechanicVersion: null,
+        executionHandler: null
+    };
+    state.resources = [];
+    state.exposure = [];
+    state.pendingResourceConsequences = [];
+    state.forcedTravel = {
+        amountSinceReset: 0,
+        unit: null,
+        normalLimit: null,
+        thresholdReached: false,
+        forcedTravelBegun: false,
+        checkDue: false,
+        pendingCheckId: null,
+        pendingConsequenceId: null,
+        lastResolution: null
+    };
+    return state;
+}
+
 function journeyFixture() {
     return {
         expeditionVersion: 42,
@@ -754,12 +792,12 @@ switch (stateName) {
         break;
     case "journey-normal":
         runtime = nonSpatialRuntimeFixture();
-        survival = survivalFixture(false);
+        survival = journeySurvivalFixture();
         journey = journeyFixture();
         break;
     case "journey-pending":
         runtime = nonSpatialRuntimeFixture();
-        survival = survivalFixture(false);
+        survival = journeySurvivalFixture();
         journey = journeyFixture();
         journey.activeProcesses[0].status = "ResolutionRequired";
         journey.eventOccurrences = [{
@@ -773,7 +811,7 @@ switch (stateName) {
         break;
     case "journey-consequence":
         runtime = nonSpatialRuntimeFixture();
-        survival = survivalFixture(false);
+        survival = journeySurvivalFixture();
         journey = journeyFixture();
         journey.activeProcesses[0].stageStates[0].failures = 1;
         journey.activeProcesses[0].stageStates[0].complications = 2;
@@ -830,7 +868,7 @@ async function waitForRootText(text, attempts = 20) {
     throw new Error(`Timed out waiting for rendered review text: ${text}`);
 }
 
-await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+await new Promise(resolve => setTimeout(resolve, 0));
 
 if (stateName === "map-selected" || stateName === "map-nonadjacent") {
     const canvas = root.querySelector("canvas");
@@ -905,7 +943,9 @@ const metrics = {
         rootText.includes("Current travel")
         || rootText.includes("Pace / travel mode")
         || rootText.includes("Current cell")
-        || rootText.includes("Hex progress")),
+        || rootText.includes("Hex progress")
+        || rootText.includes("Teleport party")
+        || rootText.includes("Party & travel order")),
     teleportContextVisible: Array.from(root.querySelectorAll("button")).some(button => isVisible(button) && button.textContent?.trim() === "Teleport party here"),
     journeyConsequenceVisible: rootText.includes("1 failure") && rootText.includes("2 complications"),
     movementUnitVisible: rootText.includes("Effective distance (mi)"),

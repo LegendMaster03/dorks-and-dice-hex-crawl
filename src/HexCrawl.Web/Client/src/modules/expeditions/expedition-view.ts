@@ -284,9 +284,12 @@ export async function renderExpedition(
                 runtime.expedition.isSpatial && runtime.expedition.isLost ? "warning" : "neutral"));
         }
         if (presentation.capabilities.resources || presentation.capabilities.survival || presentation.capabilities.effects) {
+            const hasSurvivalOrResources = presentation.capabilities.resources || presentation.capabilities.survival;
             stats.append(statAction(
-                "Survival / resources",
-                presentation.resourceLabel ?? "Procedure active",
+                presentation.capabilities.effects
+                    ? hasSurvivalOrResources ? "Survival / resources / effects" : "Effects"
+                    : "Survival / resources",
+                presentation.resourceLabel ?? (presentation.capabilities.effects ? "Effect procedure active" : "Procedure active"),
                 survivalDetail(survival),
                 openSurvivalWorkspace,
                 survivalAttention(survival) ? "warning" : "neutral"));
@@ -765,15 +768,30 @@ export async function renderExpedition(
     };
 
     const renderGmTools = (): HTMLElement => {
+        const presentation = expeditionWorkspacePresentation(runtime, journey, survival);
         const tools = disclosure("GM Tools", false);
         const row = document.createElement("div");
         row.className = "hc-button-row hc-gm-tools";
+        row.append(button(
+            runtime.expedition.isSpatial ? "Party & travel order" : "Party & roles",
+            openPartyWorkspace));
+        if (runtime.expedition.isSpatial) {
+            row.append(button("Teleport party", () => openRepositionWorkspace(selectedHex)));
+        }
+        row.append(button("Environment", openEnvironmentWorkspace));
+        if (presentation.capabilities.resources || presentation.capabilities.survival || presentation.capabilities.effects) {
+            row.append(button(
+                presentation.capabilities.effects
+                    ? presentation.capabilities.resources || presentation.capabilities.survival
+                        ? "Survival, resources & effects"
+                        : "Effects"
+                    : "Survival & resources",
+                openSurvivalWorkspace));
+        }
+        if (presentation.capabilities.journey) {
+            row.append(button("Journey", openJourneyWorkspace));
+        }
         row.append(
-            button("Party & travel order", openPartyWorkspace),
-            button("Teleport party", () => openRepositionWorkspace(selectedHex)),
-            button("Environment", openEnvironmentWorkspace),
-            button("Survival & resources", openSurvivalWorkspace),
-            button("Journey", openJourneyWorkspace),
             button("History", openHistory),
             button("Procedure reference", () =>
                 navigate(`/procedures/${encodeURIComponent(runtime.procedure.procedureId)}/revisions/${runtime.procedure.revision}/reference`)));

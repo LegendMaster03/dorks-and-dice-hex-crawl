@@ -824,6 +824,16 @@ test("journey-first primary workspace projects current process state without spa
     assert.match(view, /This procedure advances its configured interval without spatial position, course, pace, hex progress, or map state/);
 });
 
+test("nonspatial GM utilities do not expose spatial repositioning or travel-order controls", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+
+    assert.match(view, /runtime\.expedition\.isSpatial \? "Party & travel order" : "Party & roles"/);
+    assert.match(view, /if \(runtime\.expedition\.isSpatial\) \{\s*row\.append\(button\("Teleport party"/);
+    assert.match(view, /if \(presentation\.capabilities\.journey\) \{\s*row\.append\(button\("Journey"/);
+});
+
 test("nonspatial summary only renders movement when the materialized procedure exposes travel capability", () => {
     const view = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
