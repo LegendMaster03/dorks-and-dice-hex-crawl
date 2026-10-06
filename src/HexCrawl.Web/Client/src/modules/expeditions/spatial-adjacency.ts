@@ -20,6 +20,7 @@ export type SpatialAdjacencyEdge<TCell, TDirection> = {
 export type CurrentCellAdjacency<TCell, TDirection> = {
     currentCell: TCell;
     polygon: AdjacencyPoint[];
+    center: AdjacencyPoint;
     edges: SpatialAdjacencyEdge<TCell, TDirection>[];
     selectedEdgeId: string | null;
 };
@@ -35,6 +36,7 @@ export function createCurrentCellAdjacency<TCell, TDirection>(
     return {
         currentCell,
         polygon: [...polygon],
+        center: polygonCenter(polygon),
         edges: [...edges].sort((left, right) => left.order - right.order),
         selectedEdgeId: selected?.id ?? null
     };
@@ -51,6 +53,16 @@ export function adjacencyEdgeForDirection<TCell, TDirection>(
     adjacency: CurrentCellAdjacency<TCell, TDirection>,
     direction: TDirection): SpatialAdjacencyEdge<TCell, TDirection> | null {
     return adjacency.edges.find(edge => Object.is(edge.directionValue, direction)) ?? null;
+}
+
+export function adjacencyFeedbackVector(
+    center: AdjacencyPoint,
+    midpoint: AdjacencyPoint): AdjacencyPoint {
+    const dx = midpoint.x - center.x;
+    const dy = midpoint.y - center.y;
+    const length = Math.hypot(dx, dy);
+    if (length <= Number.EPSILON) return { x: 0, y: 0 };
+    return { x: dx / length, y: dy / length };
 }
 
 export function screenRelativeEdgeLabel(midpoint: AdjacencyPoint): string {
@@ -169,6 +181,17 @@ function transformGeometry(
     return {
         polygon: rotatedPolygon.map(normalize),
         midpoints: rotatedMidpoints.map(normalize)
+    };
+}
+
+function polygonCenter(polygon: AdjacencyPoint[]): AdjacencyPoint {
+    if (polygon.length === 0) return { x: 0.5, y: 0.5 };
+    const sum = polygon.reduce(
+        (current, point) => ({ x: current.x + point.x, y: current.y + point.y }),
+        { x: 0, y: 0 });
+    return {
+        x: sum.x / polygon.length,
+        y: sum.y / polygon.length
     };
 }
 
