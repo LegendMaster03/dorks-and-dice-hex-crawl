@@ -844,7 +844,7 @@ if (stateName === "map-selected" || stateName === "map-nonadjacent") {
 } else if (stateName === "forced-travel-pending") {
     findButton("Resolve forced travel")?.click();
 } else if (stateName === "boundary-pending") {
-    root.querySelector(".hc-current-action-primary")?.click();
+    findButton("Resolve lost-party boundary decision")?.click();
 } else if (stateName === "more-options-open") {
     findButton("More options")?.click();
 } else if (stateName === "teleport-workspace") {
