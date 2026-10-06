@@ -737,6 +737,8 @@ export async function renderExpedition(
         }
         const requirements = body.querySelector<HTMLElement>("[data-requirements]");
         if (requirements) requirements.hidden = true;
+        const genericHelper = body.querySelector<HTMLElement>("[data-resolution-helper]");
+        if (genericHelper) genericHelper.hidden = true;
 
         const intro = document.createElement("section");
         intro.className = "hc-focused-resolution-summary";
