@@ -146,6 +146,24 @@ export function ensurePhase15Styles(): void {
         .hc-current-action h2 { margin:0; color:var(--hc-text-strong); }
         .hc-current-action-primary { font-size:1.05rem; margin:0; }
         .hc-current-action-detail { margin:0; color:var(--hc-muted); }
+        @media (min-width: 1041px) {
+            .hc-current-action { grid-template-columns:minmax(11rem,.48fr) minmax(0,1fr) auto; align-items:center; gap:.35rem .9rem; padding:.72rem .85rem; }
+            .hc-current-action header { grid-column:1; grid-row:1 / span 2; display:grid; justify-content:start; gap:.3rem; align-content:center; }
+            .hc-current-action-primary { grid-column:2; grid-row:1; align-self:end; }
+            .hc-current-action-detail { grid-column:2; grid-row:2; align-self:start; }
+            .hc-current-action > .hc-button-row { grid-column:3; grid-row:1 / span 2; justify-content:flex-end; align-self:center; }
+            .hc-current-travel { grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:.28rem .8rem; padding:.55rem .7rem; }
+            .hc-current-travel > h3 { grid-column:1; grid-row:1; white-space:nowrap; }
+            .hc-current-travel-facts { grid-column:2; grid-row:1; grid-template-columns:repeat(4,auto minmax(0,1fr)); gap:.12rem .4rem; }
+            .hc-current-travel > p { grid-column:1 / 3; grid-row:2; }
+            .hc-current-travel-actions { grid-column:3; grid-row:1 / span 2; justify-content:flex-end; flex-wrap:nowrap; }
+            .hc-current-travel-pace-editor { grid-column:1 / -1; grid-row:3; }
+        }
+        @media (min-width: 1200px) {
+            .hc-phase15-expedition .hc-stat-action-grid { grid-template-columns:repeat(8,minmax(0,1fr)); }
+            .hc-phase15-expedition .hc-stat-action { padding:.58rem .62rem; }
+            .hc-phase15-expedition .hc-stat-action-detail { font-size:.73rem; }
+        }
         .hc-phase15-expedition { display:grid; gap:var(--hc-ux-gap); }
         .hc-phase15-expedition .hc-workspace-grid { grid-template-columns:minmax(0,1fr) minmax(18rem,23rem); align-items:start; }
         .hc-phase15-expedition .hc-map-sheet-top { grid-template-columns:minmax(0,1.5fr) minmax(17rem,.8fr); }

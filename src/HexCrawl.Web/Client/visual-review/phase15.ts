@@ -342,6 +342,18 @@ switch (stateName) {
         runtime.expedition.activeEncounterKind = "WanderingEncounter";
         runtime.expedition.activeEncounterHour = 1.5;
         runtime.expedition.activeEncounterHandled = false;
+        runtime.history.push({
+            sequence: 2,
+            watchNumber: 4,
+            kind: "EncounterTriggered",
+            expeditionElapsedHours: 13.5,
+            hex: { q: 0, r: 0 },
+            message: "A wandering encounter interrupts the expedition.",
+            distanceValue: null,
+            distanceUnit: null,
+            subjectId: null,
+            subjectType: null
+        });
         break;
     case "forced-travel-pending":
         runtime.expedition.intendedDirection = 4;

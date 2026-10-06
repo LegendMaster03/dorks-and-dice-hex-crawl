@@ -307,7 +307,9 @@ export async function renderExpedition(
 
         const primary = document.createElement("div");
         primary.className = "hc-panel hc-map-panel";
-        primary.append(textElement("h2", world ? "Expedition map" : "Spatial expedition"));
+        primary.append(
+            textElement("h2", world ? "Expedition map" : "Spatial expedition"),
+            renderCurrentTravel());
         if (world) {
             const frame = document.createElement("div");
             frame.className = "hc-map-frame";
@@ -323,7 +325,6 @@ export async function renderExpedition(
         } else {
             primary.append(textElement("p", "This spatial crawl has no authored world map. Choose an adjacent cell from the accessible course control below.", "hc-muted"));
         }
-        primary.append(renderCurrentTravel());
 
         const secondary = document.createElement("aside");
         secondary.className = "hc-panel hc-sidebar hc-table-rail";

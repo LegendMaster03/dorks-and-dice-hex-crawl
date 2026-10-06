@@ -641,6 +641,21 @@ test("normal spatial travel has one primary continuation path and focused unreso
     assert.doesNotMatch(view, /openTravelWorkspace\("travel"\)/);
 });
 
+test("desktop hierarchy exposes current travel before the map and compacts summary chrome", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+    const styles = fs.readFileSync(path.join(sourceDir, "phase15-styles.ts"), "utf8");
+
+    const mapPanel = view.slice(
+        view.indexOf('primary.className = "hc-panel hc-map-panel"'),
+        view.indexOf('const secondary = document.createElement("aside")'));
+    assert.ok(mapPanel.indexOf("renderCurrentTravel()") < mapPanel.indexOf("primary.append(frame)"));
+    assert.match(styles, /@media \(min-width: 1041px\)[\s\S]*\.hc-current-action \{ grid-template-columns:/);
+    assert.match(styles, /\.hc-current-travel \{ grid-template-columns:auto minmax\(0,1fr\) auto/);
+    assert.match(styles, /@media \(min-width: 1200px\)[\s\S]*\.hc-phase15-expedition \.hc-stat-action-grid \{ grid-template-columns:repeat\(8,minmax\(0,1fr\)\)/);
+});
+
 test("current travel stays beside the map while selection detail is contextual overlay", () => {
     const view = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
