@@ -621,7 +621,7 @@ test("normal spatial travel has one primary continuation path and focused unreso
         path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
         "utf8");
 
-    assert.match(view, /const primary = button\(actionLabel, \(\) => activateAction\(action.kind\)\)/);
+    assert.match(view, /const primary = button\(copy\.label, \(\) => activateAction\(action.kind\)\)/);
     assert.doesNotMatch(view, /const continueControl = button\("Continue travel"/);
     assert.match(view, /actions\.append\(changePace, more\)/);
     assert.doesNotMatch(view, /button\("Travel controls"/);
