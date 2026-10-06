@@ -648,7 +648,7 @@ At minimum, presentation validation should cover:
 4. Pathfinder 2e Hexploration — activity-oriented proof;
 5. Forbidden Lands or Worlds Without Number — survival/resource-oriented proof;
 6. The One Ring 2e — mandatory no-fabricated-interval journey proof;
-7. Mixed House Rule — materialized behavior must drive UI rather than named preset assumptions;
+7. Synthetic mixed procedure — test-only composition proving that materialized behavior drives UI/runtime behavior without a named production preset;
 8. Custom — no preset origin.
 
 ## Required Phase 15 end-to-end scenarios
