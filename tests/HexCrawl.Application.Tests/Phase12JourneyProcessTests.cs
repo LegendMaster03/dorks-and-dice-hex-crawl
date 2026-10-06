@@ -79,9 +79,9 @@ public sealed class Phase12JourneyProcessTests
     }
 
     [Fact]
-    public void MixedHouseRuleMaterializesStandaloneWatchAndLandmarkEventPolicy()
+    public void SyntheticMixedProcedureMaterializesStandaloneWatchAndLandmarkEventPolicy()
     {
-        var procedure = Materialize(CrawlProcedureCatalog.MixedHouseRulePresetKey);
+        var procedure = SyntheticProcedureFixtures.MixedProcedure();
         var policy = JourneyProcedurePolicyResolver.ResolveEvents(procedure);
 
         Assert.Equal(JourneyPolicySupport.Supported, policy.Support);
@@ -350,7 +350,7 @@ public sealed class Phase12JourneyProcessTests
     [Fact]
     public void StandaloneEventOccurrenceIsStableAndResolvedContentIsExplicit()
     {
-        var policy = JourneyProcedurePolicyResolver.ResolveEvents(Materialize(CrawlProcedureCatalog.MixedHouseRulePresetKey))
+        var policy = JourneyProcedurePolicyResolver.ResolveEvents(SyntheticProcedureFixtures.MixedProcedure())
             with { TargetingModel = "explicit-target" };
         var id = Guid.NewGuid();
         var created = JourneyEventEngine.CreateOpportunity(
@@ -408,7 +408,7 @@ public sealed class Phase12JourneyProcessTests
     [Fact]
     public void MixedWatchIntegrationCreatesExactlyOneStandaloneOpportunityAndDoesNotChangeRuntime()
     {
-        var procedure = Materialize(CrawlProcedureCatalog.MixedHouseRulePresetKey);
+        var procedure = SyntheticProcedureFixtures.MixedProcedure();
         var runtimeId = Guid.NewGuid();
         var before = new NonSpatialSessionState { Id = runtimeId, ElapsedTime = TimeSpan.Zero, CompletedWatches = 0 };
         var after = before with { ElapsedTime = TimeSpan.FromHours(4), CompletedWatches = 1 };
@@ -444,7 +444,7 @@ public sealed class Phase12JourneyProcessTests
         };
         var started = JourneyProcessEngine.Start(ExpeditionJourneyState.Empty, processId, definition, execution,
             new JourneyClockReference(TimeSpan.Zero, 0), CrawlPartySheet.Empty, Dm).State;
-        var procedure = Materialize(CrawlProcedureCatalog.MixedHouseRulePresetKey);
+        var procedure = SyntheticProcedureFixtures.MixedProcedure();
         var before = new NonSpatialSessionState { Id = Guid.NewGuid(), ElapsedTime = TimeSpan.Zero, CompletedWatches = 0 };
         var after = before with { ElapsedTime = TimeSpan.FromHours(4), CompletedWatches = 1 };
         var expedition = Stored(procedure, before) with { Journey = started };
@@ -459,7 +459,7 @@ public sealed class Phase12JourneyProcessTests
     [Fact]
     public void AggregateConsequenceTransitionUsesPhase10AndPhase11WithoutJourneyOwnedResourceMutation()
     {
-        var procedure = Materialize(CrawlProcedureCatalog.MixedHouseRulePresetKey);
+        var procedure = SyntheticProcedureFixtures.MixedProcedure();
         var target = new ExpeditionEffectTarget(ExpeditionEffectScope.Party);
         var resource = new ExpeditionResource
         {
@@ -502,7 +502,7 @@ public sealed class Phase12JourneyProcessTests
     [Fact]
     public void EncounterCircumstanceRemainsPendingForPhase13()
     {
-        var procedure = Materialize(CrawlProcedureCatalog.MixedHouseRulePresetKey);
+        var procedure = SyntheticProcedureFixtures.MixedProcedure();
         var expedition = Stored(procedure, new NonSpatialSessionState
         {
             Id = Guid.NewGuid(), ElapsedTime = TimeSpan.Zero, CompletedWatches = 0
