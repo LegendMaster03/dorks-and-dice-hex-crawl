@@ -182,14 +182,15 @@ public sealed class Phase12JourneyRuntimeIntegrationTests
     }
 
     [Fact]
-    public async Task MixedHouseRuleWatchAndLandmarkCreateStandaloneStableEventOpportunities()
+    public async Task SyntheticMixedProcedureWatchAndLandmarkCreateStandaloneStableEventOpportunities()
     {
         var database = TestWebHost.NewDatabasePath();
         try
         {
             using var factory = TestWebHost.Create(database);
             using var client = factory.CreateClient();
-            var started = await StartAsync(client, "mixed-house-rule", "Mixed events");
+            var synthetic = await SyntheticProcedureApiFixture.CreateMixedAsync(client);
+            var started = await StartAsync(client, synthetic, "Synthetic mixed events");
             var expeditionId = started.GetProperty("id").GetGuid();
 
             using var watchResponse = await client.PostAsJsonAsync(
@@ -283,6 +284,22 @@ public sealed class Phase12JourneyRuntimeIntegrationTests
         {
             name,
             procedureKey,
+            context = new { kind = "NonSpatial", name = "Journey state" }
+        });
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<JsonElement>();
+    }
+
+    private static async Task<JsonElement> StartAsync(
+        HttpClient client,
+        SyntheticProcedureRevision procedure,
+        string name)
+    {
+        using var response = await client.PostAsJsonAsync("/api/expeditions", new
+        {
+            name,
+            procedureId = procedure.ProcedureId,
+            procedureRevision = procedure.Revision,
             context = new { kind = "NonSpatial", name = "Journey state" }
         });
         response.EnsureSuccessStatusCode();
