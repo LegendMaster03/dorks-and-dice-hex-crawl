@@ -9,6 +9,42 @@ namespace HexCrawl.IntegrationTests;
 public sealed class ProcedureComposerEndpointsTests
 {
     [Fact]
+    public async Task RetiredMixedProofRecipeIsAbsentAndCanNotBeMaterializedOrStarted()
+    {
+        var database = TestWebHost.NewDatabasePath();
+        try
+        {
+            using var factory = TestWebHost.Create(database);
+            using var client = factory.CreateClient();
+
+            var presets = await client.GetFromJsonAsync<JsonElement>("/api/procedures/presets");
+            Assert.DoesNotContain(
+                presets.EnumerateArray(),
+                value => value.GetProperty("presetKey").GetString() == "mixed-house-rule");
+
+            using var materialize = await client.PostAsJsonAsync("/api/procedures", new
+            {
+                presetKey = "mixed-house-rule",
+                campaignId = (Guid?)null,
+                overrides = Array.Empty<object>()
+            });
+            Assert.Equal(HttpStatusCode.BadRequest, materialize.StatusCode);
+
+            using var start = await client.PostAsJsonAsync("/api/expeditions", new
+            {
+                name = "Retired mixed proof",
+                procedureKey = "mixed-house-rule",
+                context = new { kind = "NonSpatial", name = "Retired mixed proof" }
+            });
+            Assert.Equal(HttpStatusCode.BadRequest, start.StatusCode);
+        }
+        finally
+        {
+            TestWebHost.DeleteDatabase(database);
+        }
+    }
+
+    [Fact]
     public async Task DraftEndpointsExposePresetMinimalCustomAndStructuralComposerContracts()
     {
         var database = TestWebHost.NewDatabasePath();
