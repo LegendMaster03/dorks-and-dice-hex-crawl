@@ -56,6 +56,15 @@ test("focused forced-travel presentation keeps tabletop fields primary and techn
 });
 
 
+test("normal effect provenance hides journey audit tokens while technical details preserve them", () => {
+    assert.match(effects, /normalProvenanceLabel\(source\)/);
+    assert.match(effects, /normalProvenanceNote\(source\)/);
+    assert.match(effects, /sourceKey\.startsWith\("journey-"/);
+    assert.match(effects, /Provenance: \$\{value\.sourceKind\} · source \$\{value\.sourceKey\}/);
+    assert.match(effects, /Consequence audit/);
+    assert.doesNotMatch(effects, /humanizeIdentifier\(record\.status\)\}\$\{record\.detail/);
+});
+
 test("combined resources and effects UI exposes authoritative active effects without typed IDs", () => {
     assert.match(effectsApi, /\/api\/expeditions\/.*\/effects/);
     assert.match(effects, /state\.activeEffects/);

@@ -65,7 +65,7 @@ export class ExpeditionEffectsPanel {
             const list = document.createElement("ul");
             for (const record of state.appliedConsequences.slice(-12).reverse()) {
                 const item = document.createElement("li");
-                item.textContent = `${humanizeIdentifier(record.consequenceKey)} — ${humanizeIdentifier(record.status)}${record.detail ? `: ${record.detail}` : ""}`;
+                item.textContent = `${humanizeIdentifier(record.consequenceKey)} — ${humanizeIdentifier(record.status)}`;
                 list.append(item);
             }
             applied.append(list);
@@ -77,6 +77,16 @@ export class ExpeditionEffectsPanel {
             "p",
             `Policy: ${humanizeIdentifier(state.policy.support)}${state.policy.accumulationModel ? ` · accumulation ${state.policy.accumulationModel}` : ""}${state.policy.recoveryModel ? ` · recovery ${state.policy.recoveryModel}` : ""}.`,
             "hc-muted"));
+        if (state.appliedConsequences.length > 0) {
+            const consequenceAudit = document.createElement("ol");
+            consequenceAudit.className = "hc-history";
+            for (const record of state.appliedConsequences.slice(-20).reverse()) {
+                const item = document.createElement("li");
+                item.textContent = `${record.consequenceKey} · ${record.status} · consequence ${record.consequenceId} · source ${record.provenance.sourceKey}${record.detail ? ` · ${record.detail}` : ""}`;
+                consequenceAudit.append(item);
+            }
+            advanced.append(textElement("h4", "Consequence audit"), consequenceAudit);
+        }
         const audit = document.createElement("ol");
         audit.className = "hc-history";
         for (const record of state.history.slice(-20).reverse()) {
@@ -103,8 +113,9 @@ export class ExpeditionEffectsPanel {
 
         const source = effect.provenance.at(-1);
         if (source) {
+            const note = normalProvenanceNote(source);
             card.append(this.muted(
-                `Source: ${source.providerName?.trim() || humanizeIdentifier(source.sourceKind)}${source.note ? ` · ${source.note}` : ""}`));
+                `Source: ${normalProvenanceLabel(source)}${note ? ` · ${note}` : ""}`));
         }
 
         const recoveryModel = effect.recoveryModel ?? state.policy.recoveryModel;
@@ -146,7 +157,9 @@ export class ExpeditionEffectsPanel {
         technical.append(
             this.muted(`Effect ID: ${effect.id}`),
             this.muted(`Scope: ${effect.target.scope}${effect.target.targetId ? ` · target ${effect.target.targetId}` : ""}`),
-            this.muted(`Source consequences: ${effect.sourceConsequenceIds.length ? effect.sourceConsequenceIds.join(", ") : "none"}`));
+            this.muted(`Source consequences: ${effect.sourceConsequenceIds.length ? effect.sourceConsequenceIds.join(", ") : "none"}`),
+            ...effect.provenance.map(value => this.muted(
+                `Provenance: ${value.sourceKind} · source ${value.sourceKey} · reference ${value.sourceReference ?? "none"} · provider ${value.providerName ?? "none"} · note ${value.note ?? "none"}`)));
         card.append(technical);
         return card;
     }
@@ -238,6 +251,17 @@ export class ExpeditionEffectsPanel {
         if (!this.state) throw new Error("Effect state has not loaded.");
         return this.state;
     }
+}
+
+function normalProvenanceLabel(value: ExpeditionEffect["provenance"][number]): string {
+    if (value.sourceKind === "JourneyEvent" || value.sourceKey.startsWith("journey-event")) return "Journey event";
+    if (value.sourceKey.startsWith("journey-process")) return "Journey result";
+    return value.providerName?.trim() || humanizeIdentifier(value.sourceKind);
+}
+
+function normalProvenanceNote(value: ExpeditionEffect["provenance"][number]): string | null {
+    if (value.sourceKind === "JourneyEvent" || value.sourceKey.startsWith("journey-")) return null;
+    return value.note;
 }
 
 function dmEffectProvenance(sourceKey: string, note: string): ConsequenceProvenanceRequest {

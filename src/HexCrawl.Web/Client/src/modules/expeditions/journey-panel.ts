@@ -413,7 +413,9 @@ export class ExpeditionJourneyPanel {
     private eventCard(event: JourneyEventOccurrence): HTMLElement {
         const card = document.createElement("div");
         card.className = "hc-card";
-        card.append(this.heading(`Pending ${humanize(event.trigger)} event`));
+        card.append(
+            this.heading("Pending journey event"),
+            this.muted(`Triggered by ${journeyTriggerLabel(event.trigger)}.`));
         if (event.environment.length > 0) card.append(this.muted(`Relevant environment: ${event.environment.map(value => `${humanize(value.dimension)} ${value.value}${value.unit ? ` ${value.unit}` : ""}`).join("; ")}`));
         const technical = document.createElement("details");
         const technicalSummary = document.createElement("summary");
@@ -486,7 +488,7 @@ export class ExpeditionJourneyPanel {
         const list = document.createElement("ol");
         for (const record of state.history) {
             const item = document.createElement("li");
-            item.textContent = `${humanize(record.kind)} — ${record.detail}`;
+            item.textContent = journeyHistoryLabel(record.kind);
             list.append(item);
         }
         section.append(list);
@@ -497,7 +499,7 @@ export class ExpeditionJourneyPanel {
         const technical = document.createElement("ol");
         for (const record of state.history) {
             const item = document.createElement("li");
-            item.textContent = `${record.kind} · watch ${record.completedWatches} · source ${record.provenance.sourceKey} · process ${record.processId ?? "none"} · stage ${record.stageKey ?? "none"} · record ${record.id}`;
+            item.textContent = `${record.kind} · ${record.detail} · watch ${record.completedWatches} · source ${record.provenance.sourceKey} · process ${record.processId ?? "none"} · stage ${record.stageKey ?? "none"} · resolution ${record.resolutionId ?? "none"} · event ${record.eventOccurrenceId ?? "none"} · record ${record.id}`;
             technical.append(item);
         }
         advanced.append(summary, technical);
@@ -786,8 +788,42 @@ function splitKeys(value: string): string[] {
     return value.split(";").map(item => item.trim()).filter(Boolean);
 }
 
+function journeyTriggerLabel(value: string): string {
+    switch (value) {
+        case "ProcessProgress": return "journey progress";
+        case "StageTransition": return "a stage transition";
+        case "WatchCompleted": return "a completed watch";
+        case "Landmark": return "a landmark";
+        case "External": return "an external event";
+        case "Explicit": return "an explicit journey event";
+        default: return humanize(value).toLowerCase();
+    }
+}
+
+function journeyHistoryLabel(kind: string): string {
+    switch (kind) {
+        case "ProcessStarted": return "Journey started";
+        case "ResolutionRecorded": return "Journey result recorded";
+        case "ProgressChanged": return "Journey progress updated";
+        case "ComplicationChanged": return "Journey complication recorded";
+        case "FailureChanged": return "Journey failure recorded";
+        case "StageTransitioned": return "Journey stage changed";
+        case "ProcessCompleted": return "Journey completed";
+        case "ProcessFailed": return "Journey failed";
+        case "ProcessAbandoned": return "Journey abandoned";
+        case "EventOpportunityCreated": return "Journey event became available";
+        case "EventResolved": return "Journey event resolved";
+        case "EventSkipped": return "Journey event skipped";
+        case "WatchOpportunityCreated": return "Journey watch resolution became available";
+        default: return humanize(kind);
+    }
+}
+
 function humanize(value: string): string {
-    const text = value.replace(/[-_]+/g, " ").trim();
+    const text = value
+        .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+        .replace(/[-_]+/g, " ")
+        .trim();
     return text ? text[0].toUpperCase() + text.slice(1) : value;
 }
 

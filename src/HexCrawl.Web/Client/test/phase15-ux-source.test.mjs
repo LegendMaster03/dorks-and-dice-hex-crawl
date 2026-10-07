@@ -869,6 +869,34 @@ test("journey-first primary workspace projects current process state without spa
     assert.match(view, /This procedure advances its configured interval without spatial position, course, pace, hex progress, or map state/);
 });
 
+test("journey summary uses the authoritative effects projection for pending consequence state", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+
+    assert.match(view, /journeyStateSummary\(stageState, survival, effects\)/);
+    assert.match(view, /effectState\.pendingConsequences\.length/);
+    assert.match(view, /consequence\$\{count === 1 \? "" : "s"\} need/);
+    assert.match(view, /No pending consequences/);
+    assert.doesNotMatch(view, /No unresolved consequence/);
+});
+
+test("normal journey and expedition history humanize audit records while Advanced retains raw identity", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+    const journey = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/journey-panel.ts"),
+        "utf8");
+
+    assert.match(view, /item\.textContent = journeyHistoryLabel\(record\.kind\)/);
+    assert.match(view, /Journey \$\{record\.kind\} · \$\{record\.detail\}/);
+    assert.match(journey, /this\.heading\("Pending journey event"\)/);
+    assert.match(journey, /item\.textContent = journeyHistoryLabel\(record\.kind\)/);
+    assert.match(journey, /record\.detail.*record\.resolutionId.*record\.eventOccurrenceId/s);
+    assert.match(journey, /case "ResolutionRecorded": return "Journey result recorded"/);
+});
+
 test("nonspatial GM utilities do not expose spatial repositioning or travel-order controls", () => {
     const view = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
@@ -1018,7 +1046,7 @@ test("focused navigation retains access to the verified procedure-helper path", 
 });
 
 
-test("focused navigation does not silently choose the first edge", () => {
+test("focused navigation reuses valid intended course and routes missing intent back to course selection", () => {
     const view = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
         "utf8");
@@ -1026,9 +1054,14 @@ test("focused navigation does not silently choose the first edge", () => {
     const navigation = view.slice(
         view.indexOf("const openNavigationWorkspace"),
         view.indexOf("const applyTravelPreferences"));
-    assert.match(navigation, /unselectedCourse\.value = ""/);
-    assert.match(navigation, /Select intended adjacent cell/);
-    assert.match(navigation, /if \(course\.value === ""\)/);
+    assert.match(navigation, /const intendedEdge = preferences\.direction === null/);
+    assert.match(navigation, /contextLine\("Intended course", intendedEdge/);
+    assert.match(navigation, /Choose an adjacent course before resolving navigation/);
+    assert.match(navigation, /button\("Choose course"/);
+    assert.match(navigation, /button\("Change course"/);
+    assert.match(navigation, /const direction = intendedEdge\.directionValue/);
+    assert.doesNotMatch(navigation, /name = "intendedDirection"/);
+    assert.doesNotMatch(navigation, /labelled\("Intended course", course\)/);
 });
 
 
