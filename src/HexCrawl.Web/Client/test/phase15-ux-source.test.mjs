@@ -436,29 +436,29 @@ test("focused travel drawer explicitly removes its course and pace listeners on 
     assert.match(view, /controller\.dispose\(\)/);
 });
 
-test("navigator controls use edge-attached arrows with visible focus and practical pointer targets", () => {
+test("navigator controls use midpoint-anchored white SVG arrows with consistent interaction outlines", () => {
     const view = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
         "utf8");
     const styles = fs.readFileSync(path.join(sourceDir, "phase15-styles.ts"), "utf8");
 
     assert.match(view, /--hc-edge-angle/);
-    assert.match(view, /edgeMarks\.get\(edge\.directionValue\)/);
-    assert.match(view, /is-interactive/);
+    assert.match(view, /edge\.midpoint\.x \+ vector\.x \* 0\.045/);
+    assert.match(view, /hc-adjacency-arrow-shape/);
+    assert.match(view, /M2 15 H38 V4 L62 20 L38 36 V25 H2 Z/);
+    assert.doesNotMatch(view, /data-adjacency-edge-mark/);
+    assert.doesNotMatch(view, /edgeMarks/);
     assert.doesNotMatch(view, /hc-adjacency-caption/);
-    assert.match(styles, /\.hc-adjacency-edge::before/);
-    assert.match(styles, /\.hc-adjacency-edge::after/);
-    assert.match(styles, /clip-path:polygon/);
+    assert.match(styles, /\.hc-adjacency-arrow-shape path/);
+    assert.match(styles, /fill:#fff/);
+    assert.match(styles, /stroke:transparent/);
+    assert.match(styles, /paint-order:stroke fill/);
+    assert.match(styles, /:hover:not\(:disabled\) \.hc-adjacency-arrow-shape path \{ stroke:var\(--hc-focus\)/);
+    assert.match(styles, /\.is-selected \.hc-adjacency-arrow-shape path \{ stroke:var\(--hc-focus\)/);
+    assert.doesNotMatch(styles, /hc-adjacency-edge-mark/);
     assert.match(styles, /cursor:pointer/);
-    assert.match(styles, /\.hc-adjacency-edge::after \{[^}]*background:#fff/);
-    assert.match(styles, /\.hc-adjacency-edge::before \{[^}]*background:transparent/);
-    assert.match(styles, /\.hc-adjacency-edge:hover:not\(:disabled\)::before \{ background:var\(--hc-focus\)/);
-    assert.match(styles, /\.hc-adjacency-edge-mark \{[^}]*opacity:0/);
-    assert.doesNotMatch(styles, /\.hc-adjacency-caption/);
-    assert.match(styles, /\.hc-adjacency-edge:focus-visible/);
     assert.match(styles, /outline:3px solid var\(--hc-focus\)/);
     assert.match(styles, /min-width:2\.75rem; min-height:2\.75rem/);
-    assert.match(styles, /@media \(max-width: 760px\)[\s\S]*\.hc-adjacency-edge \{ min-width:2\.75rem; min-height:2\.75rem/);
 });
 
 test("Phase 15 focused editing uses accessible drawers and keeps secondary tools out of the primary surface", () => {

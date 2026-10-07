@@ -597,11 +597,6 @@ export async function renderExpedition(
             control.setAttribute("aria-pressed", String(selected));
             control.classList.toggle("is-selected", selected);
         }
-        for (const mark of root.querySelectorAll<SVGLineElement>("[data-adjacency-edge-mark]")) {
-            const direction = Number(mark.getAttribute("data-adjacency-edge-mark"));
-            mark.classList.toggle("is-selected", preferences.direction === direction);
-        }
-
         const selector = root.querySelector<HTMLSelectElement>("[data-adjacency-select]");
         if (selector) selector.value = preferences.direction === null ? "" : String(preferences.direction);
 
@@ -643,23 +638,6 @@ export async function renderExpedition(
             .map(point => `${point.x * 100},${point.y * 100}`)
             .join(" "));
         svg.append(polygon);
-
-        const edgeMarks = new Map<number, SVGLineElement>();
-        for (const edge of adjacency.edges) {
-            const vector = adjacencyFeedbackVector(adjacency.center, edge.midpoint);
-            const tangent = { x: -vector.y, y: vector.x };
-            const halfLength = 0.11;
-            const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-            line.classList.add("hc-adjacency-edge-mark");
-            if (adjacency.selectedEdgeId === edge.id) line.classList.add("is-selected");
-            line.setAttribute("data-adjacency-edge-mark", String(edge.directionValue));
-            line.setAttribute("x1", String((edge.midpoint.x - tangent.x * halfLength) * 100));
-            line.setAttribute("y1", String((edge.midpoint.y - tangent.y * halfLength) * 100));
-            line.setAttribute("x2", String((edge.midpoint.x + tangent.x * halfLength) * 100));
-            line.setAttribute("y2", String((edge.midpoint.y + tangent.y * halfLength) * 100));
-            edgeMarks.set(edge.directionValue, line);
-            svg.append(line);
-        }
         navigator.append(svg);
 
         const action = expeditionWorkspacePresentation(runtime, journey, survival).action;
@@ -673,11 +651,21 @@ export async function renderExpedition(
             control.className = "hc-adjacency-edge";
             control.dataset.adjacencyEdge = String(edge.directionValue);
             control.dataset.adjacencyEdgeId = edge.id;
-            control.style.setProperty("--hc-edge-x", `${(edge.midpoint.x + vector.x * 0.075) * 100}%`);
-            control.style.setProperty("--hc-edge-y", `${(edge.midpoint.y + vector.y * 0.075) * 100}%`);
-            control.style.setProperty("--hc-edge-feedback-x", `${vector.x * 0.24}rem`);
-            control.style.setProperty("--hc-edge-feedback-y", `${vector.y * 0.24}rem`);
+            control.style.setProperty("--hc-edge-x", `${(edge.midpoint.x + vector.x * 0.045) * 100}%`);
+            control.style.setProperty("--hc-edge-y", `${(edge.midpoint.y + vector.y * 0.045) * 100}%`);
+            control.style.setProperty("--hc-edge-feedback-x", `${vector.x * 0.2}rem`);
+            control.style.setProperty("--hc-edge-feedback-y", `${vector.y * 0.2}rem`);
             control.style.setProperty("--hc-edge-angle", `${angleDegrees}deg`);
+
+            const arrow = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            arrow.classList.add("hc-adjacency-arrow-shape");
+            arrow.setAttribute("viewBox", "0 0 64 40");
+            arrow.setAttribute("aria-hidden", "true");
+            const arrowPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            arrowPath.setAttribute("d", "M2 15 H38 V4 L62 20 L38 36 V25 H2 Z");
+            arrow.append(arrowPath);
+            control.append(arrow);
+
             const actualCourse = runtime.expedition.actualDirection === edge.directionValue
                 && runtime.expedition.actualDirection !== preferences.direction;
             control.setAttribute(
@@ -691,18 +679,7 @@ export async function renderExpedition(
                 : `${identity} to ${targetIdentity}`;
             control.disabled = !courseSelectable || !edge.traversable;
             if (adjacency.selectedEdgeId === edge.id) control.classList.add("is-selected");
-            if (actualCourse) {
-                control.classList.add("is-actual-course");
-            }
-
-            const edgeMark = edgeMarks.get(edge.directionValue);
-            const setInteractiveEdge = (active: boolean): void => {
-                edgeMark?.classList.toggle("is-interactive", active);
-            };
-            control.addEventListener("pointerenter", () => setInteractiveEdge(true));
-            control.addEventListener("pointerleave", () => setInteractiveEdge(false));
-            control.addEventListener("focus", () => setInteractiveEdge(true));
-            control.addEventListener("blur", () => setInteractiveEdge(false));
+            if (actualCourse) control.classList.add("is-actual-course");
             navigator.append(control);
         }
         return navigator;
