@@ -90,6 +90,7 @@ cases=(
   "32-effects-workspace-mobile|effects-workspace|dark|500|844|390"
   "32a-readability-workspace-wide|readability-workspace|light|1366|1000"
   "32b-readability-workspace-container-390|readability-workspace|dark|390|844|390"
+  "32c-guided-pending-consequence|guided-pending-consequence|light|1366|900"
   "33-history-workspace-wide|history-workspace|light|1366|900"
   "34-history-workspace-mobile|history-workspace|dark|500|844|390"
   "35-encounter-mobile|encounter-pending|light|500|844|390"
@@ -269,6 +270,9 @@ else:
             raise SystemExit(f'duplicate Continue travel actions: {metrics}')
         if metrics["travelControlsButtons"] != 0:
             raise SystemExit(f'legacy Travel controls action returned: {metrics}')
+
+    if state == "guided-pending-consequence" and metrics["guidedConsequenceHelpCount"] < 1:
+        raise SystemExit(f'Guided pending-consequence explanation is missing: {metrics}')
 
     if state == "no-course":
         if metrics["selectedEdges"] != 0 or metrics["primaryAction"] != "Choose course":

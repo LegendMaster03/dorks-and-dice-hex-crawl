@@ -2,6 +2,7 @@ import { ExpeditionEffectsApi } from "../../effect-api";
 import type { ExpeditionEffect, ExpeditionEffectState, PendingConsequence } from "../../effect-types";
 import type { ConsequenceProvenanceRequest } from "../../survival-types";
 import type { ExpeditionDetail } from "../../types";
+import { guidedDisclosure } from "../../ui/guidance";
 import { disclosure, humanizeIdentifier, textElement } from "../../ui/workspace";
 
 export class ExpeditionEffectsPanel {
@@ -214,7 +215,11 @@ export class ExpeditionEffectsPanel {
             title,
             this.muted(`${humanizeIdentifier(pending.consequence.category)} · affects ${this.targetLabelFromTarget(pending.consequence.target)}`),
             this.muted(pending.reason),
-            this.muted(`Next: ${pending.requiredAction}`));
+            this.muted(`Next: ${pending.requiredAction}`),
+            guidedDisclosure(
+                "Why is this pending?",
+                humanizeIdentifier(pending.consequence.consequenceKey),
+                `${pending.reason} Hex Crawl still needs this table resolution: ${pending.requiredAction} Record the table result below so the pending consequence can be resolved without inventing an automatic outcome.`));
 
         const note = document.createElement("input");
         note.type = "text";

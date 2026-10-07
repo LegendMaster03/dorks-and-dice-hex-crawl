@@ -1551,6 +1551,12 @@ switch (stateName) {
         effects = effectsFixture(false);
         journey = journeyFixtureWithShuffledDefinitions();
         break;
+    case "guided-pending-consequence":
+        runtime.expedition.intendedDirection = 1;
+        runtime.expedition.actualDirection = 1;
+        effects = effectsFixture(true);
+        effects.pendingConsequences = [pendingJourneyConsequence("pending-guided-consequence")];
+        break;
     case "effects-journey-source":
         runtime.expedition.intendedDirection = 1;
         runtime.expedition.actualDirection = 1;
@@ -1882,7 +1888,7 @@ if (stateName === "more-options-open") {
 } else if (stateName === "journey-pending") {
     findButton("Resolve journey event")?.click();
     await waitForRootText("Pending journey event");
-} else if (stateName === "effects-workspace" || stateName === "effects-journey-source" || stateName === "readability-workspace") {
+} else if (stateName === "effects-workspace" || stateName === "effects-journey-source" || stateName === "readability-workspace" || stateName === "guided-pending-consequence") {
     findButtonContaining("Resources & effects")?.click();
     await waitForRootText("Active effects");
 } else if (stateName === "history-workspace") {
@@ -1985,6 +1991,8 @@ const metrics = {
     primaryAction: root.querySelector(".hc-current-action-primary")?.textContent?.trim() || null,
     guidedNextActionWhyVisible: Array.from(root.querySelectorAll("summary"))
         .some(summary => summary.textContent?.trim() === "Why is this next?"),
+    guidedConsequenceHelpCount: Array.from(root.querySelectorAll("summary"))
+        .filter(summary => summary.textContent?.trim() === "Why is this pending?").length,
     focusedTitle: root.querySelector("[data-phase15-drawer] h2")?.textContent?.trim() || null,
     focusedEdge: document.activeElement?.matches?.("[data-adjacency-edge]") ?? false,
     journeyVisible: rootText.includes("Current stage") && rootText.includes("Progress") && rootText.includes("Roles") && rootText.includes("Pending"),

@@ -1373,3 +1373,29 @@ test("Phase 15.1 procedure entry surfaces expose the same beginner-help preferen
     assert.match(workspace, /toolbar\.append\(back, guidancePreferenceButton\(root\)\)/);
     assert.match(capture, /Guided procedure preference control is missing/);
 });
+
+
+test("Phase 15.1 explains pending consequences without inventing their outcome", () => {
+    const effects = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/effects-panel.ts"),
+        "utf8");
+    const survival = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/survival-resources-panel.ts"),
+        "utf8");
+    const fixture = fs.readFileSync(
+        path.join(sourceDir, "../visual-review/phase15.ts"),
+        "utf8");
+    const capture = fs.readFileSync(
+        path.join(sourceDir, "../visual-review/capture-phase15.sh"),
+        "utf8");
+
+    assert.match(effects, /Why is this pending\?/);
+    assert.match(effects, /pending\.reason/);
+    assert.match(effects, /pending\.requiredAction/);
+    assert.match(effects, /without inventing an automatic outcome/);
+    assert.match(survival, /Why is this pending\?/);
+    assert.match(survival, /does not reroll or reinterpret the consequence/);
+    assert.match(fixture, /guided-pending-consequence/);
+    assert.match(fixture, /guidedConsequenceHelpCount/);
+    assert.match(capture, /Guided pending-consequence explanation is missing/);
+});
