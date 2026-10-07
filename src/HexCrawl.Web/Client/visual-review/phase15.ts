@@ -243,7 +243,9 @@ function moduleDef(moduleKey) {
         mechanicVersion: 1,
         executionHandler: "visual-review",
         automationLevel: "Assisted",
-        parameters: {}
+        parameters: moduleKey === "effects.expedition"
+            ? { effectKinds: "fatigue;exhaustion" }
+            : {}
     };
 }
 
@@ -409,7 +411,8 @@ function runtimeFixture() {
             activeContinueAcrossBoundaries: false,
             activeEncounterKind: null,
             activeEncounterHour: null,
-            activeEncounterHandled: null
+            activeEncounterHandled: null,
+            pendingEncounter: null
         },
         party: party(),
         participantActivityPolicy: {
@@ -479,7 +482,8 @@ function nonSpatialRuntimeFixture() {
         activeWatchRemainingHours: null,
         activeWatchPendingDecision: null,
         activePaceKey: null,
-        activeActivityAssignments: []
+        activeActivityAssignments: [],
+        pendingEncounter: null
     };
     value.movementComposition = {
         policy: {
@@ -664,6 +668,62 @@ function journeySurvivalFixture() {
     return state;
 }
 
+function effectsFixture(active = false) {
+    return {
+        policy: {
+            support: "Supported",
+            effectKinds: ["fatigue", "exhaustion"],
+            accumulationModel: "levels",
+            recoveryModel: "rest",
+            scope: "Participant",
+            mechanicKey: "effects.expedition",
+            mechanicVersion: 1,
+            executionHandler: "visual-review",
+            unsupportedReason: null
+        },
+        activeEffects: active ? [{
+            id: "effect-fatigue",
+            effectKey: "fatigue",
+            target: { scope: "Participant", targetId: "member-1" },
+            mergeKey: "fatigue:member-1",
+            level: 2,
+            magnitude: null,
+            unit: null,
+            state: null,
+            movementComponents: [],
+            sourceConsequenceIds: ["consequence-fatigue"],
+            provenance: [{
+                sourceKind: "ForcedTravelResult",
+                sourceKey: "forced-travel-check",
+                sourceReference: null,
+                providerName: null,
+                note: "Failed forced-travel check"
+            }],
+            recoveryModel: "rest"
+        }] : [],
+        appliedConsequences: [],
+        pendingConsequences: [],
+        history: active ? [{
+            id: "effect-audit-1",
+            effectId: "effect-fatigue",
+            effectKey: "fatigue",
+            operation: "adjust-level",
+            beforeLevel: 1,
+            afterLevel: 2,
+            beforeMagnitude: null,
+            afterMagnitude: null,
+            consequenceId: "consequence-fatigue",
+            provenance: {
+                sourceKind: "ForcedTravelResult",
+                sourceKey: "forced-travel-check",
+                sourceReference: null,
+                providerName: null,
+                note: "Failed forced-travel check"
+            }
+        }] : []
+    };
+}
+
 function journeyFixture() {
     return {
         expeditionVersion: 42,
@@ -712,6 +772,7 @@ function journeyFixture() {
 
 let runtime = runtimeFixture();
 let survival = survivalFixture(false);
+let effects = effectsFixture(false);
 let journey = journeyFixture();
 
 switch (stateName) {
@@ -777,6 +838,16 @@ switch (stateName) {
         runtime.expedition.activeEncounterHour = 1.5;
         runtime.expedition.activeEncounterHandled = true;
         runtime.expedition.activeWatchPendingDecision = "EncounterTriggered";
+        runtime.expedition.pendingEncounter = {
+            id: "encounter-occurrence-1",
+            triggerSequence: 2,
+            watchNumber: 4,
+            outcome: "WanderingEncounter",
+            expeditionElapsedHours: 13.5,
+            hex: { q: 0, r: 0 },
+            locationId: null,
+            note: "A wandering encounter interrupts the expedition."
+        };
         runtime.history.push({
             sequence: 2,
             watchNumber: 4,
@@ -787,12 +858,42 @@ switch (stateName) {
             distanceValue: null,
             distanceUnit: null,
             subjectId: null,
-            subjectType: null
+            subjectType: null,
+            encounterOutcome: "WanderingEncounter",
+            encounterNote: "A wandering encounter interrupts the expedition.",
+            encounterOccurrenceId: "encounter-occurrence-1"
         });
         break;
     case "forced-travel-pending":
         runtime.expedition.intendedDirection = 4;
         survival = survivalFixture(true);
+        effects = effectsFixture(true);
+        break;
+    case "effects-workspace":
+        runtime.expedition.intendedDirection = 1;
+        runtime.expedition.actualDirection = 1;
+        effects = effectsFixture(true);
+        break;
+    case "history-workspace":
+        runtime = nonSpatialRuntimeFixture();
+        survival = journeySurvivalFixture();
+        effects = effectsFixture(true);
+        journey = journeyFixture();
+        journey.history = [{
+            id: "journey-history-1",
+            kind: "StageResolved",
+            processId: "journey-1",
+            stageKey: "pass",
+            detail: "Cross the pass advanced by 2 legs.",
+            completedWatches: 0,
+            provenance: {
+                sourceKind: "Dm",
+                sourceKey: "journey-resolution",
+                sourceReference: null,
+                providerName: null,
+                note: null
+            }
+        }];
         break;
     case "more-options-open":
         runtime.expedition.intendedDirection = 5;
@@ -848,6 +949,7 @@ const originalFetch = window.fetch.bind(window);
 window.fetch = async input => {
     const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
     if (url.includes("/api/expeditions/" + runtime.id + "/survival")) return responseJson(survival);
+    if (url.includes("/api/expeditions/" + runtime.id + "/effects")) return responseJson(effects);
     if (url.includes("/api/expeditions/" + runtime.id + "/journeys")) return responseJson(journey);
     return new Response(JSON.stringify({ detail: "visual-review stub" }), {
         status: 404,
@@ -875,6 +977,10 @@ await renderExpedition(root, api, runtime.id, () => {}, undefined, null);
 
 function findButton(label) {
     return Array.from(root.querySelectorAll("button")).find(button => button.textContent?.trim() === label) || null;
+}
+
+function findButtonContaining(label) {
+    return Array.from(root.querySelectorAll("button")).find(button => button.textContent?.includes(label)) || null;
 }
 
 async function waitForRootText(text, attempts = 20) {
@@ -913,6 +1019,12 @@ if (stateName === "map-selected" || stateName === "map-nonadjacent") {
     findButton("More options")?.click();
 } else if (stateName === "teleport-workspace") {
     findButton("Teleport party")?.click();
+} else if (stateName === "effects-workspace") {
+    findButtonContaining("Resources & effects")?.click();
+    await waitForRootText("Active effects");
+} else if (stateName === "history-workspace") {
+    findButtonContaining("Expedition history")?.click();
+    await waitForRootText("Effects / consequences");
 }
 
 if (stateName === "selected-edge") {
@@ -974,7 +1086,11 @@ const metrics = {
     journeyConsequenceVisible: rootText.includes("1 failure") && rootText.includes("2 complications"),
     movementUnitVisible: rootText.includes("Effective distance (mi)"),
     forcedTravelPrimaryDomainFacing: rootText.includes("Current requirement") && rootText.includes("Failure consequence:"),
-    forcedTravelTechnicalExpanded: Array.from(root.querySelectorAll("details[open] > summary")).some(summary => summary.textContent?.trim() === "Advanced consequence details")
+    forcedTravelTechnicalExpanded: Array.from(root.querySelectorAll("details[open] > summary")).some(summary => summary.textContent?.trim() === "Advanced consequence details"),
+    activeEffectVisible: rootText.includes("Fatigue") && rootText.includes("Level 2") && rootText.includes("Clear effect"),
+    effectRecoveryVisible: rootText.includes("Reduce 1 level") && rootText.includes("Recovery:"),
+    unifiedHistoryVisible: rootText.includes("Journey") && rootText.includes("Travel / runtime") && rootText.includes("Effects / consequences"),
+    positionProgressVisible: rootText.includes("4.5 / 12 mi") && rootText.includes("37.5% through current cell")
 };
 document.getElementById("review-metrics").textContent = JSON.stringify(metrics);
 document.documentElement.dataset.visualReviewReady = "true";

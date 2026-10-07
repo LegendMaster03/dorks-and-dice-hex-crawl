@@ -69,6 +69,13 @@ cases=(
   "28-theme-light-nonspatial|journey-normal|light|1366|900"
   "29-spatial-fixed-pace|fixed-pace|light|1366|900"
   "30-spatial-empty-party|empty-party|light|1366|900"
+  "31-effects-workspace-wide|effects-workspace|light|1366|900"
+  "32-effects-workspace-mobile|effects-workspace|dark|500|844|390"
+  "33-history-workspace-wide|history-workspace|light|1366|900"
+  "34-history-workspace-mobile|history-workspace|dark|500|844|390"
+  "35-encounter-mobile|encounter-pending|light|500|844|390"
+  "36-journey-pending-mobile|journey-pending|dark|500|844|390"
+  "37-partial-progress-mobile|partial-progress|dark|500|844|390"
 )
 
 for spec in "${cases[@]}"; do
@@ -182,6 +189,18 @@ else:
             raise SystemExit(f'forced-travel primary workflow is not domain-facing: {metrics}')
         if metrics["forcedTravelTechnicalExpanded"]:
             raise SystemExit(f'forced-travel advanced consequence details opened by default: {metrics}')
+    if state == "effects-workspace":
+        if metrics["drawerCount"] != 1 or metrics["focusedTitle"] != "Resources & effects":
+            raise SystemExit(f'effects workspace did not open correctly: {metrics}')
+        if not metrics["activeEffectVisible"] or not metrics["effectRecoveryVisible"]:
+            raise SystemExit(f'active effect or recovery controls missing: {metrics}')
+    if state == "history-workspace":
+        if metrics["drawerCount"] != 1 or metrics["focusedTitle"] != "Expedition history":
+            raise SystemExit(f'history workspace did not open correctly: {metrics}')
+        if not metrics["unifiedHistoryVisible"]:
+            raise SystemExit(f'unified expedition history is incomplete: {metrics}')
+    if state == "partial-progress" and not metrics["positionProgressVisible"]:
+        raise SystemExit(f'partial spatial progress is not visible: {metrics}')
     if state == "fixed-pace":
         if metrics["changePaceButtons"] != 0 or metrics["paceTextInputs"] != 0:
             raise SystemExit(f'fixed pace exposed an arbitrary normal-user editor: {metrics}')
