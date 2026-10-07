@@ -73,3 +73,13 @@ export function normalizeTravelModePreference(
     }
     return authoritativePace?.trim() || "normal";
 }
+
+export function normalizeTravelDirectionPreference(
+    direction: number | null,
+    choices: readonly number[],
+    authoritativeDirection: number | null = null): number | null {
+    if (authoritativeDirection !== null && choices.includes(authoritativeDirection)) {
+        return authoritativeDirection;
+    }
+    return direction !== null && choices.includes(direction) ? direction : null;
+}

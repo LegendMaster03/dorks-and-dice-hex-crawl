@@ -32,6 +32,7 @@ import { authoritativeFixedWatchDistance } from "./expedition-party-movement";
 import {
     loadTravelPreferences,
     mergeRuntimeTravelPreferences,
+    normalizeTravelDirectionPreference,
     normalizeTravelModePreference,
     saveTravelPreferences,
     type TravelPreferences
@@ -138,6 +139,19 @@ export async function renderExpedition(
         };
     };
 
+    const normalizeTravelDirectionSelection = (): void => {
+        if (!runtime.expedition.isSpatial) {
+            preferences.direction = null;
+            return;
+        }
+        const adjacency = currentAdjacency();
+        preferences.direction = normalizeTravelDirectionPreference(
+            preferences.direction,
+            adjacency?.edges.map(edge => edge.directionValue) ?? [],
+            runtime.expedition.intendedDirection);
+    };
+    normalizeTravelDirectionSelection();
+
     const synchronizeTravelTargetProjection = (): void => {
         if (!runtime.expedition.isSpatial || preferences.direction === null) {
             if (selectedHexTracksTravelIntent) {
@@ -186,6 +200,7 @@ export async function renderExpedition(
         runtime = next;
         preferences = mergeRuntimeTravelPreferences(runtime, preferences);
         normalizeTravelModeSelection();
+        normalizeTravelDirectionSelection();
         synchronizeTravelTargetProjection();
         saveTravelPreferences(runtime.id, preferences);
         publishExpeditionRuntimeChanged(root, runtime);

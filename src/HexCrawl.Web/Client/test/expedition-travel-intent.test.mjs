@@ -5,6 +5,7 @@ import {
     defaultTravelPreferences,
     loadTravelPreferences,
     mergeRuntimeTravelPreferences,
+    normalizeTravelDirectionPreference,
     normalizeTravelModePreference,
     saveTravelPreferences
 } from "../.test-dist/modules/expeditions/expedition-travel-intent.js";
@@ -76,4 +77,11 @@ test("authoritative active pace wins over reusable browser preference", () => {
     assert.equal(
         normalizeTravelModePreference("fast", ["normal", "fast", "slow"], "slow"),
         "slow");
+});
+
+test("stored course is constrained by the current cell's authoritative edge set", () => {
+    assert.equal(normalizeTravelDirectionPreference(4, [0, 2, 4]), 4);
+    assert.equal(normalizeTravelDirectionPreference(99, [0, 2, 4]), null);
+    assert.equal(normalizeTravelDirectionPreference(4, [0, 2, 4], 2), 2);
+    assert.equal(normalizeTravelDirectionPreference(4, [], 2), null);
 });
