@@ -964,10 +964,12 @@ switch (stateName) {
         journey = journeyFixture();
         journey.history = [{
             id: "journey-history-1",
-            kind: "StageResolved",
+            kind: "ResolutionRecorded",
             processId: "journey-1",
             stageKey: "pass",
-            detail: "Cross the pass advanced by 2 legs.",
+            resolutionId: "8ac00000-0000-0000-0000-000000000001",
+            eventOccurrenceId: null,
+            detail: "Recorded resolution '8ac00000-0000-0000-0000-000000000001' for journey stage 'pass'.",
             completedWatches: 0,
             provenance: {
                 sourceKind: "Dm",
@@ -1030,6 +1032,29 @@ switch (stateName) {
         runtime = nonSpatialRuntimeFixture();
         survival = journeySurvivalFixture();
         journey = journeyFixture();
+        effects = effectsFixture(false);
+        effects.pendingConsequences = [{
+            consequence: {
+                id: "pending-journey-consequence",
+                consequenceKey: "journey-fatigue",
+                category: "PersistentEffectChange",
+                target: { scope: "Participant", targetId: "member-1" },
+                components: [],
+                provenance: {
+                    sourceKind: "JourneyEvent",
+                    sourceKey: "journey-event-consequence",
+                    sourceReference: "event-1",
+                    providerName: null,
+                    note: "event-1:8ac00000-0000-0000-0000-000000000001"
+                },
+                sourceReference: "event-1",
+                note: null
+            },
+            status: "RequiresAdjudication",
+            reason: "Journey consequence requires resolution.",
+            requiredAction: "Resolve consequence.",
+            unresolvedComponents: []
+        }];
         journey.activeProcesses[0].stageStates[0].failures = 1;
         journey.activeProcesses[0].stageStates[0].complications = 2;
         break;
@@ -1157,6 +1182,11 @@ const mapContext = root.querySelector("[data-map-context]");
 const rail = root.querySelector(".hc-table-rail");
 const currentTravel = root.querySelector("[data-current-travel]");
 const rootText = root.textContent || "";
+const journeyPrimaryText = root.querySelector(".hc-journey-primary")?.textContent || "";
+const normalHistoryText = Array.from(root.querySelectorAll("[data-phase15-drawer] .hc-history li"))
+    .filter(isVisible)
+    .map(item => item.textContent || "")
+    .join(" ");
 const metrics = {
     state: stateName,
     surface: "expedition",
@@ -1199,9 +1229,24 @@ const metrics = {
         || rootText.includes("Party & travel order")),
     teleportContextVisible: Array.from(root.querySelectorAll("button")).some(button => isVisible(button) && button.textContent?.trim() === "Teleport party here"),
     journeyConsequenceVisible: rootText.includes("1 failure") && rootText.includes("2 complications"),
+    journeyPendingConsequenceVisible: journeyPrimaryText.includes("1 consequence needs resolution"),
     movementUnitVisible: rootText.includes("Effective distance (mi)"),
+    navigationCourseReadOnly: stateName !== "navigation-pending" || (
+        rootText.includes("Intended course:")
+        && !root.querySelector('[data-phase15-drawer] select[name="intendedDirection"]')
+    ),
     forcedTravelPrimaryDomainFacing: rootText.includes("Current requirement") && rootText.includes("Failure consequence:"),
+    forcedTravelNamedTargetVisible: stateName !== "forced-travel-pending" || (
+        rootText.includes("Affected scope: Participant")
+        && rootText.includes("Affected character")
+        && rootText.includes("Ari")
+        && !rootText.includes("Participant, mount, or vehicle ID when required")
+    ),
     forcedTravelTechnicalExpanded: Array.from(root.querySelectorAll("details[open] > summary")).some(summary => summary.textContent?.trim() === "Advanced consequence details"),
+    normalHistoryRawInternalsVisible: stateName === "history-workspace"
+        && normalHistoryText.includes("8ac00000-0000-0000-0000-000000000001"),
+    technicalHistoryRetained: stateName !== "history-workspace"
+        || rootText.includes("8ac00000-0000-0000-0000-000000000001"),
     activeEffectVisible: rootText.includes("Fatigue") && rootText.includes("Level 2") && rootText.includes("Clear effect"),
     effectRecoveryVisible: rootText.includes("Reduce 1 level") && rootText.includes("Recovery:"),
     unifiedHistoryVisible: rootText.includes("Journey") && rootText.includes("Travel / runtime") && rootText.includes("Effects / consequences"),

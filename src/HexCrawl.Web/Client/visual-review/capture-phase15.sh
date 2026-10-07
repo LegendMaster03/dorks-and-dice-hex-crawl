@@ -158,6 +158,8 @@ else:
             raise SystemExit(f'journey event is not the actual next action: {metrics}')
         if state == "journey-consequence" and not metrics["journeyConsequenceVisible"]:
             raise SystemExit(f'journey consequence state is not visible on the primary surface: {metrics}')
+        if state == "journey-consequence" and not metrics["journeyPendingConsequenceVisible"]:
+            raise SystemExit(f'journey summary disagrees with authoritative pending Effects state: {metrics}')
     else:
         if metrics["navigatorButtons"] != 6:
             raise SystemExit(f'navigator edge count: {metrics}')
@@ -189,8 +191,12 @@ else:
     if state == "forced-travel-pending":
         if not metrics["forcedTravelPrimaryDomainFacing"]:
             raise SystemExit(f'forced-travel primary workflow is not domain-facing: {metrics}')
+        if not metrics["forcedTravelNamedTargetVisible"]:
+            raise SystemExit(f'forced-travel normal workflow does not expose named participant targeting: {metrics}')
         if metrics["forcedTravelTechnicalExpanded"]:
             raise SystemExit(f'forced-travel advanced consequence details opened by default: {metrics}')
+    if state == "navigation-pending" and not metrics["navigationCourseReadOnly"]:
+        raise SystemExit(f'navigation repeated the already-selected intended course input: {metrics}')
     if state == "effects-workspace":
         if metrics["drawerCount"] != 1 or metrics["focusedTitle"] != "Resources & effects":
             raise SystemExit(f'effects workspace did not open correctly: {metrics}')
@@ -201,6 +207,10 @@ else:
             raise SystemExit(f'history workspace did not open correctly: {metrics}')
         if not metrics["unifiedHistoryVisible"]:
             raise SystemExit(f'unified expedition history is incomplete: {metrics}')
+        if metrics["normalHistoryRawInternalsVisible"]:
+            raise SystemExit(f'normal expedition history exposes raw journey identity: {metrics}')
+        if not metrics["technicalHistoryRetained"]:
+            raise SystemExit(f'advanced expedition history lost raw diagnostic identity: {metrics}')
     if state == "partial-progress" and not metrics["positionProgressVisible"]:
         raise SystemExit(f'partial spatial progress is not visible: {metrics}')
     if state == "focus-return" and not metrics["focusReturnedToOpener"]:
