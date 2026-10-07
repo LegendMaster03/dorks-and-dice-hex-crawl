@@ -1835,7 +1835,7 @@ const normalJourneyText = Array.from(root.querySelectorAll("[data-journey-panel]
     .filter(isNormalPresentationElement)
     .map(item => item.textContent || "")
     .join(" ");
-const normalEffectText = Array.from(root.querySelectorAll("[data-effects-panel] h3, [data-effects-panel] h4, [data-effects-panel] p, [data-effects-panel] li"))
+const normalEffectText = Array.from(root.querySelectorAll("[data-effects-panel] h3, [data-effects-panel] h4, [data-effects-panel] p, [data-effects-panel] li, [data-effects-panel] caption, [data-effects-panel] th, [data-effects-panel] td"))
     .filter(isNormalPresentationElement)
     .map(item => item.textContent || "")
     .join(" ");
@@ -1946,7 +1946,7 @@ const metrics = {
         ),
     journeyEffectSourceHumanized: stateName !== "effects-journey-source"
         || (
-            normalEffectText.includes("Source: Journey event")
+            normalEffectText.includes("Journey event")
             && !normalEffectText.includes("8ac00000-0000-0000-0000-000000000001")
             && !normalEffectText.includes("journey-event-consequence")
         ),
