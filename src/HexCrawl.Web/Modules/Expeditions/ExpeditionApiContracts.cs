@@ -31,6 +31,22 @@ public sealed record PresentationProfileContract(
         policy.AllowPlayerAnnotations);
 }
 
+public sealed record PendingEncounterContract(
+    Guid Id,
+    long TriggerSequence,
+    int WatchNumber,
+    EncounterOutcomeKind Outcome,
+    double ExpeditionElapsedHours,
+    HexCoordinate? Hex,
+    Guid? LocationId,
+    string? Note)
+{
+    public static PendingEncounterContract? From(PendingEncounterOccurrence? occurrence) =>
+        occurrence is null ? null : new PendingEncounterContract(
+            occurrence.Id, occurrence.TriggerSequence, occurrence.WatchNumber, occurrence.Outcome,
+            occurrence.ExpeditionElapsedTime.TotalHours, occurrence.Hex, occurrence.LocationId, occurrence.Note);
+}
+
 public sealed record WorkbenchExpeditionStateContract(
     Guid Id,
     bool IsSpatial,
@@ -64,7 +80,8 @@ public sealed record WorkbenchExpeditionStateContract(
     bool ActiveContinueAcrossBoundaries,
     EncounterOutcomeKind? ActiveEncounterKind,
     double? ActiveEncounterHour,
-    bool? ActiveEncounterHandled)
+    bool? ActiveEncounterHandled,
+    PendingEncounterContract? PendingEncounter)
 {
     public static WorkbenchExpeditionStateContract From(CrawlSessionRuntimeState runtime) => runtime switch
     {
@@ -103,7 +120,8 @@ public sealed record WorkbenchExpeditionStateContract(
             expedition.ActiveWatch?.Plan.ContinueAcrossBoundaries ?? false,
             expedition.ActiveWatch?.Encounter.Kind,
             expedition.ActiveWatch?.Encounter.OccursAt?.TotalHours,
-            expedition.ActiveWatch?.EncounterHandled),
+            expedition.ActiveWatch?.EncounterHandled,
+            PendingEncounterContract.From(expedition.PendingEncounter)),
         NonSpatialSessionState nonSpatial => new(
             nonSpatial.Id,
             false,
@@ -139,7 +157,8 @@ public sealed record WorkbenchExpeditionStateContract(
             false,
             null,
             null,
-            null),
+            null,
+            PendingEncounterContract.From(nonSpatial.PendingEncounter)),
         _ => throw new ArgumentOutOfRangeException(nameof(runtime))
     };
 }
@@ -370,6 +389,16 @@ public sealed record AdvanceExpeditionWorkbenchRequest
         DmOverrideNote = DmOverrideNote,
         GeneratedProcedureResolutionId = GeneratedProcedureResolutionId
     };
+}
+
+public sealed record ResolveEncounterRequest(
+    long ExpectedVersion,
+    ResolutionSource ResolutionSource = ResolutionSource.DmOverride,
+    string? ResolutionNote = null,
+    string? ResultNote = null)
+{
+    public ResolveEncounterCommand ToCommand(Guid occurrenceId) => new(
+        ExpectedVersion, occurrenceId, ResolutionSource, ResolutionNote, ResultNote);
 }
 
 public sealed record ResolveBoundaryDecisionRequest(

@@ -1,3 +1,5 @@
+using System.Buffers.Binary;
+using System.Security.Cryptography;
 using HexCrawl.Domain.Spatial;
 
 namespace HexCrawl.Domain.Runtime;
@@ -57,9 +59,34 @@ public sealed record NonSpatialCrawlSessionContext(string Name) : CrawlSessionCo
     }
 }
 
+public static class EncounterOccurrenceIdentity
+{
+    public static Guid Create(Guid runtimeId, long triggerSequence)
+    {
+        Span<byte> input = stackalloc byte[24];
+        runtimeId.TryWriteBytes(input[..16]);
+        BinaryPrimitives.WriteInt64LittleEndian(input[16..], triggerSequence);
+        Span<byte> hash = stackalloc byte[32];
+        SHA256.HashData(input, hash);
+        return new Guid(hash[..16]);
+    }
+}
+
+public sealed record PendingEncounterOccurrence(
+    Guid Id,
+    long TriggerSequence,
+    int WatchNumber,
+    EncounterOutcomeKind Outcome,
+    TimeSpan ExpeditionElapsedTime,
+    HexCoordinate? Hex,
+    Guid? LocationId,
+    string? Note,
+    ResolutionProvenance Provenance);
+
 public abstract record CrawlSessionRuntimeState
 {
     public required Guid Id { get; init; }
+    public PendingEncounterOccurrence? PendingEncounter { get; init; }
     public IReadOnlyList<CrawlRuntimeEvent> History { get; init; } = [];
 }
 

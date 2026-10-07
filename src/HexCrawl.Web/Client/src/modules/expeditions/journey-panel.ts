@@ -62,19 +62,28 @@ export class ExpeditionJourneyPanel {
     }
 
     private policySummary(state: ExpeditionJourneyState): HTMLElement {
-        const section = this.section("Pinned journey policy");
+        const section = this.section("Journey rules");
         const process = state.processPolicy;
         const events = state.eventPolicy;
         section.append(this.muted(process.support === "None"
-            ? "No journey.process capability is stored on this campaign procedure."
+            ? "This procedure does not use a journey process."
             : process.support === "Unsupported"
-                ? process.unsupportedReason ?? "The stored journey.process policy is unsupported."
-                : `Process: ${process.stageModel}; transition ${process.stageTransitionModel}; progress ${process.progressModel} (${process.progressKind}${process.progressUnit ? `, ${process.progressUnit}` : ""}); completion ${process.completionModel}; roles ${process.roleDriven ? process.roleAssignmentModel : "not required"}; interval integration ${process.intervalIntegrationModel}.`));
+                ? process.unsupportedReason ?? "The stored journey rules are not supported by this runtime."
+                : `Journey stages track ${process.progressKind === "Numeric" ? "progress" : "table state"}${process.progressUnit ? ` in ${process.progressUnit}` : ""}. ${process.roleDriven ? "Assigned roles can be used for resolutions." : "No journey role is required by the procedure."}`));
         section.append(this.muted(events.support === "None"
-            ? "No journey.events capability is stored on this campaign procedure."
+            ? "This procedure does not create journey events."
             : events.support === "Unsupported"
-                ? events.unsupportedReason ?? "The stored journey.events policy is unsupported."
-                : `Events: ${events.triggerModel}; explicit sources ${events.triggerSources.join(", ")}; ${events.linkMode}; target ${events.targetingModel}; environment ${events.terrainInfluence}; consequence ${events.consequenceModel}. Trigger semantics create opportunities only; event content and quantities are resolved inputs.`));
+                ? events.unsupportedReason ?? "The stored journey-event rules are not supported by this runtime."
+                : "Journey events appear when their configured trigger occurs. The DM resolves the event content and any resulting expedition consequence."));
+
+        const advanced = document.createElement("details");
+        const summary = document.createElement("summary");
+        summary.textContent = "Advanced technical details";
+        advanced.append(
+            summary,
+            this.muted(`Process stage model: ${process.stageModel ?? "none"}; transition: ${process.stageTransitionModel ?? "none"}; progress model: ${process.progressModel ?? "none"}; role assignment: ${process.roleAssignmentModel ?? "none"}; interval integration: ${process.intervalIntegrationModel ?? "none"}.`),
+            this.muted(`Event trigger model: ${events.triggerModel ?? "none"}; trigger sources: ${events.triggerSources.join(", ") || "none"}; link mode: ${events.linkMode ?? "none"}; targeting: ${events.targetingModel ?? "none"}; consequence model: ${events.consequenceModel ?? "none"}.`));
+        section.append(advanced);
         return section;
     }
 
@@ -90,7 +99,7 @@ export class ExpeditionJourneyPanel {
         const list = document.createElement("ul");
         for (const assignment of roles) {
             const item = document.createElement("li");
-            item.textContent = `${assignment.roleKey}: ${assignment.participantId ? members.get(assignment.participantId) ?? assignment.participantId : "party"}`;
+            item.textContent = `${humanize(assignment.roleKey!)}: ${assignment.participantId ? members.get(assignment.participantId) ?? "Unknown participant" : "Party"}`;
             list.append(item);
         }
         section.append(list, this.muted("Each resolution snapshots the participant/role used; later role edits do not rewrite history."));
@@ -107,20 +116,19 @@ export class ExpeditionJourneyPanel {
         if (state.processPolicy.stageKeys.length > 0) {
             const form = document.createElement("form");
             form.className = "hc-form hc-form-grid";
-            const key = this.input("Process key", "text", "journey");
-            const name = this.input("Display name", "text", "Journey");
-            const destination = this.input("Destination / target reference", "text");
-            const route = this.input("Route reference", "text");
-            const submit = this.button("Start pinned process");
-            form.append(key.wrapper, name.wrapper, destination.wrapper, route.wrapper, submit);
+            const name = this.input("Journey name", "text", "Journey");
+            const destination = this.input("Destination / target", "text");
+            const route = this.input("Route", "text");
+            const submit = this.button("Start journey");
+            form.append(name.wrapper, destination.wrapper, route.wrapper, submit);
             form.addEventListener("submit", event => {
                 event.preventDefault();
                 void this.mutate(submit, async () => {
                     const result = await this.api.startProcess(this.expeditionId, {
                         expectedVersion: this.requireState().expeditionVersion,
                         processId: crypto.randomUUID(),
-                        processKey: required(key.control.value, "Process key"),
-                        displayName: required(name.control.value, "Display name"),
+                        processKey: "journey",
+                        displayName: required(name.control.value, "Journey name"),
                         destinationReference: nullable(destination.control.value),
                         routeReference: nullable(route.control.value),
                         provenance: dmJourneyProvenance("journey-process-start")
@@ -128,7 +136,7 @@ export class ExpeditionJourneyPanel {
                     this.apply(result.state);
                 });
             });
-            section.append(this.muted(`The pinned procedure supplies stages: ${state.processPolicy.stageKeys.join(" → ")}. No route length, check formula, or event count is inferred.`), form);
+            section.append(this.muted(`Stages: ${state.processPolicy.stageKeys.map(humanize).join(" → ")}. No route length, check formula, or event count is inferred.`), form);
             return section;
         }
 
@@ -158,7 +166,14 @@ export class ExpeditionJourneyPanel {
                 this.apply(result.state);
             });
         });
-        section.append(this.muted("Custom definitions provide concrete stage/approach structure only. They do not replace the campaign's pinned execution policy."), custom);
+        const advanced = document.createElement("details");
+        const advancedSummary = document.createElement("summary");
+        advancedSummary.textContent = "Advanced custom process definition";
+        advanced.append(
+            advancedSummary,
+            this.muted("Use exact process, stage, and approach keys only when the generic procedure intentionally leaves the journey structure unresolved."),
+            custom);
+        section.append(advanced);
         return section;
     }
 
@@ -186,11 +201,19 @@ export class ExpeditionJourneyPanel {
         card.className = "hc-card";
         const current = process.definition.stages.find(value => value.stageKey === process.currentStageKey)!;
         const stageState = process.stageStates.find(value => value.stageKey === process.currentStageKey)!;
-        card.append(this.heading(`${process.definition.displayName} — ${process.status}`));
-        card.append(this.muted(`Stage: ${current.displayName} (${current.stageKey}). ${describeProgress(process, stageState)} Successes ${stageState.successes}; failures ${stageState.failures}; complications ${stageState.complications}.`));
-        if (current.approaches.length > 0) card.append(this.muted(`Approaches: ${current.approaches.map(value => capabilityLabel(value)).join(" · ")}`));
-        if (process.pendingActions.length > 0) card.append(this.muted(`Pending: ${process.pendingActions.map(value => `${value.kind}${value.detail ? ` — ${value.detail}` : ""}`).join(" | ")}`));
+        card.append(this.heading(`${process.definition.displayName} — ${humanize(process.status)}`));
+        card.append(this.muted(`Stage: ${current.displayName}. ${describeProgress(process, stageState)} Successes ${stageState.successes}; failures ${stageState.failures}; complications ${stageState.complications}.`));
+        if (current.approaches.length > 0) card.append(this.muted(`Approaches: ${current.approaches.map(value => value.displayName).join(" · ")}`));
+        if (process.pendingActions.length > 0) card.append(this.muted(`Pending: ${process.pendingActions.map(value => `${humanize(value.kind)}${value.detail ? ` — ${value.detail}` : ""}`).join(" | ")}`));
         card.append(this.processStageSummary(process), this.resolveProcessForm(process), this.processCloseControls(process));
+        const technical = document.createElement("details");
+        const technicalSummary = document.createElement("summary");
+        technicalSummary.textContent = "Advanced technical details";
+        technical.append(
+            technicalSummary,
+            this.muted(`Process ID: ${process.id}`),
+            this.muted(`Process key: ${process.processKey}; current stage key: ${process.currentStageKey}.`));
+        card.append(technical);
         return card;
     }
 
@@ -210,12 +233,16 @@ export class ExpeditionJourneyPanel {
         const form = document.createElement("form");
         form.className = "hc-form hc-form-grid";
         const stage = process.definition.stages.find(value => value.stageKey === process.currentStageKey)!;
-        const pendingValues = process.pendingActions.length > 0 ? process.pendingActions.map(value => value.id) : [""];
+        const pendingValues = process.pendingActions.length > 0
+            ? process.pendingActions.map(value => `${value.id}|${humanize(value.kind)}${value.detail ? ` — ${value.detail}` : ""}`)
+            : [""];
         const pending = this.select("Pending opportunity", pendingValues);
-        const approach = this.select("Approach", ["", ...stage.approaches.map(value => value.approachKey)]);
+        const approach = this.select("Approach", ["", ...stage.approaches.map(value => `${value.approachKey}|${value.displayName}`)]);
         const runtime = this.getRuntime();
         const roles = [...new Set(runtime.party.activityAssignments.map(value => value.roleKey).filter((value): value is string => Boolean(value)))];
-        const roleValues = process.execution.roleDriven && roles.length > 0 ? roles : ["", ...roles];
+        const roleValues = process.execution.roleDriven && roles.length > 0
+            ? roles.map(value => `${value}|${humanize(value)}`)
+            : ["", ...roles.map(value => `${value}|${humanize(value)}`)];
         const role = this.select("Role", roleValues);
         const actor = this.select("Actor", ["", ...runtime.party.members.map(value => `${value.id}|${value.name}`)]);
         const progress = this.input(process.execution.progressKind === "Numeric" ? "Progress delta" : "Progress state", process.execution.progressKind === "Numeric" ? "number" : "text", process.execution.progressKind === "Numeric" ? "0" : "");
@@ -224,7 +251,9 @@ export class ExpeditionJourneyPanel {
         const failures = this.input("Failure delta", "number", "0");
         const complications = this.input("Complication delta", "number", "0");
         const completeStage = this.checkbox("Complete current stage", false);
-        const targetStage = this.select("Explicit next stage", ["", ...process.definition.stageOrder.filter(value => value !== process.currentStageKey)]);
+        const targetStage = this.select("Next stage", ["", ...process.definition.stageOrder
+            .filter(value => value !== process.currentStageKey)
+            .map(value => `${value}|${process.definition.stages.find(stage => stage.stageKey === value)?.displayName ?? humanize(value)}`)]);
         const completeProcess = this.checkbox("Complete process", false);
         const failProcess = this.checkbox("Fail process", false);
         const consequence = this.consequenceFields();
@@ -341,9 +370,17 @@ export class ExpeditionJourneyPanel {
             for (const event of resolved) {
                 const card = document.createElement("div");
                 card.className = "hc-card";
-                card.append(this.heading(`${event.eventKey ?? event.trigger} — ${event.status}`));
-                card.append(this.muted(`Trigger ${event.trigger}: ${event.triggerReference}. Target ${event.participantSnapshot?.participantName ?? event.targetRoleKey ?? event.targetKind}. Consequences: ${event.consequenceIds.length ? event.consequenceIds.join(", ") : "none"}.`));
-                if (event.environment.length > 0) card.append(this.muted(`Environment snapshot: ${event.environment.map(value => `${value.dimension}=${value.value}${value.unit ? ` ${value.unit}` : ""}`).join("; ")}`));
+                card.append(this.heading(`${event.eventKey ? humanize(event.eventKey) : humanize(event.trigger)} — ${humanize(event.status)}`));
+                card.append(this.muted(`Affects ${event.participantSnapshot?.participantName ?? (event.targetRoleKey ? humanize(event.targetRoleKey) : humanize(event.targetKind))}. ${event.consequenceIds.length ? `${event.consequenceIds.length} consequence${event.consequenceIds.length === 1 ? "" : "s"} recorded.` : "No consequence recorded."}`));
+                if (event.environment.length > 0) card.append(this.muted(`Environment: ${event.environment.map(value => `${humanize(value.dimension)} ${value.value}${value.unit ? ` ${value.unit}` : ""}`).join("; ")}`));
+                const technical = document.createElement("details");
+                const technicalSummary = document.createElement("summary");
+                technicalSummary.textContent = "Advanced technical details";
+                technical.append(
+                    technicalSummary,
+                    this.muted(`Trigger: ${event.trigger}; reference: ${event.triggerReference}.`),
+                    this.muted(`Occurrence ID: ${event.id}; process ID: ${event.processId ?? "none"}; stage key: ${event.stageKey ?? "none"}; consequence IDs: ${event.consequenceIds.join(", ") || "none"}.`));
+                card.append(technical);
                 if (event.status === "Resolved" && event.consequenceIds.length > 0) card.append(this.encounterHandoffControl(event));
                 section.append(card);
             }
@@ -376,21 +413,28 @@ export class ExpeditionJourneyPanel {
     private eventCard(event: JourneyEventOccurrence): HTMLElement {
         const card = document.createElement("div");
         card.className = "hc-card";
-        card.append(this.heading(`Pending ${event.trigger} event`));
-        card.append(this.muted(`Source: ${event.triggerReference}${event.processId ? `; process ${event.processId}; stage ${event.stageKey ?? "—"}` : ""}.`));
-        if (event.environment.length > 0) card.append(this.muted(`Relevant environment: ${event.environment.map(value => `${value.dimension}=${value.value}${value.unit ? ` ${value.unit}` : ""}`).join("; ")}`));
+        card.append(this.heading(`Pending ${humanize(event.trigger)} event`));
+        if (event.environment.length > 0) card.append(this.muted(`Relevant environment: ${event.environment.map(value => `${humanize(value.dimension)} ${value.value}${value.unit ? ` ${value.unit}` : ""}`).join("; ")}`));
+        const technical = document.createElement("details");
+        const technicalSummary = document.createElement("summary");
+        technicalSummary.textContent = "Advanced technical details";
+        technical.append(
+            technicalSummary,
+            this.muted(`Trigger reference: ${event.triggerReference}.`),
+            this.muted(`Occurrence ID: ${event.id}; process ID: ${event.processId ?? "none"}; stage key: ${event.stageKey ?? "none"}.`));
+        card.append(technical);
         const form = document.createElement("form");
         form.className = "hc-form hc-form-grid";
         const state = this.requireState();
         const runtime = this.getRuntime();
-        const status = this.select("Resolution", ["Resolved", "Skipped", "NotApplicable"]);
-        const key = this.input("Event key", "text");
-        const type = this.input("Event type/category", "text");
+        const status = this.select("Resolution", ["Resolved|Resolved", "Skipped|Skipped", "NotApplicable|Not applicable"]);
+        const key = this.input("Event name", "text");
+        const type = this.input("Event type", "text");
         const targetKinds = state.eventPolicy.targetingModel === "travel-role"
             ? ["Role"]
             : ["Party", "Expedition", "Role", "Participant", "Mount", "Vehicle"];
-        const targetKind = this.select("Target kind", targetKinds);
-        const role = this.select("Target role", ["", ...runtime.participantActivityPolicy.roleKeys]);
+        const targetKind = this.select("Affects", targetKinds.map(value => `${value}|${humanize(value)}`));
+        const role = this.select("Role", ["", ...runtime.participantActivityPolicy.roleKeys.map(value => `${value}|${humanize(value)}`)]);
         const participant = this.select("Target participant", ["", ...runtime.party.members.map(value => `${value.id}|${value.name}`)]);
         const contributors = (runtime.party.movementContributors ?? [])
             .filter(value => value.kind === "Mount" || value.kind === "Vehicle")
@@ -416,7 +460,7 @@ export class ExpeditionJourneyPanel {
                     resolution: {
                         occurrenceId: event.id,
                         status: status.control.value as "Resolved" | "Skipped" | "NotApplicable",
-                        eventKey: resolved ? required(key.control.value, "Event key") : null,
+                        eventKey: resolved ? required(key.control.value, "Event name") : null,
                         eventType: resolved ? nullable(type.control.value) : null,
                         targetKind: resolved ? selectedKind : "Unresolved",
                         targetRoleKey: resolved && selectedKind === "Role" ? required(role.control.value, "Target role") : null,
@@ -434,7 +478,7 @@ export class ExpeditionJourneyPanel {
     }
 
     private historyView(state: ExpeditionJourneyState): HTMLElement {
-        const section = this.section("Process history");
+        const section = this.section("Journey history");
         if (state.history.length === 0) {
             section.append(this.muted("No journey history yet."));
             return section;
@@ -442,49 +486,152 @@ export class ExpeditionJourneyPanel {
         const list = document.createElement("ol");
         for (const record of state.history) {
             const item = document.createElement("li");
-            item.textContent = `${record.kind}: ${record.detail} [watch ${record.completedWatches}; source ${record.provenance.sourceKey}]`;
+            item.textContent = `${humanize(record.kind)} — ${record.detail}`;
             list.append(item);
         }
         section.append(list);
+
+        const advanced = document.createElement("details");
+        const summary = document.createElement("summary");
+        summary.textContent = "Advanced technical details";
+        const technical = document.createElement("ol");
+        for (const record of state.history) {
+            const item = document.createElement("li");
+            item.textContent = `${record.kind} · watch ${record.completedWatches} · source ${record.provenance.sourceKey} · process ${record.processId ?? "none"} · stage ${record.stageKey ?? "none"} · record ${record.id}`;
+            technical.append(item);
+        }
+        advanced.append(summary, technical);
+        section.append(advanced);
         return section;
     }
 
     private consequenceFields(): { container: HTMLElement; build: (source: string, sourceId: string, occurrenceId: string) => ExpeditionConsequenceInput[] } {
         const container = document.createElement("fieldset");
         const legend = document.createElement("legend");
-        legend.textContent = "Optional structured consequence";
-        const kind = this.select("Consequence", ["None", "TimeDelay", "PersistentEffectChange", "ResourceChange", "EncounterCircumstance", "DamageEndurance"]);
-        const key = this.input("Consequence/effect/resource key", "text");
-        const value = this.input("Resolved value / delta", "number", "1");
+        legend.textContent = "Optional journey result";
+
+        const kind = this.select("Result", [
+            "None|No consequence",
+            "TimeDelay|Time delay",
+            "PersistentEffectChange|Persistent effect",
+            "ResourceChange|Resource change",
+            "EncounterCircumstance|Encounter circumstance",
+            "DamageEndurance|Damage / endurance"
+        ]);
+        const runtime = this.getRuntime();
+        const effectKinds = runtime.procedure.modules
+            .find(module => module.moduleKey === "effects.expedition")
+            ?.parameters.effectKinds?.split(";").map(value => value.trim()).filter(Boolean) ?? [];
+        const effect = effectKinds.length > 0
+            ? this.select("Effect", effectKinds.map(value => `${value}|${humanize(value)}`))
+            : this.input("Effect", "text");
+        const name = this.input("Resource / circumstance / state", "text");
+        const value = this.input("Amount / level change", "number", "1");
         value.control.step = "any";
-        const unit = this.input("Unit / encounter value", "text");
-        const scope = this.select("Scope", ["Party", "Expedition", "Participant", "Mount", "Vehicle"]);
-        const targetId = this.input("Target ID when required", "text");
-        container.append(legend, kind.wrapper, key.wrapper, value.wrapper, unit.wrapper, scope.wrapper, targetId.wrapper);
+        const unit = this.input("Unit / value", "text");
+        const timeUnit = this.select("Time unit", ["Hours|Hours", "Minutes|Minutes", "Days|Days"]);
+
+        const targetOptions = [
+            "Party|Party",
+            "Expedition|Expedition",
+            ...runtime.party.members.map(member => `Participant:${member.id}|${member.name}`),
+            ...(runtime.party.movementContributors ?? [])
+                .filter(contributor => contributor.kind === "Mount" || contributor.kind === "Vehicle")
+                .map(contributor => `${contributor.kind}:${contributor.id}|${humanize(contributor.kind)}: ${humanize(contributor.key)}`)
+        ];
+        const affected = this.select("Affects", targetOptions);
+
+        const technical = document.createElement("details");
+        const technicalSummary = document.createElement("summary");
+        technicalSummary.textContent = "Advanced technical details";
+        technical.append(
+            technicalSummary,
+            this.muted("The selected tabletop result is translated to the existing generic ExpeditionConsequence model. Exact category, target scope, generated identity, and provenance remain available in persisted audit state."));
+
+        container.append(
+            legend,
+            kind.wrapper,
+            effect.wrapper,
+            name.wrapper,
+            value.wrapper,
+            unit.wrapper,
+            timeUnit.wrapper,
+            affected.wrapper,
+            technical);
+
+        const updateVisibility = (): void => {
+            const selected = kind.control.value;
+            effect.wrapper.hidden = selected !== "PersistentEffectChange";
+            name.wrapper.hidden = !["ResourceChange", "EncounterCircumstance", "DamageEndurance"].includes(selected);
+            value.wrapper.hidden = selected === "None" || selected === "EncounterCircumstance";
+            unit.wrapper.hidden = !["ResourceChange", "EncounterCircumstance", "DamageEndurance"].includes(selected);
+            timeUnit.wrapper.hidden = selected !== "TimeDelay";
+            affected.wrapper.hidden = selected === "None";
+        };
+        kind.control.addEventListener("change", updateVisibility);
+        updateVisibility();
+
         return {
             container,
             build: (source, sourceId, occurrenceId) => {
                 if (kind.control.value === "None") return [];
                 const consequenceId = crypto.randomUUID();
-                const consequenceKey = required(key.control.value, "Consequence key");
-                const resolvedTarget = target(scope.control.value as ExpeditionEffectScope, nullable(targetId.control.value));
+                const resolvedTarget = parseJourneyTarget(affected.control.value);
                 const provenance = dmJourneyProvenance(`${source}-consequence`, `${sourceId}:${occurrenceId}`);
                 switch (kind.control.value) {
                     case "TimeDelay":
-                        return [{ id: consequenceId, consequenceKey, category: "TimeDelay", target: resolvedTarget,
-                            components: [{ kind: "timeDelay", value: positiveNumber(value.control.value), unit: unit.control.value === "Days" ? "Days" : unit.control.value === "Minutes" ? "Minutes" : "Hours" }], provenance }];
-                    case "PersistentEffectChange":
-                        return [{ id: consequenceId, consequenceKey, category: "PersistentEffectChange", target: resolvedTarget,
-                            components: [{ kind: "persistentEffectChange", effectKey: consequenceKey, operation: "AdjustLevel", levelDelta: nonZeroInteger(value.control.value), explicitlyResolved: true, movementComponents: [] }], provenance }];
-                    case "ResourceChange":
-                        return [{ id: consequenceId, consequenceKey, category: "ResourceChange", target: resolvedTarget,
-                            components: [{ kind: "resourceChange", resourceKey: consequenceKey, operation: "AdjustQuantity", quantity: nonZeroNumber(value.control.value), unit: required(unit.control.value, "Resource unit") }], provenance }];
-                    case "EncounterCircumstance":
-                        return [{ id: consequenceId, consequenceKey, category: "EncounterCircumstance", target: resolvedTarget,
-                            components: [{ kind: "encounterCircumstance", circumstanceKey: consequenceKey, value: nullable(unit.control.value) }], provenance }];
-                    case "DamageEndurance":
-                        return [{ id: consequenceId, consequenceKey, category: "DamageEndurance", target: resolvedTarget,
-                            components: [{ kind: "externalState", stateKey: consequenceKey, delta: nonZeroNumber(value.control.value), unit: nullable(unit.control.value) }], provenance }];
+                        return [{
+                            id: consequenceId,
+                            consequenceKey: "journey-time-delay",
+                            category: "TimeDelay",
+                            target: resolvedTarget,
+                            components: [{ kind: "timeDelay", value: positiveNumber(value.control.value), unit: timeUnit.control.value as "Minutes" | "Hours" | "Days" }],
+                            provenance
+                        }];
+                    case "PersistentEffectChange": {
+                        const effectKey = required(effect.control.value, "Effect");
+                        return [{
+                            id: consequenceId,
+                            consequenceKey: effectKey,
+                            category: "PersistentEffectChange",
+                            target: resolvedTarget,
+                            components: [{ kind: "persistentEffectChange", effectKey, operation: "AdjustLevel", levelDelta: nonZeroInteger(value.control.value), explicitlyResolved: true, movementComponents: [] }],
+                            provenance
+                        }];
+                    }
+                    case "ResourceChange": {
+                        const resourceKey = required(name.control.value, "Resource");
+                        return [{
+                            id: consequenceId,
+                            consequenceKey: resourceKey,
+                            category: "ResourceChange",
+                            target: resolvedTarget,
+                            components: [{ kind: "resourceChange", resourceKey, operation: "AdjustQuantity", quantity: nonZeroNumber(value.control.value), unit: required(unit.control.value, "Resource unit") }],
+                            provenance
+                        }];
+                    }
+                    case "EncounterCircumstance": {
+                        const circumstanceKey = required(name.control.value, "Circumstance");
+                        return [{
+                            id: consequenceId,
+                            consequenceKey: circumstanceKey,
+                            category: "EncounterCircumstance",
+                            target: resolvedTarget,
+                            components: [{ kind: "encounterCircumstance", circumstanceKey, value: nullable(unit.control.value) }],
+                            provenance
+                        }];
+                    }
+                    case "DamageEndurance": {
+                        const stateKey = required(name.control.value, "State");
+                        return [{
+                            id: consequenceId,
+                            consequenceKey: stateKey,
+                            category: "DamageEndurance",
+                            target: resolvedTarget,
+                            components: [{ kind: "externalState", stateKey, delta: nonZeroNumber(value.control.value), unit: nullable(unit.control.value) }],
+                            provenance
+                        }];
+                    }
                     default:
                         return [];
                 }
@@ -642,6 +789,14 @@ function splitKeys(value: string): string[] {
 function humanize(value: string): string {
     const text = value.replace(/[-_]+/g, " ").trim();
     return text ? text[0].toUpperCase() + text.slice(1) : value;
+}
+
+function parseJourneyTarget(value: string): ReturnType<typeof target> {
+    const separator = value.indexOf(":");
+    if (separator < 0) return target(value as ExpeditionEffectScope, null);
+    return target(
+        value.slice(0, separator) as ExpeditionEffectScope,
+        value.slice(separator + 1));
 }
 
 function nullable(value: string): string | null {

@@ -34,11 +34,10 @@ export class ExpeditionWatchController {
         api: HexCrawlApi,
         runtime: ExpeditionDetail,
         intendedDirection: number,
-        paceKey: string,
-        resumeEncounter = false): Promise<ExpeditionDetail> {
+        paceKey: string): Promise<ExpeditionDetail> {
         const execution = requireProcedureRuntime(runtime);
         const state = spatialState(runtime);
-        if (runtime.pauseReason === "EncounterTriggered" && !resumeEncounter) {
+        if (runtime.pauseReason === "EncounterTriggered" || state.pendingEncounter !== null) {
             throw new Error("Resolve the active encounter before continuing travel.");
         }
         if (runtime.pauseReason === "LostRecognitionRequired") {

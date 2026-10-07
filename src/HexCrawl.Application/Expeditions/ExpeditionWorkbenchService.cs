@@ -114,6 +114,10 @@ public sealed class ExpeditionWorkbenchService(IHexCrawlStore store, HexCrawlSer
     {
         var expedition = await coreService.GetExpeditionAsync(expeditionId, ownerUserId, cancellationToken);
         RequireVersion(command.ExpectedVersion, expedition.Version);
+        if (expedition.Runtime.PendingEncounter is not null)
+        {
+            throw new InvalidOperationException("Resolve the pending encounter before continuing travel.");
+        }
         JourneyRuntimeIntegration.EnsureRelevantTravelAllowed(expedition);
         var state = expedition.Runtime as ExpeditionState
             ?? throw new InvalidOperationException("The full crawl workbench requires a spatial crawl session.");

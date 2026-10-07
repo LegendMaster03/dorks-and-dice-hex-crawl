@@ -50,6 +50,13 @@ public sealed record EncounterCadenceAssistantCommand
     public string? Note { get; init; }
 }
 
+public sealed record ResolveEncounterCommand(
+    long ExpectedVersion,
+    Guid OccurrenceId,
+    ResolutionSource ResolutionSource = ResolutionSource.DmOverride,
+    string? ResolutionNote = null,
+    string? ResultNote = null);
+
 public sealed class ExpeditionAssistantService(
     IHexCrawlStore store,
     HexCrawlService coreService,
@@ -63,6 +70,7 @@ public sealed class ExpeditionAssistantService(
     {
         var expedition = await coreService.GetExpeditionAsync(expeditionId, ownerUserId, cancellationToken);
         RequireVersion(command.ExpectedVersion, expedition.Version);
+        EnsureNoPendingEncounter(expedition);
         JourneyRuntimeIntegration.EnsureRelevantTravelAllowed(expedition);
 
         var stateBefore = expedition.Runtime as ExpeditionState
@@ -146,6 +154,7 @@ public sealed class ExpeditionAssistantService(
     {
         var expedition = await coreService.GetExpeditionAsync(expeditionId, ownerUserId, cancellationToken);
         RequireVersion(command.ExpectedVersion, expedition.Version);
+        EnsureNoPendingEncounter(expedition);
         JourneyRuntimeIntegration.EnsureRelevantTravelAllowed(expedition);
 
         if (expedition.Context is not NonSpatialCrawlSessionContext)
@@ -202,6 +211,7 @@ public sealed class ExpeditionAssistantService(
     {
         var expedition = await coreService.GetExpeditionAsync(expeditionId, ownerUserId, cancellationToken);
         RequireVersion(command.ExpectedVersion, expedition.Version);
+        EnsureNoPendingEncounter(expedition);
 
         if (expedition.Context is NonSpatialCrawlSessionContext)
         {
@@ -233,6 +243,7 @@ public sealed class ExpeditionAssistantService(
     {
         var expedition = await coreService.GetExpeditionAsync(expeditionId, ownerUserId, cancellationToken);
         RequireVersion(command.ExpectedVersion, expedition.Version);
+        EnsureNoPendingEncounter(expedition);
 
         var input = new EncounterCadenceAssistantInput(
             command.Outcome,
@@ -246,10 +257,100 @@ public sealed class ExpeditionAssistantService(
             _ => throw new InvalidOperationException("Unsupported crawl session runtime state.")
         };
 
+        var pending = runtime.PendingEncounter;
         return await SaveAsync(
-            expedition with { Runtime = runtime },
+            expedition with
+            {
+                Runtime = runtime,
+                PauseReason = pending is null ? expedition.PauseReason : RuntimePauseReason.EncounterTriggered,
+                RemainingWatchTime = pending is null ? expedition.RemainingWatchTime : runtime switch
+                {
+                    ExpeditionState spatial => spatial.ActiveWatch?.Remaining ?? TimeSpan.Zero,
+                    NonSpatialSessionState nonSpatial => nonSpatial.ActiveWatch?.Remaining ?? TimeSpan.Zero,
+                    _ => TimeSpan.Zero
+                }
+            },
             command.ExpectedVersion,
             cancellationToken);
+    }
+
+    public async Task<StoredExpedition> ResolveEncounterAsync(
+        Guid expeditionId,
+        string ownerUserId,
+        ResolveEncounterCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        var expedition = await coreService.GetExpeditionAsync(expeditionId, ownerUserId, cancellationToken);
+        RequireVersion(command.ExpectedVersion, expedition.Version);
+        var pending = expedition.Runtime.PendingEncounter
+            ?? throw new InvalidOperationException("No encounter is pending for this expedition.");
+        if (pending.Id != command.OccurrenceId)
+        {
+            throw new InvalidOperationException("The requested encounter occurrence is not the encounter currently pending for this expedition.");
+        }
+        if (expedition.PauseReason != RuntimePauseReason.EncounterTriggered)
+        {
+            throw new InvalidOperationException("Pending encounter state is inconsistent with the expedition interruption.");
+        }
+
+        var provenance = ClientSuppliedProvenance(command.ResolutionSource, command.ResolutionNote);
+        var history = expedition.Runtime.History.ToList();
+        var sequence = history.Count == 0 ? 1 : history[^1].Sequence + 1;
+        var elapsed = expedition.Runtime switch
+        {
+            ExpeditionState spatial => spatial.ElapsedTravelTime,
+            NonSpatialSessionState nonSpatial => nonSpatial.ElapsedTime,
+            _ => pending.ExpeditionElapsedTime
+        };
+        history.Add(new CrawlRuntimeEvent(
+            sequence,
+            pending.WatchNumber,
+            CrawlRuntimeEventKind.EncounterResolved,
+            elapsed,
+            pending.Hex,
+            string.IsNullOrWhiteSpace(command.ResultNote)
+                ? $"{pending.Outcome} resolved."
+                : $"{pending.Outcome} resolved: {command.ResultNote.Trim()}",
+            EncounterOutcome: pending.Outcome,
+            EncounterNote: command.ResultNote,
+            EncounterProvenance: provenance,
+            EncounterOccurrenceId: pending.Id));
+
+        CrawlSessionRuntimeState runtime = expedition.Runtime switch
+        {
+            ExpeditionState spatial => spatial with
+            {
+                ActiveWatch = spatial.ActiveWatch?.PendingDecision == RuntimePauseReason.EncounterTriggered
+                    ? spatial.ActiveWatch with { PendingDecision = null }
+                    : spatial.ActiveWatch,
+                PendingEncounter = null,
+                History = history
+            },
+            NonSpatialSessionState nonSpatial => nonSpatial with
+            {
+                PendingEncounter = null,
+                History = history
+            },
+            _ => throw new InvalidOperationException("Unsupported crawl session runtime state.")
+        };
+        var remaining = runtime switch
+        {
+            ExpeditionState spatial => spatial.ActiveWatch?.Remaining ?? TimeSpan.Zero,
+            NonSpatialSessionState nonSpatial => nonSpatial.ActiveWatch?.Remaining ?? TimeSpan.Zero,
+            _ => TimeSpan.Zero
+        };
+        return await SaveAsync(
+            expedition with { Runtime = runtime, PauseReason = null, RemainingWatchTime = remaining },
+            command.ExpectedVersion,
+            cancellationToken);
+    }
+
+    private static void EnsureNoPendingEncounter(StoredExpedition expedition)
+    {
+        if (expedition.Runtime.PendingEncounter is not null)
+        {
+            throw new InvalidOperationException("Resolve the pending encounter before continuing this expedition procedure.");
+        }
     }
 
     private static ResolutionProvenance ClientSuppliedProvenance(

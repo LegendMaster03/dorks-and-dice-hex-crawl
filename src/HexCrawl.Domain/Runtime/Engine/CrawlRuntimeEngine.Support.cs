@@ -50,8 +50,9 @@ public sealed partial class CrawlRuntimeEngine
         }
 
         public List<CrawlRuntimeEvent> NewEvents { get; } = [];
+        public long NextSequence => _nextSequence;
 
-        public void Add(
+        public CrawlRuntimeEvent Add(
             int watchNumber,
             CrawlRuntimeEventKind kind,
             TimeSpan elapsed,
@@ -63,9 +64,10 @@ public sealed partial class CrawlRuntimeEngine
             KnowledgeSubjectType? subjectType = null,
             EncounterOutcomeKind? encounterOutcome = null,
             string? encounterNote = null,
-            ResolutionProvenance? encounterProvenance = null)
+            ResolutionProvenance? encounterProvenance = null,
+            Guid? encounterOccurrenceId = null)
         {
-            NewEvents.Add(new CrawlRuntimeEvent(
+            var runtimeEvent = new CrawlRuntimeEvent(
                 _nextSequence++,
                 watchNumber,
                 kind,
@@ -78,7 +80,10 @@ public sealed partial class CrawlRuntimeEngine
                 subjectType,
                 encounterOutcome,
                 encounterNote,
-                encounterProvenance));
+                encounterProvenance,
+                EncounterOccurrenceId: encounterOccurrenceId);
+            NewEvents.Add(runtimeEvent);
+            return runtimeEvent;
         }
     }
 }

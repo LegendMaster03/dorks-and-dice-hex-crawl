@@ -1,5 +1,7 @@
 import type { HexCrawlApi } from "../../api";
 import { blockInitiativeHandoffHref } from "../../encounter-handoff";
+import { ExpeditionEffectsApi } from "../../effect-api";
+import type { ExpeditionEffectState } from "../../effect-types";
 import { worldToHex } from "../../hex-math";
 import { JourneyApi } from "../../journey-api";
 import type { ExpeditionJourneyState } from "../../journey-types";
@@ -12,6 +14,7 @@ import { canonicalExpeditionRoute } from "../../tool-route";
 import type { ExpeditionDetail, HexCoordinate, HexOrientation, Overworld, ResolutionSource, ToolHostContext } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
 import { badge, disclosure, openWorkspaceDrawer, statAction, textElement, type WorkspaceDrawer } from "../../ui/workspace";
+import { ExpeditionEffectsPanel } from "./effects-panel";
 import { ExpeditionEnvironmentPanel } from "./environment-panel";
 import { ExpeditionJourneyPanel } from "./journey-panel";
 import { ExpeditionPartySheetController } from "./expedition-party-sheet";
@@ -27,13 +30,16 @@ import { ExpeditionSurvivalResourcesPanel } from "./survival-resources-panel";
 import { ExpeditionWatchController } from "./expedition-watch-controller";
 import { authoritativeFixedWatchDistance } from "./expedition-party-movement";
 import {
-    defaultTravelPreferences,
+    loadTravelPreferences,
     mergeRuntimeTravelPreferences,
+    normalizeTravelDirectionPreference,
+    normalizeTravelModePreference,
+    saveTravelPreferences,
     type TravelPreferences
 } from "./expedition-travel-intent";
 import { canUseFocusedNonSpatialWatch, focusedIntervalHours } from "./focused-interval-policy";
 import { navigationResolutionDue, pauseInstruction, spatialTravelContinuationTarget } from "./expedition-workflow";
-import { expeditionWorkspacePresentation } from "./expedition-workspace-model";
+import { expeditionWorkspacePresentation, spatialPositionPresentation } from "./expedition-workspace-model";
 
 export async function renderExpedition(
     root: HTMLElement,
@@ -56,8 +62,10 @@ export async function renderExpedition(
 
     let world: Overworld | null = runtime.overworldId ? await api.getOverworld(runtime.overworldId) : null;
     const survivalApi = new SurvivalResourcesApi(toolContext);
+    const effectsApi = new ExpeditionEffectsApi(toolContext);
     const journeyApi = new JourneyApi(toolContext);
     let survival = await safeLoad(() => survivalApi.get(expeditionId));
+    let effects = await safeLoad(() => effectsApi.get(expeditionId));
     let journey = await safeLoad(() => journeyApi.get(expeditionId));
     let map: MapSurface | null = null;
     let drawer: WorkspaceDrawer | null = null;
@@ -67,15 +75,11 @@ export async function renderExpedition(
     let selectedHexTracksTravelIntent = false;
     let preferences = loadTravelPreferences(runtime);
     const availableTravelModes = (): string[] => runtime.movementComposition.policy.travelModeKeys ?? [];
-    const normalizeTravelModePreference = (): void => {
-        const choices = availableTravelModes();
-        if (choices.length > 0) {
-            if (!choices.includes(preferences.pace)) preferences.pace = choices[0];
-            return;
-        }
-        preferences.pace = runtime.expedition.isSpatial
-            ? runtime.expedition.activePaceKey ?? "normal"
-            : "normal";
+    const normalizeTravelModeSelection = (): void => {
+        preferences.pace = normalizeTravelModePreference(
+            preferences.pace,
+            availableTravelModes(),
+            runtime.expedition.isSpatial ? runtime.expedition.activePaceKey : null);
     };
     // Normal runtime pace editing exists only for an authoritative finite choice with alternatives.
     // Zero/one-mode procedures are fixed here; arbitrary identifiers require an explicit procedure contract.
@@ -99,7 +103,7 @@ export async function renderExpedition(
         ?? runtime.movementComposition.effectiveDistanceUnit?.symbol
         ?? runtime.context.hexCenterDistance?.unit.symbol
         ?? null;
-    normalizeTravelModePreference();
+    normalizeTravelModeSelection();
     let adjacencyCache: {
         key: string;
         value: ReturnType<typeof currentHexAdjacency>;
@@ -134,6 +138,19 @@ export async function renderExpedition(
             selectedEdgeId: selected?.id ?? null
         };
     };
+
+    const normalizeTravelDirectionSelection = (): void => {
+        if (!runtime.expedition.isSpatial) {
+            preferences.direction = null;
+            return;
+        }
+        const adjacency = currentAdjacency();
+        preferences.direction = normalizeTravelDirectionPreference(
+            preferences.direction,
+            adjacency?.edges.map(edge => edge.directionValue) ?? [],
+            runtime.expedition.intendedDirection);
+    };
+    normalizeTravelDirectionSelection();
 
     const synchronizeTravelTargetProjection = (): void => {
         if (!runtime.expedition.isSpatial || preferences.direction === null) {
@@ -172,8 +189,9 @@ export async function renderExpedition(
     };
 
     const refreshAuxiliary = async (): Promise<void> => {
-        [survival, journey] = await Promise.all([
+        [survival, effects, journey] = await Promise.all([
             safeLoad(() => survivalApi.get(expeditionId)),
+            safeLoad(() => effectsApi.get(expeditionId)),
             safeLoad(() => journeyApi.get(expeditionId))
         ]);
     };
@@ -181,7 +199,8 @@ export async function renderExpedition(
     const applyRuntime = (next: ExpeditionDetail): void => {
         runtime = next;
         preferences = mergeRuntimeTravelPreferences(runtime, preferences);
-        normalizeTravelModePreference();
+        normalizeTravelModeSelection();
+        normalizeTravelDirectionSelection();
         synchronizeTravelTargetProjection();
         saveTravelPreferences(runtime.id, preferences);
         publishExpeditionRuntimeChanged(root, runtime);
@@ -214,8 +233,14 @@ export async function renderExpedition(
     };
 
     const render = (): void => {
-        cleanupDrawer();
-        drawer = null;
+        const restoreFocusAfterRender = drawer !== null;
+        if (drawer) {
+            const activeDrawer = drawer;
+            drawer = null;
+            activeDrawer.close();
+        } else {
+            cleanupDrawer();
+        }
 
         const presentation = expeditionWorkspacePresentation(runtime, journey, survival);
         const page = document.createElement("section");
@@ -251,12 +276,13 @@ export async function renderExpedition(
         status.className = "hc-phase15-runtime-summary";
         const stats = document.createElement("div");
         stats.className = "hc-stat-action-grid";
+        const position = spatialPositionPresentation(runtime);
         stats.append(
             statAction("Time", presentation.timeLabel, null, openHistory),
             statAction(
                 runtime.expedition.isSpatial ? "Position" : "Context",
-                runtime.expedition.isSpatial ? "Current cell" : presentation.routeLabel ?? runtime.context.name,
-                runtime.expedition.isSpatial ? "Course and pace are shown with the map" : "Non-spatial expedition",
+                position?.value ?? presentation.routeLabel ?? runtime.context.name,
+                runtime.expedition.isSpatial ? position?.detail ?? null : "Non-spatial expedition",
                 runtime.expedition.isSpatial ? focusTravelCourse : openHistory,
                 runtime.pauseReason ? "warning" : "neutral"),
             statAction(
@@ -284,18 +310,19 @@ export async function renderExpedition(
                 openNavigationWorkspace,
                 runtime.expedition.isSpatial && runtime.expedition.isLost ? "warning" : "neutral"));
         }
-        if (presentation.capabilities.resources || presentation.capabilities.survival || presentation.capabilities.effects) {
+        if (runtime.expedition.isSpatial
+            && (presentation.capabilities.resources || presentation.capabilities.survival || presentation.capabilities.effects)) {
             const hasSurvivalOrResources = presentation.capabilities.resources || presentation.capabilities.survival;
             stats.append(statAction(
                 presentation.capabilities.effects
                     ? hasSurvivalOrResources ? "Survival / resources / effects" : "Effects"
                     : "Survival / resources",
-                presentation.resourceLabel ?? (presentation.capabilities.effects ? "Effect procedure active" : "Procedure active"),
-                survivalDetail(survival),
+                effectsSummary(effects) ?? presentation.resourceLabel ?? (presentation.capabilities.effects ? "Effect procedure active" : "Procedure active"),
+                resourcesEffectsDetail(survival, effects),
                 openSurvivalWorkspace,
                 survivalAttention(survival) ? "warning" : "neutral"));
         }
-        if (presentation.capabilities.journey) {
+        if (runtime.expedition.isSpatial && presentation.capabilities.journey) {
             stats.append(statAction(
                 "Journey",
                 presentation.journeyLabel ?? "No active journey",
@@ -324,6 +351,12 @@ export async function renderExpedition(
         root.replaceChildren(page);
 
         bindMapIfPresent();
+        if (restoreFocusAfterRender) {
+            queueMicrotask(() => {
+                if (disposed) return;
+                root.querySelector<HTMLButtonElement>("[data-current-action-button]")?.focus();
+            });
+        }
     };
 
     const currentActionCopy = (
@@ -407,8 +440,8 @@ export async function renderExpedition(
         if (journeyRailUseful(journey)) {
             secondary.append(railAction("Journey / challenge", journeyDetail(journey), openJourneyWorkspace));
         }
-        if (survivalRailUseful(survival)) {
-            secondary.append(railAction("Survival & resources", survivalDetail(survival), openSurvivalWorkspace));
+        if (survivalRailUseful(survival) || effectsUseful(effects)) {
+            secondary.append(railAction("Resources & effects", resourcesEffectsDetail(survival, effects), openSurvivalWorkspace));
         }
         section.append(primary, secondary);
         return section;
@@ -447,24 +480,16 @@ export async function renderExpedition(
                     journeyFact("Consequences / state", journeyStateSummary(stageState, survival)));
                 main.append(facts);
 
-                if (presentation.action.kind === "journey") {
-                    const copy = currentActionCopy(presentation.action);
-                    const control = button(copy.label, openJourneyWorkspace);
-                    control.className = "hc-primary-action";
-                    main.append(control);
-                } else {
+                if (presentation.action.kind !== "journey") {
                     main.append(button("Open journey workspace", openJourneyWorkspace));
                 }
             } else {
                 main.append(
                     textElement("p", "No journey process is currently active.", "hc-muted"),
                     textElement("p", journeyPendingEventSummary(journey), "hc-muted"));
-                const copy = currentActionCopy(presentation.action);
-                const control = button(
-                    presentation.action.kind === "journey" ? copy.label : "Start or manage journey",
-                    openJourneyWorkspace);
-                control.className = "hc-primary-action";
-                main.append(control);
+                if (presentation.action.kind !== "journey") {
+                    main.append(button("Start or manage journey", openJourneyWorkspace));
+                }
             }
         } else if (canUseFocusedNonSpatialWatch(runtime)) {
             main.append(
@@ -485,7 +510,7 @@ export async function renderExpedition(
             textElement("h2", "At the table"),
             railAction("Party & roles", journeyRoleSummary(runtime), openPartyWorkspace));
         if (presentation.capabilities.resources || presentation.capabilities.survival || presentation.capabilities.effects) {
-            side.append(railAction("Resources & effects", survivalDetail(survival), openSurvivalWorkspace));
+            side.append(railAction("Resources & effects", resourcesEffectsDetail(survival, effects), openSurvivalWorkspace));
         }
         if (journey?.eventPolicy.support === "Supported") {
             side.append(railAction("Journey events", journeyEventSummary(journey), openJourneyWorkspace));
@@ -922,12 +947,15 @@ export async function renderExpedition(
     const openDrawer = (
         title: string,
         build: (body: HTMLElement) => (() => void) | void): void => {
+        const returnFocus = document.activeElement instanceof HTMLElement
+            ? document.activeElement
+            : root.querySelector<HTMLElement>("[data-current-action-button]");
         cleanupDrawer();
         drawer?.close();
         drawer = openWorkspaceDrawer(root, title, body => {
             const cleanup = build(body);
             drawerCleanup = cleanup ?? null;
-        }, null, cleanupDrawer);
+        }, returnFocus, cleanupDrawer);
     };
 
     const openTravelWorkspace = (
@@ -1172,7 +1200,7 @@ export async function renderExpedition(
                     map.requestRender();
                 }
                 syncTravelIntentControls();
-                continueTravel(false, true);
+                continueTravel(true);
             });
 
             const more = button("More options", () => openTravelWorkspace("advanced"));
@@ -1460,6 +1488,7 @@ export async function renderExpedition(
 
     const openSurvivalWorkspace = (
         focus: "all" | "attention" = "all"): void => {
+        const capabilities = expeditionWorkspacePresentation(runtime, journey, survival).capabilities;
         const panelFocus = focus === "attention"
             ? survival?.forcedTravel.checkDue
                 ? "forcedTravel"
@@ -1469,23 +1498,39 @@ export async function renderExpedition(
             ? "Forced travel"
             : panelFocus === "pendingResourceConsequences"
                 ? "Travel consequence"
-                : "Survival & resources";
+                : capabilities.effects ? "Resources & effects" : "Survival & resources";
         openDrawer(title, body => {
             body.classList.add("hc-page");
-            const panel = new ExpeditionSurvivalResourcesPanel(
-                body,
-                survivalApi,
-                runtime.id,
-                async (_control, action) => {
-                    await runUiMutation(action);
-                },
-                panelFocus);
-            void panel.sync();
-            queueMicrotask(() => {
-                const details = body.querySelector<HTMLDetailsElement>("[data-survival-resources-panel]");
-                if (details) details.open = true;
-            });
-            return () => panel.dispose();
+            const cleanups: Array<() => void> = [];
+            if (capabilities.effects) {
+                const effectPanel = new ExpeditionEffectsPanel(
+                    body,
+                    effectsApi,
+                    runtime.id,
+                    () => runtime,
+                    async (_control, action) => {
+                        await runUiMutation(action);
+                    });
+                void effectPanel.sync();
+                cleanups.push(() => effectPanel.dispose());
+            }
+            if (capabilities.resources || capabilities.survival) {
+                const panel = new ExpeditionSurvivalResourcesPanel(
+                    body,
+                    survivalApi,
+                    runtime.id,
+                    async (_control, action) => {
+                        await runUiMutation(action);
+                    },
+                    panelFocus);
+                void panel.sync();
+                queueMicrotask(() => {
+                    const details = body.querySelector<HTMLDetailsElement>("[data-survival-resources-panel]");
+                    if (details) details.open = true;
+                });
+                cleanups.push(() => panel.dispose());
+            }
+            return () => cleanups.forEach(cleanup => cleanup());
         });
     };
 
@@ -1511,21 +1556,48 @@ export async function renderExpedition(
 
     const openEncounterWorkspace = (): void => {
         openDrawer("Encounter", body => {
-            const triggered = [...runtime.history].reverse().find(event => event.kind === "EncounterTriggered");
-            if (!triggered) {
+            const pending = runtime.expedition.pendingEncounter;
+            if (!pending) {
                 body.append(textElement("p", "No encounter is currently interrupting the expedition."));
                 return;
             }
+
+            const triggered = runtime.history.find(event =>
+                event.kind === "EncounterTriggered"
+                && event.sequence === pending.triggerSequence
+                && event.encounterOccurrenceId === pending.id);
+
             body.append(
-                textElement("p", triggered.message),
-                textElement("p", "Preparing a Block Initiative handoff does not consume or clear expedition consequences. After the encounter is resolved, return here and resume the current travel procedure.", "hc-muted"));
+                textElement("h3", humanize(pending.outcome)),
+                textElement("p", triggered?.message ?? pending.note ?? "Encounter resolution is pending."),
+                contextLine("Watch", String(pending.watchNumber)),
+                textElement(
+                    "p",
+                    "Preparing a Block Initiative handoff does not resolve the expedition interruption. Mark the encounter resolved here only after its table or tactical handling is complete.",
+                    "hc-muted"));
+
+            const resultNote = document.createElement("input");
+            resultNote.name = "encounterResultNote";
+            resultNote.placeholder = "Optional result or table note";
+
             const row = document.createElement("div");
             row.className = "hc-button-row";
-            const handoff = button("Open in Block Initiative", () => void prepareEncounterHandoff(triggered.sequence, handoff));
+            const handoff = button("Open in Block Initiative", () =>
+                void prepareEncounterHandoff(pending.triggerSequence, handoff));
             handoff.className = "hc-primary-action";
-            const resume = button("Encounter resolved — continue travel", () => continueTravel(true));
-            row.append(handoff, resume);
-            body.append(row);
+            const resolve = button("Mark encounter resolved", () => {
+                void runUiMutation(async () => {
+                    const next = await api.resolveEncounter(runtime.id, pending.id, {
+                        expectedVersion: runtime.version,
+                        resolutionSource: "DmOverride",
+                        resolutionNote: "Encounter resolution recorded from expedition workspace.",
+                        resultNote: resultNote.value.trim() || undefined
+                    });
+                    applyRuntime(next);
+                });
+            });
+            row.append(handoff, resolve);
+            body.append(labelled("Result note", resultNote), row);
         });
     };
 
@@ -1587,18 +1659,78 @@ export async function renderExpedition(
 
     const openHistory = (): void => {
         openDrawer("Expedition history", body => {
-            if (runtime.history.length === 0) {
+            const hasRuntime = runtime.history.length > 0;
+            const hasJourney = (journey?.history.length ?? 0) > 0;
+            const hasEffects = (effects?.history.length ?? 0) > 0;
+            if (!hasRuntime && !hasJourney && !hasEffects) {
                 body.append(textElement("p", "No expedition history has been recorded yet."));
                 return;
             }
-            const list = document.createElement("ol");
-            list.className = "hc-history";
-            for (const event of [...runtime.history].reverse().slice(0, 80)) {
-                const item = document.createElement("li");
-                item.textContent = `#${event.sequence} · ${formatHours(event.expeditionElapsedHours)} · ${event.message}`;
-                list.append(item);
+
+            if (hasJourney && journey) {
+                body.append(textElement("h3", "Journey"));
+                const list = document.createElement("ol");
+                list.className = "hc-history";
+                for (const record of journey.history.slice(-80).reverse()) {
+                    const item = document.createElement("li");
+                    item.textContent = `${humanize(record.kind)} — ${record.detail}`;
+                    list.append(item);
+                }
+                body.append(list);
             }
-            body.append(list);
+
+            if (hasRuntime) {
+                body.append(textElement("h3", "Travel / runtime"));
+                const list = document.createElement("ol");
+                list.className = "hc-history";
+                for (const event of [...runtime.history].reverse().slice(0, 80)) {
+                    const item = document.createElement("li");
+                    item.textContent = `${formatHours(event.expeditionElapsedHours)} · ${event.message}`;
+                    list.append(item);
+                }
+                body.append(list);
+            }
+
+            if (hasEffects && effects) {
+                body.append(textElement("h3", "Effects / consequences"));
+                const list = document.createElement("ol");
+                list.className = "hc-history";
+                for (const record of effects.history.slice(-80).reverse()) {
+                    const item = document.createElement("li");
+                    const before = record.beforeLevel !== null ? ` level ${record.beforeLevel}` : "";
+                    const after = record.afterLevel !== null
+                        ? ` → ${record.afterLevel}`
+                        : record.beforeLevel !== null ? " → cleared" : "";
+                    item.textContent = `${humanize(record.effectKey)} — ${humanize(record.operation)}${before}${after}`;
+                    list.append(item);
+                }
+                body.append(list);
+            }
+
+            const advanced = disclosure("Advanced history details");
+            if (journey?.history.length) {
+                for (const record of journey.history.slice(-40).reverse()) {
+                    advanced.append(textElement(
+                        "p",
+                        `Journey ${record.kind} · watch ${record.completedWatches} · source ${record.provenance.sourceKey} · record ${record.id}`,
+                        "hc-muted"));
+                }
+            }
+            for (const event of runtime.history.slice(-40).reverse()) {
+                advanced.append(textElement(
+                    "p",
+                    `Runtime #${event.sequence} · watch ${event.watchNumber} · ${event.kind}`,
+                    "hc-muted"));
+            }
+            if (effects?.history.length) {
+                for (const record of effects.history.slice(-40).reverse()) {
+                    advanced.append(textElement(
+                        "p",
+                        `Effect ${record.effectId} · ${record.operation} · audit ${record.id}`,
+                        "hc-muted"));
+                }
+            }
+            body.append(advanced);
         });
     };
 
@@ -1611,7 +1743,7 @@ export async function renderExpedition(
         target?.focus();
     };
 
-    const continueTravel = (resumeEncounter = false, resumeTravelReview = false): void => {
+    const continueTravel = (resumeTravelReview = false): void => {
         if (!runtime.expedition.isSpatial || runtime.procedure.runtime === null) {
             openHistory();
             return;
@@ -1632,7 +1764,6 @@ export async function renderExpedition(
             suppressesNavigation,
             deliberateDoubleBack,
             survivalAttention(survival),
-            resumeEncounter,
             resumeTravelReview);
         switch (target) {
             case "course":
@@ -1668,8 +1799,7 @@ export async function renderExpedition(
                 api,
                 runtime,
                 edge.directionValue,
-                preferences.pace,
-                resumeEncounter));
+                preferences.pace));
         });
     };
 
@@ -1811,6 +1941,47 @@ function environmentRailDetail(state: SurvivalResources | null): string | null {
     return detail.join(" · ");
 }
 
+function effectsSummary(state: ExpeditionEffectState | null): string | null {
+    if (!state) return null;
+    if (state.activeEffects.length > 0) {
+        return `${state.activeEffects.length} active effect${state.activeEffects.length === 1 ? "" : "s"}`;
+    }
+    if (state.pendingConsequences.length > 0) {
+        return `${state.pendingConsequences.length} pending consequence${state.pendingConsequences.length === 1 ? "" : "s"}`;
+    }
+    return state.policy.support === "Supported" ? "No active effects" : null;
+}
+
+function effectsDetail(state: ExpeditionEffectState | null): string[] {
+    if (!state) return [];
+    const parts: string[] = state.activeEffects.slice(0, 2).map(effect => {
+        const value = effect.level !== null
+            ? `level ${effect.level}`
+            : effect.magnitude !== null
+                ? `${formatNumber(effect.magnitude)}${effect.unit ? ` ${effect.unit}` : ""}`
+                : effect.state ? humanize(effect.state) : "active";
+        return `${humanize(effect.effectKey)}: ${value}`;
+    });
+    if (state.activeEffects.length > 2) parts.push(`+${state.activeEffects.length - 2} effects`);
+    if (state.pendingConsequences.length > 0) parts.push(`${state.pendingConsequences.length} pending consequence${state.pendingConsequences.length === 1 ? "" : "s"}`);
+    return parts;
+}
+
+function resourcesEffectsDetail(survival: SurvivalResources | null, effects: ExpeditionEffectState | null): string {
+    const parts: string[] = [];
+    const effectParts = effectsDetail(effects);
+    parts.push(...effectParts);
+    const survivalText = survivalDetail(survival);
+    if (survivalText !== "No survival resolution currently needs attention." && survivalText !== "Survival state unavailable.") {
+        parts.push(survivalText);
+    }
+    return parts.join(" · ") || effectsSummary(effects) || survivalText;
+}
+
+function effectsUseful(state: ExpeditionEffectState | null): boolean {
+    return Boolean(state && (state.activeEffects.length > 0 || state.pendingConsequences.length > 0));
+}
+
 function survivalDetail(state: SurvivalResources | null): string {
     if (!state) return "Survival state unavailable.";
     const parts: string[] = state.resources.slice(0, 3).map(resource => {
@@ -1915,31 +2086,6 @@ function adjacencyCourseLabel(
 function edgeCourseLabel(
     edge: ReturnType<typeof currentHexAdjacency>["edges"][number]): string {
     return edge.label;
-}
-
-function loadTravelPreferences(runtime: ExpeditionDetail): TravelPreferences {
-    const fallback = defaultTravelPreferences(runtime);
-    try {
-        const raw = localStorage.getItem(`hex-crawl.expedition.${runtime.id}.travel-intent`);
-        if (!raw) return fallback;
-        const parsed = JSON.parse(raw) as Partial<TravelPreferences>;
-        return {
-            direction: Number.isInteger(parsed.direction) && Number(parsed.direction) >= 0
-                ? Number(parsed.direction)
-                : fallback.direction,
-            pace: typeof parsed.pace === "string" && parsed.pace.trim() ? parsed.pace.trim() : fallback.pace
-        };
-    } catch {
-        return fallback;
-    }
-}
-
-function saveTravelPreferences(expeditionId: string, preferences: TravelPreferences): void {
-    try {
-        localStorage.setItem(`hex-crawl.expedition.${expeditionId}.travel-intent`, JSON.stringify(preferences));
-    } catch {
-        // Persistent UI preferences are optional; runtime state remains authoritative.
-    }
 }
 
 function safeCurrentReturnPath(): string | null {

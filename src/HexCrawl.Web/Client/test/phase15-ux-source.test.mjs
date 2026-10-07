@@ -317,11 +317,14 @@ test("routine spatial travel reuses intent and suppresses fixed movement inputs 
     const movement = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/expedition-party-movement.ts"),
         "utf8");
+    const intent = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-travel-intent.ts"),
+        "utf8");
 
     assert.match(view, /hc-adjacency-navigator/);
     assert.match(view, /currentHexAdjacency/);
     assert.match(view, /adjacencyEdgeForCell/);
-    assert.match(view, /hex-crawl\.expedition\.\$\{runtime\.id\}\.travel-intent/);
+    assert.match(intent, /hex-crawl\.expedition\.\$\{expeditionId\}\.travel-intent/);
     assert.match(view, /Reusable course and pace stay filled until changed/);
     assert.match(view, /movementComposition\.suggestedExpectedDistance/);
     assert.match(controller, /suggestedWatchDistance\(runtime\)/);
@@ -557,12 +560,12 @@ test("Compact authoring offers generic one-click dependency repair", () => {
 
 
 test("persisted travel intent does not hardcode a six-edge direction range", () => {
-    const view = fs.readFileSync(
-        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+    const intent = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-travel-intent.ts"),
         "utf8");
 
-    assert.match(view, /Number\.isInteger\(parsed\.direction\) && Number\(parsed\.direction\) >= 0/);
-    assert.doesNotMatch(view, /Number\(parsed\.direction\) <= 5/);
+    assert.match(intent, /Number\.isInteger\(parsed\.direction\) && Number\(parsed\.direction\) >= 0/);
+    assert.doesNotMatch(intent, /Number\(parsed\.direction\) <= 5/);
 });
 
 test("current-cell navigator stays orientation-neutral unless authoritative compass metadata exists", () => {
@@ -631,7 +634,7 @@ test("urgent travel pauses preserve their task wording and use a focused course-
     assert.match(view, /const openTravelReviewWorkspace = \(\): void =>/);
     assert.match(view, /"Changed travel conditions"/);
     assert.match(view, /"Backtrack boundary"/);
-    assert.match(view, /continueTravel\(false, true\)/);
+    assert.match(view, /continueTravel\(true\)/);
     assert.match(view, /case "review":[\s\S]*openTravelReviewWorkspace\(\)/);
     const review = view.slice(
         view.indexOf("const openTravelReviewWorkspace"),
@@ -649,9 +652,10 @@ test("encounter resume requires an explicit resolved-at-table acknowledgement", 
         path.join(sourceDir, "modules/expeditions/expedition-watch-controller.ts"),
         "utf8");
 
-    assert.match(view, /Encounter resolved — continue travel/);
-    assert.match(view, /continueTravel\(true\)/);
-    assert.match(controller, /runtime\.pauseReason === "EncounterTriggered" && !resumeEncounter/);
+    assert.match(view, /api\.resolveEncounter/);
+    assert.match(view, /pending\.triggerSequence/);
+    assert.doesNotMatch(view, /Encounter resolved — continue travel/);
+    assert.doesNotMatch(controller, /resumeEncounter/);
 });
 
 test("normal spatial travel has one primary continuation path and focused unresolved workspaces", () => {
@@ -664,7 +668,7 @@ test("normal spatial travel has one primary continuation path and focused unreso
     assert.match(view, /if \(paceEditor && pace\)[\s\S]*actions\.append\(changePace\)/);
     assert.match(view, /actions\.append\(more\)/);
     assert.doesNotMatch(view, /button\("Travel controls"/);
-    assert.match(view, /const continueTravel = \(resumeEncounter = false, resumeTravelReview = false\): void =>/);
+    assert.match(view, /const continueTravel = \(resumeTravelReview = false\): void =>/);
     assert.match(view, /spatialTravelContinuationTarget/);
     assert.match(view, /case "navigation":[\s\S]*openNavigationWorkspace\(\)/);
     assert.match(view, /case "encounter":[\s\S]*openTravelWorkspace\("encounter"\)/);
@@ -1041,4 +1045,56 @@ test("secondary travel course changes synchronize navigator and map target", () 
     assert.match(capture, /selectedHexTracksTravelIntent = true/);
     assert.match(capture, /map\.renderer\.selectedHex = edge\.targetCell/);
     assert.match(capture, /syncTravelIntentControls\(\)/);
+});
+
+
+test("expedition drawers restore opener focus and rerenders provide a deliberate fallback", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+    assert.match(view, /const returnFocus = document\.activeElement instanceof HTMLElement/);
+    assert.match(view, /openWorkspaceDrawer\(root, title/);
+    assert.match(view, /\[data-current-action-button\]/);
+    assert.match(view, /restoreFocusAfterRender/);
+    assert.match(view, /queueMicrotask\(\(\) => \{/);
+});
+
+
+test("remediation review matrix exercises effects, history, encounter, journey, and progress at narrow widths", () => {
+    const capture = fs.readFileSync(
+        path.join(sourceDir, "../visual-review/capture-phase15.sh"),
+        "utf8");
+    const fixture = fs.readFileSync(
+        path.join(sourceDir, "../visual-review/phase15.ts"),
+        "utf8");
+
+    for (const state of [
+        "effects-workspace",
+        "history-workspace",
+        "encounter-pending",
+        "journey-pending",
+        "partial-progress"
+    ]) {
+        assert.match(capture, new RegExp(state));
+    }
+    assert.match(capture, /500\|844\|390/);
+    assert.match(capture, /activeEffectVisible/);
+    assert.match(capture, /unifiedHistoryVisible/);
+    assert.match(capture, /positionProgressVisible/);
+    assert.match(fixture, /pendingEncounter/);
+    assert.match(fixture, /effectsFixture/);
+});
+
+
+test("encounter resolution finishes its authoritative mutation before travel can resume", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+    const start = view.indexOf('const resolve = button("Mark encounter resolved"');
+    const end = view.indexOf("row.append(handoff, resolve)", start);
+    assert.ok(start >= 0 && end > start);
+    const resolutionBlock = view.slice(start, end);
+    assert.match(resolutionBlock, /api\.resolveEncounter/);
+    assert.match(resolutionBlock, /applyRuntime\(next\)/);
+    assert.doesNotMatch(resolutionBlock, /continueTravel\(/);
 });

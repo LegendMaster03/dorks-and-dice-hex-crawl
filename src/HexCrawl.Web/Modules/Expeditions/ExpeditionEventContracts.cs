@@ -29,7 +29,8 @@ public sealed record RuntimeEventContract(
     KnowledgeSubjectType? SubjectType,
     EncounterOutcomeKind? EncounterOutcome,
     string? EncounterNote,
-    ResolutionProvenance? EncounterProvenance)
+    ResolutionProvenance? EncounterProvenance,
+    Guid? EncounterOccurrenceId)
 {
     public static RuntimeEventContract From(CrawlRuntimeEvent runtimeEvent) => new(
         runtimeEvent.Sequence,
@@ -44,7 +45,8 @@ public sealed record RuntimeEventContract(
         runtimeEvent.SubjectType,
         runtimeEvent.EncounterOutcome,
         runtimeEvent.EncounterNote,
-        runtimeEvent.EncounterProvenance);
+        runtimeEvent.EncounterProvenance,
+        runtimeEvent.EncounterOccurrenceId);
 }
 
 public sealed record DiscoverSubjectRequest(

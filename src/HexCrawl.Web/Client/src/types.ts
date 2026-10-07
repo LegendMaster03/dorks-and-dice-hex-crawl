@@ -243,6 +243,17 @@ export type ParticipantActivityPolicy = {
 
 export type RuntimePauseReason = "ConditionsReviewRequired" | "LostRecognitionRequired" | "EncounterTriggered" | "BacktrackBoundaryReached";
 
+export type PendingEncounter = {
+    id: string;
+    triggerSequence: number;
+    watchNumber: number;
+    outcome: "WanderingEncounter" | "KeyedLocationDiscovery" | "ManualCustom";
+    expeditionElapsedHours: number;
+    hex: HexCoordinate | null;
+    locationId: string | null;
+    note: string | null;
+};
+
 export type SpatialRuntimeExpedition = {
     id: string;
     isSpatial: true;
@@ -277,6 +288,7 @@ export type SpatialRuntimeExpedition = {
     activeEncounterKind: "None" | "WanderingEncounter" | "KeyedLocationDiscovery" | "ManualCustom" | null;
     activeEncounterHour: number | null;
     activeEncounterHandled: boolean | null;
+    pendingEncounter: PendingEncounter | null;
 };
 
 export type NonSpatialRuntimeExpedition = {
@@ -313,6 +325,7 @@ export type NonSpatialRuntimeExpedition = {
     activeEncounterKind: null;
     activeEncounterHour: null;
     activeEncounterHandled: null;
+    pendingEncounter: PendingEncounter | null;
 };
 
 export type RuntimeExpedition = SpatialRuntimeExpedition | NonSpatialRuntimeExpedition;
@@ -336,6 +349,9 @@ export type RuntimeEvent = {
     distanceUnit: string | null;
     subjectId: string | null;
     subjectType: string | null;
+    encounterOutcome?: "None" | "WanderingEncounter" | "KeyedLocationDiscovery" | "ManualCustom" | null;
+    encounterNote?: string | null;
+    encounterOccurrenceId?: string | null;
 };
 
 export type CrawlSessionContextKind = "WorldBound" | "AbstractHex" | "NonSpatial";
@@ -708,6 +724,13 @@ export type EncounterCadenceAssistantRequest = {
     resolutionSource: ResolutionSource;
     resolutionNote?: string;
     note?: string;
+};
+
+export type ResolveEncounterRequest = {
+    expectedVersion: number;
+    resolutionSource: ResolutionSource;
+    resolutionNote?: string;
+    resultNote?: string;
 };
 
 export type ToolHostContext = {

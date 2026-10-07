@@ -416,6 +416,37 @@ public sealed class ExpeditionWorkbenchEndpointsTests
                 expedition.GetProperty("history").EnumerateArray(),
                 item => item.GetProperty("kind").GetString() == "EncounterCheckPerformed"
                     && item.GetProperty("watchNumber").GetInt32() == 2);
+            var pendingEncounter = expedition.GetProperty("expedition").GetProperty("pendingEncounter");
+            var occurrenceId = pendingEncounter.GetProperty("id").GetGuid();
+
+            using (var blockedWatch = await client.PostAsJsonAsync(
+                $"/api/expeditions/{expeditionId:D}/advance",
+                new
+                {
+                    expectedVersion = expedition.GetProperty("version").GetInt64(),
+                    intendedDirection = 0,
+                    paceKey = "normal",
+                    expectedDistance = 1,
+                    actualDistance = 1,
+                    travelResolutionSource = "ManualRoll"
+                }))
+            {
+                Assert.Equal(HttpStatusCode.BadRequest, blockedWatch.StatusCode);
+            }
+
+            using (var resolveEncounter = await client.PostAsJsonAsync(
+                $"/api/expeditions/{expeditionId:D}/encounters/{occurrenceId:D}/resolve",
+                new
+                {
+                    expectedVersion = expedition.GetProperty("version").GetInt64(),
+                    resolutionSource = "DmOverride",
+                    resolutionNote = "integration test resolution",
+                    resultNote = "handled"
+                }))
+            {
+                resolveEncounter.EnsureSuccessStatusCode();
+                expedition = await resolveEncounter.Content.ReadFromJsonAsync<JsonElement>();
+            }
 
             using var secondWatch = await client.PostAsJsonAsync(
                 $"/api/expeditions/{expeditionId:D}/advance",
@@ -531,6 +562,89 @@ public sealed class ExpeditionWorkbenchEndpointsTests
                 expedition.GetProperty("history").EnumerateArray(),
                 item => item.GetProperty("kind").GetString() == "NavigationCheckResolved"
                     && item.GetProperty("watchNumber").GetInt32() == 1);
+        }
+        finally
+        {
+            TestWebHost.DeleteDatabase(database);
+        }
+    }
+
+    [Fact]
+    public async Task FiniteAlternatePacePersistsAcrossPartialTravelRestart()
+    {
+        var database = TestWebHost.NewDatabasePath();
+        Guid sessionId;
+
+        try
+        {
+            using (var factory = TestWebHost.Create(database))
+            using (var client = factory.CreateClient())
+            {
+                var procedure = await SyntheticProcedureApiFixture.CreatePacedExecutableAsync(client);
+                using var startResponse = await client.PostAsJsonAsync("/api/expeditions", new
+                {
+                    name = "Pace persistence",
+                    procedureId = procedure.ProcedureId,
+                    procedureRevision = procedure.Revision,
+                    context = new
+                    {
+                        kind = "AbstractHex",
+                        name = "Pace proof",
+                        orientation = "PointyTop",
+                        hexCenterDistance = 12,
+                        distanceUnit = new { kind = "Mile", symbol = "mi", metersPerUnit = 1609.344 }
+                    },
+                    startHex = new { q = 0, r = 0 }
+                });
+                startResponse.EnsureSuccessStatusCode();
+                var session = await startResponse.Content.ReadFromJsonAsync<JsonElement>();
+                sessionId = session.GetProperty("id").GetGuid();
+
+                var modes = session.GetProperty("movementComposition")
+                    .GetProperty("policy")
+                    .GetProperty("travelModeKeys")
+                    .EnumerateArray()
+                    .Select(value => value.GetString())
+                    .ToArray();
+                Assert.Equal(new[] { "normal", "fast", "slow" }, modes);
+
+                using var advance = await client.PostAsJsonAsync(
+                    $"/api/expeditions/{sessionId:D}/advance",
+                    new
+                    {
+                        expectedVersion = session.GetProperty("version").GetInt64(),
+                        intendedDirection = 0,
+                        paceKey = "fast",
+                        navigationAidKey = "none",
+                        suppressesNavigationCheck = false,
+                        resetsVeerAtBoundary = false,
+                        expectedDistance = 12,
+                        actualDistance = 12,
+                        resolutionSource = "ManualRoll",
+                        travelResolutionSource = "ManualRoll",
+                        deliberateDoubleBack = false,
+                        continueAcrossBoundaries = false
+                    });
+                advance.EnsureSuccessStatusCode();
+                session = await advance.Content.ReadFromJsonAsync<JsonElement>();
+
+                Assert.Equal("ConditionsReviewRequired", session.GetProperty("pauseReason").GetString());
+                Assert.Equal("fast", session.GetProperty("expedition").GetProperty("activePaceKey").GetString());
+                Assert.True(session.GetProperty("expedition").GetProperty("activeWatchRemainingHours").GetDouble() > 0);
+            }
+
+            using (var restartedFactory = TestWebHost.Create(database))
+            using (var restartedClient = restartedFactory.CreateClient())
+            {
+                var reloaded = await restartedClient.GetFromJsonAsync<JsonElement>(
+                    $"/api/expeditions/{sessionId:D}");
+
+                Assert.Equal("ConditionsReviewRequired", reloaded.GetProperty("pauseReason").GetString());
+                Assert.Equal("fast", reloaded.GetProperty("expedition").GetProperty("activePaceKey").GetString());
+                Assert.Contains(
+                    reloaded.GetProperty("movementComposition").GetProperty("policy").GetProperty("travelModeKeys").EnumerateArray(),
+                    value => value.GetString() == "fast");
+            }
         }
         finally
         {
@@ -739,6 +853,57 @@ public sealed class ExpeditionWorkbenchEndpointsTests
                 Assert.Equal(1, runtime.GetProperty("activeWatchNumber").GetInt32());
                 Assert.Equal(1, runtime.GetProperty("activeWatchElapsedHours").GetDouble());
                 Assert.Equal(watchHours - 1, runtime.GetProperty("activeWatchRemainingHours").GetDouble(), 6);
+                Assert.Equal("EncounterTriggered", session.GetProperty("pauseReason").GetString());
+                var pending = runtime.GetProperty("pendingEncounter");
+                var occurrenceId = pending.GetProperty("id").GetGuid();
+
+                using (var blockedResume = await restartedClient.PostAsJsonAsync(
+                    $"/api/expeditions/{sessionId:D}/assistants/watch",
+                    new
+                    {
+                        expectedVersion = session.GetProperty("version").GetInt64(),
+                        elapsedHours = watchHours - 1,
+                        resolutionSource = "DmOverride",
+                        resolutionNote = "must not bypass encounter",
+                        note = "blocked"
+                    }))
+                {
+                    Assert.Equal(HttpStatusCode.BadRequest, blockedResume.StatusCode);
+                }
+
+                var pendingVersion = session.GetProperty("version").GetInt64();
+                using (var resolveResponse = await restartedClient.PostAsJsonAsync(
+                    $"/api/expeditions/{sessionId:D}/encounters/{occurrenceId:D}/resolve",
+                    new
+                    {
+                        expectedVersion = pendingVersion,
+                        resolutionSource = "DmOverride",
+                        resolutionNote = "resolved at table",
+                        resultNote = "complete"
+                    }))
+                {
+                    resolveResponse.EnsureSuccessStatusCode();
+                    session = await resolveResponse.Content.ReadFromJsonAsync<JsonElement>();
+                    runtime = session.GetProperty("expedition");
+                }
+
+                Assert.Equal(JsonValueKind.Null, runtime.GetProperty("pendingEncounter").ValueKind);
+                Assert.Equal(JsonValueKind.Null, session.GetProperty("pauseReason").ValueKind);
+                Assert.Contains(
+                    session.GetProperty("history").EnumerateArray(),
+                    item => item.GetProperty("kind").GetString() == "EncounterResolved"
+                        && item.GetProperty("encounterOccurrenceId").GetGuid() == occurrenceId);
+
+                using (var staleResolve = await restartedClient.PostAsJsonAsync(
+                    $"/api/expeditions/{sessionId:D}/encounters/{occurrenceId:D}/resolve",
+                    new
+                    {
+                        expectedVersion = pendingVersion,
+                        resolutionSource = "DmOverride"
+                    }))
+                {
+                    Assert.Equal(HttpStatusCode.Conflict, staleResolve.StatusCode);
+                }
 
                 using var resumeResponse = await restartedClient.PostAsJsonAsync(
                     $"/api/expeditions/{sessionId:D}/assistants/watch",

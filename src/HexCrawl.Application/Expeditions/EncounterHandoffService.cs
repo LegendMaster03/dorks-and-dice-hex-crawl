@@ -177,6 +177,11 @@ public sealed class EncounterHandoffService(HexCrawlService coreService)
             throw new ArgumentException(
                 "The requested runtime event is not a structured encounter occurrence.");
         }
+        if (expedition.Runtime.PendingEncounter is { } pending && pending.TriggerSequence != sequence)
+        {
+            throw new ArgumentException(
+                "The requested runtime encounter is not the encounter currently pending for this expedition.");
+        }
         if (runtimeEvent.SubjectId.HasValue && runtimeEvent.EncounterLocation is null)
         {
             throw new InvalidOperationException(
@@ -204,7 +209,9 @@ public sealed class EncounterHandoffService(HexCrawlService coreService)
         return Build(
             expedition,
             handoffId,
-            $"runtime:{runtimeEvent.Sequence}",
+            runtimeEvent.EncounterOccurrenceId is { } occurrenceId
+                ? $"runtime:{occurrenceId:D}"
+                : $"runtime:{runtimeEvent.Sequence}",
             returnPath,
             elapsed,
             watchNumber,

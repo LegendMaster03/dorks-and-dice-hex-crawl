@@ -16,6 +16,7 @@ import type {
     RegistrationControlPoint,
     RuntimeAdvanceRequest,
     ResolveBoundaryDecisionRequest,
+    ResolveEncounterRequest,
     RepositionExpeditionRequest,
     TravelWatchAssistantRequest,
     NonSpatialWatchAssistantRequest,
@@ -418,6 +419,17 @@ export class HexCrawlApi {
 
     public advanceExpedition(expeditionId: string, input: RuntimeAdvanceRequest): Promise<ExpeditionDetail> {
         return this.sendJson("POST", `/api/expeditions/${encodeURIComponent(expeditionId)}/advance`, input, "Advance expedition");
+    }
+
+    public resolveEncounter(
+        expeditionId: string,
+        occurrenceId: string,
+        input: ResolveEncounterRequest): Promise<ExpeditionDetail> {
+        return this.sendJson(
+            "POST",
+            `/api/expeditions/${encodeURIComponent(expeditionId)}/encounters/${encodeURIComponent(occurrenceId)}/resolve`,
+            input,
+            "Resolve encounter");
     }
 
     public resolveBoundaryDecision(

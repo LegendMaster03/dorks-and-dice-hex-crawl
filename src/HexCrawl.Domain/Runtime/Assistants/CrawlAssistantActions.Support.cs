@@ -46,7 +46,8 @@ public static partial class CrawlAssistantActions
         string? distanceUnit = null,
         EncounterOutcomeKind? encounterOutcome = null,
         string? encounterNote = null,
-        ResolutionProvenance? encounterProvenance = null) =>
+        ResolutionProvenance? encounterProvenance = null,
+        Guid? encounterOccurrenceId = null) =>
         new(
             NextSequence(state, pending),
             watchNumber,
@@ -58,7 +59,8 @@ public static partial class CrawlAssistantActions
             distanceUnit,
             EncounterOutcome: encounterOutcome,
             EncounterNote: encounterNote,
-            EncounterProvenance: encounterProvenance);
+            EncounterProvenance: encounterProvenance,
+            EncounterOccurrenceId: encounterOccurrenceId);
 
     private static CrawlRuntimeEvent ProvenanceEvent(
         CrawlSessionRuntimeState state,

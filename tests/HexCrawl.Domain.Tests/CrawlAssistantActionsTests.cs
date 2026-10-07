@@ -140,7 +140,24 @@ public sealed class CrawlAssistantActionsTests
         Assert.Equal(state.ElapsedTravelTime, result.ElapsedTravelTime);
         Assert.Equal(state.CurrentHex, result.CurrentHex);
         Assert.Contains(result.History, item => item.Kind == CrawlRuntimeEventKind.EncounterCheckPerformed);
-        Assert.Contains(result.History, item => item.Kind == CrawlRuntimeEventKind.EncounterTriggered);
+        var trigger = Assert.Single(result.History, item => item.Kind == CrawlRuntimeEventKind.EncounterTriggered);
+        Assert.NotNull(result.PendingEncounter);
+        Assert.Equal(trigger.Sequence, result.PendingEncounter!.TriggerSequence);
+        Assert.Equal(trigger.EncounterOccurrenceId, result.PendingEncounter.Id);
+        Assert.Equal(EncounterOutcomeKind.WanderingEncounter, result.PendingEncounter.Outcome);
+    }
+
+    [Fact]
+    public void EncounterAssistantNoneLeavesTravelUnblocked()
+    {
+        var result = CrawlAssistantActions.RecordEncounterCadence(
+            State(),
+            new EncounterCadenceAssistantInput(
+                EncounterOutcomeKind.None,
+                new ResolutionProvenance(ResolutionSource.ManualRoll, "d20")));
+
+        Assert.Null(result.PendingEncounter);
+        Assert.DoesNotContain(result.History, item => item.Kind == CrawlRuntimeEventKind.EncounterTriggered);
     }
 
     [Fact]

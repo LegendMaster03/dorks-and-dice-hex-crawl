@@ -105,6 +105,34 @@ internal static class SyntheticProcedureApiFixture
             stored.GetProperty("revision").GetInt32());
     }
 
+    public static async Task<SyntheticProcedureRevision> CreatePacedExecutableAsync(HttpClient client)
+    {
+        using var response = await client.PostAsJsonAsync("/api/procedures", new
+        {
+            presetKey = "simple-fixed-distance",
+            campaignId = (Guid?)null,
+            name = "Synthetic paced executable procedure",
+            moduleSelections = new[]
+            {
+                Include(GenericProcedureCatalog.MovementBudgetModule)
+            },
+            overrides = new object[]
+            {
+                Change(GenericProcedureCatalog.MovementBudgetModule,
+                    ("budgetModel", "speed-and-pace"),
+                    ("baseBudget", "12"),
+                    ("budgetUnit", "mi"),
+                    ("limitingScope", "party"),
+                    ("travelModeKeys", "normal;fast;slow"))
+            }
+        });
+        response.EnsureSuccessStatusCode();
+        var stored = await response.Content.ReadFromJsonAsync<JsonElement>();
+        return new SyntheticProcedureRevision(
+            stored.GetProperty("procedureId").GetGuid(),
+            stored.GetProperty("revision").GetInt32());
+    }
+
     private static object Include(string moduleKey) => new { moduleKey, included = true };
 
     private static object Change(string moduleKey, params (string Key, string Value)[] parameters) => new

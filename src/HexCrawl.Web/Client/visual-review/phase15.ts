@@ -243,7 +243,9 @@ function moduleDef(moduleKey) {
         mechanicVersion: 1,
         executionHandler: "visual-review",
         automationLevel: "Assisted",
-        parameters: {}
+        parameters: moduleKey === "effects.expedition"
+            ? { effectKinds: "fatigue;exhaustion" }
+            : {}
     };
 }
 
@@ -409,7 +411,8 @@ function runtimeFixture() {
             activeContinueAcrossBoundaries: false,
             activeEncounterKind: null,
             activeEncounterHour: null,
-            activeEncounterHandled: null
+            activeEncounterHandled: null,
+            pendingEncounter: null
         },
         party: party(),
         participantActivityPolicy: {
@@ -479,7 +482,8 @@ function nonSpatialRuntimeFixture() {
         activeWatchRemainingHours: null,
         activeWatchPendingDecision: null,
         activePaceKey: null,
-        activeActivityAssignments: []
+        activeActivityAssignments: [],
+        pendingEncounter: null
     };
     value.movementComposition = {
         policy: {
@@ -664,11 +668,101 @@ function journeySurvivalFixture() {
     return state;
 }
 
+function effectsFixture(active = false) {
+    return {
+        policy: {
+            support: "Supported",
+            effectKinds: ["fatigue", "exhaustion"],
+            accumulationModel: "levels",
+            recoveryModel: "rest",
+            scope: "Participant",
+            mechanicKey: "effects.expedition",
+            mechanicVersion: 1,
+            executionHandler: "visual-review",
+            unsupportedReason: null
+        },
+        activeEffects: active ? [{
+            id: "effect-fatigue",
+            effectKey: "fatigue",
+            target: { scope: "Participant", targetId: "member-1" },
+            mergeKey: "fatigue:member-1",
+            level: 2,
+            magnitude: null,
+            unit: null,
+            state: null,
+            movementComponents: [],
+            sourceConsequenceIds: ["consequence-fatigue"],
+            provenance: [{
+                sourceKind: "ForcedTravelResult",
+                sourceKey: "forced-travel-check",
+                sourceReference: null,
+                providerName: null,
+                note: "Failed forced-travel check"
+            }],
+            recoveryModel: "rest"
+        }] : [],
+        appliedConsequences: [],
+        pendingConsequences: [],
+        history: active ? [{
+            id: "effect-audit-1",
+            effectId: "effect-fatigue",
+            effectKey: "fatigue",
+            operation: "adjust-level",
+            beforeLevel: 1,
+            afterLevel: 2,
+            beforeMagnitude: null,
+            afterMagnitude: null,
+            consequenceId: "consequence-fatigue",
+            provenance: {
+                sourceKind: "ForcedTravelResult",
+                sourceKey: "forced-travel-check",
+                sourceReference: null,
+                providerName: null,
+                note: "Failed forced-travel check"
+            }
+        }] : []
+    };
+}
+
 function journeyFixture() {
     return {
         expeditionVersion: 42,
-        processPolicy: { support: "Supported" },
-        eventPolicy: { support: "Supported" },
+        processPolicy: {
+            support: "Supported",
+            stageModel: "Ordered",
+            stageKeys: ["pass"],
+            stageTransitionModel: "Sequential",
+            progressModel: "Accumulated",
+            progressKind: "Numeric",
+            progressUnit: "legs",
+            allowNegativeProgress: false,
+            progressFloor: 0,
+            progressCeiling: 6,
+            completionModel: "StageCompletion",
+            roleDriven: true,
+            roleAssignmentModel: "CurrentAtResolution",
+            intervalIntegrationModel: "None",
+            blocksRelevantTravelWhileResolutionRequired: true,
+            mechanicKey: "journey.process",
+            mechanicVersion: 1,
+            executionHandler: "visual-review",
+            unsupportedReason: null
+        },
+        eventPolicy: {
+            support: "Supported",
+            triggerModel: "Explicit",
+            triggerSources: ["ProcessProgress", "StageTransition"],
+            linkMode: "ProcessLinked",
+            targetingModel: "RoleOrParty",
+            terrainInfluence: "Snapshot",
+            consequenceModel: "ExpeditionConsequence",
+            requiresResolvedTrigger: false,
+            blocksRelevantTravelWhileResolutionRequired: true,
+            mechanicKey: "journey.events",
+            mechanicVersion: 1,
+            executionHandler: "visual-review",
+            unsupportedReason: null
+        },
         activeProcesses: [{
             id: "journey-1",
             processKey: "ashen-pass",
@@ -677,18 +771,52 @@ function journeyFixture() {
                 processKey: "ashen-pass",
                 displayName: "Cross the Ashen Pass",
                 description: "Guide the company through the flooded pass and into the high country.",
+                initialStageKey: "pass",
+                stageOrder: ["pass"],
+                destinationReference: "High country",
+                routeReference: "Ashen Pass",
+                locationReference: null,
+                note: null,
                 stages: [{
                     stageKey: "pass",
                     displayName: "Cross the pass",
                     description: "Make progress through the broken highland route.",
+                    completionModel: "ProgressThreshold",
                     progressTarget: 6,
+                    successTarget: null,
+                    failureLimit: null,
+                    complicationLimit: null,
+                    failProcessAtFailureLimit: false,
+                    failProcessAtComplicationLimit: false,
+                    initialProgressState: null,
+                    explicitNextStageKey: null,
+                    outcomeTransitions: [],
+                    approaches: [{
+                        approachKey: "steady",
+                        displayName: "Steady progress",
+                        capabilityReference: null,
+                        note: null
+                    }],
                     roleKeys: ["navigator", "scout"]
                 }]
             },
             execution: {
+                stageModel: "Ordered",
+                stageTransitionModel: "Sequential",
+                progressModel: "Accumulated",
                 progressKind: "Numeric",
                 progressUnit: "legs",
-                roleDriven: true
+                allowNegativeProgress: false,
+                progressFloor: 0,
+                progressCeiling: 6,
+                completionModel: "StageCompletion",
+                roleDriven: true,
+                roleAssignmentModel: "CurrentAtResolution",
+                intervalIntegrationModel: "None",
+                blocksRelevantTravelWhileResolutionRequired: true,
+                mechanicKey: "journey.process",
+                mechanicVersion: 1,
+                executionHandler: "visual-review"
             },
             currentStageKey: "pass",
             stageStates: [{
@@ -701,6 +829,18 @@ function journeyFixture() {
                 completed: false
             }],
             pendingActions: [],
+            startedAtExpeditionTime: "PT0H",
+            startedAfterCompletedWatches: 0,
+            endedAtExpeditionTime: null,
+            endedAfterCompletedWatches: null,
+            endReason: null,
+            provenance: {
+                sourceKind: "Dm",
+                sourceKey: "visual-journey-start",
+                sourceReference: null,
+                providerName: null,
+                note: null
+            },
             isTerminal: false
         }],
         closedProcesses: [],
@@ -712,10 +852,12 @@ function journeyFixture() {
 
 let runtime = runtimeFixture();
 let survival = survivalFixture(false);
+let effects = effectsFixture(false);
 let journey = journeyFixture();
 
 switch (stateName) {
     case "selected-edge":
+    case "focus-return":
         runtime.expedition.intendedDirection = 1;
         runtime.expedition.actualDirection = 1;
         break;
@@ -777,6 +919,16 @@ switch (stateName) {
         runtime.expedition.activeEncounterHour = 1.5;
         runtime.expedition.activeEncounterHandled = true;
         runtime.expedition.activeWatchPendingDecision = "EncounterTriggered";
+        runtime.expedition.pendingEncounter = {
+            id: "encounter-occurrence-1",
+            triggerSequence: 2,
+            watchNumber: 4,
+            outcome: "WanderingEncounter",
+            expeditionElapsedHours: 13.5,
+            hex: { q: 0, r: 0 },
+            locationId: null,
+            note: "A wandering encounter interrupts the expedition."
+        };
         runtime.history.push({
             sequence: 2,
             watchNumber: 4,
@@ -787,12 +939,42 @@ switch (stateName) {
             distanceValue: null,
             distanceUnit: null,
             subjectId: null,
-            subjectType: null
+            subjectType: null,
+            encounterOutcome: "WanderingEncounter",
+            encounterNote: "A wandering encounter interrupts the expedition.",
+            encounterOccurrenceId: "encounter-occurrence-1"
         });
         break;
     case "forced-travel-pending":
         runtime.expedition.intendedDirection = 4;
         survival = survivalFixture(true);
+        effects = effectsFixture(true);
+        break;
+    case "effects-workspace":
+        runtime.expedition.intendedDirection = 1;
+        runtime.expedition.actualDirection = 1;
+        effects = effectsFixture(true);
+        break;
+    case "history-workspace":
+        runtime = nonSpatialRuntimeFixture();
+        survival = journeySurvivalFixture();
+        effects = effectsFixture(true);
+        journey = journeyFixture();
+        journey.history = [{
+            id: "journey-history-1",
+            kind: "StageResolved",
+            processId: "journey-1",
+            stageKey: "pass",
+            detail: "Cross the pass advanced by 2 legs.",
+            completedWatches: 0,
+            provenance: {
+                sourceKind: "Dm",
+                sourceKey: "journey-resolution",
+                sourceReference: null,
+                providerName: null,
+                note: null
+            }
+        }];
         break;
     case "more-options-open":
         runtime.expedition.intendedDirection = 5;
@@ -818,12 +1000,28 @@ switch (stateName) {
         journey = journeyFixture();
         journey.activeProcesses[0].status = "ResolutionRequired";
         journey.eventOccurrences = [{
-            occurrenceId: "event-1",
+            id: "event-1",
             processId: "journey-1",
+            stageKey: "pass",
+            trigger: "ProcessProgress",
+            triggerReference: "journey-1:pass:progress",
             status: "ResolutionRequired",
-            eventType: "Journey hazard",
-            eventKey: "hazard",
-            stageKey: "pass"
+            targetKind: "Role",
+            targetRoleKey: "navigator",
+            targetId: null,
+            participantSnapshot: null,
+            eventKey: null,
+            eventType: null,
+            environment: [],
+            consequenceIds: [],
+            provenance: {
+                sourceKind: "Procedure",
+                sourceKey: "journey-event-opportunity",
+                sourceReference: null,
+                providerName: null,
+                note: null
+            },
+            note: null
         }];
         break;
     case "journey-consequence":
@@ -848,6 +1046,7 @@ const originalFetch = window.fetch.bind(window);
 window.fetch = async input => {
     const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
     if (url.includes("/api/expeditions/" + runtime.id + "/survival")) return responseJson(survival);
+    if (url.includes("/api/expeditions/" + runtime.id + "/effects")) return responseJson(effects);
     if (url.includes("/api/expeditions/" + runtime.id + "/journeys")) return responseJson(journey);
     return new Response(JSON.stringify({ detail: "visual-review stub" }), {
         status: 404,
@@ -877,6 +1076,15 @@ function findButton(label) {
     return Array.from(root.querySelectorAll("button")).find(button => button.textContent?.trim() === label) || null;
 }
 
+function findButtonContaining(label) {
+    return Array.from(root.querySelectorAll("button")).find(button => button.textContent?.includes(label)) || null;
+}
+
+function findStatAction(label) {
+    return Array.from(root.querySelectorAll(".hc-stat-action")).find(button =>
+        button.querySelector(".hc-stat-action-label")?.textContent?.trim() === label) || null;
+}
+
 async function waitForRootText(text, attempts = 20) {
     for (let index = 0; index < attempts; index += 1) {
         if ((root.textContent || "").includes(text)) return;
@@ -886,6 +1094,8 @@ async function waitForRootText(text, attempts = 20) {
 }
 
 await new Promise(resolve => setTimeout(resolve, 0));
+
+let focusReturnVerified = false;
 
 if (stateName === "map-selected" || stateName === "map-nonadjacent") {
     const canvas = root.querySelector("canvas");
@@ -909,10 +1119,25 @@ if (stateName === "map-selected" || stateName === "map-nonadjacent") {
     await waitForRootText("Current requirement");
 } else if (stateName === "boundary-pending") {
     findButton("Resolve lost-party boundary decision")?.click();
-} else if (stateName === "more-options-open") {
+}
+
+if (stateName === "more-options-open") {
     findButton("More options")?.click();
 } else if (stateName === "teleport-workspace") {
     findButton("Teleport party")?.click();
+} else if (stateName === "effects-workspace") {
+    findButtonContaining("Resources & effects")?.click();
+    await waitForRootText("Active effects");
+} else if (stateName === "history-workspace") {
+    findStatAction("Time")?.click();
+    await waitForRootText("Effects / consequences");
+} else if (stateName === "focus-return") {
+    const opener = findStatAction("Time");
+    opener?.focus();
+    opener?.click();
+    await waitForRootText("Expedition history");
+    findButton("Close")?.click();
+    focusReturnVerified = document.activeElement === opener;
 }
 
 if (stateName === "selected-edge") {
@@ -974,7 +1199,14 @@ const metrics = {
     journeyConsequenceVisible: rootText.includes("1 failure") && rootText.includes("2 complications"),
     movementUnitVisible: rootText.includes("Effective distance (mi)"),
     forcedTravelPrimaryDomainFacing: rootText.includes("Current requirement") && rootText.includes("Failure consequence:"),
-    forcedTravelTechnicalExpanded: Array.from(root.querySelectorAll("details[open] > summary")).some(summary => summary.textContent?.trim() === "Advanced consequence details")
+    forcedTravelTechnicalExpanded: Array.from(root.querySelectorAll("details[open] > summary")).some(summary => summary.textContent?.trim() === "Advanced consequence details"),
+    activeEffectVisible: rootText.includes("Fatigue") && rootText.includes("Level 2") && rootText.includes("Clear effect"),
+    effectRecoveryVisible: rootText.includes("Reduce 1 level") && rootText.includes("Recovery:"),
+    unifiedHistoryVisible: rootText.includes("Journey") && rootText.includes("Travel / runtime") && rootText.includes("Effects / consequences"),
+    positionProgressVisible: rootText.includes("4.5 / 12 mi") && rootText.includes("37.5% through current cell"),
+    focusReturnedToOpener: focusReturnVerified,
+    encounterResolutionVisible: rootText.includes("Mark encounter resolved")
+        && !rootText.includes("Encounter resolved — continue travel")
 };
 document.getElementById("review-metrics").textContent = JSON.stringify(metrics);
 document.documentElement.dataset.visualReviewReady = "true";

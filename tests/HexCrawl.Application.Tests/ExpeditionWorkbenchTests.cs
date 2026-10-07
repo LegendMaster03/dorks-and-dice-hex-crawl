@@ -144,6 +144,137 @@ public sealed class ExpeditionWorkbenchTests
     }
 
     [Fact]
+    public async Task FocusedEncounterBlocksTravelAcrossReloadUntilExactOccurrenceIsResolved()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var (core, workbench) = await database.ServicesAsync();
+        var assistants = await database.AssistantServiceAsync();
+        var world = await core.CreateOverworldAsync("alice", WorldCommand());
+        var expedition = await workbench.StartAsync(
+            world.World.Id,
+            "alice",
+            new StartExpeditionWorkbenchCommand(
+                "Encounter interruption",
+                "alexandrian-advanced",
+                "exploration-map",
+                new HexCoordinate(0, 0)));
+
+        expedition = await assistants.RecordNavigationAsync(
+            expedition.State.Id,
+            "alice",
+            new NavigationAssistantCommand
+            {
+                ExpectedVersion = expedition.Version,
+                IsLost = false,
+                VeerSteps = 0,
+                IntendedDirection = 2,
+                ResolutionSource = ResolutionSource.ManualRoll
+            });
+        expedition = await assistants.RecordEncounterCadenceAsync(
+            expedition.State.Id,
+            "alice",
+            new EncounterCadenceAssistantCommand
+            {
+                ExpectedVersion = expedition.Version,
+                Outcome = EncounterOutcomeKind.WanderingEncounter,
+                ResolutionSource = ResolutionSource.ManualRoll,
+                Note = "roadside encounter"
+            });
+
+        var pending = Assert.IsType<PendingEncounterOccurrence>(expedition.State.PendingEncounter);
+        Assert.Equal(RuntimePauseReason.EncounterTriggered, expedition.PauseReason);
+        Assert.Equal(
+            pending.Id,
+            Assert.Single(
+                expedition.State.History,
+                item => item.Kind == CrawlRuntimeEventKind.EncounterTriggered).EncounterOccurrenceId);
+
+        var reloaded = await core.GetExpeditionAsync(expedition.State.Id, "alice");
+        Assert.Equal(pending, reloaded.State.PendingEncounter);
+        Assert.Equal(RuntimePauseReason.EncounterTriggered, reloaded.PauseReason);
+
+        var navigationBlocked = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            assistants.RecordNavigationAsync(
+                reloaded.State.Id,
+                "alice",
+                new NavigationAssistantCommand
+                {
+                    ExpectedVersion = reloaded.Version,
+                    IsLost = true,
+                    VeerSteps = 1,
+                    IntendedDirection = 3,
+                    ResolutionSource = ResolutionSource.ManualRoll
+                }));
+        Assert.Contains("pending encounter", navigationBlocked.Message, StringComparison.OrdinalIgnoreCase);
+
+        var blocked = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            workbench.AdvanceAsync(
+                reloaded.State.Id,
+                "alice",
+                new AdvanceExpeditionWorkbenchCommand
+                {
+                    ExpectedVersion = reloaded.Version,
+                    IntendedDirection = 2,
+                    PaceKey = "normal",
+                    ExpectedDistance = 1,
+                    ActualDistance = 1,
+                    TravelResolutionSource = ResolutionSource.ManualRoll
+                }));
+        Assert.Contains("pending encounter", blocked.Message, StringComparison.OrdinalIgnoreCase);
+
+        var resolved = await assistants.ResolveEncounterAsync(
+            reloaded.State.Id,
+            "alice",
+            new ResolveEncounterCommand(
+                reloaded.Version,
+                pending.Id,
+                ResolutionSource.DmOverride,
+                "table resolution",
+                "encounter complete"));
+
+        Assert.Null(resolved.State.PendingEncounter);
+        Assert.Null(resolved.PauseReason);
+        var resolution = Assert.Single(
+            resolved.State.History,
+            item => item.Kind == CrawlRuntimeEventKind.EncounterResolved);
+        Assert.Equal(pending.Id, resolution.EncounterOccurrenceId);
+        Assert.True(resolution.Sequence > pending.TriggerSequence);
+        Assert.Equal(new HexDirection(2), resolved.State.IntendedDirection);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            assistants.ResolveEncounterAsync(
+                resolved.State.Id,
+                "alice",
+                new ResolveEncounterCommand(
+                    resolved.Version,
+                    pending.Id,
+                    ResolutionSource.DmOverride)));
+
+        var advanced = await workbench.AdvanceAsync(
+            resolved.State.Id,
+            "alice",
+            new AdvanceExpeditionWorkbenchCommand
+            {
+                ExpectedVersion = resolved.Version,
+                IntendedDirection = 2,
+                PaceKey = "normal",
+                ExpectedDistance = 1,
+                ActualDistance = 1,
+                TravelResolutionSource = ResolutionSource.ManualRoll
+            });
+
+        Assert.True(advanced.State.DistanceTraveled.Value > resolved.State.DistanceTraveled.Value);
+        Assert.Single(
+            advanced.State.History,
+            item => item.Kind == CrawlRuntimeEventKind.EncounterTriggered
+                && item.EncounterOccurrenceId == pending.Id);
+        Assert.Single(
+            advanced.State.History,
+            item => item.Kind == CrawlRuntimeEventKind.EncounterResolved
+                && item.EncounterOccurrenceId == pending.Id);
+    }
+
+    [Fact]
     public async Task NavigationThenFocusedEncounterResolutionPreservesTravelUntilAdvance()
     {
         await using var database = await TestDatabase.CreateAsync();

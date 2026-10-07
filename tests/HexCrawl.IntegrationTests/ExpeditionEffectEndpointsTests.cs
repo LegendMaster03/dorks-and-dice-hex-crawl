@@ -176,6 +176,87 @@ public sealed class ExpeditionEffectEndpointsTests
     }
 
     [Fact]
+    public async Task EffectRecoveryEnforcesVersionAndOwnerWithoutMutatingState()
+    {
+        var database = TestWebHost.NewDatabasePath();
+        Guid expeditionId;
+        Guid effectId;
+        long currentVersion;
+        long staleVersion;
+
+        try
+        {
+            using (var ownerFactory = TestWebHost.Create(database, "alice"))
+            using (var owner = ownerFactory.CreateClient())
+            {
+                var started = await StartMaplessExpeditionAsync(owner, "Protected effect");
+                expeditionId = started.GetProperty("id").GetGuid();
+                staleVersion = started.GetProperty("version").GetInt64();
+                effectId = Guid.NewGuid();
+
+                using var upsert = await owner.PutAsJsonAsync(
+                    $"/api/expeditions/{expeditionId:D}/effects/{effectId:D}",
+                    new
+                    {
+                        expectedVersion = staleVersion,
+                        effect = new
+                        {
+                            id = effectId,
+                            effectKey = "fatigue",
+                            target = new { scope = "Party", targetId = (Guid?)null },
+                            level = 2,
+                            recoveryModel = "rest"
+                        },
+                        provenance = Provenance("protected-effect")
+                    });
+                upsert.EnsureSuccessStatusCode();
+                var operation = await upsert.Content.ReadFromJsonAsync<JsonElement>();
+                currentVersion = operation.GetProperty("expedition").GetProperty("version").GetInt64();
+
+                using var stale = await owner.PostAsJsonAsync(
+                    $"/api/expeditions/{expeditionId:D}/effects/{effectId:D}/recover",
+                    new
+                    {
+                        expectedVersion = staleVersion,
+                        triggerKey = "rest",
+                        levelReduction = 1,
+                        clear = false,
+                        provenance = Provenance("stale-recovery")
+                    });
+                Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
+            }
+
+            using (var otherFactory = TestWebHost.Create(database, "bob"))
+            using (var other = otherFactory.CreateClient())
+            using (var otherRecovery = await other.PostAsJsonAsync(
+                $"/api/expeditions/{expeditionId:D}/effects/{effectId:D}/recover",
+                new
+                {
+                    expectedVersion = currentVersion,
+                    triggerKey = "rest",
+                    levelReduction = 1,
+                    clear = false,
+                    provenance = Provenance("other-owner-recovery")
+                }))
+            {
+                Assert.Equal(HttpStatusCode.NotFound, otherRecovery.StatusCode);
+            }
+
+            using var reopenedFactory = TestWebHost.Create(database, "alice");
+            using var reopened = reopenedFactory.CreateClient();
+            var effects = await reopened.GetFromJsonAsync<JsonElement>(
+                $"/api/expeditions/{expeditionId:D}/effects");
+            var active = Assert.Single(effects.GetProperty("activeEffects").EnumerateArray());
+            Assert.Equal(effectId, active.GetProperty("id").GetGuid());
+            Assert.Equal(2, active.GetProperty("level").GetInt32());
+        }
+        finally
+        {
+            TestWebHost.DeleteDatabase(database);
+        }
+    }
+
+    [Fact]
     public async Task OversizedTimeDelayReturnsBadRequestInsteadOfServerError()
     {
         var database = TestWebHost.NewDatabasePath();
