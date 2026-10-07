@@ -727,8 +727,42 @@ function effectsFixture(active = false) {
 function journeyFixture() {
     return {
         expeditionVersion: 42,
-        processPolicy: { support: "Supported" },
-        eventPolicy: { support: "Supported" },
+        processPolicy: {
+            support: "Supported",
+            stageModel: "Ordered",
+            stageKeys: ["pass"],
+            stageTransitionModel: "Sequential",
+            progressModel: "Accumulated",
+            progressKind: "Numeric",
+            progressUnit: "legs",
+            allowNegativeProgress: false,
+            progressFloor: 0,
+            progressCeiling: 6,
+            completionModel: "StageCompletion",
+            roleDriven: true,
+            roleAssignmentModel: "CurrentAtResolution",
+            intervalIntegrationModel: "None",
+            blocksRelevantTravelWhileResolutionRequired: true,
+            mechanicKey: "journey.process",
+            mechanicVersion: 1,
+            executionHandler: "visual-review",
+            unsupportedReason: null
+        },
+        eventPolicy: {
+            support: "Supported",
+            triggerModel: "Explicit",
+            triggerSources: ["ProcessProgress", "StageTransition"],
+            linkMode: "ProcessLinked",
+            targetingModel: "RoleOrParty",
+            terrainInfluence: "Snapshot",
+            consequenceModel: "ExpeditionConsequence",
+            requiresResolvedTrigger: false,
+            blocksRelevantTravelWhileResolutionRequired: true,
+            mechanicKey: "journey.events",
+            mechanicVersion: 1,
+            executionHandler: "visual-review",
+            unsupportedReason: null
+        },
         activeProcesses: [{
             id: "journey-1",
             processKey: "ashen-pass",
@@ -737,18 +771,52 @@ function journeyFixture() {
                 processKey: "ashen-pass",
                 displayName: "Cross the Ashen Pass",
                 description: "Guide the company through the flooded pass and into the high country.",
+                initialStageKey: "pass",
+                stageOrder: ["pass"],
+                destinationReference: "High country",
+                routeReference: "Ashen Pass",
+                locationReference: null,
+                note: null,
                 stages: [{
                     stageKey: "pass",
                     displayName: "Cross the pass",
                     description: "Make progress through the broken highland route.",
+                    completionModel: "ProgressThreshold",
                     progressTarget: 6,
+                    successTarget: null,
+                    failureLimit: null,
+                    complicationLimit: null,
+                    failProcessAtFailureLimit: false,
+                    failProcessAtComplicationLimit: false,
+                    initialProgressState: null,
+                    explicitNextStageKey: null,
+                    outcomeTransitions: [],
+                    approaches: [{
+                        approachKey: "steady",
+                        displayName: "Steady progress",
+                        capabilityReference: null,
+                        note: null
+                    }],
                     roleKeys: ["navigator", "scout"]
                 }]
             },
             execution: {
+                stageModel: "Ordered",
+                stageTransitionModel: "Sequential",
+                progressModel: "Accumulated",
                 progressKind: "Numeric",
                 progressUnit: "legs",
-                roleDriven: true
+                allowNegativeProgress: false,
+                progressFloor: 0,
+                progressCeiling: 6,
+                completionModel: "StageCompletion",
+                roleDriven: true,
+                roleAssignmentModel: "CurrentAtResolution",
+                intervalIntegrationModel: "None",
+                blocksRelevantTravelWhileResolutionRequired: true,
+                mechanicKey: "journey.process",
+                mechanicVersion: 1,
+                executionHandler: "visual-review"
             },
             currentStageKey: "pass",
             stageStates: [{
@@ -761,6 +829,18 @@ function journeyFixture() {
                 completed: false
             }],
             pendingActions: [],
+            startedAtExpeditionTime: "PT0H",
+            startedAfterCompletedWatches: 0,
+            endedAtExpeditionTime: null,
+            endedAfterCompletedWatches: null,
+            endReason: null,
+            provenance: {
+                sourceKind: "Dm",
+                sourceKey: "visual-journey-start",
+                sourceReference: null,
+                providerName: null,
+                note: null
+            },
             isTerminal: false
         }],
         closedProcesses: [],
@@ -919,12 +999,28 @@ switch (stateName) {
         journey = journeyFixture();
         journey.activeProcesses[0].status = "ResolutionRequired";
         journey.eventOccurrences = [{
-            occurrenceId: "event-1",
+            id: "event-1",
             processId: "journey-1",
+            stageKey: "pass",
+            trigger: "ProcessProgress",
+            triggerReference: "journey-1:pass:progress",
             status: "ResolutionRequired",
-            eventType: "Journey hazard",
-            eventKey: "hazard",
-            stageKey: "pass"
+            targetKind: "Role",
+            targetRoleKey: "navigator",
+            targetId: null,
+            participantSnapshot: null,
+            eventKey: null,
+            eventType: null,
+            environment: [],
+            consequenceIds: [],
+            provenance: {
+                sourceKind: "Procedure",
+                sourceKey: "journey-event-opportunity",
+                sourceReference: null,
+                providerName: null,
+                note: null
+            },
+            note: null
         }];
         break;
     case "journey-consequence":
