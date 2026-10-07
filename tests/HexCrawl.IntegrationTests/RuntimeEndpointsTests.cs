@@ -163,6 +163,25 @@ public sealed class RuntimeEndpointsTests
                     new { expectedVersion = versionB, intendedDirection = 99 });
                 Assert.Equal(HttpStatusCode.BadRequest, invalidDirection.StatusCode);
 
+                using var nonSpatialStart = await ownerClient.PostAsJsonAsync(
+                    "/api/expeditions",
+                    new
+                    {
+                        name = "Nonspatial course rejection",
+                        procedureKey = "the-one-ring-2e",
+                        context = new { kind = "NonSpatial", name = "Journey state" }
+                    });
+                nonSpatialStart.EnsureSuccessStatusCode();
+                var nonSpatial = await nonSpatialStart.Content.ReadFromJsonAsync<JsonElement>();
+                using var nonSpatialCourse = await ownerClient.PutAsJsonAsync(
+                    $"/api/expeditions/{nonSpatial.GetProperty("id").GetGuid():D}/course-intent",
+                    new
+                    {
+                        expectedVersion = nonSpatial.GetProperty("version").GetInt64(),
+                        intendedDirection = 2
+                    });
+                Assert.Equal(HttpStatusCode.BadRequest, nonSpatialCourse.StatusCode);
+
                 using var stale = await ownerClient.PutAsJsonAsync(
                     $"/api/expeditions/{expeditionId:D}/course-intent",
                     new { expectedVersion = versionA, intendedDirection = 4 });
