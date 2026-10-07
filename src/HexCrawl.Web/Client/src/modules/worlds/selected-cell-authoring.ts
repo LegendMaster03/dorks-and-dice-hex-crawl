@@ -144,6 +144,32 @@ export function addFeatureTagFact(
     }];
 }
 
+export function replaceFeatureTagFact(
+    annotations: readonly EnvironmentAnnotation[],
+    featureId: string,
+    dimension: string,
+    value: string | null,
+    provenance: string | null = "world-editor:selected-feature",
+    note: string | null = null,
+    createId: () => string = () => crypto.randomUUID()): EnvironmentAnnotation[] {
+    const normalizedDimension = normalizeDimension(dimension);
+    const next = annotations
+        .map(annotation => {
+            if (annotation.scope.kind !== "SpatialFeature" || annotation.scope.featureId !== featureId) {
+                return annotation;
+            }
+            return {
+                ...annotation,
+                facts: annotation.facts.filter(fact => normalizeDimension(fact.dimension) !== normalizedDimension)
+            };
+        })
+        .filter(annotation => annotation.facts.length > 0);
+
+    const trimmed = value?.trim() ?? "";
+    if (!trimmed) return next;
+    return addFeatureTagFact(next, featureId, dimension, trimmed, provenance, note, createId);
+}
+
 export function addEnvironmentFact(
     annotations: readonly EnvironmentAnnotation[],
     scope: EnvironmentAnnotation["scope"],
