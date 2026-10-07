@@ -2170,20 +2170,20 @@ function encounterSchedulePanel(runtime: ExpeditionDetail): HTMLElement {
     const facts = document.createElement("dl");
     facts.className = "hc-current-travel-facts";
     facts.append(
-        travelFact("Cadence", cadence === "PerWatch" ? "Every watch" : cadence === "PerDay" ? "Every day" : "No automatic cadence", "encounter-cadence"),
-        travelFact("Current day", String(runtime.expedition.currentDay), "encounter-day"),
+        travelFact("Cadence", cadence === "PerWatch" ? "Every watch" : cadence === "PerDay" ? "Every day" : "No automatic cadence", "encounterCadence"),
+        travelFact("Current day", String(runtime.expedition.currentDay), "encounterDay"),
         travelFact(
             "Watch tracking",
             runtime.expedition.activeWatchNumber !== null
                 ? `Watch ${runtime.expedition.activeWatchNumber} · ${formatHours(runtime.expedition.activeWatchElapsedHours ?? 0)} elapsed`
                 : `${runtime.expedition.completedWatches} completed watch${runtime.expedition.completedWatches === 1 ? "" : "es"}`,
-            "encounter-watch"),
+            "encounterWatch"),
         travelFact(
             "Encounter state",
             runtime.expedition.pendingEncounter
                 ? `${humanize(runtime.expedition.pendingEncounter.outcome)} pending`
                 : "No encounter pending",
-            "encounter-state"));
+            "encounterState"));
     section.append(facts);
 
     const helper = runtime.procedure.runtime?.resolutionHelpers?.encounter;
