@@ -6,6 +6,7 @@ import {
     compactRuleCatalog,
     parameterDefinitions,
     procedureParameterFacts,
+    procedurePresentationSections,
     friendlyStoredValue,
     durationToTicks,
     formatDurationTicks,
@@ -181,4 +182,74 @@ test("semantic value formatting preserves decimal numbers and decimal mappings",
         friendlyStoredValue("terrainAdjustments", "rough=0.5;severe=0.25"),
         "Rough: 0.5, Severe: 0.25");
     assert.equal(friendlyStoredValue("baseBudget", "1"), "1");
+});
+
+
+test("all 19 authoring modules have a semantic table presentation", () => {
+    const rules = compactRuleCatalog();
+    assert.equal(rules.length, 19);
+    for (const rule of rules) {
+        const parameters = rule.moduleKey === "procedure.helpers"
+            ? { "travel.enabled": "true", "travel.diceCount": "2", "travel.dieSides": "6", "travel.modifier": "3" }
+            : { exampleValue: "configured" };
+        const sections = procedurePresentationSections(rule.moduleKey, parameters);
+        assert.ok(sections.length > 0, rule.moduleKey);
+        assert.ok(sections.flatMap(section => section.facts).length > 0, rule.moduleKey);
+    }
+});
+
+test("semantic procedure presentation keeps mappings aligned and helper dice settings as formulas", () => {
+    const terrain = procedurePresentationSections("movement.terrain", {
+        adjustmentModel: "multiplier",
+        terrainAdjustments: "clear=1;broken=0.75;difficult=0.5",
+        routeAdjustmentModel: "route-improves-cost"
+    });
+    const terrainFact = terrain.flatMap(section => section.facts)
+        .find(fact => fact.label === "Terrain costs");
+    assert.deepEqual(terrainFact?.entries, [
+        { label: "Clear", value: "1" },
+        { label: "Broken", value: "0.75" },
+        { label: "Difficult", value: "0.5" }
+    ]);
+
+    const helpers = procedurePresentationSections("procedure.helpers", {
+        "travel.enabled": "true",
+        "travel.diceCount": "2",
+        "travel.dieSides": "6",
+        "travel.modifier": "3",
+        "travel.distanceFactor": "0.1",
+        "navigation.enabled": "true",
+        "navigation.diceCount": "1",
+        "navigation.dieSides": "20",
+        "navigation.modifier": "0"
+    });
+    assert.equal(
+        helpers.find(section => section.key === "travel")?.facts.find(fact => fact.label === "Roll")?.value,
+        "2d6 + 3");
+    assert.equal(
+        helpers.find(section => section.key === "navigation")?.facts.find(fact => fact.label === "Roll")?.value,
+        "1d20");
+});
+
+test("journey presentation separates stages, progress bounds, roles, and transitions", () => {
+    const sections = procedurePresentationSections("journey.process", {
+        stageModel: "manual-stages",
+        stageKeys: "approach;crossing;arrival",
+        progressModel: "progress-points",
+        progressFloor: "-2",
+        progressCeiling: "8",
+        allowNegativeProgress: "true",
+        roleDriven: "true",
+        stageTransitionModel: "sequential",
+        completionModel: "final-stage-completion"
+    });
+    assert.deepEqual(sections.map(section => section.label), [
+        "Stages",
+        "Progress and bounds",
+        "Roles",
+        "Transitions and completion"
+    ]);
+    assert.deepEqual(
+        sections[0].facts.find(fact => fact.label === "Journey stages")?.items,
+        ["Approach", "Crossing", "Arrival"]);
 });

@@ -21,6 +21,129 @@ export function movementCompositionStatusCells(runtime: ExpeditionDetail): HTMLE
     return cells;
 }
 
+export function movementCompositionLedger(runtime: ExpeditionDetail): HTMLElement {
+    const composition = runtime.movementComposition;
+    const section = document.createElement("section");
+    section.className = "hc-movement-composition-ledger";
+    section.dataset.movementCompositionLedger = "";
+
+    const heading = document.createElement("header");
+    const title = document.createElement("div");
+    const kicker = document.createElement("span");
+    kicker.className = "hc-ledger-kicker";
+    kicker.textContent = "Effective movement";
+    const value = document.createElement("strong");
+    value.className = "hc-ledger-effective";
+    value.textContent = composition.effectiveValue === null
+        ? "Unresolved"
+        : `${formatNumber(composition.effectiveValue)} ${composition.effectiveUnit ?? "unit"}${composition.effectivePerUnit ? `/${composition.effectivePerUnit}` : ""}`;
+    title.append(kicker, value);
+    const status = document.createElement("span");
+    status.className = "hc-ledger-status";
+    status.textContent = humanizeKey(composition.status);
+    heading.append(title, status);
+    section.append(heading);
+
+    const summary = document.createElement("dl");
+    summary.className = "hc-movement-ledger-summary";
+    appendDefinition(summary, "Limiter", limiterSummary(runtime));
+    appendDefinition(summary, "Reference basis", referenceUseLabel(composition.referenceUse));
+    const appliedOverride = composition.contributors.some(contributor =>
+        contributor.kind === "DmOverride" && contributor.applied);
+    if (appliedOverride && composition.preOverrideValue !== null) {
+        appendDefinition(
+            summary,
+            "Before DM override",
+            `${formatNumber(composition.preOverrideValue)} ${composition.effectiveUnit ?? "unit"}${composition.effectivePerUnit ? `/${composition.effectivePerUnit}` : ""}`);
+    }
+    section.append(summary);
+
+    if (composition.contributors.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "hc-muted";
+        empty.textContent = composition.missingInputs.length > 0
+            ? "No movement contributors are currently resolved."
+            : "No composed movement contributors were returned.";
+        section.append(empty);
+    } else {
+        const table = document.createElement("table");
+        table.className = "hc-movement-ledger-table";
+        table.setAttribute("aria-label", "Movement composition contributors");
+        const head = document.createElement("thead");
+        const headerRow = document.createElement("tr");
+        for (const label of ["Source", "Adjustment", "Value", "State"]) {
+            const cell = document.createElement("th");
+            cell.scope = "col";
+            cell.textContent = label;
+            headerRow.append(cell);
+        }
+        head.append(headerRow);
+        const body = document.createElement("tbody");
+        for (const contributor of composition.contributors) {
+            const row = document.createElement("tr");
+            const source = document.createElement("th");
+            source.scope = "row";
+            source.textContent = contributorSource(runtime, contributor);
+            if (contributor.detail || contributor.provenance) {
+                const note = document.createElement("small");
+                note.textContent = [contributor.detail, contributor.provenance].filter(Boolean).join(" · ");
+                source.append(document.createElement("br"), note);
+            }
+            const operation = document.createElement("td");
+            operation.textContent = humanizeKey(contributor.operation);
+            const amount = document.createElement("td");
+            amount.textContent = contributorValue(contributor) || "Symbolic / unresolved";
+            const state = document.createElement("td");
+            state.textContent = contributor.applied ? "Applied" : "Retained, not applied";
+            row.append(source, operation, amount, state);
+            body.append(row);
+        }
+        table.append(head, body);
+        section.append(table);
+    }
+
+    const diagnostics = diagnosticSummary(runtime);
+    if (diagnostics) {
+        const note = document.createElement("p");
+        note.className = "hc-movement-ledger-diagnostic";
+        note.textContent = diagnostics;
+        section.append(note);
+    }
+    return section;
+}
+
+function appendDefinition(list: HTMLDListElement, label: string, value: string): void {
+    const term = document.createElement("dt");
+    term.textContent = label;
+    const detail = document.createElement("dd");
+    detail.textContent = value;
+    list.append(term, detail);
+}
+
+function contributorSource(runtime: ExpeditionDetail, contributor: MovementAppliedContributor): string {
+    const kind = humanizeKey(contributor.kind ?? "Reference");
+    const participant = contributor.participantId
+        ? runtime.party.members.find(member => member.id === contributor.participantId)?.name ?? contributor.participantId
+        : null;
+    return `${kind} · ${humanizeKey(contributor.key)}${participant ? ` · ${participant}` : ""}`;
+}
+
+function contributorValue(contributor: MovementAppliedContributor): string {
+    if (contributor.value !== null) {
+        return `${formatNumber(contributor.value)}${contributor.unit ? ` ${contributor.unit}` : ""}${contributor.perUnit ? `/${contributor.perUnit}` : ""}`;
+    }
+    return contributor.symbolicValue ?? "";
+}
+
+function referenceUseLabel(value: ExpeditionDetail["movementComposition"]["referenceUse"]): string {
+    switch (value) {
+        case "AuthoritativeBase": return "Authoritative base";
+        case "Fallback": return "Reference fallback";
+        case "InformationalOnly": return "Informational only";
+        default: return "No reference value used";
+    }
+}
+
 function compositionSummary(runtime: ExpeditionDetail): string {
     const composition = runtime.movementComposition;
     const effective = composition.effectiveValue === null

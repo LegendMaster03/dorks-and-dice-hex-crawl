@@ -1154,3 +1154,51 @@ test("encounter resolution finishes its authoritative mutation before travel can
     assert.match(resolutionBlock, /applyRuntime\(next\)/);
     assert.doesNotMatch(resolutionBlock, /continueTravel\(/);
 });
+
+
+test("readability presentation uses structured procedure groups without hiding exact configuration", () => {
+    const authoring = fs.readFileSync(
+        path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"),
+        "utf8");
+    const reference = fs.readFileSync(
+        path.join(sourceDir, "modules/procedures/procedure-reference-view.ts"),
+        "utf8");
+
+    assert.match(authoring, /procedurePresentationSections/);
+    assert.match(authoring, /hc-rule-fact-groups/);
+    assert.match(authoring, /hc-rule-map/);
+    assert.match(reference, /At the table/);
+    assert.match(reference, /Exact parameter detail/);
+    assert.match(reference, /procedurePresentationSections/);
+});
+
+test("active play exposes authoritative cell and journey progress visually", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+
+    assert.match(view, /cellProgressIndicator\(runtime\)/);
+    assert.match(view, /data\.cellProgress|dataset\.cellProgress/);
+    assert.match(view, /Progress through the current cell/);
+    assert.match(view, /journeyStageSequence\(activeJourney\)/);
+    assert.match(view, /hc-stage-sequence/);
+    assert.match(view, /process\.execution\.progressFloor/);
+    assert.match(view, /process\.execution\.progressCeiling/);
+});
+
+test("movement resolution includes an accessible contributor ledger and authority distinctions", () => {
+    const movement = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-movement-composition-view.ts"),
+        "utf8");
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+
+    assert.match(movement, /movementCompositionLedger/);
+    assert.match(movement, /Movement composition contributors/);
+    assert.match(movement, /Retained, not applied/);
+    assert.match(movement, /Reference fallback/);
+    assert.match(movement, /Before DM override/);
+    assert.match(view, /movementCompositionLedger\(runtime\)/);
+    assert.match(view, /Reference fallback; not a fully resolved composition/);
+});

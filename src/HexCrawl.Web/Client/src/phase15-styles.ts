@@ -37,6 +37,14 @@ export function ensurePhase15Styles(): void {
         .hc-preset-card-head { min-height:4rem; }
         .hc-preset-card-head p { margin:.3rem 0 0; color:var(--hc-muted); }
         .hc-preset-facts, .hc-rule-facts { display:grid; grid-template-columns:minmax(7rem,auto) minmax(0,1fr); gap:.3rem .75rem; margin:0; align-content:start; }
+        .hc-rule-fact-groups { display:grid; gap:.55rem; min-width:0; }
+        .hc-rule-fact-group { display:grid; gap:.3rem; min-width:0; padding-top:.45rem; border-top:1px solid var(--hc-border); }
+        .hc-rule-fact-group:first-child { border-top:0; padding-top:0; }
+        .hc-rule-fact-group h4 { margin:0; font-size:.76rem; text-transform:uppercase; letter-spacing:.045em; color:var(--hc-muted); }
+        .hc-rule-map { width:100%; border-collapse:collapse; font-size:.9rem; }
+        .hc-rule-map th, .hc-rule-map td { padding:.18rem .3rem; border-bottom:1px solid var(--hc-border); text-align:left; vertical-align:top; }
+        .hc-rule-map th { width:42%; font-weight:650; color:var(--hc-text-strong); }
+        .hc-rule-value-list { margin:0; padding-left:1.1rem; display:grid; gap:.1rem; }
         .hc-preset-facts dt, .hc-rule-facts dt { font-weight:600; color:var(--hc-text-strong); }
         .hc-preset-facts dd, .hc-rule-facts dd { margin:0; overflow-wrap:anywhere; color:var(--hc-text); }
         .hc-preset-actions, .hc-area-actions, .hc-json-actions { display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; }
@@ -216,6 +224,36 @@ export function ensurePhase15Styles(): void {
         .hc-map-context-overlay h3, .hc-map-context-overlay p { margin:0; }
         .hc-current-travel { display:grid; gap:.6rem; padding:.75rem .85rem; border:1px solid var(--hc-border); border-radius:.7rem; background:var(--hc-surface-elevated); }
         .hc-current-travel h3, .hc-current-travel p { margin:0; }
+        .hc-cell-progress { display:grid; gap:.3rem; min-width:0; padding:.5rem .6rem; border:1px solid var(--hc-border); border-radius:.55rem; background:var(--hc-surface); }
+        .hc-progress-heading { display:flex; justify-content:space-between; gap:.65rem; align-items:baseline; flex-wrap:wrap; }
+        .hc-ledger-kicker { font-size:.72rem; font-weight:800; text-transform:uppercase; letter-spacing:.045em; color:var(--hc-muted); }
+        .hc-cell-progress progress, .hc-stage-content progress { width:100%; height:.65rem; accent-color:var(--hc-primary); }
+        .hc-cell-progress.is-unbounded { border-style:dashed; }
+        .hc-movement-composition-ledger { display:grid; gap:.65rem; min-width:0; padding:.75rem; border:1px solid var(--hc-border); border-radius:.7rem; background:var(--hc-surface-elevated); }
+        .hc-movement-composition-ledger > header { display:flex; justify-content:space-between; align-items:flex-start; gap:.75rem; flex-wrap:wrap; }
+        .hc-movement-composition-ledger > header > div { display:grid; gap:.1rem; }
+        .hc-ledger-effective { font-size:1.15rem; color:var(--hc-text-strong); }
+        .hc-ledger-status { border:1px solid var(--hc-border); border-radius:999px; padding:.16rem .5rem; font-size:.78rem; }
+        .hc-movement-ledger-summary { display:grid; grid-template-columns:auto minmax(0,1fr); gap:.22rem .7rem; margin:0; }
+        .hc-movement-ledger-summary dt { font-weight:650; color:var(--hc-text-strong); }
+        .hc-movement-ledger-summary dd { margin:0; min-width:0; overflow-wrap:anywhere; }
+        .hc-movement-ledger-table { width:100%; border-collapse:collapse; font-size:.88rem; }
+        .hc-movement-ledger-table th, .hc-movement-ledger-table td { padding:.38rem .45rem; border-bottom:1px solid var(--hc-border); text-align:left; vertical-align:top; }
+        .hc-movement-ledger-table thead th { font-size:.72rem; text-transform:uppercase; letter-spacing:.04em; color:var(--hc-muted); }
+        .hc-movement-ledger-table tbody th { font-weight:650; color:var(--hc-text-strong); }
+        .hc-movement-ledger-table small { color:var(--hc-muted); font-weight:400; }
+        .hc-movement-ledger-diagnostic { margin:0; padding:.55rem .65rem; border-inline-start:3px solid var(--hc-warning); background:var(--hc-surface); }
+        .hc-journey-stage-sequence { display:grid; gap:.45rem; }
+        .hc-journey-stage-sequence h4 { margin:0; }
+        .hc-stage-sequence { list-style:none; margin:0; padding:0; display:grid; gap:.4rem; }
+        .hc-stage-step { display:grid; grid-template-columns:1.7rem minmax(0,1fr); gap:.5rem; align-items:start; padding:.5rem .55rem; border:1px solid var(--hc-border); border-radius:.55rem; background:var(--hc-surface); }
+        .hc-stage-step.is-current { border-width:2px; }
+        .hc-stage-step.is-complete { opacity:.78; }
+        .hc-stage-marker { width:1.7rem; height:1.7rem; display:grid; place-items:center; border:1px solid var(--hc-border); border-radius:999px; font-weight:800; }
+        .hc-stage-step.is-current .hc-stage-marker { border-color:var(--hc-primary); }
+        .hc-stage-content { display:grid; gap:.18rem; min-width:0; }
+        .hc-stage-content > span { overflow-wrap:anywhere; }
+        .hc-stage-progress-label { font-size:.86rem; font-weight:650; color:var(--hc-text-strong); }
         .hc-current-travel-facts { display:grid; grid-template-columns:auto minmax(0,1fr) auto minmax(0,1fr); gap:.2rem .65rem; margin:0; align-items:baseline; }
         .hc-current-travel-facts dt { font-size:.74rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--hc-muted); }
         .hc-current-travel-facts dd { margin:0; min-width:0; color:var(--hc-text-strong); overflow-wrap:anywhere; }
@@ -283,6 +321,8 @@ export function ensurePhase15Styles(): void {
             .hc-adjacency-navigator { width:7.5rem; top:.55rem; left:.55rem; }
             .hc-adjacency-edge { min-width:2.75rem; min-height:2.75rem; }
             .hc-current-travel-facts { grid-template-columns:auto minmax(0,1fr); }
+            .hc-movement-ledger-table { display:block; overflow-x:auto; }
+            .hc-reference-table-facts, .hc-rule-facts { grid-template-columns:minmax(6rem,auto) minmax(0,1fr); }
             .hc-journey-state-grid { grid-template-columns:1fr; }
             .hc-current-travel-pace-editor { grid-template-columns:1fr; }
             .hc-map-context-overlay { max-height:48%; right:.5rem; bottom:.5rem; width:calc(100% - 1rem); }

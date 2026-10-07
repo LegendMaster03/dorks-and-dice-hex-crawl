@@ -49,6 +49,7 @@ cases=(
   "08-spatial-selected-edge|selected-edge|light|1366|900"
   "09-spatial-persisted-course|persisted-course|light|1366|900"
   "10-spatial-movement|movement-input-pending|light|1366|900"
+  "10a-spatial-movement-composition|movement-composition|light|1366|900"
   "11-spatial-navigation|navigation-pending|light|1366|900"
   "12-spatial-boundary|boundary-pending|light|1366|900"
   "13-spatial-encounter|encounter-pending|dark|1366|900"
@@ -265,6 +266,9 @@ else:
         raise SystemExit(f'non-adjacent inspection did not expose deliberate teleport authority: {metrics}')
     if state == "movement-input-pending" and not metrics["movementUnitVisible"]:
         raise SystemExit(f'movement resolution omitted its authoritative unit: {metrics}')
+    if state == "movement-composition":
+        if not metrics["movementLedgerVisible"] or metrics["movementContributorRows"] < 9:
+            raise SystemExit(f'movement composition ledger did not expose all contributor kinds: {metrics}')
     if state in {"forced-travel-pending", "forced-travel-one-participant", "forced-travel-zero-participants", "forced-travel-party-scope", "forced-travel-mount", "forced-travel-vehicle"}:
         if not metrics["forcedTravelPrimaryDomainFacing"]:
             raise SystemExit(f'forced-travel primary workflow is not domain-facing: {metrics}')

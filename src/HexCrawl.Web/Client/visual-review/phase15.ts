@@ -1059,6 +1059,26 @@ switch (stateName) {
         runtime.expedition.intendedDirection = 3;
         runtime.movementComposition = movement(false);
         break;
+    case "movement-composition":
+        runtime.expedition.intendedDirection = 3;
+        runtime.expedition.actualDirection = 3;
+        runtime.movementComposition = movement(true);
+        runtime.movementComposition.effectiveValue = 4.5;
+        runtime.movementComposition.preOverrideValue = 4;
+        runtime.movementComposition.limitingParticipantId = "member-2";
+        runtime.movementComposition.referenceUse = "AuthoritativeBase";
+        runtime.movementComposition.contributors = [
+            { id: "participant", kind: "Participant", key: "Brann speed", operation: "Base", applied: true, value: 6, symbolicValue: null, unit: "mi", perUnit: "watch", participantId: "member-2", movementUnitKey: null, provenance: "party sheet", detail: "Slowest traveler" },
+            { id: "mount", kind: "Mount", key: "Pack mule", operation: "Replace", applied: false, value: 7, symbolicValue: null, unit: "mi", perUnit: "watch", participantId: null, movementUnitKey: "pack-mule", provenance: "party sheet", detail: "Retained mount option" },
+            { id: "vehicle", kind: "Vehicle", key: "River skiff", operation: "Replace", applied: false, value: 8, symbolicValue: null, unit: "mi", perUnit: "watch", participantId: null, movementUnitKey: "skiff", provenance: "party sheet", detail: null },
+            { id: "load", kind: "Load", key: "Heavy cargo", operation: "Multiply", applied: true, value: 0.8, symbolicValue: null, unit: null, perUnit: null, participantId: null, movementUnitKey: null, provenance: "load", detail: null },
+            { id: "mode", kind: "TravelMode", key: "careful", operation: "Multiply", applied: true, value: 0.9, symbolicValue: null, unit: null, perUnit: null, participantId: null, movementUnitKey: null, provenance: "travel mode", detail: null },
+            { id: "terrain", kind: "TerrainRoute", key: "broken ground", operation: "Multiply", applied: true, value: 0.75, symbolicValue: null, unit: null, perUnit: null, participantId: null, movementUnitKey: null, provenance: "current cell", detail: null },
+            { id: "environment", kind: "Environment", key: "driving rain", operation: "SymbolicLimit", applied: false, value: null, symbolicValue: "manual review", unit: null, perUnit: null, participantId: null, movementUnitKey: null, provenance: "environment", detail: "Retained pending adjudication" },
+            { id: "effect", kind: "PersistentEffect", key: "fatigue", operation: "Cap", applied: true, value: 4, symbolicValue: null, unit: "mi", perUnit: "watch", participantId: "member-2", movementUnitKey: null, provenance: "effect engine", detail: null },
+            { id: "override", kind: "DmOverride", key: "clear route ruling", operation: "Replace", applied: true, value: 4.5, symbolicValue: null, unit: "mi", perUnit: "watch", participantId: null, movementUnitKey: null, provenance: "DM", detail: "Table ruling" }
+        ];
+        break;
     case "encounter-pending":
         runtime.pauseReason = "EncounterTriggered";
         runtime.remainingWatchHours = 2.5;
@@ -1496,6 +1516,9 @@ if (stateName === "course-change-reload") {
     findButton("Resolve navigation")?.click();
 } else if (stateName === "movement-input-pending") {
     findButton("Continue travel")?.click();
+} else if (stateName === "movement-composition") {
+    findStatAction("Movement")?.click();
+    await waitForRootText("Movement composition contributors");
 } else if (stateName === "encounter-pending") {
     findButton("Resolve encounter")?.click();
 } else if (stateName === "forced-travel-pending"
@@ -1618,6 +1641,8 @@ const metrics = {
     focusedEdge: document.activeElement?.matches?.("[data-adjacency-edge]") ?? false,
     journeyVisible: rootText.includes("Current stage") && rootText.includes("Progress") && rootText.includes("Roles") && rootText.includes("Pending"),
     movementStatusVisible: Array.from(root.querySelectorAll(".hc-stat-action-label")).some(label => label.textContent?.trim() === "Movement"),
+    movementLedgerVisible: isVisible(root.querySelector("[data-movement-composition-ledger]")),
+    movementContributorRows: root.querySelectorAll(".hc-movement-ledger-table tbody tr").length,
     fakeSpatialStateVisible: !runtime.expedition.isSpatial && (
         rootText.includes("Current travel")
         || rootText.includes("Pace / travel mode")
