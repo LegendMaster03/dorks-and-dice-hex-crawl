@@ -150,11 +150,11 @@ const labels: Record<string, string> = {
 };
 
 const numericHelp: Partial<Record<string, string>> = {
-    startingExitProgressFactor: "How much of one cell crossing is already counted at the starting edge. 0 means none; 0.5 means half a crossing; 1 means one full crossing.",
-    nearExitProgressFactor: "How much progress is required to leave through a nearby exit. 0.5 means half of one normal cell crossing.",
-    farExitProgressFactor: "How much progress is required to leave through a far exit. 1 means one normal cell crossing.",
-    backExitProgressFactor: "How much progress is required to leave back through the entry side. 1 means one normal cell crossing.",
-    directionChangeProgressCostFactor: "The fraction of one normal cell crossing charged when the party changes course. 0.5 means half a crossing.",
+    startingExitProgressFactor: "The fraction of the configured hex center distance required to leave the starting hex before an entry side is known. 0.5 means half the configured center-to-center distance.",
+    nearExitProgressFactor: "The fraction of the configured hex center distance required to leave through a nearby side after an entry side is known. 0.5 means half the configured center-to-center distance.",
+    farExitProgressFactor: "The fraction of the configured hex center distance required to leave through a far side after an entry side is known. 1 means the full configured center-to-center distance.",
+    backExitProgressFactor: "The fraction of the configured hex center distance required to leave back through the entry side. 0.5 means half the configured center-to-center distance.",
+    directionChangeProgressCostFactor: "The fraction of the configured hex center distance subtracted from accumulated progress when a course change costs progress. 0.5 means half the configured center-to-center distance.",
     baseBudget: "The unadjusted movement allowance before terrain, routes, weather, load, effects, or DM overrides are applied. The Movement unit setting supplies the unit.",
     travelChecksPerInterval: "How many encounter checks this schedule makes during each configured travel period.",
     timeCost: "How many units of the selected Time unit this activity or procedure step consumes.",
