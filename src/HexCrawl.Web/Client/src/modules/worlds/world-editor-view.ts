@@ -10,7 +10,6 @@ import type { DistanceUnitKind } from "./world-form";
 import { input, integer, numeric, required, select } from "../../ui/dom";
 import {
     addEnvironmentFact,
-    addFeatureTagFact,
     addHexTagFact,
     applicableFeatureEnvironmentFacts,
     commonEnvironmentDimensions,
@@ -20,6 +19,7 @@ import {
     locationsInCell,
     measurementFact,
     removeEnvironmentFact,
+    replaceFeatureTagFact,
     replaceHexTerrain,
     sameHex,
     tagFact,
@@ -555,6 +555,26 @@ export async function renderWorldEditor(
     };
 
     const onMapClick = (point: WorldPoint): void => {
+        if (placement === "cell-location") {
+            if (!selectedCell) return;
+            const clickedCell = worldToHex(world.grid, point);
+            if (!sameHex(clickedCell, selectedCell)) {
+                mapHint.textContent = `Choose an exact position inside Hex ${selectedCell.q},${selectedCell.r}.`;
+                return;
+            }
+            cellLocationPoint = point;
+            placement = null;
+            cellLocationPosition.textContent = `Position: exact map point ${formatPoint(point)}.`;
+            mapHint.textContent = "Exact location position captured. Complete the location details and save.";
+            input(cellLocationForm, "name").focus();
+            return;
+        }
+        if (placement === "cell-route") {
+            cellRouteDraft.push(point);
+            cellRouteDraftLabel.textContent = `Route vertices (${cellRouteDraft.length}): ${cellRouteDraft.map(formatPoint).join(" · ")}`;
+            mapHint.textContent = `Route authoring: ${cellRouteDraft.length} vertices captured. Continue clicking anywhere the route travels, then save the line feature.`;
+            return;
+        }
         if (placement === "location") {
             input(locationForm, "x").value = String(point.x);
             input(locationForm, "y").value = String(point.y);
@@ -577,8 +597,194 @@ export async function renderWorldEditor(
         }
     };
 
+    mapSurface.setHexSelectionHandler(hex => {
+        if (placement !== null) {
+            mapSurface.renderer.selectedHex = selectedCell;
+            mapSurface.requestRender();
+            return;
+        }
+        selectedCell = hex;
+        cellLocationPoint = null;
+        cellRouteDraft = [];
+        cellLocationPosition.textContent = "Position: cell center.";
+        cellRouteDraftLabel.textContent = "Draw a continuous line on the map; it may cross any number of cells.";
+        persistSelectedCell(worldId, selectedCell);
+        renderSelectedCell();
+        if (hex) mapHint.textContent = `Selected Hex ${hex.q},${hex.r} for world authoring.`;
+        else mapHint.textContent = "Select a map cell to author its contents.";
+    });
+    if (selectedCell) mapSurface.renderer.selectedHex = selectedCell;
+
     required<HTMLButtonElement>(root, "[data-worlds]").addEventListener("click", () => navigate("/worlds"));
     required<HTMLButtonElement>(root, "[data-reset-view]").addEventListener("click", () => mapSurface.resetView());
+
+    required<HTMLButtonElement>(root, "[data-save-cell-terrain]").addEventListener("click", () => void run(null, async () => {
+        if (!selectedCell) throw new Error("Select a map cell before setting terrain.");
+        await saveWorldEnvironment(replaceHexTerrain(
+            worldEnvironment.annotations,
+            selectedCell,
+            cellTerrain.value));
+    }));
+    required<HTMLButtonElement>(root, "[data-clear-cell-terrain]").addEventListener("click", () => void run(null, async () => {
+        if (!selectedCell) throw new Error("Select a map cell before clearing terrain.");
+        await saveWorldEnvironment(replaceHexTerrain(
+            worldEnvironment.annotations,
+            selectedCell,
+            null));
+    }));
+
+    required<HTMLButtonElement>(root, "[data-cell-location-exact]").addEventListener("click", () => {
+        if (!selectedCell) {
+            showUiError(error, new Error("Select a map cell before choosing a location position."));
+            return;
+        }
+        placement = "cell-location";
+        cellLocationPoint = null;
+        cellLocationPosition.textContent = `Position: choose an exact point inside Hex ${selectedCell.q},${selectedCell.r}.`;
+        mapHint.textContent = `Click an exact position inside Hex ${selectedCell.q},${selectedCell.r}.`;
+        mapSurface.canvas.focus();
+    });
+    cellLocationForm.addEventListener("submit", event => {
+        event.preventDefault();
+        void run(cellLocationForm, async () => {
+            if (!selectedCell) throw new Error("Select a map cell before adding a location.");
+            const position = cellLocationPoint ?? hexToWorld(world.grid, selectedCell);
+            applyWorld(await api.createLocation(world.id, {
+                name: input(cellLocationForm, "name").value.trim(),
+                category: input(cellLocationForm, "category").value.trim(),
+                position,
+                discoverability: select(cellLocationForm, "discoverability").value as "Obvious" | "Hidden" | "Conditional",
+                expectedVersion: world.version
+            }));
+            cellLocationForm.reset();
+            cellLocationPoint = null;
+            cellLocationPosition.textContent = "Position: cell center.";
+        });
+    });
+
+    const setCellRouteCategory = (category: string): void => {
+        input(cellRouteForm, "category").value = category;
+        input(cellRouteForm, "name").focus();
+    };
+    required<HTMLButtonElement>(root, "[data-cell-route-road]").addEventListener("click", () => setCellRouteCategory("road"));
+    required<HTMLButtonElement>(root, "[data-cell-route-trail]").addEventListener("click", () => setCellRouteCategory("trail"));
+    required<HTMLButtonElement>(root, "[data-cell-route-river]").addEventListener("click", () => setCellRouteCategory("river"));
+    required<HTMLButtonElement>(root, "[data-cell-route-draw]").addEventListener("click", () => {
+        if (!selectedCell) {
+            showUiError(error, new Error("Select a map cell before drawing a route."));
+            return;
+        }
+        cellRouteDraft = [];
+        placement = "cell-route";
+        cellRouteDraftLabel.textContent = "Route vertices (0). Click the map to draw the continuous route.";
+        mapHint.textContent = "Click the map to add continuous route vertices. The route may cross any number of cells.";
+        mapSurface.canvas.focus();
+    });
+    cellRouteForm.addEventListener("submit", event => {
+        event.preventDefault();
+        void run(cellRouteForm, async () => {
+            if (!selectedCell) throw new Error("Select a map cell before adding a route.");
+            if (cellRouteDraft.length < 2) throw new Error("Draw at least two route points before saving the line feature.");
+            applyWorld(await api.createFeature(world.id, {
+                name: input(cellRouteForm, "name").value.trim(),
+                category: input(cellRouteForm, "category").value.trim(),
+                kind: "Line",
+                position: null,
+                path: [...cellRouteDraft],
+                boundary: null,
+                expectedVersion: world.version
+            }));
+            cellRouteForm.reset();
+            cellRouteDraft = [];
+            placement = null;
+            cellRouteDraftLabel.textContent = "Draw a continuous line on the map; it may cross any number of cells.";
+            mapHint.textContent = `Route saved. Hex ${selectedCell.q},${selectedCell.r} remains selected for authoring.`;
+        });
+    });
+
+    cellEnvironmentForm.addEventListener("submit", event => {
+        event.preventDefault();
+        void run(cellEnvironmentForm, async () => {
+            if (!selectedCell) throw new Error("Select a map cell before adding environment details.");
+            const dimension = input(cellEnvironmentForm, "dimension").value.trim();
+            const value = input(cellEnvironmentForm, "value").value.trim();
+            const next = dimension.toLowerCase() === "terrain"
+                ? replaceHexTerrain(worldEnvironment.annotations, selectedCell, value)
+                : addHexTagFact(worldEnvironment.annotations, selectedCell, dimension, value);
+            await saveWorldEnvironment(next);
+            cellEnvironmentForm.reset();
+        });
+    });
+
+    cellFeatureEnvironmentForm.addEventListener("submit", event => {
+        event.preventDefault();
+        void run(cellFeatureEnvironmentForm, async () => {
+            const featureId = select(cellFeatureEnvironmentForm, "featureId").value;
+            if (!featureId) throw new Error("Select an intersecting feature before setting feature behavior.");
+            const dimension = input(cellFeatureEnvironmentForm, "dimension").value.trim();
+            const value = input(cellFeatureEnvironmentForm, "value").value.trim();
+            await saveWorldEnvironment(replaceFeatureTagFact(
+                worldEnvironment.annotations,
+                featureId,
+                dimension,
+                value));
+        });
+    });
+
+    const advancedScope = select(cellAdvancedEnvironmentForm, "scope");
+    const advancedFeatureRow = required<HTMLElement>(cellAdvancedEnvironmentForm, "[data-advanced-feature-row]");
+    const advancedValueKind = select(cellAdvancedEnvironmentForm, "valueKind");
+    const advancedTagRow = required<HTMLElement>(cellAdvancedEnvironmentForm, "[data-advanced-tag-row]");
+    const advancedMeasurementRow = required<HTMLElement>(cellAdvancedEnvironmentForm, "[data-advanced-measurement-row]");
+    const syncAdvancedEnvironmentForm = (): void => {
+        advancedFeatureRow.hidden = advancedScope.value !== "SpatialFeature";
+        const measurement = advancedValueKind.value === "Measurement";
+        advancedTagRow.hidden = measurement;
+        advancedMeasurementRow.hidden = !measurement;
+        input(cellAdvancedEnvironmentForm, "tag").required = !measurement;
+        input(cellAdvancedEnvironmentForm, "measurement").required = measurement;
+        input(cellAdvancedEnvironmentForm, "unit").required = measurement;
+    };
+    advancedScope.addEventListener("change", syncAdvancedEnvironmentForm);
+    advancedValueKind.addEventListener("change", syncAdvancedEnvironmentForm);
+    syncAdvancedEnvironmentForm();
+
+    cellAdvancedEnvironmentForm.addEventListener("submit", event => {
+        event.preventDefault();
+        void run(cellAdvancedEnvironmentForm, async () => {
+            if (!selectedCell) throw new Error("Select a map cell before adding an environment fact.");
+            const scopeKind = advancedScope.value as "World" | "Hex" | "SpatialFeature";
+            const featureId = select(cellAdvancedEnvironmentForm, "featureId").value;
+            if (scopeKind === "SpatialFeature" && !featureId) {
+                throw new Error("Select an intersecting feature for SpatialFeature scope.");
+            }
+            const provenance = input(cellAdvancedEnvironmentForm, "provenance").value.trim() || null;
+            const note = input(cellAdvancedEnvironmentForm, "note").value.trim() || null;
+            const dimension = input(cellAdvancedEnvironmentForm, "dimension").value.trim();
+            const fact: EnvironmentFact = advancedValueKind.value === "Measurement"
+                ? measurementFact(
+                    dimension,
+                    numeric(input(cellAdvancedEnvironmentForm, "measurement")),
+                    input(cellAdvancedEnvironmentForm, "unit").value,
+                    provenance,
+                    note)
+                : tagFact(
+                    dimension,
+                    input(cellAdvancedEnvironmentForm, "tag").value,
+                    provenance,
+                    note);
+            const scope: EnvironmentAnnotation["scope"] = scopeKind === "World"
+                ? { kind: "World", hex: null, featureId: null }
+                : scopeKind === "Hex"
+                    ? { kind: "Hex", hex: selectedCell, featureId: null }
+                    : { kind: "SpatialFeature", hex: null, featureId };
+            const next = scopeKind === "Hex" && dimension.toLowerCase() === "terrain" && fact.valueKind === "Tag"
+                ? replaceHexTerrain(worldEnvironment.annotations, selectedCell, fact.tag)
+                : addEnvironmentFact(worldEnvironment.annotations, scope, fact);
+            await saveWorldEnvironment(next);
+        });
+    });
+
     required<HTMLButtonElement>(root, "[data-place-location]").addEventListener("click", () => {
         placement = "location";
         mapHint.textContent = "Click the map to position the location.";
