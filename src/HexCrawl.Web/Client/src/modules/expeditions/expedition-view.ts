@@ -73,6 +73,7 @@ export async function renderExpedition(
     let disposed = false;
     let selectedHex: HexCoordinate | null = null;
     let selectedHexTracksTravelIntent = false;
+    let courseIntentMutationPending = false;
     let preferences = loadTravelPreferences(runtime);
     const availableTravelModes = (): string[] => runtime.movementComposition.policy.travelModeKeys ?? [];
     const normalizeTravelModeSelection = (): void => {
@@ -610,8 +611,17 @@ export async function renderExpedition(
         return parts.length > 0 ? parts.join(" · ") : "No pending consequences";
     };
 
+    const setCourseIntentMutationPending = (pending: boolean): void => {
+        courseIntentMutationPending = pending;
+        for (const control of root.querySelectorAll<HTMLButtonElement | HTMLSelectElement>(
+            '[data-adjacency-edge], [data-adjacency-select], select[name="direction"]')) {
+            control.disabled = pending;
+        }
+    };
+
     const commitTravelIntent = async (direction: number | null): Promise<void> => {
-        if (!runtime.expedition.isSpatial) return;
+        if (!runtime.expedition.isSpatial || courseIntentMutationPending) return;
+        setCourseIntentMutationPending(true);
         const errorBefore = root.querySelector<HTMLElement>("[data-error]");
         if (errorBefore) clearUiError(errorBefore);
         try {
@@ -644,6 +654,8 @@ export async function renderExpedition(
             }
             const errorAfter = root.querySelector<HTMLElement>("[data-error]");
             if (!disposed && errorAfter) showUiError(errorAfter, value);
+        } finally {
+            if (!disposed) setCourseIntentMutationPending(false);
         }
     };
 
