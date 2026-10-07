@@ -1393,7 +1393,7 @@ export async function renderProcedureAuthoringWorkspace(
 }
 
 function presetGuidanceCard(preset: ProcedurePreset): HTMLElement {
-    const guidance = presetGuidance(preset);
+    const guidance = presetGuidance(preset.procedure);
     const section = document.createElement("section");
     section.className = "hc-guided-preset-advice hc-guided-only";
     section.append(
