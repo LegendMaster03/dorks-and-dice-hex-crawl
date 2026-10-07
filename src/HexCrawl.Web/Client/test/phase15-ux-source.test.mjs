@@ -474,6 +474,10 @@ test("navigator controls use midpoint-anchored white SVG arrows with consistent 
     assert.match(styles, /:hover:not\(:disabled\) \.hc-adjacency-arrow-shape path \{ stroke:var\(--hc-primary\)/);
     assert.match(styles, /\.is-selected \.hc-adjacency-arrow-shape path \{ stroke:var\(--hc-primary\)/);
     assert.doesNotMatch(styles, /hc-adjacency-edge-mark/);
+    assert.match(styles, /#tool-root\.hex-crawl-app button\.hc-adjacency-edge \{/);
+    assert.match(styles, /#tool-root\.hex-crawl-app button\.hc-adjacency-edge:hover:not\(:disabled\)/);
+    assert.match(styles, /#tool-root\.hex-crawl-app button\.hc-adjacency-edge:focus-visible/);
+    assert.match(styles, /#tool-root\.hex-crawl-app button\.hc-adjacency-edge:disabled/);
     assert.match(styles, /cursor:pointer/);
     assert.match(styles, /outline:3px solid var\(--hc-primary\)/);
     assert.match(styles, /min-width:2\.75rem; min-height:2\.75rem/);
