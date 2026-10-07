@@ -123,10 +123,10 @@ test("changed-condition and backtrack pauses require explicit review acknowledge
             }
         };
         assert.equal(
-            spatialTravelContinuationTarget(paused, true, true, true, false, false, false, false),
+            spatialTravelContinuationTarget(paused, true, true, true, false, false, false),
             "review");
         assert.equal(
-            spatialTravelContinuationTarget(paused, true, true, true, false, false, false, true),
+            spatialTravelContinuationTarget(paused, true, true, true, false, false, true),
             "advance");
     }
 });
