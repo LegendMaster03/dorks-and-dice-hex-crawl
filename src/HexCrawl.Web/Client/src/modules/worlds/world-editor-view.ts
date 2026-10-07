@@ -14,6 +14,7 @@ import {
     applicableFeatureEnvironmentFacts,
     commonEnvironmentDimensions,
     featureHasEnvironmentRules,
+    featureIntersectsCell,
     featuresIntersectingCell,
     hexEnvironmentFacts,
     locationsInCell,
@@ -685,13 +686,25 @@ export async function renderWorldEditor(
         void run(cellRouteForm, async () => {
             if (!selectedCell) throw new Error("Select a map cell before adding a route.");
             if (cellRouteDraft.length < 2) throw new Error("Draw at least two route points before saving the line feature.");
-            applyWorld(await api.createFeature(world.id, {
+            const feature: SpatialFeature = {
+                id: crypto.randomUUID(),
                 name: input(cellRouteForm, "name").value.trim(),
                 category: input(cellRouteForm, "category").value.trim(),
                 kind: "Line",
                 position: null,
                 path: [...cellRouteDraft],
-                boundary: null,
+                boundary: null
+            };
+            if (!featureIntersectsCell(world, selectedCell, feature)) {
+                throw new Error(`The route does not intersect selected Hex ${selectedCell.q},${selectedCell.r}. Draw the route through the selected cell or select the cell it belongs to.`);
+            }
+            applyWorld(await api.createFeature(world.id, {
+                name: feature.name,
+                category: feature.category,
+                kind: feature.kind,
+                position: feature.position,
+                path: feature.path,
+                boundary: feature.boundary,
                 expectedVersion: world.version
             }));
             cellRouteForm.reset();
@@ -779,7 +792,12 @@ export async function renderWorldEditor(
                     ? { kind: "Hex", hex: selectedCell, featureId: null }
                     : { kind: "SpatialFeature", hex: null, featureId };
             const next = scopeKind === "Hex" && dimension.toLowerCase() === "terrain" && fact.valueKind === "Tag"
-                ? replaceHexTerrain(worldEnvironment.annotations, selectedCell, fact.tag)
+                ? replaceHexTerrain(
+                    worldEnvironment.annotations,
+                    selectedCell,
+                    fact.tag,
+                    fact.provenance,
+                    fact.note)
                 : addEnvironmentFact(worldEnvironment.annotations, scope, fact);
             await saveWorldEnvironment(next);
         });
@@ -875,6 +893,9 @@ export async function renderWorldEditor(
 
     required<HTMLButtonElement>(root, "[data-delete-feature]").addEventListener("click", () => void run(null, async () => {
         if (!selectedFeature) throw new Error("Select a feature to delete.");
+        if (featureHasEnvironmentRules(worldEnvironment, selectedFeature.id)) {
+            throw new Error("This feature has environment rules attached. Remove or reassign them before deleting the feature.");
+        }
         applyWorld(await api.deleteFeature(world.id, selectedFeature.id, world.version));
         newFeature();
     }));
@@ -968,5 +989,58 @@ function setFormPending(form: HTMLFormElement, pending: boolean): void {
     } else if (submit.dataset.idleText) {
         submit.textContent = submit.dataset.idleText;
         delete submit.dataset.idleText;
+    }
+}
+
+function formatEnvironmentFact(fact: EnvironmentFact): string {
+    if (fact.valueKind === "Measurement" && fact.measurement) {
+        return `${formatNumber(fact.measurement.value)} ${fact.measurement.unit}`.trim();
+    }
+    return fact.tag?.trim() || "Unspecified";
+}
+
+function humanizeEnvironmentDimension(value: string): string {
+    const text = value.replace(/[-_]+/g, " ").trim();
+    return text ? text[0].toUpperCase() + text.slice(1) : value;
+}
+
+function formatNumber(value: number): string {
+    return Number.isInteger(value) ? String(value) : value.toFixed(3).replace(/0+$/, "").replace(/\.$/, "");
+}
+
+function formatPoint(point: WorldPoint): string {
+    return `${formatNumber(point.x)}, ${formatNumber(point.y)}`;
+}
+
+function technicalLine(text: string): HTMLElement {
+    const line = document.createElement("p");
+    line.className = "hc-hint";
+    line.textContent = text;
+    return line;
+}
+
+function selectedCellStorageKey(worldId: string): string {
+    return `hex-crawl.world-editor.selected-cell.${worldId}`;
+}
+
+function restoreSelectedCell(worldId: string): HexCoordinate | null {
+    try {
+        const raw = sessionStorage.getItem(selectedCellStorageKey(worldId));
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as Partial<HexCoordinate>;
+        return Number.isInteger(parsed.q) && Number.isInteger(parsed.r)
+            ? { q: parsed.q!, r: parsed.r! }
+            : null;
+    } catch {
+        return null;
+    }
+}
+
+function persistSelectedCell(worldId: string, cell: HexCoordinate | null): void {
+    try {
+        if (cell) sessionStorage.setItem(selectedCellStorageKey(worldId), JSON.stringify(cell));
+        else sessionStorage.removeItem(selectedCellStorageKey(worldId));
+    } catch {
+        // Selection persistence is presentation-only; authoring remains usable without web storage.
     }
 }
