@@ -168,6 +168,17 @@ test("Phase 15 procedure surfaces inherit shared theme tokens", () => {
     assert.match(styles, /outline:3px solid var\(--hc-focus\)/);
 });
 
+test("navigator accent follows the host site primary token without changing shared focus semantics", () => {
+    const styles = fs.readFileSync(path.join(sourceDir, "styles.ts"), "utf8");
+    const phaseStyles = fs.readFileSync(path.join(sourceDir, "phase15-styles.ts"), "utf8");
+
+    assert.match(styles, /--hc-primary: var\(--bs-primary, #6557d2\)/);
+    assert.equal((styles.match(/--hc-primary: var\(--bs-primary, #6d61dc\);/g) ?? []).length, 2);
+    assert.equal((styles.match(/--hc-focus: #6557d2;/g) ?? []).length, 1);
+    assert.equal((styles.match(/--hc-focus: #a99df5;/g) ?? []).length, 2);
+    assert.match(phaseStyles, /\.hc-adjacency-edge\.is-selected \.hc-adjacency-arrow-shape path \{ stroke:var\(--hc-primary\); \}/);
+});
+
 test("Compact procedure edits keep their focused workspace across draft recomposition", () => {
     const workspace = fs.readFileSync(
         path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"),
@@ -436,13 +447,36 @@ test("focused travel drawer explicitly removes its course and pace listeners on 
     assert.match(view, /controller\.dispose\(\)/);
 });
 
-test("navigator controls keep visible focus and practical pointer targets at narrow widths", () => {
+test("navigator controls use midpoint-anchored white SVG arrows with consistent interaction outlines", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
     const styles = fs.readFileSync(path.join(sourceDir, "phase15-styles.ts"), "utf8");
 
-    assert.match(styles, /\.hc-adjacency-edge:focus-visible/);
-    assert.match(styles, /outline:4px solid var\(--hc-focus\)/);
+    assert.match(view, /--hc-edge-angle/);
+    assert.match(view, /edge\.midpoint\.x \+ vector\.x \* 0\.045/);
+    assert.match(view, /hc-adjacency-arrow-shape/);
+    assert.match(view, /M2 15 H38 V4 L62 20 L38 36 V25 H2 Z/);
+    assert.match(view, /const selectTravelIntent =/);
+    assert.match(view, /const toggleTravelIntent =/);
+    assert.match(view, /if \(preferences\.direction !== direction\) \{\s*selectTravelIntent\(direction, target\)/);
+    assert.match(view, /preferences\.direction = null/);
+    assert.match(view, /selectedHexTracksTravelIntent = false/);
+    assert.match(view, /button\("", \(\) => toggleTravelIntent\(edge\.directionValue, edge\.targetCell\)\)/);
+    assert.match(view, /if \(edge\) selectTravelIntent\(edge\.directionValue, edge\.targetCell\)/);
+    assert.doesNotMatch(view, /data-adjacency-edge-mark/);
+    assert.doesNotMatch(view, /edgeMarks/);
+    assert.doesNotMatch(view, /hc-adjacency-caption/);
+    assert.match(styles, /\.hc-adjacency-arrow-shape path/);
+    assert.match(styles, /fill:#fff/);
+    assert.match(styles, /stroke:transparent/);
+    assert.match(styles, /paint-order:stroke fill/);
+    assert.match(styles, /:hover:not\(:disabled\) \.hc-adjacency-arrow-shape path \{ stroke:var\(--hc-primary\)/);
+    assert.match(styles, /\.is-selected \.hc-adjacency-arrow-shape path \{ stroke:var\(--hc-primary\)/);
+    assert.doesNotMatch(styles, /hc-adjacency-edge-mark/);
+    assert.match(styles, /cursor:pointer/);
+    assert.match(styles, /outline:3px solid var\(--hc-primary\)/);
     assert.match(styles, /min-width:2\.75rem; min-height:2\.75rem/);
-    assert.match(styles, /@media \(max-width: 760px\)[\s\S]*\.hc-adjacency-edge \{ min-width:2\.75rem; min-height:2\.75rem/);
 });
 
 test("Phase 15 focused editing uses accessible drawers and keeps secondary tools out of the primary surface", () => {

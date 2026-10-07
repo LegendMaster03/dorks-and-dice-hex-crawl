@@ -104,7 +104,7 @@ export function ensureStyles(): void {
                 --hc-border: #303449;
                 --hc-input-bg: #11131d;
                 --hc-input-text: #f3f4f6;
-                --hc-primary: #6d61dc;
+                --hc-primary: var(--bs-primary, #6d61dc);
                 --hc-primary-hover: color-mix(in srgb, var(--hc-primary) 82%, white);
                 --hc-secondary: #2b3042;
                 --hc-secondary-hover: #373d52;
