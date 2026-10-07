@@ -291,7 +291,8 @@ else:
         "more-options-open": "Advanced travel controls",
         "teleport-workspace": "Teleport party",
         "abstract-spatial-course": "Navigation",
-        "effects-journey-source": "Resources & effects"
+        "effects-journey-source": "Resources & effects",
+        "journey-pending": "Journey / challenge"
     }
     if state in expected_titles:
         if metrics["drawerCount"] != 1 or metrics["focusedTitle"] != expected_titles[state]:

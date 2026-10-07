@@ -1346,6 +1346,9 @@ if (stateName === "more-options-open") {
     findButton("More options")?.click();
 } else if (stateName === "teleport-workspace") {
     findButton("Teleport party")?.click();
+} else if (stateName === "journey-pending") {
+    findButton("Resolve journey event")?.click();
+    await waitForRootText("Pending journey event");
 } else if (stateName === "effects-workspace" || stateName === "effects-journey-source") {
     findButtonContaining("Resources & effects")?.click();
     await waitForRootText("Active effects");
