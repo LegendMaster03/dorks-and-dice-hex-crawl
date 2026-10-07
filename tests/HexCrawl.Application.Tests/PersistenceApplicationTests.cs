@@ -328,133 +328,131 @@ public sealed class PersistenceApplicationTests
     }
 
     [Fact]
-    public async Task CourseIntentPersistsAcrossRestartWithoutAdvancingAndRejectsStaleWrite()
+    public async Task CourseIntentAuthorityPersistsAcrossReloadScenariosWithoutTravelSideEffects()
     {
         await using var database = await TestDatabase.CreateAsync();
         var service = await database.ServiceAsync();
         var world = await service.CreateOverworldAsync("alice", WorldCommand());
-        var expedition = await service.StartExpeditionAsync(world.World.Id, "alice", new StartExpeditionCommand(
+
+        var course = await service.StartExpeditionAsync(world.World.Id, "alice", new StartExpeditionCommand(
             "Course persistence", "alexandrian-advanced", new HexCoordinate(1, -1)));
-
-        expedition = await service.SetExpeditionCourseIntentAsync(
-            expedition.State.Id,
+        course = await service.SetExpeditionCourseIntentAsync(
+            course.State.Id,
             "alice",
-            new SetExpeditionCourseIntentCommand(expedition.Version, 0));
-        var versionWithA = expedition.Version;
-        var beforeChange = expedition.State;
+            new SetExpeditionCourseIntentCommand(course.Version, 0));
+        var versionWithA = course.Version;
+        var beforeChange = course.State;
 
-        expedition = await service.SetExpeditionCourseIntentAsync(
-            expedition.State.Id,
+        course = await service.SetExpeditionCourseIntentAsync(
+            course.State.Id,
             "alice",
             new SetExpeditionCourseIntentCommand(versionWithA, 2));
 
-        Assert.Equal(new HexDirection(2), expedition.State.IntendedDirection);
-        Assert.Equal(beforeChange.ActualDirection, expedition.State.ActualDirection);
-        Assert.Equal(beforeChange.CurrentHex, expedition.State.CurrentHex);
-        Assert.Equal(beforeChange.Traversal.Progress, expedition.State.Traversal.Progress);
-        Assert.Equal(beforeChange.DistanceTraveled, expedition.State.DistanceTraveled);
-        Assert.Equal(beforeChange.ElapsedTravelTime, expedition.State.ElapsedTravelTime);
-        Assert.Equal(beforeChange.CompletedWatches, expedition.State.CompletedWatches);
-        Assert.Equal(beforeChange.History, expedition.State.History);
+        Assert.Equal(new HexDirection(2), course.State.IntendedDirection);
+        Assert.Equal(beforeChange.ActualDirection, course.State.ActualDirection);
+        Assert.Equal(beforeChange.CurrentHex, course.State.CurrentHex);
+        Assert.Equal(beforeChange.Traversal.Progress, course.State.Traversal.Progress);
+        Assert.Equal(beforeChange.DistanceTraveled, course.State.DistanceTraveled);
+        Assert.Equal(beforeChange.ElapsedTravelTime, course.State.ElapsedTravelTime);
+        Assert.Equal(beforeChange.CompletedWatches, course.State.CompletedWatches);
+        Assert.Equal(beforeChange.History, course.State.History);
 
         await Assert.ThrowsAsync<HexCrawlConcurrencyException>(() =>
             service.SetExpeditionCourseIntentAsync(
-                expedition.State.Id,
+                course.State.Id,
                 "alice",
                 new SetExpeditionCourseIntentCommand(versionWithA, 4)));
 
-        var restarted = await database.ServiceAsync();
-        var loaded = await restarted.GetExpeditionAsync(expedition.State.Id, "alice");
-        Assert.Equal(new HexDirection(2), loaded.State.IntendedDirection);
-        Assert.Equal(expedition.State.CurrentHex, loaded.State.CurrentHex);
-        Assert.Equal(expedition.State.Traversal.Progress, loaded.State.Traversal.Progress);
-        Assert.Equal(expedition.State.DistanceTraveled, loaded.State.DistanceTraveled);
-        Assert.Equal(expedition.State.ElapsedTravelTime, loaded.State.ElapsedTravelTime);
-        Assert.Equal(expedition.State.CompletedWatches, loaded.State.CompletedWatches);
-    }
+        var reloadedB = await service.GetExpeditionAsync(course.State.Id, "alice");
+        Assert.Equal(new HexDirection(2), reloadedB.State.IntendedDirection);
+        Assert.Equal(course.State.CurrentHex, reloadedB.State.CurrentHex);
+        Assert.Equal(course.State.Traversal.Progress, reloadedB.State.Traversal.Progress);
+        Assert.Equal(course.State.DistanceTraveled, reloadedB.State.DistanceTraveled);
+        Assert.Equal(course.State.ElapsedTravelTime, reloadedB.State.ElapsedTravelTime);
+        Assert.Equal(course.State.CompletedWatches, reloadedB.State.CompletedWatches);
 
-    [Fact]
-    public async Task RepeatedCourseChangesPersistOnlyTheLatestIntent()
-    {
-        await using var database = await TestDatabase.CreateAsync();
-        var service = await database.ServiceAsync();
-        var world = await service.CreateOverworldAsync("alice", WorldCommand());
-        var expedition = await service.StartExpeditionAsync(world.World.Id, "alice", new StartExpeditionCommand(
-            "Repeated course changes", "alexandrian-advanced", new HexCoordinate(0, 0)));
-
-        foreach (var direction in new[] { 0, 2, 5 })
-        {
-            expedition = await service.SetExpeditionCourseIntentAsync(
-                expedition.State.Id,
-                "alice",
-                new SetExpeditionCourseIntentCommand(expedition.Version, direction));
-        }
-
-        Assert.Equal(new HexDirection(5), expedition.State.IntendedDirection);
-        var restarted = await database.ServiceAsync();
-        var loaded = await restarted.GetExpeditionAsync(expedition.State.Id, "alice");
-        Assert.Equal(new HexDirection(5), loaded.State.IntendedDirection);
-    }
-
-    [Fact]
-    public async Task ExplicitCourseClearPersistsAndDoesNotResurrectPriorIntent()
-    {
-        await using var database = await TestDatabase.CreateAsync();
-        var service = await database.ServiceAsync();
-        var world = await service.CreateOverworldAsync("alice", WorldCommand());
-        var expedition = await service.StartExpeditionAsync(world.World.Id, "alice", new StartExpeditionCommand(
-            "Course clear", "alexandrian-advanced", new HexCoordinate(0, 0)));
-
-        expedition = await service.SetExpeditionCourseIntentAsync(
-            expedition.State.Id,
+        course = await service.SetExpeditionCourseIntentAsync(
+            reloadedB.State.Id,
             "alice",
-            new SetExpeditionCourseIntentCommand(expedition.Version, 1));
-        expedition = await service.SetExpeditionCourseIntentAsync(
-            expedition.State.Id,
+            new SetExpeditionCourseIntentCommand(reloadedB.Version, 5));
+        Assert.Equal(new HexDirection(5), course.State.IntendedDirection);
+
+        course = await service.SetExpeditionCourseIntentAsync(
+            course.State.Id,
             "alice",
-            new SetExpeditionCourseIntentCommand(expedition.Version, null));
+            new SetExpeditionCourseIntentCommand(course.Version, null));
+        Assert.Null(course.State.IntendedDirection);
 
-        Assert.Null(expedition.State.IntendedDirection);
-
-        var restarted = await database.ServiceAsync();
-        var loaded = await restarted.GetExpeditionAsync(expedition.State.Id, "alice");
-        Assert.Null(loaded.State.IntendedDirection);
-    }
-
-    [Fact]
-    public async Task CourseChangeKeepsActiveWatchPlanCoherentAcrossRestart()
-    {
-        await using var database = await TestDatabase.CreateAsync();
-        var service = await database.ServiceAsync();
-        var world = await service.CreateOverworldAsync("alice", WorldCommand());
-        var expedition = await service.StartExpeditionAsync(world.World.Id, "alice", new StartExpeditionCommand(
+        var active = await service.StartExpeditionAsync(world.World.Id, "alice", new StartExpeditionCommand(
             "Active course change", "simple-fixed-distance", new HexCoordinate(0, 0)));
-        expedition = await service.AdvanceExpeditionAsync(
-            expedition.State.Id,
+        active = await service.AdvanceExpeditionAsync(
+            active.State.Id,
             "alice",
-            FixedAdvance(expedition.Version, 12, false));
-        Assert.NotNull(expedition.State.ActiveWatch);
+            FixedAdvance(active.Version, 12, false));
+        Assert.NotNull(active.State.ActiveWatch);
+        var beforeActiveChange = active.State;
 
-        var before = expedition.State;
-        expedition = await service.SetExpeditionCourseIntentAsync(
-            expedition.State.Id,
+        active = await service.SetExpeditionCourseIntentAsync(
+            active.State.Id,
             "alice",
-            new SetExpeditionCourseIntentCommand(expedition.Version, 2));
+            new SetExpeditionCourseIntentCommand(active.Version, 2));
 
-        Assert.Equal(new HexDirection(2), expedition.State.IntendedDirection);
-        Assert.Equal(new HexDirection(2), expedition.State.ActiveWatch!.Plan.IntendedDirection);
-        Assert.Equal(before.ActualDirection, expedition.State.ActualDirection);
-        Assert.Equal(before.CurrentHex, expedition.State.CurrentHex);
-        Assert.Equal(before.Traversal.Progress, expedition.State.Traversal.Progress);
-        Assert.Equal(before.DistanceTraveled, expedition.State.DistanceTraveled);
-        Assert.Equal(before.ElapsedTravelTime, expedition.State.ElapsedTravelTime);
-        Assert.Equal(before.CompletedWatches, expedition.State.CompletedWatches);
-        Assert.Equal(before.History, expedition.State.History);
+        Assert.Equal(new HexDirection(2), active.State.IntendedDirection);
+        Assert.Equal(new HexDirection(2), active.State.ActiveWatch!.Plan.IntendedDirection);
+        Assert.Equal(beforeActiveChange.ActualDirection, active.State.ActualDirection);
+        Assert.Equal(beforeActiveChange.CurrentHex, active.State.CurrentHex);
+        Assert.Equal(beforeActiveChange.Traversal.Progress, active.State.Traversal.Progress);
+        Assert.Equal(beforeActiveChange.DistanceTraveled, active.State.DistanceTraveled);
+        Assert.Equal(beforeActiveChange.ElapsedTravelTime, active.State.ElapsedTravelTime);
+        Assert.Equal(beforeActiveChange.CompletedWatches, active.State.CompletedWatches);
+        Assert.Equal(beforeActiveChange.History, active.State.History);
+
+        var lost = await service.StartExpeditionAsync(world.World.Id, "alice", new StartExpeditionCommand(
+            "Lost changed course", "alexandrian-advanced", new HexCoordinate(0, 0)));
+        lost = await service.SetExpeditionCourseIntentAsync(
+            lost.State.Id,
+            "alice",
+            new SetExpeditionCourseIntentCommand(lost.Version, 0));
+        lost = await service.SetExpeditionCourseIntentAsync(
+            lost.State.Id,
+            "alice",
+            new SetExpeditionCourseIntentCommand(lost.Version, 2));
+
+        var reloadedBeforeResolution = await service.GetExpeditionAsync(lost.State.Id, "alice");
+        Assert.Equal(new HexDirection(2), reloadedBeforeResolution.State.IntendedDirection);
+
+        lost = await service.AdvanceExpeditionAsync(
+            reloadedBeforeResolution.State.Id,
+            "alice",
+            new AdvanceExpeditionCommand
+            {
+                ExpectedVersion = reloadedBeforeResolution.Version,
+                IntendedDirection = 2,
+                ExpectedDistance = 2,
+                ActualDistance = 2,
+                ResolutionSource = ResolutionSource.ManualRoll,
+                NavigationOutcome = NavigationCheckOutcome.Failed,
+                VeerSteps = 1,
+                EncounterOutcome = EncounterOutcomeKind.None
+            });
+
+        Assert.Equal(new HexDirection(2), lost.State.IntendedDirection);
+        Assert.Equal(new HexDirection(3), lost.State.ActualDirection);
 
         var restarted = await database.ServiceAsync();
-        var loaded = await restarted.GetExpeditionAsync(expedition.State.Id, "alice");
-        Assert.Equal(new HexDirection(2), loaded.State.IntendedDirection);
-        Assert.Equal(new HexDirection(2), loaded.State.ActiveWatch!.Plan.IntendedDirection);
+
+        var clearedReload = await restarted.GetExpeditionAsync(course.State.Id, "alice");
+        Assert.Null(clearedReload.State.IntendedDirection);
+
+        var activeReload = await restarted.GetExpeditionAsync(active.State.Id, "alice");
+        Assert.Equal(new HexDirection(2), activeReload.State.IntendedDirection);
+        Assert.Equal(new HexDirection(2), activeReload.State.ActiveWatch!.Plan.IntendedDirection);
+
+        var lostReload = await restarted.GetExpeditionAsync(lost.State.Id, "alice");
+        Assert.True(lostReload.State.Navigation.IsLost);
+        Assert.Equal(1, lostReload.State.Navigation.VeerSteps);
+        Assert.Equal(new HexDirection(2), lostReload.State.IntendedDirection);
+        Assert.Equal(new HexDirection(3), lostReload.State.ActualDirection);
     }
 
     [Fact]
@@ -474,53 +472,6 @@ public sealed class PersistenceApplicationTests
         Assert.Equal(TimeSpan.FromHours(2), loaded.RemainingWatchTime);
         Assert.Equal(6, loaded.State.DistanceTraveled.Value);
         Assert.Equal(new HexCoordinate(1, 0), loaded.State.CurrentHex);
-    }
-
-    [Fact]
-    public async Task ChangedCourseRemainsIntendedWhenLostVeerProducesDifferentActualDirectionAfterReload()
-    {
-        await using var database = await TestDatabase.CreateAsync();
-        var service = await database.ServiceAsync();
-        var world = await service.CreateOverworldAsync("alice", WorldCommand());
-        var expedition = await service.StartExpeditionAsync(world.World.Id, "alice", new StartExpeditionCommand(
-            "Lost survey", "alexandrian-advanced", new HexCoordinate(0, 0)));
-        expedition = await service.SetExpeditionCourseIntentAsync(
-            expedition.State.Id,
-            "alice",
-            new SetExpeditionCourseIntentCommand(expedition.Version, 0));
-        expedition = await service.SetExpeditionCourseIntentAsync(
-            expedition.State.Id,
-            "alice",
-            new SetExpeditionCourseIntentCommand(expedition.Version, 2));
-
-        var beforeNavigation = await database.ServiceAsync();
-        var reloadedBeforeResolution = await beforeNavigation.GetExpeditionAsync(expedition.State.Id, "alice");
-        Assert.Equal(new HexDirection(2), reloadedBeforeResolution.State.IntendedDirection);
-
-        expedition = await beforeNavigation.AdvanceExpeditionAsync(
-            reloadedBeforeResolution.State.Id,
-            "alice",
-            new AdvanceExpeditionCommand
-            {
-                ExpectedVersion = reloadedBeforeResolution.Version,
-                IntendedDirection = 2,
-                ExpectedDistance = 2,
-                ActualDistance = 2,
-                ResolutionSource = ResolutionSource.ManualRoll,
-                NavigationOutcome = NavigationCheckOutcome.Failed,
-                VeerSteps = 1,
-                EncounterOutcome = EncounterOutcomeKind.None
-            });
-
-        Assert.Equal(new HexDirection(2), expedition.State.IntendedDirection);
-        Assert.Equal(new HexDirection(3), expedition.State.ActualDirection);
-
-        var restarted = await database.ServiceAsync();
-        var loaded = await restarted.GetExpeditionAsync(expedition.State.Id, "alice");
-        Assert.True(loaded.State.Navigation.IsLost);
-        Assert.Equal(1, loaded.State.Navigation.VeerSteps);
-        Assert.Equal(new HexDirection(2), loaded.State.IntendedDirection);
-        Assert.Equal(new HexDirection(3), loaded.State.ActualDirection);
     }
 
     [Fact]
