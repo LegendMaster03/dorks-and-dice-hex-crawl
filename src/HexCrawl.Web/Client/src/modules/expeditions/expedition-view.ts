@@ -626,11 +626,13 @@ export async function renderExpedition(
                 selectedHexTracksTravelIntent = selectedHex !== null;
             }
             applyRuntime(next);
+            await refreshAuxiliary();
             if (!disposed) render();
         } catch (value) {
             try {
                 const latest = await api.getExpedition(expeditionId);
                 applyRuntime(latest);
+                await refreshAuxiliary();
                 if (!disposed) render();
             } catch {
                 // Preserve the original mutation failure if authoritative reload also fails.
