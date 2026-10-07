@@ -31,7 +31,7 @@ function composerFixture() {
         type: "duration",
         required: true,
         description: "Length of the repeating expedition interval.",
-        defaultValue: "4h"
+        defaultValue: "144000000000"
     };
     const mechanic = {
         key: "time.interval.standard",
@@ -69,7 +69,7 @@ function composerFixture() {
             mechanic,
             alternatives: [],
             configurationSchema: { durationTicks: duration },
-            parameters: { durationTicks: "4h" },
+            parameters: { durationTicks: "144000000000" },
             requiredInputs: [],
             outputs: ["time.interval"],
             dependencyIssues: [],
@@ -118,7 +118,7 @@ function installProcedureFetch() {
                     procedureId: "visual-procedure",
                     revision: 3,
                     name: "Shattered Marches Procedure",
-                    modules: [{ moduleKey: "time.interval", parameters: { durationTicks: "4h" } }]
+                    modules: [{ moduleKey: "time.interval", parameters: { durationTicks: "144000000000" } }]
                 }, null, 2)
             });
         }
@@ -844,7 +844,7 @@ function journeyFixture() {
         processPolicy: {
             support: "Supported",
             stageModel: "Ordered",
-            stageKeys: ["pass"],
+            stageKeys: ["approach", "pass", "arrival"],
             stageTransitionModel: "Sequential",
             progressModel: "Accumulated",
             progressKind: "Numeric",
@@ -885,13 +885,34 @@ function journeyFixture() {
                 processKey: "ashen-pass",
                 displayName: "Cross the Ashen Pass",
                 description: "Guide the company through the flooded pass and into the high country.",
-                initialStageKey: "pass",
-                stageOrder: ["pass"],
+                initialStageKey: "approach",
+                stageOrder: ["approach", "pass", "arrival"],
                 destinationReference: "High country",
                 routeReference: "Ashen Pass",
                 locationReference: null,
                 note: null,
                 stages: [{
+                    stageKey: "approach",
+                    displayName: "Reach the pass",
+                    description: "Find the safe approach and establish the route.",
+                    completionModel: "ProgressThreshold",
+                    progressTarget: 2,
+                    successTarget: null,
+                    failureLimit: null,
+                    complicationLimit: null,
+                    failProcessAtFailureLimit: false,
+                    failProcessAtComplicationLimit: false,
+                    initialProgressState: null,
+                    explicitNextStageKey: null,
+                    outcomeTransitions: [],
+                    approaches: [{
+                        approachKey: "scout",
+                        displayName: "Scout the approach",
+                        capabilityReference: null,
+                        note: null
+                    }],
+                    roleKeys: ["navigator", "scout"]
+                }, {
                     stageKey: "pass",
                     displayName: "Cross the pass",
                     description: "Make progress through the broken highland route.",
@@ -908,6 +929,27 @@ function journeyFixture() {
                     approaches: [{
                         approachKey: "steady",
                         displayName: "Steady progress",
+                        capabilityReference: null,
+                        note: null
+                    }],
+                    roleKeys: ["navigator", "scout"]
+                }, {
+                    stageKey: "arrival",
+                    displayName: "Reach the high country",
+                    description: "Finish the crossing and secure the destination.",
+                    completionModel: "ProgressThreshold",
+                    progressTarget: 1,
+                    successTarget: null,
+                    failureLimit: null,
+                    complicationLimit: null,
+                    failProcessAtFailureLimit: false,
+                    failProcessAtComplicationLimit: false,
+                    initialProgressState: null,
+                    explicitNextStageKey: null,
+                    outcomeTransitions: [],
+                    approaches: [{
+                        approachKey: "finish",
+                        displayName: "Complete the crossing",
                         capabilityReference: null,
                         note: null
                     }],
@@ -934,10 +976,26 @@ function journeyFixture() {
             },
             currentStageKey: "pass",
             stageStates: [{
+                stageKey: "approach",
+                numericProgress: 2,
+                explicitState: null,
+                successes: 1,
+                failures: 0,
+                complications: 0,
+                completed: true
+            }, {
                 stageKey: "pass",
                 numericProgress: 3,
                 explicitState: null,
                 successes: 2,
+                failures: 0,
+                complications: 0,
+                completed: false
+            }, {
+                stageKey: "arrival",
+                numericProgress: 0,
+                explicitState: null,
+                successes: 0,
                 failures: 0,
                 complications: 0,
                 completed: false

@@ -50,6 +50,7 @@ cases=(
   "09-spatial-persisted-course|persisted-course|light|1366|900"
   "10-spatial-movement|movement-input-pending|light|1366|900"
   "10a-spatial-movement-composition|movement-composition|light|1366|900"
+  "10b-spatial-movement-composition-mobile|movement-composition|dark|500|844|390"
   "11-spatial-navigation|navigation-pending|light|1366|900"
   "12-spatial-boundary|boundary-pending|light|1366|900"
   "13-spatial-encounter|encounter-pending|dark|1366|900"
