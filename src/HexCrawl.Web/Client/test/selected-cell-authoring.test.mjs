@@ -61,14 +61,16 @@ test("location membership follows the authoritative rotated grid transform", () 
         const g = grid({ orientation, rotationDegrees: 43 });
         const target = { q: 4, r: -2 };
         const other = { q: -3, r: 5 };
+        const targetCenter = hexToWorld(g, target);
         const w = world({
             grid: g,
             locations: [
-                { id: "target", name: "Ruined Tower", category: "Ruin", position: hexToWorld(g, target), discoverability: "Hidden" },
+                { id: "target", name: "Ruined Tower", category: "Ruin", position: targetCenter, discoverability: "Hidden" },
+                { id: "exact", name: "Exact Camp", category: "Camp", position: { x: targetCenter.x + .15, y: targetCenter.y - .1 }, discoverability: "Obvious" },
                 { id: "other", name: "Village", category: "Settlement", position: hexToWorld(g, other), discoverability: "Obvious" }
             ]
         });
-        assert.deepEqual(locationsInCell(w, target).map(value => value.id), ["target"]);
+        assert.deepEqual(locationsInCell(w, target).map(value => value.id), ["target", "exact"]);
         assert.equal(locationsInCell(w, target)[0].discoverability, "Hidden");
     }
 });
@@ -165,6 +167,44 @@ test("feature-scoped mechanics replace only the matching feature dimension", () 
 
     const removed = removeEnvironmentFact(next, "new-annotation", "new-fact");
     assert.equal(featureHasEnvironmentRules(environment(removed), "road"), true, "visibility remains an attached environment rule");
+});
+
+test("selected-cell derivation stays bounded for a representative authored world", () => {
+    const g = grid({ origin: { x: 0, y: 0 }, rotationDegrees: 23 });
+    const locations = Array.from({ length: 1200 }, (_, index) => {
+        const cell = { q: (index % 41) - 20, r: (Math.floor(index / 41) % 41) - 20 };
+        return {
+            id: `location-${index}`,
+            name: `Location ${index}`,
+            category: "site",
+            position: hexToWorld(g, cell),
+            discoverability: index % 3 === 0 ? "Hidden" : "Obvious"
+        };
+    });
+    const features = Array.from({ length: 180 }, (_, index) => {
+        const row = (index % 19) - 9;
+        return {
+            id: `line-${index}`,
+            name: `Line ${index}`,
+            category: index % 2 === 0 ? "road" : "river",
+            kind: "Line",
+            position: null,
+            path: [
+                hexToWorld(g, { q: -20, r: row }),
+                hexToWorld(g, { q: 20, r: row })
+            ],
+            boundary: null
+        };
+    });
+    const representative = world({ grid: g, locations, features });
+    const started = performance.now();
+    const selectedLocations = locationsInCell(representative, { q: 0, r: 0 });
+    const selectedFeatures = featuresIntersectingCell(representative, { q: 0, r: 0 });
+    const elapsed = performance.now() - started;
+
+    assert.ok(selectedLocations.length >= 1);
+    assert.ok(selectedFeatures.length >= 1);
+    assert.ok(elapsed < 1500, `representative selected-cell derivation took ${elapsed.toFixed(1)}ms`);
 });
 
 test("world editor composes existing authorities and does not mutate player knowledge when selecting content", () => {
