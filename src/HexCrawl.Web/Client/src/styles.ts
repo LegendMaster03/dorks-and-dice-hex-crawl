@@ -232,6 +232,8 @@ export function ensureStyles(): void {
         .hc-map-panel > .hc-hint { margin: .55rem .15rem .15rem; }
         .hc-discovery-row { display: flex; gap: .5rem; justify-content: space-between; align-items: center; padding: .4rem 0; border-bottom: 1px solid var(--hc-border); }
         .hc-discovery-row:last-child { border-bottom: 0; }
+        .hc-selected-cell-panel .hc-discovery-row { flex-wrap: wrap; align-items: flex-start; }
+        .hc-selected-cell-panel .hc-discovery-row > span { flex: 1 1 12rem; min-width: 0; overflow-wrap: anywhere; }
         .hc-status-section { margin-top: .7rem; }
         .hc-status-section h2 { margin: 0 0 .45rem; font-size: 1rem; }
         .hc-status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: .4rem; }
