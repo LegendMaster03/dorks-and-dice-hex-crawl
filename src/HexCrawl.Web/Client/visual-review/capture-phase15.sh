@@ -236,10 +236,10 @@ else:
         if metrics["forcedTravelTargetVisible"] or metrics["forcedTravelTargetRequired"]:
             raise SystemExit(f'party-scope forced travel incorrectly requires an entity target: {metrics}')
     if state == "forced-travel-mount":
-        if metrics["forcedTravelTargetOptionCount"] != 1 or metrics["forcedTravelTargetValue"] != "mount-1" or "Pack mule" not in metrics["forcedTravelTargetLabels"]:
+        if metrics["forcedTravelTargetOptionCount"] != 1 or metrics["forcedTravelTargetValue"] != "mount-1" or "Pack Mule" not in metrics["forcedTravelTargetLabels"]:
             raise SystemExit(f'mount-scope forced travel did not expose the named authoritative mount: {metrics}')
     if state == "forced-travel-vehicle":
-        if metrics["forcedTravelTargetOptionCount"] != 1 or metrics["forcedTravelTargetValue"] != "vehicle-1" or "River skiff" not in metrics["forcedTravelTargetLabels"]:
+        if metrics["forcedTravelTargetOptionCount"] != 1 or metrics["forcedTravelTargetValue"] != "vehicle-1" or "River Skiff" not in metrics["forcedTravelTargetLabels"]:
             raise SystemExit(f'vehicle-scope forced travel did not expose the named authoritative vehicle: {metrics}')
     if state in {"navigation-pending", "abstract-spatial-course"} and not metrics["navigationCourseReadOnly"]:
         raise SystemExit(f'navigation repeated the already-selected intended course input: {metrics}')
