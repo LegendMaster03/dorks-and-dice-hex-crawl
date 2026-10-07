@@ -40,8 +40,14 @@ export function locationsInCell(world: Overworld, cell: HexCoordinate): Location
 }
 
 export function featuresIntersectingCell(world: Overworld, cell: HexCoordinate): SpatialFeature[] {
-    const hex = hexCorners(world.grid, cell);
-    return world.features.filter(feature => featureIntersectsPolygon(feature, hex));
+    return world.features.filter(feature => featureIntersectsCell(world, cell, feature));
+}
+
+export function featureIntersectsCell(
+    world: Pick<Overworld, "grid">,
+    cell: HexCoordinate,
+    feature: SpatialFeature): boolean {
+    return featureIntersectsPolygon(feature, hexCorners(world.grid, cell));
 }
 
 export function hexEnvironmentFacts(
@@ -82,6 +88,8 @@ export function replaceHexTerrain(
     annotations: readonly EnvironmentAnnotation[],
     cell: HexCoordinate,
     terrain: string | null,
+    provenance: string | null = "world-editor:selected-cell",
+    note: string | null = null,
     createId: () => string = () => crypto.randomUUID()): EnvironmentAnnotation[] {
     const next = annotations
         .map(annotation => {
@@ -96,7 +104,7 @@ export function replaceHexTerrain(
     const value = terrain?.trim() ?? "";
     if (!value) return next;
 
-    const fact = tagFact("terrain", value, "world-editor:selected-cell", null, createId);
+    const fact = tagFact("terrain", value, provenance, note, createId);
     const existingIndex = next.findIndex(annotation =>
         annotation.scope.kind === "Hex" && sameHex(annotation.scope.hex, cell));
     if (existingIndex >= 0) {
