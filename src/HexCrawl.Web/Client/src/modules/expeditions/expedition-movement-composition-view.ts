@@ -68,7 +68,9 @@ export function movementCompositionLedger(runtime: ExpeditionDetail): HTMLElemen
     } else {
         const table = document.createElement("table");
         table.className = "hc-movement-ledger-table";
-        table.setAttribute("aria-label", "Movement composition contributors");
+        const caption = document.createElement("caption");
+        caption.textContent = "Movement composition contributors";
+        table.append(caption);
         const head = document.createElement("thead");
         const headerRow = document.createElement("tr");
         for (const label of ["Source", "Adjustment", "Value", "State"]) {
