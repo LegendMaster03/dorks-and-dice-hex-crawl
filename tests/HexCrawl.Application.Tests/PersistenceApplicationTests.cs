@@ -374,6 +374,29 @@ public sealed class PersistenceApplicationTests
     }
 
     [Fact]
+    public async Task RepeatedCourseChangesPersistOnlyTheLatestIntent()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var service = await database.ServiceAsync();
+        var world = await service.CreateOverworldAsync("alice", WorldCommand());
+        var expedition = await service.StartExpeditionAsync(world.World.Id, "alice", new StartExpeditionCommand(
+            "Repeated course changes", "alexandrian-advanced", new HexCoordinate(0, 0)));
+
+        foreach (var direction in new[] { 0, 2, 5 })
+        {
+            expedition = await service.SetExpeditionCourseIntentAsync(
+                expedition.State.Id,
+                "alice",
+                new SetExpeditionCourseIntentCommand(expedition.Version, direction));
+        }
+
+        Assert.Equal(new HexDirection(5), expedition.State.IntendedDirection);
+        var restarted = await database.ServiceAsync();
+        var loaded = await restarted.GetExpeditionAsync(expedition.State.Id, "alice");
+        Assert.Equal(new HexDirection(5), loaded.State.IntendedDirection);
+    }
+
+    [Fact]
     public async Task ExplicitCourseClearPersistsAndDoesNotResurrectPriorIntent()
     {
         await using var database = await TestDatabase.CreateAsync();
