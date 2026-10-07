@@ -145,6 +145,7 @@ public sealed class RuntimeEndpointsTests
                 setBResponse.EnsureSuccessStatusCode();
                 var withB = await setBResponse.Content.ReadFromJsonAsync<JsonElement>();
                 var after = withB.GetProperty("expedition");
+                var versionB = withB.GetProperty("version").GetInt64();
 
                 Assert.Equal(2, after.GetProperty("intendedDirection").GetInt32());
                 Assert.Equal(before.GetProperty("currentHex").GetRawText(), after.GetProperty("currentHex").GetRawText());
@@ -156,6 +157,11 @@ public sealed class RuntimeEndpointsTests
 
                 var reloaded = await ownerClient.GetFromJsonAsync<JsonElement>($"/api/expeditions/{expeditionId:D}");
                 Assert.Equal(2, reloaded.GetProperty("expedition").GetProperty("intendedDirection").GetInt32());
+
+                using var invalidDirection = await ownerClient.PutAsJsonAsync(
+                    $"/api/expeditions/{expeditionId:D}/course-intent",
+                    new { expectedVersion = versionB, intendedDirection = 99 });
+                Assert.Equal(HttpStatusCode.BadRequest, invalidDirection.StatusCode);
 
                 using var stale = await ownerClient.PutAsJsonAsync(
                     $"/api/expeditions/{expeditionId:D}/course-intent",
