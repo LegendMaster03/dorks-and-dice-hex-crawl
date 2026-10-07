@@ -61,6 +61,10 @@ cases=(
   "18-journey-normal|journey-normal|light|1366|900"
   "19-journey-pending|journey-pending|light|1366|900"
   "20-journey-consequence|journey-consequence|light|1366|900"
+  "20a-journey-consequence-multiple|journey-consequence-multiple|light|1366|900"
+  "20b-journey-consequence-resolved|journey-consequence-resolved|dark|1366|900"
+  "20c-effects-journey-source|effects-journey-source|light|1366|900"
+  "20d-abstract-spatial-course|abstract-spatial-course|light|1366|900"
   "21-responsive-laptop|selected-edge|light|1366|900"
   "22-responsive-embedded|selected-edge|light|1120|820|900"
   "23-responsive-tablet|selected-edge|light|820|980"
@@ -147,6 +151,7 @@ elif surface == "procedure":
         raise SystemExit(f'wrong procedure authoring surface: {metrics}')
 else:
     nonspatial = state.startswith("journey-") or state == "history-workspace"
+    abstract_spatial = state == "abstract-spatial-course"
     if nonspatial:
         if metrics["navigatorButtons"] != 0 or metrics["mapHeight"] != 0:
             raise SystemExit(f'nonspatial fixture fabricated a map or navigator: {metrics}')
@@ -162,6 +167,22 @@ else:
             raise SystemExit(f'journey consequence state is not visible on the primary surface: {metrics}')
         if state == "journey-consequence" and not metrics["journeyPendingConsequenceVisible"]:
             raise SystemExit(f'journey summary disagrees with authoritative pending Effects state: {metrics}')
+        if state == "journey-consequence-multiple" and not metrics["journeyMultiplePendingConsequenceVisible"]:
+            raise SystemExit(f'journey summary did not report multiple authoritative pending consequences: {metrics}')
+        if state == "journey-consequence-resolved":
+            if metrics["journeyPendingConsequenceVisible"] or metrics["journeyMultiplePendingConsequenceVisible"]:
+                raise SystemExit(f'resolved journey consequence remained pending in the summary: {metrics}')
+            if not metrics["journeyStageStateVisible"]:
+                raise SystemExit(f'stage-local failures/complications were lost after consequence resolution: {metrics}')
+        if state == "journey-normal" and not metrics["journeyNoPendingConsequencesVisible"]:
+            raise SystemExit(f'clean journey does not report an authoritative no-pending state: {metrics}')
+        if state == "journey-pending" and metrics["journeyPendingRawInternalsVisible"]:
+            raise SystemExit(f'normal pending journey presentation exposes raw event internals: {metrics}')
+    elif abstract_spatial:
+        if metrics["navigatorButtons"] != 0 or metrics["mapHeight"] != 0:
+            raise SystemExit(f'abstract spatial fixture fabricated an authored map: {metrics}')
+        if not metrics["currentTravelVisible"] or not metrics["abstractSpatialCourseReused"]:
+            raise SystemExit(f'abstract spatial course was not reused through focused navigation: {metrics}')
     else:
         if metrics["navigatorButtons"] != 6:
             raise SystemExit(f'navigator edge count: {metrics}')
@@ -207,8 +228,13 @@ else:
             raise SystemExit(f'single participant forced-travel target was not visibly preselected: {metrics}')
     if state == "forced-travel-zero-participants" and not metrics["forcedTravelMissingTargetBlocked"]:
         raise SystemExit(f'zero-participant forced-travel failure did not expose blocked setup state: {metrics}')
-    if state == "navigation-pending" and not metrics["navigationCourseReadOnly"]:
+    if state in {"navigation-pending", "abstract-spatial-course"} and not metrics["navigationCourseReadOnly"]:
         raise SystemExit(f'navigation repeated the already-selected intended course input: {metrics}')
+    if state == "effects-journey-source":
+        if not metrics["journeyEffectSourceHumanized"]:
+            raise SystemExit(f'normal journey-generated effect provenance exposes raw internals: {metrics}')
+        if not metrics["journeyEffectTechnicalRetained"]:
+            raise SystemExit(f'journey-generated effect diagnostics were lost from Technical details: {metrics}')
     if state == "effects-workspace":
         if metrics["drawerCount"] != 1 or metrics["focusedTitle"] != "Resources & effects":
             raise SystemExit(f'effects workspace did not open correctly: {metrics}')
@@ -247,7 +273,9 @@ else:
         "forced-travel-one-participant": "Forced travel",
         "forced-travel-zero-participants": "Forced travel",
         "more-options-open": "Advanced travel controls",
-        "teleport-workspace": "Teleport party"
+        "teleport-workspace": "Teleport party",
+        "abstract-spatial-course": "Navigation",
+        "effects-journey-source": "Resources & effects"
     }
     if state in expected_titles:
         if metrics["drawerCount"] != 1 or metrics["focusedTitle"] != expected_titles[state]:

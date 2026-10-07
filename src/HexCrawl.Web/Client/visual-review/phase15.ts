@@ -523,6 +523,18 @@ function nonSpatialRuntimeFixture() {
     return value;
 }
 
+function abstractHexRuntimeFixture() {
+    const value = runtimeFixture();
+    value.overworldId = null;
+    value.context = {
+        kind: "AbstractHex",
+        name: "Abstract route",
+        orientation: "PointyTop",
+        hexCenterDistance: distance(12)
+    };
+    return value;
+}
+
 function survivalFixture(forced) {
     const unsupported = {
         support: "None",
@@ -852,6 +864,31 @@ function journeyFixture() {
     };
 }
 
+function pendingJourneyConsequence(id, suffix = "") {
+    return {
+        consequence: {
+            id,
+            consequenceKey: `journey-fatigue${suffix}`,
+            category: "PersistentEffectChange",
+            target: { scope: "Participant", targetId: "member-1" },
+            components: [],
+            provenance: {
+                sourceKind: "JourneyEvent",
+                sourceKey: "journey-event-consequence",
+                sourceReference: "event-1",
+                providerName: null,
+                note: `event-1:8ac00000-0000-0000-0000-00000000000${suffix || "1"}`
+            },
+            sourceReference: "event-1",
+            note: null
+        },
+        status: "RequiresAdjudication",
+        reason: "Journey consequence requires resolution.",
+        requiredAction: "Resolve consequence.",
+        unresolvedComponents: []
+    };
+}
+
 let runtime = runtimeFixture();
 let survival = survivalFixture(false);
 let effects = effectsFixture(false);
@@ -947,6 +984,12 @@ switch (stateName) {
             encounterOccurrenceId: "encounter-occurrence-1"
         });
         break;
+    case "abstract-spatial-course":
+        runtime = abstractHexRuntimeFixture();
+        runtime.expedition.intendedDirection = 2;
+        runtime.expedition.actualDirection = 2;
+        runtime.procedure.runtime.usesNavigationChecks = true;
+        break;
     case "forced-travel-pending":
         runtime.expedition.intendedDirection = 4;
         survival = survivalFixture(true);
@@ -981,6 +1024,33 @@ switch (stateName) {
         runtime.expedition.actualDirection = 1;
         effects = effectsFixture(true);
         break;
+    case "effects-journey-source":
+        runtime.expedition.intendedDirection = 1;
+        runtime.expedition.actualDirection = 1;
+        effects = effectsFixture(true);
+        effects.activeEffects[0].provenance = [{
+            sourceKind: "JourneyEvent",
+            sourceKey: "journey-event-consequence",
+            sourceReference: "event-1",
+            providerName: null,
+            note: "event-1:8ac00000-0000-0000-0000-000000000001"
+        }];
+        effects.appliedConsequences = [{
+            consequenceId: "8ac00000-0000-0000-0000-000000000001",
+            consequenceKey: "journey-fatigue",
+            status: "Applied",
+            effectIds: ["effect-fatigue"],
+            provenance: {
+                sourceKind: "JourneyEvent",
+                sourceKey: "journey-event-consequence",
+                sourceReference: "event-1",
+                providerName: null,
+                note: "event-1:8ac00000-0000-0000-0000-000000000001"
+            },
+            detail: "Applied journey consequence '8ac00000-0000-0000-0000-000000000001'.",
+            resolutionProvenance: null
+        }];
+        break;
     case "history-workspace":
         runtime = nonSpatialRuntimeFixture();
         survival = journeySurvivalFixture();
@@ -999,6 +1069,22 @@ switch (stateName) {
                 sourceKind: "Dm",
                 sourceKey: "journey-resolution",
                 sourceReference: null,
+                providerName: null,
+                note: null
+            }
+        }, {
+            id: "journey-history-2",
+            kind: "ProcessCompleted",
+            processId: "journey-1",
+            stageKey: "pass",
+            resolutionId: null,
+            eventOccurrenceId: null,
+            detail: "Completed process 'journey-1' after resolution '8ac00000-0000-0000-0000-000000000001'.",
+            completedWatches: 0,
+            provenance: {
+                sourceKind: "Dm",
+                sourceKey: "journey-process-complete",
+                sourceReference: "journey-1",
                 providerName: null,
                 note: null
             }
@@ -1057,27 +1143,39 @@ switch (stateName) {
         survival = journeySurvivalFixture();
         journey = journeyFixture();
         effects = effectsFixture(false);
-        effects.pendingConsequences = [{
-            consequence: {
-                id: "pending-journey-consequence",
-                consequenceKey: "journey-fatigue",
-                category: "PersistentEffectChange",
-                target: { scope: "Participant", targetId: "member-1" },
-                components: [],
-                provenance: {
-                    sourceKind: "JourneyEvent",
-                    sourceKey: "journey-event-consequence",
-                    sourceReference: "event-1",
-                    providerName: null,
-                    note: "event-1:8ac00000-0000-0000-0000-000000000001"
-                },
+        effects.pendingConsequences = [pendingJourneyConsequence("pending-journey-consequence")];
+        journey.activeProcesses[0].stageStates[0].failures = 1;
+        journey.activeProcesses[0].stageStates[0].complications = 2;
+        break;
+    case "journey-consequence-multiple":
+        runtime = nonSpatialRuntimeFixture();
+        survival = journeySurvivalFixture();
+        journey = journeyFixture();
+        effects = effectsFixture(false);
+        effects.pendingConsequences = [
+            pendingJourneyConsequence("pending-journey-consequence-1", "1"),
+            pendingJourneyConsequence("pending-journey-consequence-2", "2")
+        ];
+        break;
+    case "journey-consequence-resolved":
+        runtime = nonSpatialRuntimeFixture();
+        survival = journeySurvivalFixture();
+        journey = journeyFixture();
+        effects = effectsFixture(false);
+        effects.appliedConsequences = [{
+            consequenceId: "8ac00000-0000-0000-0000-000000000001",
+            consequenceKey: "journey-fatigue",
+            status: "Applied",
+            effectIds: [],
+            provenance: {
+                sourceKind: "JourneyEvent",
+                sourceKey: "journey-event-consequence",
                 sourceReference: "event-1",
+                providerName: null,
                 note: null
             },
-            status: "RequiresAdjudication",
-            reason: "Journey consequence requires resolution.",
-            requiredAction: "Resolve consequence.",
-            unresolvedComponents: []
+            detail: "Journey consequence resolved.",
+            resolutionProvenance: null
         }];
         journey.activeProcesses[0].stageStates[0].failures = 1;
         journey.activeProcesses[0].stageStates[0].complications = 2;
@@ -1159,7 +1257,7 @@ if (stateName === "map-selected" || stateName === "map-nonadjacent") {
             clientY: rect.top + rect.height / 2
         }));
     }
-} else if (stateName === "navigation-pending") {
+} else if (stateName === "navigation-pending" || stateName === "abstract-spatial-course") {
     findButton("Resolve navigation")?.click();
 } else if (stateName === "movement-input-pending") {
     findButton("Continue travel")?.click();
@@ -1185,7 +1283,7 @@ if (stateName === "more-options-open") {
     findButton("More options")?.click();
 } else if (stateName === "teleport-workspace") {
     findButton("Teleport party")?.click();
-} else if (stateName === "effects-workspace") {
+} else if (stateName === "effects-workspace" || stateName === "effects-journey-source") {
     findButtonContaining("Resources & effects")?.click();
     await waitForRootText("Active effects");
 } else if (stateName === "history-workspace") {
@@ -1217,6 +1315,14 @@ const currentTravel = root.querySelector("[data-current-travel]");
 const rootText = root.textContent || "";
 const journeyPrimaryText = root.querySelector(".hc-journey-primary")?.textContent || "";
 const normalHistoryText = Array.from(root.querySelectorAll("[data-phase15-drawer] .hc-history li"))
+    .filter(isVisible)
+    .map(item => item.textContent || "")
+    .join(" ");
+const normalJourneyText = Array.from(root.querySelectorAll("[data-journey-panel] h3, [data-journey-panel] h4, [data-journey-panel] p, [data-journey-panel] li"))
+    .filter(isVisible)
+    .map(item => item.textContent || "")
+    .join(" ");
+const normalEffectText = Array.from(root.querySelectorAll("[data-effects-panel] h3, [data-effects-panel] h4, [data-effects-panel] p, [data-effects-panel] li"))
     .filter(isVisible)
     .map(item => item.textContent || "")
     .join(" ");
@@ -1266,9 +1372,19 @@ const metrics = {
     teleportContextVisible: Array.from(root.querySelectorAll("button")).some(button => isVisible(button) && button.textContent?.trim() === "Teleport party here"),
     journeyConsequenceVisible: rootText.includes("1 failure") && rootText.includes("2 complications"),
     journeyPendingConsequenceVisible: journeyPrimaryText.includes("1 consequence needs resolution"),
+    journeyMultiplePendingConsequenceVisible: journeyPrimaryText.includes("2 consequences need resolution"),
+    journeyStageStateVisible: journeyPrimaryText.includes("Stage: 1 failure, 2 complications"),
+    journeyNoPendingConsequencesVisible: journeyPrimaryText.includes("No pending consequences"),
+    journeyPendingRawInternalsVisible: stateName === "journey-pending"
+        && /ProcessProgress|journey-event-opportunity|event-1:pass:progress/.test(normalJourneyText),
     movementUnitVisible: rootText.includes("Effective distance (mi)"),
-    navigationCourseReadOnly: stateName !== "navigation-pending" || (
+    navigationCourseReadOnly: !["navigation-pending", "abstract-spatial-course"].includes(stateName) || (
         rootText.includes("Intended course:")
+        && !root.querySelector('[data-phase15-drawer] select[name="intendedDirection"]')
+    ),
+    abstractSpatialCourseReused: stateName !== "abstract-spatial-course" || (
+        runtime.context.kind === "AbstractHex"
+        && root.querySelector("[data-adjacency-select]")?.value === "2"
         && !root.querySelector('[data-phase15-drawer] select[name="intendedDirection"]')
     ),
     forcedTravelPrimaryDomainFacing: rootText.includes("Current requirement") && rootText.includes("Failure consequence:"),
@@ -1287,9 +1403,24 @@ const metrics = {
     ),
     forcedTravelTechnicalExpanded: Array.from(root.querySelectorAll("details[open] > summary")).some(summary => summary.textContent?.trim() === "Advanced consequence details"),
     normalHistoryRawInternalsVisible: stateName === "history-workspace"
-        && normalHistoryText.includes("8ac00000-0000-0000-0000-000000000001"),
+        && /8ac00000-0000-0000-0000-000000000001|ResolutionRecorded|ProcessCompleted|journey-resolution|journey-process-complete|adjust-level/.test(normalHistoryText),
     technicalHistoryRetained: stateName !== "history-workspace"
-        || rootText.includes("8ac00000-0000-0000-0000-000000000001"),
+        || (
+            rootText.includes("8ac00000-0000-0000-0000-000000000001")
+            && rootText.includes("ResolutionRecorded")
+            && rootText.includes("ProcessCompleted")
+        ),
+    journeyEffectSourceHumanized: stateName !== "effects-journey-source"
+        || (
+            normalEffectText.includes("Source: Journey event")
+            && !normalEffectText.includes("8ac00000-0000-0000-0000-000000000001")
+            && !normalEffectText.includes("journey-event-consequence")
+        ),
+    journeyEffectTechnicalRetained: stateName !== "effects-journey-source"
+        || (
+            rootText.includes("8ac00000-0000-0000-0000-000000000001")
+            && rootText.includes("journey-event-consequence")
+        ),
     activeEffectVisible: rootText.includes("Fatigue") && rootText.includes("Level 2") && rootText.includes("Clear effect"),
     effectRecoveryVisible: rootText.includes("Reduce 1 level") && rootText.includes("Recovery:"),
     unifiedHistoryVisible: rootText.includes("Journey") && rootText.includes("Travel / runtime") && rootText.includes("Effects / consequences"),
