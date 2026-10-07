@@ -53,6 +53,47 @@ public static class CrawlRuntimeActions
         };
     }
 
+    public static ExpeditionState SetIntendedCourse(
+        ExpeditionState expedition,
+        HexDirection? intendedDirection)
+    {
+        ArgumentNullException.ThrowIfNull(expedition);
+
+        if (expedition.PendingEncounter is not null)
+        {
+            throw new InvalidOperationException(
+                "Resolve the pending encounter before changing the intended course.");
+        }
+
+        if (expedition.ActiveWatch?.PendingDecision is RuntimePauseReason.LostRecognitionRequired
+            or RuntimePauseReason.BacktrackBoundaryReached)
+        {
+            throw new InvalidOperationException(
+                "Resolve the pending boundary decision before changing the intended course.");
+        }
+
+        if (intendedDirection is null && expedition.ActiveWatch is not null)
+        {
+            throw new InvalidOperationException(
+                "The active travel watch requires an intended course. Choose another adjacent course instead of clearing it.");
+        }
+
+        var activeWatch = expedition.ActiveWatch;
+        if (activeWatch is not null && intendedDirection is { } activeDirection)
+        {
+            activeWatch = activeWatch with
+            {
+                Plan = activeWatch.Plan with { IntendedDirection = activeDirection }
+            };
+        }
+
+        return expedition with
+        {
+            IntendedDirection = intendedDirection,
+            ActiveWatch = activeWatch
+        };
+    }
+
     public static ManualDiscoveryResult Discover(
         OverworldDefinition world,
         ExpeditionState expedition,
