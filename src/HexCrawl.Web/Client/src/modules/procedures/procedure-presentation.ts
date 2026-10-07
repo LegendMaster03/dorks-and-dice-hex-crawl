@@ -149,6 +149,20 @@ const labels: Record<string, string> = {
     "encounter.timingSlots": "Encounter timing slots"
 };
 
+const numericHelp: Partial<Record<string, string>> = {
+    startingExitProgressFactor: "How much of one cell crossing is already counted at the starting edge. 0 means none; 0.5 means half a crossing; 1 means one full crossing.",
+    nearExitProgressFactor: "How much progress is required to leave through a nearby exit. 0.5 means half of one normal cell crossing.",
+    farExitProgressFactor: "How much progress is required to leave through a far exit. 1 means one normal cell crossing.",
+    backExitProgressFactor: "How much progress is required to leave back through the entry side. 1 means one normal cell crossing.",
+    directionChangeProgressCostFactor: "The fraction of one normal cell crossing charged when the party changes course. 0.5 means half a crossing.",
+    baseBudget: "The unadjusted movement allowance before terrain, routes, weather, load, effects, or DM overrides are applied. The Movement unit setting supplies the unit.",
+    travelChecksPerInterval: "How many encounter checks this schedule makes during each configured travel period.",
+    timeCost: "How many units of the selected Time unit this activity or procedure step consumes.",
+    normalTravelLimit: "How many selected Limit units count as ordinary travel before forced-travel rules begin.",
+    progressFloor: "The lowest accumulated journey progress the process permits.",
+    progressCeiling: "The highest accumulated journey progress the process permits."
+};
+
 const choiceSets: Record<string, Array<{ value: string; label: string }>> = {
     "movement.resolution.travelResolution": choices("ContinuousDistance", "HexSteps"),
     "movement.resolution.actualDistanceResolution": choices("Fixed", "VariableResolved"),
@@ -354,7 +368,7 @@ export function compactParameter(
         return { label, help: definition.description, control: "select", choices: choiceSets[moduleChoiceKey] };
     }
     if (numberKeys.has(key) || definition.type === "number" || definition.type === "integer" || definition.type === "decimal") {
-        return { label, help: definition.description, control: "number" };
+        return { label, help: definition.description ?? numericHelp[key] ?? null, control: "number" };
     }
     if (keyListKeys.has(key) || definition.type === "key-list") {
         return { label, help: definition.description, control: "key-list" };

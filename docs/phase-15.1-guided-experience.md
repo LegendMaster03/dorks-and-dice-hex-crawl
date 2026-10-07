@@ -65,6 +65,21 @@ The existing **Next action** surface remains primary. Guided adds a **Why is thi
 
 A tester who opened a restricted deep link before signing in received a generic page-not-found experience. Hex Crawl does not own Site authentication or tester-role authorization, so that behavior is not corrected by inventing tool-local authentication. Host integration should prefer an explicit sign-in/access-required state for restricted tool deep links when the Site supports it.
 
+## Implemented Guided slices
+
+The current Phase 15.1 branch includes:
+
+- default-on, dismissible beginner help backed by local presentation preference only;
+- a home-page basics primer covering procedure/context selection and core travel terminology;
+- point-of-use help for world/grid settings, including hex center distance and internal geometry distinctions;
+- Guided Compact procedure explanations and per-rule **Why?** disclosures;
+- **Why is this next?** coaching on the authoritative expedition Next action;
+- beginner-oriented preset summaries derived from generic procedure structure rather than preset identity;
+- fallback domain explanations for Compact numeric procedure settings when the pinned schema does not already provide a description;
+- rendered-review assertions for Guided home, preset, Compact, world/grid, and runtime surfaces.
+
+The Site authentication/access-denied behavior remains a host-level follow-up rather than a Hex Crawl runtime responsibility.
+
 ## Acceptance direction
 
 Phase 15.1 is successful when a tester with general tabletop RPG knowledge can begin from the Hex Crawl home page, choose a reasonable starting procedure/context, understand unfamiliar required settings, and follow current-action coaching through representative spatial and nonspatial play without needing Discord explanations from the developer.

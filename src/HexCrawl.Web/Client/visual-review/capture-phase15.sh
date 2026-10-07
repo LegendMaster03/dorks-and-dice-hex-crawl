@@ -166,9 +166,13 @@ if surface == "home":
         raise SystemExit(f'home does not expose Open expedition: {metrics}')
     if not all((metrics["startExpeditionVisible"], metrics["manageProceduresVisible"], metrics["manageWorldsVisible"], metrics["gmUtilitiesVisible"])):
         raise SystemExit(f'home hierarchy is incomplete: {metrics}')
+    if not metrics["guidedPrimerVisible"] or not metrics["guidanceToggleVisible"] or metrics["guidedFieldHelpCount"] < 4:
+        raise SystemExit(f'Guided home onboarding is incomplete: {metrics}')
 elif surface == "procedure":
     if state == "procedure-home" and not metrics["procedureHomeVisible"]:
         raise SystemExit(f'procedure home is incomplete: {metrics}')
+    if state == "procedure-home" and metrics["guidedPresetAdviceCount"] < 1:
+        raise SystemExit(f'Guided preset discovery is missing: {metrics}')
     expected = {
         "procedure-compact": "compactVisible",
         "procedure-advanced": "advancedVisible",
@@ -179,12 +183,16 @@ elif surface == "procedure":
     if state == "procedure-compact":
         if metrics["procedureModuleCards"] != 19 or metrics["procedureFactGroups"] < 19:
             raise SystemExit(f'feature-rich compact procedure did not render all semantic modules: {metrics}')
+        if not metrics["compactGuidanceVisible"] or metrics["guidedRuleWhyCount"] != 19:
+            raise SystemExit(f'Guided Compact explanations are incomplete: {metrics}')
     if state == "procedure-reference":
         if not metrics["referenceVisible"] or metrics["referenceModuleCount"] != 19:
             raise SystemExit(f'feature-rich procedure reference is incomplete: {metrics}')
         if metrics["referenceFactGroups"] < 19 or metrics["exactParameterDisclosures"] != 19:
             raise SystemExit(f'procedure reference lost semantic or exact parameter evidence: {metrics}')
 elif surface == "world":
+    if not metrics["guidanceToggleVisible"] or metrics["guidedFieldHelpCount"] < 4:
+        raise SystemExit(f'Guided world/grid help is incomplete: {metrics}')
     if metrics["selectedCellTitle"] != "Hex 0,0":
         raise SystemExit(f'selected world cell context is missing: {metrics}')
     if metrics["selectedCellTerrain"] != "forest":
@@ -200,6 +208,8 @@ elif surface == "world":
     if metrics["mapHeight"] < 250:
         raise SystemExit(f'world authoring map is too short to remain usable: {metrics}')
 else:
+    if not metrics["guidedNextActionWhyVisible"]:
+        raise SystemExit(f'Guided next-action explanation is missing: {metrics}')
     nonspatial = state.startswith("journey-") or state in {"history-workspace", "nonspatial-movement-composition"}
     abstract_spatial = state == "abstract-spatial-course"
     if nonspatial:

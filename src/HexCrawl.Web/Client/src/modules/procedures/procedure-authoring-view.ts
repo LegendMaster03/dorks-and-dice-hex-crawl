@@ -455,6 +455,14 @@ export async function renderProcedureAuthoringWorkspace(
         back.addEventListener("click", () => { entry = "landing"; render(); });
         toolbar.append(back);
         page.append(toolbar, errorBox());
+        page.append(guidedCallout(
+            "Choosing a starting point",
+            "Choose the procedure whose ordinary table workflow is closest to what you want to run. A larger procedure is not automatically better; you can edit the campaign-owned copy after choosing it.",
+            [
+                "Start with the Good fit when summary rather than the procedure name.",
+                "Check You will manage to see which parts of exploration the procedure expects at the table.",
+                "Use Inspect when two starting points look similar or when you want exact rule details before choosing."
+            ]));
 
         const familiar = familiarPresets(presets);
         if (familiar.length > 0) page.append(presetSection("Familiar procedures", familiar));
@@ -481,7 +489,7 @@ export async function renderProcedureAuthoringWorkspace(
         const head = document.createElement("div");
         head.className = "hc-preset-card-head";
         head.append(textElement("h3", preset.displayName), textElement("p", presetTagline(preset)));
-        card.append(head, presetFacts(preset));
+        card.append(head, presetFacts(preset), presetGuidanceCard(preset));
         const provenance = document.createElement("details");
         provenance.className = "hc-ux-disclosure hc-preset-provenance";
         provenance.innerHTML = `<summary>Source and provenance</summary>`;
@@ -506,7 +514,7 @@ export async function renderProcedureAuthoringWorkspace(
             description: "Inspect the procedure before using it as the starting point for your table.",
             onClose: () => { activeDrawer = null; }
         });
-        activeDrawer.body.append(presetFacts(preset));
+        activeDrawer.body.append(presetFacts(preset), presetGuidanceCard(preset));
         const behavior = document.createElement("section");
         behavior.className = "hc-focus-workspace-module hc-inspect-rules";
         behavior.append(textElement("h3", "Procedure rules"));
@@ -1379,6 +1387,61 @@ export async function renderProcedureAuthoringWorkspace(
         window.removeEventListener("beforeunload", onBeforeUnload);
         closeDrawer();
         root.classList.remove("hc-phase15");
+    };
+}
+
+function presetGuidanceCard(preset: ProcedurePreset): HTMLElement {
+    const guidance = presetGuidance(preset);
+    const section = document.createElement("section");
+    section.className = "hc-guided-preset-advice hc-guided-only";
+    section.append(
+        textElement("strong", "Good fit when"),
+        textElement("p", guidance.bestFor),
+        textElement("strong", "You will manage"),
+        textElement("p", guidance.manage),
+        textElement("strong", "Setup breadth"),
+        textElement("p", `${guidance.breadth} · ${guidance.areaCount} ${guidance.areaCount === 1 ? "rule area" : "rule areas"}`));
+    return section;
+}
+
+function presetGuidance(preset: ProcedurePreset): {
+    bestFor: string;
+    manage: string;
+    breadth: "Focused" | "Moderate" | "Broad";
+    areaCount: number;
+} {
+    const keys = new Set(preset.procedure.modules.map(module => module.moduleKey));
+    const areas: string[] = [];
+    if ([...keys].some(key => key === "time.interval" || key.startsWith("movement."))) {
+        areas.push("travel time and movement");
+    }
+    if ([...keys].some(key => key.startsWith("navigation."))) areas.push("navigation and getting lost");
+    if ([...keys].some(key => key.startsWith("encounters."))) areas.push("encounter checks");
+    if ([...keys].some(key =>
+        key.startsWith("survival.") || key === "exploration.foraging" || key === "time.forced-travel" || key === "effects.expedition")) {
+        areas.push("survival, resources, and expedition effects");
+    }
+    if ([...keys].some(key => key.startsWith("journey."))) areas.push("journey stages and events");
+    if (keys.has("party.activities")) areas.push("travel roles and activities");
+    if (keys.has("procedure.helpers")) areas.push("automatic result generation");
+
+    const bestFor = keys.has("journey.process")
+        ? "You want travel to run primarily as a staged journey or challenge with explicit progress and events."
+        : keys.has("movement.resolution") && keys.has("navigation.outcome")
+            ? "You want traditional spatial travel where course, movement, navigation failure, and recovery all matter."
+            : keys.has("movement.resolution")
+                ? "You want repeated travel and movement without a full getting-lost and recovery subsystem."
+                : keys.has("time.interval")
+                    ? "You mainly need repeating travel-time bookkeeping and a small foundation you can extend."
+                    : "The listed rule areas already match the exploration procedure you intend to run.";
+
+    const areaCount = areas.length;
+    const breadth = areaCount <= 2 ? "Focused" : areaCount <= 4 ? "Moderate" : "Broad";
+    return {
+        bestFor,
+        manage: areas.length > 0 ? areas.join(", ") : "only the procedure-specific rules shown above",
+        breadth,
+        areaCount
     };
 }
 

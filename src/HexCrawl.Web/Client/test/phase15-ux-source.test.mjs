@@ -1300,3 +1300,62 @@ test("Phase 15.1 explains domain-specific numeric grid settings at their point o
     assert.match(editor, /They are not travel-distance settings/);
     assert.match(assistant, /q\/r are axial hex coordinates/);
 });
+
+
+test("Phase 15.1 preset discovery explains fit and DM workload from generic procedure structure", () => {
+    const workspace = fs.readFileSync(
+        path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"),
+        "utf8");
+
+    assert.match(workspace, /Choosing a starting point/);
+    assert.match(workspace, /Good fit when/);
+    assert.match(workspace, /You will manage/);
+    assert.match(workspace, /Setup breadth/);
+    assert.match(workspace, /keys\.has\("journey\.process"\)/);
+    assert.match(workspace, /keys\.has\("movement\.resolution"\) && keys\.has\("navigation\.outcome"\)/);
+    assert.match(workspace, /key\.startsWith\("survival\."\)/);
+    assert.doesNotMatch(workspace, /presetKey\s*===/);
+});
+
+test("Phase 15.1 Compact supplies domain explanations for numeric procedure settings", () => {
+    const presentation = fs.readFileSync(
+        path.join(sourceDir, "modules/procedures/procedure-presentation.ts"),
+        "utf8");
+
+    for (const key of [
+        "startingExitProgressFactor",
+        "nearExitProgressFactor",
+        "farExitProgressFactor",
+        "backExitProgressFactor",
+        "directionChangeProgressCostFactor",
+        "baseBudget",
+        "travelChecksPerInterval",
+        "timeCost",
+        "normalTravelLimit",
+        "progressFloor",
+        "progressCeiling"
+    ]) {
+        assert.match(presentation, new RegExp(key + ":"));
+    }
+    assert.match(presentation, /definition\.description \?\? numericHelp\[key\] \?\? null/);
+    assert.match(presentation, /0\.5 means half a crossing/);
+});
+
+test("Phase 15.1 rendered review requires Guided onboarding, preset advice, and next-action explanations", () => {
+    const capture = fs.readFileSync(
+        path.join(sourceDir, "../visual-review/capture-phase15.sh"),
+        "utf8");
+    const fixture = fs.readFileSync(
+        path.join(sourceDir, "../visual-review/phase15.ts"),
+        "utf8");
+
+    assert.match(fixture, /guidedPrimerVisible/);
+    assert.match(fixture, /guidedPresetAdviceCount/);
+    assert.match(fixture, /guidedRuleWhyCount/);
+    assert.match(fixture, /guidedNextActionWhyVisible/);
+    assert.match(fixture, /visualPreset/);
+    assert.match(capture, /Guided home onboarding is incomplete/);
+    assert.match(capture, /Guided preset discovery is missing/);
+    assert.match(capture, /Guided Compact explanations are incomplete/);
+    assert.match(capture, /Guided next-action explanation is missing/);
+});

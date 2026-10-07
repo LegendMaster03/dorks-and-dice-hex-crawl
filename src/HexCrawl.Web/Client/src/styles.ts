@@ -278,6 +278,17 @@ export function ensureStyles(): void {
         .hc-guided-help-body strong, .hc-guided-help-body p { margin: 0; }
         .hc-guided-help-example { color: var(--hc-text); font-style: italic; }
         .hc-guided-why { margin-top: .45rem; }
+        .hc-guided-preset-advice {
+            display: grid;
+            grid-template-columns: minmax(7.5rem, auto) minmax(0, 1fr);
+            gap: .25rem .65rem;
+            padding: .65rem .7rem;
+            border: 1px solid var(--hc-border);
+            border-radius: .55rem;
+            background: color-mix(in srgb, var(--hc-primary) 5%, var(--hc-surface));
+        }
+        .hc-guided-preset-advice strong { color: var(--hc-text-strong); }
+        .hc-guided-preset-advice p { margin: 0; color: var(--hc-muted); }
         .hc-home-optional-tools { margin-bottom: 1rem; }
         .hc-home-optional-tools > summary { cursor: pointer; color: var(--hc-text-strong); font-weight: 800; }
         .hc-home-optional-tools[open] > summary { margin-bottom: .7rem; }
@@ -386,6 +397,8 @@ export function ensureStyles(): void {
             .hc-party-save-row { align-items: stretch; flex-direction: column; }
             .hc-guided-terms { grid-template-columns: 1fr; gap: .12rem; }
             .hc-guided-terms dd { margin-bottom: .35rem; }
+            .hc-guided-preset-advice { grid-template-columns: 1fr; gap: .1rem; }
+            .hc-guided-preset-advice p { margin-bottom: .35rem; }
         }
         @media (max-width: 1050px) {
             .hc-workspace-grid { grid-template-columns: minmax(0, 1fr) minmax(17rem, 21rem); }
