@@ -1494,7 +1494,7 @@ export async function renderExpedition(
     };
 
     const openPartyWorkspace = (): void => {
-        openDrawer("Party & travel order", body => {
+        openDrawer(runtime.expedition.isSpatial ? "Party & travel order" : "Party & activities", body => {
             body.classList.add("hc-page");
             const summary = document.createElement("div");
             summary.dataset.partySummary = "";
