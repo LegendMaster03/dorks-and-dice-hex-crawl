@@ -374,6 +374,175 @@ export async function renderWorldEditor(
         updateDraftLabel();
     };
 
+    const renderSelectedCell = (): void => {
+        const cell = selectedCell;
+        selectedCellEmpty.hidden = cell !== null;
+        selectedCellContent.hidden = cell === null;
+        mapSurface.renderer.selectedHex = cell;
+        if (!cell) {
+            mapSurface.requestRender();
+            return;
+        }
+
+        selectedCellTitle.textContent = `Hex ${cell.q},${cell.r}`;
+
+        const terrainFacts = terrainFactsForCell(worldEnvironment, cell);
+        const terrainTags = terrainFacts
+            .map(item => item.fact.valueKind === "Tag" ? item.fact.tag?.trim() ?? "" : "")
+            .filter(Boolean);
+        cellTerrain.value = terrainFacts.length === 1 && terrainTags.length === 1 ? terrainTags[0] : "";
+        cellTerrainStatus.textContent = terrainFacts.length === 0
+            ? "No explicit terrain is defined for this cell."
+            : terrainFacts.length === 1
+                ? `Explicit Hex-scope terrain: ${formatEnvironmentFact(terrainFacts[0].fact)}.`
+                : "Multiple explicit terrain facts exist for this cell. Saving Terrain / biome will deliberately replace them with one Hex-scope terrain fact.";
+
+        const cellLocations = locationsInCell(world, cell);
+        const locationHost = required<HTMLElement>(root, "[data-cell-location-list]");
+        locationHost.replaceChildren();
+        if (cellLocations.length === 0) {
+            locationHost.append(emptyState("No locations in this cell.", "Add a location here without entering map coordinates."));
+        } else {
+            for (const location of cellLocations) {
+                const row = document.createElement("div");
+                row.className = "hc-discovery-row";
+                const label = document.createElement("span");
+                label.textContent = `${location.name} · ${location.category} · ${location.discoverability}`;
+                const edit = document.createElement("button");
+                edit.type = "button";
+                edit.textContent = "Edit";
+                edit.addEventListener("click", () => {
+                    loadLocation(location);
+                    advancedWorldObjects.open = true;
+                    const details = locationForm.closest("details");
+                    if (details instanceof HTMLDetailsElement) details.open = true;
+                    input(locationForm, "name").focus();
+                });
+                const remove = document.createElement("button");
+                remove.type = "button";
+                remove.textContent = "Delete";
+                remove.className = "hc-danger-action";
+                remove.addEventListener("click", () => void run(null, async () => {
+                    applyWorld(await api.deleteLocation(world.id, location.id, world.version));
+                }));
+                row.append(label, edit, remove);
+                locationHost.append(row);
+            }
+        }
+
+        const cellFeatures = featuresIntersectingCell(world, cell);
+        const featureHost = required<HTMLElement>(root, "[data-cell-feature-list]");
+        featureHost.replaceChildren();
+        if (cellFeatures.length === 0) {
+            featureHost.append(emptyState(
+                "No spatial features intersect this cell.",
+                "Draw a road, trail, river, border, or other line feature below."));
+        } else {
+            for (const feature of cellFeatures) {
+                const row = document.createElement("div");
+                row.className = "hc-discovery-row";
+                const label = document.createElement("span");
+                label.textContent = `${feature.name} · ${feature.category} · ${feature.kind}`;
+                const edit = document.createElement("button");
+                edit.type = "button";
+                edit.textContent = "Edit";
+                edit.addEventListener("click", () => {
+                    loadFeature(feature);
+                    advancedWorldObjects.open = true;
+                    const details = featureForm.closest("details");
+                    if (details instanceof HTMLDetailsElement) details.open = true;
+                    input(featureForm, "name").focus();
+                });
+                const mechanics = document.createElement("button");
+                mechanics.type = "button";
+                mechanics.textContent = "Set mechanics";
+                mechanics.addEventListener("click", () => {
+                    select(cellFeatureEnvironmentForm, "featureId").value = feature.id;
+                    input(cellFeatureEnvironmentForm, "value").focus();
+                });
+                const remove = document.createElement("button");
+                remove.type = "button";
+                remove.textContent = "Delete";
+                remove.className = "hc-danger-action";
+                remove.addEventListener("click", () => void run(null, async () => {
+                    if (featureHasEnvironmentRules(worldEnvironment, feature.id)) {
+                        throw new Error("This feature has environment rules attached. Remove or reassign them before deleting the feature.");
+                    }
+                    applyWorld(await api.deleteFeature(world.id, feature.id, world.version));
+                }));
+                row.append(label, edit, mechanics, remove);
+                featureHost.append(row);
+            }
+        }
+
+        const featureChoices = [
+            select(cellFeatureEnvironmentForm, "featureId"),
+            select(cellAdvancedEnvironmentForm, "featureId")
+        ];
+        for (const choice of featureChoices) {
+            const previous = choice.value;
+            choice.replaceChildren();
+            const empty = document.createElement("option");
+            empty.value = "";
+            empty.textContent = "Select intersecting feature";
+            choice.append(empty);
+            for (const feature of cellFeatures) {
+                const option = document.createElement("option");
+                option.value = feature.id;
+                option.textContent = `${feature.name} · ${feature.category}`;
+                choice.append(option);
+            }
+            if ([...choice.options].some(option => option.value === previous)) choice.value = previous;
+        }
+
+        const cellFacts = hexEnvironmentFacts(worldEnvironment, cell);
+        const featureFacts = applicableFeatureEnvironmentFacts(worldEnvironment, cellFeatures);
+        const environmentHost = required<HTMLElement>(root, "[data-cell-environment-list]");
+        environmentHost.replaceChildren();
+        const authoredFacts = [...cellFacts, ...featureFacts];
+        if (authoredFacts.length === 0) {
+            environmentHost.append(emptyState(
+                "No explicit environment rules apply from this cell or its intersecting features.",
+                "Add terrain, route behavior, visibility, hazards, or another campaign-defined fact."));
+        } else {
+            for (const item of authoredFacts) {
+                const row = document.createElement("div");
+                row.className = "hc-discovery-row";
+                const label = document.createElement("span");
+                label.textContent = `${item.sourceLabel} · ${humanizeEnvironmentDimension(item.fact.dimension)}: ${formatEnvironmentFact(item.fact)}`;
+                const remove = document.createElement("button");
+                remove.type = "button";
+                remove.textContent = "Remove";
+                remove.addEventListener("click", () => void run(null, async () => {
+                    await saveWorldEnvironment(removeEnvironmentFact(
+                        worldEnvironment.annotations,
+                        item.annotation.id,
+                        item.fact.id));
+                }));
+                row.append(label, remove);
+                environmentHost.append(row);
+            }
+        }
+
+        const advancedSummary = required<HTMLElement>(root, "[data-cell-advanced-summary]");
+        advancedSummary.replaceChildren();
+        advancedSummary.append(
+            technicalLine(`Cell coordinate: q ${cell.q}, r ${cell.r}`),
+            technicalLine(`Cell center: ${formatPoint(hexToWorld(world.grid, cell))}`));
+        for (const location of cellLocations) {
+            advancedSummary.append(technicalLine(
+                `Location ${location.id}: ${location.name} · position ${formatPoint(location.position)}`));
+        }
+        for (const feature of cellFeatures) {
+            advancedSummary.append(technicalLine(
+                `Feature ${feature.id}: ${feature.kind} · ${feature.category}`));
+        }
+        for (const item of authoredFacts) {
+            advancedSummary.append(technicalLine(
+                `Annotation ${item.annotation.id} · fact ${item.fact.id} · scope ${item.annotation.scope.kind} · ${item.fact.dimension} · ${item.fact.valueKind} · provenance ${item.fact.provenance ?? "none"} · note ${item.fact.note ?? "none"}`));
+        }
+    };
+
     const updatePointFieldVisibility = (): void => {
         required<HTMLElement>(featureForm, "[data-point-fields]").hidden = select(featureForm, "kind").value !== "Point";
     };
