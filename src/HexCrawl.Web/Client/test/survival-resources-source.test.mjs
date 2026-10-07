@@ -20,6 +20,7 @@ test("survival resource forms expose the generic resource operation contract", (
 });
 
 test("survival resolution forms preserve explicit targets instead of hard-coding party scope", () => {
+    assert.match(source, /targetValue\(selectedScope\(\), target\.value\)/);
     assert.match(source, /targetValue\(scope\.control\.value as ExpeditionEffectScope, target\.control\.value\)/);
     assert.match(source, /targetValue\(targetScope, target\.control\.value\)/);
 });
@@ -35,6 +36,14 @@ test("focused forced-travel presentation keeps tabletop fields primary and techn
     assert.match(source, /Failure consequence: \$\{humanize\(policy\.failureConsequence/);
     assert.match(source, /Resolved travel usage \(\$\{policy\.limitUnit\}\)/);
     assert.match(source, /Affected target/);
+    assert.match(source, /policy\.failureTargetScope/);
+    assert.match(source, /Affected character/);
+    assert.match(source, /runtime\.party\.members\.map/);
+    assert.match(source, /movementContributors/);
+    assert.match(source, /Configure the party before recording a failed check/);
+    assert.doesNotMatch(source, /Participant, mount, or vehicle ID when required/);
+    assert.match(source, /choices\.length !== 1/);
+    assert.match(source, /resolve\.disabled = resolvingFailure && requiresEntity && choices\.length === 0/);
     assert.match(source, /Advanced consequence details/);
     assert.match(source, /Advanced policy details/);
 
@@ -46,6 +55,15 @@ test("focused forced-travel presentation keeps tabletop fields primary and techn
     assert.ok(appendAdvanced > advancedStart);
 });
 
+
+test("normal effect provenance hides journey audit tokens while technical details preserve them", () => {
+    assert.match(effects, /normalProvenanceLabel\(source\)/);
+    assert.match(effects, /normalProvenanceNote\(source\)/);
+    assert.match(effects, /sourceKey\.startsWith\("journey-"/);
+    assert.match(effects, /Provenance: \$\{value\.sourceKind\} · source \$\{value\.sourceKey\}/);
+    assert.match(effects, /Consequence audit/);
+    assert.doesNotMatch(effects, /humanizeIdentifier\(record\.status\)\}\$\{record\.detail/);
+});
 
 test("combined resources and effects UI exposes authoritative active effects without typed IDs", () => {
     assert.match(effectsApi, /\/api\/expeditions\/.*\/effects/);

@@ -67,14 +67,28 @@ public sealed record ForcedTravelPolicyContract(
     string? LimitUnit,
     string? CheckModel,
     string? FailureConsequence,
+    ExpeditionEffectScope? FailureTargetScope,
     string? MechanicKey,
     int? MechanicVersion,
     string? ExecutionHandler,
     string? UnsupportedReason)
 {
-    public static ForcedTravelPolicyContract From(ForcedTravelPolicy value) => new(
-        value.Support, value.NormalTravelLimit, value.LimitUnit, value.CheckModel, value.FailureConsequence,
-        value.MechanicKey, value.MechanicVersion, value.ExecutionHandler, value.UnsupportedReason);
+    public static ForcedTravelPolicyContract From(
+        ForcedTravelPolicy value,
+        PersistentEffectPolicy effectPolicy) => new(
+        value.Support,
+        value.NormalTravelLimit,
+        value.LimitUnit,
+        value.CheckModel,
+        value.FailureConsequence,
+        value.Support == Phase11PolicySupport.Supported
+            && effectPolicy.Support == PersistentEffectPolicySupport.Supported
+                ? effectPolicy.Scope
+                : null,
+        value.MechanicKey,
+        value.MechanicVersion,
+        value.ExecutionHandler,
+        value.UnsupportedReason);
 }
 
 public sealed record ExposurePolicyContract(
@@ -205,6 +219,7 @@ public sealed record SurvivalResourcesContract(
         var foraging = Phase11ProcedurePolicyResolver.ResolveForaging(expedition.CampaignProcedure);
         var camping = Phase11ProcedurePolicyResolver.ResolveCamping(expedition.CampaignProcedure);
         var forcedTravel = Phase11ProcedurePolicyResolver.ResolveForcedTravel(expedition.CampaignProcedure);
+        var effectPolicy = PersistentEffectPolicyResolver.Resolve(expedition.CampaignProcedure);
         var exposure = Phase11ProcedurePolicyResolver.ResolveExposure(expedition.CampaignProcedure);
         var dimensions = exposure.Support == Phase11PolicySupport.Supported
             ? exposure.Dimensions.ToHashSet(StringComparer.Ordinal)
@@ -236,7 +251,7 @@ public sealed record SurvivalResourcesContract(
             ResourceConsumptionPolicyContract.From(resourcePolicy),
             ForagingPolicyContract.From(foraging),
             CampingPolicyContract.From(camping),
-            ForcedTravelPolicyContract.From(forcedTravel),
+            ForcedTravelPolicyContract.From(forcedTravel, effectPolicy),
             ExposurePolicyContract.From(exposure),
             expedition.Resources.Resources.Select(ExpeditionResourceContract.From).ToArray(),
             ForcedTravelStateContract.From(expedition.Survival.ForcedTravel, forcedTravel),

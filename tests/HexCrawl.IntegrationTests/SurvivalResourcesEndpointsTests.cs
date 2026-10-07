@@ -202,6 +202,168 @@ public sealed class SurvivalResourcesEndpointsTests
     }
 
     [Fact]
+    public async Task ForcedTravelProjectionDerivesFailureTargetScopeFromPinnedEffectPolicy()
+    {
+        var database = TestWebHost.NewDatabasePath();
+        try
+        {
+            using var factory = TestWebHost.Create(database);
+            using var client = factory.CreateClient();
+            var started = await StartMaplessExpeditionAsync(client, "Forced travel target", CrawlProcedureCatalog.Dnd2024PresetKey);
+            var expeditionId = started.GetProperty("id").GetGuid();
+
+            var state = await client.GetFromJsonAsync<JsonElement>($"/api/expeditions/{expeditionId:D}/survival");
+
+            Assert.Equal(
+                "Participant",
+                state.GetProperty("forcedTravelPolicy").GetProperty("failureTargetScope").GetString());
+        }
+        finally
+        {
+            TestWebHost.DeleteDatabase(database);
+        }
+    }
+
+    [Fact]
+    public async Task ForcedTravelParticipantFailureAppliesPersistsAndRecoversEffect()
+    {
+        var database = TestWebHost.NewDatabasePath();
+        var memberId = Guid.NewGuid();
+        Guid expeditionId;
+        Guid effectId;
+        long versionAfterFailure;
+
+        try
+        {
+            using (var factory = TestWebHost.Create(database))
+            using (var client = factory.CreateClient())
+            {
+                var started = await StartMaplessExpeditionAsync(
+                    client,
+                    "Forced travel participant lifecycle",
+                    CrawlProcedureCatalog.Dnd2024PresetKey);
+                expeditionId = started.GetProperty("id").GetGuid();
+                var version = started.GetProperty("version").GetInt64();
+
+                using var partyResponse = await client.PutAsJsonAsync(
+                    $"/api/expeditions/{expeditionId:D}/party",
+                    new
+                    {
+                        expectedVersion = version,
+                        members = new[]
+                        {
+                            new
+                            {
+                                id = memberId,
+                                name = "Walker",
+                                externalCharacterId = (string?)null,
+                                countsTowardPartyMovement = true
+                            }
+                        }
+                    });
+                partyResponse.EnsureSuccessStatusCode();
+                var party = await partyResponse.Content.ReadFromJsonAsync<JsonElement>();
+                version = party.GetProperty("version").GetInt64();
+
+                using var usageResponse = await client.PostAsJsonAsync(
+                    $"/api/expeditions/{expeditionId:D}/survival/forced-travel/usage",
+                    new
+                    {
+                        expectedVersion = version,
+                        occurrenceId = Guid.NewGuid(),
+                        amount = 9.0,
+                        unit = "hours",
+                        provenance = Provenance("forced-travel-over-limit")
+                    });
+                usageResponse.EnsureSuccessStatusCode();
+                var usage = await usageResponse.Content.ReadFromJsonAsync<JsonElement>();
+                Assert.True(usage.GetProperty("state").GetProperty("forcedTravel").GetProperty("checkDue").GetBoolean());
+                var checkId = usage.GetProperty("state").GetProperty("forcedTravel").GetProperty("pendingCheckId").GetGuid();
+                var versionBeforeFailure = usage.GetProperty("expeditionVersion").GetInt64();
+
+                using var failureResponse = await client.PostAsJsonAsync(
+                    $"/api/expeditions/{expeditionId:D}/survival/forced-travel/check",
+                    new
+                    {
+                        expectedVersion = versionBeforeFailure,
+                        checkId,
+                        success = false,
+                        target = new { scope = "Participant", targetId = memberId },
+                        failureComponents = new[]
+                        {
+                            new
+                            {
+                                kind = "PersistentEffect",
+                                key = "exhaustion",
+                                effectOperation = "AdjustLevel",
+                                levelDelta = (int?)1,
+                                level = (int?)null,
+                                magnitude = (double?)null,
+                                delta = (double?)null,
+                                unit = (string?)null,
+                                state = (string?)null
+                            }
+                        },
+                        provenance = Provenance("forced-travel-check-resolution")
+                    });
+                failureResponse.EnsureSuccessStatusCode();
+                var failure = await failureResponse.Content.ReadFromJsonAsync<JsonElement>();
+                Assert.Equal("Applied", failure.GetProperty("status").GetString());
+                versionAfterFailure = failure.GetProperty("expeditionVersion").GetInt64();
+
+                var effects = await client.GetFromJsonAsync<JsonElement>($"/api/expeditions/{expeditionId:D}/effects");
+                var active = Assert.Single(effects.GetProperty("activeEffects").EnumerateArray());
+                effectId = active.GetProperty("id").GetGuid();
+                Assert.Equal("exhaustion", active.GetProperty("effectKey").GetString());
+                Assert.Equal("Participant", active.GetProperty("target").GetProperty("scope").GetString());
+                Assert.Equal(memberId, active.GetProperty("target").GetProperty("targetId").GetGuid());
+                Assert.Equal(1, active.GetProperty("level").GetInt32());
+
+                using var staleReset = await client.PostAsJsonAsync(
+                    $"/api/expeditions/{expeditionId:D}/survival/forced-travel/reset",
+                    new
+                    {
+                        expectedVersion = versionBeforeFailure,
+                        provenance = Provenance("stale-forced-travel-reset")
+                    });
+                Assert.Equal(HttpStatusCode.Conflict, staleReset.StatusCode);
+            }
+
+            using (var factory = TestWebHost.Create(database))
+            using (var client = factory.CreateClient())
+            {
+                var reloadedEffects = await client.GetFromJsonAsync<JsonElement>($"/api/expeditions/{expeditionId:D}/effects");
+                var persisted = Assert.Single(reloadedEffects.GetProperty("activeEffects").EnumerateArray());
+                Assert.Equal(effectId, persisted.GetProperty("id").GetGuid());
+                Assert.Equal(memberId, persisted.GetProperty("target").GetProperty("targetId").GetGuid());
+                Assert.Equal(1, persisted.GetProperty("level").GetInt32());
+
+                var reloaded = await client.GetFromJsonAsync<JsonElement>($"/api/expeditions/{expeditionId:D}");
+                Assert.Equal(versionAfterFailure, reloaded.GetProperty("version").GetInt64());
+
+                using var recoverResponse = await client.PostAsJsonAsync(
+                    $"/api/expeditions/{expeditionId:D}/effects/{effectId:D}/recover",
+                    new
+                    {
+                        expectedVersion = versionAfterFailure,
+                        triggerKey = "manual",
+                        levelReduction = (int?)null,
+                        clear = true,
+                        provenance = Provenance("forced-travel-effect-recovery")
+                    });
+                recoverResponse.EnsureSuccessStatusCode();
+                var recovered = await recoverResponse.Content.ReadFromJsonAsync<JsonElement>();
+                Assert.Equal("Applied", recovered.GetProperty("status").GetString());
+                Assert.Empty(recovered.GetProperty("effects").GetProperty("activeEffects").EnumerateArray());
+            }
+        }
+        finally
+        {
+            TestWebHost.DeleteDatabase(database);
+        }
+    }
+
+    [Fact]
     public async Task EmptyForcedTravelOccurrenceIsRejectedWithoutAdvancingVersion()
     {
         var database = TestWebHost.NewDatabasePath();

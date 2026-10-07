@@ -477,7 +477,7 @@ export async function renderExpedition(
                     journeyFact("Progress", journeyProgressSummary(activeJourney, stage, stageState)),
                     journeyFact("Roles", journeyRoleSummary(runtime)),
                     journeyFact("Pending", journeyPendingSummary(journey, activeJourney)),
-                    journeyFact("Consequences / state", journeyStateSummary(stageState, survival)));
+                    journeyFact("Consequences / state", journeyStateSummary(stageState, survival, effects)));
                 main.append(facts);
 
                 if (presentation.action.kind !== "journey") {
@@ -587,14 +587,23 @@ export async function renderExpedition(
 
     const journeyStateSummary = (
         state: ExpeditionJourneyState["activeProcesses"][number]["stageStates"][number] | null,
-        resources: SurvivalResources | null): string => {
+        resources: SurvivalResources | null,
+        effectState: ExpeditionEffectState | null): string => {
         const parts: string[] = [];
+        if (effectState === null) {
+            parts.push("Consequence state unavailable");
+        } else if (effectState.pendingConsequences.length > 0) {
+            const count = effectState.pendingConsequences.length;
+            parts.push(`${count} consequence${count === 1 ? "" : "s"} need${count === 1 ? "s" : ""} resolution`);
+        }
         if (state && (state.failures > 0 || state.complications > 0)) {
-            if (state.failures > 0) parts.push(`${state.failures} failure${state.failures === 1 ? "" : "s"}`);
-            if (state.complications > 0) parts.push(`${state.complications} complication${state.complications === 1 ? "" : "s"}`);
+            const stage: string[] = [];
+            if (state.failures > 0) stage.push(`${state.failures} failure${state.failures === 1 ? "" : "s"}`);
+            if (state.complications > 0) stage.push(`${state.complications} complication${state.complications === 1 ? "" : "s"}`);
+            parts.push(`Stage: ${stage.join(", ")}`);
         }
         if (resources && survivalAttention(resources)) parts.push(survivalDetail(resources));
-        return parts.length > 0 ? parts.join(" · ") : "No unresolved consequence";
+        return parts.length > 0 ? parts.join(" · ") : "No pending consequences";
     };
 
     const selectTravelIntent = (direction: number, target: HexCoordinate): void => {
@@ -1147,65 +1156,68 @@ export async function renderExpedition(
         openDrawer(title, body => {
             body.append(textElement(
                 "p",
-                pauseInstruction(runtime) ?? "Review the current course and pace before travel continues.",
+                pauseInstruction(runtime) ?? "Review the current travel conditions before travel continues.",
                 "hc-muted"));
+
+            const intendedEdge = preferences.direction === null
+                ? null
+                : adjacencyEdgeForDirection(adjacency, preferences.direction);
+            if (!intendedEdge) {
+                body.append(textElement(
+                    "p",
+                    "The previous course is not available from the current cell. Choose an adjacent course before resuming travel.",
+                    "hc-muted"));
+                const choose = button("Choose course", () => {
+                    closeDrawer();
+                    queueMicrotask(focusTravelCourse);
+                });
+                choose.className = "hc-primary-action";
+                const more = button("More options", () => openTravelWorkspace("advanced"));
+                more.className = "hc-secondary-action";
+                const row = document.createElement("div");
+                row.className = "hc-button-row";
+                row.append(choose, more);
+                body.append(row);
+                return;
+            }
+
+            body.append(contextLine(
+                "Course",
+                `${edgeCourseLabel(intendedEdge)} → cell ${intendedEdge.targetCell.q}, ${intendedEdge.targetCell.r}`));
 
             const form = document.createElement("form");
             form.className = "hc-form";
-            const course = document.createElement("select");
-            course.required = true;
-            const empty = document.createElement("option");
-            empty.value = "";
-            empty.textContent = "Select intended adjacent cell";
-            course.append(empty);
-            for (const edge of adjacency.edges) {
-                const option = document.createElement("option");
-                option.value = String(edge.directionValue);
-                option.textContent = edgeCourseLabel(edge);
-                course.append(option);
-            }
-            if (preferences.direction !== null) course.value = String(preferences.direction);
-
             const pace = createPaceControl();
-            if (pace) pace.required = true;
+            if (pace) {
+                pace.required = true;
+                form.append(labelled("Pace / travel mode", pace));
+            } else {
+                form.append(contextLine("Pace", humanize(preferences.pace)));
+            }
 
             const submit = document.createElement("button");
             submit.type = "submit";
             submit.className = "hc-primary-action";
             submit.textContent = "Continue travel";
-            form.append(labelled("Course", course));
-            if (pace) {
-                form.append(labelled("Pace / travel mode", pace));
-            } else {
-                form.append(contextLine("Pace", humanize(preferences.pace)));
-            }
             form.append(submit);
             form.addEventListener("submit", event => {
                 event.preventDefault();
-                const direction = Number(course.value);
-                const edge = course.value === ""
-                    ? null
-                    : adjacencyEdgeForDirection(adjacency, direction);
-                const nextPace = pace?.value.trim() || preferences.pace;
-                if (!edge) {
-                    throw new Error("Select an intended adjacent cell before continuing travel.");
-                }
-                preferences.direction = edge.directionValue;
-                preferences.pace = nextPace;
-                selectedHex = edge.targetCell;
-                selectedHexTracksTravelIntent = true;
+                preferences.pace = pace?.value.trim() || preferences.pace;
                 saveTravelPreferences(runtime.id, preferences);
-                if (map) {
-                    map.renderer.selectedHex = edge.targetCell;
-                    map.requestRender();
-                }
-                syncTravelIntentControls();
                 continueTravel(true);
             });
 
+            const changeCourse = button("Change course", () => {
+                closeDrawer();
+                queueMicrotask(focusTravelCourse);
+            });
+            changeCourse.className = "hc-secondary-action";
             const more = button("More options", () => openTravelWorkspace("advanced"));
             more.className = "hc-secondary-action";
-            body.append(form, more);
+            const row = document.createElement("div");
+            row.className = "hc-button-row";
+            row.append(changeCourse, more);
+            body.append(form, row);
         });
     };
 
@@ -1223,12 +1235,15 @@ export async function renderExpedition(
                 .map(assignment => runtime.party.members.find(member => member.id === assignment.participantId)?.name)
                 .filter((name): name is string => Boolean(name));
             const navigationDue = navigationResolutionDue(runtime, false, false);
+            const intendedEdge = preferences.direction === null
+                ? null
+                : adjacencyEdgeForDirection(adjacency, preferences.direction);
             body.append(
                 textElement("h3", navigationDue ? "Navigation required" : "Navigation status"),
                 contextLine("Navigator", assigned.join(", ") || "No navigator role assigned"),
-                contextLine("Intended course", preferences.direction === null
-                    ? "Not selected"
-                    : courseLabel(preferences.direction)),
+                contextLine("Intended course", intendedEdge
+                    ? `${edgeCourseLabel(intendedEdge)} → cell ${intendedEdge.targetCell.q}, ${intendedEdge.targetCell.r}`
+                    : "Not selected"),
                 contextLine("Current navigation state", state.isLost
                     ? `Lost / off course · actual ${courseLabel(state.actualDirection)}`
                     : "On course"));
@@ -1241,23 +1256,27 @@ export async function renderExpedition(
                 return;
             }
 
+            if (!intendedEdge) {
+                body.append(textElement(
+                    "p",
+                    "Choose an adjacent course before resolving navigation. The selected navigator edge or adjacent map cell will be reused by later travel stages.",
+                    "hc-muted"));
+                const choose = button("Choose course", () => {
+                    closeDrawer();
+                    queueMicrotask(focusTravelCourse);
+                });
+                choose.className = "hc-primary-action";
+                const more = button("Advanced travel controls", () => openTravelWorkspace("advanced"));
+                more.className = "hc-secondary-action";
+                const row = document.createElement("div");
+                row.className = "hc-button-row";
+                row.append(choose, more);
+                body.append(row);
+                return;
+            }
+
             const form = document.createElement("form");
             form.className = "hc-form";
-
-            const course = document.createElement("select");
-            course.name = "intendedDirection";
-            course.required = true;
-            const unselectedCourse = document.createElement("option");
-            unselectedCourse.value = "";
-            unselectedCourse.textContent = "Select intended adjacent cell";
-            course.append(unselectedCourse);
-            for (const edge of adjacency.edges) {
-                const option = document.createElement("option");
-                option.value = String(edge.directionValue);
-                option.textContent = edgeCourseLabel(edge);
-                course.append(option);
-            }
-            if (preferences.direction !== null) course.value = String(preferences.direction);
 
             const outcome = document.createElement("select");
             outcome.name = "navigationOutcome";
@@ -1305,7 +1324,6 @@ export async function renderExpedition(
             submit.type = "submit";
             submit.className = "hc-primary-action";
             form.append(
-                labelled("Intended course", course),
                 labelled("Resolution", outcome),
                 veerField,
                 labelled("Resolution source", source),
@@ -1314,20 +1332,12 @@ export async function renderExpedition(
                 submit);
             form.addEventListener("submit", event => {
                 event.preventDefault();
-                if (course.value === "") {
-                    throw new Error("Select an intended adjacent cell before resolving navigation.");
-                }
-                const direction = Number(course.value);
+                const direction = intendedEdge.directionValue;
                 const lost = outcome.value === "lost";
                 const resolvedVeer = lost ? Number(veer.value) : 0;
-                if (!Number.isInteger(direction) || !adjacencyEdgeForDirection(adjacency, direction)) {
-                    throw new Error("Select a valid adjacent course.");
-                }
                 if (!Number.isInteger(resolvedVeer) || (lost && resolvedVeer === 0)) {
                     throw new Error("A lost navigation result requires a non-zero whole-step veer.");
                 }
-                preferences.direction = direction;
-                saveTravelPreferences(runtime.id, preferences);
                 void runUiMutation(async () => {
                     applyRuntime(await api.recordNavigationAssistant(runtime.id, {
                         expectedVersion: runtime.version,
@@ -1340,9 +1350,18 @@ export async function renderExpedition(
                     }));
                 });
             });
+
+            const changeCourse = button("Change course", () => {
+                closeDrawer();
+                queueMicrotask(focusTravelCourse);
+            });
+            changeCourse.className = "hc-secondary-action";
             const more = button("Advanced travel controls", () => openTravelWorkspace("advanced"));
             more.className = "hc-secondary-action";
-            body.append(form, more);
+            const row = document.createElement("div");
+            row.className = "hc-button-row";
+            row.append(changeCourse, more);
+            body.append(form, row);
         });
     };
 
@@ -1519,6 +1538,7 @@ export async function renderExpedition(
                     body,
                     survivalApi,
                     runtime.id,
+                    () => runtime,
                     async (_control, action) => {
                         await runUiMutation(action);
                     },
@@ -1673,7 +1693,7 @@ export async function renderExpedition(
                 list.className = "hc-history";
                 for (const record of journey.history.slice(-80).reverse()) {
                     const item = document.createElement("li");
-                    item.textContent = `${humanize(record.kind)} — ${record.detail}`;
+                    item.textContent = journeyHistoryLabel(record.kind);
                     list.append(item);
                 }
                 body.append(list);
@@ -1701,7 +1721,7 @@ export async function renderExpedition(
                     const after = record.afterLevel !== null
                         ? ` → ${record.afterLevel}`
                         : record.beforeLevel !== null ? " → cleared" : "";
-                    item.textContent = `${humanize(record.effectKey)} — ${humanize(record.operation)}${before}${after}`;
+                    item.textContent = `${humanize(record.effectKey)} — ${effectOperationLabel(record.operation)}${before}${after}`;
                     list.append(item);
                 }
                 body.append(list);
@@ -1712,7 +1732,7 @@ export async function renderExpedition(
                 for (const record of journey.history.slice(-40).reverse()) {
                     advanced.append(textElement(
                         "p",
-                        `Journey ${record.kind} · watch ${record.completedWatches} · source ${record.provenance.sourceKey} · record ${record.id}`,
+                        `Journey ${record.kind} · ${record.detail} · watch ${record.completedWatches} · source ${record.provenance.sourceKey} · record ${record.id}`,
                         "hc-muted"));
                 }
             }
@@ -1827,6 +1847,30 @@ export async function renderExpedition(
         map?.dispose();
         root.classList.remove("hc-phase15");
     };
+}
+
+function journeyHistoryLabel(kind: string): string {
+    switch (kind) {
+        case "ProcessStarted": return "Journey started";
+        case "ResolutionRecorded": return "Journey result recorded";
+        case "ProgressChanged": return "Journey progress updated";
+        case "ComplicationChanged": return "Journey complication recorded";
+        case "FailureChanged": return "Journey failure recorded";
+        case "StageTransitioned": return "Journey stage changed";
+        case "ProcessCompleted": return "Journey completed";
+        case "ProcessFailed": return "Journey failed";
+        case "ProcessAbandoned": return "Journey abandoned";
+        case "EventOpportunityCreated": return "Journey event became available";
+        case "EventResolved": return "Journey event resolved";
+        case "EventSkipped": return "Journey event skipped";
+        case "WatchOpportunityCreated": return "Journey watch resolution became available";
+        default: return humanize(kind);
+    }
+}
+
+function effectOperationLabel(operation: string): string {
+    const suffix = operation.includes(":") ? operation.slice(operation.lastIndexOf(":") + 1) : operation;
+    return humanize(suffix);
 }
 
 function actionCard(title: string, detail: string, action: () => void): HTMLElement {

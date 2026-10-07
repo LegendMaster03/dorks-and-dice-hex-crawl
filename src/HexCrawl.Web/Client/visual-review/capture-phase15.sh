@@ -53,12 +53,21 @@ cases=(
   "12-spatial-boundary|boundary-pending|light|1366|900"
   "13-spatial-encounter|encounter-pending|dark|1366|900"
   "14-spatial-forced-travel|forced-travel-pending|light|1366|900"
+  "14a-spatial-forced-travel-one|forced-travel-one-participant|light|1366|900"
+  "14b-spatial-forced-travel-zero|forced-travel-zero-participants|dark|500|844|390"
+  "14c-spatial-forced-travel-party|forced-travel-party-scope|light|1366|900"
+  "14d-spatial-forced-travel-mount|forced-travel-mount|light|1366|900"
+  "14e-spatial-forced-travel-vehicle|forced-travel-vehicle|dark|1366|900"
   "15-spatial-more-options|more-options-open|dark|1366|900"
   "16-spatial-nonadjacent-inspect|map-nonadjacent|light|1366|900"
   "17-spatial-teleport-workspace|teleport-workspace|light|1366|900"
   "18-journey-normal|journey-normal|light|1366|900"
   "19-journey-pending|journey-pending|light|1366|900"
   "20-journey-consequence|journey-consequence|light|1366|900"
+  "20a-journey-consequence-multiple|journey-consequence-multiple|light|1366|900"
+  "20b-journey-consequence-resolved|journey-consequence-resolved|dark|1366|900"
+  "20c-effects-journey-source|effects-journey-source|light|1366|900"
+  "20d-abstract-spatial-course|abstract-spatial-course|light|1366|900"
   "21-responsive-laptop|selected-edge|light|1366|900"
   "22-responsive-embedded|selected-edge|light|1120|820|900"
   "23-responsive-tablet|selected-edge|light|820|980"
@@ -145,6 +154,7 @@ elif surface == "procedure":
         raise SystemExit(f'wrong procedure authoring surface: {metrics}')
 else:
     nonspatial = state.startswith("journey-") or state == "history-workspace"
+    abstract_spatial = state == "abstract-spatial-course"
     if nonspatial:
         if metrics["navigatorButtons"] != 0 or metrics["mapHeight"] != 0:
             raise SystemExit(f'nonspatial fixture fabricated a map or navigator: {metrics}')
@@ -158,6 +168,24 @@ else:
             raise SystemExit(f'journey event is not the actual next action: {metrics}')
         if state == "journey-consequence" and not metrics["journeyConsequenceVisible"]:
             raise SystemExit(f'journey consequence state is not visible on the primary surface: {metrics}')
+        if state == "journey-consequence" and not metrics["journeyPendingConsequenceVisible"]:
+            raise SystemExit(f'journey summary disagrees with authoritative pending Effects state: {metrics}')
+        if state == "journey-consequence-multiple" and not metrics["journeyMultiplePendingConsequenceVisible"]:
+            raise SystemExit(f'journey summary did not report multiple authoritative pending consequences: {metrics}')
+        if state == "journey-consequence-resolved":
+            if metrics["journeyPendingConsequenceVisible"] or metrics["journeyMultiplePendingConsequenceVisible"]:
+                raise SystemExit(f'resolved journey consequence remained pending in the summary: {metrics}')
+            if not metrics["journeyStageStateVisible"]:
+                raise SystemExit(f'stage-local failures/complications were lost after consequence resolution: {metrics}')
+        if state == "journey-normal" and not metrics["journeyNoPendingConsequencesVisible"]:
+            raise SystemExit(f'clean journey does not report an authoritative no-pending state: {metrics}')
+        if state == "journey-pending" and metrics["journeyPendingRawInternalsVisible"]:
+            raise SystemExit(f'normal pending journey presentation exposes raw event internals: {metrics}')
+    elif abstract_spatial:
+        if metrics["navigatorButtons"] != 0 or metrics["mapHeight"] != 0:
+            raise SystemExit(f'abstract spatial fixture fabricated an authored map: {metrics}')
+        if not metrics["currentTravelVisible"] or not metrics["abstractSpatialCourseReused"]:
+            raise SystemExit(f'abstract spatial course was not reused through focused navigation: {metrics}')
     else:
         if metrics["navigatorButtons"] != 6:
             raise SystemExit(f'navigator edge count: {metrics}')
@@ -186,11 +214,40 @@ else:
         raise SystemExit(f'non-adjacent inspection did not expose deliberate teleport authority: {metrics}')
     if state == "movement-input-pending" and not metrics["movementUnitVisible"]:
         raise SystemExit(f'movement resolution omitted its authoritative unit: {metrics}')
-    if state == "forced-travel-pending":
+    if state in {"forced-travel-pending", "forced-travel-one-participant", "forced-travel-zero-participants", "forced-travel-party-scope", "forced-travel-mount", "forced-travel-vehicle"}:
         if not metrics["forcedTravelPrimaryDomainFacing"]:
             raise SystemExit(f'forced-travel primary workflow is not domain-facing: {metrics}')
         if metrics["forcedTravelTechnicalExpanded"]:
             raise SystemExit(f'forced-travel advanced consequence details opened by default: {metrics}')
+    if state in {"forced-travel-pending", "forced-travel-one-participant", "forced-travel-zero-participants"}:
+        if not metrics["forcedTravelNamedTargetVisible"]:
+            raise SystemExit(f'forced-travel normal workflow does not expose named participant targeting: {metrics}')
+    if state == "forced-travel-pending":
+        if metrics["forcedTravelTargetOptionCount"] < 3 or metrics["forcedTravelTargetValue"] != "":
+            raise SystemExit(f'multiple participant forced-travel target was silently selected: {metrics}')
+        if not metrics["forcedTravelTargetRequired"]:
+            raise SystemExit(f'multiple participant forced-travel target can submit without an explicit named choice: {metrics}')
+    if state == "forced-travel-one-participant":
+        if metrics["forcedTravelTargetOptionCount"] != 1 or metrics["forcedTravelTargetValue"] != "member-1":
+            raise SystemExit(f'single participant forced-travel target was not visibly preselected: {metrics}')
+    if state == "forced-travel-zero-participants" and not metrics["forcedTravelMissingTargetBlocked"]:
+        raise SystemExit(f'zero-participant forced-travel failure did not expose blocked setup state: {metrics}')
+    if state == "forced-travel-party-scope":
+        if metrics["forcedTravelTargetVisible"] or metrics["forcedTravelTargetRequired"]:
+            raise SystemExit(f'party-scope forced travel incorrectly requires an entity target: {metrics}')
+    if state == "forced-travel-mount":
+        if metrics["forcedTravelTargetOptionCount"] != 1 or metrics["forcedTravelTargetValue"] != "mount-1" or "Pack Mule" not in metrics["forcedTravelTargetLabels"]:
+            raise SystemExit(f'mount-scope forced travel did not expose the named authoritative mount: {metrics}')
+    if state == "forced-travel-vehicle":
+        if metrics["forcedTravelTargetOptionCount"] != 1 or metrics["forcedTravelTargetValue"] != "vehicle-1" or "River Skiff" not in metrics["forcedTravelTargetLabels"]:
+            raise SystemExit(f'vehicle-scope forced travel did not expose the named authoritative vehicle: {metrics}')
+    if state in {"navigation-pending", "abstract-spatial-course"} and not metrics["navigationCourseReadOnly"]:
+        raise SystemExit(f'navigation repeated the already-selected intended course input: {metrics}')
+    if state == "effects-journey-source":
+        if not metrics["journeyEffectSourceHumanized"]:
+            raise SystemExit(f'normal journey-generated effect provenance exposes raw internals: {metrics}')
+        if not metrics["journeyEffectTechnicalRetained"]:
+            raise SystemExit(f'journey-generated effect diagnostics were lost from Technical details: {metrics}')
     if state == "effects-workspace":
         if metrics["drawerCount"] != 1 or metrics["focusedTitle"] != "Resources & effects":
             raise SystemExit(f'effects workspace did not open correctly: {metrics}')
@@ -201,6 +258,10 @@ else:
             raise SystemExit(f'history workspace did not open correctly: {metrics}')
         if not metrics["unifiedHistoryVisible"]:
             raise SystemExit(f'unified expedition history is incomplete: {metrics}')
+        if metrics["normalHistoryRawInternalsVisible"]:
+            raise SystemExit(f'normal expedition history exposes raw journey identity: {metrics}')
+        if not metrics["technicalHistoryRetained"]:
+            raise SystemExit(f'advanced expedition history lost raw diagnostic identity: {metrics}')
     if state == "partial-progress" and not metrics["positionProgressVisible"]:
         raise SystemExit(f'partial spatial progress is not visible: {metrics}')
     if state == "focus-return" and not metrics["focusReturnedToOpener"]:
@@ -222,8 +283,16 @@ else:
         "boundary-pending": "Boundary crossing",
         "encounter-pending": "Encounter",
         "forced-travel-pending": "Forced travel",
+        "forced-travel-one-participant": "Forced travel",
+        "forced-travel-zero-participants": "Forced travel",
+        "forced-travel-party-scope": "Forced travel",
+        "forced-travel-mount": "Forced travel",
+        "forced-travel-vehicle": "Forced travel",
         "more-options-open": "Advanced travel controls",
-        "teleport-workspace": "Teleport party"
+        "teleport-workspace": "Teleport party",
+        "abstract-spatial-course": "Navigation",
+        "effects-journey-source": "Resources & effects",
+        "journey-pending": "Journey / challenge"
     }
     if state in expected_titles:
         if metrics["drawerCount"] != 1 or metrics["focusedTitle"] != expected_titles[state]:
