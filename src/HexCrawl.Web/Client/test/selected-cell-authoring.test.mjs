@@ -218,5 +218,8 @@ test("world editor composes existing authorities and does not mutate player know
     assert.match(source, /kind: "Line"/);
     assert.match(source, /replaceFeatureTagFact/);
     assert.match(source, /featureHasEnvironmentRules/);
+    assert.match(source, /confirmDeletion/);
+    assert.match(source, /window\.confirm/);
+    assert.match(source, /This can not be undone/);
     assert.doesNotMatch(source, /revealSubject|discoverSubject|PlayerKnowledge|playerKnowledge/);
 });
