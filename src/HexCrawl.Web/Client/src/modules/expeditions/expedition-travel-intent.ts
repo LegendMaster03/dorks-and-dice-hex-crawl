@@ -17,7 +17,7 @@ export function mergeRuntimeTravelPreferences(
     current: TravelPreferences): TravelPreferences {
     if (!runtime.expedition.isSpatial) return current;
     return {
-        direction: runtime.expedition.intendedDirection ?? current.direction,
+        direction: runtime.expedition.intendedDirection,
         pace: runtime.expedition.activePaceKey ?? current.pace
     };
 }
@@ -40,9 +40,9 @@ export function loadTravelPreferences(
         if (!raw) return fallback;
         const parsed = JSON.parse(raw) as Partial<TravelPreferences>;
         return {
-            direction: Number.isInteger(parsed.direction) && Number(parsed.direction) >= 0
-                ? Number(parsed.direction)
-                : fallback.direction,
+            // Intended course is expedition runtime authority. Browser storage must not
+            // resurrect a stale course over a newer server value or an explicit clear.
+            direction: fallback.direction,
             pace: typeof parsed.pace === "string" && parsed.pace.trim()
                 ? parsed.pace.trim()
                 : fallback.pace
@@ -57,7 +57,7 @@ export function saveTravelPreferences(
     preferences: TravelPreferences,
     storage: TravelPreferenceStorage = window.localStorage): void {
     try {
-        storage.setItem(travelPreferenceStorageKey(expeditionId), JSON.stringify(preferences));
+        storage.setItem(travelPreferenceStorageKey(expeditionId), JSON.stringify({ pace: preferences.pace }));
     } catch {
         // UI preference persistence is optional; runtime state remains authoritative.
     }
@@ -76,10 +76,6 @@ export function normalizeTravelModePreference(
 
 export function normalizeTravelDirectionPreference(
     direction: number | null,
-    choices: readonly number[],
-    authoritativeDirection: number | null = null): number | null {
-    if (authoritativeDirection !== null && choices.includes(authoritativeDirection)) {
-        return authoritativeDirection;
-    }
+    choices: readonly number[]): number | null {
     return direction !== null && choices.includes(direction) ? direction : null;
 }
