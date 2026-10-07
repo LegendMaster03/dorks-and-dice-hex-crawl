@@ -51,13 +51,14 @@ test("Compact starting-exit help describes the runtime exit requirement rather t
     assert.doesNotMatch(presentation?.help ?? "", /already counted/i);
     assert.notEqual(presentation?.help, "Starting exit progress factor.");
 
-    const unmodeled = compactParameter("customNumericSetting", {
-        type: "number",
+    const mechanicSpecific = compactParameter("travel.diceCount", {
+        type: "integer",
         required: false,
         description: "Pinned mechanic-specific numeric meaning.",
         defaultValue: null
-    }, "custom.module");
-    assert.equal(unmodeled, null);
+    }, "procedure.helpers");
+    assert.equal(mechanicSpecific?.control, "number");
+    assert.equal(mechanicSpecific?.help, "Pinned mechanic-specific numeric meaning.");
 });
 
 
