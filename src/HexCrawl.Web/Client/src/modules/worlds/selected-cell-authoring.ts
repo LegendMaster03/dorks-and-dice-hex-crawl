@@ -3,7 +3,7 @@ import type {
     EnvironmentFact,
     WorldEnvironment
 } from "../../environment-types";
-import { hexCorners, worldToHex } from "../../hex-math";
+import { hexCorners, worldToHex } from "../../hex-math.js";
 import type {
     HexCoordinate,
     Location,
