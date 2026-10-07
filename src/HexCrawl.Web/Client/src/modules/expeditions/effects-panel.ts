@@ -212,7 +212,7 @@ export class ExpeditionEffectsPanel {
             return runtime.party.members.find(member => member.id === target.targetId)?.name
                 ?? "Unknown participant";
         }
-        const contributor = runtime.party.movementContributors.find(value => value.id === target.targetId);
+        const contributor = (runtime.party.movementContributors ?? []).find(value => value.id === target.targetId);
         return contributor ? `${humanizeIdentifier(target.scope)}: ${humanizeIdentifier(contributor.key)}` : humanizeIdentifier(target.scope);
     }
 

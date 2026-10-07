@@ -1482,6 +1482,7 @@ export async function renderExpedition(
 
     const openSurvivalWorkspace = (
         focus: "all" | "attention" = "all"): void => {
+        const capabilities = expeditionWorkspacePresentation(runtime, journey, survival).capabilities;
         const panelFocus = focus === "attention"
             ? survival?.forcedTravel.checkDue
                 ? "forcedTravel"
@@ -1495,7 +1496,7 @@ export async function renderExpedition(
         openDrawer(title, body => {
             body.classList.add("hc-page");
             const cleanups: Array<() => void> = [];
-            if (presentation.capabilities.effects) {
+            if (capabilities.effects) {
                 const effectPanel = new ExpeditionEffectsPanel(
                     body,
                     effectsApi,
@@ -1507,7 +1508,7 @@ export async function renderExpedition(
                 void effectPanel.sync();
                 cleanups.push(() => effectPanel.dispose());
             }
-            if (presentation.capabilities.resources || presentation.capabilities.survival) {
+            if (capabilities.resources || capabilities.survival) {
                 const panel = new ExpeditionSurvivalResourcesPanel(
                     body,
                     survivalApi,
