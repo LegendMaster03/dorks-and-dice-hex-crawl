@@ -107,6 +107,60 @@ public sealed class ExpeditionWorkbenchTests
     }
 
     [Fact]
+    public async Task ChangedCourseFeedsFocusedNavigationWithoutAdvancingTravel()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var (core, workbench) = await database.ServicesAsync();
+        var assistants = await database.AssistantServiceAsync();
+        var world = await core.CreateOverworldAsync("alice", WorldCommand());
+        var expedition = await workbench.StartAsync(
+            world.World.Id,
+            "alice",
+            new StartExpeditionWorkbenchCommand(
+                "Changed course navigation",
+                "alexandrian-advanced",
+                "exploration-map",
+                new HexCoordinate(1, -1)));
+
+        expedition = await core.SetExpeditionCourseIntentAsync(
+            expedition.State.Id,
+            "alice",
+            new SetExpeditionCourseIntentCommand(expedition.Version, 0));
+        expedition = await core.SetExpeditionCourseIntentAsync(
+            expedition.State.Id,
+            "alice",
+            new SetExpeditionCourseIntentCommand(expedition.Version, 5));
+        var beforeNavigation = expedition.State;
+
+        expedition = await assistants.RecordNavigationAsync(
+            expedition.State.Id,
+            "alice",
+            new NavigationAssistantCommand
+            {
+                ExpectedVersion = expedition.Version,
+                IsLost = true,
+                VeerSteps = 1,
+                IntendedDirection = 5,
+                ResolutionSource = ResolutionSource.ManualRoll,
+                ResolutionNote = "changed-course navigation"
+            });
+
+        Assert.Equal(new HexDirection(5), expedition.State.IntendedDirection);
+        Assert.Equal(new HexDirection(0), expedition.State.ActualDirection);
+        Assert.True(expedition.State.Navigation.IsLost);
+        Assert.Equal(1, expedition.State.Navigation.VeerSteps);
+        Assert.Equal(beforeNavigation.CurrentHex, expedition.State.CurrentHex);
+        Assert.Equal(beforeNavigation.Traversal.Progress, expedition.State.Traversal.Progress);
+        Assert.Equal(beforeNavigation.DistanceTraveled, expedition.State.DistanceTraveled);
+        Assert.Equal(beforeNavigation.ElapsedTravelTime, expedition.State.ElapsedTravelTime);
+        Assert.Equal(beforeNavigation.CompletedWatches, expedition.State.CompletedWatches);
+
+        var reloaded = await core.GetExpeditionAsync(expedition.State.Id, "alice");
+        Assert.Equal(new HexDirection(5), reloaded.State.IntendedDirection);
+        Assert.Equal(new HexDirection(0), reloaded.State.ActualDirection);
+    }
+
+    [Fact]
     public async Task FocusedEncounterResolutionUsesPinnedGenericRuntimeState()
     {
         await using var database = await TestDatabase.CreateAsync();
