@@ -621,6 +621,11 @@ export type RuntimeAdvanceRequest = {
     generatedProcedureResolutionId?: string;
 };
 
+export type SetExpeditionCourseIntentRequest = {
+    expectedVersion: number;
+    intendedDirection: number | null;
+};
+
 export type RepositionExpeditionRequest = {
     expectedVersion: number;
     targetHex: HexCoordinate;
