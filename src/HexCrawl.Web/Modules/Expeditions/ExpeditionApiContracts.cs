@@ -416,6 +416,15 @@ public sealed record ResolveBoundaryDecisionRequest(
         ResolutionNote);
 }
 
+public sealed record SetExpeditionCourseIntentRequest(
+    long ExpectedVersion,
+    int? IntendedDirection)
+{
+    public SetExpeditionCourseIntentCommand ToCommand() => new(
+        ExpectedVersion,
+        IntendedDirection);
+}
+
 public sealed record RepositionExpeditionRequest(
     long ExpectedVersion,
     HexCoordinate TargetHex,

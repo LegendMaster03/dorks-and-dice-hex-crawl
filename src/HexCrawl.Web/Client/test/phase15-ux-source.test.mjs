@@ -445,8 +445,8 @@ test("focused travel drawer explicitly removes its course and pace listeners on 
         path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
         "utf8");
 
-    assert.match(view, /directionControl\?\.removeEventListener\("change", captureTravelPreferencesFromControls\)/);
-    assert.match(view, /paceControl\?\.removeEventListener\("change", captureTravelPreferencesFromControls\)/);
+    assert.match(view, /directionControl\?\.removeEventListener\("change", captureTravelDirectionFromControls\)/);
+    assert.match(view, /paceControl\?\.removeEventListener\("change", captureTravelPaceFromControls\)/);
     assert.match(view, /controller\.dispose\(\)/);
 });
 
@@ -461,10 +461,13 @@ test("navigator controls use midpoint-anchored white SVG arrows with consistent 
     assert.match(view, /hc-adjacency-arrow-shape/);
     assert.match(view, /M2 15 H38 V4 L62 20 L38 36 V25 H2 Z/);
     assert.match(view, /const selectTravelIntent =/);
+    assert.match(view, /const clearTravelIntent =/);
     assert.match(view, /const toggleTravelIntent =/);
     assert.match(view, /if \(preferences\.direction !== direction\) \{\s*selectTravelIntent\(direction, target\)/);
-    assert.match(view, /preferences\.direction = null/);
-    assert.match(view, /selectedHexTracksTravelIntent = false/);
+    assert.match(view, /clearTravelIntent\(\)/);
+    assert.match(view, /runtime\.expedition\.activeWatchNumber !== null/);
+    assert.match(view, /active travel watch requires an intended course/);
+    assert.match(view, /setExpeditionCourseIntent/);
     assert.match(view, /button\("", \(\) => toggleTravelIntent\(edge\.directionValue, edge\.targetCell\)\)/);
     assert.match(view, /if \(edge\) selectTravelIntent\(edge\.directionValue, edge\.targetCell\)/);
     assert.doesNotMatch(view, /data-adjacency-edge-mark/);
@@ -559,13 +562,15 @@ test("Compact authoring offers generic one-click dependency repair", () => {
 });
 
 
-test("persisted travel intent does not hardcode a six-edge direction range", () => {
+test("persisted browser travel preferences do not own course direction or hardcode topology", () => {
     const intent = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/expedition-travel-intent.ts"),
         "utf8");
 
-    assert.match(intent, /Number\.isInteger\(parsed\.direction\) && Number\(parsed\.direction\) >= 0/);
-    assert.doesNotMatch(intent, /Number\(parsed\.direction\) <= 5/);
+    assert.match(intent, /direction: fallback\.direction/);
+    assert.match(intent, /JSON\.stringify\(\{ pace: preferences\.pace \}\)/);
+    assert.doesNotMatch(intent, /parsed\.direction/);
+    assert.doesNotMatch(intent, /direction\s*[<>]=?\s*[56]/);
 });
 
 test("current-cell navigator stays orientation-neutral unless authoritative compass metadata exists", () => {
@@ -973,7 +978,7 @@ test("travel-target map selection follows persisted course across authoritative 
     assert.match(view, /let selectedHexTracksTravelIntent = false/);
     assert.match(view, /const synchronizeTravelTargetProjection = \(\): void =>/);
     assert.match(view, /synchronizeTravelTargetProjection\(\);/);
-    assert.match(view, /selectedHexTracksTravelIntent = true/);
+    assert.match(view, /selectedHexTracksTravelIntent = selectedHex !== null/);
     assert.match(view, /if \(selectedHex !== null && !selectedHexTracksTravelIntent\) return/);
     assert.match(view, /selectedHex = adjacency[\s\S]*adjacencyEdgeForDirection\(adjacency, preferences\.direction\)\?\.targetCell/);
     assert.match(view, /preferences = mergeRuntimeTravelPreferences\(runtime, preferences\);[\s\S]*synchronizeTravelTargetProjection\(\);/);
@@ -1072,19 +1077,30 @@ test("focused navigation reuses valid intended course and routes missing intent 
 });
 
 
-test("secondary travel course changes synchronize navigator and map target", () => {
+test("secondary travel course changes use the same authoritative course mutation", () => {
     const view = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
         "utf8");
 
-    const capture = view.slice(
-        view.indexOf("const captureTravelPreferences"),
-        view.indexOf("const openPartyWorkspace"));
-    assert.match(capture, /adjacencyEdgeForDirection\(adjacency, parsed\)/);
-    assert.match(capture, /selectedHex = edge\.targetCell/);
-    assert.match(capture, /selectedHexTracksTravelIntent = true/);
-    assert.match(capture, /map\.renderer\.selectedHex = edge\.targetCell/);
-    assert.match(capture, /syncTravelIntentControls\(\)/);
+    const workspace = view.slice(
+        view.indexOf("const openTravelWorkspace"),
+        view.indexOf("const openRepositionWorkspace"));
+    assert.match(workspace, /captureTravelDirectionFromControls/);
+    assert.match(workspace, /adjacencyEdgeForDirection\(adjacency, parsed\)/);
+    assert.match(workspace, /selectTravelIntent\(edge\.directionValue, edge\.targetCell\)/);
+    assert.doesNotMatch(workspace, /preferences\.direction = parsed/);
+});
+
+test("course intent UI serializes server mutations so rapid clicks can not race the same version", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+
+    assert.match(view, /let courseIntentMutationPending = false/);
+    assert.match(view, /if \(!runtime\.expedition\.isSpatial \|\| courseIntentMutationPending\) return/);
+    assert.match(view, /setCourseIntentMutationPending\(true\)/);
+    assert.match(view, /\[data-adjacency-edge\], \[data-adjacency-select\], select\[name="direction"\]/);
+    assert.match(view, /finally \{\s*if \(!disposed\) setCourseIntentMutationPending\(false\)/);
 });
 
 

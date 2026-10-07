@@ -147,6 +147,31 @@ public sealed partial class HexCrawlService
         return await SaveExpeditionAsync(updated, command.ExpectedVersion, cancellationToken);
     }
 
+    public async Task<StoredExpedition> SetExpeditionCourseIntentAsync(
+        Guid expeditionId,
+        string ownerUserId,
+        SetExpeditionCourseIntentCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        var expedition = await GetExpeditionAsync(expeditionId, ownerUserId, cancellationToken);
+        RequireVersion(command.ExpectedVersion, expedition.Version);
+        var state = expedition.Runtime as ExpeditionState
+            ?? throw new InvalidOperationException("Course intent requires a spatial crawl session.");
+        var intendedDirection = command.IntendedDirection.HasValue
+            ? new HexDirection(command.IntendedDirection.Value)
+            : (HexDirection?)null;
+        var updatedState = CrawlRuntimeActions.SetIntendedCourse(state, intendedDirection);
+
+        return await SaveExpeditionAsync(
+            expedition with
+            {
+                Runtime = updatedState,
+                GeneratedProcedureResolutions = []
+            },
+            command.ExpectedVersion,
+            cancellationToken);
+    }
+
     public async Task<StoredExpedition> RepositionExpeditionAsync(
         Guid expeditionId,
         string ownerUserId,

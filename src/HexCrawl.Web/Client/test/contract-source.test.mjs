@@ -209,7 +209,7 @@ test("direction controls retain numeric runtime values while current-cell adjace
 test("non-spatial primary workspace does not fabricate route, navigation, course, or pace state", () => {
     const view = read("modules/expeditions/expedition-view.ts");
     const start = view.indexOf("const renderNonSpatialWorkspace");
-    const end = view.indexOf("const selectTravelIntent", start);
+    const end = view.indexOf("const journeyFact", start);
     const nonspatial = view.slice(start, end);
     assert.match(nonspatial, /Current stage/);
     assert.match(nonspatial, /Progress/);

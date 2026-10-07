@@ -43,6 +43,7 @@ public sealed class ExpeditionModule : IHexCrawlModule
         api.MapPost("/expeditions/{expeditionId:guid}/advance", AdvanceExpeditionAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/encounters/{occurrenceId:guid}/resolve", ResolveEncounterAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/boundary-decision", ResolveBoundaryDecisionAsync);
+        api.MapPut("/expeditions/{expeditionId:guid}/course-intent", SetCourseIntentAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/reposition", RepositionExpeditionAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/resolution-helper", ResolveProcedureInputsAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/discover", DiscoverAsync);
@@ -180,6 +181,22 @@ public sealed class ExpeditionModule : IHexCrawlModule
     {
         var owner = UserId(context);
         var expedition = await workbench.ResolveBoundaryDecisionAsync(
+            expeditionId,
+            owner,
+            request.ToCommand(),
+            cancellationToken);
+        return Results.Ok(await ContractAsync(expedition, owner, service, cancellationToken));
+    }
+
+    private static async Task<IResult> SetCourseIntentAsync(
+        Guid expeditionId,
+        SetExpeditionCourseIntentRequest request,
+        HttpContext context,
+        HexCrawlService service,
+        CancellationToken cancellationToken)
+    {
+        var owner = UserId(context);
+        var expedition = await service.SetExpeditionCourseIntentAsync(
             expeditionId,
             owner,
             request.ToCommand(),

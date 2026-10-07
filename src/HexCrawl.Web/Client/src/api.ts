@@ -18,6 +18,7 @@ import type {
     ResolveBoundaryDecisionRequest,
     ResolveEncounterRequest,
     RepositionExpeditionRequest,
+    SetExpeditionCourseIntentRequest,
     TravelWatchAssistantRequest,
     NonSpatialWatchAssistantRequest,
     NavigationAssistantRequest,
@@ -440,6 +441,16 @@ export class HexCrawlApi {
             `/api/expeditions/${encodeURIComponent(expeditionId)}/boundary-decision`,
             input,
             "Resolve boundary");
+    }
+
+    public setExpeditionCourseIntent(
+        expeditionId: string,
+        input: SetExpeditionCourseIntentRequest): Promise<ExpeditionDetail> {
+        return this.sendJson(
+            "PUT",
+            `/api/expeditions/${encodeURIComponent(expeditionId)}/course-intent`,
+            input,
+            "Set expedition course");
     }
 
     public repositionExpedition(

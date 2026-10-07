@@ -101,6 +101,81 @@ public sealed class CrawlAssistantActionsTests
     }
 
     [Fact]
+    public void CourseIntentMutationUpdatesCurrentIntentAndActivePlanWithoutTravelSideEffects()
+    {
+        var state = State() with
+        {
+            Traversal = new HexTraversalState
+            {
+                CurrentHex = new HexCoordinate(1, -1),
+                EntryDirection = new HexDirection(2),
+                LastTravelDirection = new HexDirection(1),
+                Progress = Miles(2),
+                CurrentExitRequirement = Miles(6)
+            },
+            IntendedDirection = new HexDirection(0),
+            ActualDirection = new HexDirection(1),
+            Navigation = new NavigationRuntimeState(true, 1),
+            DistanceTraveled = Miles(18),
+            ElapsedTravelTime = TimeSpan.FromHours(8),
+            CompletedWatches = 2,
+            ActiveWatch = new ActiveWatchState(
+                3,
+                TimeSpan.FromHours(4),
+                TimeSpan.FromHours(1),
+                new WatchTravelPlan(
+                    new HexDirection(0),
+                    TravelModeSelection.Normal,
+                    NavigationAidSelection.None),
+                ResolvedEncounter.None,
+                true,
+                null)
+        };
+        var history = state.History;
+
+        var result = CrawlRuntimeActions.SetIntendedCourse(state, new HexDirection(2));
+
+        Assert.Equal(new HexDirection(2), result.IntendedDirection);
+        Assert.Equal(new HexDirection(2), result.ActiveWatch!.Plan.IntendedDirection);
+        Assert.Equal(new HexDirection(1), result.ActualDirection);
+        Assert.Equal(state.CurrentHex, result.CurrentHex);
+        Assert.Equal(state.Traversal.Progress, result.Traversal.Progress);
+        Assert.Equal(state.DistanceTraveled, result.DistanceTraveled);
+        Assert.Equal(state.ElapsedTravelTime, result.ElapsedTravelTime);
+        Assert.Equal(state.CompletedWatches, result.CompletedWatches);
+        Assert.Same(history, result.History);
+    }
+
+    [Fact]
+    public void CourseIntentCanClearOutsideActiveWatchButNotFakeClearInsideOne()
+    {
+        var state = State() with
+        {
+            IntendedDirection = new HexDirection(0),
+            ActualDirection = new HexDirection(1)
+        };
+
+        var cleared = CrawlRuntimeActions.SetIntendedCourse(state, null);
+        Assert.Null(cleared.IntendedDirection);
+        Assert.Equal(state.ActualDirection, cleared.ActualDirection);
+
+        var active = state with
+        {
+            ActiveWatch = new ActiveWatchState(
+                1,
+                TimeSpan.FromHours(4),
+                TimeSpan.Zero,
+                new WatchTravelPlan(new HexDirection(0), TravelModeSelection.Normal, NavigationAidSelection.None),
+                ResolvedEncounter.None,
+                true,
+                null)
+        };
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            CrawlRuntimeActions.SetIntendedCourse(active, null));
+        Assert.Contains("requires an intended course", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void NavigationAssistantMutatesNavigationWithoutAdvancingTravel()
     {
         var state = State();

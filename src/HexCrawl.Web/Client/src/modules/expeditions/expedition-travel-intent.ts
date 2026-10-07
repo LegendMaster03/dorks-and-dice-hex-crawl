@@ -17,7 +17,7 @@ export function mergeRuntimeTravelPreferences(
     current: TravelPreferences): TravelPreferences {
     if (!runtime.expedition.isSpatial) return current;
     return {
-        direction: runtime.expedition.intendedDirection ?? current.direction,
+        direction: runtime.expedition.intendedDirection,
         pace: runtime.expedition.activePaceKey ?? current.pace
     };
 }
@@ -39,13 +39,15 @@ export function loadTravelPreferences(
         const raw = storage.getItem(travelPreferenceStorageKey(runtime.id));
         if (!raw) return fallback;
         const parsed = JSON.parse(raw) as Partial<TravelPreferences>;
+        const pace = typeof parsed.pace === "string" && parsed.pace.trim()
+            ? parsed.pace.trim()
+            : fallback.pace;
+        // Intended course is expedition runtime authority. Normalize legacy development
+        // storage immediately so a stale browser direction can not remain a competing value.
+        storage.setItem(travelPreferenceStorageKey(runtime.id), JSON.stringify({ pace }));
         return {
-            direction: Number.isInteger(parsed.direction) && Number(parsed.direction) >= 0
-                ? Number(parsed.direction)
-                : fallback.direction,
-            pace: typeof parsed.pace === "string" && parsed.pace.trim()
-                ? parsed.pace.trim()
-                : fallback.pace
+            direction: fallback.direction,
+            pace
         };
     } catch {
         return fallback;
@@ -57,7 +59,7 @@ export function saveTravelPreferences(
     preferences: TravelPreferences,
     storage: TravelPreferenceStorage = window.localStorage): void {
     try {
-        storage.setItem(travelPreferenceStorageKey(expeditionId), JSON.stringify(preferences));
+        storage.setItem(travelPreferenceStorageKey(expeditionId), JSON.stringify({ pace: preferences.pace }));
     } catch {
         // UI preference persistence is optional; runtime state remains authoritative.
     }
@@ -76,10 +78,6 @@ export function normalizeTravelModePreference(
 
 export function normalizeTravelDirectionPreference(
     direction: number | null,
-    choices: readonly number[],
-    authoritativeDirection: number | null = null): number | null {
-    if (authoritativeDirection !== null && choices.includes(authoritativeDirection)) {
-        return authoritativeDirection;
-    }
+    choices: readonly number[]): number | null {
     return direction !== null && choices.includes(direction) ? direction : null;
 }

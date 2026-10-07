@@ -90,6 +90,8 @@ cases=(
   "40-world-selected-cell-wide|world-selected-cell|light|1366|900"
   "41-world-selected-cell-dark|world-selected-cell|dark|1366|900"
   "42-world-selected-cell-narrow|world-selected-cell|light|500|844|390"
+  "43-course-change-reload|course-change-reload|light|1366|900"
+  "44-course-clear-reload|course-clear-reload|dark|820|980"
 )
 
 for spec in "${cases[@]}"; do
@@ -228,6 +230,37 @@ else:
     if state == "persisted-course":
         if metrics["primaryAction"] != "Continue travel" or not metrics["currentTravelVisible"]:
             raise SystemExit(f'persisted course did not restore the shared travel projection: {metrics}')
+        if metrics["selectedDirection"] != "2" or metrics["runtimeIntendedDirection"] != 2:
+            raise SystemExit(f'browser-stale direction overrode authoritative persisted course: {metrics}')
+        stored = json.loads(metrics["storedTravelPreferences"] or "{}")
+        if "direction" in stored or stored.get("pace") != "fast":
+            raise SystemExit(f'browser travel storage is not pace-only after authoritative rebind: {metrics}')
+    if state == "course-change-reload":
+        if metrics["selectedDirection"] != "5" or metrics["runtimeIntendedDirection"] != 5:
+            raise SystemExit(f'changed course did not survive a fresh-client render: {metrics}')
+        if metrics["runtimeActualDirection"] != 1:
+            raise SystemExit(f'course selection overwrote previously resolved actual direction: {metrics}')
+        if metrics["currentTravelCourseText"] != "lower-right edge":
+            raise SystemExit(f'Current travel disagrees with changed authoritative course: {metrics}')
+        if "Intended lower-right edge" not in (metrics["navigationStatText"] or ""):
+            raise SystemExit(f'Navigation summary disagrees with changed authoritative course: {metrics}')
+        if "Intended course: lower-right edge" not in (metrics["focusedNavigationText"] or ""):
+            raise SystemExit(f'focused Navigation disagrees with changed authoritative course: {metrics}')
+        if metrics["drawerCount"] != 1 or metrics["focusedTitle"] != "Navigation":
+            raise SystemExit(f'changed-course reload did not reach focused Navigation: {metrics}')
+        stored = json.loads(metrics["storedTravelPreferences"] or "{}")
+        if "direction" in stored:
+            raise SystemExit(f'fresh client retained browser direction authority: {metrics}')
+    if state == "course-clear-reload":
+        if metrics["selectedEdges"] != 0 or metrics["runtimeIntendedDirection"] is not None:
+            raise SystemExit(f'explicitly cleared course resurrected after fresh-client render: {metrics}')
+        if metrics["currentTravelCourseText"] != "No course selected":
+            raise SystemExit(f'Current travel did not retain explicit no-course state: {metrics}')
+        if metrics["primaryAction"] != "Choose course":
+            raise SystemExit(f'cleared course did not return workflow to course selection: {metrics}')
+        stored = json.loads(metrics["storedTravelPreferences"] or "{}")
+        if "direction" in stored:
+            raise SystemExit(f'course clear survived only in browser direction state: {metrics}')
     if state == "map-nonadjacent" and not metrics["teleportContextVisible"]:
         raise SystemExit(f'non-adjacent inspection did not expose deliberate teleport authority: {metrics}')
     if state == "movement-input-pending" and not metrics["movementUnitVisible"]:
