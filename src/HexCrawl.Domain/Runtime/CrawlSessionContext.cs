@@ -1,3 +1,5 @@
+using System.Buffers.Binary;
+using System.Security.Cryptography;
 using HexCrawl.Domain.Spatial;
 
 namespace HexCrawl.Domain.Runtime;
@@ -54,6 +56,19 @@ public sealed record NonSpatialCrawlSessionContext(string Name) : CrawlSessionCo
         {
             throw new InvalidOperationException("Non-spatial context name is required.");
         }
+    }
+}
+
+public static class EncounterOccurrenceIdentity
+{
+    public static Guid Create(Guid runtimeId, long triggerSequence)
+    {
+        Span<byte> input = stackalloc byte[24];
+        runtimeId.TryWriteBytes(input[..16]);
+        BinaryPrimitives.WriteInt64LittleEndian(input[16..], triggerSequence);
+        Span<byte> hash = stackalloc byte[32];
+        SHA256.HashData(input, hash);
+        return new Guid(hash[..16]);
     }
 }
 

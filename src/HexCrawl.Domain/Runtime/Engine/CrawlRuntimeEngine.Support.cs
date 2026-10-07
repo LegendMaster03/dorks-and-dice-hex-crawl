@@ -50,6 +50,7 @@ public sealed partial class CrawlRuntimeEngine
         }
 
         public List<CrawlRuntimeEvent> NewEvents { get; } = [];
+        public long NextSequence => _nextSequence;
 
         public CrawlRuntimeEvent Add(
             int watchNumber,

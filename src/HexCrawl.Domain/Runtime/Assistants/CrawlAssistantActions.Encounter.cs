@@ -34,7 +34,9 @@ public static partial class CrawlAssistantActions
         PendingEncounterOccurrence? pendingEncounter = null;
         if (input.Outcome != EncounterOutcomeKind.None)
         {
-            var occurrenceId = Guid.NewGuid();
+            var occurrenceId = EncounterOccurrenceIdentity.Create(
+                state.Id,
+                NextSequence(state, events));
             var triggered = Event(
                 state,
                 events,

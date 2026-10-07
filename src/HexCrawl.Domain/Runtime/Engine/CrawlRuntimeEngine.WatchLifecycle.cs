@@ -132,7 +132,7 @@ public sealed partial class CrawlRuntimeEngine
         EventCollector events)
     {
         var encounter = active.Encounter;
-        var occurrenceId = Guid.NewGuid();
+        var occurrenceId = EncounterOccurrenceIdentity.Create(state.Id, events.NextSequence);
         var triggered = events.Add(
             active.WatchNumber,
             CrawlRuntimeEventKind.EncounterTriggered,
