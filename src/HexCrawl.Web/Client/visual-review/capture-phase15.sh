@@ -199,8 +199,11 @@ else:
                 raise SystemExit(f'resolved journey consequence remained pending in the summary: {metrics}')
             if not metrics["journeyStageStateVisible"]:
                 raise SystemExit(f'stage-local failures/complications were lost after consequence resolution: {metrics}')
-        if state == "journey-normal" and not metrics["journeyNoPendingConsequencesVisible"]:
-            raise SystemExit(f'clean journey does not report an authoritative no-pending state: {metrics}')
+        if state == "journey-normal":
+            if not metrics["journeyNoPendingConsequencesVisible"]:
+                raise SystemExit(f'clean journey does not report an authoritative no-pending state: {metrics}')
+            if metrics["journeyStageCount"] != 3:
+                raise SystemExit(f'multi-stage journey sequence is incomplete: {metrics}')
         if state == "journey-pending" and metrics["journeyPendingRawInternalsVisible"]:
             raise SystemExit(f'normal pending journey presentation exposes raw event internals: {metrics}')
     elif abstract_spatial:

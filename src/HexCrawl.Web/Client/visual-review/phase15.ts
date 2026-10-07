@@ -1397,8 +1397,8 @@ switch (stateName) {
         journey = journeyFixture();
         effects = effectsFixture(false);
         effects.pendingConsequences = [pendingJourneyConsequence("pending-journey-consequence")];
-        journey.activeProcesses[0].stageStates[0].failures = 1;
-        journey.activeProcesses[0].stageStates[0].complications = 2;
+        journey.activeProcesses[0].stageStates[1].failures = 1;
+        journey.activeProcesses[0].stageStates[1].complications = 2;
         break;
     case "journey-consequence-multiple":
         runtime = nonSpatialRuntimeFixture();
@@ -1430,8 +1430,8 @@ switch (stateName) {
             detail: "Journey consequence resolved.",
             resolutionProvenance: null
         }];
-        journey.activeProcesses[0].stageStates[0].failures = 1;
-        journey.activeProcesses[0].stageStates[0].complications = 2;
+        journey.activeProcesses[0].stageStates[1].failures = 1;
+        journey.activeProcesses[0].stageStates[1].complications = 2;
         break;
     default:
         throw new Error("Unknown visual state: " + stateName);
@@ -1698,6 +1698,7 @@ const metrics = {
     focusedTitle: root.querySelector("[data-phase15-drawer] h2")?.textContent?.trim() || null,
     focusedEdge: document.activeElement?.matches?.("[data-adjacency-edge]") ?? false,
     journeyVisible: rootText.includes("Current stage") && rootText.includes("Progress") && rootText.includes("Roles") && rootText.includes("Pending"),
+    journeyStageCount: root.querySelectorAll(".hc-stage-step").length,
     movementStatusVisible: Array.from(root.querySelectorAll(".hc-stat-action-label")).some(label => label.textContent?.trim() === "Movement"),
     movementLedgerVisible: isVisible(root.querySelector("[data-movement-composition-ledger]")),
     movementContributorRows: root.querySelectorAll(".hc-movement-ledger-table tbody tr").length,
