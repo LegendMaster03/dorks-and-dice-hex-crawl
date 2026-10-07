@@ -173,7 +173,7 @@ export class ExpeditionEnvironmentPanel {
         const section = document.createElement("section");
         const heading = document.createElement("h4");
         heading.textContent = "Static world environment";
-        section.append(heading, hint("Author persistent world truth explicitly at world, current-hex, or existing spatial-feature scope."));
+        section.append(heading, hint("Persistent world truth is normally authored in the World Editor. This at-table path remains available for deliberate world corrections at world, current-hex, or existing spatial-feature scope."));
 
         const facts = this.worldEnvironment!.annotations.flatMap(annotation =>
             annotation.facts.map(fact => ({ annotation, fact })));
