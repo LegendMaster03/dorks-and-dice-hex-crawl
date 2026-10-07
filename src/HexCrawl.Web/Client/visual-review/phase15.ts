@@ -1022,8 +1022,12 @@ switch (stateName) {
         runtime.expedition.actualDirection = 2;
         break;
     case "course-change-reload":
+        runtime.expedition.currentHex = { q: 1, r: -1 };
         runtime.expedition.intendedDirection = 1;
         runtime.expedition.actualDirection = 1;
+        runtime.expedition.hexProgress = distance(2);
+        runtime.expedition.exitRequirement = distance(6);
+        runtime.expedition.completedWatches = 2;
         runtime.procedure.runtime.usesNavigationChecks = true;
         break;
     case "course-clear-reload":
