@@ -572,14 +572,24 @@ export async function renderExpedition(
         return parts.length > 0 ? parts.join(" · ") : "No unresolved consequence";
     };
 
-    const selectTravelIntent = (direction: number, target: HexCoordinate): void => {
+    const toggleTravelIntent = (direction: number, target: HexCoordinate): void => {
         if (!runtime.expedition.isSpatial) return;
-        preferences.direction = direction;
-        selectedHex = target;
-        selectedHexTracksTravelIntent = true;
+
+        if (preferences.direction === direction) {
+            preferences.direction = null;
+            if (selectedHexTracksTravelIntent) {
+                selectedHex = null;
+                selectedHexTracksTravelIntent = false;
+            }
+        } else {
+            preferences.direction = direction;
+            selectedHex = target;
+            selectedHexTracksTravelIntent = true;
+        }
+
         saveTravelPreferences(runtime.id, preferences);
         if (map) {
-            map.renderer.selectedHex = target;
+            map.renderer.selectedHex = selectedHex;
             map.requestRender();
         }
         syncTravelIntentControls();
@@ -645,7 +655,7 @@ export async function renderExpedition(
         for (const edge of adjacency.edges) {
             const vector = adjacencyFeedbackVector(adjacency.center, edge.midpoint);
             const angleDegrees = Math.atan2(vector.y, vector.x) * 180 / Math.PI;
-            const control = button("", () => selectTravelIntent(edge.directionValue, edge.targetCell));
+            const control = button("", () => toggleTravelIntent(edge.directionValue, edge.targetCell));
             const identity = edgeCourseLabel(edge);
             const targetIdentity = `cell ${edge.targetCell.q}, ${edge.targetCell.r}`;
             control.className = "hc-adjacency-edge";

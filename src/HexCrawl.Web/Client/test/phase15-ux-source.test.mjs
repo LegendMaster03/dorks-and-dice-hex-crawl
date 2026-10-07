@@ -446,6 +446,11 @@ test("navigator controls use midpoint-anchored white SVG arrows with consistent 
     assert.match(view, /edge\.midpoint\.x \+ vector\.x \* 0\.045/);
     assert.match(view, /hc-adjacency-arrow-shape/);
     assert.match(view, /M2 15 H38 V4 L62 20 L38 36 V25 H2 Z/);
+    assert.match(view, /const toggleTravelIntent =/);
+    assert.match(view, /if \(preferences\.direction === direction\)/);
+    assert.match(view, /preferences\.direction = null/);
+    assert.match(view, /selectedHexTracksTravelIntent = false/);
+    assert.match(view, /button\("", \(\) => toggleTravelIntent\(edge\.directionValue, edge\.targetCell\)\)/);
     assert.doesNotMatch(view, /data-adjacency-edge-mark/);
     assert.doesNotMatch(view, /edgeMarks/);
     assert.doesNotMatch(view, /hc-adjacency-caption/);
