@@ -196,6 +196,45 @@ public sealed class RulesCoreTravelEnvironmentProviderTests
     }
 
     [Fact]
+    public async Task TimeoutBecomesProviderFailedStatusWithoutEscapingTransportException()
+    {
+        var provider = await CreateProviderAsync(new RecordingHandler((_, _) =>
+            throw new TaskCanceledException("simulated timeout")));
+
+        var result = await provider.GetCatalogAsync(null);
+
+        Assert.Equal(TravelEnvironmentProviderAvailabilityStates.Failed, result.Availability);
+        Assert.Null(result.Catalog);
+        Assert.Contains("timed out", result.Detail!, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task MalformedResponseBecomesProviderFailedStatus()
+    {
+        var provider = await CreateProviderAsync(new RecordingHandler((_, _) =>
+            Json(HttpStatusCode.OK, "{not-valid-json")));
+
+        var result = await provider.GetCatalogAsync(null);
+
+        Assert.Equal(TravelEnvironmentProviderAvailabilityStates.Failed, result.Availability);
+        Assert.Null(result.Catalog);
+        Assert.Contains("invalid", result.Detail!, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task EmptyResponseBecomesProviderFailedStatus()
+    {
+        var provider = await CreateProviderAsync(new RecordingHandler((_, _) =>
+            Json(HttpStatusCode.OK, "null")));
+
+        var result = await provider.GetCatalogAsync(null);
+
+        Assert.Equal(TravelEnvironmentProviderAvailabilityStates.Failed, result.Availability);
+        Assert.Null(result.Catalog);
+        Assert.Contains("empty", result.Detail!, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task MissingToolHostConfigurationReportsProviderUnavailableWithoutHttpCall()
     {
         var handler = new RecordingHandler((_, _) =>
