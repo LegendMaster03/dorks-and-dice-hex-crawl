@@ -297,7 +297,8 @@ export async function renderExpedition(
                 openNavigationWorkspace,
                 runtime.expedition.isSpatial && runtime.expedition.isLost ? "warning" : "neutral"));
         }
-        if (presentation.capabilities.resources || presentation.capabilities.survival || presentation.capabilities.effects) {
+        if (runtime.expedition.isSpatial
+            && (presentation.capabilities.resources || presentation.capabilities.survival || presentation.capabilities.effects)) {
             const hasSurvivalOrResources = presentation.capabilities.resources || presentation.capabilities.survival;
             stats.append(statAction(
                 presentation.capabilities.effects
@@ -308,7 +309,7 @@ export async function renderExpedition(
                 openSurvivalWorkspace,
                 survivalAttention(survival) ? "warning" : "neutral"));
         }
-        if (presentation.capabilities.journey) {
+        if (runtime.expedition.isSpatial && presentation.capabilities.journey) {
             stats.append(statAction(
                 "Journey",
                 presentation.journeyLabel ?? "No active journey",
@@ -466,24 +467,16 @@ export async function renderExpedition(
                     journeyFact("Consequences / state", journeyStateSummary(stageState, survival)));
                 main.append(facts);
 
-                if (presentation.action.kind === "journey") {
-                    const copy = currentActionCopy(presentation.action);
-                    const control = button(copy.label, openJourneyWorkspace);
-                    control.className = "hc-primary-action";
-                    main.append(control);
-                } else {
+                if (presentation.action.kind !== "journey") {
                     main.append(button("Open journey workspace", openJourneyWorkspace));
                 }
             } else {
                 main.append(
                     textElement("p", "No journey process is currently active.", "hc-muted"),
                     textElement("p", journeyPendingEventSummary(journey), "hc-muted"));
-                const copy = currentActionCopy(presentation.action);
-                const control = button(
-                    presentation.action.kind === "journey" ? copy.label : "Start or manage journey",
-                    openJourneyWorkspace);
-                control.className = "hc-primary-action";
-                main.append(control);
+                if (presentation.action.kind !== "journey") {
+                    main.append(button("Start or manage journey", openJourneyWorkspace));
+                }
             }
         } else if (canUseFocusedNonSpatialWatch(runtime)) {
             main.append(
@@ -1655,18 +1648,78 @@ export async function renderExpedition(
 
     const openHistory = (): void => {
         openDrawer("Expedition history", body => {
-            if (runtime.history.length === 0) {
+            const hasRuntime = runtime.history.length > 0;
+            const hasJourney = (journey?.history.length ?? 0) > 0;
+            const hasEffects = (effects?.history.length ?? 0) > 0;
+            if (!hasRuntime && !hasJourney && !hasEffects) {
                 body.append(textElement("p", "No expedition history has been recorded yet."));
                 return;
             }
-            const list = document.createElement("ol");
-            list.className = "hc-history";
-            for (const event of [...runtime.history].reverse().slice(0, 80)) {
-                const item = document.createElement("li");
-                item.textContent = `#${event.sequence} · ${formatHours(event.expeditionElapsedHours)} · ${event.message}`;
-                list.append(item);
+
+            if (hasJourney && journey) {
+                body.append(textElement("h3", "Journey"));
+                const list = document.createElement("ol");
+                list.className = "hc-history";
+                for (const record of journey.history.slice(-80).reverse()) {
+                    const item = document.createElement("li");
+                    item.textContent = `${humanize(record.kind)} — ${record.detail}`;
+                    list.append(item);
+                }
+                body.append(list);
             }
-            body.append(list);
+
+            if (hasRuntime) {
+                body.append(textElement("h3", "Travel / runtime"));
+                const list = document.createElement("ol");
+                list.className = "hc-history";
+                for (const event of [...runtime.history].reverse().slice(0, 80)) {
+                    const item = document.createElement("li");
+                    item.textContent = `${formatHours(event.expeditionElapsedHours)} · ${event.message}`;
+                    list.append(item);
+                }
+                body.append(list);
+            }
+
+            if (hasEffects && effects) {
+                body.append(textElement("h3", "Effects / consequences"));
+                const list = document.createElement("ol");
+                list.className = "hc-history";
+                for (const record of effects.history.slice(-80).reverse()) {
+                    const item = document.createElement("li");
+                    const before = record.beforeLevel !== null ? ` level ${record.beforeLevel}` : "";
+                    const after = record.afterLevel !== null
+                        ? ` → ${record.afterLevel}`
+                        : record.beforeLevel !== null ? " → cleared" : "";
+                    item.textContent = `${humanize(record.effectKey)} — ${humanize(record.operation)}${before}${after}`;
+                    list.append(item);
+                }
+                body.append(list);
+            }
+
+            const advanced = disclosure("Advanced history details");
+            if (journey?.history.length) {
+                for (const record of journey.history.slice(-40).reverse()) {
+                    advanced.append(textElement(
+                        "p",
+                        `Journey ${record.kind} · watch ${record.completedWatches} · source ${record.provenance.sourceKey} · record ${record.id}`,
+                        "hc-muted"));
+                }
+            }
+            for (const event of runtime.history.slice(-40).reverse()) {
+                advanced.append(textElement(
+                    "p",
+                    `Runtime #${event.sequence} · watch ${event.watchNumber} · ${event.kind}`,
+                    "hc-muted"));
+            }
+            if (effects?.history.length) {
+                for (const record of effects.history.slice(-40).reverse()) {
+                    advanced.append(textElement(
+                        "p",
+                        `Effect ${record.effectId} · ${record.operation} · audit ${record.id}`,
+                        "hc-muted"));
+                }
+            }
+            body.append(advanced);
         });
     };
 
