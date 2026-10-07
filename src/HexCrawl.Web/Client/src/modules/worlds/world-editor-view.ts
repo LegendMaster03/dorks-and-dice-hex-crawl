@@ -424,9 +424,12 @@ export async function renderWorldEditor(
                 remove.type = "button";
                 remove.textContent = "Delete";
                 remove.className = "hc-danger-action";
-                remove.addEventListener("click", () => void run(null, async () => {
-                    applyWorld(await api.deleteLocation(world.id, location.id, world.version));
-                }));
+                remove.addEventListener("click", () => {
+                    if (!confirmDeletion(`Delete location “${location.name}”? This can not be undone.`)) return;
+                    void run(null, async () => {
+                        applyWorld(await api.deleteLocation(world.id, location.id, world.version));
+                    });
+                });
                 row.append(label, edit, remove);
                 locationHost.append(row);
             }
@@ -466,12 +469,15 @@ export async function renderWorldEditor(
                 remove.type = "button";
                 remove.textContent = "Delete";
                 remove.className = "hc-danger-action";
-                remove.addEventListener("click", () => void run(null, async () => {
-                    if (featureHasEnvironmentRules(worldEnvironment, feature.id)) {
-                        throw new Error("This feature has environment rules attached. Remove or reassign them before deleting the feature.");
-                    }
-                    applyWorld(await api.deleteFeature(world.id, feature.id, world.version));
-                }));
+                remove.addEventListener("click", () => {
+                    if (!confirmDeletion(`Delete feature “${feature.name}”? This can not be undone.`)) return;
+                    void run(null, async () => {
+                        if (featureHasEnvironmentRules(worldEnvironment, feature.id)) {
+                            throw new Error("This feature has environment rules attached. Remove or reassign them before deleting the feature.");
+                        }
+                        applyWorld(await api.deleteFeature(world.id, feature.id, world.version));
+                    });
+                });
                 row.append(label, edit, mechanics, remove);
                 featureHost.append(row);
             }
@@ -866,11 +872,17 @@ export async function renderWorldEditor(
         });
     });
 
-    required<HTMLButtonElement>(root, "[data-delete-location]").addEventListener("click", () => void run(null, async () => {
-        if (!selectedLocation) throw new Error("Select a location to delete.");
-        applyWorld(await api.deleteLocation(world.id, selectedLocation.id, world.version));
-        newLocation();
-    }));
+    required<HTMLButtonElement>(root, "[data-delete-location]").addEventListener("click", () => {
+        if (!selectedLocation) {
+            void run(null, async () => { throw new Error("Select a location to delete."); });
+            return;
+        }
+        if (!confirmDeletion(`Delete location “${selectedLocation.name}”? This can not be undone.`)) return;
+        void run(null, async () => {
+            applyWorld(await api.deleteLocation(world.id, selectedLocation!.id, world.version));
+            newLocation();
+        });
+    });
 
     featureForm.addEventListener("submit", event => {
         event.preventDefault();
@@ -892,14 +904,20 @@ export async function renderWorldEditor(
         });
     });
 
-    required<HTMLButtonElement>(root, "[data-delete-feature]").addEventListener("click", () => void run(null, async () => {
-        if (!selectedFeature) throw new Error("Select a feature to delete.");
-        if (featureHasEnvironmentRules(worldEnvironment, selectedFeature.id)) {
-            throw new Error("This feature has environment rules attached. Remove or reassign them before deleting the feature.");
+    required<HTMLButtonElement>(root, "[data-delete-feature]").addEventListener("click", () => {
+        if (!selectedFeature) {
+            void run(null, async () => { throw new Error("Select a feature to delete."); });
+            return;
         }
-        applyWorld(await api.deleteFeature(world.id, selectedFeature.id, world.version));
-        newFeature();
-    }));
+        if (!confirmDeletion(`Delete feature “${selectedFeature.name}”? This can not be undone.`)) return;
+        void run(null, async () => {
+            if (featureHasEnvironmentRules(worldEnvironment, selectedFeature!.id)) {
+                throw new Error("This feature has environment rules attached. Remove or reassign them before deleting the feature.");
+            }
+            applyWorld(await api.deleteFeature(world.id, selectedFeature!.id, world.version));
+            newFeature();
+        });
+    });
 
     const procedure = select(expeditionForm, "procedure");
     for (const preset of procedurePresets) {
@@ -1018,6 +1036,10 @@ function technicalLine(text: string): HTMLElement {
     line.className = "hc-hint";
     line.textContent = text;
     return line;
+}
+
+function confirmDeletion(message: string): boolean {
+    return window.confirm(message);
 }
 
 function selectedCellStorageKey(worldId: string): string {
