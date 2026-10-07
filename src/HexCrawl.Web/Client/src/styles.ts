@@ -26,7 +26,7 @@ export function ensureStyles(): void {
             --hc-danger-hover: #8f2b36;
             --hc-danger-text: #8f2632;
             --hc-danger-text-hover: #711d26;
-            --hc-focus: #6557d2;
+            --hc-focus: var(--hc-primary);
             --hc-selected: #9b641c;
             --hc-success: #2f7d46;
             --hc-warning: #946410;
@@ -73,7 +73,7 @@ export function ensureStyles(): void {
             --hc-danger-hover: #cf5a63;
             --hc-danger-text: #f0a6ad;
             --hc-danger-text-hover: #ffd2d6;
-            --hc-focus: #a99df5;
+            --hc-focus: var(--hc-primary);
             --hc-selected: #d69a45;
             --hc-success: #65b47a;
             --hc-warning: #d8a64f;
@@ -104,7 +104,7 @@ export function ensureStyles(): void {
                 --hc-border: #303449;
                 --hc-input-bg: #11131d;
                 --hc-input-text: #f3f4f6;
-                --hc-primary: #6d61dc;
+                --hc-primary: var(--bs-primary, #6d61dc);
                 --hc-primary-hover: color-mix(in srgb, var(--hc-primary) 82%, white);
                 --hc-secondary: #2b3042;
                 --hc-secondary-hover: #373d52;
@@ -114,7 +114,7 @@ export function ensureStyles(): void {
                 --hc-danger-hover: #cf5a63;
                 --hc-danger-text: #f0a6ad;
                 --hc-danger-text-hover: #ffd2d6;
-                --hc-focus: #a99df5;
+                --hc-focus: var(--hc-primary);
                 --hc-selected: #d69a45;
                 --hc-success: #65b47a;
                 --hc-warning: #d8a64f;

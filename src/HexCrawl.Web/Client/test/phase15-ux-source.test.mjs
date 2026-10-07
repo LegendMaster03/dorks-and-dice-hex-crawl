@@ -168,6 +168,14 @@ test("Phase 15 procedure surfaces inherit shared theme tokens", () => {
     assert.match(styles, /outline:3px solid var\(--hc-focus\)/);
 });
 
+test("shared focus color follows the host site primary theme token", () => {
+    const styles = fs.readFileSync(path.join(sourceDir, "styles.ts"), "utf8");
+
+    assert.equal((styles.match(/--hc-focus: var\(--hc-primary\);/g) ?? []).length, 3);
+    assert.equal((styles.match(/--hc-primary: var\(--bs-primary, #6d61dc\);/g) ?? []).length, 2);
+    assert.doesNotMatch(styles, /--hc-focus: #(?:6557d2|a99df5)/);
+});
+
 test("Compact procedure edits keep their focused workspace across draft recomposition", () => {
     const workspace = fs.readFileSync(
         path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"),
