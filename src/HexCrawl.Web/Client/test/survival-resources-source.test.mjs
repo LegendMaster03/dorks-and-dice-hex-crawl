@@ -6,6 +6,10 @@ import test from "node:test";
 const source = fs.readFileSync(
     path.resolve("src/modules/expeditions/survival-resources-panel.ts"),
     "utf8");
+const effects = fs.readFileSync(
+    path.resolve("src/modules/expeditions/effects-panel.ts"),
+    "utf8");
+const effectsApi = fs.readFileSync(path.resolve("src/effect-api.ts"), "utf8");
 
 test("survival resource forms expose the generic resource operation contract", () => {
     for (const operation of ["AdjustQuantity", "SetQuantity", "SetState", "SetSupplyDie", "Deplete"]) {
@@ -40,4 +44,19 @@ test("focused forced-travel presentation keeps tabletop fields primary and techn
     assert.ok(effectKey >= 0);
     assert.ok(advancedStart >= 0);
     assert.ok(appendAdvanced > advancedStart);
+});
+
+
+test("combined resources and effects UI exposes authoritative active effects without typed IDs", () => {
+    assert.match(effectsApi, /\/api\/expeditions\/.*\/effects/);
+    assert.match(effects, /state\.activeEffects/);
+    assert.match(effects, /Active effects/);
+    assert.match(effects, /Pending consequences/);
+    assert.match(effects, /Applied \/ resolved consequences/);
+    assert.match(effects, /Reduce 1 level/);
+    assert.match(effects, /Clear effect/);
+    assert.match(effects, /Record resolution/);
+    assert.doesNotMatch(effects, /Persistent effect ID/);
+    assert.match(effects, /effect\.id/);
+    assert.match(effects, /Technical details/);
 });

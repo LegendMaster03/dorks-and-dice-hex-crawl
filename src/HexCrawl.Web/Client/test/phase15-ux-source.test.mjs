@@ -1043,3 +1043,15 @@ test("secondary travel course changes synchronize navigator and map target", () 
     assert.match(capture, /map\.renderer\.selectedHex = edge\.targetCell/);
     assert.match(capture, /syncTravelIntentControls\(\)/);
 });
+
+
+test("expedition drawers restore opener focus and rerenders provide a deliberate fallback", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+    assert.match(view, /const returnFocus = document\.activeElement instanceof HTMLElement/);
+    assert.match(view, /openWorkspaceDrawer\(root, title/);
+    assert.match(view, /\[data-current-action-button\]/);
+    assert.match(view, /restoreFocusAfterRender/);
+    assert.match(view, /queueMicrotask\(\(\) => \{/);
+});

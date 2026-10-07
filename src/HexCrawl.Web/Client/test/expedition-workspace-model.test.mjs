@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { expeditionWorkspaceAction } from "../.test-dist/modules/expeditions/expedition-workspace-model.js";
+import { expeditionWorkspaceAction, spatialPositionPresentation } from "../.test-dist/modules/expeditions/expedition-workspace-model.js";
 
 function runtime() {
     return {
@@ -80,4 +80,41 @@ test("active journey stays primary instead of falling through to generic interva
     assert.equal(action.label, "Continue journey");
     assert.equal(action.urgent, false);
     assert.match(action.detail, /Crossing the Shattered Marches/);
+});
+
+
+test("abstract spatial position exposes authoritative cell and partial progress with units", () => {
+    const state = {
+        context: { kind: "AbstractHex" },
+        procedure: { runtime: { tracksIntraHexProgress: true } },
+        expedition: {
+            isSpatial: true,
+            currentHex: { q: 0, r: 0 },
+            hexProgress: { value: 1.5, unit: { symbol: "mi" } },
+            exitRequirement: { value: 6, unit: { symbol: "mi" } }
+        }
+    };
+
+    assert.deepEqual(spatialPositionPresentation(state), {
+        value: "Cell 0, 0",
+        detail: "1.5 / 6 mi · 25% through current cell"
+    });
+});
+
+test("spatial procedures without partial progress do not fabricate a progress value", () => {
+    const state = {
+        context: { kind: "WorldBound" },
+        procedure: { runtime: { tracksIntraHexProgress: false } },
+        expedition: {
+            isSpatial: true,
+            currentHex: { q: 4, r: -2 },
+            hexProgress: { value: 0, unit: { symbol: "km" } },
+            exitRequirement: { value: 8, unit: { symbol: "km" } }
+        }
+    };
+
+    assert.deepEqual(spatialPositionPresentation(state), {
+        value: "Cell 4, -2",
+        detail: "Mapped spatial position"
+    });
 });

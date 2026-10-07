@@ -33,6 +33,11 @@ export type ExpeditionWorkspaceCapabilities = {
     interval: boolean;
 };
 
+export type SpatialPositionPresentation = {
+    value: string;
+    detail: string | null;
+};
+
 export type ExpeditionWorkspacePresentation = {
     action: ExpeditionWorkspaceAction;
     capabilities: ExpeditionWorkspaceCapabilities;
@@ -58,6 +63,34 @@ export function expeditionWorkspacePresentation(
             : null,
         resourceLabel: resourceLabel(survival),
         journeyLabel: journeyLabel(journey)
+    };
+}
+
+export function spatialPositionPresentation(runtime: ExpeditionDetail): SpatialPositionPresentation | null {
+    if (!runtime.expedition.isSpatial) return null;
+    const state = runtime.expedition;
+    const value = `Cell ${state.currentHex.q}, ${state.currentHex.r}`;
+    if (runtime.procedure.runtime?.tracksIntraHexProgress !== true) {
+        return {
+            value,
+            detail: runtime.context.kind === "AbstractHex"
+                ? "Abstract spatial position"
+                : "Mapped spatial position"
+        };
+    }
+
+    const progress = state.hexProgress;
+    const requirement = state.exitRequirement;
+    if (requirement && requirement.unit.symbol === progress.unit.symbol && requirement.value > 0) {
+        const percent = Math.max(0, Math.min(100, progress.value / requirement.value * 100));
+        return {
+            value,
+            detail: `${formatNumber(progress.value)} / ${formatNumber(requirement.value)} ${progress.unit.symbol} · ${formatNumber(percent)}% through current cell`
+        };
+    }
+    return {
+        value,
+        detail: `${formatNumber(progress.value)} ${progress.unit.symbol} through current cell`
     };
 }
 
