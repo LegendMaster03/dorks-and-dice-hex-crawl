@@ -4,6 +4,7 @@ import { ensureStyles } from "../src/styles";
 import { renderExpedition } from "../src/modules/expeditions/expedition-view";
 import { renderToolHome } from "../src/modules/home/tool-home-view";
 import { renderProcedureAuthoringWorkspace } from "../src/modules/procedures/procedure-authoring-view";
+import { renderProcedureReference } from "../src/modules/procedures/procedure-reference-view";
 import { renderWorldEditor } from "../src/modules/worlds/world-editor-view";
 
 const params = new URLSearchParams(window.location.search);
@@ -26,26 +27,83 @@ const responseJson = value => new Response(JSON.stringify(value), {
     headers: { "Content-Type": "application/json" }
 });
 
+const richProcedureParameters = {
+    "time.interval": { durationTicks: "144000000000" },
+    "party.activities": { assignmentScope: "participant", roleKeys: "navigator;scout", activityBudgetModel: "one-per-watch", activityKeys: "navigate;scout;forage" },
+    "movement.budget": { budgetModel: "watch-distance", baseBudget: "6", budgetUnit: "mi", limitingScope: "party", travelModeKeys: "normal;fast;slow" },
+    "movement.terrain": { adjustmentModel: "multiplier", terrainAdjustments: "clear=1;rough=0.75;difficult=0.5", routeAdjustmentModel: "route-improves-cost", weatherAdjustmentModel: "symbolic" },
+    "movement.resolution": { travelResolution: "continuous-distance", actualDistanceResolution: "fixed" },
+    "movement.hex-progress": { tracksIntraHexProgress: "true", startingExitProgressFactor: "0", nearExitProgressFactor: "0.5", farExitProgressFactor: "1", backExitProgressFactor: "1", directionChangesCostProgress: "true", directionChangeProgressCostFactor: "0.5", supportsDeliberateDoubleBack: "true" },
+    "navigation.check": { usesNavigationChecks: "true", usesPersistentVeer: "true" },
+    "navigation.outcome": { checkTriggerModel: "per-watch", failureStateModel: "lost", directionalErrorModel: "persistent-veer", recognitionModel: "procedure-check", reorientationModel: "resolved-check" },
+    "encounters.cadence": { cadence: "per-watch" },
+    "encounters.schedule": { scheduleModel: "travel-and-camp", travelChecksPerInterval: "1", campCheck: "true", terrainProbabilityModel: "table" },
+    "survival.resources": { resourceKinds: "food;water;supplies", inventoryModel: "counted", consumptionModel: "resolved-quantity", consumptionInterval: "travel-day" },
+    "exploration.foraging": { timeCost: "1", timeUnit: "watch", movementTradeoff: "half-movement", resolutionModel: "skill-check" },
+    "survival.camping": { timeCost: "1", timeUnit: "watch", resolutionModel: "fortify-camp", watchModel: "assigned" },
+    "time.forced-travel": { normalTravelLimit: "8", limitUnit: "hours", checkModel: "escalating-constitution-save", failureConsequence: "fatigue" },
+    "survival.exposure": { dimensions: "temperature;precipitation", evaluationInterval: "per-watch", evaluationModel: "procedure-check", targetScope: "party", consequenceModel: "fatigue" },
+    "effects.expedition": { effectKinds: "fatigue;exhaustion", scope: "participant", accumulationModel: "levels", recoveryModel: "rest" },
+    "journey.process": { stageModel: "ordered", stageKeys: "approach;crossing;arrival", progressModel: "accumulated", progressKind: "numeric", progressUnit: "legs", progressFloor: "0", progressCeiling: "6", allowNegativeProgress: "false", roleDriven: "true", roleAssignmentModel: "current-at-resolution", stageTransitionModel: "sequential", completionModel: "stage-completion", intervalIntegrationModel: "none" },
+    "journey.events": { triggerModel: "explicit", triggerSources: "process-progress;stage-transition", linkMode: "process-linked", targetingModel: "role-or-party", terrainInfluence: "snapshot", consequenceModel: "expedition-consequence", requiresResolvedTrigger: "false", blocksRelevantTravelWhileResolutionRequired: "true" },
+    "procedure.helpers": { "travel.enabled": "true", "travel.diceCount": "2", "travel.dieSides": "6", "travel.modifier": "3", "travel.distanceFactor": "0.1", "navigation.enabled": "true", "navigation.diceCount": "1", "navigation.dieSides": "20", "navigation.modifier": "0", "encounter.enabled": "true", "encounter.diceCount": "1", "encounter.dieSides": "6", "encounter.modifier": "0", "encounter.wanderingResults": "1;2", "encounter.keyedLocationResults": "6", "encounter.timingSlots": "4" }
+};
+
+function visualProcedureGroup(moduleKey) {
+    if (moduleKey === "procedure.helpers") return "Automation";
+    if (moduleKey.startsWith("journey.")) return "Journey & events";
+    if (["survival.resources", "exploration.foraging", "survival.camping", "time.forced-travel", "survival.exposure", "effects.expedition"].includes(moduleKey)) return "Survival & resources";
+    return "Travel flow";
+}
+
+function visualTitle(value) {
+    return value.replace(/[._-]+/g, " ").replace(/\b\w/g, match => match.toUpperCase());
+}
+
+function composerModule(moduleKey, parameters) {
+    const parameterSchema = Object.fromEntries(Object.keys(parameters).map(key => [key, {
+        type: key === "durationTicks" ? "duration" : "string",
+        required: false,
+        description: null,
+        defaultValue: null
+    }]));
+    return {
+        moduleKey,
+        category: visualProcedureGroup(moduleKey),
+        displayName: visualTitle(moduleKey),
+        purpose: "Representative visual-review configuration for " + visualTitle(moduleKey) + ".",
+        executionStage: visualProcedureGroup(moduleKey),
+        reads: [],
+        produces: [moduleKey],
+        requiredDependencies: [],
+        optionalDependencies: [],
+        presentationMetadata: {},
+        mechanic: {
+            key: moduleKey + ".visual",
+            displayName: visualTitle(moduleKey),
+            description: "Representative pinned behavior for rendered readability review.",
+            version: 1,
+            executionHandler: "visual-review",
+            automationLevel: "Assisted",
+            executionSupport: "Native",
+            inputs: [],
+            outputs: [moduleKey],
+            parameterSchema,
+            compatibilityTags: []
+        },
+        alternatives: [],
+        configurationSchema: parameterSchema,
+        parameters,
+        requiredInputs: [],
+        outputs: [moduleKey],
+        dependencyIssues: [],
+        isModified: false,
+        modificationCount: 0,
+        validationIssues: []
+    };
+}
+
 function composerFixture() {
-    const duration = {
-        type: "duration",
-        required: true,
-        description: "Length of the repeating expedition interval.",
-        defaultValue: "144000000000"
-    };
-    const mechanic = {
-        key: "time.interval.standard",
-        displayName: "Repeating expedition interval",
-        description: "Advance expedition procedure state in a repeating interval.",
-        version: 1,
-        executionHandler: "visual-review",
-        automationLevel: "Assisted",
-        executionSupport: "Native",
-        inputs: [],
-        outputs: ["time.interval"],
-        parameterSchema: { durationTicks: duration },
-        compatibilityTags: []
-    };
     return {
         procedureId: "visual-procedure",
         revision: 3,
@@ -55,31 +113,64 @@ function composerFixture() {
         modificationCount: 0,
         modifiedModuleCount: 0,
         origin: null,
-        modules: [{
-            moduleKey: "time.interval",
-            category: "Time",
-            displayName: "Travel period",
-            purpose: "Set the repeating expedition interval.",
-            executionStage: "Time",
-            reads: [],
-            produces: ["time.interval"],
-            requiredDependencies: [],
-            optionalDependencies: [],
-            presentationMetadata: {},
-            mechanic,
-            alternatives: [],
-            configurationSchema: { durationTicks: duration },
-            parameters: { durationTicks: "144000000000" },
-            requiredInputs: [],
-            outputs: ["time.interval"],
-            dependencyIssues: [],
-            isModified: false,
-            modificationCount: 0,
-            validationIssues: []
-        }],
+        modules: Object.entries(richProcedureParameters).map(([moduleKey, parameters]) => composerModule(moduleKey, parameters)),
         dependencies: { hasErrors: false, issues: [] },
         dependencyFixes: [],
         overrides: []
+    };
+}
+
+function referenceFixture() {
+    const groups = ["Travel flow", "Survival & resources", "Journey & events", "Automation"];
+    const modules = composerFixture().modules.map(module => ({
+        moduleKey: module.moduleKey,
+        category: module.category,
+        section: visualProcedureGroup(module.moduleKey),
+        displayName: visualTitle(module.moduleKey),
+        purpose: module.purpose,
+        executionStage: module.executionStage,
+        presentationMetadata: {},
+        mechanic: {
+            key: module.mechanic.key,
+            displayName: module.mechanic.displayName,
+            description: module.mechanic.description,
+            version: 1,
+            executionHandler: "visual-review",
+            automationLevel: "Assisted",
+            executionSupport: "Native",
+            executionStatus: "Native visual-review fixture",
+            compatibilityTags: []
+        },
+        parameters: Object.entries(module.parameters).map(([key, rawValue]) => ({
+            key,
+            displayName: visualTitle(key),
+            type: "string",
+            description: null,
+            rawValue,
+            displayValue: rawValue,
+            isUnknown: false,
+            listValues: [],
+            mapEntries: [],
+            technicalDetail: null
+        })),
+        requiredInputs: [],
+        outputs: [],
+        diagnostics: [],
+        isModified: false,
+        modificationCount: 0,
+        modificationNotes: []
+    }));
+    return {
+        procedureId: "visual-procedure",
+        revision: 3,
+        key: "visual-procedure",
+        name: "Shattered Marches Procedure",
+        isExecutable: true,
+        modificationCount: 0,
+        modifiedModuleCount: 0,
+        origin: null,
+        dependencies: { hasErrors: false, issues: [] },
+        sections: groups.map(name => ({ name, modules: modules.filter(module => module.section === name) }))
     };
 }
 
@@ -92,7 +183,7 @@ const savedProcedure = {
     originPresetKey: null,
     originPresetDisplayName: null,
     isExecutable: true,
-    moduleCount: 1,
+    moduleCount: Object.keys(richProcedureParameters).length,
     createdAt: "2026-10-06T04:00:00Z"
 };
 
@@ -118,9 +209,12 @@ function installProcedureFetch() {
                     procedureId: "visual-procedure",
                     revision: 3,
                     name: "Shattered Marches Procedure",
-                    modules: [{ moduleKey: "time.interval", parameters: { durationTicks: "144000000000" } }]
+                    modules: Object.entries(richProcedureParameters).map(([moduleKey, parameters]) => ({ moduleKey, parameters }))
                 }, null, 2)
             });
+        }
+        if (url.includes("/api/procedures/visual-procedure/revisions/3/reference")) {
+            return responseJson(referenceFixture());
         }
         if (url.includes("/api/procedures/composer/draft") || url.includes("/api/procedures/visual-procedure")) {
             return responseJson(composerFixture());
@@ -156,6 +250,12 @@ function emitSpecialMetrics(surface) {
         advancedVisible: Boolean(root.querySelector(".hc-advanced-layout")),
         jsonVisible: Boolean(root.querySelector(".hc-json-editor")),
         procedureHomeVisible: text.includes("Saved procedures") && text.includes("Build my own"),
+        procedureModuleCards: root.querySelectorAll(".hc-rule-card").length,
+        procedureFactGroups: root.querySelectorAll(".hc-rule-fact-group").length,
+        referenceVisible: Boolean(root.querySelector(".hc-procedure-reference")),
+        referenceModuleCount: root.querySelectorAll(".hc-reference-module").length,
+        referenceFactGroups: root.querySelectorAll(".hc-reference-rule-group").length,
+        exactParameterDisclosures: Array.from(root.querySelectorAll("summary")).filter(summary => summary.textContent?.trim() === "Exact parameter detail").length,
         technicalModeLabels: ["Compact", "Advanced", "JSON"].filter(label => text.includes(label)).length,
         selectedCellTitle: root.querySelector("[data-selected-cell-title]")?.textContent?.trim() || null,
         selectedCellTerrain: root.querySelector("[data-cell-terrain]")?.value || null,
@@ -199,6 +299,8 @@ if (stateName === "home") {
     if (stateName === "procedure-home") {
         localStorage.removeItem("hex-crawl.procedure-authoring.mode");
         await renderProcedureAuthoringWorkspace(root, api, null, () => {});
+    } else if (stateName === "procedure-reference") {
+        await renderProcedureReference(root, "visual-procedure", 3, () => {});
     } else {
         const mode = stateName.replace("procedure-", "");
         localStorage.setItem("hex-crawl.procedure-authoring.mode", mode);

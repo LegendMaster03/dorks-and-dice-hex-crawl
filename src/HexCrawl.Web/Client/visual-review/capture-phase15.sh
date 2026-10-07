@@ -43,6 +43,8 @@ cases=(
   "02-home-narrow|home|light|500|900|390"
   "03-procedure-home|procedure-home|light|1366|1000"
   "04-procedure-compact|procedure-compact|light|1366|1000"
+  "04a-procedure-compact-native-mobile|procedure-compact|dark|390|844|390"
+  "04b-procedure-reference|procedure-reference|light|1366|1000"
   "05-procedure-advanced|procedure-advanced|light|1366|1000"
   "06-procedure-json|procedure-json|light|1366|1000"
   "07-spatial-no-course|no-course|light|1600|1000"
@@ -159,6 +161,14 @@ elif surface == "procedure":
     }
     if state in expected and not metrics[expected[state]]:
         raise SystemExit(f'wrong procedure authoring surface: {metrics}')
+    if state == "procedure-compact":
+        if metrics["procedureModuleCards"] != 19 or metrics["procedureFactGroups"] < 19:
+            raise SystemExit(f'feature-rich compact procedure did not render all semantic modules: {metrics}')
+    if state == "procedure-reference":
+        if not metrics["referenceVisible"] or metrics["referenceModuleCount"] != 19:
+            raise SystemExit(f'feature-rich procedure reference is incomplete: {metrics}')
+        if metrics["referenceFactGroups"] < 19 or metrics["exactParameterDisclosures"] != 19:
+            raise SystemExit(f'procedure reference lost semantic or exact parameter evidence: {metrics}')
 elif surface == "world":
     if metrics["selectedCellTitle"] != "Hex 0,0":
         raise SystemExit(f'selected world cell context is missing: {metrics}')
