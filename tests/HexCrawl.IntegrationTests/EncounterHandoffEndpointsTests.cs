@@ -38,9 +38,29 @@ public sealed class EncounterHandoffEndpointsTests
             var encounterEvent = expedition.GetProperty("history").EnumerateArray()
                 .Single(value => value.GetProperty("kind").GetString() == "EncounterTriggered");
             var encounterSequence = encounterEvent.GetProperty("sequence").GetInt64();
+            var occurrenceId = encounterEvent.GetProperty("encounterOccurrenceId").GetGuid();
             Assert.Equal("WanderingEncounter", encounterEvent.GetProperty("encounterOutcome").GetString());
             Assert.Equal(0, encounterEvent.GetProperty("hex").GetProperty("q").GetInt32());
             Assert.Equal(0, encounterEvent.GetProperty("hex").GetProperty("r").GetInt32());
+
+            var pendingHandoffId = Guid.NewGuid();
+            var pendingVersion = expedition.GetProperty("version").GetInt64();
+            var pendingHandoff = await CreateRuntimeHandoffAsync(
+                client, expeditionId, pendingVersion, pendingHandoffId, encounterSequence);
+            Assert.Equal($"runtime:{occurrenceId:D}", pendingHandoff.GetProperty("identity").GetProperty("encounterOccurrenceId").GetString());
+
+            using (var resolveResponse = await client.PostAsJsonAsync(
+                $"/api/expeditions/{expeditionId:D}/encounters/{occurrenceId:D}/resolve",
+                new
+                {
+                    expectedVersion = expedition.GetProperty("version").GetInt64(),
+                    resolutionSource = "DmOverride",
+                    resolutionNote = "resolved before later travel"
+                }))
+            {
+                resolveResponse.EnsureSuccessStatusCode();
+                expedition = await resolveResponse.Content.ReadFromJsonAsync<JsonElement>();
+            }
 
             using (var travelResponse = await client.PostAsJsonAsync(
                        $"/api/expeditions/{expeditionId:D}/assistants/travel",
@@ -69,7 +89,7 @@ public sealed class EncounterHandoffEndpointsTests
             Assert.Equal(2, handoff.GetProperty("version").GetInt32());
             Assert.Equal("hex-crawl", handoff.GetProperty("sourceTool").GetString());
             Assert.Equal(handoffId, handoff.GetProperty("identity").GetProperty("handoffId").GetGuid());
-            Assert.Equal($"runtime:{encounterSequence}", handoff.GetProperty("identity").GetProperty("encounterOccurrenceId").GetString());
+            Assert.Equal($"runtime:{occurrenceId:D}", handoff.GetProperty("identity").GetProperty("encounterOccurrenceId").GetString());
             Assert.Equal("WanderingEncounter", handoff.GetProperty("encounter").GetProperty("outcome").GetString());
             Assert.Equal(0, handoff.GetProperty("worldContext").GetProperty("hex").GetProperty("q").GetInt32());
             Assert.Equal(0, handoff.GetProperty("worldContext").GetProperty("hex").GetProperty("r").GetInt32());
