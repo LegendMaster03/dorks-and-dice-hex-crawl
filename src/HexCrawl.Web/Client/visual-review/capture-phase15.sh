@@ -55,6 +55,9 @@ cases=(
   "14-spatial-forced-travel|forced-travel-pending|light|1366|900"
   "14a-spatial-forced-travel-one|forced-travel-one-participant|light|1366|900"
   "14b-spatial-forced-travel-zero|forced-travel-zero-participants|dark|500|844|390"
+  "14c-spatial-forced-travel-party|forced-travel-party-scope|light|1366|900"
+  "14d-spatial-forced-travel-mount|forced-travel-mount|light|1366|900"
+  "14e-spatial-forced-travel-vehicle|forced-travel-vehicle|dark|1366|900"
   "15-spatial-more-options|more-options-open|dark|1366|900"
   "16-spatial-nonadjacent-inspect|map-nonadjacent|light|1366|900"
   "17-spatial-teleport-workspace|teleport-workspace|light|1366|900"
@@ -211,13 +214,14 @@ else:
         raise SystemExit(f'non-adjacent inspection did not expose deliberate teleport authority: {metrics}')
     if state == "movement-input-pending" and not metrics["movementUnitVisible"]:
         raise SystemExit(f'movement resolution omitted its authoritative unit: {metrics}')
-    if state in {"forced-travel-pending", "forced-travel-one-participant", "forced-travel-zero-participants"}:
+    if state in {"forced-travel-pending", "forced-travel-one-participant", "forced-travel-zero-participants", "forced-travel-party-scope", "forced-travel-mount", "forced-travel-vehicle"}:
         if not metrics["forcedTravelPrimaryDomainFacing"]:
             raise SystemExit(f'forced-travel primary workflow is not domain-facing: {metrics}')
-        if not metrics["forcedTravelNamedTargetVisible"]:
-            raise SystemExit(f'forced-travel normal workflow does not expose named participant targeting: {metrics}')
         if metrics["forcedTravelTechnicalExpanded"]:
             raise SystemExit(f'forced-travel advanced consequence details opened by default: {metrics}')
+    if state in {"forced-travel-pending", "forced-travel-one-participant", "forced-travel-zero-participants"}:
+        if not metrics["forcedTravelNamedTargetVisible"]:
+            raise SystemExit(f'forced-travel normal workflow does not expose named participant targeting: {metrics}')
     if state == "forced-travel-pending":
         if metrics["forcedTravelTargetOptionCount"] < 3 or metrics["forcedTravelTargetValue"] != "":
             raise SystemExit(f'multiple participant forced-travel target was silently selected: {metrics}')
@@ -228,6 +232,15 @@ else:
             raise SystemExit(f'single participant forced-travel target was not visibly preselected: {metrics}')
     if state == "forced-travel-zero-participants" and not metrics["forcedTravelMissingTargetBlocked"]:
         raise SystemExit(f'zero-participant forced-travel failure did not expose blocked setup state: {metrics}')
+    if state == "forced-travel-party-scope":
+        if metrics["forcedTravelTargetVisible"] or metrics["forcedTravelTargetRequired"]:
+            raise SystemExit(f'party-scope forced travel incorrectly requires an entity target: {metrics}')
+    if state == "forced-travel-mount":
+        if metrics["forcedTravelTargetOptionCount"] != 1 or metrics["forcedTravelTargetValue"] != "mount-1" or "Pack mule" not in metrics["forcedTravelTargetLabels"]:
+            raise SystemExit(f'mount-scope forced travel did not expose the named authoritative mount: {metrics}')
+    if state == "forced-travel-vehicle":
+        if metrics["forcedTravelTargetOptionCount"] != 1 or metrics["forcedTravelTargetValue"] != "vehicle-1" or "River skiff" not in metrics["forcedTravelTargetLabels"]:
+            raise SystemExit(f'vehicle-scope forced travel did not expose the named authoritative vehicle: {metrics}')
     if state in {"navigation-pending", "abstract-spatial-course"} and not metrics["navigationCourseReadOnly"]:
         raise SystemExit(f'navigation repeated the already-selected intended course input: {metrics}')
     if state == "effects-journey-source":
@@ -272,6 +285,9 @@ else:
         "forced-travel-pending": "Forced travel",
         "forced-travel-one-participant": "Forced travel",
         "forced-travel-zero-participants": "Forced travel",
+        "forced-travel-party-scope": "Forced travel",
+        "forced-travel-mount": "Forced travel",
+        "forced-travel-vehicle": "Forced travel",
         "more-options-open": "Advanced travel controls",
         "teleport-workspace": "Teleport party",
         "abstract-spatial-course": "Navigation",

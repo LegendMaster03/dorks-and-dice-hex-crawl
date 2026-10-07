@@ -1019,6 +1019,66 @@ switch (stateName) {
         survival = survivalFixture(true);
         effects = effectsFixture(false);
         break;
+    case "forced-travel-party-scope":
+        runtime.expedition.intendedDirection = 4;
+        survival = survivalFixture(true);
+        survival.forcedTravelPolicy.failureTargetScope = "Party";
+        effects = effectsFixture(false);
+        break;
+    case "forced-travel-mount":
+        runtime.expedition.intendedDirection = 4;
+        runtime.party = {
+            ...runtime.party,
+            movementContributors: [{
+                id: "mount-1",
+                kind: "Mount",
+                key: "Pack mule",
+                operation: "Base",
+                scope: "MovementUnit",
+                value: 6,
+                unit: "mi",
+                perUnit: "watch",
+                distanceUnit: mile,
+                symbolicValue: null,
+                participantId: null,
+                movementUnitKey: "pack-mule",
+                replacesParticipantIds: [],
+                provenance: "DM",
+                note: null,
+                enabled: true
+            }]
+        };
+        survival = survivalFixture(true);
+        survival.forcedTravelPolicy.failureTargetScope = "Mount";
+        effects = effectsFixture(false);
+        break;
+    case "forced-travel-vehicle":
+        runtime.expedition.intendedDirection = 4;
+        runtime.party = {
+            ...runtime.party,
+            movementContributors: [{
+                id: "vehicle-1",
+                kind: "Vehicle",
+                key: "River skiff",
+                operation: "Base",
+                scope: "MovementUnit",
+                value: 6,
+                unit: "mi",
+                perUnit: "watch",
+                distanceUnit: mile,
+                symbolicValue: null,
+                participantId: null,
+                movementUnitKey: "river-skiff",
+                replacesParticipantIds: [],
+                provenance: "DM",
+                note: null,
+                enabled: true
+            }]
+        };
+        survival = survivalFixture(true);
+        survival.forcedTravelPolicy.failureTargetScope = "Vehicle";
+        effects = effectsFixture(false);
+        break;
     case "effects-workspace":
         runtime.expedition.intendedDirection = 1;
         runtime.expedition.actualDirection = 1;
@@ -1265,7 +1325,10 @@ if (stateName === "map-selected" || stateName === "map-nonadjacent") {
     findButton("Resolve encounter")?.click();
 } else if (stateName === "forced-travel-pending"
     || stateName === "forced-travel-one-participant"
-    || stateName === "forced-travel-zero-participants") {
+    || stateName === "forced-travel-zero-participants"
+    || stateName === "forced-travel-party-scope"
+    || stateName === "forced-travel-mount"
+    || stateName === "forced-travel-vehicle") {
     findButton("Resolve forced travel")?.click();
     await waitForRootText("Current requirement");
     const checkbox = Array.from(root.querySelectorAll("label"))
@@ -1402,8 +1465,10 @@ const metrics = {
         && !rootText.includes("Participant, mount, or vehicle ID when required")
     ),
     forcedTravelTargetOptionCount: forcedTravelTarget?.querySelectorAll("option").length ?? 0,
+    forcedTravelTargetLabels: Array.from(forcedTravelTarget?.querySelectorAll("option") ?? []).map(option => option.textContent?.trim() || ""),
     forcedTravelTargetValue: forcedTravelTarget?.value ?? null,
     forcedTravelTargetRequired: forcedTravelTarget?.required ?? false,
+    forcedTravelTargetVisible: isVisible(forcedTravelTarget),
     forcedTravelMissingTargetBlocked: stateName !== "forced-travel-zero-participants" || (
         rootText.includes("no party members configured")
         && forcedTravelResolve?.disabled === true
