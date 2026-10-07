@@ -39,6 +39,7 @@ import {
 } from "./expedition-travel-intent";
 import { canUseFocusedNonSpatialWatch, focusedIntervalHours } from "./focused-interval-policy";
 import { navigationResolutionDue, pauseInstruction, spatialTravelContinuationTarget } from "./expedition-workflow";
+import { movementCompositionLedger } from "./expedition-movement-composition-view";
 import { expeditionWorkspacePresentation, spatialPositionPresentation } from "./expedition-workspace-model";
 
 export async function renderExpedition(
@@ -283,7 +284,7 @@ export async function renderExpedition(
         stats.className = "hc-stat-action-grid";
         const position = spatialPositionPresentation(runtime);
         stats.append(
-            statAction("Time", presentation.timeLabel, null, openHistory),
+            statAction("Time", presentation.timeLabel, travelPeriodDetail(runtime), openHistory),
             statAction(
                 runtime.expedition.isSpatial ? "Position" : "Context",
                 position?.value ?? presentation.routeLabel ?? runtime.context.name,
@@ -299,9 +300,7 @@ export async function renderExpedition(
             stats.append(statAction(
                 "Movement",
                 movementSummary(runtime),
-                runtime.movementComposition.missingInputs.length > 0
-                    ? `${runtime.movementComposition.missingInputs.length} unresolved input${runtime.movementComposition.missingInputs.length === 1 ? "" : "s"}`
-                    : movementSuggestionDetail(runtime),
+                movementStatusDetail(runtime),
                 runtime.expedition.isSpatial ? () => openTravelWorkspace("movement") : openPartyWorkspace,
                 runtime.movementComposition.missingInputs.length > 0 ? "warning" : "neutral"));
         }
@@ -314,26 +313,6 @@ export async function renderExpedition(
                     : null,
                 openNavigationWorkspace,
                 runtime.expedition.isSpatial && runtime.expedition.isLost ? "warning" : "neutral"));
-        }
-        if (runtime.expedition.isSpatial
-            && (presentation.capabilities.resources || presentation.capabilities.survival || presentation.capabilities.effects)) {
-            const hasSurvivalOrResources = presentation.capabilities.resources || presentation.capabilities.survival;
-            stats.append(statAction(
-                presentation.capabilities.effects
-                    ? hasSurvivalOrResources ? "Survival / resources / effects" : "Effects"
-                    : "Survival / resources",
-                effectsSummary(effects) ?? presentation.resourceLabel ?? (presentation.capabilities.effects ? "Effect procedure active" : "Procedure active"),
-                resourcesEffectsDetail(survival, effects),
-                openSurvivalWorkspace,
-                survivalAttention(survival) ? "warning" : "neutral"));
-        }
-        if (runtime.expedition.isSpatial && presentation.capabilities.journey) {
-            stats.append(statAction(
-                "Journey",
-                presentation.journeyLabel ?? "No active journey",
-                journeyDetail(journey),
-                openJourneyWorkspace,
-                journeyAttention(journey) ? "warning" : "neutral"));
         }
         if (presentation.capabilities.encounters) {
             stats.append(statAction(
@@ -483,7 +462,7 @@ export async function renderExpedition(
                     journeyFact("Roles", journeyRoleSummary(runtime)),
                     journeyFact("Pending", journeyPendingSummary(journey, activeJourney)),
                     journeyFact("Consequences / state", journeyStateSummary(stageState, survival, effects)));
-                main.append(facts);
+                main.append(facts, journeyStageSequence(activeJourney));
 
                 if (presentation.action.kind !== "journey") {
                     main.append(button("Open journey workspace", openJourneyWorkspace));
@@ -805,6 +784,8 @@ export async function renderExpedition(
             travelFact("Actual", actualCourseLabel(runtime, adjacency), "currentTravelActual"),
             travelFact("Progress", travelProgressDetail(runtime), "currentTravelProgress"));
         section.append(facts);
+        const cellProgress = cellProgressIndicator(runtime);
+        if (cellProgress) section.append(cellProgress);
 
         if (!world) {
             const course = document.createElement("select");
@@ -1106,10 +1087,12 @@ export async function renderExpedition(
             textElement("h3", heading),
             textElement("p", travelIntentSummary(runtime, preferences, currentAdjacency()), "hc-muted"));
         if (focus === "movement") {
-            intro.append(textElement(
-                "p",
-                movementSuggestionDetail(runtime) ?? movementSummary(runtime),
-                "hc-muted"));
+            intro.append(
+                textElement(
+                    "p",
+                    movementSuggestionDetail(runtime) ?? movementSummary(runtime),
+                    "hc-muted"),
+                movementCompositionLedger(runtime));
         } else if (focus === "encounter") {
             intro.append(textElement("p", "Resolve the due encounter check, then continue the same travel intent.", "hc-muted"));
         } else {
@@ -2000,6 +1983,32 @@ function partyRailContext(runtime: ExpeditionDetail): { title: string; detail: s
     return { title: "Travel assignments", detail: detail.join(" · ") };
 }
 
+function travelPeriodDetail(runtime: ExpeditionDetail): string {
+    const completed = runtime.expedition.completedWatches;
+    const completedLabel = `${completed} completed watch${completed === 1 ? "" : "es"}`;
+    const intervalHours = runtime.procedure.runtime?.intervalHours ?? null;
+    return intervalHours === null
+        ? completedLabel
+        : `Configured period ${formatHours(intervalHours)} · ${completedLabel}`;
+}
+
+function movementStatusDetail(runtime: ExpeditionDetail): string | null {
+    const composition = runtime.movementComposition;
+    const parts: string[] = [];
+    if (composition.missingInputs.length > 0) {
+        parts.push(`${composition.missingInputs.length} unresolved input${composition.missingInputs.length === 1 ? "" : "s"}`);
+    }
+    const limiter = composition.limitingParticipantId
+        ? runtime.party.members.find(member => member.id === composition.limitingParticipantId)?.name
+        : composition.limitingContributorKey;
+    if (limiter) parts.push(`Limited by ${limiter}`);
+    const suggestion = movementSuggestionDetail(runtime);
+    if (suggestion) parts.push(suggestion);
+    if (composition.referenceUse === "Fallback") parts.push("Reference fallback; not a fully resolved composition");
+    else if (composition.referenceUse === "InformationalOnly") parts.push("Reference value is informational only");
+    return parts.length > 0 ? parts.join(" · ") : null;
+}
+
 function movementSummary(runtime: ExpeditionDetail): string {
     const composition = runtime.movementComposition;
     if (composition.effectiveValue !== null && composition.effectiveUnit) {
@@ -2012,6 +2021,97 @@ function movementSummary(runtime: ExpeditionDetail): string {
 function movementSuggestionDetail(runtime: ExpeditionDetail): string | null {
     const suggestion = runtime.movementComposition.suggestedExpectedDistance;
     return suggestion ? `Suggested next watch: ${formatDistance(suggestion)}` : null;
+}
+
+function cellProgressIndicator(runtime: ExpeditionDetail): HTMLElement | null {
+    if (!runtime.expedition.isSpatial || runtime.procedure.runtime?.tracksIntraHexProgress !== true) return null;
+
+    const progress = runtime.expedition.hexProgress;
+    const requirement = runtime.expedition.exitRequirement;
+    const section = document.createElement("section");
+    section.className = "hc-cell-progress";
+    section.dataset.cellProgress = "";
+
+    const heading = document.createElement("div");
+    heading.className = "hc-progress-heading";
+    heading.append(
+        textElement("span", "Cell progress", "hc-ledger-kicker"),
+        textElement(
+            "strong",
+            requirement && requirement.unit.symbol === progress.unit.symbol
+                ? `${formatNumber(progress.value)} / ${formatNumber(requirement.value)} ${progress.unit.symbol}`
+                : `${formatNumber(progress.value)} ${progress.unit.symbol}`));
+    section.append(heading);
+
+    if (requirement && requirement.unit.symbol === progress.unit.symbol && requirement.value > 0) {
+        const meter = document.createElement("progress");
+        meter.max = requirement.value;
+        meter.value = Math.max(0, Math.min(progress.value, requirement.value));
+        meter.setAttribute("aria-label", "Progress through the current cell");
+        section.append(meter);
+    } else {
+        section.classList.add("is-unbounded");
+        section.append(textElement(
+            "span",
+            requirement
+                ? `Exit requirement uses ${requirement.unit.symbol}; no percentage is derived across unlike units.`
+                : "No authoritative exit requirement is available, so no percentage is shown.",
+            "hc-muted"));
+    }
+    return section;
+}
+
+function journeyStageSequence(
+    process: ExpeditionJourneyState["activeProcesses"][number]): HTMLElement {
+    const section = document.createElement("section");
+    section.className = "hc-journey-stage-sequence";
+    section.append(textElement("h4", "Journey stages"));
+    const list = document.createElement("ol");
+    list.className = "hc-stage-sequence";
+
+    for (const [index, stage] of process.definition.stages.entries()) {
+        const state = process.stageStates.find(value => value.stageKey === stage.stageKey) ?? null;
+        const item = document.createElement("li");
+        item.className = "hc-stage-step";
+        if (stage.stageKey === process.currentStageKey && !process.isTerminal) item.classList.add("is-current");
+        if (state?.completed) item.classList.add("is-complete");
+
+        const marker = textElement("span", state?.completed ? "✓" : String(index + 1), "hc-stage-marker");
+        marker.setAttribute("aria-hidden", "true");
+        const content = document.createElement("div");
+        content.className = "hc-stage-content";
+        content.append(textElement("strong", stage.displayName));
+        if (stage.description) content.append(textElement("span", stage.description, "hc-muted"));
+
+        if (process.execution.progressKind === "Numeric" && state && stage.stageKey === process.currentStageKey) {
+            const current = state.numericProgress ?? 0;
+            const unit = process.execution.progressUnit ? ` ${process.execution.progressUnit}` : "";
+            const target = stage.progressTarget;
+            const progressText = target === null
+                ? `${formatNumber(current)}${unit}`
+                : `${formatNumber(current)} / ${formatNumber(target)}${unit}`;
+            content.append(textElement("span", `Progress: ${progressText}`, "hc-stage-progress-label"));
+
+            const lowerBound = process.execution.progressFloor
+                ?? (process.execution.allowNegativeProgress ? null : 0);
+            if (target !== null && lowerBound !== null && target > lowerBound) {
+                const meter = document.createElement("progress");
+                meter.max = target - lowerBound;
+                meter.value = Math.max(0, Math.min(current - lowerBound, target - lowerBound));
+                meter.setAttribute("aria-label", `${stage.displayName} progress`);
+                content.append(meter);
+            }
+            const bounds: string[] = [];
+            if (process.execution.progressFloor !== null) bounds.push(`minimum ${formatNumber(process.execution.progressFloor)}`);
+            if (process.execution.progressCeiling !== null) bounds.push(`maximum ${formatNumber(process.execution.progressCeiling)}`);
+            if (bounds.length > 0) content.append(textElement("span", bounds.join(" · "), "hc-muted"));
+        }
+
+        item.append(marker, content);
+        list.append(item);
+    }
+    section.append(list);
+    return section;
 }
 
 function environmentRailDetail(state: SurvivalResources | null): string | null {

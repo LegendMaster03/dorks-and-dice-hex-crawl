@@ -31,7 +31,7 @@ function composerFixture() {
         type: "duration",
         required: true,
         description: "Length of the repeating expedition interval.",
-        defaultValue: "4h"
+        defaultValue: "144000000000"
     };
     const mechanic = {
         key: "time.interval.standard",
@@ -69,7 +69,7 @@ function composerFixture() {
             mechanic,
             alternatives: [],
             configurationSchema: { durationTicks: duration },
-            parameters: { durationTicks: "4h" },
+            parameters: { durationTicks: "144000000000" },
             requiredInputs: [],
             outputs: ["time.interval"],
             dependencyIssues: [],
@@ -118,7 +118,7 @@ function installProcedureFetch() {
                     procedureId: "visual-procedure",
                     revision: 3,
                     name: "Shattered Marches Procedure",
-                    modules: [{ moduleKey: "time.interval", parameters: { durationTicks: "4h" } }]
+                    modules: [{ moduleKey: "time.interval", parameters: { durationTicks: "144000000000" } }]
                 }, null, 2)
             });
         }
@@ -844,7 +844,7 @@ function journeyFixture() {
         processPolicy: {
             support: "Supported",
             stageModel: "Ordered",
-            stageKeys: ["pass"],
+            stageKeys: ["approach", "pass", "arrival"],
             stageTransitionModel: "Sequential",
             progressModel: "Accumulated",
             progressKind: "Numeric",
@@ -885,13 +885,34 @@ function journeyFixture() {
                 processKey: "ashen-pass",
                 displayName: "Cross the Ashen Pass",
                 description: "Guide the company through the flooded pass and into the high country.",
-                initialStageKey: "pass",
-                stageOrder: ["pass"],
+                initialStageKey: "approach",
+                stageOrder: ["approach", "pass", "arrival"],
                 destinationReference: "High country",
                 routeReference: "Ashen Pass",
                 locationReference: null,
                 note: null,
                 stages: [{
+                    stageKey: "approach",
+                    displayName: "Reach the pass",
+                    description: "Find the safe approach and establish the route.",
+                    completionModel: "ProgressThreshold",
+                    progressTarget: 2,
+                    successTarget: null,
+                    failureLimit: null,
+                    complicationLimit: null,
+                    failProcessAtFailureLimit: false,
+                    failProcessAtComplicationLimit: false,
+                    initialProgressState: null,
+                    explicitNextStageKey: null,
+                    outcomeTransitions: [],
+                    approaches: [{
+                        approachKey: "scout",
+                        displayName: "Scout the approach",
+                        capabilityReference: null,
+                        note: null
+                    }],
+                    roleKeys: ["navigator", "scout"]
+                }, {
                     stageKey: "pass",
                     displayName: "Cross the pass",
                     description: "Make progress through the broken highland route.",
@@ -908,6 +929,27 @@ function journeyFixture() {
                     approaches: [{
                         approachKey: "steady",
                         displayName: "Steady progress",
+                        capabilityReference: null,
+                        note: null
+                    }],
+                    roleKeys: ["navigator", "scout"]
+                }, {
+                    stageKey: "arrival",
+                    displayName: "Reach the high country",
+                    description: "Finish the crossing and secure the destination.",
+                    completionModel: "ProgressThreshold",
+                    progressTarget: 1,
+                    successTarget: null,
+                    failureLimit: null,
+                    complicationLimit: null,
+                    failProcessAtFailureLimit: false,
+                    failProcessAtComplicationLimit: false,
+                    initialProgressState: null,
+                    explicitNextStageKey: null,
+                    outcomeTransitions: [],
+                    approaches: [{
+                        approachKey: "finish",
+                        displayName: "Complete the crossing",
                         capabilityReference: null,
                         note: null
                     }],
@@ -934,10 +976,26 @@ function journeyFixture() {
             },
             currentStageKey: "pass",
             stageStates: [{
+                stageKey: "approach",
+                numericProgress: 2,
+                explicitState: null,
+                successes: 1,
+                failures: 0,
+                complications: 0,
+                completed: true
+            }, {
                 stageKey: "pass",
                 numericProgress: 3,
                 explicitState: null,
                 successes: 2,
+                failures: 0,
+                complications: 0,
+                completed: false
+            }, {
+                stageKey: "arrival",
+                numericProgress: 0,
+                explicitState: null,
+                successes: 0,
                 failures: 0,
                 complications: 0,
                 completed: false
@@ -1058,6 +1116,26 @@ switch (stateName) {
     case "movement-input-pending":
         runtime.expedition.intendedDirection = 3;
         runtime.movementComposition = movement(false);
+        break;
+    case "movement-composition":
+        runtime.expedition.intendedDirection = 3;
+        runtime.expedition.actualDirection = 3;
+        runtime.movementComposition = movement(true);
+        runtime.movementComposition.effectiveValue = 4.5;
+        runtime.movementComposition.preOverrideValue = 4;
+        runtime.movementComposition.limitingParticipantId = "member-2";
+        runtime.movementComposition.referenceUse = "AuthoritativeBase";
+        runtime.movementComposition.contributors = [
+            { id: "participant", kind: "Participant", key: "Brann speed", operation: "Base", applied: true, value: 6, symbolicValue: null, unit: "mi", perUnit: "watch", participantId: "member-2", movementUnitKey: null, provenance: "party sheet", detail: "Slowest traveler" },
+            { id: "mount", kind: "Mount", key: "Pack mule", operation: "Replace", applied: false, value: 7, symbolicValue: null, unit: "mi", perUnit: "watch", participantId: null, movementUnitKey: "pack-mule", provenance: "party sheet", detail: "Retained mount option" },
+            { id: "vehicle", kind: "Vehicle", key: "River skiff", operation: "Replace", applied: false, value: 8, symbolicValue: null, unit: "mi", perUnit: "watch", participantId: null, movementUnitKey: "skiff", provenance: "party sheet", detail: null },
+            { id: "load", kind: "Load", key: "Heavy cargo", operation: "Multiply", applied: true, value: 0.8, symbolicValue: null, unit: null, perUnit: null, participantId: null, movementUnitKey: null, provenance: "load", detail: null },
+            { id: "mode", kind: "TravelMode", key: "careful", operation: "Multiply", applied: true, value: 0.9, symbolicValue: null, unit: null, perUnit: null, participantId: null, movementUnitKey: null, provenance: "travel mode", detail: null },
+            { id: "terrain", kind: "TerrainRoute", key: "broken ground", operation: "Multiply", applied: true, value: 0.75, symbolicValue: null, unit: null, perUnit: null, participantId: null, movementUnitKey: null, provenance: "current cell", detail: null },
+            { id: "environment", kind: "Environment", key: "driving rain", operation: "SymbolicLimit", applied: false, value: null, symbolicValue: "manual review", unit: null, perUnit: null, participantId: null, movementUnitKey: null, provenance: "environment", detail: "Retained pending adjudication" },
+            { id: "effect", kind: "PersistentEffect", key: "fatigue", operation: "Cap", applied: true, value: 4, symbolicValue: null, unit: "mi", perUnit: "watch", participantId: "member-2", movementUnitKey: null, provenance: "effect engine", detail: null },
+            { id: "override", kind: "DmOverride", key: "clear route ruling", operation: "Replace", applied: true, value: 4.5, symbolicValue: null, unit: "mi", perUnit: "watch", participantId: null, movementUnitKey: null, provenance: "DM", detail: "Table ruling" }
+        ];
         break;
     case "encounter-pending":
         runtime.pauseReason = "EncounterTriggered";
@@ -1319,8 +1397,8 @@ switch (stateName) {
         journey = journeyFixture();
         effects = effectsFixture(false);
         effects.pendingConsequences = [pendingJourneyConsequence("pending-journey-consequence")];
-        journey.activeProcesses[0].stageStates[0].failures = 1;
-        journey.activeProcesses[0].stageStates[0].complications = 2;
+        journey.activeProcesses[0].stageStates[1].failures = 1;
+        journey.activeProcesses[0].stageStates[1].complications = 2;
         break;
     case "journey-consequence-multiple":
         runtime = nonSpatialRuntimeFixture();
@@ -1352,8 +1430,8 @@ switch (stateName) {
             detail: "Journey consequence resolved.",
             resolutionProvenance: null
         }];
-        journey.activeProcesses[0].stageStates[0].failures = 1;
-        journey.activeProcesses[0].stageStates[0].complications = 2;
+        journey.activeProcesses[0].stageStates[1].failures = 1;
+        journey.activeProcesses[0].stageStates[1].complications = 2;
         break;
     default:
         throw new Error("Unknown visual state: " + stateName);
@@ -1496,6 +1574,9 @@ if (stateName === "course-change-reload") {
     findButton("Resolve navigation")?.click();
 } else if (stateName === "movement-input-pending") {
     findButton("Continue travel")?.click();
+} else if (stateName === "movement-composition") {
+    findStatAction("Movement")?.click();
+    await waitForRootText("Movement composition contributors");
 } else if (stateName === "encounter-pending") {
     findButton("Resolve encounter")?.click();
 } else if (stateName === "forced-travel-pending"
@@ -1617,7 +1698,10 @@ const metrics = {
     focusedTitle: root.querySelector("[data-phase15-drawer] h2")?.textContent?.trim() || null,
     focusedEdge: document.activeElement?.matches?.("[data-adjacency-edge]") ?? false,
     journeyVisible: rootText.includes("Current stage") && rootText.includes("Progress") && rootText.includes("Roles") && rootText.includes("Pending"),
+    journeyStageCount: root.querySelectorAll(".hc-stage-step").length,
     movementStatusVisible: Array.from(root.querySelectorAll(".hc-stat-action-label")).some(label => label.textContent?.trim() === "Movement"),
+    movementLedgerVisible: isVisible(root.querySelector("[data-movement-composition-ledger]")),
+    movementContributorRows: root.querySelectorAll(".hc-movement-ledger-table tbody tr").length,
     fakeSpatialStateVisible: !runtime.expedition.isSpatial && (
         rootText.includes("Current travel")
         || rootText.includes("Pace / travel mode")

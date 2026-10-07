@@ -7,6 +7,7 @@ import type {
     ProcedureReferenceParameter
 } from "../../procedure-reference-types";
 import { showUiError } from "../../ui-error";
+import { procedurePresentationSections } from "./procedure-presentation";
 
 export async function renderProcedureReference(
     root: HTMLElement,
@@ -146,7 +147,14 @@ function renderModule(module: ProcedureReferenceModule): HTMLElement {
         text("p", module.mechanic.displayName, "hc-reference-behavior-name"),
         text("p", module.mechanic.description),
         text("p", module.mechanic.executionStatus, "hc-reference-execution"));
-    card.append(behavior, renderParameters(module.parameters));
+    card.append(behavior, renderTableSummary(module));
+
+    const technical = document.createElement("details");
+    technical.className = "hc-reference-technical-parameters";
+    const technicalSummary = document.createElement("summary");
+    technicalSummary.textContent = "Exact parameter detail";
+    technical.append(technicalSummary, renderParameters(module.parameters));
+    card.append(technical);
 
     const contracts = element("div", "hc-reference-contracts");
     contracts.append(renderInputs(module.requiredInputs), renderOutputs(module), renderDiagnostics(module.diagnostics));
@@ -165,6 +173,56 @@ function renderModule(module: ProcedureReferenceModule): HTMLElement {
         card.append(modifications);
     }
     return card;
+}
+
+function renderTableSummary(module: ProcedureReferenceModule): HTMLElement {
+    const section = document.createElement("section");
+    section.className = "hc-reference-table-summary";
+    section.append(text("h4", "At the table"));
+
+    const parameters = Object.fromEntries(module.parameters.map(parameter => [parameter.key, parameter.rawValue]));
+    const groups = procedurePresentationSections(module.moduleKey, parameters);
+    if (groups.length === 0) {
+        section.append(text("p", "No additional table-facing values are configured.", "hc-muted"));
+        return section;
+    }
+
+    const grid = element("div", "hc-reference-rule-groups");
+    for (const group of groups) {
+        const panel = element("section", "hc-reference-rule-group");
+        panel.append(text("h5", group.label));
+        const facts = element("dl", "hc-reference-table-facts");
+        for (const fact of group.facts) {
+            facts.append(text("dt", fact.label), renderReferenceFact(fact));
+        }
+        panel.append(facts);
+        grid.append(panel);
+    }
+    section.append(grid);
+    return section;
+}
+
+function renderReferenceFact(fact: ReturnType<typeof procedurePresentationSections>[number]["facts"][number]): HTMLElement {
+    const value = document.createElement("dd");
+    if (fact.entries && fact.entries.length > 0) {
+        const table = document.createElement("table");
+        table.className = "hc-reference-map";
+        const body = document.createElement("tbody");
+        for (const entry of fact.entries) {
+            const row = document.createElement("tr");
+            row.append(text("th", entry.label), text("td", entry.value));
+            body.append(row);
+        }
+        table.append(body);
+        value.append(table);
+    } else if (fact.items && fact.items.length > 0) {
+        const list = document.createElement("ul");
+        for (const item of fact.items) list.append(listItem(item));
+        value.append(list);
+    } else {
+        value.textContent = fact.value || "—";
+    }
+    return value;
 }
 
 function renderParameters(parameters: ProcedureReferenceParameter[]): HTMLElement {
@@ -324,6 +382,15 @@ function ensureReferenceStyles(): void {
         .hc-reference-behavior-name { font-weight: 700; }
         .hc-reference-execution { padding: .65rem .8rem; border-inline-start: 3px solid currentColor; }
         .hc-reference-contracts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin-top: 1rem; }
+        .hc-reference-table-summary { display:grid; gap:.6rem; }
+        .hc-reference-rule-groups { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,15rem),1fr)); gap:.65rem; }
+        .hc-reference-rule-group { border:1px solid var(--hc-border); border-radius:.6rem; padding:.65rem .75rem; background:var(--hc-surface-elevated); min-width:0; }
+        .hc-reference-rule-group h5 { margin:0 0 .45rem; font-size:.82rem; text-transform:uppercase; letter-spacing:.04em; color:var(--hc-muted); }
+        .hc-reference-table-facts { display:grid; grid-template-columns:minmax(7rem,auto) minmax(0,1fr); gap:.25rem .65rem; margin:0; }
+        .hc-reference-table-facts dt { font-weight:650; color:var(--hc-text-strong); }
+        .hc-reference-table-facts dd { margin:0; min-width:0; overflow-wrap:anywhere; }
+        .hc-reference-technical-parameters { margin-top:.75rem; border-top:1px solid var(--hc-border); padding-top:.55rem; }
+        .hc-reference-technical-parameters > summary { cursor:pointer; font-weight:650; }
         .hc-reference-definition-list { display: grid; grid-template-columns: minmax(150px, .45fr) minmax(0, 1fr); gap: .65rem 1rem; }
         .hc-reference-definition-list dt { font-weight: 700; }
         .hc-reference-definition-list dd { margin: 0; min-width: 0; }

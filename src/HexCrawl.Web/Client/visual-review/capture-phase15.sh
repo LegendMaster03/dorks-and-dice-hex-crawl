@@ -49,6 +49,8 @@ cases=(
   "08-spatial-selected-edge|selected-edge|light|1366|900"
   "09-spatial-persisted-course|persisted-course|light|1366|900"
   "10-spatial-movement|movement-input-pending|light|1366|900"
+  "10a-spatial-movement-composition|movement-composition|light|1366|900"
+  "10b-spatial-movement-composition-mobile|movement-composition|dark|500|844|390"
   "11-spatial-navigation|navigation-pending|light|1366|900"
   "12-spatial-boundary|boundary-pending|light|1366|900"
   "13-spatial-encounter|encounter-pending|dark|1366|900"
@@ -197,8 +199,11 @@ else:
                 raise SystemExit(f'resolved journey consequence remained pending in the summary: {metrics}')
             if not metrics["journeyStageStateVisible"]:
                 raise SystemExit(f'stage-local failures/complications were lost after consequence resolution: {metrics}')
-        if state == "journey-normal" and not metrics["journeyNoPendingConsequencesVisible"]:
-            raise SystemExit(f'clean journey does not report an authoritative no-pending state: {metrics}')
+        if state == "journey-normal":
+            if not metrics["journeyNoPendingConsequencesVisible"]:
+                raise SystemExit(f'clean journey does not report an authoritative no-pending state: {metrics}')
+            if metrics["journeyStageCount"] != 3:
+                raise SystemExit(f'multi-stage journey sequence is incomplete: {metrics}')
         if state == "journey-pending" and metrics["journeyPendingRawInternalsVisible"]:
             raise SystemExit(f'normal pending journey presentation exposes raw event internals: {metrics}')
     elif abstract_spatial:
@@ -265,6 +270,9 @@ else:
         raise SystemExit(f'non-adjacent inspection did not expose deliberate teleport authority: {metrics}')
     if state == "movement-input-pending" and not metrics["movementUnitVisible"]:
         raise SystemExit(f'movement resolution omitted its authoritative unit: {metrics}')
+    if state == "movement-composition":
+        if not metrics["movementLedgerVisible"] or metrics["movementContributorRows"] < 9:
+            raise SystemExit(f'movement composition ledger did not expose all contributor kinds: {metrics}')
     if state in {"forced-travel-pending", "forced-travel-one-participant", "forced-travel-zero-participants", "forced-travel-party-scope", "forced-travel-mount", "forced-travel-vehicle"}:
         if not metrics["forcedTravelPrimaryDomainFacing"]:
             raise SystemExit(f'forced-travel primary workflow is not domain-facing: {metrics}')

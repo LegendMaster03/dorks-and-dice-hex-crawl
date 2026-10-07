@@ -18,6 +18,14 @@ export type CompactParameterPresentation = {
 export type ProcedurePresentationFact = {
     label: string;
     value: string;
+    entries?: Array<{ label: string; value: string }>;
+    items?: string[];
+};
+
+export type ProcedurePresentationSection = {
+    key: string;
+    label: string;
+    facts: ProcedurePresentationFact[];
 };
 
 const rules: CompactRuleDescriptor[] = [
@@ -238,6 +246,89 @@ const progressFactorKeys = new Set([
 ]);
 const textKeys = new Set(["evaluationInterval"]);
 
+type PresentationSectionLayout = {
+    key: string;
+    label: string;
+    parameters: string[];
+};
+
+const presentationSectionLayouts: Record<string, PresentationSectionLayout[]> = {
+    "time.interval": [
+        { key: "timing", label: "Timing", parameters: ["durationTicks"] }
+    ],
+    "party.activities": [
+        { key: "assignment", label: "Assignments", parameters: ["assignmentScope", "roleKeys"] },
+        { key: "allowance", label: "Allowance", parameters: ["activityBudgetModel", "activityKeys"] }
+    ],
+    "movement.budget": [
+        { key: "budget", label: "Movement allowance", parameters: ["budgetModel", "baseBudget", "budgetUnit", "limitingScope", "travelModeKeys"] }
+    ],
+    "movement.terrain": [
+        { key: "terrain", label: "Terrain", parameters: ["adjustmentModel", "terrainAdjustments"] },
+        { key: "context", label: "Routes and weather", parameters: ["routeAdjustmentModel", "weatherAdjustmentModel"] }
+    ],
+    "movement.resolution": [
+        { key: "resolution", label: "Movement resolution", parameters: ["travelResolution", "actualDistanceResolution"] }
+    ],
+    "movement.hex-progress": [
+        { key: "progress", label: "Cell progress", parameters: ["tracksIntraHexProgress", "startingExitProgressFactor", "nearExitProgressFactor", "farExitProgressFactor", "backExitProgressFactor"] },
+        { key: "course-change", label: "Course changes", parameters: ["directionChangesCostProgress", "directionChangeProgressCostFactor", "supportsDeliberateDoubleBack"] }
+    ],
+    "navigation.check": [
+        { key: "check", label: "Navigation check", parameters: ["usesNavigationChecks", "usesPersistentVeer"] }
+    ],
+    "navigation.outcome": [
+        { key: "trigger", label: "When it applies", parameters: ["checkTriggerModel"] },
+        { key: "failure", label: "Failure", parameters: ["failureStateModel", "directionalErrorModel"] },
+        { key: "recovery", label: "Recognition and recovery", parameters: ["recognitionModel", "reorientationModel"] }
+    ],
+    "encounters.cadence": [
+        { key: "cadence", label: "Check cadence", parameters: ["cadence"] }
+    ],
+    "encounters.schedule": [
+        { key: "schedule", label: "Schedule", parameters: ["scheduleModel", "travelChecksPerInterval", "campCheck"] },
+        { key: "context", label: "Context", parameters: ["terrainProbabilityModel"] }
+    ],
+    "survival.resources": [
+        { key: "inventory", label: "Inventory", parameters: ["resourceKinds", "inventoryModel"] },
+        { key: "consumption", label: "Consumption", parameters: ["consumptionModel", "consumptionInterval"] }
+    ],
+    "exploration.foraging": [
+        { key: "cost", label: "Cost", parameters: ["timeCost", "timeUnit", "movementTradeoff"] },
+        { key: "resolution", label: "Resolution", parameters: ["resolutionModel"] }
+    ],
+    "survival.camping": [
+        { key: "cost", label: "Cost", parameters: ["timeCost", "timeUnit"] },
+        { key: "resolution", label: "Resolution and watches", parameters: ["resolutionModel", "watchModel"] }
+    ],
+    "time.forced-travel": [
+        { key: "limit", label: "Ordinary limit", parameters: ["normalTravelLimit", "limitUnit"] },
+        { key: "resolution", label: "Forced-travel resolution", parameters: ["checkModel"] },
+        { key: "consequence", label: "Consequence", parameters: ["failureConsequence"] }
+    ],
+    "survival.exposure": [
+        { key: "conditions", label: "Environment", parameters: ["dimensions", "evaluationInterval"] },
+        { key: "resolution", label: "Evaluation", parameters: ["evaluationModel", "targetScope"] },
+        { key: "consequence", label: "Consequence", parameters: ["consequenceModel"] }
+    ],
+    "effects.expedition": [
+        { key: "effect", label: "Effect", parameters: ["effectKinds", "scope"] },
+        { key: "application", label: "Application", parameters: ["accumulationModel"] },
+        { key: "recovery", label: "Recovery", parameters: ["recoveryModel"] }
+    ],
+    "journey.process": [
+        { key: "stages", label: "Stages", parameters: ["stageModel", "stageKeys"] },
+        { key: "progress", label: "Progress and bounds", parameters: ["progressModel", "progressKind", "progressUnit", "progressFloor", "progressCeiling", "allowNegativeProgress"] },
+        { key: "roles", label: "Roles", parameters: ["roleDriven", "roleAssignmentModel"] },
+        { key: "transition", label: "Transitions and completion", parameters: ["stageTransitionModel", "completionModel", "intervalIntegrationModel"] }
+    ],
+    "journey.events": [
+        { key: "trigger", label: "Trigger", parameters: ["triggerModel", "triggerSources"] },
+        { key: "target", label: "Journey link and target", parameters: ["linkMode", "targetingModel", "terrainInfluence"] },
+        { key: "resolution", label: "Resolution and consequences", parameters: ["consequenceModel", "requiresResolvedTrigger", "blocksRelevantTravelWhileResolutionRequired"] }
+    ]
+};
+
 export function compactRuleCatalog(): CompactRuleDescriptor[] {
     return [...rules];
 }
@@ -335,17 +426,149 @@ export function friendlyStoredValue(key: string, value: string, moduleKey: strin
     return friendlyToken(value);
 }
 
+export function procedurePresentationSections(
+    moduleKey: string,
+    parameters: Record<string, string>): ProcedurePresentationSection[] {
+    if (moduleKey === "procedure.helpers") {
+        return helperPresentationSections(parameters);
+    }
+
+    const present = Object.entries(parameters).filter(([, value]) => value !== "");
+    if (present.length === 0) return [];
+
+    const byKey = new Map(present.map(([key, value]) => [key, parameterFact(moduleKey, key, value)]));
+    const used = new Set<string>();
+    const sections: ProcedurePresentationSection[] = [];
+
+    for (const layout of presentationSectionLayouts[moduleKey] ?? []) {
+        const facts = layout.parameters
+            .map(key => {
+                const fact = byKey.get(key);
+                if (fact) used.add(key);
+                return fact ?? null;
+            })
+            .filter((fact): fact is ProcedurePresentationFact => fact !== null);
+        if (facts.length > 0) sections.push({ key: layout.key, label: layout.label, facts });
+    }
+
+    const remaining = present
+        .filter(([key]) => !used.has(key))
+        .map(([key, value]) => parameterFact(moduleKey, key, value));
+    if (remaining.length > 0) {
+        sections.push({
+            key: sections.length === 0 ? "configuration" : "additional",
+            label: sections.length === 0 ? "Configuration" : "Additional details",
+            facts: remaining
+        });
+    }
+    return sections;
+}
+
 export function procedureParameterFacts(
     moduleKey: string,
     parameters: Record<string, string>): ProcedurePresentationFact[] {
-    return Object.entries(parameters)
-        .filter(([, value]) => value !== "")
-        .map(([key, value]) => ({
-            label: labels[key] ?? friendlyToken(key),
-            value: key === "durationTicks"
-                ? formatDurationTicks(value)
-                : friendlyStoredValue(key, value, moduleKey)
-        }));
+    return procedurePresentationSections(moduleKey, parameters)
+        .flatMap(section => section.facts);
+}
+
+function parameterFact(moduleKey: string, key: string, value: string): ProcedurePresentationFact {
+    const fact: ProcedurePresentationFact = {
+        label: labels[key] ?? friendlyToken(key),
+        value: key === "durationTicks"
+            ? formatDurationTicks(value)
+            : friendlyStoredValue(key, value, moduleKey)
+    };
+
+    if (mappingKeys.has(key)) {
+        fact.entries = value.split(";")
+            .map(part => {
+                const [storedKey, storedValue] = part.split("=", 2);
+                return storedValue === undefined
+                    ? { label: friendlyToken(part), value: "—" }
+                    : { label: friendlyToken(storedKey), value: friendlyToken(storedValue) };
+            })
+            .filter(entry => entry.label !== "Not used");
+    } else if (keyListKeys.has(key)) {
+        fact.items = value.split(";").map(friendlyToken).filter(item => item !== "Not used");
+    }
+    return fact;
+}
+
+function helperPresentationSections(parameters: Record<string, string>): ProcedurePresentationSection[] {
+    const present = Object.fromEntries(Object.entries(parameters).filter(([, value]) => value !== ""));
+    const consumed = new Set<string>();
+    const sections: ProcedurePresentationSection[] = [];
+    const definitions: Array<{ prefix: "travel" | "navigation" | "encounter"; label: string }> = [
+        { prefix: "travel", label: "Travel generation" },
+        { prefix: "navigation", label: "Navigation generation" },
+        { prefix: "encounter", label: "Encounter generation" }
+    ];
+
+    for (const definition of definitions) {
+        const prefix = definition.prefix;
+        const facts: ProcedurePresentationFact[] = [];
+        const enabledKey = `${prefix}.enabled`;
+        if (present[enabledKey] !== undefined) {
+            consumed.add(enabledKey);
+            facts.push({ label: "Enabled", value: friendlyStoredValue(enabledKey, present[enabledKey], "procedure.helpers") });
+        }
+
+        const countKey = `${prefix}.diceCount`;
+        const sidesKey = `${prefix}.dieSides`;
+        const modifierKey = `${prefix}.modifier`;
+        const count = present[countKey];
+        const sides = present[sidesKey];
+        const modifier = present[modifierKey];
+        if (count !== undefined && sides !== undefined) {
+            consumed.add(countKey);
+            consumed.add(sidesKey);
+            if (modifier !== undefined) consumed.add(modifierKey);
+            facts.push({ label: "Roll", value: diceFormula(count, sides, modifier) });
+        }
+
+        if (prefix === "travel" && present["travel.distanceFactor"] !== undefined) {
+            consumed.add("travel.distanceFactor");
+            facts.push({
+                label: "Distance factor",
+                value: `${friendlyStoredValue("travel.distanceFactor", present["travel.distanceFactor"], "procedure.helpers")} per roll point`
+            });
+        }
+
+        if (prefix === "encounter") {
+            for (const [key, label] of [
+                ["encounter.wanderingResults", "Wandering results"],
+                ["encounter.keyedLocationResults", "Keyed-location results"],
+                ["encounter.timingSlots", "Timing slots"]
+            ] as const) {
+                if (present[key] === undefined) continue;
+                consumed.add(key);
+                facts.push({
+                    label,
+                    value: key.endsWith("Results")
+                        ? present[key].split(";").filter(Boolean).join(", ") || "Not used"
+                        : friendlyStoredValue(key, present[key], "procedure.helpers")
+                });
+            }
+        }
+
+        if (facts.length > 0) sections.push({ key: prefix, label: definition.label, facts });
+    }
+
+    const remaining = Object.entries(present)
+        .filter(([key]) => !consumed.has(key))
+        .map(([key, value]) => parameterFact("procedure.helpers", key, value));
+    if (remaining.length > 0) sections.push({ key: "additional", label: "Additional details", facts: remaining });
+    return sections;
+}
+
+function diceFormula(count: string, sides: string, modifier: string | undefined): string {
+    const base = `${count}d${sides}`;
+    if (modifier === undefined || modifier.trim() === "" || Number(modifier) === 0) return base;
+    const numeric = Number(modifier);
+    if (Number.isFinite(numeric)) {
+        return numeric > 0 ? `${base} + ${formatNumber(numeric)}` : `${base} - ${formatNumber(Math.abs(numeric))}`;
+    }
+    return `${base} ${modifier.trim()}`;
 }
 
 export function ticksToDuration(value: string): { amount: number; unit: "minutes" | "hours" | "days" } | null {
