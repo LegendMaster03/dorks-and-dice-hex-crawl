@@ -229,6 +229,16 @@ export function ensurePhase15Styles(): void {
         .hc-ledger-kicker { font-size:.72rem; font-weight:800; text-transform:uppercase; letter-spacing:.045em; color:var(--hc-muted); }
         .hc-cell-progress progress, .hc-stage-content progress { width:100%; height:.65rem; accent-color:var(--hc-primary); }
         .hc-cell-progress.is-unbounded { border-style:dashed; }
+        .hc-readable-facts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.45rem; margin:.55rem 0; }
+        .hc-readable-facts > div { min-width:0; padding:.55rem .6rem; border:1px solid var(--hc-border); border-radius:.55rem; background:var(--hc-surface-elevated); }
+        .hc-readable-facts dt { font-size:.72rem; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:var(--hc-muted); }
+        .hc-readable-facts dd { margin:.12rem 0 0; min-width:0; color:var(--hc-text-strong); overflow-wrap:anywhere; }
+        .hc-readable-table { width:100%; border-collapse:collapse; margin:.55rem 0; font-size:.88rem; }
+        .hc-readable-table caption { text-align:left; padding:0 0 .35rem; font-weight:750; color:var(--hc-text-strong); }
+        .hc-readable-table th, .hc-readable-table td { padding:.4rem .45rem; border-bottom:1px solid var(--hc-border); text-align:left; vertical-align:top; overflow-wrap:anywhere; }
+        .hc-readable-table thead th { font-size:.72rem; text-transform:uppercase; letter-spacing:.04em; color:var(--hc-muted); }
+        .hc-readable-table tbody th { font-weight:650; color:var(--hc-text-strong); }
+        .hc-form select[multiple] { min-height:4.5rem; }
         .hc-movement-composition-ledger { display:grid; gap:.65rem; min-width:0; padding:.75rem; border:1px solid var(--hc-border); border-radius:.7rem; background:var(--hc-surface-elevated); }
         .hc-movement-composition-ledger > header { display:flex; justify-content:space-between; align-items:flex-start; gap:.75rem; flex-wrap:wrap; }
         .hc-movement-composition-ledger > header > div { display:grid; gap:.1rem; }
@@ -321,7 +331,8 @@ export function ensurePhase15Styles(): void {
             .hc-adjacency-navigator { width:7.5rem; top:.55rem; left:.55rem; }
             .hc-adjacency-edge { min-width:2.75rem; min-height:2.75rem; }
             .hc-current-travel-facts { grid-template-columns:auto minmax(0,1fr); }
-            .hc-movement-ledger-table { display:block; overflow-x:auto; }
+            .hc-movement-ledger-table, .hc-readable-table { display:block; overflow-x:auto; }
+            .hc-readable-facts { grid-template-columns:1fr; }
             .hc-reference-table-facts, .hc-rule-facts { grid-template-columns:minmax(6rem,auto) minmax(0,1fr); }
             .hc-journey-state-grid { grid-template-columns:1fr; }
             .hc-current-travel-pace-editor { grid-template-columns:1fr; }

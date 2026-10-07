@@ -78,3 +78,18 @@ test("combined resources and effects UI exposes authoritative active effects wit
     assert.match(effects, /effect\.id/);
     assert.match(effects, /Technical details/);
 });
+
+
+test("readability follow-up renders comparable resource, environment, exposure, foraging, and camp state", () => {
+    assert.match(source, /data\.resourceLedger/);
+    assert.match(source, /Resource inventory/);
+    assert.match(source, /Effective environment/);
+    assert.match(source, /Exposure progress/);
+    assert.match(source, /Activities used/);
+    assert.match(source, /Preparation \/ watch activities/);
+    assert.match(source, /Watch model/);
+    assert.match(source, /targetSelect\("Target"/);
+    assert.match(source, /assignmentMultiSelect/);
+    assert.doesNotMatch(source, /Activity assignment IDs, comma-separated/);
+    assert.doesNotMatch(source, /Target ID when scope requires it/);
+});
