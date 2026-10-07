@@ -195,6 +195,11 @@ export async function renderExpedition(
         ]);
     };
 
+    const rebaseAuxiliaryVersions = (version: number): void => {
+        if (survival) survival = { ...survival, expeditionVersion: version };
+        if (journey) journey = { ...journey, expeditionVersion: version };
+    };
+
     const applyRuntime = (next: ExpeditionDetail): void => {
         runtime = next;
         preferences = mergeRuntimeTravelPreferences(runtime, preferences);
@@ -626,7 +631,7 @@ export async function renderExpedition(
                 selectedHexTracksTravelIntent = selectedHex !== null;
             }
             applyRuntime(next);
-            await refreshAuxiliary();
+            rebaseAuxiliaryVersions(next.version);
             if (!disposed) render();
         } catch (value) {
             try {
