@@ -454,30 +454,50 @@ public sealed class PersistenceApplicationTests
     }
 
     [Fact]
-    public async Task LostAndVeerStateSurviveReload()
+    public async Task ChangedCourseRemainsIntendedWhenLostVeerProducesDifferentActualDirectionAfterReload()
     {
         await using var database = await TestDatabase.CreateAsync();
         var service = await database.ServiceAsync();
         var world = await service.CreateOverworldAsync("alice", WorldCommand());
         var expedition = await service.StartExpeditionAsync(world.World.Id, "alice", new StartExpeditionCommand(
             "Lost survey", "alexandrian-advanced", new HexCoordinate(0, 0)));
-        expedition = await service.AdvanceExpeditionAsync(expedition.State.Id, "alice", new AdvanceExpeditionCommand
-        {
-            ExpectedVersion = expedition.Version,
-            IntendedDirection = 0,
-            ExpectedDistance = 2,
-            ActualDistance = 2,
-            ResolutionSource = ResolutionSource.ManualRoll,
-            NavigationOutcome = NavigationCheckOutcome.Failed,
-            VeerSteps = 1,
-            EncounterOutcome = EncounterOutcomeKind.None
-        });
+        expedition = await service.SetExpeditionCourseIntentAsync(
+            expedition.State.Id,
+            "alice",
+            new SetExpeditionCourseIntentCommand(expedition.Version, 0));
+        expedition = await service.SetExpeditionCourseIntentAsync(
+            expedition.State.Id,
+            "alice",
+            new SetExpeditionCourseIntentCommand(expedition.Version, 2));
+
+        var beforeNavigation = await database.ServiceAsync();
+        var reloadedBeforeResolution = await beforeNavigation.GetExpeditionAsync(expedition.State.Id, "alice");
+        Assert.Equal(new HexDirection(2), reloadedBeforeResolution.State.IntendedDirection);
+
+        expedition = await beforeNavigation.AdvanceExpeditionAsync(
+            reloadedBeforeResolution.State.Id,
+            "alice",
+            new AdvanceExpeditionCommand
+            {
+                ExpectedVersion = reloadedBeforeResolution.Version,
+                IntendedDirection = 2,
+                ExpectedDistance = 2,
+                ActualDistance = 2,
+                ResolutionSource = ResolutionSource.ManualRoll,
+                NavigationOutcome = NavigationCheckOutcome.Failed,
+                VeerSteps = 1,
+                EncounterOutcome = EncounterOutcomeKind.None
+            });
+
+        Assert.Equal(new HexDirection(2), expedition.State.IntendedDirection);
+        Assert.Equal(new HexDirection(3), expedition.State.ActualDirection);
 
         var restarted = await database.ServiceAsync();
         var loaded = await restarted.GetExpeditionAsync(expedition.State.Id, "alice");
         Assert.True(loaded.State.Navigation.IsLost);
         Assert.Equal(1, loaded.State.Navigation.VeerSteps);
-        Assert.Equal(new HexDirection(1), loaded.State.ActualDirection);
+        Assert.Equal(new HexDirection(2), loaded.State.IntendedDirection);
+        Assert.Equal(new HexDirection(3), loaded.State.ActualDirection);
     }
 
     [Fact]
