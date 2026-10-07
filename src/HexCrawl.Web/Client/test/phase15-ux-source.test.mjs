@@ -1302,19 +1302,24 @@ test("Phase 15.1 explains domain-specific numeric grid settings at their point o
 });
 
 
-test("Phase 15.1 preset discovery explains fit and DM workload from generic procedure structure", () => {
+test("Phase 15.1 preset discovery explains fit and DM workload from configured generic behavior", () => {
     const workspace = fs.readFileSync(
         path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"),
+        "utf8");
+    const guidance = fs.readFileSync(
+        path.join(sourceDir, "modules/procedures/preset-guidance.ts"),
         "utf8");
 
     assert.match(workspace, /Choosing a starting point/);
     assert.match(workspace, /Good fit when/);
     assert.match(workspace, /You will manage/);
     assert.match(workspace, /Setup breadth/);
-    assert.match(workspace, /keys\.has\("journey\.process"\)/);
-    assert.match(workspace, /keys\.has\("movement\.resolution"\) && keys\.has\("navigation\.outcome"\)/);
-    assert.match(workspace, /key\.startsWith\("survival\."\)/);
-    assert.doesNotMatch(workspace, /presetKey\s*===/);
+    assert.match(workspace, /presetGuidance\(preset\.procedure\)/);
+    assert.match(guidance, /usesNavigationChecks/);
+    assert.match(guidance, /cadence/);
+    assert.match(guidance, /travel\.enabled/);
+    assert.match(guidance, /automationLevel/);
+    assert.doesNotMatch(guidance, /presetKey/);
 });
 
 test("Phase 15.1 Compact supplies domain explanations for numeric procedure settings", () => {

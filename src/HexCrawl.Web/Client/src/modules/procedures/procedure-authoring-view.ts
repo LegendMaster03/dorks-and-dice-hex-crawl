@@ -16,6 +16,7 @@ import { clearUiError, showUiError } from "../../ui-error";
 import { badge, openWorkspaceDrawer, textElement, type WorkspaceDrawer } from "../../ui/workspace";
 import { applyGuidedExperience, guidedCallout, guidedDisclosure, guidancePreferenceButton } from "../../ui/guidance";
 import { executionSummary, inputSourceLabel, saveBlocked, withBehavior, withParameter } from "./procedure-composer-model";
+import { presetGuidance } from "./preset-guidance";
 import {
     compactParameter,
     compactRule,
@@ -1403,47 +1404,6 @@ function presetGuidanceCard(preset: ProcedurePreset): HTMLElement {
         textElement("strong", "Setup breadth"),
         textElement("p", `${guidance.breadth} · ${guidance.areaCount} ${guidance.areaCount === 1 ? "rule area" : "rule areas"}`));
     return section;
-}
-
-function presetGuidance(preset: ProcedurePreset): {
-    bestFor: string;
-    manage: string;
-    breadth: "Focused" | "Moderate" | "Broad";
-    areaCount: number;
-} {
-    const keys = new Set(preset.procedure.modules.map(module => module.moduleKey));
-    const areas: string[] = [];
-    if ([...keys].some(key => key === "time.interval" || key.startsWith("movement."))) {
-        areas.push("travel time and movement");
-    }
-    if ([...keys].some(key => key.startsWith("navigation."))) areas.push("navigation and getting lost");
-    if ([...keys].some(key => key.startsWith("encounters."))) areas.push("encounter checks");
-    if ([...keys].some(key =>
-        key.startsWith("survival.") || key === "exploration.foraging" || key === "time.forced-travel" || key === "effects.expedition")) {
-        areas.push("survival, resources, and expedition effects");
-    }
-    if ([...keys].some(key => key.startsWith("journey."))) areas.push("journey stages and events");
-    if (keys.has("party.activities")) areas.push("travel roles and activities");
-    if (keys.has("procedure.helpers")) areas.push("automatic result generation");
-
-    const bestFor = keys.has("journey.process")
-        ? "You want travel to run primarily as a staged journey or challenge with explicit progress and events."
-        : keys.has("movement.resolution") && keys.has("navigation.outcome")
-            ? "You want traditional spatial travel where course, movement, navigation failure, and recovery all matter."
-            : keys.has("movement.resolution")
-                ? "You want repeated travel and movement without a full getting-lost and recovery subsystem."
-                : keys.has("time.interval")
-                    ? "You mainly need repeating travel-time bookkeeping and a small foundation you can extend."
-                    : "The listed rule areas already match the exploration procedure you intend to run.";
-
-    const areaCount = areas.length;
-    const breadth = areaCount <= 2 ? "Focused" : areaCount <= 4 ? "Moderate" : "Broad";
-    return {
-        bestFor,
-        manage: areas.length > 0 ? areas.join(", ") : "only the procedure-specific rules shown above",
-        breadth,
-        areaCount
-    };
 }
 
 function presetFacts(preset: ProcedurePreset): HTMLElement {
