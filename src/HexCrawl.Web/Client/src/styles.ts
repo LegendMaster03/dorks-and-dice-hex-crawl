@@ -252,6 +252,32 @@ export function ensureStyles(): void {
         /* Running-sheet presentation: recognizable paper workflow with modern, optional automation. */
         .hc-run-toolbar { align-items: center; padding: .45rem; border: 1px solid var(--hc-border); border-radius: .65rem; background: var(--hc-surface); }
         .hc-run-toolbar .hc-active-view { border-color: var(--hc-primary); background: color-mix(in srgb, var(--hc-primary) 12%, var(--hc-surface)); box-shadow: inset 0 -2px 0 var(--hc-primary); }
+        .hc-guidance-off .hc-guided-only { display: none !important; }
+        .hc-guidance-toggle { white-space: nowrap; }
+        .hc-guided-callout {
+            display: grid;
+            gap: .65rem;
+            margin: 0 0 1rem;
+            padding: .9rem 1rem;
+            border: 1px solid var(--hc-border);
+            border-inline-start: .3rem solid var(--hc-primary);
+            border-radius: .65rem;
+            background: color-mix(in srgb, var(--hc-primary) 6%, var(--hc-surface));
+            color: var(--hc-text);
+        }
+        .hc-guided-callout h2, .hc-guided-callout h3, .hc-guided-callout p { margin: 0; }
+        .hc-guided-steps { display: grid; gap: .35rem; margin: 0; padding-left: 1.25rem; }
+        .hc-guided-lesson { padding-top: .45rem; border-top: 1px solid var(--hc-border); }
+        .hc-guided-lesson > summary { cursor: pointer; color: var(--hc-text-strong); font-weight: 750; }
+        .hc-guided-terms { display: grid; grid-template-columns: minmax(8rem, auto) minmax(0, 1fr); gap: .35rem .8rem; margin: .65rem 0 0; }
+        .hc-guided-terms dt { font-weight: 750; color: var(--hc-text-strong); }
+        .hc-guided-terms dd { margin: 0; color: var(--hc-muted); }
+        .hc-guided-help { margin: -.2rem 0 .15rem; font-size: .82rem; color: var(--hc-muted); }
+        .hc-guided-help > summary { width: max-content; cursor: pointer; color: var(--hc-primary); font-weight: 750; }
+        .hc-guided-help-body { display: grid; gap: .25rem; max-width: 46rem; padding: .45rem .55rem; border-inline-start: 2px solid var(--hc-primary); }
+        .hc-guided-help-body strong, .hc-guided-help-body p { margin: 0; }
+        .hc-guided-help-example { color: var(--hc-text); font-style: italic; }
+        .hc-guided-why { margin-top: .45rem; }
         .hc-home-optional-tools { margin-bottom: 1rem; }
         .hc-home-optional-tools > summary { cursor: pointer; color: var(--hc-text-strong); font-weight: 800; }
         .hc-home-optional-tools[open] > summary { margin-bottom: .7rem; }
@@ -358,6 +384,8 @@ export function ensureStyles(): void {
             .hc-party-register-grid > div { grid-column: 1 !important; border-right: 0; }
             .hc-party-member-row, .hc-party-editor-row, .hc-marching-row, .hc-standing-order-row, .hc-watch-heading-row { grid-template-columns: 1fr; }
             .hc-party-save-row { align-items: stretch; flex-direction: column; }
+            .hc-guided-terms { grid-template-columns: 1fr; gap: .12rem; }
+            .hc-guided-terms dd { margin-bottom: .35rem; }
         }
         @media (max-width: 1050px) {
             .hc-workspace-grid { grid-template-columns: minmax(0, 1fr) minmax(17rem, 21rem); }

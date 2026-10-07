@@ -14,6 +14,7 @@ import { canonicalExpeditionRoute } from "../../tool-route";
 import type { ExpeditionDetail, HexCoordinate, HexOrientation, Overworld, ResolutionSource, ToolHostContext } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
 import { badge, disclosure, openWorkspaceDrawer, statAction, textElement, type WorkspaceDrawer } from "../../ui/workspace";
+import { applyGuidedExperience, guidedDisclosure, guidancePreferenceButton } from "../../ui/guidance";
 import { ExpeditionEffectsPanel } from "./effects-panel";
 import { ExpeditionEnvironmentPanel } from "./environment-panel";
 import { ExpeditionJourneyPanel } from "./journey-panel";
@@ -52,6 +53,7 @@ export async function renderExpedition(
     toolContext: ToolHostContext | null = null): Promise<() => void> {
     ensurePhase15Styles();
     root.classList.add("hc-phase15");
+    applyGuidedExperience(root);
 
     let runtime = await api.getExpedition(expeditionId);
     if (routeWorldId) {
@@ -267,6 +269,7 @@ export async function renderExpedition(
         }
         nav.append(button("Procedure reference", () =>
             navigate(`/procedures/${encodeURIComponent(runtime.procedure.procedureId)}/revisions/${runtime.procedure.revision}/reference`)));
+        nav.append(guidancePreferenceButton(root));
         header.append(heading, nav);
         page.append(header);
 
@@ -364,6 +367,21 @@ export async function renderExpedition(
         };
     };
 
+    const guidedActionExplanation = (
+        kind: ReturnType<typeof expeditionWorkspacePresentation>["action"]["kind"]): string => {
+        switch (kind) {
+            case "travel": return "Travel is the routine progression step. Choose or keep the party's course and pace, then let the procedure resolve movement, partial progress, navigation, encounters, and other consequences through the normal runtime.";
+            case "navigation": return "Navigation is due before more travel can resolve. It determines how the intended course relates to the party's actual course; resolving it does not by itself advance movement.";
+            case "encounter": return "An encounter interrupted the expedition. Travel remains paused so the encounter can be resolved and handed off without losing the authoritative expedition state.";
+            case "survival": return "A forced-travel, resource, or survival consequence is pending. Resolving it first prevents later travel from skipping a consequence the procedure already created.";
+            case "journey": return "The active journey has a stage, event, approach, or resolution that must be handled before the process can continue.";
+            case "watch": return "This procedure uses a repeating travel period. Running or resuming the watch advances that configured interval without inventing spatial movement.";
+            case "boundary": return "The party reached a boundary while its position or course needs a decision. Resolve that ambiguity before additional travel changes the expedition state.";
+            case "procedure": return "There is no automatic travel or journey step available right now. Use the saved procedure as the table authority and resolve any unsupported or manual behavior explicitly.";
+        }
+        return "Follow the authoritative current action before advancing the expedition.";
+    };
+
     const renderCurrentAction = (action: ReturnType<typeof expeditionWorkspacePresentation>["action"]): HTMLElement => {
         const section = document.createElement("section");
         section.className = "hc-current-action";
@@ -382,6 +400,7 @@ export async function renderExpedition(
         primary.dataset.currentActionButton = "";
         row.append(primary);
         section.append(row);
+        section.append(guidedDisclosure("Why is this next?", copy.label, guidedActionExplanation(action.kind)));
         return section;
     };
 

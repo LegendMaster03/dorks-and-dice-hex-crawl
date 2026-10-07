@@ -1229,3 +1229,37 @@ test("readability follow-up exposes nonspatial movement and encounter schedule s
     assert.match(journey, /Journey event record/);
     assert.match(journey, /Journey history/);
 });
+
+
+test("Phase 15.1 Guided layers beginner help over existing Compact and runtime authority", () => {
+    const guidance = fs.readFileSync(path.join(sourceDir, "ui/guidance.ts"), "utf8");
+    const home = fs.readFileSync(path.join(sourceDir, "modules/home/tool-home-view.ts"), "utf8");
+    const procedure = fs.readFileSync(path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"), "utf8");
+    const expedition = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-view.ts"), "utf8");
+    assert.match(guidance, /hex-crawl\.guided\.enabled/);
+    assert.match(guidance, /stored !== "false"/);
+    assert.match(guidance, /hc-guidance-off/);
+    assert.match(home, /New to hex crawls\? Start here\./);
+    assert.match(home, /A 6-mile value means one adjacent hex represents 6 miles center-to-center/);
+    assert.match(procedure, /ProcedureAuthoringMode = "compact" \| "advanced" \| "json"/);
+    assert.match(procedure, /How to use Compact/);
+    assert.match(procedure, /guidedDisclosure\(/);
+    assert.match(expedition, /Why is this next\?/);
+    assert.match(expedition, /guidedActionExplanation/);
+    assert.doesNotMatch(guidance, /fetch\(|CampaignProcedure|procedure\.modules|runtime\./);
+});
+
+test("Phase 15.1 explains domain-specific numeric grid settings at their point of use", () => {
+    const home = fs.readFileSync(path.join(sourceDir, "modules/home/tool-home-view.ts"), "utf8");
+    const worlds = fs.readFileSync(path.join(sourceDir, "modules/worlds/world-list-view.ts"), "utf8");
+    const editor = fs.readFileSync(path.join(sourceDir, "modules/worlds/world-editor-view.ts"), "utf8");
+    const assistant = fs.readFileSync(path.join(sourceDir, "modules/assistants/assistant-entry-view.ts"), "utf8");
+    for (const source of [home, worlds, editor, assistant]) {
+        assert.match(source, /attachFieldHelp/);
+        assert.match(source, /Hex center distance/);
+        assert.match(source, /center of one hex to the center of an adjacent hex/);
+    }
+    assert.match(worlds, /internal coordinate frame/);
+    assert.match(editor, /They are not travel-distance settings/);
+    assert.match(assistant, /q\/r are axial hex coordinates/);
+});
