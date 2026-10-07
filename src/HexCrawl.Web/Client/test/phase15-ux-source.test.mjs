@@ -450,7 +450,10 @@ test("navigator controls use edge-attached arrows with visible focus and practic
     assert.match(styles, /\.hc-adjacency-edge::after/);
     assert.match(styles, /clip-path:polygon/);
     assert.match(styles, /cursor:pointer/);
-    assert.match(styles, /background:var\(--hc-surface\)/);
+    assert.match(styles, /\.hc-adjacency-edge::after \{[^}]*background:#fff/);
+    assert.match(styles, /\.hc-adjacency-edge::before \{[^}]*background:transparent/);
+    assert.match(styles, /\.hc-adjacency-edge:hover:not\(:disabled\)::before \{ background:var\(--hc-focus\)/);
+    assert.match(styles, /\.hc-adjacency-edge-mark \{[^}]*opacity:0/);
     assert.doesNotMatch(styles, /\.hc-adjacency-caption/);
     assert.match(styles, /\.hc-adjacency-edge:focus-visible/);
     assert.match(styles, /outline:3px solid var\(--hc-focus\)/);
