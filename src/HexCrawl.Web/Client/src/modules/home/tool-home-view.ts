@@ -6,6 +6,7 @@ import type { ExpeditionSummary, OverworldSummary, ProcedurePreset, StartStandal
 import { clearUiError, showUiError } from "../../ui-error";
 import { campaignProcedureSummary, renderProcedureMechanicList } from "../../campaign-procedure-view";
 import { input, integer, numeric, option, required, select } from "../../ui/dom";
+import { applyGuidedExperience, attachFieldHelp, guidancePreferenceButton } from "../../ui/guidance";
 import {
     applyStandaloneProcedureChoice,
     applyWorldProcedureChoice,
@@ -23,6 +24,7 @@ export async function renderToolHome(
     navigate: (route: string, replace?: boolean) => void): Promise<() => void> {
     let disposed = false;
     let startPending = false;
+    applyGuidedExperience(root);
     root.innerHTML = `
         <section class="hc-page">
             <header class="hc-page-header">
@@ -30,8 +32,38 @@ export async function renderToolHome(
                     <h1>Hex Crawl</h1>
                     <p>Run expeditions with campaign-owned exploration procedures, spatial maps when needed, and focused GM utilities.</p>
                 </div>
+                <nav class="hc-button-row" data-guidance-controls></nav>
             </header>
             <div class="hc-error" data-error hidden role="alert"></div>
+            <section class="hc-guided-callout hc-guided-only" aria-labelledby="hc-guided-start-title">
+                <div>
+                    <span class="hc-sheet-kicker">Guided</span>
+                    <h2 id="hc-guided-start-title">New to hex crawls? Start here.</h2>
+                    <p>A hex crawl turns exploration into a repeatable table procedure. Hex Crawl keeps the current state and next action visible so you do not have to memorize the procedure first.</p>
+                </div>
+                <ol class="hc-guided-steps">
+                    <li><strong>Pick a procedure.</strong> If you are unsure, use a familiar preset instead of building one from scratch.</li>
+                    <li><strong>Pick the expedition context.</strong> Use an authored world/map when you have one, an abstract hex grid for mapless spatial travel, or a non-spatial session for journey procedures that do not use hexes.</li>
+                    <li><strong>Start the expedition.</strong> During play, follow the Next action card; it tells you what the current procedure needs before play can continue.</li>
+                    <li><strong>Open details only when needed.</strong> Party, movement, navigation, encounters, resources, and journey state remain available without becoming separate workflows.</li>
+                </ol>
+                <details class="hc-guided-lesson">
+                    <summary>Travel basics and terms</summary>
+                    <dl class="hc-guided-terms">
+                        <dt>Procedure</dt><dd>The rules that define how this expedition handles time, movement, navigation, encounters, survival, and journeys.</dd>
+                        <dt>Hex center distance</dt><dd>The game-world distance from the center of one hex to the center of an adjacent hex. A 6-mile value means one adjacent hex represents 6 miles center-to-center.</dd>
+                        <dt>Travel period / watch</dt><dd>A repeating chunk of travel time defined by the selected procedure. Not every procedure uses watches.</dd>
+                        <dt>Course</dt><dd>The direction the party intends to travel. Selecting a course does not move the party; travel resolves only when you take the travel action.</dd>
+                        <dt>Navigation</dt><dd>The procedure that determines whether the party follows its intended course, becomes lost, recognizes that problem, or reorients.</dd>
+                        <dt>Pace / travel mode</dt><dd>A reusable travel choice such as normal, slow, or fast when the selected procedure defines those choices.</dd>
+                        <dt>q / r</dt><dd>Axial coordinates used to identify hexes. For a new abstract grid, 0 / 0 is a normal starting point.</dd>
+                    </dl>
+                </details>
+                <details class="hc-guided-lesson">
+                    <summary>When do I need advanced setup?</summary>
+                    <p>Usually you do not. Start with a preset and ordinary map/context values. Advanced grid alignment, custom units, Advanced procedure editing, and JSON exist for unusual maps, house rules, imports, or exact technical control.</p>
+                </details>
+            </section>
             <div class="hc-columns hc-home-three-column-grid hc-home-main-grid">
                 <section class="hc-panel">
                     <div class="hc-panel-heading">
@@ -115,6 +147,7 @@ export async function renderToolHome(
     required<HTMLButtonElement>(root, "[data-assistant-travel]").addEventListener("click", () => navigate("/assistants/travel"));
     required<HTMLButtonElement>(root, "[data-assistant-navigation]").addEventListener("click", () => navigate("/assistants/navigation"));
     required<HTMLButtonElement>(root, "[data-assistant-encounters]").addEventListener("click", () => navigate("/assistants/encounters"));
+    required<HTMLElement>(root, "[data-guidance-controls]").append(guidancePreferenceButton(root));
     const error = required<HTMLElement>(root, "[data-error]");
     const list = required<HTMLElement>(root, "[data-expedition-list]");
     const count = required<HTMLElement>(root, "[data-expedition-count]");
@@ -126,6 +159,32 @@ export async function renderToolHome(
     const nonSpatialContext = required<HTMLElement>(form, "[data-nonspatial-context]");
     const customUnit = required<HTMLElement>(form, "[data-custom-unit]");
     const startButton = required<HTMLButtonElement>(form, "[data-start-button]");
+    attachFieldHelp(
+        procedure,
+        "Procedure",
+        "The procedure is the expedition ruleset. It decides which travel, navigation, encounter, survival, and journey steps exist.",
+        "If you are new to hex crawling, choose a preset first; you can edit the saved campaign copy later.");
+    attachFieldHelp(
+        context,
+        "Expedition context",
+        "The context tells Hex Crawl whether this expedition uses an authored world map, an abstract mathematical hex grid, or no spatial grid at all.");
+    attachFieldHelp(
+        select(form, "orientation"),
+        "Hex orientation",
+        "Pointy-top and flat-top describe how the hexes are drawn. Orientation alone does not define north or change the distance represented by a hex.");
+    attachFieldHelp(
+        input(form, "scale"),
+        "Hex center distance",
+        "This is the game-world distance from the center of one hex to the center of an adjacent hex.",
+        "If adjacent hexes on your map represent 6 miles of travel, enter 6 and choose Miles.");
+    attachFieldHelp(
+        unit,
+        "Distance unit",
+        "This is the unit used by the hex center distance and spatial travel calculations.");
+    attachFieldHelp(
+        input(form, "meters"),
+        "Custom meters per unit",
+        "For a custom distance unit, this conversion tells Hex Crawl how large one custom unit is in meters. Leave it alone unless you selected Custom.");
     let presets: ProcedurePreset[] = [];
     let savedProcedures = await Promise.resolve([] as Awaited<ReturnType<ProcedureComposerApi["listProcedures"]>>);
     const composerApi = await ProcedureComposerApi.create(root);

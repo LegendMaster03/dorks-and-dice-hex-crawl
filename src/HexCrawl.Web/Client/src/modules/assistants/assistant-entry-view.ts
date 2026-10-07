@@ -11,6 +11,7 @@ import type {
 import { clearUiError, showUiError } from "../../ui-error";
 import { campaignProcedureSummary, renderProcedureMechanicList } from "../../campaign-procedure-view";
 import { input, integer, numeric, required, select } from "../../ui/dom";
+import { applyGuidedExperience, attachFieldHelp, guidancePreferenceButton } from "../../ui/guidance";
 import {
     applyStandaloneProcedureChoice,
     populateProcedureStartChoices,
@@ -25,6 +26,7 @@ export async function renderAssistantEntry(
     navigate: (route: string, replace?: boolean) => void): Promise<() => void> {
     let disposed = false;
     let pending = false;
+    applyGuidedExperience(root);
 
     root.innerHTML = `
         <section class="hc-page">
@@ -34,7 +36,7 @@ export async function renderAssistantEntry(
                     <h1>${title(assistant)}</h1>
                     <p>${subtitle(assistant)}</p>
                 </div>
-                <nav><button type="button" data-home>Hex Crawl home</button></nav>
+                <nav class="hc-button-row"><button type="button" data-home>Hex Crawl home</button><span data-guidance-controls></span></nav>
             </header>
             <div class="hc-error" data-error hidden role="alert"></div>
             <div class="hc-columns">
@@ -94,6 +96,7 @@ export async function renderAssistantEntry(
                                 <label>Start q <input name="q" type="number" step="1" value="0"></label>
                                 <label>Start r <input name="r" type="number" step="1" value="0"></label>
                             </div>
+                            <p class="hc-hint hc-guided-only">q/r are axial hex coordinates. For a new abstract grid, 0 / 0 is a normal starting point.</p>
                             <p class="hc-hint">This creates only mathematical hex context. It does not create or load an Overworld.</p>
                         </div>
                         <button type="submit" class="hc-primary-action" data-submit>${createButton(assistant)}</button>
@@ -103,6 +106,7 @@ export async function renderAssistantEntry(
         </section>`;
 
     required<HTMLButtonElement>(root, "[data-home]").addEventListener("click", () => navigate("/"));
+    required<HTMLElement>(root, "[data-guidance-controls]").append(guidancePreferenceButton(root));
     const error = required<HTMLElement>(root, "[data-error]");
     const list = required<HTMLElement>(root, "[data-sessions]");
     const count = required<HTMLElement>(root, "[data-count]");
@@ -113,6 +117,15 @@ export async function renderAssistantEntry(
     const customUnitPanel = required<HTMLElement>(form, "[data-custom-unit]");
     const submit = required<HTMLButtonElement>(form, "[data-submit]");
     input(form, "name").value = defaultSessionName(assistant);
+    attachFieldHelp(procedure, "Procedure", "The procedure defines the table rules this focused utility will follow.");
+    const modeField = form.querySelector<HTMLSelectElement>('select[name="mode"]');
+    if (modeField) {
+        attachFieldHelp(modeField, "Bookkeeping mode", "Time / interval only avoids creating spatial state. Abstract hex travel adds only the mathematical grid information needed for spatial travel.");
+    }
+    attachFieldHelp(select(form, "orientation"), "Hex orientation", "Pointy-top and flat-top describe the grid geometry. They do not define map north.");
+    attachFieldHelp(input(form, "scale"), "Hex center distance", "This is the game-world distance from the center of one hex to the center of an adjacent hex.", "If adjacent hexes represent 6 miles, enter 6 and choose Miles.");
+    attachFieldHelp(select(form, "unit"), "Distance unit", "The physical unit represented by the hex center distance.");
+    attachFieldHelp(input(form, "meters"), "Custom meters per unit", "Only used for Custom units. Enter the number of meters represented by one custom unit.");
 
     const composerApi = await ProcedureComposerApi.create(root);
     const [sessions, presets, savedProcedures] = await Promise.all([

@@ -7,9 +7,9 @@ Phase 15 turns the Phase 0–14 generic expedition engine into one coherent DM-f
 The roadmap sequence is now:
 
 - **Phase 14 — complete:** broad architecture, correctness, integration, security, performance, documentation, and encounter-handoff remediation.
-- **Phase 15 — current:** core UX and presentation architecture: unified expedition workspace, Compact, Advanced, expert JSON editing, preset browsing, procedure-aware presentation, responsive interaction patterns, and reusable UI primitives.
-- **After Phase 15 acceptance:** internal human testing begins.
-- **Phase 15.1 — later:** Guided Hex Crawl experience for users who understand tabletop RPGs/D&D but do not already know hexcrawling. Guided should enrich/wrap Compact rather than fork the application.
+- **Phase 15 — complete:** core UX and presentation architecture: unified expedition workspace, Compact, Advanced, expert JSON editing, preset browsing, procedure-aware presentation, responsive interaction patterns, and reusable UI primitives.
+- **After Phase 15 acceptance:** internal human testing begins and provides direct usability evidence.
+- **Phase 15.1 — current:** Guided Hex Crawl experience for users who understand tabletop RPGs/D&D but do not already know hexcrawling. Guided enriches/wraps Compact rather than forking the application.
 - **Phase 15.5 — later:** internal-testing stabilization and pre-release hardening.
 
 Battle Map ownership and cross-tool tactical-map integration are **outside the Hex Crawl roadmap**. Phase 15 does not design or implement a Battle Map tool and does not decide its future ownership architecture. Block Initiative remains authoritative for tactical combat; existing provider-neutral linked-scene references and encounter-handoff behavior remain valid integration surfaces without implying a future Battle Map design.
@@ -47,7 +47,7 @@ JSON
   "I understand the canonical data. Give me the representation."
 ```
 
-Phase 15.1 later adds Guided above Compact.
+Phase 15.1 adds Guided above Compact as a presentation layer over the same canonical state.
 
 ### Compact
 

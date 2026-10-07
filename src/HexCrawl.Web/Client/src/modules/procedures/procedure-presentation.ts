@@ -149,6 +149,20 @@ const labels: Record<string, string> = {
     "encounter.timingSlots": "Encounter timing slots"
 };
 
+const numericHelp: Partial<Record<string, string>> = {
+    startingExitProgressFactor: "The fraction of the configured hex center distance required to leave the starting hex before an entry side is known. 0.5 means half the configured center-to-center distance.",
+    nearExitProgressFactor: "The fraction of the configured hex center distance required to leave through a nearby side after an entry side is known. 0.5 means half the configured center-to-center distance.",
+    farExitProgressFactor: "The fraction of the configured hex center distance required to leave through a far side after an entry side is known. 1 means the full configured center-to-center distance.",
+    backExitProgressFactor: "The fraction of the configured hex center distance required to leave back through the entry side. 0.5 means half the configured center-to-center distance.",
+    directionChangeProgressCostFactor: "The fraction of the configured hex center distance subtracted from accumulated progress when a course change costs progress. 0.5 means half the configured center-to-center distance.",
+    baseBudget: "The unadjusted movement allowance before terrain, routes, weather, load, effects, or DM overrides are applied. The Movement unit setting supplies the unit.",
+    travelChecksPerInterval: "How many encounter checks this schedule makes during each configured travel period.",
+    timeCost: "How many units of the selected Time unit this activity or procedure step consumes.",
+    normalTravelLimit: "How many selected Limit units count as ordinary travel before forced-travel rules begin.",
+    progressFloor: "The lowest accumulated journey progress the process permits.",
+    progressCeiling: "The highest accumulated journey progress the process permits."
+};
+
 const choiceSets: Record<string, Array<{ value: string; label: string }>> = {
     "movement.resolution.travelResolution": choices("ContinuousDistance", "HexSteps"),
     "movement.resolution.actualDistanceResolution": choices("Fixed", "VariableResolved"),
@@ -354,7 +368,7 @@ export function compactParameter(
         return { label, help: definition.description, control: "select", choices: choiceSets[moduleChoiceKey] };
     }
     if (numberKeys.has(key) || definition.type === "number" || definition.type === "integer" || definition.type === "decimal") {
-        return { label, help: definition.description, control: "number" };
+        return { label, help: numericHelp[key] ?? definition.description ?? null, control: "number" };
     }
     if (keyListKeys.has(key) || definition.type === "key-list") {
         return { label, help: definition.description, control: "key-list" };

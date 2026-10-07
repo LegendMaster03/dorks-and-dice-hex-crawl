@@ -2,16 +2,18 @@ import type { HexCrawlApi } from "../../api";
 import { clearUiError, showUiError } from "../../ui-error";
 import { createOverworldInput, customUnitFieldsVisible } from "./world-form";
 import type { DistanceUnitKind } from "./world-form";
+import { applyGuidedExperience, attachFieldHelp, guidancePreferenceButton } from "../../ui/guidance";
 
 export async function renderWorldList(
     root: HTMLElement,
     api: HexCrawlApi,
     navigate: (route: string, replace?: boolean) => void): Promise<() => void> {
+    applyGuidedExperience(root);
     root.innerHTML = `
         <section class="hc-page">
             <header class="hc-page-header">
                 <div><span class="hc-sheet-kicker">Map preparation</span><h1>Overworlds</h1><p>Create and manage persistent hex-crawl worlds separately from the expedition.</p></div>
-                <nav><button type="button" data-home>Expeditions</button></nav>
+                <nav class="hc-button-row"><button type="button" data-home>Expeditions</button><span data-guidance-controls></span></nav>
             </header>
             <div class="hc-error" data-error hidden role="alert"></div>
             <div class="hc-columns">
@@ -32,6 +34,7 @@ export async function renderWorldList(
                         </div>
                         <details><summary>Advanced grid alignment</summary>
                             <div class="hc-form">
+                                <p class="hc-hint hc-guided-only">These values define the internal coordinate frame used to line maps up with the hex grid. Most new worlds should keep the defaults; change them when matching an existing map or imported coordinate system.</p>
                                 <div class="hc-inline"><label>Origin X <input name="originX" type="number" step="any" value="0"></label><label>Origin Y <input name="originY" type="number" step="any" value="0"></label></div>
                                 <label>Rotation degrees <input name="rotation" type="number" step="any" value="0"></label>
                                 <label>Hex radius (world units) <input name="radius" type="number" min="0.001" step="any" value="1"></label>
@@ -44,6 +47,7 @@ export async function renderWorldList(
         </section>`;
 
     required<HTMLButtonElement>(root, "[data-home]").addEventListener("click", () => navigate("/"));
+    required<HTMLElement>(root, "[data-guidance-controls]").append(guidancePreferenceButton(root));
     const error = required<HTMLElement>(root, "[data-error]");
     const list = required<HTMLElement>(root, "[data-world-list]");
     const count = required<HTMLElement>(root, "[data-world-count]");
@@ -53,6 +57,11 @@ export async function renderWorldList(
     const symbolInput = input(form, "symbol");
     const metersInput = input(form, "meters");
     const createButton = required<HTMLButtonElement>(form, "[data-create-button]");
+    attachFieldHelp(select(form, "orientation"), "Hex orientation", "Pointy-top and flat-top describe the grid geometry. They do not define map north.");
+    attachFieldHelp(input(form, "scale"), "Hex center distance", "This is the game-world distance from the center of one hex to the center of an adjacent hex.", "A 6-mile map uses 6 with Miles.");
+    attachFieldHelp(unitSelect, "Unit", "The physical unit represented by the center-to-center distance between adjacent hexes.");
+    attachFieldHelp(metersInput, "Custom meters per unit", "Only used for Custom units. Enter the number of meters represented by one custom unit.");
+    attachFieldHelp(input(form, "radius"), "Hex radius (world units)", "This is an internal map-coordinate scale used for grid geometry, not the game-world travel distance. Most worlds should leave it at 1.");
     let disposed = false;
     let busy = false;
     let worldCount = 0;

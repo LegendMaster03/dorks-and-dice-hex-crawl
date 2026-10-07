@@ -174,6 +174,67 @@ function referenceFixture() {
     };
 }
 
+function visualPreset() {
+    const moduleKeys = [
+        "time.interval",
+        "movement.budget",
+        "movement.resolution",
+        "navigation.check",
+        "navigation.outcome",
+        "encounters.cadence"
+    ];
+    return {
+        presetKey: "visual-guided-travel",
+        displayName: "Classic exploration travel",
+        description: "A representative spatial travel procedure with movement, navigation, and encounter checks.",
+        category: "Familiar procedures",
+        presetRevision: 1,
+        procedure: {
+            procedureId: "visual-guided-travel",
+            revision: 1,
+            key: "visual-guided-travel",
+            name: "Classic exploration travel",
+            isExecutable: true,
+            runtime: {
+                intervalHours: 4,
+                travelResolution: "ContinuousDistance",
+                actualDistanceResolution: "Fixed",
+                encounterCadence: "PerWatch",
+                usesNavigationChecks: true,
+                usesPersistentVeer: true,
+                tracksIntraHexProgress: false,
+                directionChangesCostProgress: false,
+                supportsDeliberateDoubleBack: true,
+                startingExitProgressFactor: 0,
+                nearExitProgressFactor: 0.5,
+                farExitProgressFactor: 1,
+                backExitProgressFactor: 1,
+                directionChangeProgressCostFactor: 0,
+                resolutionHelpers: null
+            },
+            focusedIntervalPolicy: {
+                support: "Supported",
+                intervalHours: 4,
+                mechanicKey: "time.interval",
+                mechanicVersion: 1,
+                executionHandler: "visual-review",
+                unsupportedReason: null
+            },
+            modules: moduleKeys.map(moduleKey => ({
+                moduleKey,
+                moduleName: visualTitle(moduleKey),
+                mechanicKey: moduleKey + ".visual",
+                mechanicVersion: 1,
+                executionHandler: "visual-review",
+                automationLevel: "Assisted",
+                parameters: richProcedureParameters[moduleKey]
+            }))
+        },
+        attribution: null,
+        disclaimer: null
+    };
+}
+
 const savedProcedure = {
     procedureId: "visual-procedure",
     revision: 3,
@@ -257,6 +318,13 @@ function emitSpecialMetrics(surface) {
         referenceFactGroups: root.querySelectorAll(".hc-reference-rule-group").length,
         exactParameterDisclosures: Array.from(root.querySelectorAll("summary")).filter(summary => summary.textContent?.trim() === "Exact parameter detail").length,
         technicalModeLabels: ["Compact", "Advanced", "JSON"].filter(label => text.includes(label)).length,
+        guidedPrimerVisible: text.includes("New to hex crawls? Start here."),
+        guidanceToggleVisible: buttons.some(button => ["Hide beginner help", "Show beginner help"].includes(button.textContent?.trim() || "")),
+        guidedFieldHelpCount: root.querySelectorAll("[data-guided-help]").length,
+        guidedPresetAdviceCount: root.querySelectorAll(".hc-guided-preset-advice").length,
+        compactGuidanceVisible: text.includes("How to use Compact"),
+        guidedRuleWhyCount: Array.from(root.querySelectorAll("summary")).filter(summary => summary.textContent?.trim() === "Why?").length,
+        guidedNextActionWhyVisible: Array.from(root.querySelectorAll("summary")).some(summary => summary.textContent?.trim() === "Why is this next?"),
         selectedCellTitle: root.querySelector("[data-selected-cell-title]")?.textContent?.trim() || null,
         selectedCellTerrain: root.querySelector("[data-cell-terrain]")?.value || null,
         selectedCellHiddenPoiVisible: text.includes("Ruined Watchtower · Ruin · Hidden"),
@@ -288,14 +356,14 @@ if (stateName === "home") {
             createdAt: "2026-10-01T12:00:00Z",
             updatedAt: "2026-10-06T04:00:00Z"
         }],
-        getProcedurePresets: async () => []
+        getProcedurePresets: async () => [visualPreset()]
     };
     await renderToolHome(root, api, () => {});
     emitSpecialMetrics("home");
     restoreFetch();
 } else if (stateName.startsWith("procedure-")) {
     const restoreFetch = installProcedureFetch();
-    const api = { getProcedurePresets: async () => [] };
+    const api = { getProcedurePresets: async () => [visualPreset()] };
     if (stateName === "procedure-home") {
         localStorage.removeItem("hex-crawl.procedure-authoring.mode");
         await renderProcedureAuthoringWorkspace(root, api, null, () => {});
@@ -1483,6 +1551,12 @@ switch (stateName) {
         effects = effectsFixture(false);
         journey = journeyFixtureWithShuffledDefinitions();
         break;
+    case "guided-pending-consequence":
+        runtime.expedition.intendedDirection = 1;
+        runtime.expedition.actualDirection = 1;
+        effects = effectsFixture(true);
+        effects.pendingConsequences = [pendingJourneyConsequence("pending-guided-consequence")];
+        break;
     case "effects-journey-source":
         runtime.expedition.intendedDirection = 1;
         runtime.expedition.actualDirection = 1;
@@ -1814,7 +1888,7 @@ if (stateName === "more-options-open") {
 } else if (stateName === "journey-pending") {
     findButton("Resolve journey event")?.click();
     await waitForRootText("Pending journey event");
-} else if (stateName === "effects-workspace" || stateName === "effects-journey-source" || stateName === "readability-workspace") {
+} else if (stateName === "effects-workspace" || stateName === "effects-journey-source" || stateName === "readability-workspace" || stateName === "guided-pending-consequence") {
     findButtonContaining("Resources & effects")?.click();
     await waitForRootText("Active effects");
 } else if (stateName === "history-workspace") {
@@ -1915,6 +1989,10 @@ const metrics = {
     partyActivitiesRailButtons: buttons.filter(button => isVisible(button) && button.textContent?.includes("Party & activities")).length,
     partySetupVisible: rootText.includes("Party not configured"),
     primaryAction: root.querySelector(".hc-current-action-primary")?.textContent?.trim() || null,
+    guidedNextActionWhyVisible: Array.from(root.querySelectorAll("summary"))
+        .some(summary => summary.textContent?.trim() === "Why is this next?"),
+    guidedConsequenceHelpCount: Array.from(root.querySelectorAll("summary"))
+        .filter(summary => summary.textContent?.trim() === "Why is this pending?").length,
     focusedTitle: root.querySelector("[data-phase15-drawer] h2")?.textContent?.trim() || null,
     focusedEdge: document.activeElement?.matches?.("[data-adjacency-edge]") ?? false,
     journeyVisible: rootText.includes("Current stage") && rootText.includes("Progress") && rootText.includes("Roles") && rootText.includes("Pending"),

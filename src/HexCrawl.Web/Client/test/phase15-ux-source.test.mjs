@@ -1266,3 +1266,136 @@ test("rendered review records measured viewport separately from 390-pixel contai
     assert.match(capture, /measuredViewportMatchesRequestedWindow/);
     assert.match(capture, /requested review container width was not established/);
 });
+
+
+test("Phase 15.1 Guided layers beginner help over existing Compact and runtime authority", () => {
+    const guidance = fs.readFileSync(path.join(sourceDir, "ui/guidance.ts"), "utf8");
+    const home = fs.readFileSync(path.join(sourceDir, "modules/home/tool-home-view.ts"), "utf8");
+    const procedure = fs.readFileSync(path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"), "utf8");
+    const expedition = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-view.ts"), "utf8");
+    assert.match(guidance, /hex-crawl\.guided\.enabled/);
+    assert.match(guidance, /stored !== "false"/);
+    assert.match(guidance, /hc-guidance-off/);
+    assert.match(home, /New to hex crawls\? Start here\./);
+    assert.match(home, /A 6-mile value means one adjacent hex represents 6 miles center-to-center/);
+    assert.match(procedure, /ProcedureAuthoringMode = "compact" \| "advanced" \| "json"/);
+    assert.match(procedure, /How to use Compact/);
+    assert.match(procedure, /guidedDisclosure\(/);
+    assert.match(expedition, /Why is this next\?/);
+    assert.match(expedition, /guidedActionExplanation/);
+    assert.doesNotMatch(guidance, /fetch\(|CampaignProcedure|procedure\.modules|runtime\./);
+});
+
+test("Phase 15.1 explains domain-specific numeric grid settings at their point of use", () => {
+    const home = fs.readFileSync(path.join(sourceDir, "modules/home/tool-home-view.ts"), "utf8");
+    const worlds = fs.readFileSync(path.join(sourceDir, "modules/worlds/world-list-view.ts"), "utf8");
+    const editor = fs.readFileSync(path.join(sourceDir, "modules/worlds/world-editor-view.ts"), "utf8");
+    const assistant = fs.readFileSync(path.join(sourceDir, "modules/assistants/assistant-entry-view.ts"), "utf8");
+    for (const source of [home, worlds, editor, assistant]) {
+        assert.match(source, /attachFieldHelp/);
+        assert.match(source, /Hex center distance/);
+        assert.match(source, /center of one hex to the center of an adjacent hex/);
+    }
+    assert.match(worlds, /internal coordinate frame/);
+    assert.match(editor, /They are not travel-distance settings/);
+    assert.match(assistant, /q\/r are axial hex coordinates/);
+});
+
+
+test("Phase 15.1 preset discovery explains fit and DM workload from generic procedure structure", () => {
+    const workspace = fs.readFileSync(
+        path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"),
+        "utf8");
+
+    assert.match(workspace, /Choosing a starting point/);
+    assert.match(workspace, /Good fit when/);
+    assert.match(workspace, /You will manage/);
+    assert.match(workspace, /Setup breadth/);
+    assert.match(workspace, /keys\.has\("journey\.process"\)/);
+    assert.match(workspace, /keys\.has\("movement\.resolution"\) && keys\.has\("navigation\.outcome"\)/);
+    assert.match(workspace, /key\.startsWith\("survival\."\)/);
+    assert.doesNotMatch(workspace, /presetKey\s*===/);
+});
+
+test("Phase 15.1 Compact supplies domain explanations for numeric procedure settings", () => {
+    const presentation = fs.readFileSync(
+        path.join(sourceDir, "modules/procedures/procedure-presentation.ts"),
+        "utf8");
+
+    for (const key of [
+        "startingExitProgressFactor",
+        "nearExitProgressFactor",
+        "farExitProgressFactor",
+        "backExitProgressFactor",
+        "directionChangeProgressCostFactor",
+        "baseBudget",
+        "travelChecksPerInterval",
+        "timeCost",
+        "normalTravelLimit",
+        "progressFloor",
+        "progressCeiling"
+    ]) {
+        assert.match(presentation, new RegExp(key + ":"));
+    }
+    assert.match(presentation, /numericHelp\[key\] \?\? definition\.description \?\? null/);
+    assert.match(presentation, /0\.5 means half the configured center-to-center distance/);
+});
+
+test("Phase 15.1 rendered review requires Guided onboarding, preset advice, and next-action explanations", () => {
+    const capture = fs.readFileSync(
+        path.join(sourceDir, "../visual-review/capture-phase15.sh"),
+        "utf8");
+    const fixture = fs.readFileSync(
+        path.join(sourceDir, "../visual-review/phase15.ts"),
+        "utf8");
+
+    assert.match(fixture, /guidedPrimerVisible/);
+    assert.match(fixture, /guidedPresetAdviceCount/);
+    assert.match(fixture, /guidedRuleWhyCount/);
+    assert.ok((fixture.match(/guidedNextActionWhyVisible/g) ?? []).length >= 2);
+    assert.match(fixture, /visualPreset/);
+    assert.match(capture, /Guided home onboarding is incomplete/);
+    assert.match(capture, /Guided preset discovery is missing/);
+    assert.match(capture, /Guided Compact explanations are incomplete/);
+    assert.match(capture, /Guided next-action explanation is missing/);
+});
+
+
+test("Phase 15.1 procedure entry surfaces expose the same beginner-help preference control", () => {
+    const workspace = fs.readFileSync(
+        path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"),
+        "utf8");
+    const capture = fs.readFileSync(
+        path.join(sourceDir, "../visual-review/capture-phase15.sh"),
+        "utf8");
+
+    assert.match(workspace, /page\.querySelector<HTMLElement>\("\.hc-page-header"\)\?\.append\(guidancePreferenceButton\(root\)\)/);
+    assert.match(workspace, /toolbar\.append\(back, guidancePreferenceButton\(root\)\)/);
+    assert.match(capture, /Guided procedure preference control is missing/);
+});
+
+
+test("Phase 15.1 explains pending consequences without inventing their outcome", () => {
+    const effects = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/effects-panel.ts"),
+        "utf8");
+    const survival = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/survival-resources-panel.ts"),
+        "utf8");
+    const fixture = fs.readFileSync(
+        path.join(sourceDir, "../visual-review/phase15.ts"),
+        "utf8");
+    const capture = fs.readFileSync(
+        path.join(sourceDir, "../visual-review/capture-phase15.sh"),
+        "utf8");
+
+    assert.match(effects, /Why is this pending\?/);
+    assert.match(effects, /pending\.reason/);
+    assert.match(effects, /pending\.requiredAction/);
+    assert.match(effects, /without inventing an automatic outcome/);
+    assert.match(survival, /Why is this pending\?/);
+    assert.match(survival, /does not reroll or reinterpret the consequence/);
+    assert.match(fixture, /guided-pending-consequence/);
+    assert.match(fixture, /guidedConsequenceHelpCount/);
+    assert.match(capture, /Guided pending-consequence explanation is missing/);
+});

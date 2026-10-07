@@ -753,7 +753,7 @@ Extracted image/grid computation behind the Surveyor service while retaining Hex
 
 Completed the broad Phase 0–13 review/remediation, including persistence, API, security, performance, UI/UX defects, cross-phase integration, test quality, stale/dead paths, and the expanded server-authoritative encounter handoff.
 
-### Phase 15 — core UX and presentation architecture — current
+### Phase 15 — core UX and presentation architecture — complete
 
 Build the coherent production interaction model, including:
 
@@ -771,7 +771,7 @@ Build the coherent production interaction model, including:
 
 After Phase 15 acceptance, internal human testing begins.
 
-### Phase 15.1 — Guided Hex Crawl experience — later
+### Phase 15.1 — Guided Hex Crawl experience — current
 
 Add the beginner-facing Guided layer over the Compact architecture while internal human testing continues.
 

@@ -8,6 +8,7 @@ import { clearUiError, showUiError } from "../../ui-error";
 import { customUnitFieldsVisible, gridWithSelectedUnit } from "./world-form";
 import type { DistanceUnitKind } from "./world-form";
 import { input, integer, numeric, required, select } from "../../ui/dom";
+import { applyGuidedExperience, attachFieldHelp, guidancePreferenceButton } from "../../ui/guidance";
 import {
     addEnvironmentFact,
     addHexTagFact,
@@ -50,11 +51,12 @@ export async function renderWorldEditor(
     let disposed = false;
     let sourceMapWorkspace: SourceMapWorkspace | null = null;
 
+    applyGuidedExperience(root);
     root.innerHTML = `
         <section class="hc-page hc-workspace hc-world-editor">
             <header class="hc-page-header">
                 <div><span class="hc-sheet-kicker">Map preparation</span><h1 data-title></h1><p>World map editor · source maps, locations, and features.</p></div>
-                <nav><button type="button" data-worlds>All overworlds</button><button type="button" data-reset-view>Reset map view</button></nav>
+                <nav class="hc-button-row"><button type="button" data-worlds>All overworlds</button><button type="button" data-reset-view>Reset map view</button><span data-guidance-controls></span></nav>
             </header>
             <div class="hc-error" data-error hidden role="alert"></div>
             <div class="hc-workspace-grid">
@@ -149,7 +151,7 @@ export async function renderWorldEditor(
                             <label>Custom symbol <input name="unitSymbol"></label>
                             <label>Custom meters per unit <input name="metersPerUnit" type="number" min="0.001" step="any"></label>
                         </div>
-                        <details><summary>Advanced grid alignment</summary><div class="hc-form"><p class="hc-hint">These values define the internal world-coordinate frame. Most maps can keep the existing values.</p>
+                        <details><summary>Advanced grid alignment</summary><div class="hc-form"><p class="hc-hint">These values define the internal world-coordinate frame. Most maps can keep the existing values.</p><p class="hc-hint hc-guided-only">Change origin, rotation, or internal hex radius only when aligning an existing source map or coordinate frame. They are not travel-distance settings.</p>
                             <div class="hc-inline"><label>Origin X <input name="originX" type="number" step="any"></label><label>Origin Y <input name="originY" type="number" step="any"></label></div>
                             <label>Rotation degrees <input name="rotation" type="number" step="any"></label>
                             <label>Hex radius (world units) <input name="radius" type="number" min="0.001" step="any"></label>
@@ -213,6 +215,12 @@ export async function renderWorldEditor(
     const customUnitFields = required<HTMLElement>(gridForm, "[data-custom-unit]");
     const unitSymbolInput = input(gridForm, "unitSymbol");
     const metersPerUnitInput = input(gridForm, "metersPerUnit");
+    required<HTMLElement>(root, "[data-guidance-controls]").append(guidancePreferenceButton(root));
+    attachFieldHelp(select(gridForm, "orientation"), "Hex orientation", "Pointy-top and flat-top describe the grid geometry. They do not define map north.");
+    attachFieldHelp(input(gridForm, "scale"), "Hex center distance", "This is the game-world distance from the center of one hex to the center of an adjacent hex.", "If adjacent hexes represent 6 miles, enter 6 and choose Miles.");
+    attachFieldHelp(unitKindSelect, "Unit", "The physical unit represented by the center-to-center distance between adjacent hexes.");
+    attachFieldHelp(metersPerUnitInput, "Custom meters per unit", "Only used for Custom units. Enter the number of meters represented by one custom unit.");
+    attachFieldHelp(input(gridForm, "radius"), "Hex radius (world units)", "This controls internal map geometry. It is separate from the physical distance represented by each hex and normally remains unchanged.");
     const selectedCellEmpty = required<HTMLElement>(root, "[data-selected-cell-empty]");
     const selectedCellContent = required<HTMLElement>(root, "[data-selected-cell-content]");
     const selectedCellTitle = required<HTMLElement>(root, "[data-selected-cell-title]");

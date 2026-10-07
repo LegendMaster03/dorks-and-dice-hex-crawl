@@ -37,6 +37,31 @@ test("Compact converts canonical interval ticks to tabletop duration controls", 
     assert.equal(presentation?.help, "Set the length of one travel period.");
 });
 
+test("Compact starting-exit help describes the runtime exit requirement rather than prepaid progress", () => {
+    const presentation = compactParameter("startingExitProgressFactor", {
+        type: "number",
+        required: true,
+        description: "Starting exit progress factor.",
+        defaultValue: "0.5"
+    }, "movement.hex-progress");
+
+    assert.equal(presentation?.control, "number");
+    assert.match(presentation?.help ?? "", /required to leave the starting hex/i);
+    assert.match(presentation?.help ?? "", /hex center distance/i);
+    assert.doesNotMatch(presentation?.help ?? "", /already counted/i);
+    assert.notEqual(presentation?.help, "Starting exit progress factor.");
+
+    const mechanicSpecific = compactParameter("travel.diceCount", {
+        type: "integer",
+        required: false,
+        description: "Pinned mechanic-specific numeric meaning.",
+        defaultValue: null
+    }, "procedure.helpers");
+    assert.equal(mechanicSpecific?.control, "number");
+    assert.equal(mechanicSpecific?.help, "Pinned mechanic-specific numeric meaning.");
+});
+
+
 test("Compact exposes current ordinary enum domains as editable selects", () => {
     const cases = [
         ["movement.budget", "budgetModel", "journey-progress"],

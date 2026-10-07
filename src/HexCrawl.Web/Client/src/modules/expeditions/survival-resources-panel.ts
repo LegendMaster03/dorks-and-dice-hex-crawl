@@ -1,5 +1,6 @@
 import { SurvivalResourcesApi } from "../../survival-api";
 import type { ExpeditionDetail } from "../../types";
+import { guidedDisclosure } from "../../ui/guidance";
 import type {
     CampingPolicy,
     ConsequenceProvenanceRequest,
@@ -162,7 +163,11 @@ export class ExpeditionSurvivalResourcesPanel {
             card.className = "hc-card";
             card.append(
                 this.heading(pending.consequenceKey),
-                this.muted(`${pending.resourceKeys.join(", ") || "Resource state"} — ${pending.reason}`));
+                this.muted(`${pending.resourceKeys.join(", ") || "Resource state"} — ${pending.reason}`),
+                guidedDisclosure(
+                    "Why is this pending?",
+                    humanize(pending.consequenceKey),
+                    `${pending.reason} The resource change has already been resolved into pending expedition state. Apply it here when the table is ready to commit that result; this control does not reroll or reinterpret the consequence.`));
             const apply = this.button("Apply resolved resource change");
             apply.type = "button";
             apply.addEventListener("click", () => {
