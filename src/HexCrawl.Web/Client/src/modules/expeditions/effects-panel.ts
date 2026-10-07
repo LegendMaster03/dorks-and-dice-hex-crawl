@@ -46,7 +46,10 @@ export class ExpeditionEffectsPanel {
         if (state.activeEffects.length === 0) {
             active.append(this.muted("No active persistent effects."));
         } else {
-            for (const effect of state.activeEffects) active.append(this.effectCard(effect, state));
+            active.append(this.activeEffectsLedger(state));
+            const manage = disclosure("Manage active effects");
+            for (const effect of state.activeEffects) manage.append(this.effectCard(effect, state));
+            active.append(manage);
         }
         this.body.append(active);
 
@@ -97,6 +100,44 @@ export class ExpeditionEffectsPanel {
         if (state.history.length === 0) advanced.append(this.muted("No effect audit records."));
         else advanced.append(audit);
         this.body.append(advanced);
+    }
+
+    private activeEffectsLedger(state: ExpeditionEffectState): HTMLElement {
+        const table = document.createElement("table");
+        table.className = "hc-readable-table";
+        table.dataset.effectLedger = "";
+        const caption = document.createElement("caption");
+        caption.textContent = "Condition / effect ledger";
+        const head = document.createElement("thead");
+        const header = document.createElement("tr");
+        for (const label of ["Effect", "Target", "Current value", "Recovery", "Source"]) {
+            const cell = document.createElement("th");
+            cell.scope = "col";
+            cell.textContent = label;
+            header.append(cell);
+        }
+        head.append(header);
+        const body = document.createElement("tbody");
+        for (const effect of state.activeEffects) {
+            const source = effect.provenance.at(-1);
+            const values = [
+                humanizeIdentifier(effect.effectKey),
+                this.targetLabel(effect),
+                this.effectValue(effect),
+                humanizeIdentifier(effect.recoveryModel ?? state.policy.recoveryModel ?? "DM adjudication"),
+                source ? normalProvenanceLabel(source) : "Unknown source"
+            ];
+            const row = document.createElement("tr");
+            values.forEach((value, index) => {
+                const cell = document.createElement(index === 0 ? "th" : "td");
+                if (index === 0) cell.scope = "row";
+                cell.textContent = value;
+                row.append(cell);
+            });
+            body.append(row);
+        }
+        table.append(caption, head, body);
+        return table;
     }
 
     private effectCard(effect: ExpeditionEffect, state: ExpeditionEffectState): HTMLElement {

@@ -93,3 +93,11 @@ test("readability follow-up renders comparable resource, environment, exposure, 
     assert.doesNotMatch(source, /Activity assignment IDs, comma-separated/);
     assert.doesNotMatch(source, /Target ID when scope requires it/);
 });
+
+
+test("active persistent effects use a comparable condition ledger", () => {
+    assert.match(effects, /data\.effectLedger/);
+    assert.match(effects, /Condition \/ effect ledger/);
+    assert.match(effects, /Current value/);
+    assert.match(effects, /Manage active effects/);
+});
