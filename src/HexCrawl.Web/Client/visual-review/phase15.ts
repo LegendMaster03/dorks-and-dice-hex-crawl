@@ -1280,6 +1280,7 @@ const metrics = {
     ),
     forcedTravelTargetOptionCount: forcedTravelTarget?.querySelectorAll("option").length ?? 0,
     forcedTravelTargetValue: forcedTravelTarget?.value ?? null,
+    forcedTravelTargetRequired: forcedTravelTarget?.required ?? false,
     forcedTravelMissingTargetBlocked: stateName !== "forced-travel-zero-participants" || (
         rootText.includes("no party members configured")
         && forcedTravelResolve?.disabled === true

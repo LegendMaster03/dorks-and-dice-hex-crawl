@@ -200,6 +200,8 @@ else:
     if state == "forced-travel-pending":
         if metrics["forcedTravelTargetOptionCount"] < 3 or metrics["forcedTravelTargetValue"] != "":
             raise SystemExit(f'multiple participant forced-travel target was silently selected: {metrics}')
+        if not metrics["forcedTravelTargetRequired"]:
+            raise SystemExit(f'multiple participant forced-travel target can submit without an explicit named choice: {metrics}')
     if state == "forced-travel-one-participant":
         if metrics["forcedTravelTargetOptionCount"] != 1 or metrics["forcedTravelTargetValue"] != "member-1":
             raise SystemExit(f'single participant forced-travel target was not visibly preselected: {metrics}')

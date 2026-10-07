@@ -436,6 +436,7 @@ export class ExpeditionSurvivalResourcesPanel {
                             ? "Affected vehicle"
                             : "Affected target";
                 const resolvingFailure = !success.control.checked;
+                target.required = resolvingFailure && requiresEntity;
                 targetWrapper.hidden = !resolvingFailure || !requiresEntity;
                 targetStatus.hidden = !resolvingFailure || !requiresEntity || choices.length > 0;
                 targetStatus.textContent = targetScope === "Participant"
