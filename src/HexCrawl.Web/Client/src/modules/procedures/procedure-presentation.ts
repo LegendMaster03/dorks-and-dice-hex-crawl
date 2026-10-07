@@ -368,7 +368,7 @@ export function compactParameter(
         return { label, help: definition.description, control: "select", choices: choiceSets[moduleChoiceKey] };
     }
     if (numberKeys.has(key) || definition.type === "number" || definition.type === "integer" || definition.type === "decimal") {
-        return { label, help: definition.description ?? numericHelp[key] ?? null, control: "number" };
+        return { label, help: numericHelp[key] ?? definition.description ?? null, control: "number" };
     }
     if (keyListKeys.has(key) || definition.type === "key-list") {
         return { label, help: definition.description, control: "key-list" };
