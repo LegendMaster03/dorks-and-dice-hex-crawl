@@ -40,6 +40,7 @@ import {
 import { canUseFocusedNonSpatialWatch, focusedIntervalHours } from "./focused-interval-policy";
 import { navigationResolutionDue, pauseInstruction, spatialTravelContinuationTarget } from "./expedition-workflow";
 import { movementCompositionLedger } from "./expedition-movement-composition-view";
+import { encounterScheduleConfiguration, hasEncounterSchedule } from "./encounter-schedule-presentation";
 import { orderedJourneyStageDefinitions } from "./journey-stage-presentation";
 import { expeditionWorkspacePresentation, spatialPositionPresentation } from "./expedition-workspace-model";
 
@@ -428,7 +429,7 @@ export async function renderExpedition(
         if (survivalRailUseful(survival) || effectsUseful(effects)) {
             secondary.append(railAction("Resources & effects", resourcesEffectsDetail(survival, effects), openSurvivalWorkspace));
         }
-        if (runtime.expedition.pendingEncounter || (runtime.procedure.runtime?.encounterCadence ?? "None") !== "None") {
+        if (encounterScheduleAvailable(runtime)) {
             secondary.append(railAction("Encounter schedule", encounterScheduleSummary(runtime), openEncounterWorkspace));
         }
         section.append(primary, secondary);
@@ -503,7 +504,7 @@ export async function renderExpedition(
         if (journey?.eventPolicy.support === "Supported") {
             side.append(railAction("Journey events", journeyEventSummary(journey), openJourneyWorkspace));
         }
-        if (runtime.expedition.pendingEncounter || (runtime.procedure.runtime?.encounterCadence ?? "None") !== "None") {
+        if (encounterScheduleAvailable(runtime)) {
             side.append(railAction("Encounter schedule", encounterScheduleSummary(runtime), openEncounterWorkspace));
         }
         side.append(railAction("Expedition history", presentation.timeLabel, openHistory));
@@ -2145,19 +2146,38 @@ function environmentRailDetail(state: SurvivalResources | null): string | null {
     return detail.join(" · ");
 }
 
+function encounterScheduleAvailable(runtime: ExpeditionDetail): boolean {
+    return Boolean(
+        runtime.expedition.pendingEncounter
+        || (runtime.procedure.runtime?.encounterCadence ?? "None") !== "None"
+        || hasEncounterSchedule(runtime.procedure));
+}
+
 function encounterScheduleSummary(runtime: ExpeditionDetail): string {
     const cadence = runtime.procedure.runtime?.encounterCadence ?? "None";
-    const cadenceLabel = cadence === "PerWatch"
-        ? "Every watch"
-        : cadence === "PerDay"
-            ? "Every day"
-            : "No automatic cadence";
+    const schedule = encounterScheduleConfiguration(runtime.procedure);
+    const parts = [
+        cadence === "PerWatch"
+            ? "Automatic: every watch"
+            : cadence === "PerDay"
+                ? "Automatic: every day"
+                : "Automatic: none"
+    ];
+    if (schedule) {
+        parts.push(`Contextual: ${schedule.scheduleModel ? humanize(schedule.scheduleModel) : "configured"}`);
+        if (schedule.travelChecksPerInterval) {
+            parts.push(`${schedule.travelChecksPerInterval} travel check${schedule.travelChecksPerInterval === "1" ? "" : "s"} / interval`);
+        }
+        if (schedule.campCheck !== null) parts.push(`Camp check: ${schedule.campCheck ? "yes" : "no"}`);
+        if (schedule.terrainProbabilityModel) parts.push(`Terrain: ${humanize(schedule.terrainProbabilityModel)}`);
+    }
     const state = runtime.expedition;
     const watchContext = state.activeWatchNumber !== null
         ? `watch ${state.activeWatchNumber}`
         : `${state.completedWatches} completed watch${state.completedWatches === 1 ? "" : "es"}`;
-    const pending = state.pendingEncounter ? " · encounter pending" : "";
-    return `${cadenceLabel} · day ${state.currentDay} · ${watchContext} · ${formatHours(state.elapsedTravelHours)} elapsed${pending}`;
+    parts.push(`day ${state.currentDay}`, watchContext, `${formatHours(state.elapsedTravelHours)} elapsed`);
+    if (state.pendingEncounter) parts.push("encounter pending");
+    return parts.join(" · ");
 }
 
 function encounterSchedulePanel(runtime: ExpeditionDetail): HTMLElement {
@@ -2167,10 +2187,30 @@ function encounterSchedulePanel(runtime: ExpeditionDetail): HTMLElement {
     section.append(textElement("h3", "Encounter check schedule"));
 
     const cadence = runtime.procedure.runtime?.encounterCadence ?? "None";
+    const schedule = encounterScheduleConfiguration(runtime.procedure);
     const facts = document.createElement("dl");
     facts.className = "hc-current-travel-facts";
     facts.append(
-        travelFact("Cadence", cadence === "PerWatch" ? "Every watch" : cadence === "PerDay" ? "Every day" : "No automatic cadence", "encounterCadence"),
+        travelFact("Automatic cadence", cadence === "PerWatch" ? "Every watch" : cadence === "PerDay" ? "Every day" : "None", "encounterCadence"));
+    if (schedule) {
+        facts.append(
+            travelFact("Contextual schedule", schedule.scheduleModel ? humanize(schedule.scheduleModel) : "Configured", "encounterContextualSchedule"),
+            travelFact(
+                "Travel checks",
+                schedule.travelChecksPerInterval
+                    ? `${schedule.travelChecksPerInterval} per interval`
+                    : "Not specified",
+                "encounterTravelChecks"),
+            travelFact(
+                "Camp check",
+                schedule.campCheck === null ? "Not specified" : schedule.campCheck ? "Yes" : "No",
+                "encounterCampCheck"),
+            travelFact(
+                "Terrain influence",
+                schedule.terrainProbabilityModel ? humanize(schedule.terrainProbabilityModel) : "Not specified",
+                "encounterTerrainInfluence"));
+    }
+    facts.append(
         travelFact("Current day", String(runtime.expedition.currentDay), "encounterDay"),
         travelFact(
             "Watch tracking",
@@ -2185,6 +2225,13 @@ function encounterSchedulePanel(runtime: ExpeditionDetail): HTMLElement {
                 : "No encounter pending",
             "encounterState"));
     section.append(facts);
+
+    if (schedule && cadence === "None") {
+        section.append(textElement(
+            "p",
+            "This contextual schedule is configured by the procedure for table use; it does not imply an automatic encounter cadence.",
+            "hc-muted"));
+    }
 
     const helper = runtime.procedure.runtime?.resolutionHelpers?.encounter;
     if (helper) {
