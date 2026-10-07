@@ -1058,3 +1058,29 @@ test("expedition drawers restore opener focus and rerenders provide a deliberate
     assert.match(view, /restoreFocusAfterRender/);
     assert.match(view, /queueMicrotask\(\(\) => \{/);
 });
+
+
+test("remediation review matrix exercises effects, history, encounter, journey, and progress at narrow widths", () => {
+    const capture = fs.readFileSync(
+        path.join(sourceDir, "../visual-review/capture-phase15.sh"),
+        "utf8");
+    const fixture = fs.readFileSync(
+        path.join(sourceDir, "../visual-review/phase15.ts"),
+        "utf8");
+
+    for (const state of [
+        "effects-workspace",
+        "history-workspace",
+        "encounter-pending",
+        "journey-pending",
+        "partial-progress"
+    ]) {
+        assert.match(capture, new RegExp(state));
+    }
+    assert.match(capture, /500\|844\|390/);
+    assert.match(capture, /activeEffectVisible/);
+    assert.match(capture, /unifiedHistoryVisible/);
+    assert.match(capture, /positionProgressVisible/);
+    assert.match(fixture, /pendingEncounter/);
+    assert.match(fixture, /effectsFixture/);
+});

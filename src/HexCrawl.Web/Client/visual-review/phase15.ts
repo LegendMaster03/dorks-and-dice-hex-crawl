@@ -1079,6 +1079,11 @@ function findButtonContaining(label) {
     return Array.from(root.querySelectorAll("button")).find(button => button.textContent?.includes(label)) || null;
 }
 
+function findStatAction(label) {
+    return Array.from(root.querySelectorAll(".hc-stat-action")).find(button =>
+        button.querySelector(".hc-stat-action-label")?.textContent?.trim() === label) || null;
+}
+
 async function waitForRootText(text, attempts = 20) {
     for (let index = 0; index < attempts; index += 1) {
         if ((root.textContent || "").includes(text)) return;
@@ -1119,7 +1124,7 @@ if (stateName === "map-selected" || stateName === "map-nonadjacent") {
     findButtonContaining("Resources & effects")?.click();
     await waitForRootText("Active effects");
 } else if (stateName === "history-workspace") {
-    findButtonContaining("Expedition history")?.click();
+    findStatAction("Time")?.click();
     await waitForRootText("Effects / consequences");
 }
 

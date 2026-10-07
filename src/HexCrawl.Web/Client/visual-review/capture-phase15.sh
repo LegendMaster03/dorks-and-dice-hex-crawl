@@ -142,7 +142,7 @@ elif surface == "procedure":
     if state in expected and not metrics[expected[state]]:
         raise SystemExit(f'wrong procedure authoring surface: {metrics}')
 else:
-    nonspatial = state.startswith("journey-")
+    nonspatial = state.startswith("journey-") or state == "history-workspace"
     if nonspatial:
         if metrics["navigatorButtons"] != 0 or metrics["mapHeight"] != 0:
             raise SystemExit(f'nonspatial fixture fabricated a map or navigator: {metrics}')
