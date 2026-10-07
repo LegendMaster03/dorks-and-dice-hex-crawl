@@ -1390,6 +1390,7 @@ switch (stateName) {
     case "readability-workspace":
         runtime.expedition.intendedDirection = 1;
         runtime.expedition.actualDirection = 1;
+        runtime.party.members.find(member => member.id === "member-3").name = "Cora Longriver";
         survival = survivalFixture(false);
         survival.foragingPolicy = {
             support: "Supported", resolutionModel: "skill-check", timeCost: 1, timeUnit: "watch",
@@ -1438,6 +1439,30 @@ switch (stateName) {
         runtime.expedition.activeWatchTotalHours = 4;
         runtime.expedition.activeWatchElapsedHours = 2;
         runtime.expedition.activeWatchRemainingHours = 2;
+        break;
+    case "encounter-schedule-day":
+        runtime.expedition.intendedDirection = 0;
+        runtime.expedition.actualDirection = 0;
+        runtime.procedure.runtime.encounterCadence = "PerDay";
+        runtime.expedition.completedWatches = 3;
+        break;
+    case "encounter-contextual-schedule":
+        runtime.expedition.intendedDirection = 0;
+        runtime.expedition.actualDirection = 0;
+        runtime.procedure.runtime.encounterCadence = "None";
+        runtime.procedure.modules = [
+            ...runtime.procedure.modules.filter(module => module.moduleKey !== "encounters.cadence" && module.moduleKey !== "encounters.schedule"),
+            {
+                ...moduleDef("encounters.schedule"),
+                automationLevel: "Manual",
+                parameters: {
+                    scheduleModel: "travel-and-camp",
+                    travelChecksPerInterval: "1",
+                    campCheck: "true",
+                    terrainProbabilityModel: "terrain-tagged"
+                }
+            }
+        ];
         break;
     case "nonspatial-movement-composition":
         runtime = nonSpatialRuntimeFixture();
@@ -1758,7 +1783,7 @@ if (stateName === "course-change-reload") {
 } else if (stateName === "movement-composition" || stateName === "nonspatial-movement-composition") {
     findStatAction("Movement")?.click();
     await waitForRootText("Movement composition contributors");
-} else if (stateName === "encounter-schedule") {
+} else if (["encounter-schedule", "encounter-schedule-day", "encounter-contextual-schedule"].includes(stateName)) {
     findButtonContaining("Encounter schedule")?.click();
     await waitForRootText("Encounter check schedule");
 } else if (stateName === "encounter-pending") {
@@ -1839,6 +1864,17 @@ const normalEffectText = Array.from(root.querySelectorAll("[data-effects-panel] 
     .filter(isNormalPresentationElement)
     .map(item => item.textContent || "")
     .join(" ");
+const textLineCount = element => {
+    if (!element) return 0;
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    const tops = Array.from(range.getClientRects())
+        .filter(rect => rect.width > 0 && rect.height > 0)
+        .map(rect => Math.round(rect.top));
+    return new Set(tops).size;
+};
+const shortReadableLedgerCells = Array.from(root.querySelectorAll(".hc-readable-table th, .hc-readable-table td"))
+    .filter(cell => ["Effect", "Target", "Fatigue", "Exhaustion"].includes(cell.textContent?.trim() || ""));
 const forcedTravelTarget = root.querySelector("[data-forced-travel-target]");
 const forcedTravelResolve = Array.from(root.querySelectorAll("button"))
     .find(button => button.textContent?.trim() === "Record forced-travel result");
@@ -1893,7 +1929,19 @@ const metrics = {
     exposureLedgerVisible: rootText.includes("Exposure progress"),
     foragingSummaryVisible: rootText.includes("Foraging") && rootText.includes("Travel tradeoff"),
     campingSummaryVisible: rootText.includes("Camping") && rootText.includes("Watch model") && rootText.includes("Preparation"),
-    encounterScheduleVisible: rootText.includes("Encounter check schedule") && rootText.includes("Every watch"),
+    encounterScheduleVisible: rootText.includes("Encounter check schedule"),
+    encounterPerWatchVisible: rootText.includes("Automatic cadence") && rootText.includes("Every watch"),
+    encounterPerDayVisible: rootText.includes("Automatic cadence") && rootText.includes("Every day"),
+    contextualEncounterScheduleVisible: rootText.includes("Contextual schedule")
+        && rootText.includes("Travel And Camp")
+        && rootText.includes("1 per interval")
+        && rootText.includes("Camp check")
+        && rootText.includes("Yes")
+        && rootText.includes("Terrain Tagged")
+        && rootText.includes("does not imply an automatic encounter cadence"),
+    readableLedgerShortCellsSingleLine: shortReadableLedgerCells.length >= 4
+        && shortReadableLedgerCells.every(cell => textLineCount(cell) === 1),
+    longReadableTargetVisible: rootText.includes("Cora Longriver"),
     fakeSpatialStateVisible: !runtime.expedition.isSpatial && (
         rootText.includes("Current travel")
         || rootText.includes("Pace / travel mode")
