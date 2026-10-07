@@ -193,6 +193,20 @@ public sealed class ExpeditionWorkbenchTests
         Assert.Equal(pending, reloaded.State.PendingEncounter);
         Assert.Equal(RuntimePauseReason.EncounterTriggered, reloaded.PauseReason);
 
+        var navigationBlocked = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            assistants.RecordNavigationAsync(
+                reloaded.State.Id,
+                "alice",
+                new NavigationAssistantCommand
+                {
+                    ExpectedVersion = reloaded.Version,
+                    IsLost = true,
+                    VeerSteps = 1,
+                    IntendedDirection = 3,
+                    ResolutionSource = ResolutionSource.ManualRoll
+                }));
+        Assert.Contains("pending encounter", navigationBlocked.Message, StringComparison.OrdinalIgnoreCase);
+
         var blocked = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             workbench.AdvanceAsync(
                 reloaded.State.Id,

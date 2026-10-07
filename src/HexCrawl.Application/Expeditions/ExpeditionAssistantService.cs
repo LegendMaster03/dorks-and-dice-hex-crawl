@@ -211,6 +211,7 @@ public sealed class ExpeditionAssistantService(
     {
         var expedition = await coreService.GetExpeditionAsync(expeditionId, ownerUserId, cancellationToken);
         RequireVersion(command.ExpectedVersion, expedition.Version);
+        EnsureNoPendingEncounter(expedition);
 
         if (expedition.Context is NonSpatialCrawlSessionContext)
         {
@@ -242,6 +243,7 @@ public sealed class ExpeditionAssistantService(
     {
         var expedition = await coreService.GetExpeditionAsync(expeditionId, ownerUserId, cancellationToken);
         RequireVersion(command.ExpectedVersion, expedition.Version);
+        EnsureNoPendingEncounter(expedition);
 
         var input = new EncounterCadenceAssistantInput(
             command.Outcome,
@@ -347,7 +349,7 @@ public sealed class ExpeditionAssistantService(
     {
         if (expedition.Runtime.PendingEncounter is not null)
         {
-            throw new InvalidOperationException("Resolve the pending encounter before continuing travel.");
+            throw new InvalidOperationException("Resolve the pending encounter before continuing this expedition procedure.");
         }
     }
 
