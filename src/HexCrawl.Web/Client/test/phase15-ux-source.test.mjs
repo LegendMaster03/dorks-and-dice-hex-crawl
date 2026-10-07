@@ -1253,18 +1253,16 @@ test("encounter schedule presentation distinguishes contextual procedure from au
 });
 
 
-test("readability coverage documents container-width evidence without claiming native 390 viewport", () => {
-    const coverage = fs.readFileSync(
-        path.join(repositoryRoot, "docs/ui-readability-coverage.md"),
-        "utf8");
+test("rendered review records measured viewport separately from 390-pixel container coverage", () => {
     const capture = fs.readFileSync(
         path.join(sourceDir, "..", "visual-review", "capture-phase15.sh"),
         "utf8");
 
-    assert.match(coverage, /390-pixel content container/);
-    assert.match(coverage, /500-pixel browser viewport/);
-    assert.doesNotMatch(coverage, /native \*\*390-pixel viewport\*\*/);
     assert.match(capture, /procedure-compact-container-390/);
     assert.match(capture, /readability-workspace-container-390/);
+    assert.doesNotMatch(capture, /native-mobile/);
+    assert.match(capture, /requestedWindowWidth/);
+    assert.match(capture, /requestedContainerWidth/);
     assert.match(capture, /measuredViewportMatchesRequestedWindow/);
+    assert.match(capture, /requested review container width was not established/);
 });
