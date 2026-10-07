@@ -68,6 +68,9 @@ test("browser storage retains pace but can not override or resurrect server cour
 
     const loaded = loadTravelPreferences(runtime, storage);
     assert.deepEqual(loaded, { direction: 2, pace: "fast" });
+    assert.deepEqual(
+        JSON.parse(storage.values.get("hex-crawl.expedition.course-proof.travel-intent")),
+        { pace: "fast" });
 
     const explicitlyCleared = spatial({ intendedDirection: null, activePaceKey: null });
     explicitlyCleared.id = runtime.id;
