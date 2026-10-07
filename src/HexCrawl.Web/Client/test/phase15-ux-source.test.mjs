@@ -631,7 +631,7 @@ test("urgent travel pauses preserve their task wording and use a focused course-
     assert.match(view, /const openTravelReviewWorkspace = \(\): void =>/);
     assert.match(view, /"Changed travel conditions"/);
     assert.match(view, /"Backtrack boundary"/);
-    assert.match(view, /continueTravel\(false, true\)/);
+    assert.match(view, /continueTravel\(true\)/);
     assert.match(view, /case "review":[\s\S]*openTravelReviewWorkspace\(\)/);
     const review = view.slice(
         view.indexOf("const openTravelReviewWorkspace"),
