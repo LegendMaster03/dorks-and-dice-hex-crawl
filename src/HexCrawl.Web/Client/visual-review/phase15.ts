@@ -1124,6 +1124,14 @@ function journeyFixture() {
     };
 }
 
+function journeyFixtureWithShuffledDefinitions() {
+    const state = journeyFixture();
+    const process = state.activeProcesses[0];
+    const byKey = new Map(process.definition.stages.map(stage => [stage.stageKey, stage]));
+    process.definition.stages = ["arrival", "approach", "pass"].map(stageKey => byKey.get(stageKey));
+    return state;
+}
+
 function pendingJourneyConsequence(id, suffix = "") {
     return {
         consequence: {
@@ -1152,7 +1160,7 @@ function pendingJourneyConsequence(id, suffix = "") {
 let runtime = runtimeFixture();
 let survival = survivalFixture(false);
 let effects = effectsFixture(false);
-let journey = journeyFixture();
+let journey = journeyFixtureWithShuffledDefinitions();
 
 switch (stateName) {
     case "selected-edge":
@@ -1448,7 +1456,7 @@ switch (stateName) {
         ];
         survival = journeySurvivalFixture();
         effects = effectsFixture(false);
-        journey = journeyFixture();
+        journey = journeyFixtureWithShuffledDefinitions();
         break;
     case "effects-journey-source":
         runtime.expedition.intendedDirection = 1;
@@ -1481,7 +1489,7 @@ switch (stateName) {
         runtime = nonSpatialRuntimeFixture();
         survival = journeySurvivalFixture();
         effects = effectsFixture(true);
-        journey = journeyFixture();
+        journey = journeyFixtureWithShuffledDefinitions();
         journey.history = [{
             id: "journey-history-1",
             kind: "ResolutionRecorded",
@@ -1532,12 +1540,12 @@ switch (stateName) {
     case "journey-normal":
         runtime = nonSpatialRuntimeFixture();
         survival = journeySurvivalFixture();
-        journey = journeyFixture();
+        journey = journeyFixtureWithShuffledDefinitions();
         break;
     case "journey-pending":
         runtime = nonSpatialRuntimeFixture();
         survival = journeySurvivalFixture();
-        journey = journeyFixture();
+        journey = journeyFixtureWithShuffledDefinitions();
         journey.activeProcesses[0].status = "ResolutionRequired";
         journey.eventOccurrences = [{
             id: "event-1",
@@ -1567,7 +1575,7 @@ switch (stateName) {
     case "journey-consequence":
         runtime = nonSpatialRuntimeFixture();
         survival = journeySurvivalFixture();
-        journey = journeyFixture();
+        journey = journeyFixtureWithShuffledDefinitions();
         effects = effectsFixture(false);
         effects.pendingConsequences = [pendingJourneyConsequence("pending-journey-consequence")];
         journey.activeProcesses[0].stageStates[1].failures = 1;
@@ -1576,7 +1584,7 @@ switch (stateName) {
     case "journey-consequence-multiple":
         runtime = nonSpatialRuntimeFixture();
         survival = journeySurvivalFixture();
-        journey = journeyFixture();
+        journey = journeyFixtureWithShuffledDefinitions();
         effects = effectsFixture(false);
         effects.pendingConsequences = [
             pendingJourneyConsequence("pending-journey-consequence-1", "1"),
@@ -1586,7 +1594,7 @@ switch (stateName) {
     case "journey-consequence-resolved":
         runtime = nonSpatialRuntimeFixture();
         survival = journeySurvivalFixture();
-        journey = journeyFixture();
+        journey = journeyFixtureWithShuffledDefinitions();
         effects = effectsFixture(false);
         effects.appliedConsequences = [{
             consequenceId: "8ac00000-0000-0000-0000-000000000001",
@@ -1875,6 +1883,7 @@ const metrics = {
     focusedEdge: document.activeElement?.matches?.("[data-adjacency-edge]") ?? false,
     journeyVisible: rootText.includes("Current stage") && rootText.includes("Progress") && rootText.includes("Roles") && rootText.includes("Pending"),
     journeyStageCount: root.querySelectorAll(".hc-stage-step").length,
+    journeyStageLabels: Array.from(root.querySelectorAll(".hc-stage-step .hc-stage-content strong")).map(value => value.textContent?.trim() || ""),
     movementStatusVisible: Array.from(root.querySelectorAll(".hc-stat-action-label")).some(label => label.textContent?.trim() === "Movement"),
     movementLedgerVisible: isVisible(root.querySelector("[data-movement-composition-ledger]")),
     movementContributorRows: root.querySelectorAll(".hc-movement-ledger-table tbody tr").length,
