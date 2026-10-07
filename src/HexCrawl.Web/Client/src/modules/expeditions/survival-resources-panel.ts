@@ -356,6 +356,7 @@ export class ExpeditionSurvivalResourcesPanel {
 
             const success = this.checkbox("Check succeeded", true);
             const runtime = this.getRuntime();
+            const movementContributors = runtime.party.movementContributors ?? [];
             const constrainedScope = policy.failureTargetScope;
             const availableScopes: ExpeditionEffectScope[] = constrainedScope
                 ? [constrainedScope]
@@ -363,8 +364,8 @@ export class ExpeditionSurvivalResourcesPanel {
                     "Party",
                     "Expedition",
                     ...(runtime.party.members.length > 0 ? ["Participant" as const] : []),
-                    ...(runtime.party.movementContributors.some(value => value.kind === "Mount") ? ["Mount" as const] : []),
-                    ...(runtime.party.movementContributors.some(value => value.kind === "Vehicle") ? ["Vehicle" as const] : [])
+                    ...(movementContributors.some(value => value.kind === "Mount") ? ["Mount" as const] : []),
+                    ...(movementContributors.some(value => value.kind === "Vehicle") ? ["Vehicle" as const] : [])
                 ];
             const scope = constrainedScope
                 ? null
@@ -401,7 +402,7 @@ export class ExpeditionSurvivalResourcesPanel {
                 if (value === "Participant") {
                     return runtime.party.members.map(member => ({ id: member.id, label: member.name }));
                 }
-                return runtime.party.movementContributors
+                return movementContributors
                     .filter(contributor => contributor.kind === value)
                     .map(contributor => ({ id: contributor.id, label: humanize(contributor.key) }));
             };
