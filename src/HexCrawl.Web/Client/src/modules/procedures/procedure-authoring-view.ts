@@ -367,6 +367,7 @@ export async function renderProcedureAuthoringWorkspace(
     const renderHome = (): void => {
         const page = pageShell("Exploration Procedures", "Choose an existing procedure, build your own, or start from a familiar method.");
         const error = errorBox();
+        page.querySelector<HTMLElement>(".hc-page-header")?.append(guidancePreferenceButton(root));
         page.append(error);
         page.append(guidedCallout(
             "New to exploration procedures?",
@@ -453,7 +454,7 @@ export async function renderProcedureAuthoringWorkspace(
         toolbar.className = "hc-procedure-toolbar";
         const back = button("Back to procedures", "secondary");
         back.addEventListener("click", () => { entry = "landing"; render(); });
-        toolbar.append(back);
+        toolbar.append(back, guidancePreferenceButton(root));
         page.append(toolbar, errorBox());
         page.append(guidedCallout(
             "Choosing a starting point",

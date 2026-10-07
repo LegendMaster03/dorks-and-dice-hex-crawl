@@ -1359,3 +1359,17 @@ test("Phase 15.1 rendered review requires Guided onboarding, preset advice, and 
     assert.match(capture, /Guided Compact explanations are incomplete/);
     assert.match(capture, /Guided next-action explanation is missing/);
 });
+
+
+test("Phase 15.1 procedure entry surfaces expose the same beginner-help preference control", () => {
+    const workspace = fs.readFileSync(
+        path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"),
+        "utf8");
+    const capture = fs.readFileSync(
+        path.join(sourceDir, "../visual-review/capture-phase15.sh"),
+        "utf8");
+
+    assert.match(workspace, /page\.querySelector<HTMLElement>\("\.hc-page-header"\)\?\.append\(guidancePreferenceButton\(root\)\)/);
+    assert.match(workspace, /toolbar\.append\(back, guidancePreferenceButton\(root\)\)/);
+    assert.match(capture, /Guided procedure preference control is missing/);
+});

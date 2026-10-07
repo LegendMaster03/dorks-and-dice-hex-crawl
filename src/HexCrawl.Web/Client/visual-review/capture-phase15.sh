@@ -173,6 +173,8 @@ elif surface == "procedure":
         raise SystemExit(f'procedure home is incomplete: {metrics}')
     if state == "procedure-home" and metrics["guidedPresetAdviceCount"] < 1:
         raise SystemExit(f'Guided preset discovery is missing: {metrics}')
+    if state == "procedure-home" and not metrics["guidanceToggleVisible"]:
+        raise SystemExit(f'Guided procedure preference control is missing: {metrics}')
     expected = {
         "procedure-compact": "compactVisible",
         "procedure-advanced": "advancedVisible",

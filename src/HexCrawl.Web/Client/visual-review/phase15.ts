@@ -174,7 +174,7 @@ function referenceFixture() {
     };
 }
 
-const savedProcedure = {function visualPreset() {
+function visualPreset() {
     const moduleKeys = [
         "time.interval",
         "movement.budget",
@@ -235,7 +235,7 @@ const savedProcedure = {function visualPreset() {
     };
 }
 
-
+const savedProcedure = {
     procedureId: "visual-procedure",
     revision: 3,
     key: "visual-procedure",
