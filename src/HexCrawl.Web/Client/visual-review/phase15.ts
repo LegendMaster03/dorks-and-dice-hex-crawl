@@ -952,6 +952,30 @@ switch (stateName) {
         survival = survivalFixture(true);
         effects = effectsFixture(true);
         break;
+    case "forced-travel-one-participant":
+        runtime.expedition.intendedDirection = 4;
+        runtime.party = {
+            ...runtime.party,
+            members: [runtime.party.members[0]],
+            marchingOrder: runtime.party.marchingOrder.filter(value => value.memberId === "member-1"),
+            watchList: [],
+            activityAssignments: runtime.party.activityAssignments.filter(value => value.participantId === "member-1")
+        };
+        survival = survivalFixture(true);
+        effects = effectsFixture(false);
+        break;
+    case "forced-travel-zero-participants":
+        runtime.expedition.intendedDirection = 4;
+        runtime.party = {
+            ...runtime.party,
+            members: [],
+            marchingOrder: [],
+            watchList: [],
+            activityAssignments: []
+        };
+        survival = survivalFixture(true);
+        effects = effectsFixture(false);
+        break;
     case "effects-workspace":
         runtime.expedition.intendedDirection = 1;
         runtime.expedition.actualDirection = 1;
@@ -1141,9 +1165,20 @@ if (stateName === "map-selected" || stateName === "map-nonadjacent") {
     findButton("Continue travel")?.click();
 } else if (stateName === "encounter-pending") {
     findButton("Resolve encounter")?.click();
-} else if (stateName === "forced-travel-pending") {
+} else if (stateName === "forced-travel-pending"
+    || stateName === "forced-travel-one-participant"
+    || stateName === "forced-travel-zero-participants") {
     findButton("Resolve forced travel")?.click();
     await waitForRootText("Current requirement");
+    if (stateName === "forced-travel-zero-participants") {
+        const checkbox = Array.from(root.querySelectorAll("label"))
+            .find(label => label.textContent?.includes("Check succeeded"))
+            ?.querySelector('input[type="checkbox"]');
+        if (checkbox) {
+            checkbox.checked = false;
+            checkbox.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+    }
 } else if (stateName === "boundary-pending") {
     findButton("Resolve lost-party boundary decision")?.click();
 }
@@ -1187,6 +1222,9 @@ const normalHistoryText = Array.from(root.querySelectorAll("[data-phase15-drawer
     .filter(isVisible)
     .map(item => item.textContent || "")
     .join(" ");
+const forcedTravelTarget = root.querySelector("[data-forced-travel-target]");
+const forcedTravelResolve = Array.from(root.querySelectorAll("button"))
+    .find(button => button.textContent?.trim() === "Record forced-travel result");
 const metrics = {
     state: stateName,
     surface: "expedition",
@@ -1236,11 +1274,16 @@ const metrics = {
         && !root.querySelector('[data-phase15-drawer] select[name="intendedDirection"]')
     ),
     forcedTravelPrimaryDomainFacing: rootText.includes("Current requirement") && rootText.includes("Failure consequence:"),
-    forcedTravelNamedTargetVisible: stateName !== "forced-travel-pending" || (
+    forcedTravelNamedTargetVisible: !stateName.startsWith("forced-travel-") || (
         rootText.includes("Affected scope: Participant")
         && rootText.includes("Affected character")
-        && rootText.includes("Ari")
         && !rootText.includes("Participant, mount, or vehicle ID when required")
+    ),
+    forcedTravelTargetOptionCount: forcedTravelTarget?.querySelectorAll("option").length ?? 0,
+    forcedTravelTargetValue: forcedTravelTarget?.value ?? null,
+    forcedTravelMissingTargetBlocked: stateName !== "forced-travel-zero-participants" || (
+        rootText.includes("no party members configured")
+        && forcedTravelResolve?.disabled === true
     ),
     forcedTravelTechnicalExpanded: Array.from(root.querySelectorAll("details[open] > summary")).some(summary => summary.textContent?.trim() === "Advanced consequence details"),
     normalHistoryRawInternalsVisible: stateName === "history-workspace"

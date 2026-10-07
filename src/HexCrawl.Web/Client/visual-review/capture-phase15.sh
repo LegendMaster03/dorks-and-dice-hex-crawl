@@ -53,6 +53,8 @@ cases=(
   "12-spatial-boundary|boundary-pending|light|1366|900"
   "13-spatial-encounter|encounter-pending|dark|1366|900"
   "14-spatial-forced-travel|forced-travel-pending|light|1366|900"
+  "14a-spatial-forced-travel-one|forced-travel-one-participant|light|1366|900"
+  "14b-spatial-forced-travel-zero|forced-travel-zero-participants|dark|500|844|390"
   "15-spatial-more-options|more-options-open|dark|1366|900"
   "16-spatial-nonadjacent-inspect|map-nonadjacent|light|1366|900"
   "17-spatial-teleport-workspace|teleport-workspace|light|1366|900"
@@ -188,13 +190,21 @@ else:
         raise SystemExit(f'non-adjacent inspection did not expose deliberate teleport authority: {metrics}')
     if state == "movement-input-pending" and not metrics["movementUnitVisible"]:
         raise SystemExit(f'movement resolution omitted its authoritative unit: {metrics}')
-    if state == "forced-travel-pending":
+    if state in {"forced-travel-pending", "forced-travel-one-participant", "forced-travel-zero-participants"}:
         if not metrics["forcedTravelPrimaryDomainFacing"]:
             raise SystemExit(f'forced-travel primary workflow is not domain-facing: {metrics}')
         if not metrics["forcedTravelNamedTargetVisible"]:
             raise SystemExit(f'forced-travel normal workflow does not expose named participant targeting: {metrics}')
         if metrics["forcedTravelTechnicalExpanded"]:
             raise SystemExit(f'forced-travel advanced consequence details opened by default: {metrics}')
+    if state == "forced-travel-pending":
+        if metrics["forcedTravelTargetOptionCount"] < 3 or metrics["forcedTravelTargetValue"] != "":
+            raise SystemExit(f'multiple participant forced-travel target was silently selected: {metrics}')
+    if state == "forced-travel-one-participant":
+        if metrics["forcedTravelTargetOptionCount"] != 1 or metrics["forcedTravelTargetValue"] != "member-1":
+            raise SystemExit(f'single participant forced-travel target was not visibly preselected: {metrics}')
+    if state == "forced-travel-zero-participants" and not metrics["forcedTravelMissingTargetBlocked"]:
+        raise SystemExit(f'zero-participant forced-travel failure did not expose blocked setup state: {metrics}')
     if state == "navigation-pending" and not metrics["navigationCourseReadOnly"]:
         raise SystemExit(f'navigation repeated the already-selected intended course input: {metrics}')
     if state == "effects-workspace":
@@ -232,6 +242,8 @@ else:
         "boundary-pending": "Boundary crossing",
         "encounter-pending": "Encounter",
         "forced-travel-pending": "Forced travel",
+        "forced-travel-one-participant": "Forced travel",
+        "forced-travel-zero-participants": "Forced travel",
         "more-options-open": "Advanced travel controls",
         "teleport-workspace": "Teleport party"
     }

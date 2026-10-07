@@ -371,6 +371,7 @@ export class ExpeditionSurvivalResourcesPanel {
                 ? null
                 : this.select("Affected target", availableScopes);
             const target = document.createElement("select");
+            target.dataset.forcedTravelTarget = "";
             const targetWrapper = document.createElement("label");
             const targetStatus = this.muted("");
             targetWrapper.append(document.createTextNode("Affected target"), target);
