@@ -111,7 +111,8 @@ test("Phase 15 Inspect and Compact consume one semantic fact formatter", () => {
         path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"),
         "utf8");
 
-    assert.ok((workspace.match(/procedureParameterFacts\(/g) ?? []).length >= 2);
+    assert.match(workspace, /procedurePresentationSections/);
+    assert.ok((workspace.match(/renderPresentationFactGroups\(/g) ?? []).length >= 3);
     assert.match(workspace, /hc-inspect-rule-facts/);
     assert.doesNotMatch(workspace, /presetModuleSummary/);
 });
