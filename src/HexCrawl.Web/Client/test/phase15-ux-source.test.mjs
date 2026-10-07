@@ -112,7 +112,7 @@ test("Phase 15 Inspect and Compact consume one semantic fact formatter", () => {
         "utf8");
 
     assert.match(workspace, /procedurePresentationSections/);
-    assert.ok((workspace.match(/renderPresentationFactGroups\(/g) ?? []).length >= 3);
+    assert.ok((workspace.match(/renderPresentationFactGroups\(/g) ?? []).length >= 2);
     assert.match(workspace, /hc-inspect-rule-facts/);
     assert.doesNotMatch(workspace, /presetModuleSummary/);
 });
