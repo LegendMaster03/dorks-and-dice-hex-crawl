@@ -76,7 +76,7 @@ The current Phase 15.1 branch includes:
 - **Why is this next?** coaching on the authoritative expedition Next action;
 - **Why is this pending?** coaching for pending effect and resource consequences without inventing automatic outcomes;
 - beginner-oriented preset summaries derived from generic procedure structure rather than preset identity;
-- fallback domain explanations for Compact numeric procedure settings when the pinned schema does not already provide a description;
+- curated domain explanations for known Compact numeric procedure settings, while unmodeled fields continue to use their pinned schema descriptions;
 - rendered-review assertions for Guided home, preset, Compact, world/grid, and runtime surfaces.
 
 The Site authentication/access-denied behavior remains a host-level follow-up rather than a Hex Crawl runtime responsibility.
