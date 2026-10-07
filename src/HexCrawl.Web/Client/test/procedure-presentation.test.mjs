@@ -41,7 +41,7 @@ test("Compact starting-exit help describes the runtime exit requirement rather t
     const presentation = compactParameter("startingExitProgressFactor", {
         type: "number",
         required: true,
-        description: null,
+        description: "Starting exit progress factor.",
         defaultValue: "0.5"
     }, "movement.hex-progress");
 
@@ -49,6 +49,15 @@ test("Compact starting-exit help describes the runtime exit requirement rather t
     assert.match(presentation?.help ?? "", /required to leave the starting hex/i);
     assert.match(presentation?.help ?? "", /hex center distance/i);
     assert.doesNotMatch(presentation?.help ?? "", /already counted/i);
+    assert.notEqual(presentation?.help, "Starting exit progress factor.");
+
+    const unmodeled = compactParameter("customNumericSetting", {
+        type: "number",
+        required: false,
+        description: "Pinned mechanic-specific numeric meaning.",
+        defaultValue: null
+    }, "custom.module");
+    assert.equal(unmodeled, null);
 });
 
 
