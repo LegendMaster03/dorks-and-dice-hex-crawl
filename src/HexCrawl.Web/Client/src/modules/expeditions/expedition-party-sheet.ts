@@ -79,19 +79,69 @@ export class ExpeditionPartySheetController {
             .filter(order => order.enabled)
             .map(order => order.text)
             .join(" · ") || "—";
-        const assignments = party.activityAssignments
-            .map(assignment => assignmentSummary(assignment, memberById))
-            .join(" · ") || "—";
-
         host.innerHTML = `
             <div class="hc-party-register-grid">
                 <div><strong>Party</strong><span>${escapeHtml(party.members.map(member => member.name).join(", ") || "—")}</span></div>
                 <div><strong>Movement</strong><span>${escapeHtml(movement)}</span></div>
-                <div class="hc-party-register-wide"><strong>Participant roles / activities</strong><span>${escapeHtml(assignments)}</span></div>
+                <div class="hc-party-register-wide" data-party-activity-roster></div>
                 <div class="hc-party-register-wide"><strong>Marching order</strong><span>${escapeHtml(marching)}</span></div>
                 <div class="hc-party-register-wide"><strong>Watch list</strong><span>${escapeHtml(watches)}</span></div>
                 <div class="hc-party-register-wide"><strong>Standing orders</strong><span>${escapeHtml(orders)}</span></div>
             </div>`;
+        this.renderActivityRoster(
+            required<HTMLElement>(host, "[data-party-activity-roster]"),
+            runtime,
+            memberById);
+    }
+
+    private renderActivityRoster(
+        host: HTMLElement,
+        runtime: ExpeditionDetail,
+        memberById: Map<string, string>): void {
+        host.replaceChildren();
+        const title = document.createElement("strong");
+        title.textContent = "Participant roles / activities";
+        host.append(title);
+        if (runtime.party.activityAssignments.length === 0) {
+            host.append(emptyLine("No current role or activity assignments."));
+            return;
+        }
+
+        const activeIds = new Set(runtime.expedition.activeActivityAssignments.map(value => value.id));
+        const table = document.createElement("table");
+        table.className = "hc-readable-table";
+        table.dataset.activityRoster = "";
+        const head = document.createElement("thead");
+        const header = document.createElement("tr");
+        for (const label of ["Target", "Activity", "Role", "Allowance model", "Resolution state"]) {
+            const cell = document.createElement("th");
+            cell.scope = "col";
+            cell.textContent = label;
+            header.append(cell);
+        }
+        head.append(header);
+        const body = document.createElement("tbody");
+        for (const assignment of runtime.party.activityAssignments) {
+            const row = document.createElement("tr");
+            const target = assignment.participantId
+                ? memberById.get(assignment.participantId) ?? "Unknown participant"
+                : assignment.scope === "Party" ? "Entire party" : humanizeKey(assignment.scope);
+            for (const [index, value] of [
+                target,
+                assignment.activityKey ? humanizeKey(assignment.activityKey) : "—",
+                assignment.roleKey ? humanizeKey(assignment.roleKey) : "—",
+                humanizeKey(runtime.participantActivityPolicy.activityBudgetModel ?? "unspecified"),
+                activeIds.has(assignment.id) ? "Active this interval" : "Standing assignment"
+            ].entries()) {
+                const cell = document.createElement(index === 0 ? "th" : "td");
+                if (index === 0) cell.scope = "row";
+                cell.textContent = value;
+                row.append(cell);
+            }
+            body.append(row);
+        }
+        table.append(head, body);
+        host.append(table);
     }
 
     private renderEditor(): void {

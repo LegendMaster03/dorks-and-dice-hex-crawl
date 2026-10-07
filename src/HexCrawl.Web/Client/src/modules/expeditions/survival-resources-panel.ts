@@ -88,10 +88,16 @@ export class ExpeditionSurvivalResourcesPanel {
         if (state.resources.length === 0) {
             container.append(this.muted("No expedition-owned resources are recorded."));
         } else {
+            container.append(this.resourceLedger(state.resources));
+            const manage = document.createElement("details");
+            manage.className = "hc-ux-disclosure";
+            const summary = document.createElement("summary");
+            summary.textContent = "Manage resource records";
             const list = document.createElement("div");
             list.className = "hc-stack";
             for (const resource of state.resources) list.append(this.resourceCard(resource));
-            container.append(list);
+            manage.append(summary, list);
+            container.append(manage);
         }
 
         const add = document.createElement("form");
@@ -101,7 +107,7 @@ export class ExpeditionSurvivalResourcesPanel {
         const value = this.input("Quantity, state, or die sides", "text");
         const unit = this.input("Unit for counted resources", "text");
         const scope = this.select("Scope", ["Party", "Expedition", "Participant", "Mount", "Vehicle"]);
-        const target = this.input("Target ID when scope requires it", "text");
+        const target = this.targetSelect("Target", scope.control);
         const note = this.input("Note", "text");
         const submit = this.button("Add resource");
         add.append(key.wrapper, model.wrapper, value.wrapper, unit.wrapper, scope.wrapper, target.wrapper, note.wrapper, submit);
@@ -247,7 +253,7 @@ export class ExpeditionSurvivalResourcesPanel {
         const value = this.input("Resolved value", "text");
         const unit = this.input("Unit for quantity operations", "text");
         const scope = this.select("Target scope", ["Party", "Expedition", "Participant", "Mount", "Vehicle"]);
-        const target = this.input("Target ID when scope requires it", "text");
+        const target = this.targetSelect("Target", scope.control);
         const submit = this.button("Resolve consumption");
         form.append(due.wrapper, resourceKey.wrapper, resourceId.wrapper, operation.wrapper, value.wrapper, unit.wrapper,
             scope.wrapper, target.wrapper, submit);
@@ -516,18 +522,46 @@ export class ExpeditionSurvivalResourcesPanel {
 
     private exposureView(state: SurvivalResources): HTMLElement {
         const container = document.createElement("div");
-        container.append(this.policySummary("Exposure policy", state.exposurePolicy));
-        if (state.environmentFacts.length > 0) {
-            const facts = document.createElement("p");
-            facts.textContent = `Relevant effective environment: ${state.environmentFacts.map(fact => `${fact.dimension}=${fact.value ?? fact.valueKind}`).join("; ")}.`;
-            container.append(facts);
+        const policy = state.exposurePolicy;
+        container.append(
+            this.policySummary("Exposure policy", policy),
+            this.factGrid([
+                ["Dimensions", policy.dimensions.map(humanize).join(", ") || "None configured"],
+                ["Evaluation", humanize(policy.evaluationModel ?? "Resolved by table")],
+                ["Interval", humanize(policy.evaluationInterval ?? "Not specified")],
+                ["Target scope", humanize(policy.targetScope ?? "Party")],
+                ["Consequence", humanize(policy.consequenceModel ?? "Explicit resolved consequence")]
+            ]));
+
+        const effectiveFacts = state.environmentFacts.filter(fact => fact.effective);
+        if (effectiveFacts.length > 0) {
+            container.append(this.readableTable(
+                "Effective environment",
+                ["Dimension", "Value", "Source"],
+                effectiveFacts.map(fact => [
+                    humanize(fact.dimension),
+                    fact.value ?? humanize(fact.valueKind),
+                    humanize(fact.sourceKind)
+                ])));
         } else {
             container.append(this.muted("No effective environment facts are automatically interpreted as fatigue, exhaustion, or damage."));
         }
-        for (const progress of state.exposure) {
-            container.append(this.muted(`${progress.exposureKey}: ${progress.amount} ${progress.unit} for ${describeTarget(progress.target)}.`));
+
+        if (state.exposure.length > 0) {
+            container.append(this.readableTable(
+                "Exposure progress",
+                ["Exposure", "Target", "Progress", "Recorded sources"],
+                state.exposure.map(progress => [
+                    humanize(progress.exposureKey),
+                    this.targetLabel(progress.target),
+                    `${formatNumber(progress.amount)} ${progress.unit}`,
+                    String(progress.sourceOccurrenceIds.length)
+                ])));
+        } else {
+            container.append(this.muted("No accumulated exposure progress is recorded."));
         }
-        if (state.exposurePolicy.support === "Supported") container.append(this.exposureForm(state.exposurePolicy));
+
+        if (policy.support === "Supported") container.append(this.exposureForm(policy));
         return container;
     }
 
@@ -538,7 +572,8 @@ export class ExpeditionSurvivalResourcesPanel {
         const delta = this.input("Resolved progress delta", "number");
         delta.control.step = "any";
         const unit = this.input("Progress unit", "text");
-        const target = this.input(`${policy.targetScope ?? "Party"} target ID when required`, "text");
+        const targetScope = policy.targetScope ?? "Party";
+        const target = this.targetSelect("Affected target", targetScope);
         const effect = this.input("Resolved persistent effect key, optional", "text");
         const level = this.input("Resolved effect level delta", "number");
         level.control.value = "1";
@@ -548,7 +583,6 @@ export class ExpeditionSurvivalResourcesPanel {
             event.preventDefault();
             void this.mutate(submit, async () => {
                 const effectKey = nullable(effect.control.value);
-                const targetScope = policy.targetScope ?? "Party";
                 const result = await this.api.resolveExposure(this.expeditionId, {
                     expectedVersion: this.requireState().expeditionVersion,
                     occurrenceId: crypto.randomUUID(),
@@ -575,7 +609,14 @@ export class ExpeditionSurvivalResourcesPanel {
     private foragingView(state: SurvivalResources): HTMLElement {
         const container = document.createElement("div");
         const policy = state.foragingPolicy;
-        container.append(this.policySummary("Foraging policy", policy));
+        container.append(
+            this.policySummary("Foraging policy", policy),
+            this.factGrid([
+                ["Resolution", humanize(policy.resolutionModel ?? "Manual")],
+                ["Time cost", policy.timeCost === null ? "Not specified" : `${formatNumber(policy.timeCost)} ${policy.timeUnit ?? "units"}`],
+                ["Travel tradeoff", humanize(policy.movementTradeoff ?? "None specified")],
+                ["Activity assignment", policy.activityBacked ? "Uses selected expedition activities" : "Not required by this procedure"]
+            ]));
         if (policy.support !== "Supported") return container;
         const form = document.createElement("form");
         form.className = "hc-form hc-form-grid";
@@ -585,8 +626,8 @@ export class ExpeditionSurvivalResourcesPanel {
         const value = this.input("Resolved value", "text");
         const unit = this.input("Unit for quantity operations", "text");
         const scope = this.select("Target scope", ["Party", "Expedition", "Participant", "Mount", "Vehicle"]);
-        const target = this.input("Target ID when scope requires it", "text");
-        const assignments = this.input("Activity assignment IDs, comma-separated", "text");
+        const target = this.targetSelect("Target", scope.control);
+        const assignments = this.assignmentMultiSelect("Activities used");
         const submit = this.button("Resolve foraging yield");
         form.append(resource.wrapper, resourceId.wrapper, operation.wrapper, value.wrapper, unit.wrapper,
             scope.wrapper, target.wrapper, assignments.wrapper, submit);
@@ -606,34 +647,47 @@ export class ExpeditionSurvivalResourcesPanel {
                     expectedVersion: this.requireState().expeditionVersion,
                     occurrenceId: crypto.randomUUID(),
                     target: targetValue(scope.control.value as ExpeditionEffectScope, target.control.value),
-                    activityAssignmentIds: csv(assignments.control.value),
+                    activityAssignmentIds: Array.from(assignments.control.selectedOptions).map(option => option.value),
                     resourceGains: [change],
                     provenance: dmProvenance("foraging-resolution")
                 });
                 this.apply(result.state);
             });
         });
-        container.append(this.muted(`Resolution ${policy.resolutionModel ?? "manual"}; cost ${policy.timeCost ?? "—"} ${policy.timeUnit ?? "units"}; travel tradeoff ${policy.movementTradeoff ?? "—"}. No yield table or check formula is inferred.`), form);
+        container.append(
+            this.muted("Resolved yield remains explicit. No yield table or check formula is inferred when the procedure does not provide one."),
+            form);
         return container;
     }
 
     private campingView(state: SurvivalResources): HTMLElement {
         const container = document.createElement("div");
         const policy = state.campingPolicy;
-        container.append(this.policySummary("Camping policy", policy));
-        if (state.camp) {
-            container.append(this.muted(`Latest camp: ${state.camp.established ? "established" : "not established"}; rest trigger ${state.camp.restTriggerKey ?? "none"}; safe ${state.camp.restSafe === null ? "unresolved" : String(state.camp.restSafe)}; prolonged ${state.camp.restProlonged === null ? "unresolved" : String(state.camp.restProlonged)}.`));
-        }
-        if (policy.support === "Supported") container.append(this.campForm(policy));
+        const preparation = state.camp?.activityAssignmentIds.length
+            ? state.camp.activityAssignmentIds.map(id => this.assignmentLabelById(id)).join(" · ")
+            : "No recorded preparation activities";
+        container.append(
+            this.policySummary("Camping policy", policy),
+            this.factGrid([
+                ["Resolution", humanize(policy.resolutionModel ?? "Manual")],
+                ["Time cost", policy.timeCost === null ? "Not specified" : `${formatNumber(policy.timeCost)} ${policy.timeUnit ?? "units"}`],
+                ["Watch model", humanize(policy.watchModel ?? "Not specified")],
+                ["Preparation", preparation],
+                ["Camp state", state.camp ? (state.camp.established ? "Established" : "Not established") : "No camp resolution recorded"],
+                ["Rest trigger", state.camp?.restTriggerKey ? humanize(state.camp.restTriggerKey) : "None recorded"],
+                ["Safe rest", state.camp?.restSafe === null || state.camp?.restSafe === undefined ? "Unresolved" : state.camp.restSafe ? "Yes" : "No"],
+                ["Prolonged rest", state.camp?.restProlonged === null || state.camp?.restProlonged === undefined ? "Unresolved" : state.camp.restProlonged ? "Yes" : "No"]
+            ]));
+        if (policy.support === "Supported") container.append(this.campForm(policy, state.camp?.activityAssignmentIds ?? []));
         if (state.camp?.restTriggerKey) container.append(this.recoveryForm(state.camp.restTriggerKey));
         return container;
     }
 
-    private campForm(policy: CampingPolicy): HTMLElement {
+    private campForm(policy: CampingPolicy, selectedAssignmentIds: string[]): HTMLElement {
         const form = document.createElement("form");
         form.className = "hc-form hc-form-grid";
         const established = this.checkbox("Camp established", true);
-        const assignments = this.input("Activity assignment IDs, comma-separated", "text");
+        const assignments = this.assignmentMultiSelect("Preparation / watch activities", selectedAssignmentIds);
         const trigger = this.input("Explicit rest trigger, optional", "text");
         const safe = this.select("Safe-rest resolution", ["unresolved", "true", "false"]);
         const prolonged = this.select("Prolonged-rest resolution", ["unresolved", "true", "false"]);
@@ -646,7 +700,7 @@ export class ExpeditionSurvivalResourcesPanel {
                     expectedVersion: this.requireState().expeditionVersion,
                     resolutionId: crypto.randomUUID(),
                     established: established.control.checked,
-                    activityAssignmentIds: csv(assignments.control.value),
+                    activityAssignmentIds: Array.from(assignments.control.selectedOptions).map(option => option.value),
                     restTriggerKey: nullable(trigger.control.value),
                     restSafe: triState(safe.control.value),
                     restProlonged: triState(prolonged.control.value),
@@ -656,7 +710,7 @@ export class ExpeditionSurvivalResourcesPanel {
             });
         });
         const wrapper = document.createElement("div");
-        wrapper.append(this.muted(`Resolution ${policy.resolutionModel ?? "manual"}; cost ${policy.timeCost ?? "—"} ${policy.timeUnit ?? "units"}; watch model ${policy.watchModel ?? "—"}. Establishing camp does not imply safe rest.`), form);
+        wrapper.append(this.muted("Establishing camp does not imply safe or prolonged rest; record only the results actually resolved at the table."), form);
         return wrapper;
     }
 
@@ -688,6 +742,157 @@ export class ExpeditionSurvivalResourcesPanel {
         });
         wrapper.append(form);
         return wrapper;
+    }
+
+    private resourceLedger(resources: ExpeditionResource[]): HTMLElement {
+        const table = this.readableTable(
+            "Resource inventory",
+            ["Resource", "Target", "Model", "Value", "State"],
+            resources.map(resource => [
+                humanize(resource.resourceKey),
+                this.targetLabel(resource.target),
+                humanize(resource.inventoryModel),
+                describeResourceValue(resource),
+                resource.isDepleted ? "Depleted" : "Available"
+            ]));
+        table.dataset.resourceLedger = "";
+        return table;
+    }
+
+    private targetLabel(target: ExpeditionTarget): string {
+        if (!target.targetId) return humanize(target.scope);
+        const runtime = this.getRuntime();
+        if (target.scope === "Participant") {
+            return runtime.party.members.find(member => member.id === target.targetId)?.name
+                ?? `Participant ${target.targetId}`;
+        }
+        const contributor = (runtime.party.movementContributors ?? [])
+            .find(value => value.id === target.targetId && value.kind === target.scope);
+        return contributor ? `${humanize(target.scope)} · ${humanize(contributor.key)}` : `${humanize(target.scope)} · ${target.targetId}`;
+    }
+
+    private targetSelect(
+        label: string,
+        scopeSource: ExpeditionEffectScope | HTMLSelectElement): { wrapper: HTMLLabelElement; control: HTMLSelectElement } {
+        const wrapper = document.createElement("label");
+        wrapper.textContent = label;
+        const control = document.createElement("select");
+        const currentScope = (): ExpeditionEffectScope =>
+            typeof scopeSource === "string" ? scopeSource : scopeSource.value as ExpeditionEffectScope;
+        const refresh = (): void => {
+            const scope = currentScope();
+            control.replaceChildren();
+            const choices: Array<{ value: string; label: string }> = [];
+            if (scope === "Participant") {
+                choices.push(...this.getRuntime().party.members.map(member => ({ value: member.id, label: member.name })));
+            } else if (scope === "Mount" || scope === "Vehicle") {
+                choices.push(...(this.getRuntime().party.movementContributors ?? [])
+                    .filter(value => value.kind === scope)
+                    .map(value => ({ value: value.id, label: humanize(value.key) })));
+            } else {
+                choices.push({ value: "", label: scope === "Party" ? "Entire party" : "Expedition" });
+            }
+            if (choices.length === 0) {
+                choices.push({ value: "", label: `No configured ${humanize(scope).toLowerCase()} targets` });
+            }
+            for (const choice of choices) {
+                const option = document.createElement("option");
+                option.value = choice.value;
+                option.textContent = choice.label;
+                control.append(option);
+            }
+            control.required = scope === "Participant" || scope === "Mount" || scope === "Vehicle";
+            control.disabled = scope === "Party" || scope === "Expedition";
+        };
+        if (typeof scopeSource !== "string") scopeSource.addEventListener("change", refresh);
+        refresh();
+        wrapper.append(control);
+        return { wrapper, control };
+    }
+
+    private assignmentMultiSelect(
+        label: string,
+        selectedIds: string[] = []): { wrapper: HTMLLabelElement; control: HTMLSelectElement } {
+        const wrapper = document.createElement("label");
+        wrapper.textContent = label;
+        const control = document.createElement("select");
+        control.multiple = true;
+        control.size = Math.min(6, Math.max(2, this.getRuntime().party.activityAssignments.length));
+        const selected = new Set(selectedIds);
+        for (const assignment of this.getRuntime().party.activityAssignments) {
+            const option = document.createElement("option");
+            option.value = assignment.id;
+            option.textContent = this.assignmentLabel(assignment);
+            option.selected = selected.has(assignment.id);
+            control.append(option);
+        }
+        if (control.options.length === 0) {
+            const option = document.createElement("option");
+            option.value = "";
+            option.textContent = "No configured activity assignments";
+            option.disabled = true;
+            control.append(option);
+        }
+        wrapper.append(control);
+        return { wrapper, control };
+    }
+
+    private assignmentLabel(assignment: ExpeditionDetail["party"]["activityAssignments"][number]): string {
+        const member = assignment.participantId
+            ? this.getRuntime().party.members.find(value => value.id === assignment.participantId)?.name ?? "Unknown participant"
+            : "Party";
+        const activity = assignment.activityKey ? humanize(assignment.activityKey) : null;
+        const role = assignment.roleKey ? humanize(assignment.roleKey) : null;
+        return [member, activity, role ? `role: ${role}` : null].filter(Boolean).join(" · ");
+    }
+
+    private assignmentLabelById(id: string): string {
+        const assignment = this.getRuntime().party.activityAssignments.find(value => value.id === id);
+        return assignment ? this.assignmentLabel(assignment) : `Unknown assignment ${id}`;
+    }
+
+    private factGrid(facts: Array<[string, string]>): HTMLElement {
+        const list = document.createElement("dl");
+        list.className = "hc-readable-facts";
+        for (const [label, value] of facts) {
+            const row = document.createElement("div");
+            const term = document.createElement("dt");
+            term.textContent = label;
+            const detail = document.createElement("dd");
+            detail.textContent = value;
+            row.append(term, detail);
+            list.append(row);
+        }
+        return list;
+    }
+
+    private readableTable(captionText: string, headers: string[], rows: string[][]): HTMLTableElement {
+        const table = document.createElement("table");
+        table.className = "hc-readable-table";
+        const caption = document.createElement("caption");
+        caption.textContent = captionText;
+        const head = document.createElement("thead");
+        const headerRow = document.createElement("tr");
+        for (const header of headers) {
+            const cell = document.createElement("th");
+            cell.scope = "col";
+            cell.textContent = header;
+            headerRow.append(cell);
+        }
+        head.append(headerRow);
+        const body = document.createElement("tbody");
+        for (const values of rows) {
+            const row = document.createElement("tr");
+            values.forEach((value, index) => {
+                const cell = document.createElement(index === 0 ? "th" : "td");
+                if (index === 0) cell.scope = "row";
+                cell.textContent = value;
+                row.append(cell);
+            });
+            body.append(row);
+        }
+        table.append(caption, head, body);
+        return table;
     }
 
     private policySummary(label: string, policy: ResourceConsumptionPolicy | ForagingPolicy | CampingPolicy | ForcedTravelPolicy | ExposurePolicy): HTMLElement {

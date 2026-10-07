@@ -252,7 +252,7 @@ test("focused party workspace exposes the persisted party register through a ded
     assert.match(view, /ExpeditionPartySheetController/);
     assert.match(view, /summary\.dataset\.partySummary = ""/);
     assert.match(view, /editor\.dataset\.partyEditor = ""/);
-    assert.match(view, /openDrawer\("Party & travel order"/);
+    assert.match(view, /openDrawer\(runtime\.expedition\.isSpatial \? "Party & travel order" : "Party & activities"/);
     assert.match(party, /updateExpeditionParty/);
     assert.match(party, /Marching order/);
     assert.match(party, /Watch list/);

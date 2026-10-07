@@ -366,24 +366,38 @@ export class ExpeditionJourneyPanel {
         for (const event of pending) section.append(this.eventCard(event));
         const resolved = state.eventOccurrences.filter(value => value.status !== "ResolutionRequired");
         if (resolved.length > 0) {
-            section.append(this.heading("Resolved / skipped events"));
-            for (const event of resolved) {
-                const card = document.createElement("div");
-                card.className = "hc-card";
-                card.append(this.heading(`${event.eventKey ? humanize(event.eventKey) : humanize(event.trigger)} — ${humanize(event.status)}`));
-                card.append(this.muted(`Affects ${event.participantSnapshot?.participantName ?? (event.targetRoleKey ? humanize(event.targetRoleKey) : humanize(event.targetKind))}. ${event.consequenceIds.length ? `${event.consequenceIds.length} consequence${event.consequenceIds.length === 1 ? "" : "s"} recorded.` : "No consequence recorded."}`));
-                if (event.environment.length > 0) card.append(this.muted(`Environment: ${event.environment.map(value => `${humanize(value.dimension)} ${value.value}${value.unit ? ` ${value.unit}` : ""}`).join("; ")}`));
-                const technical = document.createElement("details");
-                const technicalSummary = document.createElement("summary");
-                technicalSummary.textContent = "Advanced technical details";
-                technical.append(
-                    technicalSummary,
-                    this.muted(`Trigger: ${event.trigger}; reference: ${event.triggerReference}.`),
-                    this.muted(`Occurrence ID: ${event.id}; process ID: ${event.processId ?? "none"}; stage key: ${event.stageKey ?? "none"}; consequence IDs: ${event.consequenceIds.join(", ") || "none"}.`));
-                card.append(technical);
-                if (event.status === "Resolved" && event.consequenceIds.length > 0) card.append(this.encounterHandoffControl(event));
-                section.append(card);
+            section.append(
+                this.heading("Resolved / skipped events"),
+                this.readableTable(
+                    "Journey event record",
+                    ["Event", "Status", "Target", "Environment", "Consequences"],
+                    resolved.map(event => [
+                        event.eventKey ? humanize(event.eventKey) : humanize(event.trigger),
+                        humanize(event.status),
+                        event.participantSnapshot?.participantName
+                            ?? (event.targetRoleKey ? humanize(event.targetRoleKey) : humanize(event.targetKind)),
+                        event.environment.length > 0
+                            ? event.environment.map(value => `${humanize(value.dimension)} ${value.value}${value.unit ? ` ${value.unit}` : ""}`).join(" · ")
+                            : "None recorded",
+                        event.consequenceIds.length > 0 ? String(event.consequenceIds.length) : "None"
+                    ])));
+            for (const event of resolved.filter(value => value.status === "Resolved" && value.consequenceIds.length > 0)) {
+                const actions = document.createElement("div");
+                actions.className = "hc-card";
+                actions.append(
+                    this.heading(event.eventKey ? humanize(event.eventKey) : humanize(event.trigger)),
+                    this.encounterHandoffControl(event));
+                section.append(actions);
             }
+            const technical = document.createElement("details");
+            const technicalSummary = document.createElement("summary");
+            technicalSummary.textContent = "Resolved event technical details";
+            technical.append(technicalSummary);
+            for (const event of resolved) {
+                technical.append(this.muted(
+                    `${event.id} · trigger ${event.trigger} · reference ${event.triggerReference} · process ${event.processId ?? "none"} · stage ${event.stageKey ?? "none"} · consequences ${event.consequenceIds.join(", ") || "none"}`));
+            }
+            section.append(technical);
         }
         return section;
     }
@@ -485,13 +499,15 @@ export class ExpeditionJourneyPanel {
             section.append(this.muted("No journey history yet."));
             return section;
         }
-        const list = document.createElement("ol");
-        for (const record of state.history) {
-            const item = document.createElement("li");
-            item.textContent = journeyHistoryLabel(record.kind);
-            list.append(item);
-        }
-        section.append(list);
+        section.append(this.readableTable(
+            "Journey history",
+            ["Event", "Detail", "Completed watches", "Source"],
+            state.history.map(record => [
+                journeyHistoryLabel(record.kind),
+                record.detail,
+                String(record.completedWatches),
+                humanize(record.provenance.sourceKey)
+            ])));
 
         const advanced = document.createElement("details");
         const summary = document.createElement("summary");
@@ -649,6 +665,35 @@ export class ExpeditionJourneyPanel {
     private requireState(): ExpeditionJourneyState {
         if (!this.state) throw new Error("Journey state has not loaded.");
         return this.state;
+    }
+
+    private readableTable(captionText: string, headers: string[], rows: string[][]): HTMLTableElement {
+        const table = document.createElement("table");
+        table.className = "hc-readable-table";
+        const caption = document.createElement("caption");
+        caption.textContent = captionText;
+        const head = document.createElement("thead");
+        const header = document.createElement("tr");
+        for (const label of headers) {
+            const cell = document.createElement("th");
+            cell.scope = "col";
+            cell.textContent = label;
+            header.append(cell);
+        }
+        head.append(header);
+        const body = document.createElement("tbody");
+        for (const values of rows) {
+            const row = document.createElement("tr");
+            values.forEach((value, index) => {
+                const cell = document.createElement(index === 0 ? "th" : "td");
+                if (index === 0) cell.scope = "row";
+                cell.textContent = value;
+                row.append(cell);
+            });
+            body.append(row);
+        }
+        table.append(caption, head, body);
+        return table;
     }
 
     private section(title: string): HTMLElement {

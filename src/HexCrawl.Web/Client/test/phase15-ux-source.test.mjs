@@ -905,7 +905,7 @@ test("normal journey and expedition history humanize audit records while Advance
     assert.match(view, /item\.textContent = journeyHistoryLabel\(record\.kind\)/);
     assert.match(view, /Journey \$\{record\.kind\} · \$\{record\.detail\}/);
     assert.match(journey, /this\.heading\("Pending journey event"\)/);
-    assert.match(journey, /item\.textContent = journeyHistoryLabel\(record\.kind\)/);
+    assert.match(journey, /"Journey history",[\s\S]*journeyHistoryLabel\(record\.kind\)/);
     assert.match(journey, /record\.detail.*record\.resolutionId.*record\.eventOccurrenceId/s);
     assert.match(journey, /case "ResolutionRecorded": return "Journey result recorded"/);
 });
@@ -1202,4 +1202,30 @@ test("movement resolution includes an accessible contributor ledger and authorit
     assert.match(movement, /Before DM override/);
     assert.match(view, /movementCompositionLedger\(runtime\)/);
     assert.match(view, /Reference fallback; not a fully resolved composition/);
+});
+
+
+test("readability follow-up exposes nonspatial movement and encounter schedule state", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+    const party = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-party-sheet.ts"),
+        "utf8");
+    const journeyOrder = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/journey-stage-presentation.ts"),
+        "utf8");
+    const journey = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/journey-panel.ts"),
+        "utf8");
+
+    assert.match(view, /!runtime\.expedition\.isSpatial[\s\S]*movementCompositionLedger\(runtime\)/);
+    assert.match(view, /Encounter check schedule/);
+    assert.match(view, /encounterScheduleSummary\(runtime\)/);
+    assert.match(party, /dataset\.activityRoster/);
+    assert.match(party, /Allowance model/);
+    assert.match(party, /Active this interval/);
+    assert.match(journeyOrder, /stageOrder\.map/);
+    assert.match(journey, /Journey event record/);
+    assert.match(journey, /Journey history/);
 });

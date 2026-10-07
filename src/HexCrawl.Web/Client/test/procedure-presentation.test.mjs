@@ -185,16 +185,70 @@ test("semantic value formatting preserves decimal numbers and decimal mappings",
 });
 
 
-test("all 19 authoring modules have a semantic table presentation", () => {
+test("all 19 authoring modules use their semantic layouts with representative real parameters", () => {
+    const samples = {
+        "time.interval": { durationTicks: "144000000000" },
+        "party.activities": { assignmentScope: "participant", roleKeys: "navigator;scout", activityBudgetModel: "one-per-watch", activityKeys: "navigate;scout" },
+        "movement.budget": { budgetModel: "watch-distance", baseBudget: "6", budgetUnit: "mi", limitingScope: "party", travelModeKeys: "normal;fast;slow" },
+        "movement.terrain": { adjustmentModel: "multiplier", terrainAdjustments: "clear=1;rough=0.75;difficult=0.5", routeAdjustmentModel: "route-improves-cost", weatherAdjustmentModel: "symbolic" },
+        "movement.resolution": { travelResolution: "continuous-distance", actualDistanceResolution: "fixed" },
+        "movement.hex-progress": { tracksIntraHexProgress: "true", startingExitProgressFactor: "0", nearExitProgressFactor: "0.5", farExitProgressFactor: "1", backExitProgressFactor: "1", directionChangesCostProgress: "true", directionChangeProgressCostFactor: "0.5", supportsDeliberateDoubleBack: "true" },
+        "navigation.check": { usesNavigationChecks: "true", usesPersistentVeer: "true" },
+        "navigation.outcome": { checkTriggerModel: "per-watch", failureStateModel: "lost", directionalErrorModel: "persistent-veer", recognitionModel: "procedure-check", reorientationModel: "resolved-check" },
+        "encounters.cadence": { cadence: "per-watch" },
+        "encounters.schedule": { scheduleModel: "travel-and-camp", travelChecksPerInterval: "1", campCheck: "true", terrainProbabilityModel: "table" },
+        "survival.resources": { resourceKinds: "food;water;supplies", inventoryModel: "counted", consumptionModel: "resolved-quantity", consumptionInterval: "travel-day" },
+        "exploration.foraging": { timeCost: "1", timeUnit: "watch", movementTradeoff: "half-movement", resolutionModel: "skill-check" },
+        "survival.camping": { timeCost: "1", timeUnit: "watch", resolutionModel: "fortify-camp", watchModel: "assigned" },
+        "time.forced-travel": { normalTravelLimit: "8", limitUnit: "hours", checkModel: "escalating-constitution-save", failureConsequence: "fatigue" },
+        "survival.exposure": { dimensions: "temperature;precipitation", evaluationInterval: "per-watch", evaluationModel: "procedure-check", targetScope: "party", consequenceModel: "fatigue" },
+        "effects.expedition": { effectKinds: "fatigue;exhaustion", scope: "participant", accumulationModel: "levels", recoveryModel: "rest" },
+        "journey.process": { stageModel: "ordered", stageKeys: "approach;crossing;arrival", progressModel: "accumulated", progressKind: "numeric", progressUnit: "legs", progressFloor: "0", progressCeiling: "6", allowNegativeProgress: "false", roleDriven: "true", roleAssignmentModel: "current-at-resolution", stageTransitionModel: "sequential", completionModel: "stage-completion", intervalIntegrationModel: "none" },
+        "journey.events": { triggerModel: "explicit", triggerSources: "process-progress;stage-transition", linkMode: "process-linked", targetingModel: "role-or-party", terrainInfluence: "snapshot", consequenceModel: "expedition-consequence", requiresResolvedTrigger: "false", blocksRelevantTravelWhileResolutionRequired: "true" },
+        "procedure.helpers": { "travel.enabled": "true", "travel.diceCount": "2", "travel.dieSides": "6", "travel.modifier": "3", "travel.distanceFactor": "0.1", "navigation.enabled": "true", "navigation.diceCount": "1", "navigation.dieSides": "20", "navigation.modifier": "0", "encounter.enabled": "true", "encounter.diceCount": "1", "encounter.dieSides": "6", "encounter.modifier": "0", "encounter.wanderingResults": "1;2", "encounter.keyedLocationResults": "6", "encounter.timingSlots": "4" }
+    };
+    const expectedSectionKeys = {
+        "time.interval": ["timing"],
+        "party.activities": ["assignment", "allowance"],
+        "movement.budget": ["budget"],
+        "movement.terrain": ["terrain", "context"],
+        "movement.resolution": ["resolution"],
+        "movement.hex-progress": ["progress", "course-change"],
+        "navigation.check": ["check"],
+        "navigation.outcome": ["trigger", "failure", "recovery"],
+        "encounters.cadence": ["cadence"],
+        "encounters.schedule": ["schedule", "context"],
+        "survival.resources": ["inventory", "consumption"],
+        "exploration.foraging": ["cost", "resolution"],
+        "survival.camping": ["cost", "resolution"],
+        "time.forced-travel": ["limit", "resolution", "consequence"],
+        "survival.exposure": ["conditions", "resolution", "consequence"],
+        "effects.expedition": ["effect", "application", "recovery"],
+        "journey.process": ["stages", "progress", "roles", "transition"],
+        "journey.events": ["trigger", "target", "resolution"],
+        "procedure.helpers": ["travel", "navigation", "encounter"]
+    };
+
     const rules = compactRuleCatalog();
     assert.equal(rules.length, 19);
+    assert.equal(Object.keys(samples).length, 19);
+    assert.deepEqual(
+        new Set(Object.keys(samples)),
+        new Set(rules.map(rule => rule.moduleKey)));
+
     for (const rule of rules) {
-        const parameters = rule.moduleKey === "procedure.helpers"
-            ? { "travel.enabled": "true", "travel.diceCount": "2", "travel.dieSides": "6", "travel.modifier": "3" }
-            : { exampleValue: "configured" };
+        const parameters = samples[rule.moduleKey];
         const sections = procedurePresentationSections(rule.moduleKey, parameters);
         assert.ok(sections.length > 0, rule.moduleKey);
-        assert.ok(sections.flatMap(section => section.facts).length > 0, rule.moduleKey);
+        for (const key of expectedSectionKeys[rule.moduleKey]) {
+            assert.ok(sections.some(section => section.key === key), `${rule.moduleKey} should render semantic section ${key}`);
+        }
+        assert.ok(
+            sections.flatMap(section => section.facts).every(fact => fact.value !== ""),
+            `${rule.moduleKey} should preserve representative values`);
+        assert.ok(
+            !sections.some(section => section.key === "configuration"),
+            `${rule.moduleKey} should not fall back to a generic-only presentation`);
     }
 });
 

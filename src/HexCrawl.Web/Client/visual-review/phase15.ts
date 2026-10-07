@@ -4,6 +4,7 @@ import { ensureStyles } from "../src/styles";
 import { renderExpedition } from "../src/modules/expeditions/expedition-view";
 import { renderToolHome } from "../src/modules/home/tool-home-view";
 import { renderProcedureAuthoringWorkspace } from "../src/modules/procedures/procedure-authoring-view";
+import { renderProcedureReference } from "../src/modules/procedures/procedure-reference-view";
 import { renderWorldEditor } from "../src/modules/worlds/world-editor-view";
 
 const params = new URLSearchParams(window.location.search);
@@ -26,26 +27,83 @@ const responseJson = value => new Response(JSON.stringify(value), {
     headers: { "Content-Type": "application/json" }
 });
 
+const richProcedureParameters = {
+    "time.interval": { durationTicks: "144000000000" },
+    "party.activities": { assignmentScope: "participant", roleKeys: "navigator;scout", activityBudgetModel: "one-per-watch", activityKeys: "navigate;scout;forage" },
+    "movement.budget": { budgetModel: "watch-distance", baseBudget: "6", budgetUnit: "mi", limitingScope: "party", travelModeKeys: "normal;fast;slow" },
+    "movement.terrain": { adjustmentModel: "multiplier", terrainAdjustments: "clear=1;rough=0.75;difficult=0.5", routeAdjustmentModel: "route-improves-cost", weatherAdjustmentModel: "symbolic" },
+    "movement.resolution": { travelResolution: "continuous-distance", actualDistanceResolution: "fixed" },
+    "movement.hex-progress": { tracksIntraHexProgress: "true", startingExitProgressFactor: "0", nearExitProgressFactor: "0.5", farExitProgressFactor: "1", backExitProgressFactor: "1", directionChangesCostProgress: "true", directionChangeProgressCostFactor: "0.5", supportsDeliberateDoubleBack: "true" },
+    "navigation.check": { usesNavigationChecks: "true", usesPersistentVeer: "true" },
+    "navigation.outcome": { checkTriggerModel: "per-watch", failureStateModel: "lost", directionalErrorModel: "persistent-veer", recognitionModel: "procedure-check", reorientationModel: "resolved-check" },
+    "encounters.cadence": { cadence: "per-watch" },
+    "encounters.schedule": { scheduleModel: "travel-and-camp", travelChecksPerInterval: "1", campCheck: "true", terrainProbabilityModel: "table" },
+    "survival.resources": { resourceKinds: "food;water;supplies", inventoryModel: "counted", consumptionModel: "resolved-quantity", consumptionInterval: "travel-day" },
+    "exploration.foraging": { timeCost: "1", timeUnit: "watch", movementTradeoff: "half-movement", resolutionModel: "skill-check" },
+    "survival.camping": { timeCost: "1", timeUnit: "watch", resolutionModel: "fortify-camp", watchModel: "assigned" },
+    "time.forced-travel": { normalTravelLimit: "8", limitUnit: "hours", checkModel: "escalating-constitution-save", failureConsequence: "fatigue" },
+    "survival.exposure": { dimensions: "temperature;precipitation", evaluationInterval: "per-watch", evaluationModel: "procedure-check", targetScope: "party", consequenceModel: "fatigue" },
+    "effects.expedition": { effectKinds: "fatigue;exhaustion", scope: "participant", accumulationModel: "levels", recoveryModel: "rest" },
+    "journey.process": { stageModel: "ordered", stageKeys: "approach;crossing;arrival", progressModel: "accumulated", progressKind: "numeric", progressUnit: "legs", progressFloor: "0", progressCeiling: "6", allowNegativeProgress: "false", roleDriven: "true", roleAssignmentModel: "current-at-resolution", stageTransitionModel: "sequential", completionModel: "stage-completion", intervalIntegrationModel: "none" },
+    "journey.events": { triggerModel: "explicit", triggerSources: "process-progress;stage-transition", linkMode: "process-linked", targetingModel: "role-or-party", terrainInfluence: "snapshot", consequenceModel: "expedition-consequence", requiresResolvedTrigger: "false", blocksRelevantTravelWhileResolutionRequired: "true" },
+    "procedure.helpers": { "travel.enabled": "true", "travel.diceCount": "2", "travel.dieSides": "6", "travel.modifier": "3", "travel.distanceFactor": "0.1", "navigation.enabled": "true", "navigation.diceCount": "1", "navigation.dieSides": "20", "navigation.modifier": "0", "encounter.enabled": "true", "encounter.diceCount": "1", "encounter.dieSides": "6", "encounter.modifier": "0", "encounter.wanderingResults": "1;2", "encounter.keyedLocationResults": "6", "encounter.timingSlots": "4" }
+};
+
+function visualProcedureGroup(moduleKey) {
+    if (moduleKey === "procedure.helpers") return "Automation";
+    if (moduleKey.startsWith("journey.")) return "Journey & events";
+    if (["survival.resources", "exploration.foraging", "survival.camping", "time.forced-travel", "survival.exposure", "effects.expedition"].includes(moduleKey)) return "Survival & resources";
+    return "Travel flow";
+}
+
+function visualTitle(value) {
+    return value.replace(/[._-]+/g, " ").replace(/\b\w/g, match => match.toUpperCase());
+}
+
+function composerModule(moduleKey, parameters) {
+    const parameterSchema = Object.fromEntries(Object.keys(parameters).map(key => [key, {
+        type: key === "durationTicks" ? "duration" : "string",
+        required: false,
+        description: null,
+        defaultValue: null
+    }]));
+    return {
+        moduleKey,
+        category: visualProcedureGroup(moduleKey),
+        displayName: visualTitle(moduleKey),
+        purpose: "Representative visual-review configuration for " + visualTitle(moduleKey) + ".",
+        executionStage: visualProcedureGroup(moduleKey),
+        reads: [],
+        produces: [moduleKey],
+        requiredDependencies: [],
+        optionalDependencies: [],
+        presentationMetadata: {},
+        mechanic: {
+            key: moduleKey + ".visual",
+            displayName: visualTitle(moduleKey),
+            description: "Representative pinned behavior for rendered readability review.",
+            version: 1,
+            executionHandler: "visual-review",
+            automationLevel: "Assisted",
+            executionSupport: "Native",
+            inputs: [],
+            outputs: [moduleKey],
+            parameterSchema,
+            compatibilityTags: []
+        },
+        alternatives: [],
+        configurationSchema: parameterSchema,
+        parameters,
+        requiredInputs: [],
+        outputs: [moduleKey],
+        dependencyIssues: [],
+        isModified: false,
+        modificationCount: 0,
+        validationIssues: []
+    };
+}
+
 function composerFixture() {
-    const duration = {
-        type: "duration",
-        required: true,
-        description: "Length of the repeating expedition interval.",
-        defaultValue: "144000000000"
-    };
-    const mechanic = {
-        key: "time.interval.standard",
-        displayName: "Repeating expedition interval",
-        description: "Advance expedition procedure state in a repeating interval.",
-        version: 1,
-        executionHandler: "visual-review",
-        automationLevel: "Assisted",
-        executionSupport: "Native",
-        inputs: [],
-        outputs: ["time.interval"],
-        parameterSchema: { durationTicks: duration },
-        compatibilityTags: []
-    };
     return {
         procedureId: "visual-procedure",
         revision: 3,
@@ -55,31 +113,64 @@ function composerFixture() {
         modificationCount: 0,
         modifiedModuleCount: 0,
         origin: null,
-        modules: [{
-            moduleKey: "time.interval",
-            category: "Time",
-            displayName: "Travel period",
-            purpose: "Set the repeating expedition interval.",
-            executionStage: "Time",
-            reads: [],
-            produces: ["time.interval"],
-            requiredDependencies: [],
-            optionalDependencies: [],
-            presentationMetadata: {},
-            mechanic,
-            alternatives: [],
-            configurationSchema: { durationTicks: duration },
-            parameters: { durationTicks: "144000000000" },
-            requiredInputs: [],
-            outputs: ["time.interval"],
-            dependencyIssues: [],
-            isModified: false,
-            modificationCount: 0,
-            validationIssues: []
-        }],
+        modules: Object.entries(richProcedureParameters).map(([moduleKey, parameters]) => composerModule(moduleKey, parameters)),
         dependencies: { hasErrors: false, issues: [] },
         dependencyFixes: [],
         overrides: []
+    };
+}
+
+function referenceFixture() {
+    const groups = ["Travel flow", "Survival & resources", "Journey & events", "Automation"];
+    const modules = composerFixture().modules.map(module => ({
+        moduleKey: module.moduleKey,
+        category: module.category,
+        section: visualProcedureGroup(module.moduleKey),
+        displayName: visualTitle(module.moduleKey),
+        purpose: module.purpose,
+        executionStage: module.executionStage,
+        presentationMetadata: {},
+        mechanic: {
+            key: module.mechanic.key,
+            displayName: module.mechanic.displayName,
+            description: module.mechanic.description,
+            version: 1,
+            executionHandler: "visual-review",
+            automationLevel: "Assisted",
+            executionSupport: "Native",
+            executionStatus: "Native visual-review fixture",
+            compatibilityTags: []
+        },
+        parameters: Object.entries(module.parameters).map(([key, rawValue]) => ({
+            key,
+            displayName: visualTitle(key),
+            type: "string",
+            description: null,
+            rawValue,
+            displayValue: rawValue,
+            isUnknown: false,
+            listValues: [],
+            mapEntries: [],
+            technicalDetail: null
+        })),
+        requiredInputs: [],
+        outputs: [],
+        diagnostics: [],
+        isModified: false,
+        modificationCount: 0,
+        modificationNotes: []
+    }));
+    return {
+        procedureId: "visual-procedure",
+        revision: 3,
+        key: "visual-procedure",
+        name: "Shattered Marches Procedure",
+        isExecutable: true,
+        modificationCount: 0,
+        modifiedModuleCount: 0,
+        origin: null,
+        dependencies: { hasErrors: false, issues: [] },
+        sections: groups.map(name => ({ name, modules: modules.filter(module => module.section === name) }))
     };
 }
 
@@ -92,7 +183,7 @@ const savedProcedure = {
     originPresetKey: null,
     originPresetDisplayName: null,
     isExecutable: true,
-    moduleCount: 1,
+    moduleCount: Object.keys(richProcedureParameters).length,
     createdAt: "2026-10-06T04:00:00Z"
 };
 
@@ -118,9 +209,12 @@ function installProcedureFetch() {
                     procedureId: "visual-procedure",
                     revision: 3,
                     name: "Shattered Marches Procedure",
-                    modules: [{ moduleKey: "time.interval", parameters: { durationTicks: "144000000000" } }]
+                    modules: Object.entries(richProcedureParameters).map(([moduleKey, parameters]) => ({ moduleKey, parameters }))
                 }, null, 2)
             });
+        }
+        if (url.includes("/api/procedures/visual-procedure/revisions/3/reference")) {
+            return responseJson(referenceFixture());
         }
         if (url.includes("/api/procedures/composer/draft") || url.includes("/api/procedures/visual-procedure")) {
             return responseJson(composerFixture());
@@ -156,6 +250,12 @@ function emitSpecialMetrics(surface) {
         advancedVisible: Boolean(root.querySelector(".hc-advanced-layout")),
         jsonVisible: Boolean(root.querySelector(".hc-json-editor")),
         procedureHomeVisible: text.includes("Saved procedures") && text.includes("Build my own"),
+        procedureModuleCards: root.querySelectorAll(".hc-rule-card").length,
+        procedureFactGroups: root.querySelectorAll(".hc-rule-fact-group").length,
+        referenceVisible: Boolean(root.querySelector(".hc-procedure-reference")),
+        referenceModuleCount: root.querySelectorAll(".hc-reference-module").length,
+        referenceFactGroups: root.querySelectorAll(".hc-reference-rule-group").length,
+        exactParameterDisclosures: Array.from(root.querySelectorAll("summary")).filter(summary => summary.textContent?.trim() === "Exact parameter detail").length,
         technicalModeLabels: ["Compact", "Advanced", "JSON"].filter(label => text.includes(label)).length,
         selectedCellTitle: root.querySelector("[data-selected-cell-title]")?.textContent?.trim() || null,
         selectedCellTerrain: root.querySelector("[data-cell-terrain]")?.value || null,
@@ -199,6 +299,8 @@ if (stateName === "home") {
     if (stateName === "procedure-home") {
         localStorage.removeItem("hex-crawl.procedure-authoring.mode");
         await renderProcedureAuthoringWorkspace(root, api, null, () => {});
+    } else if (stateName === "procedure-reference") {
+        await renderProcedureReference(root, "visual-procedure", 3, () => {});
     } else {
         const mode = stateName.replace("procedure-", "");
         localStorage.setItem("hex-crawl.procedure-authoring.mode", mode);
@@ -1022,6 +1124,14 @@ function journeyFixture() {
     };
 }
 
+function journeyFixtureWithShuffledDefinitions() {
+    const state = journeyFixture();
+    const process = state.activeProcesses[0];
+    const byKey = new Map(process.definition.stages.map(stage => [stage.stageKey, stage]));
+    process.definition.stages = ["arrival", "approach", "pass"].map(stageKey => byKey.get(stageKey));
+    return state;
+}
+
 function pendingJourneyConsequence(id, suffix = "") {
     return {
         consequence: {
@@ -1050,7 +1160,7 @@ function pendingJourneyConsequence(id, suffix = "") {
 let runtime = runtimeFixture();
 let survival = survivalFixture(false);
 let effects = effectsFixture(false);
-let journey = journeyFixture();
+let journey = journeyFixtureWithShuffledDefinitions();
 
 switch (stateName) {
     case "selected-edge":
@@ -1277,6 +1387,77 @@ switch (stateName) {
         runtime.expedition.actualDirection = 1;
         effects = effectsFixture(true);
         break;
+    case "readability-workspace":
+        runtime.expedition.intendedDirection = 1;
+        runtime.expedition.actualDirection = 1;
+        survival = survivalFixture(false);
+        survival.foragingPolicy = {
+            support: "Supported", resolutionModel: "skill-check", timeCost: 1, timeUnit: "watch",
+            movementTradeoff: "half-movement", activityBacked: true,
+            mechanicKey: "exploration.foraging", mechanicVersion: 1, executionHandler: "visual-review", unsupportedReason: null
+        };
+        survival.campingPolicy = {
+            support: "Supported", resolutionModel: "fortify-camp", timeCost: 1, timeUnit: "watch",
+            watchModel: "assigned", activityBacked: true,
+            mechanicKey: "survival.camping", mechanicVersion: 1, executionHandler: "visual-review", unsupportedReason: null
+        };
+        survival.exposurePolicy = {
+            support: "Supported", dimensions: ["temperature", "precipitation"],
+            evaluationModel: "procedure-check", evaluationInterval: "per-watch", targetScope: "Party",
+            consequenceModel: "fatigue", mechanicKey: "survival.exposure", mechanicVersion: 1,
+            executionHandler: "visual-review", unsupportedReason: null
+        };
+        survival.resources.push(
+            { id: "morale", resourceKey: "morale", target: { scope: "Party", targetId: null }, inventoryModel: "Abstract", quantity: null, unit: null, symbolicState: "steady", supplyDieSides: null, isDepleted: false, note: null },
+            { id: "supplies", resourceKey: "supplies", target: { scope: "Party", targetId: null }, inventoryModel: "SupplyDie", quantity: null, unit: null, symbolicState: null, supplyDieSides: 8, isDepleted: false, note: null },
+            { id: "special-stock", resourceKey: "special-stock", target: { scope: "Expedition", targetId: null }, inventoryModel: "ExternalManual", quantity: null, unit: null, symbolicState: null, supplyDieSides: null, isDepleted: false, note: "Tracked by the table" });
+        survival.environmentFacts = [
+            { id: "heat", dimension: "temperature", valueKind: "Measurement", value: "96 °F", effective: true, sourceKind: "Hex" },
+            { id: "rain", dimension: "precipitation", valueKind: "Tag", value: "heavy rain", effective: true, sourceKind: "Weather" }
+        ];
+        survival.camp = {
+            resolutionId: "camp-1", established: true, activityAssignmentIds: ["assignment-2"],
+            resolutionModel: "fortify-camp", restTriggerKey: "long-rest", restSafe: true, restProlonged: false
+        };
+        effects = effectsFixture(true);
+        effects.activeEffects.push({
+            id: "effect-exhaustion", effectKey: "exhaustion",
+            target: { scope: "Participant", targetId: "member-3" }, mergeKey: "exhaustion:member-3",
+            level: 1, magnitude: null, unit: null, state: null, movementComponents: [],
+            sourceConsequenceIds: ["consequence-exposure"],
+            provenance: [{ sourceKind: "Exposure", sourceKey: "heat", sourceReference: null, providerName: null, note: "Resolved heat exposure" }],
+            recoveryModel: "rest"
+        });
+        break;
+    case "encounter-schedule":
+        runtime.expedition.intendedDirection = 0;
+        runtime.expedition.actualDirection = 0;
+        runtime.procedure.runtime.encounterCadence = "PerWatch";
+        runtime.expedition.completedWatches = 3;
+        runtime.expedition.activeWatchNumber = 4;
+        runtime.expedition.activeWatchTotalHours = 4;
+        runtime.expedition.activeWatchElapsedHours = 2;
+        runtime.expedition.activeWatchRemainingHours = 2;
+        break;
+    case "nonspatial-movement-composition":
+        runtime = nonSpatialRuntimeFixture();
+        runtime.procedure = {
+            ...runtime.procedure,
+            modules: [...runtime.procedure.modules, moduleDef("movement.budget"), moduleDef("movement.resolution")]
+        };
+        runtime.movementComposition = movement(true);
+        runtime.movementComposition.effectiveValue = 5;
+        runtime.movementComposition.effectiveUnit = "mi";
+        runtime.movementComposition.effectivePerUnit = "watch";
+        runtime.movementComposition.referenceUse = "AuthoritativeBase";
+        runtime.movementComposition.contributors = [
+            { id: "party-base", kind: "Participant", key: "party pace", operation: "Base", applied: true, value: 6, symbolicValue: null, unit: "mi", perUnit: "watch", participantId: "member-1", movementUnitKey: null, provenance: "party sheet", detail: null },
+            { id: "journey-progress", kind: "PersistentEffect", key: "journey progress budget", operation: "Cap", applied: true, value: 5, symbolicValue: null, unit: "mi", perUnit: "watch", participantId: null, movementUnitKey: null, provenance: "procedure", detail: "Nonspatial activity budget" }
+        ];
+        survival = journeySurvivalFixture();
+        effects = effectsFixture(false);
+        journey = journeyFixtureWithShuffledDefinitions();
+        break;
     case "effects-journey-source":
         runtime.expedition.intendedDirection = 1;
         runtime.expedition.actualDirection = 1;
@@ -1308,7 +1489,7 @@ switch (stateName) {
         runtime = nonSpatialRuntimeFixture();
         survival = journeySurvivalFixture();
         effects = effectsFixture(true);
-        journey = journeyFixture();
+        journey = journeyFixtureWithShuffledDefinitions();
         journey.history = [{
             id: "journey-history-1",
             kind: "ResolutionRecorded",
@@ -1359,12 +1540,12 @@ switch (stateName) {
     case "journey-normal":
         runtime = nonSpatialRuntimeFixture();
         survival = journeySurvivalFixture();
-        journey = journeyFixture();
+        journey = journeyFixtureWithShuffledDefinitions();
         break;
     case "journey-pending":
         runtime = nonSpatialRuntimeFixture();
         survival = journeySurvivalFixture();
-        journey = journeyFixture();
+        journey = journeyFixtureWithShuffledDefinitions();
         journey.activeProcesses[0].status = "ResolutionRequired";
         journey.eventOccurrences = [{
             id: "event-1",
@@ -1394,7 +1575,7 @@ switch (stateName) {
     case "journey-consequence":
         runtime = nonSpatialRuntimeFixture();
         survival = journeySurvivalFixture();
-        journey = journeyFixture();
+        journey = journeyFixtureWithShuffledDefinitions();
         effects = effectsFixture(false);
         effects.pendingConsequences = [pendingJourneyConsequence("pending-journey-consequence")];
         journey.activeProcesses[0].stageStates[1].failures = 1;
@@ -1403,7 +1584,7 @@ switch (stateName) {
     case "journey-consequence-multiple":
         runtime = nonSpatialRuntimeFixture();
         survival = journeySurvivalFixture();
-        journey = journeyFixture();
+        journey = journeyFixtureWithShuffledDefinitions();
         effects = effectsFixture(false);
         effects.pendingConsequences = [
             pendingJourneyConsequence("pending-journey-consequence-1", "1"),
@@ -1413,7 +1594,7 @@ switch (stateName) {
     case "journey-consequence-resolved":
         runtime = nonSpatialRuntimeFixture();
         survival = journeySurvivalFixture();
-        journey = journeyFixture();
+        journey = journeyFixtureWithShuffledDefinitions();
         effects = effectsFixture(false);
         effects.appliedConsequences = [{
             consequenceId: "8ac00000-0000-0000-0000-000000000001",
@@ -1574,9 +1755,12 @@ if (stateName === "course-change-reload") {
     findButton("Resolve navigation")?.click();
 } else if (stateName === "movement-input-pending") {
     findButton("Continue travel")?.click();
-} else if (stateName === "movement-composition") {
+} else if (stateName === "movement-composition" || stateName === "nonspatial-movement-composition") {
     findStatAction("Movement")?.click();
     await waitForRootText("Movement composition contributors");
+} else if (stateName === "encounter-schedule") {
+    findButtonContaining("Encounter schedule")?.click();
+    await waitForRootText("Encounter check schedule");
 } else if (stateName === "encounter-pending") {
     findButton("Resolve encounter")?.click();
 } else if (stateName === "forced-travel-pending"
@@ -1605,7 +1789,7 @@ if (stateName === "more-options-open") {
 } else if (stateName === "journey-pending") {
     findButton("Resolve journey event")?.click();
     await waitForRootText("Pending journey event");
-} else if (stateName === "effects-workspace" || stateName === "effects-journey-source") {
+} else if (stateName === "effects-workspace" || stateName === "effects-journey-source" || stateName === "readability-workspace") {
     findButtonContaining("Resources & effects")?.click();
     await waitForRootText("Active effects");
 } else if (stateName === "history-workspace") {
@@ -1651,7 +1835,7 @@ const normalJourneyText = Array.from(root.querySelectorAll("[data-journey-panel]
     .filter(isNormalPresentationElement)
     .map(item => item.textContent || "")
     .join(" ");
-const normalEffectText = Array.from(root.querySelectorAll("[data-effects-panel] h3, [data-effects-panel] h4, [data-effects-panel] p, [data-effects-panel] li"))
+const normalEffectText = Array.from(root.querySelectorAll("[data-effects-panel] h3, [data-effects-panel] h4, [data-effects-panel] p, [data-effects-panel] li, [data-effects-panel] caption, [data-effects-panel] th, [data-effects-panel] td"))
     .filter(isNormalPresentationElement)
     .map(item => item.textContent || "")
     .join(" ");
@@ -1699,9 +1883,17 @@ const metrics = {
     focusedEdge: document.activeElement?.matches?.("[data-adjacency-edge]") ?? false,
     journeyVisible: rootText.includes("Current stage") && rootText.includes("Progress") && rootText.includes("Roles") && rootText.includes("Pending"),
     journeyStageCount: root.querySelectorAll(".hc-stage-step").length,
+    journeyStageLabels: Array.from(root.querySelectorAll(".hc-stage-step .hc-stage-content strong")).map(value => value.textContent?.trim() || ""),
     movementStatusVisible: Array.from(root.querySelectorAll(".hc-stat-action-label")).some(label => label.textContent?.trim() === "Movement"),
     movementLedgerVisible: isVisible(root.querySelector("[data-movement-composition-ledger]")),
     movementContributorRows: root.querySelectorAll(".hc-movement-ledger-table tbody tr").length,
+    resourceLedgerRows: root.querySelectorAll("[data-resource-ledger] tbody tr").length,
+    effectLedgerRows: root.querySelectorAll("[data-effect-ledger] tbody tr").length,
+    readableEnvironmentVisible: rootText.includes("Effective environment") && rootText.includes("heavy rain"),
+    exposureLedgerVisible: rootText.includes("Exposure progress"),
+    foragingSummaryVisible: rootText.includes("Foraging") && rootText.includes("Travel tradeoff"),
+    campingSummaryVisible: rootText.includes("Camping") && rootText.includes("Watch model") && rootText.includes("Preparation"),
+    encounterScheduleVisible: rootText.includes("Encounter check schedule") && rootText.includes("Every watch"),
     fakeSpatialStateVisible: !runtime.expedition.isSpatial && (
         rootText.includes("Current travel")
         || rootText.includes("Pace / travel mode")
@@ -1754,7 +1946,7 @@ const metrics = {
         ),
     journeyEffectSourceHumanized: stateName !== "effects-journey-source"
         || (
-            normalEffectText.includes("Source: Journey event")
+            normalEffectText.includes("Journey event")
             && !normalEffectText.includes("8ac00000-0000-0000-0000-000000000001")
             && !normalEffectText.includes("journey-event-consequence")
         ),

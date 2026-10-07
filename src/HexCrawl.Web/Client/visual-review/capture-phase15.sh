@@ -43,6 +43,8 @@ cases=(
   "02-home-narrow|home|light|500|900|390"
   "03-procedure-home|procedure-home|light|1366|1000"
   "04-procedure-compact|procedure-compact|light|1366|1000"
+  "04a-procedure-compact-native-mobile|procedure-compact|dark|390|844|390"
+  "04b-procedure-reference|procedure-reference|light|1366|1000"
   "05-procedure-advanced|procedure-advanced|light|1366|1000"
   "06-procedure-json|procedure-json|light|1366|1000"
   "07-spatial-no-course|no-course|light|1600|1000"
@@ -51,9 +53,11 @@ cases=(
   "10-spatial-movement|movement-input-pending|light|1366|900"
   "10a-spatial-movement-composition|movement-composition|light|1366|900"
   "10b-spatial-movement-composition-mobile|movement-composition|dark|500|844|390"
+  "10c-nonspatial-movement-composition|nonspatial-movement-composition|light|1366|900"
   "11-spatial-navigation|navigation-pending|light|1366|900"
   "12-spatial-boundary|boundary-pending|light|1366|900"
   "13-spatial-encounter|encounter-pending|dark|1366|900"
+  "13a-encounter-schedule|encounter-schedule|light|1366|900"
   "14-spatial-forced-travel|forced-travel-pending|light|1366|900"
   "14a-spatial-forced-travel-one|forced-travel-one-participant|light|1366|900"
   "14b-spatial-forced-travel-zero|forced-travel-zero-participants|dark|500|844|390"
@@ -82,6 +86,8 @@ cases=(
   "30-spatial-empty-party|empty-party|light|1366|900"
   "31-effects-workspace-wide|effects-workspace|light|1366|900"
   "32-effects-workspace-mobile|effects-workspace|dark|500|844|390"
+  "32a-readability-workspace-wide|readability-workspace|light|1366|1000"
+  "32b-readability-workspace-native-mobile|readability-workspace|dark|390|844|390"
   "33-history-workspace-wide|history-workspace|light|1366|900"
   "34-history-workspace-mobile|history-workspace|dark|500|844|390"
   "35-encounter-mobile|encounter-pending|light|500|844|390"
@@ -159,6 +165,14 @@ elif surface == "procedure":
     }
     if state in expected and not metrics[expected[state]]:
         raise SystemExit(f'wrong procedure authoring surface: {metrics}')
+    if state == "procedure-compact":
+        if metrics["procedureModuleCards"] != 19 or metrics["procedureFactGroups"] < 19:
+            raise SystemExit(f'feature-rich compact procedure did not render all semantic modules: {metrics}')
+    if state == "procedure-reference":
+        if not metrics["referenceVisible"] or metrics["referenceModuleCount"] != 19:
+            raise SystemExit(f'feature-rich procedure reference is incomplete: {metrics}')
+        if metrics["referenceFactGroups"] < 19 or metrics["exactParameterDisclosures"] != 19:
+            raise SystemExit(f'procedure reference lost semantic or exact parameter evidence: {metrics}')
 elif surface == "world":
     if metrics["selectedCellTitle"] != "Hex 0,0":
         raise SystemExit(f'selected world cell context is missing: {metrics}')
@@ -175,17 +189,21 @@ elif surface == "world":
     if metrics["mapHeight"] < 250:
         raise SystemExit(f'world authoring map is too short to remain usable: {metrics}')
 else:
-    nonspatial = state.startswith("journey-") or state == "history-workspace"
+    nonspatial = state.startswith("journey-") or state in {"history-workspace", "nonspatial-movement-composition"}
     abstract_spatial = state == "abstract-spatial-course"
     if nonspatial:
         if metrics["navigatorButtons"] != 0 or metrics["mapHeight"] != 0:
             raise SystemExit(f'nonspatial fixture fabricated a map or navigator: {metrics}')
         if metrics["currentTravelVisible"] or metrics["fakeSpatialStateVisible"]:
             raise SystemExit(f'nonspatial fixture fabricated spatial travel state: {metrics}')
-        if metrics["movementStatusVisible"]:
-            raise SystemExit(f'nonspatial journey without movement capability rendered movement state: {metrics}')
-        if not metrics["journeyVisible"] or not metrics["railVisible"]:
-            raise SystemExit(f'journey-first primary state is incomplete: {metrics}')
+        if state == "nonspatial-movement-composition":
+            if not metrics["movementStatusVisible"] or not metrics["movementLedgerVisible"] or metrics["movementContributorRows"] < 2:
+                raise SystemExit(f'nonspatial movement composition is not presented in the party workspace: {metrics}')
+        else:
+            if metrics["movementStatusVisible"]:
+                raise SystemExit(f'nonspatial journey without movement capability rendered movement state: {metrics}')
+            if not metrics["journeyVisible"] or not metrics["railVisible"]:
+                raise SystemExit(f'journey-first primary state is incomplete: {metrics}')
         if state == "journey-pending" and metrics["primaryAction"] != "Resolve journey event":
             raise SystemExit(f'journey event is not the actual next action: {metrics}')
         if state == "journey-consequence" and not metrics["journeyConsequenceVisible"]:
@@ -204,6 +222,8 @@ else:
                 raise SystemExit(f'clean journey does not report an authoritative no-pending state: {metrics}')
             if metrics["journeyStageCount"] != 3:
                 raise SystemExit(f'multi-stage journey sequence is incomplete: {metrics}')
+            if metrics["journeyStageLabels"] != ["Reach the pass", "Cross the pass", "Reach the high country"]:
+                raise SystemExit(f'journey stage sequence ignored authoritative stageOrder: {metrics}')
         if state == "journey-pending" and metrics["journeyPendingRawInternalsVisible"]:
             raise SystemExit(f'normal pending journey presentation exposes raw event internals: {metrics}')
     elif abstract_spatial:
@@ -273,6 +293,13 @@ else:
     if state == "movement-composition":
         if not metrics["movementLedgerVisible"] or metrics["movementContributorRows"] < 9:
             raise SystemExit(f'movement composition ledger did not expose all contributor kinds: {metrics}')
+    if state == "encounter-schedule" and not metrics["encounterScheduleVisible"]:
+        raise SystemExit(f'encounter cadence is not visible before an encounter is pending: {metrics}')
+    if state == "readability-workspace":
+        if metrics["resourceLedgerRows"] < 5 or metrics["effectLedgerRows"] < 2:
+            raise SystemExit(f'resource/effect comparison ledgers are incomplete: {metrics}')
+        if not all((metrics["readableEnvironmentVisible"], metrics["exposureLedgerVisible"], metrics["foragingSummaryVisible"], metrics["campingSummaryVisible"])):
+            raise SystemExit(f'survival readability summaries are incomplete: {metrics}')
     if state in {"forced-travel-pending", "forced-travel-one-participant", "forced-travel-zero-participants", "forced-travel-party-scope", "forced-travel-mount", "forced-travel-vehicle"}:
         if not metrics["forcedTravelPrimaryDomainFacing"]:
             raise SystemExit(f'forced-travel primary workflow is not domain-facing: {metrics}')

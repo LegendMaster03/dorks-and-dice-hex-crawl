@@ -40,6 +40,7 @@ import {
 import { canUseFocusedNonSpatialWatch, focusedIntervalHours } from "./focused-interval-policy";
 import { navigationResolutionDue, pauseInstruction, spatialTravelContinuationTarget } from "./expedition-workflow";
 import { movementCompositionLedger } from "./expedition-movement-composition-view";
+import { orderedJourneyStageDefinitions } from "./journey-stage-presentation";
 import { expeditionWorkspacePresentation, spatialPositionPresentation } from "./expedition-workspace-model";
 
 export async function renderExpedition(
@@ -427,6 +428,9 @@ export async function renderExpedition(
         if (survivalRailUseful(survival) || effectsUseful(effects)) {
             secondary.append(railAction("Resources & effects", resourcesEffectsDetail(survival, effects), openSurvivalWorkspace));
         }
+        if (runtime.expedition.pendingEncounter || (runtime.procedure.runtime?.encounterCadence ?? "None") !== "None") {
+            secondary.append(railAction("Encounter schedule", encounterScheduleSummary(runtime), openEncounterWorkspace));
+        }
         section.append(primary, secondary);
         return section;
     };
@@ -498,6 +502,9 @@ export async function renderExpedition(
         }
         if (journey?.eventPolicy.support === "Supported") {
             side.append(railAction("Journey events", journeyEventSummary(journey), openJourneyWorkspace));
+        }
+        if (runtime.expedition.pendingEncounter || (runtime.procedure.runtime?.encounterCadence ?? "None") !== "None") {
+            side.append(railAction("Encounter schedule", encounterScheduleSummary(runtime), openEncounterWorkspace));
         }
         side.append(railAction("Expedition history", presentation.timeLabel, openHistory));
         section.append(main, side);
@@ -1487,13 +1494,25 @@ export async function renderExpedition(
     };
 
     const openPartyWorkspace = (): void => {
-        openDrawer("Party & travel order", body => {
+        openDrawer(runtime.expedition.isSpatial ? "Party & travel order" : "Party & activities", body => {
             body.classList.add("hc-page");
             const summary = document.createElement("div");
             summary.dataset.partySummary = "";
             const editor = document.createElement("div");
             editor.dataset.partyEditor = "";
-            body.append(summary, editor);
+            body.append(summary);
+            if (!runtime.expedition.isSpatial
+                && (runtime.movementComposition.contributors.length > 0
+                    || runtime.movementComposition.missingInputs.length > 0
+                    || runtime.movementComposition.effectiveValue !== null)) {
+                const movement = document.createElement("section");
+                movement.className = "hc-stack";
+                movement.append(
+                    textElement("h3", "Movement composition"),
+                    movementCompositionLedger(runtime));
+                body.append(movement);
+            }
+            body.append(editor);
             const controller = new ExpeditionPartySheetController(
                 body,
                 api,
@@ -1597,9 +1616,10 @@ export async function renderExpedition(
 
     const openEncounterWorkspace = (): void => {
         openDrawer("Encounter", body => {
+            body.append(encounterSchedulePanel(runtime));
             const pending = runtime.expedition.pendingEncounter;
             if (!pending) {
-                body.append(textElement("p", "No encounter is currently interrupting the expedition."));
+                body.append(textElement("p", "No encounter is currently interrupting the expedition.", "hc-muted"));
                 return;
             }
 
@@ -2069,7 +2089,9 @@ function journeyStageSequence(
     const list = document.createElement("ol");
     list.className = "hc-stage-sequence";
 
-    for (const [index, stage] of process.definition.stages.entries()) {
+    for (const [index, stage] of orderedJourneyStageDefinitions(
+        process.definition.stageOrder,
+        process.definition.stages).entries()) {
         const state = process.stageStates.find(value => value.stageKey === stage.stageKey) ?? null;
         const item = document.createElement("li");
         item.className = "hc-stage-step";
@@ -2121,6 +2143,62 @@ function environmentRailDetail(state: SurvivalResources | null): string | null {
         `${humanize(fact.dimension)}: ${fact.value ?? humanize(fact.valueKind)}`);
     if (facts.length > 3) detail.push(`+${facts.length - 3} more`);
     return detail.join(" · ");
+}
+
+function encounterScheduleSummary(runtime: ExpeditionDetail): string {
+    const cadence = runtime.procedure.runtime?.encounterCadence ?? "None";
+    const cadenceLabel = cadence === "PerWatch"
+        ? "Every watch"
+        : cadence === "PerDay"
+            ? "Every day"
+            : "No automatic cadence";
+    const state = runtime.expedition;
+    const watchContext = state.activeWatchNumber !== null
+        ? `watch ${state.activeWatchNumber}`
+        : `${state.completedWatches} completed watch${state.completedWatches === 1 ? "" : "es"}`;
+    const pending = state.pendingEncounter ? " · encounter pending" : "";
+    return `${cadenceLabel} · day ${state.currentDay} · ${watchContext} · ${formatHours(state.elapsedTravelHours)} elapsed${pending}`;
+}
+
+function encounterSchedulePanel(runtime: ExpeditionDetail): HTMLElement {
+    const section = document.createElement("section");
+    section.className = "hc-focused-resolution-summary";
+    section.dataset.encounterSchedule = "";
+    section.append(textElement("h3", "Encounter check schedule"));
+
+    const cadence = runtime.procedure.runtime?.encounterCadence ?? "None";
+    const facts = document.createElement("dl");
+    facts.className = "hc-current-travel-facts";
+    facts.append(
+        travelFact("Cadence", cadence === "PerWatch" ? "Every watch" : cadence === "PerDay" ? "Every day" : "No automatic cadence", "encounterCadence"),
+        travelFact("Current day", String(runtime.expedition.currentDay), "encounterDay"),
+        travelFact(
+            "Watch tracking",
+            runtime.expedition.activeWatchNumber !== null
+                ? `Watch ${runtime.expedition.activeWatchNumber} · ${formatHours(runtime.expedition.activeWatchElapsedHours ?? 0)} elapsed`
+                : `${runtime.expedition.completedWatches} completed watch${runtime.expedition.completedWatches === 1 ? "" : "es"}`,
+            "encounterWatch"),
+        travelFact(
+            "Encounter state",
+            runtime.expedition.pendingEncounter
+                ? `${humanize(runtime.expedition.pendingEncounter.outcome)} pending`
+                : "No encounter pending",
+            "encounterState"));
+    section.append(facts);
+
+    const helper = runtime.procedure.runtime?.resolutionHelpers?.encounter;
+    if (helper) {
+        const modifier = helper.checkRoll.modifier === 0
+            ? ""
+            : helper.checkRoll.modifier > 0
+                ? ` + ${helper.checkRoll.modifier}`
+                : ` - ${Math.abs(helper.checkRoll.modifier)}`;
+        section.append(textElement(
+            "p",
+            `Automatic helper: ${helper.checkRoll.diceCount}d${helper.checkRoll.dieSides}${modifier}. Wandering results: ${helper.wanderingResults.join(", ") || "none"}; keyed-location results: ${helper.keyedLocationResults.join(", ") || "none"}.`,
+            "hc-muted"));
+    }
+    return section;
 }
 
 function effectsSummary(state: ExpeditionEffectState | null): string | null {
