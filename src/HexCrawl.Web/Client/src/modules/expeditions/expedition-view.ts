@@ -30,8 +30,10 @@ import { ExpeditionSurvivalResourcesPanel } from "./survival-resources-panel";
 import { ExpeditionWatchController } from "./expedition-watch-controller";
 import { authoritativeFixedWatchDistance } from "./expedition-party-movement";
 import {
-    defaultTravelPreferences,
+    loadTravelPreferences,
     mergeRuntimeTravelPreferences,
+    normalizeTravelModePreference,
+    saveTravelPreferences,
     type TravelPreferences
 } from "./expedition-travel-intent";
 import { canUseFocusedNonSpatialWatch, focusedIntervalHours } from "./focused-interval-policy";
@@ -72,15 +74,11 @@ export async function renderExpedition(
     let selectedHexTracksTravelIntent = false;
     let preferences = loadTravelPreferences(runtime);
     const availableTravelModes = (): string[] => runtime.movementComposition.policy.travelModeKeys ?? [];
-    const normalizeTravelModePreference = (): void => {
-        const choices = availableTravelModes();
-        if (choices.length > 0) {
-            if (!choices.includes(preferences.pace)) preferences.pace = choices[0];
-            return;
-        }
-        preferences.pace = runtime.expedition.isSpatial
-            ? runtime.expedition.activePaceKey ?? "normal"
-            : "normal";
+    const normalizeTravelModeSelection = (): void => {
+        preferences.pace = normalizeTravelModePreference(
+            preferences.pace,
+            availableTravelModes(),
+            runtime.expedition.isSpatial ? runtime.expedition.activePaceKey : null);
     };
     // Normal runtime pace editing exists only for an authoritative finite choice with alternatives.
     // Zero/one-mode procedures are fixed here; arbitrary identifiers require an explicit procedure contract.
@@ -104,7 +102,7 @@ export async function renderExpedition(
         ?? runtime.movementComposition.effectiveDistanceUnit?.symbol
         ?? runtime.context.hexCenterDistance?.unit.symbol
         ?? null;
-    normalizeTravelModePreference();
+    normalizeTravelModeSelection();
     let adjacencyCache: {
         key: string;
         value: ReturnType<typeof currentHexAdjacency>;
@@ -187,7 +185,7 @@ export async function renderExpedition(
     const applyRuntime = (next: ExpeditionDetail): void => {
         runtime = next;
         preferences = mergeRuntimeTravelPreferences(runtime, preferences);
-        normalizeTravelModePreference();
+        normalizeTravelModeSelection();
         synchronizeTravelTargetProjection();
         saveTravelPreferences(runtime.id, preferences);
         publishExpeditionRuntimeChanged(root, runtime);
@@ -2075,31 +2073,6 @@ function adjacencyCourseLabel(
 function edgeCourseLabel(
     edge: ReturnType<typeof currentHexAdjacency>["edges"][number]): string {
     return edge.label;
-}
-
-function loadTravelPreferences(runtime: ExpeditionDetail): TravelPreferences {
-    const fallback = defaultTravelPreferences(runtime);
-    try {
-        const raw = localStorage.getItem(`hex-crawl.expedition.${runtime.id}.travel-intent`);
-        if (!raw) return fallback;
-        const parsed = JSON.parse(raw) as Partial<TravelPreferences>;
-        return {
-            direction: Number.isInteger(parsed.direction) && Number(parsed.direction) >= 0
-                ? Number(parsed.direction)
-                : fallback.direction,
-            pace: typeof parsed.pace === "string" && parsed.pace.trim() ? parsed.pace.trim() : fallback.pace
-        };
-    } catch {
-        return fallback;
-    }
-}
-
-function saveTravelPreferences(expeditionId: string, preferences: TravelPreferences): void {
-    try {
-        localStorage.setItem(`hex-crawl.expedition.${expeditionId}.travel-intent`, JSON.stringify(preferences));
-    } catch {
-        // Persistent UI preferences are optional; runtime state remains authoritative.
-    }
 }
 
 function safeCurrentReturnPath(): string | null {
