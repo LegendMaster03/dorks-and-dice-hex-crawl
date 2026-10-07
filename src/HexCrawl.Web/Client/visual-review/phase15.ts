@@ -1379,6 +1379,77 @@ switch (stateName) {
         runtime.expedition.actualDirection = 1;
         effects = effectsFixture(true);
         break;
+    case "readability-workspace":
+        runtime.expedition.intendedDirection = 1;
+        runtime.expedition.actualDirection = 1;
+        survival = survivalFixture(false);
+        survival.foragingPolicy = {
+            support: "Supported", resolutionModel: "skill-check", timeCost: 1, timeUnit: "watch",
+            movementTradeoff: "half-movement", activityBacked: true,
+            mechanicKey: "exploration.foraging", mechanicVersion: 1, executionHandler: "visual-review", unsupportedReason: null
+        };
+        survival.campingPolicy = {
+            support: "Supported", resolutionModel: "fortify-camp", timeCost: 1, timeUnit: "watch",
+            watchModel: "assigned", activityBacked: true,
+            mechanicKey: "survival.camping", mechanicVersion: 1, executionHandler: "visual-review", unsupportedReason: null
+        };
+        survival.exposurePolicy = {
+            support: "Supported", dimensions: ["temperature", "precipitation"],
+            evaluationModel: "procedure-check", evaluationInterval: "per-watch", targetScope: "Party",
+            consequenceModel: "fatigue", mechanicKey: "survival.exposure", mechanicVersion: 1,
+            executionHandler: "visual-review", unsupportedReason: null
+        };
+        survival.resources.push(
+            { id: "morale", resourceKey: "morale", target: { scope: "Party", targetId: null }, inventoryModel: "Abstract", quantity: null, unit: null, symbolicState: "steady", supplyDieSides: null, isDepleted: false, note: null },
+            { id: "supplies", resourceKey: "supplies", target: { scope: "Party", targetId: null }, inventoryModel: "SupplyDie", quantity: null, unit: null, symbolicState: null, supplyDieSides: 8, isDepleted: false, note: null },
+            { id: "special-stock", resourceKey: "special-stock", target: { scope: "Expedition", targetId: null }, inventoryModel: "ExternalManual", quantity: null, unit: null, symbolicState: null, supplyDieSides: null, isDepleted: false, note: "Tracked by the table" });
+        survival.environmentFacts = [
+            { id: "heat", dimension: "temperature", valueKind: "Measurement", value: "96 °F", effective: true, sourceKind: "Hex" },
+            { id: "rain", dimension: "precipitation", valueKind: "Tag", value: "heavy rain", effective: true, sourceKind: "Weather" }
+        ];
+        survival.camp = {
+            resolutionId: "camp-1", established: true, activityAssignmentIds: ["assignment-2"],
+            resolutionModel: "fortify-camp", restTriggerKey: "long-rest", restSafe: true, restProlonged: false
+        };
+        effects = effectsFixture(true);
+        effects.activeEffects.push({
+            id: "effect-exhaustion", effectKey: "exhaustion",
+            target: { scope: "Participant", targetId: "member-3" }, mergeKey: "exhaustion:member-3",
+            level: 1, magnitude: null, unit: null, state: null, movementComponents: [],
+            sourceConsequenceIds: ["consequence-exposure"],
+            provenance: [{ sourceKind: "Exposure", sourceKey: "heat", sourceReference: null, providerName: null, note: "Resolved heat exposure" }],
+            recoveryModel: "rest"
+        });
+        break;
+    case "encounter-schedule":
+        runtime.expedition.intendedDirection = 0;
+        runtime.expedition.actualDirection = 0;
+        runtime.procedure.runtime.encounterCadence = "PerWatch";
+        runtime.expedition.completedWatches = 3;
+        runtime.expedition.activeWatchNumber = 4;
+        runtime.expedition.activeWatchTotalHours = 4;
+        runtime.expedition.activeWatchElapsedHours = 2;
+        runtime.expedition.activeWatchRemainingHours = 2;
+        break;
+    case "nonspatial-movement-composition":
+        runtime = nonSpatialRuntimeFixture();
+        runtime.procedure = {
+            ...runtime.procedure,
+            modules: [...runtime.procedure.modules, moduleDef("movement.budget"), moduleDef("movement.resolution")]
+        };
+        runtime.movementComposition = movement(true);
+        runtime.movementComposition.effectiveValue = 5;
+        runtime.movementComposition.effectiveUnit = "mi";
+        runtime.movementComposition.effectivePerUnit = "watch";
+        runtime.movementComposition.referenceUse = "AuthoritativeBase";
+        runtime.movementComposition.contributors = [
+            { id: "party-base", kind: "Participant", key: "party pace", operation: "Base", applied: true, value: 6, symbolicValue: null, unit: "mi", perUnit: "watch", participantId: "member-1", movementUnitKey: null, provenance: "party sheet", detail: null },
+            { id: "journey-progress", kind: "PersistentEffect", key: "journey progress budget", operation: "Cap", applied: true, value: 5, symbolicValue: null, unit: "mi", perUnit: "watch", participantId: null, movementUnitKey: null, provenance: "procedure", detail: "Nonspatial activity budget" }
+        ];
+        survival = journeySurvivalFixture();
+        effects = effectsFixture(false);
+        journey = journeyFixture();
+        break;
     case "effects-journey-source":
         runtime.expedition.intendedDirection = 1;
         runtime.expedition.actualDirection = 1;
@@ -1676,9 +1747,12 @@ if (stateName === "course-change-reload") {
     findButton("Resolve navigation")?.click();
 } else if (stateName === "movement-input-pending") {
     findButton("Continue travel")?.click();
-} else if (stateName === "movement-composition") {
+} else if (stateName === "movement-composition" || stateName === "nonspatial-movement-composition") {
     findStatAction("Movement")?.click();
     await waitForRootText("Movement composition contributors");
+} else if (stateName === "encounter-schedule") {
+    findButtonContaining("Encounter schedule")?.click();
+    await waitForRootText("Encounter check schedule");
 } else if (stateName === "encounter-pending") {
     findButton("Resolve encounter")?.click();
 } else if (stateName === "forced-travel-pending"
@@ -1707,7 +1781,7 @@ if (stateName === "more-options-open") {
 } else if (stateName === "journey-pending") {
     findButton("Resolve journey event")?.click();
     await waitForRootText("Pending journey event");
-} else if (stateName === "effects-workspace" || stateName === "effects-journey-source") {
+} else if (stateName === "effects-workspace" || stateName === "effects-journey-source" || stateName === "readability-workspace") {
     findButtonContaining("Resources & effects")?.click();
     await waitForRootText("Active effects");
 } else if (stateName === "history-workspace") {
@@ -1804,6 +1878,13 @@ const metrics = {
     movementStatusVisible: Array.from(root.querySelectorAll(".hc-stat-action-label")).some(label => label.textContent?.trim() === "Movement"),
     movementLedgerVisible: isVisible(root.querySelector("[data-movement-composition-ledger]")),
     movementContributorRows: root.querySelectorAll(".hc-movement-ledger-table tbody tr").length,
+    resourceLedgerRows: root.querySelectorAll("[data-resource-ledger] tbody tr").length,
+    effectLedgerRows: root.querySelectorAll("[data-effect-ledger] tbody tr").length,
+    readableEnvironmentVisible: rootText.includes("Effective environment") && rootText.includes("Heavy Rain"),
+    exposureLedgerVisible: rootText.includes("Exposure progress"),
+    foragingSummaryVisible: rootText.includes("Foraging") && rootText.includes("Travel tradeoff"),
+    campingSummaryVisible: rootText.includes("Camping") && rootText.includes("Watch model") && rootText.includes("Preparation"),
+    encounterScheduleVisible: rootText.includes("Encounter check schedule") && rootText.includes("Every watch"),
     fakeSpatialStateVisible: !runtime.expedition.isSpatial && (
         rootText.includes("Current travel")
         || rootText.includes("Pace / travel mode")
