@@ -1091,6 +1091,18 @@ test("secondary travel course changes use the same authoritative course mutation
     assert.doesNotMatch(workspace, /preferences\.direction = parsed/);
 });
 
+test("course intent UI serializes server mutations so rapid clicks can not race the same version", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+
+    assert.match(view, /let courseIntentMutationPending = false/);
+    assert.match(view, /if \(!runtime\.expedition\.isSpatial \|\| courseIntentMutationPending\) return/);
+    assert.match(view, /setCourseIntentMutationPending\(true\)/);
+    assert.match(view, /\[data-adjacency-edge\], \[data-adjacency-select\], select\[name="direction"\]/);
+    assert.match(view, /finally \{\s*if \(!disposed\) setCourseIntentMutationPending\(false\)/);
+});
+
 
 test("expedition drawers restore opener focus and rerenders provide a deliberate fallback", () => {
     const view = fs.readFileSync(
