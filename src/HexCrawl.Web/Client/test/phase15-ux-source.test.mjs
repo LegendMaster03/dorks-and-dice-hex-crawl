@@ -1352,7 +1352,7 @@ test("Phase 15.1 rendered review requires Guided onboarding, preset advice, and 
     assert.match(fixture, /guidedPrimerVisible/);
     assert.match(fixture, /guidedPresetAdviceCount/);
     assert.match(fixture, /guidedRuleWhyCount/);
-    assert.match(fixture, /guidedNextActionWhyVisible/);
+    assert.ok((fixture.match(/guidedNextActionWhyVisible/g) ?? []).length >= 2);
     assert.match(fixture, /visualPreset/);
     assert.match(capture, /Guided home onboarding is incomplete/);
     assert.match(capture, /Guided preset discovery is missing/);

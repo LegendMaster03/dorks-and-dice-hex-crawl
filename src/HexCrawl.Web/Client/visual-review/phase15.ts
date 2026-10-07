@@ -1983,6 +1983,8 @@ const metrics = {
     partyActivitiesRailButtons: buttons.filter(button => isVisible(button) && button.textContent?.includes("Party & activities")).length,
     partySetupVisible: rootText.includes("Party not configured"),
     primaryAction: root.querySelector(".hc-current-action-primary")?.textContent?.trim() || null,
+    guidedNextActionWhyVisible: Array.from(root.querySelectorAll("summary"))
+        .some(summary => summary.textContent?.trim() === "Why is this next?"),
     focusedTitle: root.querySelector("[data-phase15-drawer] h2")?.textContent?.trim() || null,
     focusedEdge: document.activeElement?.matches?.("[data-adjacency-edge]") ?? false,
     journeyVisible: rootText.includes("Current stage") && rootText.includes("Progress") && rootText.includes("Roles") && rootText.includes("Pending"),
