@@ -647,7 +647,7 @@ test("urgent travel pauses preserve valid reusable course and ask only for chang
     assert.match(review, /previous course is not available from the current cell/);
     assert.doesNotMatch(review, /labelled\("Course", course\)/);
     assert.doesNotMatch(review, /Select intended adjacent cell/);
-    assert.doesNotMatch(review, /preferences\.direction =/);
+    assert.doesNotMatch(review, /preferences\.direction\s*=(?!=)/);
     assert.doesNotMatch(review, /suppressNav|resetVeer|continueAcross|doubleBack/);
 });
 
