@@ -465,6 +465,8 @@ test("navigator controls use midpoint-anchored white SVG arrows with consistent 
     assert.match(view, /const toggleTravelIntent =/);
     assert.match(view, /if \(preferences\.direction !== direction\) \{\s*selectTravelIntent\(direction, target\)/);
     assert.match(view, /clearTravelIntent\(\)/);
+    assert.match(view, /runtime\.expedition\.activeWatchNumber !== null/);
+    assert.match(view, /active travel watch requires an intended course/);
     assert.match(view, /setExpeditionCourseIntent/);
     assert.match(view, /button\("", \(\) => toggleTravelIntent\(edge\.directionValue, edge\.targetCell\)\)/);
     assert.match(view, /if \(edge\) selectTravelIntent\(edge\.directionValue, edge\.targetCell\)/);
