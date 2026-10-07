@@ -1095,6 +1095,8 @@ async function waitForRootText(text, attempts = 20) {
 
 await new Promise(resolve => setTimeout(resolve, 0));
 
+let focusReturnVerified = false;
+
 if (stateName === "map-selected" || stateName === "map-nonadjacent") {
     const canvas = root.querySelector("canvas");
     if (canvas) {
@@ -1117,7 +1119,7 @@ if (stateName === "map-selected" || stateName === "map-nonadjacent") {
     await waitForRootText("Current requirement");
 } else if (stateName === "boundary-pending") {
     findButton("Resolve lost-party boundary decision")?.click();
-} else let focusReturnVerified = false;
+}
 
 if (stateName === "more-options-open") {
     findButton("More options")?.click();
