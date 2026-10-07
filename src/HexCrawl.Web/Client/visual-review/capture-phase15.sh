@@ -43,7 +43,7 @@ cases=(
   "02-home-narrow|home|light|500|900|390"
   "03-procedure-home|procedure-home|light|1366|1000"
   "04-procedure-compact|procedure-compact|light|1366|1000"
-  "04a-procedure-compact-native-mobile|procedure-compact|dark|390|844|390"
+  "04a-procedure-compact-container-390|procedure-compact|dark|390|844|390"
   "04b-procedure-reference|procedure-reference|light|1366|1000"
   "05-procedure-advanced|procedure-advanced|light|1366|1000"
   "06-procedure-json|procedure-json|light|1366|1000"
@@ -58,6 +58,8 @@ cases=(
   "12-spatial-boundary|boundary-pending|light|1366|900"
   "13-spatial-encounter|encounter-pending|dark|1366|900"
   "13a-encounter-schedule|encounter-schedule|light|1366|900"
+  "13b-encounter-contextual-schedule|encounter-contextual-schedule|light|1366|900"
+  "13c-encounter-schedule-day|encounter-schedule-day|dark|1366|900"
   "14-spatial-forced-travel|forced-travel-pending|light|1366|900"
   "14a-spatial-forced-travel-one|forced-travel-one-participant|light|1366|900"
   "14b-spatial-forced-travel-zero|forced-travel-zero-participants|dark|500|844|390"
@@ -87,7 +89,7 @@ cases=(
   "31-effects-workspace-wide|effects-workspace|light|1366|900"
   "32-effects-workspace-mobile|effects-workspace|dark|500|844|390"
   "32a-readability-workspace-wide|readability-workspace|light|1366|1000"
-  "32b-readability-workspace-native-mobile|readability-workspace|dark|390|844|390"
+  "32b-readability-workspace-container-390|readability-workspace|dark|390|844|390"
   "33-history-workspace-wide|history-workspace|light|1366|900"
   "34-history-workspace-mobile|history-workspace|dark|500|844|390"
   "35-encounter-mobile|encounter-pending|light|500|844|390"
@@ -127,7 +129,7 @@ for spec in "${cases[@]}"; do
   rm -rf "$profile"
 
   printf "%s" "$dom" >"$out_dir/$name.html"
-  python3 - "$out_dir/$name.html" "$out_dir/$name.json" <<'PY'
+  python3 - "$out_dir/$name.html" "$out_dir/$name.json" "$name" "$width" "${container_width:-}" <<'PY'
 import html, json, re, sys
 source = open(sys.argv[1], encoding="utf-8").read()
 match = re.search(r'<pre id="review-metrics"[^>]*>(.*?)</pre>', source, re.S)
@@ -137,6 +139,15 @@ raw = html.unescape(match.group(1)).strip()
 if not raw:
     raise SystemExit("visual review metrics were empty before the fixture finished")
 metrics = json.loads(raw)
+case_name = sys.argv[3]
+requested_window_width = int(sys.argv[4])
+requested_container_width = int(sys.argv[5]) if sys.argv[5] else None
+metrics["captureCase"] = case_name
+metrics["requestedWindowWidth"] = requested_window_width
+metrics["requestedContainerWidth"] = requested_container_width
+metrics["measuredViewportMatchesRequestedWindow"] = metrics["viewportWidth"] == requested_window_width
+if requested_container_width is not None and abs(metrics["reviewWidth"] - requested_container_width) > 2:
+    raise SystemExit(f'requested review container width was not established: {metrics}')
 with open(sys.argv[2], "w", encoding="utf-8") as handle:
     json.dump(metrics, handle, indent=2, sort_keys=True)
 
@@ -293,13 +304,22 @@ else:
     if state == "movement-composition":
         if not metrics["movementLedgerVisible"] or metrics["movementContributorRows"] < 9:
             raise SystemExit(f'movement composition ledger did not expose all contributor kinds: {metrics}')
-    if state == "encounter-schedule" and not metrics["encounterScheduleVisible"]:
-        raise SystemExit(f'encounter cadence is not visible before an encounter is pending: {metrics}')
+    if state == "encounter-schedule":
+        if not metrics["encounterScheduleVisible"] or not metrics["encounterPerWatchVisible"]:
+            raise SystemExit(f'per-watch encounter cadence is not visible before an encounter is pending: {metrics}')
+    if state == "encounter-schedule-day":
+        if not metrics["encounterScheduleVisible"] or not metrics["encounterPerDayVisible"]:
+            raise SystemExit(f'per-day encounter cadence is not visible before an encounter is pending: {metrics}')
+    if state == "encounter-contextual-schedule":
+        if not metrics["encounterScheduleVisible"] or not metrics["contextualEncounterScheduleVisible"]:
+            raise SystemExit(f'contextual-only encounter schedule is not visible before an encounter is pending: {metrics}')
     if state == "readability-workspace":
         if metrics["resourceLedgerRows"] < 5 or metrics["effectLedgerRows"] < 2:
             raise SystemExit(f'resource/effect comparison ledgers are incomplete: {metrics}')
         if not all((metrics["readableEnvironmentVisible"], metrics["exposureLedgerVisible"], metrics["foragingSummaryVisible"], metrics["campingSummaryVisible"])):
             raise SystemExit(f'survival readability summaries are incomplete: {metrics}')
+        if not metrics["readableLedgerShortCellsSingleLine"] or not metrics["longReadableTargetVisible"]:
+            raise SystemExit(f'narrow comparison ledger fragmented core labels or lost the longer named target: {metrics}')
     if state in {"forced-travel-pending", "forced-travel-one-participant", "forced-travel-zero-participants", "forced-travel-party-scope", "forced-travel-mount", "forced-travel-vehicle"}:
         if not metrics["forcedTravelPrimaryDomainFacing"]:
             raise SystemExit(f'forced-travel primary workflow is not domain-facing: {metrics}')
