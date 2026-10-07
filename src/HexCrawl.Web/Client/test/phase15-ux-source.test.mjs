@@ -447,11 +447,13 @@ test("navigator controls use edge-attached arrows with visible focus and practic
     assert.match(view, /is-interactive/);
     assert.doesNotMatch(view, /hc-adjacency-caption/);
     assert.match(styles, /\.hc-adjacency-edge::before/);
+    assert.match(styles, /\.hc-adjacency-edge::after/);
     assert.match(styles, /clip-path:polygon/);
-    assert.match(styles, /background:transparent/);
+    assert.match(styles, /cursor:pointer/);
+    assert.match(styles, /background:var\(--hc-surface\)/);
     assert.doesNotMatch(styles, /\.hc-adjacency-caption/);
     assert.match(styles, /\.hc-adjacency-edge:focus-visible/);
-    assert.match(styles, /outline:4px solid var\(--hc-focus\)/);
+    assert.match(styles, /outline:3px solid var\(--hc-focus\)/);
     assert.match(styles, /min-width:2\.75rem; min-height:2\.75rem/);
     assert.match(styles, /@media \(max-width: 760px\)[\s\S]*\.hc-adjacency-edge \{ min-width:2\.75rem; min-height:2\.75rem/);
 });
