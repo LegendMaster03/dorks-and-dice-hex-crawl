@@ -1018,6 +1018,13 @@ switch (stateName) {
         };
         break;
     case "persisted-course":
+        runtime.expedition.intendedDirection = 2;
+        runtime.expedition.actualDirection = 2;
+        break;
+    case "course-change-reload":
+        runtime.expedition.intendedDirection = 1;
+        runtime.expedition.actualDirection = 1;
+        runtime.procedure.runtime.usesNavigationChecks = true;
         break;
     case "partial-progress":
         runtime.expedition.intendedDirection = 2;
@@ -1348,7 +1355,12 @@ localStorage.removeItem("hex-crawl.expedition." + runtime.id + ".travel-intent")
 if (stateName === "persisted-course") {
     localStorage.setItem(
         "hex-crawl.expedition." + runtime.id + ".travel-intent",
-        JSON.stringify({ direction: 2, pace: "fast" }));
+        JSON.stringify({ direction: 4, pace: "fast" }));
+}
+if (stateName === "course-change-reload") {
+    localStorage.setItem(
+        "hex-crawl.expedition." + runtime.id + ".travel-intent",
+        JSON.stringify({ direction: 1, pace: "normal" }));
 }
 
 const originalFetch = window.fetch.bind(window);
@@ -1366,6 +1378,20 @@ window.fetch = async input => {
 const api = new Proxy({
     getExpedition: async () => runtime,
     getOverworld: async () => world,
+    setExpeditionCourseIntent: async (_expeditionId, input) => {
+        if (input.expectedVersion !== runtime.version) {
+            throw new Error("Visual review stale course mutation.");
+        }
+        runtime = {
+            ...runtime,
+            version: runtime.version + 1,
+            expedition: {
+                ...runtime.expedition,
+                intendedDirection: input.intendedDirection
+            }
+        };
+        return runtime;
+    },
     getTravelEnvironmentCatalog: async () => ({
         availability: "unavailable",
         provider: null,
@@ -1379,7 +1405,7 @@ const api = new Proxy({
     }
 });
 
-await renderExpedition(root, api, runtime.id, () => {}, undefined, null);
+let disposeExpedition = await renderExpedition(root, api, runtime.id, () => {}, undefined, null);
 
 function findButton(label) {
     return Array.from(root.querySelectorAll("button")).find(button => button.textContent?.trim() === label) || null;
@@ -1402,11 +1428,37 @@ async function waitForRootText(text, attempts = 20) {
     throw new Error(`Timed out waiting for rendered review text: ${text}`);
 }
 
+async function waitForCondition(predicate, label, attempts = 30) {
+    for (let index = 0; index < attempts; index += 1) {
+        if (predicate()) return;
+        await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    throw new Error(`Timed out waiting for visual review condition: ${label}`);
+}
+
 await new Promise(resolve => setTimeout(resolve, 0));
 
 let focusReturnVerified = false;
 
-if (stateName === "map-selected" || stateName === "map-nonadjacent") {
+if (stateName === "course-change-reload") {
+    const changedEdge = root.querySelector('[data-adjacency-edge="5"]');
+    changedEdge?.click();
+    await waitForCondition(
+        () => runtime.expedition.intendedDirection === 5
+            && root.querySelector('[data-adjacency-edge="5"]')?.getAttribute("aria-pressed") === "true",
+        "server-authoritative changed course");
+
+    disposeExpedition();
+    root.replaceChildren();
+    localStorage.removeItem("hex-crawl.expedition." + runtime.id + ".travel-intent");
+    disposeExpedition = await renderExpedition(root, api, runtime.id, () => {}, undefined, null);
+    await waitForCondition(
+        () => root.querySelector('[data-adjacency-edge="5"]')?.getAttribute("aria-pressed") === "true",
+        "fresh client restored changed course");
+
+    findButton("Resolve navigation")?.click();
+    await waitForRootText("Intended course:");
+} else if (stateName === "map-selected" || stateName === "map-nonadjacent") {
     const canvas = root.querySelector("canvas");
     if (canvas) {
         const rect = canvas.getBoundingClientRect();
@@ -1514,6 +1566,14 @@ const metrics = {
     scrollHeight: document.documentElement.scrollHeight,
     navigatorButtons: root.querySelectorAll("[data-adjacency-edge]").length,
     selectedEdges: root.querySelectorAll('[data-adjacency-edge][aria-pressed="true"]').length,
+    selectedDirection: root.querySelector('[data-adjacency-edge][aria-pressed="true"]')?.dataset.adjacencyEdge ?? null,
+    runtimeIntendedDirection: runtime.expedition.isSpatial ? runtime.expedition.intendedDirection : null,
+    runtimeActualDirection: runtime.expedition.isSpatial ? runtime.expedition.actualDirection : null,
+    currentTravelCourseText: root.querySelector("[data-current-travel-course]")?.textContent?.trim() ?? null,
+    navigationStatText: Array.from(root.querySelectorAll(".hc-stat-action")).find(item =>
+        item.querySelector(".hc-stat-action-label")?.textContent?.trim() === "Navigation")?.textContent?.replace(/\s+/g, " ").trim() ?? null,
+    focusedNavigationText: root.querySelector("[data-phase15-drawer]")?.textContent?.replace(/\s+/g, " ").trim() ?? null,
+    storedTravelPreferences: localStorage.getItem("hex-crawl.expedition." + runtime.id + ".travel-intent"),
     continueButtons: buttons.filter(button => isVisible(button) && button.textContent?.trim() === "Continue travel").length,
     travelControlsButtons: buttons.filter(button => isVisible(button) && button.textContent?.trim() === "Travel controls").length,
     drawerCount: root.querySelectorAll("[data-phase15-drawer]").length,
