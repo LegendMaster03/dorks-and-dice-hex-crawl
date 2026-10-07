@@ -436,9 +436,20 @@ test("focused travel drawer explicitly removes its course and pace listeners on 
     assert.match(view, /controller\.dispose\(\)/);
 });
 
-test("navigator controls keep visible focus and practical pointer targets at narrow widths", () => {
+test("navigator controls use edge-attached arrows with visible focus and practical pointer targets", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
     const styles = fs.readFileSync(path.join(sourceDir, "phase15-styles.ts"), "utf8");
 
+    assert.match(view, /--hc-edge-angle/);
+    assert.match(view, /edgeMarks\.get\(edge\.directionValue\)/);
+    assert.match(view, /is-interactive/);
+    assert.doesNotMatch(view, /hc-adjacency-caption/);
+    assert.match(styles, /\.hc-adjacency-edge::before/);
+    assert.match(styles, /clip-path:polygon/);
+    assert.match(styles, /background:transparent/);
+    assert.doesNotMatch(styles, /\.hc-adjacency-caption/);
     assert.match(styles, /\.hc-adjacency-edge:focus-visible/);
     assert.match(styles, /outline:4px solid var\(--hc-focus\)/);
     assert.match(styles, /min-width:2\.75rem; min-height:2\.75rem/);

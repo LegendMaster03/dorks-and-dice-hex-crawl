@@ -197,19 +197,21 @@ export function ensurePhase15Styles(): void {
         .hc-phase15-expedition .hc-map-host { height:clamp(28rem,58vh,46rem); min-height:0; }
         .hc-phase15-expedition .hc-map-canvas { height:100%; min-height:0; }
         .hc-map-frame { position:relative; min-width:0; overflow:hidden; border-radius:.55rem; }
-        .hc-adjacency-navigator { position:absolute; z-index:6; top:.8rem; left:.8rem; width:9.5rem; aspect-ratio:1; pointer-events:none; filter:drop-shadow(0 .25rem .45rem rgba(0,0,0,.26)); }
+        .hc-adjacency-navigator { position:absolute; z-index:6; top:.8rem; left:.8rem; width:8.5rem; aspect-ratio:1; pointer-events:none; filter:drop-shadow(0 .2rem .4rem rgba(0,0,0,.24)); }
         .hc-adjacency-cell { position:absolute; inset:0; width:100%; height:100%; overflow:visible; pointer-events:none; }
-        .hc-adjacency-cell polygon { fill:color-mix(in srgb,var(--hc-surface) 88%,transparent); stroke:var(--hc-text-strong); stroke-width:8; stroke-linejoin:round; vector-effect:non-scaling-stroke; }
-        .hc-adjacency-edge-mark { stroke:color-mix(in srgb,var(--hc-text-strong) 70%,transparent); stroke-width:8; stroke-linecap:round; vector-effect:non-scaling-stroke; }
-        .hc-adjacency-edge-mark.is-selected { stroke:var(--hc-focus); stroke-width:13; }
-        .hc-adjacency-caption { position:absolute; inset:50% auto auto 50%; transform:translate(-50%,-50%); width:4.4rem; text-align:center; font-size:.7rem; font-weight:700; line-height:1.1; color:var(--hc-text-strong); pointer-events:none; }
-        .hc-adjacency-edge { position:absolute; pointer-events:auto; left:var(--hc-edge-x); top:var(--hc-edge-y); transform:translate(-50%,-50%); min-width:2.75rem; min-height:2.75rem; padding:.2rem .4rem; border:3px solid var(--hc-text-strong); border-radius:999px; background:var(--hc-surface); color:var(--hc-text-strong); font-weight:800; line-height:1; box-shadow:0 .12rem .35rem rgba(0,0,0,.22); }
-        .hc-adjacency-edge:hover:not(:disabled) { transform:translate(-50%,-50%) scale(1.08); border-color:var(--hc-focus); background:var(--hc-surface-elevated); }
-        .hc-adjacency-edge:focus-visible { transform:translate(-50%,-50%) scale(1.08); outline:4px solid var(--hc-focus); outline-offset:3px; z-index:2; }
+        .hc-adjacency-cell polygon { fill:color-mix(in srgb,var(--hc-surface) 36%,transparent); stroke:var(--hc-text-strong); stroke-width:5; stroke-linejoin:round; vector-effect:non-scaling-stroke; }
+        .hc-adjacency-edge-mark { stroke:color-mix(in srgb,var(--hc-text-strong) 62%,transparent); stroke-width:4; stroke-linecap:round; opacity:.55; vector-effect:non-scaling-stroke; }
+        .hc-adjacency-edge-mark.is-interactive { stroke:var(--hc-focus); stroke-width:8; opacity:1; }
+        .hc-adjacency-edge-mark.is-selected { stroke:var(--hc-focus); stroke-width:9; opacity:1; }
+        .hc-adjacency-edge { position:absolute; pointer-events:auto; left:var(--hc-edge-x); top:var(--hc-edge-y); transform:translate(-50%,-50%); display:grid; place-items:center; width:2.75rem; height:2.75rem; min-width:2.75rem; min-height:2.75rem; padding:0; border:0; border-radius:999px; background:transparent; color:var(--hc-text-strong); line-height:1; box-shadow:none; }
+        .hc-adjacency-edge::before { content:""; display:block; width:2rem; height:.72rem; background:currentColor; clip-path:polygon(0 39%,68% 39%,68% 0,100% 50%,68% 100%,68% 61%,0 61%); transform:rotate(var(--hc-edge-angle)); transform-origin:center; filter:drop-shadow(0 0 1px var(--hc-surface)) drop-shadow(0 .08rem .12rem rgba(0,0,0,.55)); }
+        .hc-adjacency-edge:hover:not(:disabled) { transform:translate(-50%,-50%) scale(1.08); background:transparent; color:var(--hc-focus); }
+        .hc-adjacency-edge:focus-visible { transform:translate(-50%,-50%) scale(1.08); outline:4px solid var(--hc-focus); outline-offset:3px; background:color-mix(in srgb,var(--hc-surface) 22%,transparent); color:var(--hc-focus); z-index:2; }
         #tool-root.hex-crawl-app button.hc-adjacency-edge:active:not(:disabled) { transform:translate(calc(-50% + var(--hc-edge-feedback-x)),calc(-50% + var(--hc-edge-feedback-y))) scale(1.04); }
-        .hc-adjacency-edge.is-selected { border-color:var(--hc-focus); background:var(--hc-text-strong); color:var(--hc-surface); box-shadow:0 0 0 3px var(--hc-focus),0 .18rem .45rem rgba(0,0,0,.3); }
-        .hc-adjacency-edge.is-actual-course:not(.is-selected) { border-style:dashed; border-color:var(--hc-warning); }
-        .hc-adjacency-edge:disabled { border-color:var(--hc-disabled-border); background:var(--hc-disabled-bg); color:var(--hc-disabled-text); cursor:not-allowed; }
+        .hc-adjacency-edge.is-selected { background:transparent; color:var(--hc-focus); box-shadow:none; }
+        .hc-adjacency-edge.is-selected::before { width:2.16rem; filter:drop-shadow(0 0 .16rem var(--hc-focus)) drop-shadow(0 .08rem .12rem rgba(0,0,0,.55)); }
+        .hc-adjacency-edge.is-actual-course:not(.is-selected) { color:var(--hc-warning); }
+        .hc-adjacency-edge:disabled { background:transparent; color:var(--hc-disabled-text); opacity:.5; cursor:not-allowed; }
         .hc-map-context-overlay { position:absolute; z-index:5; right:.75rem; bottom:.75rem; width:min(22rem,calc(100% - 1.5rem)); max-height:min(18rem,55%); overflow:auto; display:grid; gap:.5rem; padding:.7rem .8rem; border:1px solid var(--hc-border); border-radius:.7rem; background:color-mix(in srgb,var(--hc-surface) 92%,transparent); color:var(--hc-text); box-shadow:0 .3rem .9rem rgba(0,0,0,.2); }
         .hc-map-context-overlay h3, .hc-map-context-overlay p { margin:0; }
         .hc-current-travel { display:grid; gap:.6rem; padding:.75rem .85rem; border:1px solid var(--hc-border); border-radius:.7rem; background:var(--hc-surface-elevated); }
@@ -279,8 +281,7 @@ export function ensurePhase15Styles(): void {
             .hc-advanced-index { max-height:none; }
             .hc-phase15-expedition .hc-map-host { height:clamp(20rem,48vh,30rem); min-height:0; }
             .hc-adjacency-navigator { width:7.5rem; top:.55rem; left:.55rem; }
-            .hc-adjacency-caption { width:3.4rem; font-size:.62rem; }
-            .hc-adjacency-edge { min-width:2.75rem; min-height:2.75rem; font-size:.78rem; }
+            .hc-adjacency-edge { min-width:2.75rem; min-height:2.75rem; }
             .hc-current-travel-facts { grid-template-columns:auto minmax(0,1fr); }
             .hc-journey-state-grid { grid-template-columns:1fr; }
             .hc-current-travel-pace-editor { grid-template-columns:1fr; }
