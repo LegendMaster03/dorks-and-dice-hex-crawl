@@ -159,6 +159,32 @@ public sealed class RuntimeEngineTests
     }
 
     [Fact]
+    public void ChangedReusableCourseRemainsAuthoritativeAcrossValidBoundaryTravel()
+    {
+        var state = CreateExpedition();
+        state = CrawlRuntimeActions.SetIntendedCourse(state, new HexDirection(0));
+        state = CrawlRuntimeActions.SetIntendedCourse(state, new HexDirection(5));
+        var setup = CreateSetup(expedition: state);
+        var procedure = TestProcedureProfiles.FixedDistance() with
+        {
+            UsesNavigationChecks = false,
+            EncounterCadence = EncounterCheckCadence.None
+        };
+
+        var result = Advance(
+            setup,
+            procedure,
+            12,
+            direction: 5,
+            continueAcrossBoundaries: true);
+
+        Assert.Equal(new HexDirection(5), result.Expedition.IntendedDirection);
+        Assert.Equal(new HexDirection(5), result.Expedition.ActualDirection);
+        Assert.NotEqual(new HexDirection(0), result.Expedition.IntendedDirection);
+        Assert.NotEqual(setup.Expedition.CurrentHex, result.Expedition.CurrentHex);
+    }
+
+    [Fact]
     public void DirectionChangeCanConsumeAbstractProgress()
     {
         var traversal = new HexTraversalState
