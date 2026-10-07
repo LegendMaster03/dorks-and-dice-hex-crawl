@@ -1314,12 +1314,17 @@ const rail = root.querySelector(".hc-table-rail");
 const currentTravel = root.querySelector("[data-current-travel]");
 const rootText = root.textContent || "";
 const journeyPrimaryText = root.querySelector(".hc-journey-primary")?.textContent || "";
+const isNormalPresentationElement = element => {
+    if (!isVisible(element)) return false;
+    for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+        if (parent instanceof HTMLDetailsElement && !parent.open) return false;
+    }
+    return true;
+};
 const normalHistoryText = Array.from(root.querySelectorAll("[data-phase15-drawer] .hc-history li"))
-    .filter(isVisible)
+    .filter(isNormalPresentationElement)
     .map(item => item.textContent || "")
     .join(" ");
-const isNormalPresentationElement = element =>
-    isVisible(element) && !element.closest("details");
 const normalJourneyText = Array.from(root.querySelectorAll("[data-journey-panel] h3, [data-journey-panel] h4, [data-journey-panel] p, [data-journey-panel] li"))
     .filter(isNormalPresentationElement)
     .map(item => item.textContent || "")
