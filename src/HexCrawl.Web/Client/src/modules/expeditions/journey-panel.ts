@@ -508,39 +508,130 @@ export class ExpeditionJourneyPanel {
     private consequenceFields(): { container: HTMLElement; build: (source: string, sourceId: string, occurrenceId: string) => ExpeditionConsequenceInput[] } {
         const container = document.createElement("fieldset");
         const legend = document.createElement("legend");
-        legend.textContent = "Optional structured consequence";
-        const kind = this.select("Consequence", ["None", "TimeDelay", "PersistentEffectChange", "ResourceChange", "EncounterCircumstance", "DamageEndurance"]);
-        const key = this.input("Consequence/effect/resource key", "text");
-        const value = this.input("Resolved value / delta", "number", "1");
+        legend.textContent = "Optional journey result";
+
+        const kind = this.select("Result", [
+            "None|No consequence",
+            "TimeDelay|Time delay",
+            "PersistentEffectChange|Persistent effect",
+            "ResourceChange|Resource change",
+            "EncounterCircumstance|Encounter circumstance",
+            "DamageEndurance|Damage / endurance"
+        ]);
+        const runtime = this.getRuntime();
+        const effectKinds = runtime.procedure.modules
+            .find(module => module.moduleKey === "effects.expedition")
+            ?.parameters.effectKinds?.split(";").map(value => value.trim()).filter(Boolean) ?? [];
+        const effect = effectKinds.length > 0
+            ? this.select("Effect", effectKinds.map(value => `${value}|${humanize(value)}`))
+            : this.input("Effect", "text");
+        const name = this.input("Resource / circumstance / state", "text");
+        const value = this.input("Amount / level change", "number", "1");
         value.control.step = "any";
-        const unit = this.input("Unit / encounter value", "text");
-        const scope = this.select("Scope", ["Party", "Expedition", "Participant", "Mount", "Vehicle"]);
-        const targetId = this.input("Target ID when required", "text");
-        container.append(legend, kind.wrapper, key.wrapper, value.wrapper, unit.wrapper, scope.wrapper, targetId.wrapper);
+        const unit = this.input("Unit / value", "text");
+        const timeUnit = this.select("Time unit", ["Hours|Hours", "Minutes|Minutes", "Days|Days"]);
+
+        const targetOptions = [
+            "Party|Party",
+            "Expedition|Expedition",
+            ...runtime.party.members.map(member => `Participant:${member.id}|${member.name}`),
+            ...(runtime.party.movementContributors ?? [])
+                .filter(contributor => contributor.kind === "Mount" || contributor.kind === "Vehicle")
+                .map(contributor => `${contributor.kind}:${contributor.id}|${humanize(contributor.kind)}: ${humanize(contributor.key)}`)
+        ];
+        const affected = this.select("Affects", targetOptions);
+
+        const technical = document.createElement("details");
+        const technicalSummary = document.createElement("summary");
+        technicalSummary.textContent = "Advanced technical details";
+        technical.append(
+            technicalSummary,
+            this.muted("The selected tabletop result is translated to the existing generic ExpeditionConsequence model. Exact category, target scope, generated identity, and provenance remain available in persisted audit state."));
+
+        container.append(
+            legend,
+            kind.wrapper,
+            effect.wrapper,
+            name.wrapper,
+            value.wrapper,
+            unit.wrapper,
+            timeUnit.wrapper,
+            affected.wrapper,
+            technical);
+
+        const updateVisibility = (): void => {
+            const selected = kind.control.value;
+            effect.wrapper.hidden = selected !== "PersistentEffectChange";
+            name.wrapper.hidden = !["ResourceChange", "EncounterCircumstance", "DamageEndurance"].includes(selected);
+            value.wrapper.hidden = selected === "None" || selected === "EncounterCircumstance";
+            unit.wrapper.hidden = !["ResourceChange", "EncounterCircumstance", "DamageEndurance"].includes(selected);
+            timeUnit.wrapper.hidden = selected !== "TimeDelay";
+            affected.wrapper.hidden = selected === "None";
+        };
+        kind.control.addEventListener("change", updateVisibility);
+        updateVisibility();
+
         return {
             container,
             build: (source, sourceId, occurrenceId) => {
                 if (kind.control.value === "None") return [];
                 const consequenceId = crypto.randomUUID();
-                const consequenceKey = required(key.control.value, "Consequence key");
-                const resolvedTarget = target(scope.control.value as ExpeditionEffectScope, nullable(targetId.control.value));
+                const resolvedTarget = parseJourneyTarget(affected.control.value);
                 const provenance = dmJourneyProvenance(`${source}-consequence`, `${sourceId}:${occurrenceId}`);
                 switch (kind.control.value) {
                     case "TimeDelay":
-                        return [{ id: consequenceId, consequenceKey, category: "TimeDelay", target: resolvedTarget,
-                            components: [{ kind: "timeDelay", value: positiveNumber(value.control.value), unit: unit.control.value === "Days" ? "Days" : unit.control.value === "Minutes" ? "Minutes" : "Hours" }], provenance }];
-                    case "PersistentEffectChange":
-                        return [{ id: consequenceId, consequenceKey, category: "PersistentEffectChange", target: resolvedTarget,
-                            components: [{ kind: "persistentEffectChange", effectKey: consequenceKey, operation: "AdjustLevel", levelDelta: nonZeroInteger(value.control.value), explicitlyResolved: true, movementComponents: [] }], provenance }];
-                    case "ResourceChange":
-                        return [{ id: consequenceId, consequenceKey, category: "ResourceChange", target: resolvedTarget,
-                            components: [{ kind: "resourceChange", resourceKey: consequenceKey, operation: "AdjustQuantity", quantity: nonZeroNumber(value.control.value), unit: required(unit.control.value, "Resource unit") }], provenance }];
-                    case "EncounterCircumstance":
-                        return [{ id: consequenceId, consequenceKey, category: "EncounterCircumstance", target: resolvedTarget,
-                            components: [{ kind: "encounterCircumstance", circumstanceKey: consequenceKey, value: nullable(unit.control.value) }], provenance }];
-                    case "DamageEndurance":
-                        return [{ id: consequenceId, consequenceKey, category: "DamageEndurance", target: resolvedTarget,
-                            components: [{ kind: "externalState", stateKey: consequenceKey, delta: nonZeroNumber(value.control.value), unit: nullable(unit.control.value) }], provenance }];
+                        return [{
+                            id: consequenceId,
+                            consequenceKey: "journey-time-delay",
+                            category: "TimeDelay",
+                            target: resolvedTarget,
+                            components: [{ kind: "timeDelay", value: positiveNumber(value.control.value), unit: timeUnit.control.value as "Minutes" | "Hours" | "Days" }],
+                            provenance
+                        }];
+                    case "PersistentEffectChange": {
+                        const effectKey = required(effect.control.value, "Effect");
+                        return [{
+                            id: consequenceId,
+                            consequenceKey: effectKey,
+                            category: "PersistentEffectChange",
+                            target: resolvedTarget,
+                            components: [{ kind: "persistentEffectChange", effectKey, operation: "AdjustLevel", levelDelta: nonZeroInteger(value.control.value), explicitlyResolved: true, movementComponents: [] }],
+                            provenance
+                        }];
+                    }
+                    case "ResourceChange": {
+                        const resourceKey = required(name.control.value, "Resource");
+                        return [{
+                            id: consequenceId,
+                            consequenceKey: resourceKey,
+                            category: "ResourceChange",
+                            target: resolvedTarget,
+                            components: [{ kind: "resourceChange", resourceKey, operation: "AdjustQuantity", quantity: nonZeroNumber(value.control.value), unit: required(unit.control.value, "Resource unit") }],
+                            provenance
+                        }];
+                    }
+                    case "EncounterCircumstance": {
+                        const circumstanceKey = required(name.control.value, "Circumstance");
+                        return [{
+                            id: consequenceId,
+                            consequenceKey: circumstanceKey,
+                            category: "EncounterCircumstance",
+                            target: resolvedTarget,
+                            components: [{ kind: "encounterCircumstance", circumstanceKey, value: nullable(unit.control.value) }],
+                            provenance
+                        }];
+                    }
+                    case "DamageEndurance": {
+                        const stateKey = required(name.control.value, "State");
+                        return [{
+                            id: consequenceId,
+                            consequenceKey: stateKey,
+                            category: "DamageEndurance",
+                            target: resolvedTarget,
+                            components: [{ kind: "externalState", stateKey, delta: nonZeroNumber(value.control.value), unit: nullable(unit.control.value) }],
+                            provenance
+                        }];
+                    }
                     default:
                         return [];
                 }
@@ -698,6 +789,14 @@ function splitKeys(value: string): string[] {
 function humanize(value: string): string {
     const text = value.replace(/[-_]+/g, " ").trim();
     return text ? text[0].toUpperCase() + text.slice(1) : value;
+}
+
+function parseJourneyTarget(value: string): ReturnType<typeof target> {
+    const separator = value.indexOf(":");
+    if (separator < 0) return target(value as ExpeditionEffectScope, null);
+    return target(
+        value.slice(0, separator) as ExpeditionEffectScope,
+        value.slice(separator + 1));
 }
 
 function nullable(value: string): string | null {
