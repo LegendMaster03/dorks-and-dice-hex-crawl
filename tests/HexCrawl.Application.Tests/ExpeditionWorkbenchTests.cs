@@ -159,6 +159,16 @@ public sealed class ExpeditionWorkbenchTests
                 "exploration-map",
                 new HexCoordinate(0, 0)));
 
+        expedition = await core.SetExpeditionCourseIntentAsync(
+            expedition.State.Id,
+            "alice",
+            new SetExpeditionCourseIntentCommand(expedition.Version, 0));
+        expedition = await core.SetExpeditionCourseIntentAsync(
+            expedition.State.Id,
+            "alice",
+            new SetExpeditionCourseIntentCommand(expedition.Version, 2));
+        Assert.Equal(new HexDirection(2), expedition.State.IntendedDirection);
+
         expedition = await assistants.RecordNavigationAsync(
             expedition.State.Id,
             "alice",
@@ -192,6 +202,14 @@ public sealed class ExpeditionWorkbenchTests
         var reloaded = await core.GetExpeditionAsync(expedition.State.Id, "alice");
         Assert.Equal(pending, reloaded.State.PendingEncounter);
         Assert.Equal(RuntimePauseReason.EncounterTriggered, reloaded.PauseReason);
+        Assert.Equal(new HexDirection(2), reloaded.State.IntendedDirection);
+
+        var courseChangeBlocked = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            core.SetExpeditionCourseIntentAsync(
+                reloaded.State.Id,
+                "alice",
+                new SetExpeditionCourseIntentCommand(reloaded.Version, 4)));
+        Assert.Contains("pending encounter", courseChangeBlocked.Message, StringComparison.OrdinalIgnoreCase);
 
         var navigationBlocked = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             assistants.RecordNavigationAsync(
