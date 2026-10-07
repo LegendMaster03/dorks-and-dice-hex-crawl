@@ -1026,6 +1026,10 @@ switch (stateName) {
         runtime.expedition.actualDirection = 1;
         runtime.procedure.runtime.usesNavigationChecks = true;
         break;
+    case "course-clear-reload":
+        runtime.expedition.intendedDirection = 1;
+        runtime.expedition.actualDirection = 1;
+        break;
     case "partial-progress":
         runtime.expedition.intendedDirection = 2;
         runtime.expedition.actualDirection = 2;
@@ -1357,7 +1361,7 @@ if (stateName === "persisted-course") {
         "hex-crawl.expedition." + runtime.id + ".travel-intent",
         JSON.stringify({ direction: 4, pace: "fast" }));
 }
-if (stateName === "course-change-reload") {
+if (stateName === "course-change-reload" || stateName === "course-clear-reload") {
     localStorage.setItem(
         "hex-crawl.expedition." + runtime.id + ".travel-intent",
         JSON.stringify({ direction: 1, pace: "normal" }));
@@ -1458,6 +1462,21 @@ if (stateName === "course-change-reload") {
 
     findButton("Resolve navigation")?.click();
     await waitForRootText("Intended course:");
+} else if (stateName === "course-clear-reload") {
+    const selectedEdge = root.querySelector('[data-adjacency-edge="1"]');
+    selectedEdge?.click();
+    await waitForCondition(
+        () => runtime.expedition.intendedDirection === null
+            && root.querySelectorAll('[data-adjacency-edge][aria-pressed="true"]').length === 0,
+        "server-authoritative cleared course");
+
+    disposeExpedition();
+    root.replaceChildren();
+    localStorage.removeItem("hex-crawl.expedition." + runtime.id + ".travel-intent");
+    disposeExpedition = await renderExpedition(root, api, runtime.id, () => {}, undefined, null);
+    await waitForCondition(
+        () => root.querySelectorAll('[data-adjacency-edge][aria-pressed="true"]').length === 0,
+        "fresh client retained no-course state");
 } else if (stateName === "map-selected" || stateName === "map-nonadjacent") {
     const canvas = root.querySelector("canvas");
     if (canvas) {
