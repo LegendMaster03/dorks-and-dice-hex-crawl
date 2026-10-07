@@ -570,6 +570,88 @@ public sealed class ExpeditionWorkbenchEndpointsTests
     }
 
     [Fact]
+    public async Task FiniteAlternatePacePersistsAcrossPartialTravelRestart()
+    {
+        var database = TestWebHost.NewDatabasePath();
+        Guid sessionId;
+
+        try
+        {
+            using (var factory = TestWebHost.Create(database))
+            using (var client = factory.CreateClient())
+            {
+                var procedure = await SyntheticProcedureApiFixture.CreatePacedExecutableAsync(client);
+                using var startResponse = await client.PostAsJsonAsync("/api/expeditions", new
+                {
+                    name = "Pace persistence",
+                    procedureId = procedure.ProcedureId,
+                    procedureRevision = procedure.Revision,
+                    context = new
+                    {
+                        kind = "AbstractHex",
+                        name = "Pace proof",
+                        orientation = "PointyTop",
+                        hexCenterDistance = 12,
+                        distanceUnit = new { kind = "Mile", symbol = "mi", metersPerUnit = 1609.344 }
+                    },
+                    startHex = new { q = 0, r = 0 }
+                });
+                startResponse.EnsureSuccessStatusCode();
+                var session = await startResponse.Content.ReadFromJsonAsync<JsonElement>();
+                sessionId = session.GetProperty("id").GetGuid();
+
+                var modes = session.GetProperty("movementComposition")
+                    .GetProperty("policy")
+                    .GetProperty("travelModeKeys")
+                    .EnumerateArray()
+                    .Select(value => value.GetString())
+                    .ToArray();
+                Assert.Equal(new[] { "normal", "fast", "slow" }, modes);
+
+                using var advance = await client.PostAsJsonAsync(
+                    $"/api/expeditions/{sessionId:D}/advance",
+                    new
+                    {
+                        expectedVersion = session.GetProperty("version").GetInt64(),
+                        intendedDirection = 0,
+                        paceKey = "fast",
+                        navigationAidKey = "none",
+                        suppressesNavigationCheck = false,
+                        resetsVeerAtBoundary = false,
+                        effectiveDistance = 12,
+                        resolutionSource = "ManualRoll",
+                        travelResolutionSource = "ManualRoll",
+                        deliberateDoubleBack = false,
+                        continueAcrossBoundaries = false
+                    });
+                advance.EnsureSuccessStatusCode();
+                session = await advance.Content.ReadFromJsonAsync<JsonElement>();
+
+                Assert.Equal("ConditionsReviewRequired", session.GetProperty("pauseReason").GetString());
+                Assert.Equal("fast", session.GetProperty("expedition").GetProperty("activePaceKey").GetString());
+                Assert.True(session.GetProperty("expedition").GetProperty("activeWatchRemainingHours").GetDouble() > 0);
+            }
+
+            using (var restartedFactory = TestWebHost.Create(database))
+            using (var restartedClient = restartedFactory.CreateClient())
+            {
+                var reloaded = await restartedClient.GetFromJsonAsync<JsonElement>(
+                    $"/api/expeditions/{sessionId:D}");
+
+                Assert.Equal("ConditionsReviewRequired", reloaded.GetProperty("pauseReason").GetString());
+                Assert.Equal("fast", reloaded.GetProperty("expedition").GetProperty("activePaceKey").GetString());
+                Assert.Contains(
+                    reloaded.GetProperty("movementComposition").GetProperty("policy").GetProperty("travelModeKeys").EnumerateArray(),
+                    value => value.GetString() == "fast");
+            }
+        }
+        finally
+        {
+            TestWebHost.DeleteDatabase(database);
+        }
+    }
+
+    [Fact]
     public async Task AbstractHexSessionPersistsAndAdvancesWithoutAnyOverworld()
     {
         var database = TestWebHost.NewDatabasePath();
