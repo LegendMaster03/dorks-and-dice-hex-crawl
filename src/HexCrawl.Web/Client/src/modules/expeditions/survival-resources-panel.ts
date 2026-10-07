@@ -253,7 +253,7 @@ export class ExpeditionSurvivalResourcesPanel {
         const value = this.input("Resolved value", "text");
         const unit = this.input("Unit for quantity operations", "text");
         const scope = this.select("Target scope", ["Party", "Expedition", "Participant", "Mount", "Vehicle"]);
-        const target = this.input("Target ID when scope requires it", "text");
+        const target = this.targetSelect("Target", scope.control);
         const submit = this.button("Resolve consumption");
         form.append(due.wrapper, resourceKey.wrapper, resourceId.wrapper, operation.wrapper, value.wrapper, unit.wrapper,
             scope.wrapper, target.wrapper, submit);
