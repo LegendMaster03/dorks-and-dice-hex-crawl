@@ -1318,12 +1318,14 @@ const normalHistoryText = Array.from(root.querySelectorAll("[data-phase15-drawer
     .filter(isVisible)
     .map(item => item.textContent || "")
     .join(" ");
+const isNormalPresentationElement = element =>
+    isVisible(element) && !element.closest("details");
 const normalJourneyText = Array.from(root.querySelectorAll("[data-journey-panel] h3, [data-journey-panel] h4, [data-journey-panel] p, [data-journey-panel] li"))
-    .filter(isVisible)
+    .filter(isNormalPresentationElement)
     .map(item => item.textContent || "")
     .join(" ");
 const normalEffectText = Array.from(root.querySelectorAll("[data-effects-panel] h3, [data-effects-panel] h4, [data-effects-panel] p, [data-effects-panel] li"))
-    .filter(isVisible)
+    .filter(isNormalPresentationElement)
     .map(item => item.textContent || "")
     .join(" ");
 const forcedTravelTarget = root.querySelector("[data-forced-travel-target]");
