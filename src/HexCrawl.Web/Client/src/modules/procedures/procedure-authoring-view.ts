@@ -23,7 +23,7 @@ import {
     formatDurationTicks,
     friendlyStoredValue,
     parameterDefinitions,
-    procedureParameterFacts,
+    procedurePresentationSections,
     ticksToDuration
 } from "./procedure-presentation";
 
@@ -506,13 +506,8 @@ export async function renderProcedureAuthoringWorkspace(
             const descriptor = compactRule(module.moduleKey);
             row.append(textElement("h4", descriptor?.label ?? module.moduleName));
             if (descriptor?.description) row.append(textElement("p", descriptor.description));
-            const facts = document.createElement("dl");
-            facts.className = "hc-rule-facts hc-inspect-rule-facts";
-            const values = procedureParameterFacts(module.moduleKey, module.parameters);
-            for (const fact of values) {
-                facts.append(textElement("dt", fact.label), textElement("dd", fact.value));
-            }
-            if (values.length > 0) row.append(facts);
+            const facts = renderPresentationFactGroups(module.moduleKey, module.parameters, "hc-inspect-rule-facts");
+            if (facts.childElementCount > 0) row.append(facts);
             else row.append(textElement("p", "No additional table-facing values are configured."));
             behavior.append(row);
         }
@@ -887,15 +882,52 @@ export async function renderProcedureAuthoringWorkspace(
     };
 
     const compactFacts = (module: ProcedureModuleComposer): HTMLElement => {
-        const facts = document.createElement("dl");
-        facts.className = "hc-rule-facts";
         const values = Object.fromEntries(parameterDefinitions(module)
             .map(([key, definition]) => [key, module.parameters[key] ?? definition.defaultValue ?? ""])
             .filter(([, value]) => value !== ""));
-        for (const fact of procedureParameterFacts(module.moduleKey, values).slice(0, 5)) {
-            facts.append(textElement("dt", fact.label), textElement("dd", fact.value));
+        return renderPresentationFactGroups(module.moduleKey, values);
+    };
+
+    const renderPresentationFactGroups = (
+        moduleKey: string,
+        values: Record<string, string>,
+        extraClass = ""): HTMLElement => {
+        const groups = document.createElement("div");
+        groups.className = `hc-rule-fact-groups${extraClass ? ` ${extraClass}` : ""}`;
+        for (const section of procedurePresentationSections(moduleKey, values)) {
+            const group = document.createElement("section");
+            group.className = "hc-rule-fact-group";
+            group.append(textElement("h4", section.label));
+            const facts = document.createElement("dl");
+            facts.className = "hc-rule-facts";
+            for (const fact of section.facts) {
+                const term = textElement("dt", fact.label);
+                const value = document.createElement("dd");
+                if (fact.entries && fact.entries.length > 0) {
+                    const table = document.createElement("table");
+                    table.className = "hc-rule-map";
+                    const body = document.createElement("tbody");
+                    for (const entry of fact.entries) {
+                        const row = document.createElement("tr");
+                        row.append(textElement("th", entry.label), textElement("td", entry.value));
+                        body.append(row);
+                    }
+                    table.append(body);
+                    value.append(table);
+                } else if (fact.items && fact.items.length > 0) {
+                    const list = document.createElement("ul");
+                    list.className = "hc-rule-value-list";
+                    for (const item of fact.items) list.append(textElement("li", item));
+                    value.append(list);
+                } else {
+                    value.textContent = fact.value;
+                }
+                facts.append(term, value);
+            }
+            group.append(facts);
+            groups.append(group);
         }
-        return facts;
+        return groups;
     };
 
     const compactGroup = (current: ProcedureComposer, section: string) => ({
