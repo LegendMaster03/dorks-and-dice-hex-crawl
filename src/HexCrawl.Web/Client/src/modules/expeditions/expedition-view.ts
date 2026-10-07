@@ -658,6 +658,14 @@ export async function renderExpedition(
             selectTravelIntent(direction, target);
             return;
         }
+        if (runtime.expedition.activeWatchNumber !== null) {
+            const error = root.querySelector<HTMLElement>("[data-error]");
+            if (error) {
+                showUiError(error, new Error(
+                    "The active travel watch requires an intended course. Choose another adjacent course instead of clearing it."));
+            }
+            return;
+        }
         clearTravelIntent();
     };
 
