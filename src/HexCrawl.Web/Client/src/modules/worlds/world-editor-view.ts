@@ -114,6 +114,7 @@ export async function renderWorldEditor(
                                 </form>
                                 <form class="hc-form" data-cell-feature-environment-form>
                                     <strong>Feature behavior</strong>
+                                    <p class="hc-hint">These mechanics are explicitly scoped to the selected feature wherever it applies. Use “Add to this cell” above for local-only behavior.</p>
                                     <label>Feature <select name="featureId" required></select></label>
                                     <label>Dimension <input name="dimension" list="hc-cell-environment-dimensions" required value="route"></label>
                                     <label>Value <input name="value" required placeholder="good-road"></label>
