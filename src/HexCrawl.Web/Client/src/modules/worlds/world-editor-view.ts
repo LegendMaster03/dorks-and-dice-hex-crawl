@@ -1,26 +1,51 @@
-import type { HexCrawlApi } from "../../api";
+import { HexCrawlApiError, type HexCrawlApi } from "../../api";
+import type { EnvironmentAnnotation, EnvironmentFact, WorldEnvironment } from "../../environment-types";
+import { hexToWorld, worldToHex } from "../../hex-math";
 import { MapSurface } from "../../map-surface";
 import { SourceMapWorkspace } from "./source-map-workspace";
-import type { Location, Overworld, SpatialFeature, WorldPoint } from "../../types";
+import type { HexCoordinate, Location, Overworld, SpatialFeature, WorldPoint } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
 import { customUnitFieldsVisible, gridWithSelectedUnit } from "./world-form";
 import type { DistanceUnitKind } from "./world-form";
 import { input, integer, numeric, required, select } from "../../ui/dom";
+import {
+    addEnvironmentFact,
+    addFeatureTagFact,
+    addHexTagFact,
+    applicableFeatureEnvironmentFacts,
+    commonEnvironmentDimensions,
+    featureHasEnvironmentRules,
+    featuresIntersectingCell,
+    hexEnvironmentFacts,
+    locationsInCell,
+    measurementFact,
+    removeEnvironmentFact,
+    replaceHexTerrain,
+    sameHex,
+    tagFact,
+    terrainFactsForCell
+} from "./selected-cell-authoring";
 
 export async function renderWorldEditor(
     root: HTMLElement,
     api: HexCrawlApi,
     worldId: string,
     navigate: (route: string, replace?: boolean) => void): Promise<() => void> {
-    let world = await api.getOverworld(worldId);
-    const [procedurePresets, initialExpeditions] = await Promise.all([
+    const [initialWorld, initialWorldEnvironment, procedurePresets, initialExpeditions] = await Promise.all([
+        api.getOverworld(worldId),
+        api.getWorldEnvironment(worldId),
         api.getProcedurePresets(),
         api.listExpeditions(worldId)
     ]);
+    let world = initialWorld;
+    let worldEnvironment = initialWorldEnvironment;
+    let selectedCell = restoreSelectedCell(worldId);
     let selectedLocation: Location | null = null;
     let selectedFeature: SpatialFeature | null = null;
-    let placement: "location" | "point" | "line" | "region" | null = null;
+    let placement: "location" | "point" | "line" | "region" | "cell-location" | "cell-route" | null = null;
     let draft: WorldPoint[] = [];
+    let cellLocationPoint: WorldPoint | null = null;
+    let cellRouteDraft: WorldPoint[] = [];
     let disposed = false;
     let sourceMapWorkspace: SourceMapWorkspace | null = null;
 
@@ -37,7 +62,83 @@ export async function renderWorldEditor(
                     <p class="hc-hint" data-map-hint>Click to select or author map content; drag to pan; wheel to zoom. The focused map also supports keyboard pan, zoom, and center-point selection.</p>
                 </section>
                 <aside class="hc-sidebar" aria-label="Overworld authoring controls">
-                    <details open><summary>World and grid</summary><form class="hc-form" data-grid-form>
+                    <details open class="hc-selected-cell-panel" data-selected-cell-panel><summary>Selected cell</summary>
+                        <div class="hc-form" data-selected-cell-empty>
+                            <p class="hc-hint">Select a map cell to edit terrain, locations, routes, features, and explicit environment rules in tabletop terms.</p>
+                        </div>
+                        <div class="hc-stack" data-selected-cell-content hidden>
+                            <div>
+                                <h3 data-selected-cell-title></h3>
+                                <p class="hc-hint">This is authoring selection only. It does not move an expedition or reveal hidden content to players.</p>
+                            </div>
+                            <section class="hc-stack">
+                                <h4>Terrain / biome</h4>
+                                <label>Terrain / biome
+                                    <input data-cell-terrain list="hc-terrain-values" placeholder="Forest, swamp, custom…">
+                                    <datalist id="hc-terrain-values"><option value="forest"><option value="swamp"><option value="grassland"><option value="desert"><option value="mountain"><option value="hills"><option value="tundra"><option value="jungle"><option value="coast"><option value="urban"></datalist>
+                                </label>
+                                <p class="hc-hint" data-cell-terrain-status></p>
+                                <div class="hc-button-row"><button type="button" class="hc-primary-action" data-save-cell-terrain>Save terrain</button><button type="button" data-clear-cell-terrain>None / unspecified</button></div>
+                            </section>
+                            <section class="hc-stack">
+                                <h4>Locations / POIs</h4>
+                                <div data-cell-location-list></div>
+                                <form class="hc-form" data-cell-location-form>
+                                    <label>Name <input name="name" required></label>
+                                    <label>Category <input name="category" required></label>
+                                    <label>Discoverability <select name="discoverability"><option>Obvious</option><option>Hidden</option><option>Conditional</option></select></label>
+                                    <p class="hc-hint" data-cell-location-position>Position: cell center.</p>
+                                    <div class="hc-button-row"><button type="button" data-cell-location-exact>Choose exact position</button><button type="submit" class="hc-primary-action">Add location here</button></div>
+                                </form>
+                            </section>
+                            <section class="hc-stack">
+                                <h4>Routes & features</h4>
+                                <div data-cell-feature-list></div>
+                                <form class="hc-form" data-cell-route-form>
+                                    <label>Name <input name="name" required></label>
+                                    <label>Category <input name="category" list="hc-cell-feature-categories" required></label>
+                                    <datalist id="hc-cell-feature-categories"><option value="road"><option value="trail"><option value="river"><option value="border"><option value="custom"></datalist>
+                                    <p class="hc-hint" data-cell-route-draft>Draw a continuous line on the map; it may cross any number of cells.</p>
+                                    <div class="hc-button-row"><button type="button" data-cell-route-road>Road</button><button type="button" data-cell-route-trail>Trail</button><button type="button" data-cell-route-river>River</button><button type="button" data-cell-route-draw>Draw route</button><button type="submit" class="hc-primary-action">Save line feature</button></div>
+                                </form>
+                            </section>
+                            <section class="hc-stack">
+                                <h4>Environment / mechanics</h4>
+                                <div data-cell-environment-list></div>
+                                <form class="hc-form" data-cell-environment-form>
+                                    <label>Environmental detail <input name="dimension" list="hc-cell-environment-dimensions" required></label>
+                                    <datalist id="hc-cell-environment-dimensions"></datalist>
+                                    <label>Value <input name="value" required></label>
+                                    <button type="submit">Add to this cell</button>
+                                </form>
+                                <form class="hc-form" data-cell-feature-environment-form>
+                                    <strong>Feature behavior</strong>
+                                    <label>Feature <select name="featureId" required></select></label>
+                                    <label>Dimension <input name="dimension" list="hc-cell-environment-dimensions" required value="route"></label>
+                                    <label>Value <input name="value" required placeholder="good-road"></label>
+                                    <button type="submit">Set feature behavior</button>
+                                </form>
+                            </section>
+                            <details data-cell-advanced><summary>Advanced</summary>
+                                <div class="hc-form">
+                                    <div data-cell-advanced-summary></div>
+                                    <form class="hc-form" data-cell-advanced-environment-form>
+                                        <label>Exact scope <select name="scope"><option value="Hex">This cell</option><option value="SpatialFeature">Spatial feature</option><option value="World">World</option></select></label>
+                                        <label data-advanced-feature-row hidden>Feature <select name="featureId"></select></label>
+                                        <label>Dimension <input name="dimension" list="hc-cell-environment-dimensions" required></label>
+                                        <label>Value type <select name="valueKind"><option value="Tag">Tag/value</option><option value="Measurement">Measurement</option></select></label>
+                                        <label data-advanced-tag-row>Value <input name="tag"></label>
+                                        <div data-advanced-measurement-row hidden class="hc-inline"><label>Numeric value <input name="measurement" type="number" step="any"></label><label>Unit <input name="unit"></label></div>
+                                        <label>Provenance <input name="provenance"></label>
+                                        <label>Note <input name="note"></label>
+                                        <button type="submit">Add exact environment fact</button>
+                                    </form>
+                                </div>
+                            </details>
+                        </div>
+                    </details>
+
+                    <details><summary>World and grid</summary><form class="hc-form" data-grid-form>
                         <label>Name <input name="name" required></label>
                         <label>Orientation <select name="orientation"><option value="PointyTop">Pointy top</option><option value="FlatTop">Flat top</option></select></label>
                         <label>Hex center distance <input name="scale" type="number" min="0.001" step="any" required><span class="hc-hint">Center-to-center distance between adjacent hexes.</span></label>
@@ -54,7 +155,8 @@ export async function renderWorldEditor(
                         <button type="submit" class="hc-primary-action">Save world and grid</button>
                     </form></details>
 
-                    <details open><summary>Locations</summary>
+                    <details data-advanced-world-objects><summary>Advanced world objects</summary>
+                    <details><summary>Locations</summary>
                         <div data-location-list></div>
                         <form class="hc-form" data-location-form>
                             <input name="id" type="hidden">
@@ -81,6 +183,7 @@ export async function renderWorldEditor(
                         </form>
                     </details>
 
+                    </details>
                     <details><summary>Expeditions using this world</summary><div data-expedition-list></div>
                         <form class="hc-form" data-expedition-form>
                             <label>Name <input name="name" required value="Expedition"></label>
