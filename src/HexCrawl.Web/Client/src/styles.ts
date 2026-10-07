@@ -26,7 +26,7 @@ export function ensureStyles(): void {
             --hc-danger-hover: #8f2b36;
             --hc-danger-text: #8f2632;
             --hc-danger-text-hover: #711d26;
-            --hc-focus: var(--hc-primary);
+            --hc-focus: #6557d2;
             --hc-selected: #9b641c;
             --hc-success: #2f7d46;
             --hc-warning: #946410;
@@ -73,7 +73,7 @@ export function ensureStyles(): void {
             --hc-danger-hover: #cf5a63;
             --hc-danger-text: #f0a6ad;
             --hc-danger-text-hover: #ffd2d6;
-            --hc-focus: var(--hc-primary);
+            --hc-focus: #a99df5;
             --hc-selected: #d69a45;
             --hc-success: #65b47a;
             --hc-warning: #d8a64f;
@@ -114,7 +114,7 @@ export function ensureStyles(): void {
                 --hc-danger-hover: #cf5a63;
                 --hc-danger-text: #f0a6ad;
                 --hc-danger-text-hover: #ffd2d6;
-                --hc-focus: var(--hc-primary);
+                --hc-focus: #a99df5;
                 --hc-selected: #d69a45;
                 --hc-success: #65b47a;
                 --hc-warning: #d8a64f;

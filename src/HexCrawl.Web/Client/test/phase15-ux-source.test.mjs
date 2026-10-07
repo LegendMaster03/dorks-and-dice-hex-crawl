@@ -168,12 +168,15 @@ test("Phase 15 procedure surfaces inherit shared theme tokens", () => {
     assert.match(styles, /outline:3px solid var\(--hc-focus\)/);
 });
 
-test("shared focus color follows the host site primary theme token", () => {
+test("navigator accent follows the host site primary token without changing shared focus semantics", () => {
     const styles = fs.readFileSync(path.join(sourceDir, "styles.ts"), "utf8");
+    const phaseStyles = fs.readFileSync(path.join(sourceDir, "phase15-styles.ts"), "utf8");
 
-    assert.equal((styles.match(/--hc-focus: var\(--hc-primary\);/g) ?? []).length, 3);
+    assert.match(styles, /--hc-primary: var\(--bs-primary, #6557d2\)/);
     assert.equal((styles.match(/--hc-primary: var\(--bs-primary, #6d61dc\);/g) ?? []).length, 2);
-    assert.doesNotMatch(styles, /--hc-focus: #(?:6557d2|a99df5)/);
+    assert.equal((styles.match(/--hc-focus: #6557d2;/g) ?? []).length, 1);
+    assert.equal((styles.match(/--hc-focus: #a99df5;/g) ?? []).length, 2);
+    assert.match(phaseStyles, /\.hc-adjacency-edge\.is-selected \.hc-adjacency-arrow-shape path \{ stroke:var\(--hc-primary\); \}/);
 });
 
 test("Compact procedure edits keep their focused workspace across draft recomposition", () => {
@@ -468,11 +471,11 @@ test("navigator controls use midpoint-anchored white SVG arrows with consistent 
     assert.match(styles, /fill:#fff/);
     assert.match(styles, /stroke:transparent/);
     assert.match(styles, /paint-order:stroke fill/);
-    assert.match(styles, /:hover:not\(:disabled\) \.hc-adjacency-arrow-shape path \{ stroke:var\(--hc-focus\)/);
-    assert.match(styles, /\.is-selected \.hc-adjacency-arrow-shape path \{ stroke:var\(--hc-focus\)/);
+    assert.match(styles, /:hover:not\(:disabled\) \.hc-adjacency-arrow-shape path \{ stroke:var\(--hc-primary\)/);
+    assert.match(styles, /\.is-selected \.hc-adjacency-arrow-shape path \{ stroke:var\(--hc-primary\)/);
     assert.doesNotMatch(styles, /hc-adjacency-edge-mark/);
     assert.match(styles, /cursor:pointer/);
-    assert.match(styles, /outline:3px solid var\(--hc-focus\)/);
+    assert.match(styles, /outline:3px solid var\(--hc-primary\)/);
     assert.match(styles, /min-width:2\.75rem; min-height:2\.75rem/);
 });
 

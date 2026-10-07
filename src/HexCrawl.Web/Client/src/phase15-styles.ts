@@ -204,12 +204,12 @@ export function ensurePhase15Styles(): void {
         .hc-adjacency-arrow-shape { width:2.45rem; height:1.4rem; overflow:visible; transform:rotate(var(--hc-edge-angle)); transform-origin:center; pointer-events:none; filter:drop-shadow(0 .1rem .13rem rgba(0,0,0,.58)); }
         .hc-adjacency-arrow-shape path { fill:#fff; stroke:transparent; stroke-width:4; stroke-linejoin:round; paint-order:stroke fill; vector-effect:non-scaling-stroke; }
         .hc-adjacency-edge:hover:not(:disabled) { transform:translate(-50%,-50%) scale(1.06); background:transparent; }
-        .hc-adjacency-edge:hover:not(:disabled) .hc-adjacency-arrow-shape path { stroke:var(--hc-focus); }
-        .hc-adjacency-edge:focus-visible { transform:translate(-50%,-50%) scale(1.06); outline:3px solid var(--hc-focus); outline-offset:2px; background:transparent; z-index:2; }
-        .hc-adjacency-edge:focus-visible .hc-adjacency-arrow-shape path { stroke:var(--hc-focus); }
+        .hc-adjacency-edge:hover:not(:disabled) .hc-adjacency-arrow-shape path { stroke:var(--hc-primary); }
+        .hc-adjacency-edge:focus-visible { transform:translate(-50%,-50%) scale(1.06); outline:3px solid var(--hc-primary); outline-offset:2px; background:transparent; z-index:2; }
+        .hc-adjacency-edge:focus-visible .hc-adjacency-arrow-shape path { stroke:var(--hc-primary); }
         #tool-root.hex-crawl-app button.hc-adjacency-edge:active:not(:disabled) { transform:translate(calc(-50% + var(--hc-edge-feedback-x)),calc(-50% + var(--hc-edge-feedback-y))) scale(1.02); }
-        #tool-root.hex-crawl-app button.hc-adjacency-edge:active:not(:disabled) .hc-adjacency-arrow-shape path { stroke:var(--hc-focus); }
-        .hc-adjacency-edge.is-selected .hc-adjacency-arrow-shape path { stroke:var(--hc-focus); }
+        #tool-root.hex-crawl-app button.hc-adjacency-edge:active:not(:disabled) .hc-adjacency-arrow-shape path { stroke:var(--hc-primary); }
+        .hc-adjacency-edge.is-selected .hc-adjacency-arrow-shape path { stroke:var(--hc-primary); }
         .hc-adjacency-edge.is-actual-course:not(.is-selected) .hc-adjacency-arrow-shape path { stroke:var(--hc-warning); }
         .hc-adjacency-edge:disabled { background:transparent; opacity:.45; cursor:not-allowed; }
         .hc-map-context-overlay { position:absolute; z-index:5; right:.75rem; bottom:.75rem; width:min(22rem,calc(100% - 1.5rem)); max-height:min(18rem,55%); overflow:auto; display:grid; gap:.5rem; padding:.7rem .8rem; border:1px solid var(--hc-border); border-radius:.7rem; background:color-mix(in srgb,var(--hc-surface) 92%,transparent); color:var(--hc-text); box-shadow:0 .3rem .9rem rgba(0,0,0,.2); }
