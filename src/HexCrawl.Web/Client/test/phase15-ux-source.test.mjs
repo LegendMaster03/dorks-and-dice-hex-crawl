@@ -317,11 +317,14 @@ test("routine spatial travel reuses intent and suppresses fixed movement inputs 
     const movement = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/expedition-party-movement.ts"),
         "utf8");
+    const intent = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-travel-intent.ts"),
+        "utf8");
 
     assert.match(view, /hc-adjacency-navigator/);
     assert.match(view, /currentHexAdjacency/);
     assert.match(view, /adjacencyEdgeForCell/);
-    assert.match(view, /hex-crawl\.expedition\.\$\{runtime\.id\}\.travel-intent/);
+    assert.match(intent, /hex-crawl\.expedition\.\$\{expeditionId\}\.travel-intent/);
     assert.match(view, /Reusable course and pace stay filled until changed/);
     assert.match(view, /movementComposition\.suggestedExpectedDistance/);
     assert.match(controller, /suggestedWatchDistance\(runtime\)/);
@@ -557,12 +560,12 @@ test("Compact authoring offers generic one-click dependency repair", () => {
 
 
 test("persisted travel intent does not hardcode a six-edge direction range", () => {
-    const view = fs.readFileSync(
-        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+    const intent = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-travel-intent.ts"),
         "utf8");
 
-    assert.match(view, /Number\.isInteger\(parsed\.direction\) && Number\(parsed\.direction\) >= 0/);
-    assert.doesNotMatch(view, /Number\(parsed\.direction\) <= 5/);
+    assert.match(intent, /Number\.isInteger\(parsed\.direction\) && Number\(parsed\.direction\) >= 0/);
+    assert.doesNotMatch(intent, /Number\(parsed\.direction\) <= 5/);
 });
 
 test("current-cell navigator stays orientation-neutral unless authoritative compass metadata exists", () => {
