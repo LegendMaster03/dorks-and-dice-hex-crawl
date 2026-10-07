@@ -34,6 +34,10 @@ public sealed record AdvanceExpeditionCommand
     public string? DmOverrideNote { get; init; }
 }
 
+public sealed record SetExpeditionCourseIntentCommand(
+    long ExpectedVersion,
+    int? IntendedDirection);
+
 public sealed record RepositionExpeditionCommand(
     long ExpectedVersion,
     HexCoordinate TargetHex,
