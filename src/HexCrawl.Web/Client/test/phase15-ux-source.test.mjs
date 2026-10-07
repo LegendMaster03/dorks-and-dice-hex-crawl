@@ -1084,3 +1084,17 @@ test("remediation review matrix exercises effects, history, encounter, journey, 
     assert.match(fixture, /pendingEncounter/);
     assert.match(fixture, /effectsFixture/);
 });
+
+
+test("encounter resolution finishes its authoritative mutation before travel can resume", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+    const start = view.indexOf('const resolve = button("Mark encounter resolved"');
+    const end = view.indexOf("row.append(handoff, resolve)", start);
+    assert.ok(start >= 0 && end > start);
+    const resolutionBlock = view.slice(start, end);
+    assert.match(resolutionBlock, /api\.resolveEncounter/);
+    assert.match(resolutionBlock, /applyRuntime\(next\)/);
+    assert.doesNotMatch(resolutionBlock, /continueTravel\(/);
+});

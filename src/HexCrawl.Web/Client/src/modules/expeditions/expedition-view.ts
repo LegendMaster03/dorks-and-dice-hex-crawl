@@ -1579,8 +1579,6 @@ export async function renderExpedition(
                         resultNote: resultNote.value.trim() || undefined
                     });
                     applyRuntime(next);
-                    drawer?.close();
-                    continueTravel();
                 });
             });
             row.append(handoff, resolve);
