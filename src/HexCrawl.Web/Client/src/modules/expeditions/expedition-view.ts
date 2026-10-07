@@ -614,6 +614,17 @@ export async function renderExpedition(
                 expectedVersion: runtime.version,
                 intendedDirection: direction
             });
+            if (direction === null) {
+                if (selectedHexTracksTravelIntent) {
+                    selectedHex = null;
+                    selectedHexTracksTravelIntent = false;
+                }
+            } else {
+                const adjacency = currentAdjacency();
+                const edge = adjacency ? adjacencyEdgeForDirection(adjacency, direction) : null;
+                selectedHex = edge?.targetCell ?? null;
+                selectedHexTracksTravelIntent = selectedHex !== null;
+            }
             applyRuntime(next);
             if (!disposed) render();
         } catch (value) {
