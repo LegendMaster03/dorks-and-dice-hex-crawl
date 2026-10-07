@@ -1889,7 +1889,7 @@ const metrics = {
     movementContributorRows: root.querySelectorAll(".hc-movement-ledger-table tbody tr").length,
     resourceLedgerRows: root.querySelectorAll("[data-resource-ledger] tbody tr").length,
     effectLedgerRows: root.querySelectorAll("[data-effect-ledger] tbody tr").length,
-    readableEnvironmentVisible: rootText.includes("Effective environment") && rootText.includes("Heavy Rain"),
+    readableEnvironmentVisible: rootText.includes("Effective environment") && rootText.includes("heavy rain"),
     exposureLedgerVisible: rootText.includes("Exposure progress"),
     foragingSummaryVisible: rootText.includes("Foraging") && rootText.includes("Travel tradeoff"),
     campingSummaryVisible: rootText.includes("Camping") && rootText.includes("Watch model") && rootText.includes("Preparation"),
