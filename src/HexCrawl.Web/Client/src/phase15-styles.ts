@@ -235,9 +235,9 @@ export function ensurePhase15Styles(): void {
         .hc-readable-facts dd { margin:.12rem 0 0; min-width:0; color:var(--hc-text-strong); overflow-wrap:anywhere; }
         .hc-readable-table { width:100%; border-collapse:collapse; margin:.55rem 0; font-size:.88rem; }
         .hc-readable-table caption { text-align:left; padding:0 0 .35rem; font-weight:750; color:var(--hc-text-strong); }
-        .hc-readable-table th, .hc-readable-table td { padding:.4rem .45rem; border-bottom:1px solid var(--hc-border); text-align:left; vertical-align:top; overflow-wrap:anywhere; }
-        .hc-readable-table thead th { font-size:.72rem; text-transform:uppercase; letter-spacing:.04em; color:var(--hc-muted); }
-        .hc-readable-table tbody th { font-weight:650; color:var(--hc-text-strong); }
+        .hc-readable-table th, .hc-readable-table td { padding:.4rem .45rem; border-bottom:1px solid var(--hc-border); text-align:left; vertical-align:top; overflow-wrap:normal; word-break:normal; }
+        .hc-readable-table thead th { font-size:.72rem; text-transform:uppercase; letter-spacing:.04em; color:var(--hc-muted); white-space:nowrap; }
+        .hc-readable-table tbody th { font-weight:650; color:var(--hc-text-strong); white-space:nowrap; }
         .hc-form select[multiple] { min-height:4.5rem; }
         .hc-movement-composition-ledger { display:grid; gap:.65rem; min-width:0; padding:.75rem; border:1px solid var(--hc-border); border-radius:.7rem; background:var(--hc-surface-elevated); }
         .hc-movement-composition-ledger > header { display:flex; justify-content:space-between; align-items:flex-start; gap:.75rem; flex-wrap:wrap; }
@@ -248,9 +248,9 @@ export function ensurePhase15Styles(): void {
         .hc-movement-ledger-summary dt { font-weight:650; color:var(--hc-text-strong); }
         .hc-movement-ledger-summary dd { margin:0; min-width:0; overflow-wrap:anywhere; }
         .hc-movement-ledger-table { width:100%; border-collapse:collapse; font-size:.88rem; }
-        .hc-movement-ledger-table th, .hc-movement-ledger-table td { padding:.38rem .45rem; border-bottom:1px solid var(--hc-border); text-align:left; vertical-align:top; }
-        .hc-movement-ledger-table thead th { font-size:.72rem; text-transform:uppercase; letter-spacing:.04em; color:var(--hc-muted); }
-        .hc-movement-ledger-table tbody th { font-weight:650; color:var(--hc-text-strong); }
+        .hc-movement-ledger-table th, .hc-movement-ledger-table td { padding:.38rem .45rem; border-bottom:1px solid var(--hc-border); text-align:left; vertical-align:top; overflow-wrap:normal; word-break:normal; }
+        .hc-movement-ledger-table thead th { font-size:.72rem; text-transform:uppercase; letter-spacing:.04em; color:var(--hc-muted); white-space:nowrap; }
+        .hc-movement-ledger-table tbody th { font-weight:650; color:var(--hc-text-strong); white-space:nowrap; }
         .hc-movement-ledger-table small { color:var(--hc-muted); font-weight:400; }
         .hc-movement-ledger-diagnostic { margin:0; padding:.55rem .65rem; border-inline-start:3px solid var(--hc-warning); background:var(--hc-surface); }
         .hc-journey-stage-sequence { display:grid; gap:.45rem; }
@@ -331,7 +331,7 @@ export function ensurePhase15Styles(): void {
             .hc-adjacency-navigator { width:7.5rem; top:.55rem; left:.55rem; }
             .hc-adjacency-edge { min-width:2.75rem; min-height:2.75rem; }
             .hc-current-travel-facts { grid-template-columns:auto minmax(0,1fr); }
-            .hc-movement-ledger-table, .hc-readable-table { display:block; overflow-x:auto; }
+            .hc-movement-ledger-table, .hc-readable-table { display:block; width:100%; max-width:100%; overflow-x:auto; overscroll-behavior-inline:contain; }
             .hc-readable-facts { grid-template-columns:1fr; }
             .hc-reference-table-facts, .hc-rule-facts { grid-template-columns:minmax(6rem,auto) minmax(0,1fr); }
             .hc-journey-state-grid { grid-template-columns:1fr; }

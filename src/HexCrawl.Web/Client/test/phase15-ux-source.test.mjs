@@ -1229,3 +1229,25 @@ test("readability follow-up exposes nonspatial movement and encounter schedule s
     assert.match(journey, /Journey event record/);
     assert.match(journey, /Journey history/);
 });
+
+
+test("encounter schedule presentation distinguishes contextual procedure from automatic cadence", () => {
+    const view = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+        "utf8");
+    const schedule = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/encounter-schedule-presentation.ts"),
+        "utf8");
+    const styles = fs.readFileSync(path.join(sourceDir, "phase15-styles.ts"), "utf8");
+
+    assert.match(view, /encounterScheduleAvailable\(runtime\)/);
+    assert.match(view, /Contextual schedule/);
+    assert.match(view, /Travel checks/);
+    assert.match(view, /Camp check/);
+    assert.match(view, /Terrain influence/);
+    assert.match(view, /does not imply an automatic encounter cadence/);
+    assert.match(schedule, /moduleKey === "encounters\.schedule"/);
+    assert.match(styles, /overflow-wrap:normal; word-break:normal/);
+    assert.match(styles, /\.hc-readable-table thead th[^}]*white-space:nowrap/);
+    assert.match(styles, /\.hc-movement-ledger-table thead th[^}]*white-space:nowrap/);
+});
