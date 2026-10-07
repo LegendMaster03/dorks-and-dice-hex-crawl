@@ -12,6 +12,10 @@ public static partial class CrawlAssistantActions
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(input);
         RequireStandaloneState(state);
+        if (state.PendingEncounter is not null)
+        {
+            throw new InvalidOperationException("Resolve the pending encounter before recording another encounter cadence result.");
+        }
         if (input.Outcome == EncounterOutcomeKind.KeyedLocationDiscovery)
         {
             throw new InvalidOperationException("Keyed-location discovery belongs to world/map composition. Use the full crawl workbench or record a manual/custom encounter.");
@@ -27,9 +31,11 @@ public static partial class CrawlAssistantActions
             state.ElapsedTravelTime,
             state.CurrentHex,
             $"Encounter cadence assistant recorded {input.Outcome}; {Describe(input.Provenance)}{NoteSuffix(input.Note)}."));
+        PendingEncounterOccurrence? pendingEncounter = null;
         if (input.Outcome != EncounterOutcomeKind.None)
         {
-            events.Add(Event(
+            var occurrenceId = Guid.NewGuid();
+            var triggered = Event(
                 state,
                 events,
                 watchNumber,
@@ -41,7 +47,12 @@ public static partial class CrawlAssistantActions
                     : $"{input.Outcome}: {input.Note.Trim()}",
                 encounterOutcome: input.Outcome,
                 encounterNote: input.Note,
-                encounterProvenance: input.Provenance));
+                encounterProvenance: input.Provenance,
+                encounterOccurrenceId: occurrenceId);
+            events.Add(triggered);
+            pendingEncounter = new PendingEncounterOccurrence(
+                occurrenceId, triggered.Sequence, watchNumber, input.Outcome,
+                state.ElapsedTravelTime, state.CurrentHex, null, input.Note, input.Provenance);
         }
         events.Add(ProvenanceEvent(
             state,
@@ -51,7 +62,11 @@ public static partial class CrawlAssistantActions
             state.CurrentHex,
             $"encounter-assistant={Describe(input.Provenance)}"));
 
-        return state with { History = [.. state.History, .. events] };
+        return state with
+        {
+            PendingEncounter = pendingEncounter,
+            History = [.. state.History, .. events]
+        };
     }
 
     public static NonSpatialSessionState RecordEncounterCadence(
@@ -60,6 +75,10 @@ public static partial class CrawlAssistantActions
     {
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(input);
+        if (state.PendingEncounter is not null)
+        {
+            throw new InvalidOperationException("Resolve the pending encounter before recording another encounter cadence result.");
+        }
         if (input.Outcome == EncounterOutcomeKind.KeyedLocationDiscovery)
         {
             throw new InvalidOperationException("Keyed-location discovery requires a world-bound crawl session.");
@@ -75,9 +94,11 @@ public static partial class CrawlAssistantActions
             state.ElapsedTime,
             null,
             $"Encounter cadence assistant recorded {input.Outcome}; {Describe(input.Provenance)}{NoteSuffix(input.Note)}."));
+        PendingEncounterOccurrence? pendingEncounter = null;
         if (input.Outcome != EncounterOutcomeKind.None)
         {
-            events.Add(Event(
+            var occurrenceId = Guid.NewGuid();
+            var triggered = Event(
                 state,
                 events,
                 watchNumber,
@@ -89,7 +110,12 @@ public static partial class CrawlAssistantActions
                     : $"{input.Outcome}: {input.Note.Trim()}",
                 encounterOutcome: input.Outcome,
                 encounterNote: input.Note,
-                encounterProvenance: input.Provenance));
+                encounterProvenance: input.Provenance,
+                encounterOccurrenceId: occurrenceId);
+            events.Add(triggered);
+            pendingEncounter = new PendingEncounterOccurrence(
+                occurrenceId, triggered.Sequence, watchNumber, input.Outcome,
+                state.ElapsedTime, null, null, input.Note, input.Provenance);
         }
         events.Add(ProvenanceEvent(
             state,
@@ -99,6 +125,10 @@ public static partial class CrawlAssistantActions
             null,
             $"encounter-assistant={Describe(input.Provenance)}"));
 
-        return state with { History = [.. state.History, .. events] };
+        return state with
+        {
+            PendingEncounter = pendingEncounter,
+            History = [.. state.History, .. events]
+        };
     }
 }

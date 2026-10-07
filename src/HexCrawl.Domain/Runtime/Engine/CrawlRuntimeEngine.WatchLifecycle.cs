@@ -132,7 +132,8 @@ public sealed partial class CrawlRuntimeEngine
         EventCollector events)
     {
         var encounter = active.Encounter;
-        events.Add(
+        var occurrenceId = Guid.NewGuid();
+        var triggered = events.Add(
             active.WatchNumber,
             CrawlRuntimeEventKind.EncounterTriggered,
             state.ElapsedTravelTime,
@@ -143,14 +144,22 @@ public sealed partial class CrawlRuntimeEngine
             subjectId: encounter.LocationId,
             encounterOutcome: encounter.Kind,
             encounterNote: encounter.Note,
-            encounterProvenance: encounter.Provenance);
+            encounterProvenance: encounter.Provenance,
+            encounterOccurrenceId: occurrenceId);
 
         active = active with
         {
             EncounterHandled = true,
             PendingDecision = RuntimePauseReason.EncounterTriggered
         };
-        state = state with { ActiveWatch = active };
+        state = state with
+        {
+            ActiveWatch = active,
+            PendingEncounter = new PendingEncounterOccurrence(
+                occurrenceId, triggered.Sequence, active.WatchNumber, encounter.Kind,
+                state.ElapsedTravelTime, state.CurrentHex, encounter.LocationId,
+                encounter.Note, encounter.Provenance)
+        };
         return Finish(state, RuntimePauseReason.EncounterTriggered, active.Remaining, events);
     }
 

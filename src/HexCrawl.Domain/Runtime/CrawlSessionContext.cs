@@ -57,9 +57,21 @@ public sealed record NonSpatialCrawlSessionContext(string Name) : CrawlSessionCo
     }
 }
 
+public sealed record PendingEncounterOccurrence(
+    Guid Id,
+    long TriggerSequence,
+    int WatchNumber,
+    EncounterOutcomeKind Outcome,
+    TimeSpan ExpeditionElapsedTime,
+    HexCoordinate? Hex,
+    Guid? LocationId,
+    string? Note,
+    ResolutionProvenance Provenance);
+
 public abstract record CrawlSessionRuntimeState
 {
     public required Guid Id { get; init; }
+    public PendingEncounterOccurrence? PendingEncounter { get; init; }
     public IReadOnlyList<CrawlRuntimeEvent> History { get; init; } = [];
 }
 

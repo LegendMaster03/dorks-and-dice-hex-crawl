@@ -31,6 +31,7 @@ public sealed partial class PostgresHexCrawlStore
         public int CompletedWatches { get; init; }
         public ActiveWatchSnapshot? ActiveWatch { get; init; }
         public NonSpatialActiveWatchSnapshot? NonSpatialActiveWatch { get; init; }
+        public PendingEncounterSnapshot? PendingEncounter { get; init; }
 
         public static RuntimeStateSnapshot FromDomain(CrawlSessionRuntimeState runtime) => runtime switch
         {
@@ -52,7 +53,8 @@ public sealed partial class PostgresHexCrawlStore
                 DistanceTraveled = state.DistanceTraveled,
                 ElapsedTravelTicks = state.ElapsedTravelTime.Ticks,
                 CompletedWatches = state.CompletedWatches,
-                ActiveWatch = state.ActiveWatch is null ? null : ActiveWatchSnapshot.FromDomain(state.ActiveWatch)
+                ActiveWatch = state.ActiveWatch is null ? null : ActiveWatchSnapshot.FromDomain(state.ActiveWatch),
+                PendingEncounter = state.PendingEncounter is null ? null : PendingEncounterSnapshot.FromDomain(state.PendingEncounter)
             },
             NonSpatialSessionState state => new RuntimeStateSnapshot
             {
@@ -62,7 +64,8 @@ public sealed partial class PostgresHexCrawlStore
                 CompletedWatches = state.CompletedWatches,
                 NonSpatialActiveWatch = state.ActiveWatch is null
                     ? null
-                    : NonSpatialActiveWatchSnapshot.FromDomain(state.ActiveWatch)
+                    : NonSpatialActiveWatchSnapshot.FromDomain(state.ActiveWatch),
+                PendingEncounter = state.PendingEncounter is null ? null : PendingEncounterSnapshot.FromDomain(state.PendingEncounter)
             },
             _ => throw new ArgumentOutOfRangeException(nameof(runtime))
         };
@@ -76,6 +79,7 @@ public sealed partial class PostgresHexCrawlStore
                 ElapsedTime = TimeSpan.FromTicks(ElapsedTravelTicks),
                 CompletedWatches = CompletedWatches,
                 ActiveWatch = NonSpatialActiveWatch?.ToDomain(),
+                PendingEncounter = PendingEncounter?.ToDomain(),
                 History = []
             },
             _ => throw new InvalidDataException("Persisted crawl session runtime kind is not supported.")
@@ -109,9 +113,25 @@ public sealed partial class PostgresHexCrawlStore
                 ElapsedTravelTime = TimeSpan.FromTicks(ElapsedTravelTicks),
                 CompletedWatches = CompletedWatches,
                 ActiveWatch = ActiveWatch?.ToDomain(),
+                PendingEncounter = PendingEncounter?.ToDomain(),
                 History = []
             };
         }
+    }
+
+    private sealed record PendingEncounterSnapshot(
+        Guid Id, long TriggerSequence, int WatchNumber, EncounterOutcomeKind Outcome,
+        long ExpeditionElapsedTicks, HexCoordinate? Hex, Guid? LocationId, string? Note,
+        ResolutionSource Source, string? ProvenanceNote)
+    {
+        public static PendingEncounterSnapshot FromDomain(PendingEncounterOccurrence encounter) => new(
+            encounter.Id, encounter.TriggerSequence, encounter.WatchNumber, encounter.Outcome,
+            encounter.ExpeditionElapsedTime.Ticks, encounter.Hex, encounter.LocationId,
+            encounter.Note, encounter.Provenance.Source, encounter.Provenance.Note);
+
+        public PendingEncounterOccurrence ToDomain() => new(
+            Id, TriggerSequence, WatchNumber, Outcome, TimeSpan.FromTicks(ExpeditionElapsedTicks),
+            Hex, LocationId, Note, new ResolutionProvenance(Source, ProvenanceNote));
     }
 
     private sealed record NonSpatialActiveWatchSnapshot(

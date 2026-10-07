@@ -14,6 +14,10 @@ public sealed partial class CrawlRuntimeEngine
         WatchAdvanceInputs inputs)
     {
         ArgumentNullException.ThrowIfNull(inputs);
+        if (expedition.PendingEncounter is not null)
+        {
+            throw new InvalidOperationException("Resolve the pending encounter before continuing travel.");
+        }
         var runtime = GenericProcedureRuntime.Bind(procedure);
         ValidateNativeTravelAmountPolicy(runtime.Movement, inputs.Travel);
         return AdvanceCore(context, runtime, expedition, plan, inputs);

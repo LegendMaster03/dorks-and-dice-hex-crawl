@@ -41,6 +41,7 @@ public sealed class ExpeditionModule : IHexCrawlModule
         api.MapGet("/expeditions/{expeditionId:guid}", GetExpeditionAsync);
         api.MapDelete("/expeditions/{expeditionId:guid}", DeleteExpeditionAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/advance", AdvanceExpeditionAsync);
+        api.MapPost("/expeditions/{expeditionId:guid}/encounters/{occurrenceId:guid}/resolve", ResolveEncounterAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/boundary-decision", ResolveBoundaryDecisionAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/reposition", RepositionExpeditionAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/resolution-helper", ResolveProcedureInputsAsync);
@@ -151,6 +152,21 @@ public sealed class ExpeditionModule : IHexCrawlModule
     {
         var owner = UserId(context);
         var expedition = await workbench.AdvanceAsync(expeditionId, owner, request.ToCommand(), cancellationToken);
+        return Results.Ok(await ContractAsync(expedition, owner, service, cancellationToken));
+    }
+
+    private static async Task<IResult> ResolveEncounterAsync(
+        Guid expeditionId,
+        Guid occurrenceId,
+        ResolveEncounterRequest request,
+        HttpContext context,
+        ExpeditionAssistantService assistants,
+        HexCrawlService service,
+        CancellationToken cancellationToken)
+    {
+        var owner = UserId(context);
+        var expedition = await assistants.ResolveEncounterAsync(
+            expeditionId, owner, request.ToCommand(occurrenceId), cancellationToken);
         return Results.Ok(await ContractAsync(expedition, owner, service, cancellationToken));
     }
 

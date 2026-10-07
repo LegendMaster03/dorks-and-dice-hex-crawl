@@ -28,7 +28,8 @@ public enum CrawlRuntimeEventKind
     DmOverrideApplied,
     ProcedureResolutionHelperGenerated,
     ProcedureResolutionHelperConsumed,
-    ResolutionProvenanceRecorded
+    ResolutionProvenanceRecorded,
+    EncounterResolved
 }
 
 public sealed record CrawlRuntimeLinkedSceneSnapshot(
@@ -56,7 +57,8 @@ public sealed record CrawlRuntimeEvent(
     EncounterOutcomeKind? EncounterOutcome = null,
     string? EncounterNote = null,
     ResolutionProvenance? EncounterProvenance = null,
-    CrawlRuntimeLocationSnapshot? EncounterLocation = null);
+    CrawlRuntimeLocationSnapshot? EncounterLocation = null,
+    Guid? EncounterOccurrenceId = null);
 
 public sealed record WatchAdvanceResult(
     ExpeditionState Expedition,
