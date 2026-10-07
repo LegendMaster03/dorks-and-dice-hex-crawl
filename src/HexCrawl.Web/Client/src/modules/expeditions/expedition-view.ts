@@ -428,7 +428,7 @@ export async function renderExpedition(
         if (survivalRailUseful(survival) || effectsUseful(effects)) {
             secondary.append(railAction("Resources & effects", resourcesEffectsDetail(survival, effects), openSurvivalWorkspace));
         }
-        if (runtime.expedition.pendingEncounter || runtime.procedure.runtime?.encounterCadence !== "None") {
+        if (runtime.expedition.pendingEncounter || (runtime.procedure.runtime?.encounterCadence ?? "None") !== "None") {
             secondary.append(railAction("Encounter schedule", encounterScheduleSummary(runtime), openEncounterWorkspace));
         }
         section.append(primary, secondary);
@@ -503,7 +503,7 @@ export async function renderExpedition(
         if (journey?.eventPolicy.support === "Supported") {
             side.append(railAction("Journey events", journeyEventSummary(journey), openJourneyWorkspace));
         }
-        if (runtime.expedition.pendingEncounter || runtime.procedure.runtime?.encounterCadence !== "None") {
+        if (runtime.expedition.pendingEncounter || (runtime.procedure.runtime?.encounterCadence ?? "None") !== "None") {
             side.append(railAction("Encounter schedule", encounterScheduleSummary(runtime), openEncounterWorkspace));
         }
         side.append(railAction("Expedition history", presentation.timeLabel, openHistory));

@@ -905,7 +905,7 @@ test("normal journey and expedition history humanize audit records while Advance
     assert.match(view, /item\.textContent = journeyHistoryLabel\(record\.kind\)/);
     assert.match(view, /Journey \$\{record\.kind\} · \$\{record\.detail\}/);
     assert.match(journey, /this\.heading\("Pending journey event"\)/);
-    assert.match(journey, /item\.textContent = journeyHistoryLabel\(record\.kind\)/);
+    assert.match(journey, /"Journey history",[\s\S]*journeyHistoryLabel\(record\.kind\)/);
     assert.match(journey, /record\.detail.*record\.resolutionId.*record\.eventOccurrenceId/s);
     assert.match(journey, /case "ResolutionRecorded": return "Journey result recorded"/);
 });
@@ -1222,7 +1222,7 @@ test("readability follow-up exposes nonspatial movement and encounter schedule s
     assert.match(view, /!runtime\.expedition\.isSpatial[\s\S]*movementCompositionLedger\(runtime\)/);
     assert.match(view, /Encounter check schedule/);
     assert.match(view, /encounterScheduleSummary\(runtime\)/);
-    assert.match(party, /data\.activityRoster/);
+    assert.match(party, /dataset\.activityRoster/);
     assert.match(party, /Allowance model/);
     assert.match(party, /Active this interval/);
     assert.match(journeyOrder, /stageOrder\.map/);
