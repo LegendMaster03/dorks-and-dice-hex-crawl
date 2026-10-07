@@ -211,6 +211,25 @@ export async function renderWorldEditor(
     const customUnitFields = required<HTMLElement>(gridForm, "[data-custom-unit]");
     const unitSymbolInput = input(gridForm, "unitSymbol");
     const metersPerUnitInput = input(gridForm, "metersPerUnit");
+    const selectedCellEmpty = required<HTMLElement>(root, "[data-selected-cell-empty]");
+    const selectedCellContent = required<HTMLElement>(root, "[data-selected-cell-content]");
+    const selectedCellTitle = required<HTMLElement>(root, "[data-selected-cell-title]");
+    const cellTerrain = required<HTMLInputElement>(root, "[data-cell-terrain]");
+    const cellTerrainStatus = required<HTMLElement>(root, "[data-cell-terrain-status]");
+    const cellLocationForm = required<HTMLFormElement>(root, "[data-cell-location-form]");
+    const cellLocationPosition = required<HTMLElement>(root, "[data-cell-location-position]");
+    const cellRouteForm = required<HTMLFormElement>(root, "[data-cell-route-form]");
+    const cellRouteDraftLabel = required<HTMLElement>(root, "[data-cell-route-draft]");
+    const cellEnvironmentForm = required<HTMLFormElement>(root, "[data-cell-environment-form]");
+    const cellFeatureEnvironmentForm = required<HTMLFormElement>(root, "[data-cell-feature-environment-form]");
+    const cellAdvancedEnvironmentForm = required<HTMLFormElement>(root, "[data-cell-advanced-environment-form]");
+    const advancedWorldObjects = required<HTMLDetailsElement>(root, "[data-advanced-world-objects]");
+    const environmentDimensions = required<HTMLDataListElement>(root, "#hc-cell-environment-dimensions");
+    for (const dimension of commonEnvironmentDimensions) {
+        const option = document.createElement("option");
+        option.value = dimension;
+        environmentDimensions.append(option);
+    }
 
     const run = async (form: HTMLFormElement | null, action: () => Promise<void>): Promise<void> => {
         if (form?.dataset.pending === "true") return;
@@ -219,7 +238,21 @@ export async function renderWorldEditor(
         try {
             await action();
         } catch (value) {
-            if (!disposed) showUiError(error, value);
+            if (!disposed && value instanceof HexCrawlApiError && value.kind === "conflict") {
+                try {
+                    const [freshWorld, freshEnvironment] = await Promise.all([
+                        api.getOverworld(world.id),
+                        api.getWorldEnvironment(world.id)
+                    ]);
+                    worldEnvironment = freshEnvironment;
+                    applyWorld(freshWorld);
+                    showUiError(error, new Error(`${value.message} Latest world state was reloaded; review the current values and retry.`));
+                } catch {
+                    showUiError(error, value);
+                }
+            } else if (!disposed) {
+                showUiError(error, value);
+            }
         } finally {
             if (form && !disposed) setFormPending(form, false);
         }
@@ -235,11 +268,28 @@ export async function renderWorldEditor(
 
     const applyWorld = (next: Overworld): void => {
         world = next;
+        if (worldEnvironment.version !== next.version) {
+            worldEnvironment = { ...worldEnvironment, version: next.version };
+        }
         title.textContent = next.name;
         fillGrid();
         renderLocations();
         renderFeatures();
+        renderSelectedCell();
         mapSurface.requestRender();
+    };
+
+    const applyWorldEnvironment = (next: WorldEnvironment): void => {
+        worldEnvironment = next;
+        if (world.version !== next.version) world = { ...world, version: next.version };
+        renderSelectedCell();
+    };
+
+    const saveWorldEnvironment = async (annotations: EnvironmentAnnotation[]): Promise<void> => {
+        applyWorldEnvironment(await api.replaceWorldEnvironment(world.id, {
+            expectedVersion: worldEnvironment.version,
+            annotations
+        }));
     };
 
     const fillGrid = (): void => {
