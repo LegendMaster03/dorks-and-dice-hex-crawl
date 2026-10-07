@@ -1170,14 +1170,12 @@ if (stateName === "map-selected" || stateName === "map-nonadjacent") {
     || stateName === "forced-travel-zero-participants") {
     findButton("Resolve forced travel")?.click();
     await waitForRootText("Current requirement");
-    if (stateName === "forced-travel-zero-participants") {
-        const checkbox = Array.from(root.querySelectorAll("label"))
-            .find(label => label.textContent?.includes("Check succeeded"))
-            ?.querySelector('input[type="checkbox"]');
-        if (checkbox) {
-            checkbox.checked = false;
-            checkbox.dispatchEvent(new Event("change", { bubbles: true }));
-        }
+    const checkbox = Array.from(root.querySelectorAll("label"))
+        .find(label => label.textContent?.includes("Check succeeded"))
+        ?.querySelector('input[type="checkbox"]');
+    if (checkbox) {
+        checkbox.checked = false;
+        checkbox.dispatchEvent(new Event("change", { bubbles: true }));
     }
 } else if (stateName === "boundary-pending") {
     findButton("Resolve lost-party boundary decision")?.click();
@@ -1277,6 +1275,7 @@ const metrics = {
     forcedTravelNamedTargetVisible: !stateName.startsWith("forced-travel-") || (
         rootText.includes("Affected scope: Participant")
         && rootText.includes("Affected character")
+        && isVisible(forcedTravelTarget)
         && !rootText.includes("Participant, mount, or vehicle ID when required")
     ),
     forcedTravelTargetOptionCount: forcedTravelTarget?.querySelectorAll("option").length ?? 0,
