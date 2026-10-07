@@ -39,13 +39,15 @@ export function loadTravelPreferences(
         const raw = storage.getItem(travelPreferenceStorageKey(runtime.id));
         if (!raw) return fallback;
         const parsed = JSON.parse(raw) as Partial<TravelPreferences>;
+        const pace = typeof parsed.pace === "string" && parsed.pace.trim()
+            ? parsed.pace.trim()
+            : fallback.pace;
+        // Intended course is expedition runtime authority. Normalize legacy development
+        // storage immediately so a stale browser direction can not remain a competing value.
+        storage.setItem(travelPreferenceStorageKey(runtime.id), JSON.stringify({ pace }));
         return {
-            // Intended course is expedition runtime authority. Browser storage must not
-            // resurrect a stale course over a newer server value or an explicit clear.
             direction: fallback.direction,
-            pace: typeof parsed.pace === "string" && parsed.pace.trim()
-                ? parsed.pace.trim()
-                : fallback.pace
+            pace
         };
     } catch {
         return fallback;
