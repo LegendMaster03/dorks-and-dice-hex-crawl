@@ -147,8 +147,7 @@ export async function renderExpedition(
         const adjacency = currentAdjacency();
         preferences.direction = normalizeTravelDirectionPreference(
             preferences.direction,
-            adjacency?.edges.map(edge => edge.directionValue) ?? [],
-            runtime.expedition.intendedDirection);
+            adjacency?.edges.map(edge => edge.directionValue) ?? []);
     };
     normalizeTravelDirectionSelection();
 
@@ -606,18 +605,38 @@ export async function renderExpedition(
         return parts.length > 0 ? parts.join(" · ") : "No pending consequences";
     };
 
-    const selectTravelIntent = (direction: number, target: HexCoordinate): void => {
+    const commitTravelIntent = async (direction: number | null): Promise<void> => {
         if (!runtime.expedition.isSpatial) return;
-        preferences.direction = direction;
-        selectedHex = target;
-        selectedHexTracksTravelIntent = true;
-        saveTravelPreferences(runtime.id, preferences);
-        if (map) {
-            map.renderer.selectedHex = target;
-            map.requestRender();
+        const errorBefore = root.querySelector<HTMLElement>("[data-error]");
+        if (errorBefore) clearUiError(errorBefore);
+        try {
+            const next = await api.setExpeditionCourseIntent(runtime.id, {
+                expectedVersion: runtime.version,
+                intendedDirection: direction
+            });
+            applyRuntime(next);
+            if (!disposed) render();
+        } catch (value) {
+            try {
+                const latest = await api.getExpedition(expeditionId);
+                applyRuntime(latest);
+                if (!disposed) render();
+            } catch {
+                // Preserve the original mutation failure if authoritative reload also fails.
+            }
+            const errorAfter = root.querySelector<HTMLElement>("[data-error]");
+            if (!disposed && errorAfter) showUiError(errorAfter, value);
         }
-        syncTravelIntentControls();
-        renderMapContext();
+    };
+
+    const selectTravelIntent = (direction: number, _target: HexCoordinate): void => {
+        if (!runtime.expedition.isSpatial) return;
+        void commitTravelIntent(direction);
+    };
+
+    const clearTravelIntent = (): void => {
+        if (!runtime.expedition.isSpatial) return;
+        void commitTravelIntent(null);
     };
 
     const toggleTravelIntent = (direction: number, target: HexCoordinate): void => {
@@ -626,19 +645,7 @@ export async function renderExpedition(
             selectTravelIntent(direction, target);
             return;
         }
-
-        preferences.direction = null;
-        if (selectedHexTracksTravelIntent) {
-            selectedHex = null;
-            selectedHexTracksTravelIntent = false;
-        }
-        saveTravelPreferences(runtime.id, preferences);
-        if (map) {
-            map.renderer.selectedHex = selectedHex;
-            map.requestRender();
-        }
-        syncTravelIntentControls();
-        renderMapContext();
+        clearTravelIntent();
     };
 
     const syncTravelIntentControls = (): void => {
@@ -777,7 +784,10 @@ export async function renderExpedition(
             }
             course.value = preferences.direction === null ? "" : String(preferences.direction);
             course.addEventListener("change", () => {
-                if (!course.value) return;
+                if (!course.value) {
+                    clearTravelIntent();
+                    return;
+                }
                 const edge = adjacencyEdgeForDirection(adjacency, Number(course.value));
                 if (edge) selectTravelIntent(edge.directionValue, edge.targetCell);
             });
@@ -968,15 +978,10 @@ export async function renderExpedition(
     };
 
     const openTravelWorkspace = (
-        focus: "advanced" | "movement" | "encounter" = "advanced",
-        direction = preferences.direction): void => {
+        focus: "advanced" | "movement" | "encounter" = "advanced"): void => {
         if (!runtime.expedition.isSpatial || runtime.procedure.runtime === null) {
             openHistory();
             return;
-        }
-        if (direction !== null) {
-            preferences.direction = direction;
-            saveTravelPreferences(runtime.id, preferences);
         }
         const title = focus === "movement"
             ? "Movement resolution"
@@ -994,7 +999,7 @@ export async function renderExpedition(
                 async action => {
                     await mutate(async () => {
                         await action();
-                        captureTravelPreferences(body);
+                        captureTravelPacePreference(body);
                     });
                 },
                 focus === "encounter" ? "encounterCadence" : "advance");
@@ -1003,16 +1008,30 @@ export async function renderExpedition(
             focusWatchWorkspace(body, focus);
             const directionControl = body.querySelector<HTMLSelectElement>('select[name="direction"]');
             const paceControl = body.querySelector<HTMLInputElement | HTMLSelectElement>('[name="pace"]');
-            directionControl?.addEventListener("change", captureTravelPreferencesFromControls);
-            paceControl?.addEventListener("change", captureTravelPreferencesFromControls);
+            directionControl?.addEventListener("change", captureTravelDirectionFromControls);
+            paceControl?.addEventListener("change", captureTravelPaceFromControls);
             return () => {
-                directionControl?.removeEventListener("change", captureTravelPreferencesFromControls);
-                paceControl?.removeEventListener("change", captureTravelPreferencesFromControls);
+                directionControl?.removeEventListener("change", captureTravelDirectionFromControls);
+                paceControl?.removeEventListener("change", captureTravelPaceFromControls);
                 controller.dispose();
             };
 
-            function captureTravelPreferencesFromControls(): void {
-                captureTravelPreferences(body);
+            function captureTravelDirectionFromControls(): void {
+                if (!directionControl) return;
+                if (!directionControl.value) {
+                    clearTravelIntent();
+                    return;
+                }
+                const parsed = Number(directionControl.value);
+                const adjacency = currentAdjacency();
+                const edge = Number.isInteger(parsed) && adjacency
+                    ? adjacencyEdgeForDirection(adjacency, parsed)
+                    : null;
+                if (edge) selectTravelIntent(edge.directionValue, edge.targetCell);
+            }
+
+            function captureTravelPaceFromControls(): void {
+                captureTravelPacePreference(body);
             }
         });
     };
@@ -1374,27 +1393,8 @@ export async function renderExpedition(
         if (!active && pace && preferences.pace) pace.value = preferences.pace;
     };
 
-    const captureTravelPreferences = (host: HTMLElement): void => {
-        const direction = host.querySelector<HTMLSelectElement>('select[name="direction"]');
+    const captureTravelPacePreference = (host: HTMLElement): void => {
         const pace = host.querySelector<HTMLInputElement | HTMLSelectElement>('[name="pace"]');
-        if (direction?.value !== undefined && direction.value !== "") {
-            const parsed = Number(direction.value);
-            const adjacency = currentAdjacency();
-            const edge = Number.isInteger(parsed) && adjacency
-                ? adjacencyEdgeForDirection(adjacency, parsed)
-                : null;
-            if (edge) {
-                preferences.direction = parsed;
-                selectedHex = edge.targetCell;
-                selectedHexTracksTravelIntent = true;
-                if (map) {
-                    map.renderer.selectedHex = edge.targetCell;
-                    map.requestRender();
-                }
-                syncTravelIntentControls();
-                renderMapContext();
-            }
-        }
         if (pace?.value.trim()) preferences.pace = pace.value.trim();
         saveTravelPreferences(runtime.id, preferences);
     };
