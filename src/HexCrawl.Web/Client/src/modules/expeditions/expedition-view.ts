@@ -1156,65 +1156,68 @@ export async function renderExpedition(
         openDrawer(title, body => {
             body.append(textElement(
                 "p",
-                pauseInstruction(runtime) ?? "Review the current course and pace before travel continues.",
+                pauseInstruction(runtime) ?? "Review the current travel conditions before travel continues.",
                 "hc-muted"));
+
+            const intendedEdge = preferences.direction === null
+                ? null
+                : adjacencyEdgeForDirection(adjacency, preferences.direction);
+            if (!intendedEdge) {
+                body.append(textElement(
+                    "p",
+                    "The previous course is not available from the current cell. Choose an adjacent course before resuming travel.",
+                    "hc-muted"));
+                const choose = button("Choose course", () => {
+                    closeDrawer();
+                    queueMicrotask(focusTravelCourse);
+                });
+                choose.className = "hc-primary-action";
+                const more = button("More options", () => openTravelWorkspace("advanced"));
+                more.className = "hc-secondary-action";
+                const row = document.createElement("div");
+                row.className = "hc-button-row";
+                row.append(choose, more);
+                body.append(row);
+                return;
+            }
+
+            body.append(contextLine(
+                "Course",
+                `${edgeCourseLabel(intendedEdge)} → cell ${intendedEdge.targetCell.q}, ${intendedEdge.targetCell.r}`));
 
             const form = document.createElement("form");
             form.className = "hc-form";
-            const course = document.createElement("select");
-            course.required = true;
-            const empty = document.createElement("option");
-            empty.value = "";
-            empty.textContent = "Select intended adjacent cell";
-            course.append(empty);
-            for (const edge of adjacency.edges) {
-                const option = document.createElement("option");
-                option.value = String(edge.directionValue);
-                option.textContent = edgeCourseLabel(edge);
-                course.append(option);
-            }
-            if (preferences.direction !== null) course.value = String(preferences.direction);
-
             const pace = createPaceControl();
-            if (pace) pace.required = true;
+            if (pace) {
+                pace.required = true;
+                form.append(labelled("Pace / travel mode", pace));
+            } else {
+                form.append(contextLine("Pace", humanize(preferences.pace)));
+            }
 
             const submit = document.createElement("button");
             submit.type = "submit";
             submit.className = "hc-primary-action";
             submit.textContent = "Continue travel";
-            form.append(labelled("Course", course));
-            if (pace) {
-                form.append(labelled("Pace / travel mode", pace));
-            } else {
-                form.append(contextLine("Pace", humanize(preferences.pace)));
-            }
             form.append(submit);
             form.addEventListener("submit", event => {
                 event.preventDefault();
-                const direction = Number(course.value);
-                const edge = course.value === ""
-                    ? null
-                    : adjacencyEdgeForDirection(adjacency, direction);
-                const nextPace = pace?.value.trim() || preferences.pace;
-                if (!edge) {
-                    throw new Error("Select an intended adjacent cell before continuing travel.");
-                }
-                preferences.direction = edge.directionValue;
-                preferences.pace = nextPace;
-                selectedHex = edge.targetCell;
-                selectedHexTracksTravelIntent = true;
+                preferences.pace = pace?.value.trim() || preferences.pace;
                 saveTravelPreferences(runtime.id, preferences);
-                if (map) {
-                    map.renderer.selectedHex = edge.targetCell;
-                    map.requestRender();
-                }
-                syncTravelIntentControls();
                 continueTravel(true);
             });
 
+            const changeCourse = button("Change course", () => {
+                closeDrawer();
+                queueMicrotask(focusTravelCourse);
+            });
+            changeCourse.className = "hc-secondary-action";
             const more = button("More options", () => openTravelWorkspace("advanced"));
             more.className = "hc-secondary-action";
-            body.append(form, more);
+            const row = document.createElement("div");
+            row.className = "hc-button-row";
+            row.append(changeCourse, more);
+            body.append(form, row);
         });
     };
 

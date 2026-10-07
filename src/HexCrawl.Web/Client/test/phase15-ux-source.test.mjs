@@ -625,7 +625,7 @@ test("lost-boundary resolution is a dedicated focused mutation and does not requ
     assert.match(api, /\/boundary-decision/);
 });
 
-test("urgent travel pauses preserve their task wording and use a focused course-and-pace review", () => {
+test("urgent travel pauses preserve valid reusable course and ask only for changed inputs", () => {
     const view = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
         "utf8");
@@ -639,8 +639,15 @@ test("urgent travel pauses preserve their task wording and use a focused course-
     const review = view.slice(
         view.indexOf("const openTravelReviewWorkspace"),
         view.indexOf("const openNavigationWorkspace"));
-    assert.match(review, /labelled\("Course", course\)/);
+    assert.match(review, /const intendedEdge = preferences\.direction === null/);
+    assert.match(review, /contextLine\(\s*"Course"/);
     assert.match(review, /labelled\("Pace \/ travel mode", pace\)/);
+    assert.match(review, /button\("Change course"/);
+    assert.match(review, /button\("Choose course"/);
+    assert.match(review, /previous course is not available from the current cell/);
+    assert.doesNotMatch(review, /labelled\("Course", course\)/);
+    assert.doesNotMatch(review, /Select intended adjacent cell/);
+    assert.doesNotMatch(review, /preferences\.direction =/);
     assert.doesNotMatch(review, /suppressNav|resetVeer|continueAcross|doubleBack/);
 });
 
