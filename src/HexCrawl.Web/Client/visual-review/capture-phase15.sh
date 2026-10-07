@@ -87,6 +87,9 @@ cases=(
   "37-partial-progress-mobile|partial-progress|dark|500|844|390"
   "38-focus-return-wide|focus-return|light|1366|900"
   "39-focus-return-mobile|focus-return|dark|500|844|390"
+  "40-world-selected-cell-wide|world-selected-cell|light|1366|900"
+  "41-world-selected-cell-dark|world-selected-cell|dark|1366|900"
+  "42-world-selected-cell-narrow|world-selected-cell|light|500|844|390"
 )
 
 for spec in "${cases[@]}"; do
@@ -152,6 +155,21 @@ elif surface == "procedure":
     }
     if state in expected and not metrics[expected[state]]:
         raise SystemExit(f'wrong procedure authoring surface: {metrics}')
+elif surface == "world":
+    if metrics["selectedCellTitle"] != "Hex 0,0":
+        raise SystemExit(f'selected world cell context is missing: {metrics}')
+    if metrics["selectedCellTerrain"] != "forest":
+        raise SystemExit(f'explicit Hex-scope terrain did not populate the normal editor: {metrics}')
+    if not metrics["selectedCellHiddenPoiVisible"]:
+        raise SystemExit(f'hidden POI is not visible to the DM selected-cell editor: {metrics}')
+    if not metrics["selectedCellRoadVisible"]:
+        raise SystemExit(f'intersecting route is not visible in selected-cell context: {metrics}')
+    if not metrics["selectedCellRouteBehaviorVisible"]:
+        raise SystemExit(f'feature-scoped route behavior is not visible in selected-cell context: {metrics}')
+    if metrics["selectedCellAdvancedOpen"]:
+        raise SystemExit(f'raw selected-cell details are open by default: {metrics}')
+    if metrics["mapHeight"] < 250:
+        raise SystemExit(f'world authoring map is too short to remain usable: {metrics}')
 else:
     nonspatial = state.startswith("journey-") or state == "history-workspace"
     abstract_spatial = state == "abstract-spatial-course"
