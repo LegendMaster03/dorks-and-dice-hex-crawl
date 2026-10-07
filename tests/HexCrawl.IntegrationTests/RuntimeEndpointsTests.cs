@@ -106,6 +106,80 @@ public sealed class RuntimeEndpointsTests
     }
 
     [Fact]
+    public async Task CourseIntentEndpointIsDurableOwnerScopedAndOptimisticallyConcurrent()
+    {
+        var database = TestWebHost.NewDatabasePath();
+        try
+        {
+            Guid expeditionId;
+            long versionA;
+            using (var ownerFactory = TestWebHost.Create(database, "alice"))
+            using (var ownerClient = ownerFactory.CreateClient())
+            {
+                var world = await CreateWorld(ownerClient, "Course authority");
+                var worldId = world.GetProperty("id").GetGuid();
+                using var startResponse = await ownerClient.PostAsJsonAsync(
+                    $"/api/overworlds/{worldId:D}/expeditions",
+                    new
+                    {
+                        name = "Course authority",
+                        procedureKey = "alexandrian-advanced",
+                        startHex = new { q = 1, r = -1 }
+                    });
+                startResponse.EnsureSuccessStatusCode();
+                var started = await startResponse.Content.ReadFromJsonAsync<JsonElement>();
+                expeditionId = started.GetProperty("id").GetGuid();
+                var initialVersion = started.GetProperty("version").GetInt64();
+                var before = started.GetProperty("expedition");
+
+                using var setAResponse = await ownerClient.PutAsJsonAsync(
+                    $"/api/expeditions/{expeditionId:D}/course-intent",
+                    new { expectedVersion = initialVersion, intendedDirection = 0 });
+                setAResponse.EnsureSuccessStatusCode();
+                var withA = await setAResponse.Content.ReadFromJsonAsync<JsonElement>();
+                versionA = withA.GetProperty("version").GetInt64();
+
+                using var setBResponse = await ownerClient.PutAsJsonAsync(
+                    $"/api/expeditions/{expeditionId:D}/course-intent",
+                    new { expectedVersion = versionA, intendedDirection = 2 });
+                setBResponse.EnsureSuccessStatusCode();
+                var withB = await setBResponse.Content.ReadFromJsonAsync<JsonElement>();
+                var after = withB.GetProperty("expedition");
+
+                Assert.Equal(2, after.GetProperty("intendedDirection").GetInt32());
+                Assert.Equal(before.GetProperty("currentHex").GetRawText(), after.GetProperty("currentHex").GetRawText());
+                Assert.Equal(before.GetProperty("hexProgress").GetRawText(), after.GetProperty("hexProgress").GetRawText());
+                Assert.Equal(before.GetProperty("distanceTraveled").GetRawText(), after.GetProperty("distanceTraveled").GetRawText());
+                Assert.Equal(before.GetProperty("elapsedTravelHours").GetDouble(), after.GetProperty("elapsedTravelHours").GetDouble());
+                Assert.Equal(before.GetProperty("completedWatches").GetInt32(), after.GetProperty("completedWatches").GetInt32());
+                Assert.Equal(started.GetProperty("history").GetArrayLength(), withB.GetProperty("history").GetArrayLength());
+
+                var reloaded = await ownerClient.GetFromJsonAsync<JsonElement>($"/api/expeditions/{expeditionId:D}");
+                Assert.Equal(2, reloaded.GetProperty("expedition").GetProperty("intendedDirection").GetInt32());
+
+                using var stale = await ownerClient.PutAsJsonAsync(
+                    $"/api/expeditions/{expeditionId:D}/course-intent",
+                    new { expectedVersion = versionA, intendedDirection = 4 });
+                Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
+
+                var afterStale = await ownerClient.GetFromJsonAsync<JsonElement>($"/api/expeditions/{expeditionId:D}");
+                Assert.Equal(2, afterStale.GetProperty("expedition").GetProperty("intendedDirection").GetInt32());
+            }
+
+            using var otherFactory = TestWebHost.Create(database, "bob");
+            using var otherClient = otherFactory.CreateClient();
+            using var foreign = await otherClient.PutAsJsonAsync(
+                $"/api/expeditions/{expeditionId:D}/course-intent",
+                new { expectedVersion = versionA + 1, intendedDirection = 3 });
+            Assert.Equal(HttpStatusCode.NotFound, foreign.StatusCode);
+        }
+        finally
+        {
+            TestWebHost.DeleteDatabase(database);
+        }
+    }
+
+    [Fact]
     public async Task GeometryAndOptimisticConcurrencyFlowThroughHttpApi()
     {
         var database = TestWebHost.NewDatabasePath();
