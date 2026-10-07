@@ -222,6 +222,8 @@ else:
                 raise SystemExit(f'clean journey does not report an authoritative no-pending state: {metrics}')
             if metrics["journeyStageCount"] != 3:
                 raise SystemExit(f'multi-stage journey sequence is incomplete: {metrics}')
+            if metrics["journeyStageLabels"] != ["Reach the pass", "Cross the pass", "Reach the high country"]:
+                raise SystemExit(f'journey stage sequence ignored authoritative stageOrder: {metrics}')
         if state == "journey-pending" and metrics["journeyPendingRawInternalsVisible"]:
             raise SystemExit(f'normal pending journey presentation exposes raw event internals: {metrics}')
     elif abstract_spatial:
