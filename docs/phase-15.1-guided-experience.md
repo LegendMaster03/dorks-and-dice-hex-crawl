@@ -59,7 +59,7 @@ The initial in-product basics content covers procedures/presets, spatial versus 
 
 ## Runtime coaching
 
-The existing **Next action** surface remains primary. Guided adds a **Why is this next?** explanation based on the same action kind already derived from authoritative expedition, journey, survival, and pause state. Guidance explains authoritative state; it does not calculate replacement outcomes in the browser.
+The existing **Next action** surface remains primary. Guided adds a **Why is this next?** explanation based on the same action kind already derived from authoritative expedition, journey, survival, and pause state. Pending effect and resource consequences also expose **Why is this pending?** explanations derived from their authoritative pending reason and required action. Guidance explains authoritative state; it does not calculate replacement outcomes in the browser.
 
 ## Host/authentication boundary
 
@@ -74,6 +74,7 @@ The current Phase 15.1 branch includes:
 - point-of-use help for world/grid settings, including hex center distance and internal geometry distinctions;
 - Guided Compact procedure explanations and per-rule **Why?** disclosures;
 - **Why is this next?** coaching on the authoritative expedition Next action;
+- **Why is this pending?** coaching for pending effect and resource consequences without inventing automatic outcomes;
 - beginner-oriented preset summaries derived from generic procedure structure rather than preset identity;
 - fallback domain explanations for Compact numeric procedure settings when the pinned schema does not already provide a description;
 - rendered-review assertions for Guided home, preset, Compact, world/grid, and runtime surfaces.
