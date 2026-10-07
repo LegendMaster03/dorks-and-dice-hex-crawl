@@ -566,6 +566,7 @@ function survivalFixture(forced) {
             limitUnit: "Hours",
             checkModel: "resolved-check",
             failureConsequence: "fatigue",
+            failureTargetScope: "Participant",
             mechanicKey: "time.forced-travel",
             mechanicVersion: 1,
             executionHandler: "visual-review",
@@ -647,6 +648,7 @@ function journeySurvivalFixture() {
         limitUnit: null,
         checkModel: null,
         failureConsequence: null,
+        failureTargetScope: null,
         mechanicKey: null,
         mechanicVersion: null,
         executionHandler: null

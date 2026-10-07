@@ -1,4 +1,5 @@
 import { SurvivalResourcesApi } from "../../survival-api";
+import type { ExpeditionDetail } from "../../types";
 import type {
     CampingPolicy,
     ConsequenceProvenanceRequest,
@@ -31,6 +32,7 @@ export class ExpeditionSurvivalResourcesPanel {
         root: HTMLElement,
         private readonly api: SurvivalResourcesApi,
         private readonly expeditionId: string,
+        private readonly getRuntime: () => ExpeditionDetail,
         private readonly mutate: (control: HTMLButtonElement | null, action: () => Promise<void>) => Promise<void>,
         private readonly focus: SurvivalResourcesPanelFocus = "all") {
         this.panel = document.createElement("details");
@@ -353,8 +355,27 @@ export class ExpeditionSurvivalResourcesPanel {
                 this.muted("Record the resolved check result. If it failed, identify who or what is affected; the configured consequence is shown above."));
 
             const success = this.checkbox("Check succeeded", true);
-            const scope = this.select("Affected target", ["Party", "Expedition", "Participant", "Mount", "Vehicle"]);
-            const target = this.input("Participant, mount, or vehicle ID when required", "text");
+            const runtime = this.getRuntime();
+            const constrainedScope = policy.failureTargetScope;
+            const availableScopes: ExpeditionEffectScope[] = constrainedScope
+                ? [constrainedScope]
+                : [
+                    "Party",
+                    "Expedition",
+                    ...(runtime.party.members.length > 0 ? ["Participant" as const] : []),
+                    ...(runtime.party.movementContributors.some(value => value.kind === "Mount") ? ["Mount" as const] : []),
+                    ...(runtime.party.movementContributors.some(value => value.kind === "Vehicle") ? ["Vehicle" as const] : [])
+                ];
+            const scope = constrainedScope
+                ? null
+                : this.select("Affected target", availableScopes);
+            const target = document.createElement("select");
+            const targetWrapper = document.createElement("label");
+            const targetStatus = this.muted("");
+            targetWrapper.append(document.createTextNode("Affected target"), target);
+            if (constrainedScope) {
+                form.append(this.muted(`Affected scope: ${humanize(constrainedScope)}.`));
+            }
 
             const effectKey = this.input("Failure effect key", "text");
             effectKey.control.value = policy.failureConsequence ?? "";
@@ -373,7 +394,60 @@ export class ExpeditionSurvivalResourcesPanel {
             advanced.append(advancedSummary, advancedBody);
 
             const resolve = this.button("Record forced-travel result");
-            form.append(success.wrapper, scope.wrapper, target.wrapper, advanced, resolve);
+
+            const selectedScope = (): ExpeditionEffectScope =>
+                constrainedScope ?? scope?.control.value as ExpeditionEffectScope ?? "Party";
+            const choicesForScope = (value: ExpeditionEffectScope): Array<{ id: string; label: string }> => {
+                if (value === "Participant") {
+                    return runtime.party.members.map(member => ({ id: member.id, label: member.name }));
+                }
+                return runtime.party.movementContributors
+                    .filter(contributor => contributor.kind === value)
+                    .map(contributor => ({ id: contributor.id, label: humanize(contributor.key) }));
+            };
+            const syncTarget = (): void => {
+                const targetScope = selectedScope();
+                const requiresEntity = targetScope === "Participant" || targetScope === "Mount" || targetScope === "Vehicle";
+                const choices = requiresEntity ? choicesForScope(targetScope) : [];
+                target.replaceChildren();
+                if (choices.length !== 1) {
+                    const empty = document.createElement("option");
+                    empty.value = "";
+                    empty.textContent = targetScope === "Participant"
+                        ? "Choose affected character"
+                        : targetScope === "Mount"
+                            ? "Choose affected mount"
+                            : "Choose affected vehicle";
+                    target.append(empty);
+                }
+                for (const choice of choices) {
+                    const option = document.createElement("option");
+                    option.value = choice.id;
+                    option.textContent = choice.label;
+                    target.append(option);
+                }
+                targetWrapper.firstChild!.textContent = targetScope === "Participant"
+                    ? "Affected character"
+                    : targetScope === "Mount"
+                        ? "Affected mount"
+                        : targetScope === "Vehicle"
+                            ? "Affected vehicle"
+                            : "Affected target";
+                const resolvingFailure = !success.control.checked;
+                targetWrapper.hidden = !resolvingFailure || !requiresEntity;
+                targetStatus.hidden = !resolvingFailure || !requiresEntity || choices.length > 0;
+                targetStatus.textContent = targetScope === "Participant"
+                    ? "This forced-travel consequence affects a character, but this expedition has no party members configured. Configure the party before recording a failed check."
+                    : `This forced-travel consequence affects a ${targetScope.toLowerCase()}, but no selectable ${targetScope.toLowerCase()} is configured for this expedition.`;
+                resolve.disabled = resolvingFailure && requiresEntity && choices.length === 0;
+            };
+            success.control.addEventListener("change", syncTarget);
+            scope?.control.addEventListener("change", syncTarget);
+            syncTarget();
+
+            form.append(success.wrapper);
+            if (scope) form.append(scope.wrapper);
+            form.append(targetWrapper, targetStatus, advanced, resolve);
             form.addEventListener("submit", event => {
                 event.preventDefault();
                 void this.mutate(resolve, async () => {
@@ -397,7 +471,9 @@ export class ExpeditionSurvivalResourcesPanel {
                         expectedVersion: this.requireState().expeditionVersion,
                         checkId: current.pendingCheckId!,
                         success: success.control.checked,
-                        target: targetValue(scope.control.value as ExpeditionEffectScope, target.control.value),
+                        target: success.control.checked
+                            ? { scope: "Party", targetId: null }
+                            : targetValue(selectedScope(), target.value),
                         failureComponents,
                         provenance: dmProvenance("forced-travel-check-resolution")
                     });

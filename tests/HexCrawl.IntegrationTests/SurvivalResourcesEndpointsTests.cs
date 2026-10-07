@@ -202,6 +202,29 @@ public sealed class SurvivalResourcesEndpointsTests
     }
 
     [Fact]
+    public async Task ForcedTravelProjectionDerivesFailureTargetScopeFromPinnedEffectPolicy()
+    {
+        var database = TestWebHost.NewDatabasePath();
+        try
+        {
+            using var factory = TestWebHost.Create(database);
+            using var client = factory.CreateClient();
+            var started = await StartMaplessExpeditionAsync(client, "Forced travel target", CrawlProcedureCatalog.Dnd2024PresetKey);
+            var expeditionId = started.GetProperty("id").GetGuid();
+
+            var state = await client.GetFromJsonAsync<JsonElement>($"/api/expeditions/{expeditionId:D}/survival");
+
+            Assert.Equal(
+                "Participant",
+                state.GetProperty("forcedTravelPolicy").GetProperty("failureTargetScope").GetString());
+        }
+        finally
+        {
+            TestWebHost.DeleteDatabase(database);
+        }
+    }
+
+    [Fact]
     public async Task EmptyForcedTravelOccurrenceIsRejectedWithoutAdvancingVersion()
     {
         var database = TestWebHost.NewDatabasePath();

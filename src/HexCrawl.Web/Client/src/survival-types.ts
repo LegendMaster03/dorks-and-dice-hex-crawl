@@ -90,6 +90,7 @@ export type ForcedTravelPolicy = {
     limitUnit: string | null;
     checkModel: string | null;
     failureConsequence: string | null;
+    failureTargetScope: ExpeditionEffectScope | null;
     mechanicKey: string | null;
     mechanicVersion: number | null;
     executionHandler: string | null;

@@ -1519,6 +1519,7 @@ export async function renderExpedition(
                     body,
                     survivalApi,
                     runtime.id,
+                    () => runtime,
                     async (_control, action) => {
                         await runUiMutation(action);
                     },
