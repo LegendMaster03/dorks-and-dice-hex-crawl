@@ -76,6 +76,8 @@ cases=(
   "35-encounter-mobile|encounter-pending|light|500|844|390"
   "36-journey-pending-mobile|journey-pending|dark|500|844|390"
   "37-partial-progress-mobile|partial-progress|dark|500|844|390"
+  "38-focus-return-wide|focus-return|light|1366|900"
+  "39-focus-return-mobile|focus-return|dark|500|844|390"
 )
 
 for spec in "${cases[@]}"; do
@@ -201,6 +203,10 @@ else:
             raise SystemExit(f'unified expedition history is incomplete: {metrics}')
     if state == "partial-progress" and not metrics["positionProgressVisible"]:
         raise SystemExit(f'partial spatial progress is not visible: {metrics}')
+    if state == "focus-return" and not metrics["focusReturnedToOpener"]:
+        raise SystemExit(f'drawer focus did not return to the opener: {metrics}')
+    if state == "encounter-pending" and not metrics["encounterResolutionVisible"]:
+        raise SystemExit(f'encounter drawer does not expose authoritative resolution: {metrics}')
     if state == "fixed-pace":
         if metrics["changePaceButtons"] != 0 or metrics["paceTextInputs"] != 0:
             raise SystemExit(f'fixed pace exposed an arbitrary normal-user editor: {metrics}')

@@ -857,6 +857,7 @@ let journey = journeyFixture();
 
 switch (stateName) {
     case "selected-edge":
+    case "focus-return":
         runtime.expedition.intendedDirection = 1;
         runtime.expedition.actualDirection = 1;
         break;
@@ -1116,7 +1117,9 @@ if (stateName === "map-selected" || stateName === "map-nonadjacent") {
     await waitForRootText("Current requirement");
 } else if (stateName === "boundary-pending") {
     findButton("Resolve lost-party boundary decision")?.click();
-} else if (stateName === "more-options-open") {
+} else let focusReturnVerified = false;
+
+if (stateName === "more-options-open") {
     findButton("More options")?.click();
 } else if (stateName === "teleport-workspace") {
     findButton("Teleport party")?.click();
@@ -1126,6 +1129,13 @@ if (stateName === "map-selected" || stateName === "map-nonadjacent") {
 } else if (stateName === "history-workspace") {
     findStatAction("Time")?.click();
     await waitForRootText("Effects / consequences");
+} else if (stateName === "focus-return") {
+    const opener = findStatAction("Time");
+    opener?.focus();
+    opener?.click();
+    await waitForRootText("Expedition history");
+    findButton("Close")?.click();
+    focusReturnVerified = document.activeElement === opener;
 }
 
 if (stateName === "selected-edge") {
@@ -1191,7 +1201,10 @@ const metrics = {
     activeEffectVisible: rootText.includes("Fatigue") && rootText.includes("Level 2") && rootText.includes("Clear effect"),
     effectRecoveryVisible: rootText.includes("Reduce 1 level") && rootText.includes("Recovery:"),
     unifiedHistoryVisible: rootText.includes("Journey") && rootText.includes("Travel / runtime") && rootText.includes("Effects / consequences"),
-    positionProgressVisible: rootText.includes("4.5 / 12 mi") && rootText.includes("37.5% through current cell")
+    positionProgressVisible: rootText.includes("4.5 / 12 mi") && rootText.includes("37.5% through current cell"),
+    focusReturnedToOpener: focusReturnVerified,
+    encounterResolutionVisible: rootText.includes("Mark encounter resolved")
+        && !rootText.includes("Encounter resolved — continue travel")
 };
 document.getElementById("review-metrics").textContent = JSON.stringify(metrics);
 document.documentElement.dataset.visualReviewReady = "true";
