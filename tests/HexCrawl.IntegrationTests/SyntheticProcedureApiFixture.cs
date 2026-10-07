@@ -119,7 +119,7 @@ internal static class SyntheticProcedureApiFixture
             overrides = new object[]
             {
                 Change(GenericProcedureCatalog.MovementBudgetModule,
-                    ("budgetModel", "fixed-watch-distance"),
+                    ("budgetModel", "speed-and-pace"),
                     ("baseBudget", "12"),
                     ("budgetUnit", "mi"),
                     ("limitingScope", "party"),
