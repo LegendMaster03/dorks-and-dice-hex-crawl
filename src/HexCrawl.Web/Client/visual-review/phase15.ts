@@ -4,6 +4,7 @@ import { ensureStyles } from "../src/styles";
 import { renderExpedition } from "../src/modules/expeditions/expedition-view";
 import { renderToolHome } from "../src/modules/home/tool-home-view";
 import { renderProcedureAuthoringWorkspace } from "../src/modules/procedures/procedure-authoring-view";
+import { renderWorldEditor } from "../src/modules/worlds/world-editor-view";
 
 const params = new URLSearchParams(window.location.search);
 const stateName = params.get("state") || "no-course";
@@ -155,7 +156,14 @@ function emitSpecialMetrics(surface) {
         advancedVisible: Boolean(root.querySelector(".hc-advanced-layout")),
         jsonVisible: Boolean(root.querySelector(".hc-json-editor")),
         procedureHomeVisible: text.includes("Saved procedures") && text.includes("Build my own"),
-        technicalModeLabels: ["Compact", "Advanced", "JSON"].filter(label => text.includes(label)).length
+        technicalModeLabels: ["Compact", "Advanced", "JSON"].filter(label => text.includes(label)).length,
+        selectedCellTitle: root.querySelector("[data-selected-cell-title]")?.textContent?.trim() || null,
+        selectedCellTerrain: root.querySelector("[data-cell-terrain]")?.value || null,
+        selectedCellHiddenPoiVisible: text.includes("Ruined Watchtower · Ruin · Hidden"),
+        selectedCellRoadVisible: text.includes("Old King's Road · road · Line"),
+        selectedCellRouteBehaviorVisible: text.includes("Old King's Road · Route: good-road"),
+        selectedCellAdvancedOpen: Boolean(root.querySelector("[data-cell-advanced][open]")),
+        mapHeight: Math.round(root.querySelector("[data-map]")?.getBoundingClientRect().height || 0)
     };
     document.getElementById("review-metrics").textContent = JSON.stringify(metrics);
     document.documentElement.dataset.visualReviewReady = "true";
@@ -198,6 +206,98 @@ if (stateName === "home") {
     }
     emitSpecialMetrics("procedure");
     restoreFetch();
+} else if (stateName === "world-selected-cell") {
+    const worldMile = { kind: "Mile", symbol: "mi", metersPerUnit: 1609.344 };
+    const worldFixture = {
+        id: "visual-world",
+        name: "The Shattered Marches",
+        version: 12,
+        createdAt: "2026-10-01T12:00:00Z",
+        updatedAt: "2026-10-07T05:00:00Z",
+        grid: {
+            id: "visual-grid",
+            orientation: "PointyTop",
+            coordinateConvention: "AxialQr",
+            origin: { x: 0, y: 0 },
+            rotationDegrees: 18,
+            hexRadiusWorldUnits: 1,
+            neighborCenterDistance: { value: 12, unit: worldMile }
+        },
+        features: [{
+            id: "road-1",
+            name: "Old King's Road",
+            category: "road",
+            kind: "Line",
+            position: null,
+            path: [{ x: -2.5, y: -0.8 }, { x: 0, y: 0 }, { x: 2.5, y: 0.8 }],
+            boundary: null
+        }, {
+            id: "forest-region",
+            name: "Blackwood Forest",
+            category: "forest",
+            kind: "Region",
+            position: null,
+            path: null,
+            boundary: [{ x: -0.8, y: -0.8 }, { x: 1.1, y: -0.6 }, { x: 0.9, y: 1.0 }, { x: -0.9, y: 0.8 }]
+        }],
+        locations: [{
+            id: "tower-1",
+            name: "Ruined Watchtower",
+            category: "Ruin",
+            position: { x: 0, y: 0 },
+            discoverability: "Hidden"
+        }],
+        sourceMaps: []
+    };
+    const environmentFixture = {
+        overworldId: worldFixture.id,
+        version: worldFixture.version,
+        annotations: [{
+            id: "hex-environment",
+            scope: { kind: "Hex", hex: { q: 0, r: 0 }, featureId: null },
+            facts: [{
+                id: "terrain-1",
+                dimension: "terrain",
+                valueKind: "Tag",
+                tag: "forest",
+                measurement: null,
+                provenance: "visual-review",
+                note: null
+            }, {
+                id: "visibility-1",
+                dimension: "visibility",
+                valueKind: "Tag",
+                tag: "dense",
+                measurement: null,
+                provenance: "visual-review",
+                note: null
+            }]
+        }, {
+            id: "road-environment",
+            scope: { kind: "SpatialFeature", hex: null, featureId: "road-1" },
+            facts: [{
+                id: "route-1",
+                dimension: "route",
+                valueKind: "Tag",
+                tag: "good-road",
+                measurement: null,
+                provenance: "visual-review",
+                note: null
+            }]
+        }]
+    };
+    sessionStorage.setItem(
+        `hex-crawl.world-editor.selected-cell.${worldFixture.id}`,
+        JSON.stringify({ q: 0, r: 0 }));
+    const api = {
+        getOverworld: async () => worldFixture,
+        getWorldEnvironment: async () => environmentFixture,
+        getProcedurePresets: async () => [],
+        listExpeditions: async () => [],
+        listSourceMaps: async () => ({ overworldVersion: worldFixture.version, sourceMaps: [] })
+    };
+    await renderWorldEditor(root, api, worldFixture.id, () => {});
+    emitSpecialMetrics("world");
 } else {
 const mile = { kind: "Mile", symbol: "mi", metersPerUnit: 1609.344 };
 const distance = value => ({ value, unit: mile });
