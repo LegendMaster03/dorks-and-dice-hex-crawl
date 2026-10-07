@@ -1172,7 +1172,7 @@ export async function renderExpedition(
                     map.requestRender();
                 }
                 syncTravelIntentControls();
-                continueTravel(false, true);
+                continueTravel(true);
             });
 
             const more = button("More options", () => openTravelWorkspace("advanced"));
@@ -1511,21 +1511,50 @@ export async function renderExpedition(
 
     const openEncounterWorkspace = (): void => {
         openDrawer("Encounter", body => {
-            const triggered = [...runtime.history].reverse().find(event => event.kind === "EncounterTriggered");
-            if (!triggered) {
+            const pending = runtime.expedition.pendingEncounter;
+            if (!pending) {
                 body.append(textElement("p", "No encounter is currently interrupting the expedition."));
                 return;
             }
+
+            const triggered = runtime.history.find(event =>
+                event.kind === "EncounterTriggered"
+                && event.sequence === pending.triggerSequence
+                && event.encounterOccurrenceId === pending.id);
+
             body.append(
-                textElement("p", triggered.message),
-                textElement("p", "Preparing a Block Initiative handoff does not consume or clear expedition consequences. After the encounter is resolved, return here and resume the current travel procedure.", "hc-muted"));
+                textElement("h3", humanize(pending.outcome)),
+                textElement("p", triggered?.message ?? pending.note ?? "Encounter resolution is pending."),
+                contextLine("Watch", String(pending.watchNumber)),
+                textElement(
+                    "p",
+                    "Preparing a Block Initiative handoff does not resolve the expedition interruption. Mark the encounter resolved here only after its table or tactical handling is complete.",
+                    "hc-muted"));
+
+            const resultNote = document.createElement("input");
+            resultNote.name = "encounterResultNote";
+            resultNote.placeholder = "Optional result or table note";
+
             const row = document.createElement("div");
             row.className = "hc-button-row";
-            const handoff = button("Open in Block Initiative", () => void prepareEncounterHandoff(triggered.sequence, handoff));
+            const handoff = button("Open in Block Initiative", () =>
+                void prepareEncounterHandoff(pending.triggerSequence, handoff));
             handoff.className = "hc-primary-action";
-            const resume = button("Encounter resolved — continue travel", () => continueTravel(true));
-            row.append(handoff, resume);
-            body.append(row);
+            const resolve = button("Mark encounter resolved", () => {
+                void runUiMutation(async () => {
+                    const next = await api.resolveEncounter(runtime.id, pending.id, {
+                        expectedVersion: runtime.version,
+                        resolutionSource: "DmOverride",
+                        resolutionNote: "Encounter resolution recorded from expedition workspace.",
+                        resultNote: resultNote.value.trim() || undefined
+                    });
+                    applyRuntime(next);
+                    drawer?.close();
+                    continueTravel();
+                });
+            });
+            row.append(handoff, resolve);
+            body.append(labelled("Result note", resultNote), row);
         });
     };
 
@@ -1611,7 +1640,7 @@ export async function renderExpedition(
         target?.focus();
     };
 
-    const continueTravel = (resumeEncounter = false, resumeTravelReview = false): void => {
+    const continueTravel = (resumeTravelReview = false): void => {
         if (!runtime.expedition.isSpatial || runtime.procedure.runtime === null) {
             openHistory();
             return;
@@ -1632,7 +1661,6 @@ export async function renderExpedition(
             suppressesNavigation,
             deliberateDoubleBack,
             survivalAttention(survival),
-            resumeEncounter,
             resumeTravelReview);
         switch (target) {
             case "course":
@@ -1668,8 +1696,7 @@ export async function renderExpedition(
                 api,
                 runtime,
                 edge.directionValue,
-                preferences.pace,
-                resumeEncounter));
+                preferences.pace));
         });
     };
 

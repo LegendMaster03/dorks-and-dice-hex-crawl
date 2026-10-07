@@ -649,9 +649,10 @@ test("encounter resume requires an explicit resolved-at-table acknowledgement", 
         path.join(sourceDir, "modules/expeditions/expedition-watch-controller.ts"),
         "utf8");
 
-    assert.match(view, /Encounter resolved — continue travel/);
-    assert.match(view, /continueTravel\(true\)/);
-    assert.match(controller, /runtime\.pauseReason === "EncounterTriggered" && !resumeEncounter/);
+    assert.match(view, /api\.resolveEncounter/);
+    assert.match(view, /pending\.triggerSequence/);
+    assert.doesNotMatch(view, /Encounter resolved — continue travel/);
+    assert.doesNotMatch(controller, /resumeEncounter/);
 });
 
 test("normal spatial travel has one primary continuation path and focused unresolved workspaces", () => {
@@ -664,7 +665,7 @@ test("normal spatial travel has one primary continuation path and focused unreso
     assert.match(view, /if \(paceEditor && pace\)[\s\S]*actions\.append\(changePace\)/);
     assert.match(view, /actions\.append\(more\)/);
     assert.doesNotMatch(view, /button\("Travel controls"/);
-    assert.match(view, /const continueTravel = \(resumeEncounter = false, resumeTravelReview = false\): void =>/);
+    assert.match(view, /const continueTravel = \(resumeTravelReview = false\): void =>/);
     assert.match(view, /spatialTravelContinuationTarget/);
     assert.match(view, /case "navigation":[\s\S]*openNavigationWorkspace\(\)/);
     assert.match(view, /case "encounter":[\s\S]*openTravelWorkspace\("encounter"\)/);

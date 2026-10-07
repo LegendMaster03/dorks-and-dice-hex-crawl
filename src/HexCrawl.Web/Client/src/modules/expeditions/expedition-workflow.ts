@@ -46,10 +46,9 @@ export function spatialTravelContinuationTarget(
     suppressesNavigationCheck = false,
     deliberateDoubleBack = false,
     hasBlockingSurvival = false,
-    resumeEncounter = false,
     resumeTravelReview = false): SpatialTravelContinuationTarget {
     if (!runtime.expedition.isSpatial || runtime.procedure.runtime === null) return "unavailable";
-    if (runtime.pauseReason === "EncounterTriggered" && !resumeEncounter) return "encounter";
+    if (runtime.pauseReason === "EncounterTriggered" || runtime.expedition.pendingEncounter !== null) return "encounter";
     if (runtime.pauseReason === "LostRecognitionRequired") return "boundary";
     if ((runtime.pauseReason === "ConditionsReviewRequired"
         || runtime.pauseReason === "BacktrackBoundaryReached")

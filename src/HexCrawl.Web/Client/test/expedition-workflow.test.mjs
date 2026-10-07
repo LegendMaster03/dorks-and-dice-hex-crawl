@@ -89,7 +89,11 @@ test("forced travel and pending consequences block routine continuation without 
         "survival");
     assert.equal(
         spatialTravelContinuationTarget(
-            { ...base, pauseReason: "EncounterTriggered" },
+            {
+                ...base,
+                pauseReason: "EncounterTriggered",
+                expedition: { ...base.expedition, pendingEncounter: { id: "enc-1" } }
+            },
             true,
             true,
             true,
@@ -127,22 +131,29 @@ test("changed-condition and backtrack pauses require explicit review acknowledge
     }
 });
 
-test("encounter pause requires explicit post-encounter resume before travel can continue", () => {
+test("encounter pause remains blocking until authoritative pending state is cleared", () => {
     const base = runtime();
     const paused = {
         ...base,
         pauseReason: "EncounterTriggered",
         expedition: {
             ...base.expedition,
-            activeWatchNumber: 1
+            activeWatchNumber: 1,
+            pendingEncounter: { id: "enc-1" }
         }
     };
 
     assert.equal(
-        spatialTravelContinuationTarget(paused, true, true, true, false, false, false),
-        "encounter");
-    assert.equal(
         spatialTravelContinuationTarget(paused, true, true, true, false, false, true),
+        "encounter");
+
+    const resolved = {
+        ...paused,
+        pauseReason: null,
+        expedition: { ...paused.expedition, pendingEncounter: null }
+    };
+    assert.equal(
+        spatialTravelContinuationTarget(resolved, true, true, true, false, false, false),
         "advance");
 });
 
