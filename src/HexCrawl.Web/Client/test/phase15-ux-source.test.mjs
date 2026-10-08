@@ -566,15 +566,20 @@ test("current-cell navigator stays orientation-neutral unless authoritative comp
     const adjacency = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/spatial-adjacency.ts"),
         "utf8");
+    const topology = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/current-cell-topology.ts"),
+        "utf8");
+    const navigator = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/cell-navigator.ts"),
+        "utf8");
     const view = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
         "utf8");
 
-    assert.match(adjacency, /screenRelativeEdgeLabel/);
-    assert.match(adjacency, /outwardArrow/);
-    assert.match(adjacency, /rotationDegrees/);
-    assert.doesNotMatch(adjacency, /Northeast|Northwest|Southeast|Southwest/);
-    assert.match(view, /Travel through \$\{identity\}/);
+    assert.match(adjacency, /screenRelativeAdjacencyLabel/);
+    assert.match(topology, /hexCorners\(input\.worldGrid, input\.currentCell\)/);
+    assert.doesNotMatch(adjacency + topology + navigator, /Northeast|Northwest|Southeast|Southwest/);
+    assert.match(navigator, /Travel through \$\{candidate\.label\}/);
     assert.match(view, /edgeCourseLabel/);
     assert.doesNotMatch(view, /data-travel-primary/);
 });
