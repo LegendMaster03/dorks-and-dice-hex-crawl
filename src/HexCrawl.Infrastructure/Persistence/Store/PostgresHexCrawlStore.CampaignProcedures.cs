@@ -130,7 +130,8 @@ public sealed partial class PostgresHexCrawlStore
     private static StoredCampaignProcedureRevision ReadCampaignProcedure(Npgsql.NpgsqlDataReader reader, string ownerUserId)
     {
         Guid? campaignId = reader.IsDBNull(0) ? null : reader.GetGuid(0);
-        var procedure = Deserialize<CampaignProcedure>(reader.GetString(1));
+        var procedure = CampaignProcedureSchema.Upgrade(
+            Deserialize<CampaignProcedure>(reader.GetString(1)));
         procedure.Validate();
         var origin = reader.IsDBNull(2) ? null : Deserialize<ProcedureOriginMetadata>(reader.GetString(2));
         return new StoredCampaignProcedureRevision(

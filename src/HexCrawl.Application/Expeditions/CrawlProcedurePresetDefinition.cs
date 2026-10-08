@@ -35,6 +35,7 @@ public sealed record CrawlProcedurePresetDefinition(
         ArgumentNullException.ThrowIfNull(Recipe);
         if (string.IsNullOrWhiteSpace(Recipe.DefaultProcedureKey)
             || string.IsNullOrWhiteSpace(Recipe.DefaultProcedureName)
+            || string.IsNullOrWhiteSpace(Recipe.TilingGjhNotation)
             || Recipe.ModuleSelections.Count == 0)
         {
             throw new InvalidOperationException($"Crawl procedure preset '{PresetKey}' requires a complete generic recipe identity and at least one module selection.");

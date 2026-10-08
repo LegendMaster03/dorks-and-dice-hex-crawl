@@ -328,7 +328,10 @@ public static class CrawlProcedureCatalog
             displayName,
             description,
             1,
-            new GenericProcedurePresetRecipe(procedureKey, procedureName, modules.ToArray()),
+            new GenericProcedurePresetRecipe(procedureKey, procedureName, modules.ToArray())
+            {
+                TilingGjhNotation = CampaignProcedureSchema.CurrentHexTilingGjhNotation
+            },
             attribution,
             disclaimer,
             category);

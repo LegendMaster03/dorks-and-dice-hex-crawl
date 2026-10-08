@@ -34,16 +34,27 @@ export function worldToHex(grid: GridDefinition, point: WorldPoint): HexCoordina
     return cubeRound(fractional.q, fractional.r);
 }
 
-export function hexCorners(grid: GridDefinition, hex: HexCoordinate): WorldPoint[] {
-    const center = hexToWorld(grid, hex);
-    const startAngle = grid.orientation === "PointyTop" ? -30 : 0;
+export function regularHexCorners(
+    orientation: GridDefinition["orientation"],
+    rotationDegrees = 0,
+    radius = 1,
+    center: WorldPoint = { x: 0, y: 0 }): WorldPoint[] {
+    const startAngle = orientation === "PointyTop" ? -30 : 0;
     return Array.from({ length: 6 }, (_, index) => {
-        const angle = degreesToRadians(startAngle + index * 60 + grid.rotationDegrees);
+        const angle = degreesToRadians(startAngle + index * 60 + rotationDegrees);
         return {
-            x: center.x + grid.hexRadiusWorldUnits * Math.cos(angle),
-            y: center.y + grid.hexRadiusWorldUnits * Math.sin(angle)
+            x: center.x + radius * Math.cos(angle),
+            y: center.y + radius * Math.sin(angle)
         };
     });
+}
+
+export function hexCorners(grid: GridDefinition, hex: HexCoordinate): WorldPoint[] {
+    return regularHexCorners(
+        grid.orientation,
+        grid.rotationDegrees,
+        grid.hexRadiusWorldUnits,
+        hexToWorld(grid, hex));
 }
 
 export function visibleHexBounds(grid: GridDefinition, worldCorners: WorldPoint[], margin = 3): { minQ: number; maxQ: number; minR: number; maxR: number } {

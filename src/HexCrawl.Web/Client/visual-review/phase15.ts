@@ -109,6 +109,8 @@ function composerFixture() {
         revision: 3,
         key: "visual-procedure",
         name: "Shattered Marches Procedure",
+        schemaVersion: "1.1",
+        tilingGjhNotation: "6/m30/r(h1)",
         isExecutable: true,
         modificationCount: 0,
         modifiedModuleCount: 0,
@@ -165,6 +167,8 @@ function referenceFixture() {
         revision: 3,
         key: "visual-procedure",
         name: "Shattered Marches Procedure",
+        schemaVersion: "1.1",
+        tilingGjhNotation: "6/m30/r(h1)",
         isExecutable: true,
         modificationCount: 0,
         modifiedModuleCount: 0,
@@ -194,6 +198,8 @@ function visualPreset() {
             revision: 1,
             key: "visual-guided-travel",
             name: "Classic exploration travel",
+            schemaVersion: "1.1",
+            tilingGjhNotation: "6/m30/r(h1)",
             isExecutable: true,
             runtime: {
                 intervalHours: 4,
@@ -269,6 +275,8 @@ function installProcedureFetch() {
                 canonicalJson: JSON.stringify({
                     procedureId: "visual-procedure",
                     revision: 3,
+                    schemaVersion: "1.1",
+                    tilingGjhNotation: "6/m30/r(h1)",
                     name: "Shattered Marches Procedure",
                     modules: Object.entries(richProcedureParameters).map(([moduleKey, parameters]) => ({ moduleKey, parameters }))
                 }, null, 2)
@@ -525,6 +533,8 @@ function procedure() {
         revision: 15,
         key: "phase15-visual",
         name: "Expedition Procedure",
+        schemaVersion: "1.1",
+        tilingGjhNotation: "6/m30/r(h1)",
         isExecutable: true,
         runtime: {
             intervalHours: 4,
@@ -1807,11 +1817,11 @@ await new Promise(resolve => setTimeout(resolve, 0));
 let focusReturnVerified = false;
 
 if (stateName === "course-change-reload") {
-    const changedEdge = root.querySelector('[data-adjacency-edge="5"]');
+    const changedEdge = root.querySelector('[data-adjacency-interface-id="adjacency-5"]');
     changedEdge?.click();
     await waitForCondition(
         () => runtime.expedition.intendedDirection === 5
-            && root.querySelector('[data-adjacency-edge="5"]')?.getAttribute("aria-pressed") === "true",
+            && root.querySelector('[data-adjacency-interface-id="adjacency-5"]')?.getAttribute("aria-pressed") === "true",
         "server-authoritative changed course");
 
     disposeExpedition();
@@ -1819,17 +1829,17 @@ if (stateName === "course-change-reload") {
     localStorage.removeItem("hex-crawl.expedition." + runtime.id + ".travel-intent");
     disposeExpedition = await renderExpedition(root, api, runtime.id, () => {}, undefined, null);
     await waitForCondition(
-        () => root.querySelector('[data-adjacency-edge="5"]')?.getAttribute("aria-pressed") === "true",
+        () => root.querySelector('[data-adjacency-interface-id="adjacency-5"]')?.getAttribute("aria-pressed") === "true",
         "fresh client restored changed course");
 
     findButton("Resolve navigation")?.click();
     await waitForRootText("Intended course:");
 } else if (stateName === "course-clear-reload") {
-    const selectedEdge = root.querySelector('[data-adjacency-edge="1"]');
+    const selectedEdge = root.querySelector('[data-adjacency-interface-id="adjacency-1"]');
     selectedEdge?.click();
     await waitForCondition(
         () => runtime.expedition.intendedDirection === null
-            && root.querySelectorAll('[data-adjacency-edge][aria-pressed="true"]').length === 0,
+            && root.querySelectorAll('[data-adjacency-interface-id][aria-pressed="true"]').length === 0,
         "server-authoritative cleared course");
 
     disposeExpedition();
@@ -1837,7 +1847,7 @@ if (stateName === "course-change-reload") {
     localStorage.removeItem("hex-crawl.expedition." + runtime.id + ".travel-intent");
     disposeExpedition = await renderExpedition(root, api, runtime.id, () => {}, undefined, null);
     await waitForCondition(
-        () => root.querySelectorAll('[data-adjacency-edge][aria-pressed="true"]').length === 0,
+        () => root.querySelectorAll('[data-adjacency-interface-id][aria-pressed="true"]').length === 0,
         "fresh client retained no-course state");
 } else if (stateName === "map-selected" || stateName === "map-nonadjacent") {
     const canvas = root.querySelector("canvas");
@@ -1904,7 +1914,7 @@ if (stateName === "more-options-open") {
 }
 
 if (stateName === "selected-edge") {
-    root.querySelector('[data-adjacency-edge][aria-pressed="true"]')?.focus({ preventScroll: true });
+    root.querySelector('[data-adjacency-interface-id][aria-pressed="true"]')?.focus({ preventScroll: true });
 }
 
 // Synchronous interactions settle immediately. Async focused panels wait for a
@@ -1962,9 +1972,9 @@ const metrics = {
     reviewScrollWidth: root.scrollWidth,
     scrollWidth: document.documentElement.scrollWidth,
     scrollHeight: document.documentElement.scrollHeight,
-    navigatorButtons: root.querySelectorAll("[data-adjacency-edge]").length,
-    selectedEdges: root.querySelectorAll('[data-adjacency-edge][aria-pressed="true"]').length,
-    selectedDirection: root.querySelector('[data-adjacency-edge][aria-pressed="true"]')?.dataset.adjacencyEdge ?? null,
+    navigatorButtons: root.querySelectorAll("[data-adjacency-interface-id]").length,
+    selectedEdges: root.querySelectorAll('[data-adjacency-interface-id][aria-pressed="true"]').length,
+    selectedDirection: root.querySelector('[data-adjacency-interface-id][aria-pressed="true"]')?.dataset.adjacencyInterfaceId?.replace("adjacency-", "") ?? null,
     runtimeIntendedDirection: runtime.expedition.isSpatial ? runtime.expedition.intendedDirection : null,
     runtimeActualDirection: runtime.expedition.isSpatial ? runtime.expedition.actualDirection : null,
     currentTravelCourseText: root.querySelector("[data-current-travel-course]")?.textContent?.trim() ?? null,
@@ -1994,7 +2004,7 @@ const metrics = {
     guidedConsequenceHelpCount: Array.from(root.querySelectorAll("summary"))
         .filter(summary => summary.textContent?.trim() === "Why is this pending?").length,
     focusedTitle: root.querySelector("[data-phase15-drawer] h2")?.textContent?.trim() || null,
-    focusedEdge: document.activeElement?.matches?.("[data-adjacency-edge]") ?? false,
+    focusedEdge: document.activeElement?.matches?.("[data-adjacency-interface-id]") ?? false,
     journeyVisible: rootText.includes("Current stage") && rootText.includes("Progress") && rootText.includes("Roles") && rootText.includes("Pending"),
     journeyStageCount: root.querySelectorAll(".hc-stage-step").length,
     journeyStageLabels: Array.from(root.querySelectorAll(".hc-stage-step .hc-stage-content strong")).map(value => value.textContent?.trim() || ""),

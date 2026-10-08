@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using HexCrawl.Domain.Procedure;
 using HexCrawl.Infrastructure.Persistence;
 
@@ -107,6 +108,41 @@ public sealed class ProcedureCanonicalJsonServiceTests
                 created.ProcedureId,
                 1,
                 canonical.Serialize(created.Procedure with { Name = "Stale edit" })));
+    }
+
+    [Fact]
+    public async Task LegacyV1CanonicalJsonUpgradesToV11WithCurrentHexTiling()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var store = new PostgresHexCrawlStore(database.ConnectionString);
+        await store.InitializeAsync();
+        var procedures = new CampaignProcedureService(store);
+        var composer = new ProcedureComposerService(procedures);
+        var canonical = new ProcedureCanonicalJsonService(procedures, composer);
+        var current = CrawlProcedureCatalog.Resolve("simple-fixed-distance").MaterializeGeneric().Procedure;
+
+        var implicitLegacy = JsonNode.Parse(canonical.Serialize(current))!.AsObject();
+        implicitLegacy.Remove("schemaVersion");
+        implicitLegacy.Remove("tilingGjhNotation");
+        var implicitResult = canonical.Validate(implicitLegacy.ToJsonString());
+
+        Assert.True(implicitResult.IsValid, implicitResult.Error);
+        Assert.Equal(CampaignProcedureSchema.CurrentVersion, implicitResult.Procedure!.SchemaVersion);
+        Assert.Equal(CampaignProcedureSchema.CurrentHexTilingGjhNotation, implicitResult.Procedure.TilingGjhNotation);
+
+        var explicitLegacy = JsonNode.Parse(canonical.Serialize(current))!.AsObject();
+        explicitLegacy["schemaVersion"] = CampaignProcedureSchema.LegacyVersion;
+        explicitLegacy.Remove("tilingGjhNotation");
+        var explicitResult = canonical.Validate(explicitLegacy.ToJsonString());
+
+        Assert.True(explicitResult.IsValid, explicitResult.Error);
+        Assert.Equal(CampaignProcedureSchema.CurrentVersion, explicitResult.Procedure!.SchemaVersion);
+        Assert.Equal(CampaignProcedureSchema.CurrentHexTilingGjhNotation, explicitResult.Procedure.TilingGjhNotation);
+
+        var unsupported = current with { TilingGjhNotation = "4/m45/r(h1)" };
+        var unsupportedResult = canonical.Validate(canonical.Serialize(unsupported));
+        Assert.False(unsupportedResult.IsValid);
+        Assert.Contains("not supported", unsupportedResult.Error, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

@@ -1,119 +1,116 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { regularHexCorners } from "../.test-dist/hex-math.js";
 import {
-    adjacencyEdgeForCell,
-    adjacencyEdgeForDirection,
-    adjacencyFeedbackVector,
+    adjacencyForCell,
+    adjacencyForIntent,
     createCurrentCellAdjacency,
-    currentHexAdjacency,
-    outwardArrow,
-    sameHex,
-    screenRelativeEdgeLabel
+    screenRelativeAdjacencyLabel
 } from "../.test-dist/modules/expeditions/spatial-adjacency.js";
+import {
+    CURRENT_HEX_GJH_NOTATION,
+    currentRuntimeCellAdjacency,
+    sameHexCell
+} from "../.test-dist/modules/expeditions/current-cell-topology.js";
 
-test("current-cell adjacency contract does not assume six edges", () => {
-    const square = createCurrentCellAdjacency(
+test("current-cell presentation supports more adjacency interfaces than polygon sides", () => {
+    const current = createCurrentCellAdjacency(
         "center",
         [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }],
         [
-            { id: "top", order: 2, targetCell: "a", directionValue: "A", label: "upper edge", shortLabel: "↑", midpoint: { x: 0.5, y: 0 }, traversable: true, disabledReason: null },
-            { id: "right", order: 3, targetCell: "b", directionValue: "B", label: "right edge", shortLabel: "→", midpoint: { x: 1, y: 0.5 }, traversable: true, disabledReason: null },
-            { id: "bottom", order: 4, targetCell: "c", directionValue: "C", label: "lower edge", shortLabel: "↓", midpoint: { x: 0.5, y: 1 }, traversable: true, disabledReason: null },
-            { id: "left", order: 1, targetCell: "d", directionValue: "D", label: "left edge", shortLabel: "←", midpoint: { x: 0, y: 0.5 }, traversable: true, disabledReason: null }
+            { id: "top", order: 1, targetCell: "a", targetLabel: "a", intentValue: "A", label: "upper boundary", boundarySegment: [{ x: 0, y: 0 }, { x: 1, y: 0 }], anchor: { x: 0.5, y: 0 }, outwardVector: { x: 0, y: -1 }, traversable: true, disabledReason: null },
+            { id: "right-upper", order: 2, targetCell: "b", targetLabel: "b", intentValue: "B", label: "upper-right boundary", boundarySegment: [{ x: 1, y: 0 }, { x: 1, y: 0.5 }], anchor: { x: 1, y: 0.25 }, outwardVector: { x: 1, y: 0 }, traversable: true, disabledReason: null },
+            { id: "right-lower", order: 3, targetCell: "c", targetLabel: "c", intentValue: "C", label: "lower-right boundary", boundarySegment: [{ x: 1, y: 0.5 }, { x: 1, y: 1 }], anchor: { x: 1, y: 0.75 }, outwardVector: { x: 1, y: 0 }, traversable: true, disabledReason: null },
+            { id: "bottom", order: 4, targetCell: "d", targetLabel: "d", intentValue: "D", label: "lower boundary", boundarySegment: [{ x: 1, y: 1 }, { x: 0, y: 1 }], anchor: { x: 0.5, y: 1 }, outwardVector: { x: 0, y: 1 }, traversable: true, disabledReason: null },
+            { id: "left", order: 5, targetCell: "e", targetLabel: "e", intentValue: "E", label: "left boundary", boundarySegment: [{ x: 0, y: 1 }, { x: 0, y: 0 }], anchor: { x: 0, y: 0.5 }, outwardVector: { x: -1, y: 0 }, traversable: true, disabledReason: null }
         ],
-        "B");
+        "C");
 
-    assert.equal(square.edges.length, 4);
-    assert.deepEqual(square.center, { x: 0.5, y: 0.5 });
-    assert.deepEqual(square.edges.map(edge => edge.id), ["left", "top", "right", "bottom"]);
-    assert.equal(square.selectedEdgeId, "right");
-    assert.equal(adjacencyEdgeForDirection(square, "C")?.targetCell, "c");
-    assert.equal(adjacencyEdgeForCell(square, "a", (left, right) => left === right)?.directionValue, "A");
+    assert.equal(current.boundary.length, 4);
+    assert.equal(current.adjacencies.length, 5);
+    assert.equal(current.selectedAdjacencyId, "right-lower");
+    assert.equal(adjacencyForIntent(current, "B")?.targetCell, "b");
+    assert.equal(adjacencyForCell(current, "c", (left, right) => left === right)?.intentValue, "C");
 });
 
-test("screen-relative edge labels, arrows, and feedback vectors are geometry-derived", () => {
-    assert.equal(screenRelativeEdgeLabel({ x: 0.9, y: 0.5 }), "right edge");
-    assert.equal(screenRelativeEdgeLabel({ x: 0.8, y: 0.2 }), "upper-right edge");
-    assert.equal(outwardArrow({ x: 0.9, y: 0.5 }), "→");
-    assert.equal(outwardArrow({ x: 0.8, y: 0.2 }), "↗");
-    assert.deepEqual(adjacencyFeedbackVector({ x: 0.5, y: 0.5 }, { x: 0.9, y: 0.5 }), { x: 1, y: 0 });
-    const diagonal = adjacencyFeedbackVector({ x: 0.5, y: 0.5 }, { x: 0.8, y: 0.2 });
-    assert.ok(diagonal.x > 0);
-    assert.ok(diagonal.y < 0);
-    assert.ok(Math.abs(Math.hypot(diagonal.x, diagonal.y) - 1) < 1e-12);
+test("screen-relative labels are derived from supplied adjacency geometry", () => {
+    assert.equal(screenRelativeAdjacencyLabel({ x: 0.9, y: 0.5 }), "right boundary");
+    assert.equal(screenRelativeAdjacencyLabel({ x: 0.8, y: 0.2 }), "upper-right boundary");
 });
 
-test("hex adapter exposes adjacent-cell identity without compass assumptions", () => {
-    const adjacency = currentHexAdjacency({ q: 4, r: -2 }, "PointyTop", 1);
+test("world-backed navigator geometry comes from the same authoritative cell corners as the map", () => {
+    const grid = {
+        id: "grid",
+        orientation: "FlatTop",
+        coordinateConvention: "AxialQr",
+        origin: { x: 13, y: -7 },
+        rotationDegrees: 0,
+        hexRadiusWorldUnits: 4,
+        neighborCenterDistance: { value: 6, unit: { kind: "Mile", symbol: "mi", metersPerUnit: 1609.344 } }
+    };
+    const current = currentRuntimeCellAdjacency({
+        currentCell: { q: 4, r: -2 },
+        tilingGjhNotation: CURRENT_HEX_GJH_NOTATION,
+        selectedDirection: 1,
+        worldGrid: grid,
+        abstractOrientation: null
+    });
 
-    assert.equal(adjacency.edges.length, 6);
-    assert.equal(adjacency.selectedEdgeId, "edge-1");
-    assert.deepEqual(
-        adjacency.edges.map(edge => [edge.label, edge.shortLabel, edge.targetCell]),
-        [
-            ["right edge", "→", { q: 5, r: -2 }],
-            ["upper-right edge", "↗", { q: 5, r: -3 }],
-            ["upper-left edge", "↖", { q: 4, r: -3 }],
-            ["left edge", "←", { q: 3, r: -2 }],
-            ["lower-left edge", "↙", { q: 3, r: -1 }],
-            ["lower-right edge", "↘", { q: 4, r: -1 }]
-        ]);
-    assert.ok(adjacency.edges.every(edge => edge.traversable));
-    assert.equal(adjacency.edges.some(edge => /north|south|east|west/i.test(edge.label)), false);
-});
-
-
-test("all six current hex edges retain independent target and feedback identity", () => {
-    const adjacency = currentHexAdjacency({ q: 10, r: -4 }, "PointyTop", null);
-    const expectedTargets = [
-        { q: 11, r: -4 },
-        { q: 11, r: -5 },
-        { q: 10, r: -5 },
-        { q: 9, r: -4 },
-        { q: 9, r: -3 },
-        { q: 10, r: -3 }
-    ];
-
-    assert.deepEqual(adjacency.edges.map(edge => edge.id), [
-        "edge-0", "edge-1", "edge-2", "edge-3", "edge-4", "edge-5"
-    ]);
-    assert.deepEqual(adjacency.edges.map(edge => edge.targetCell), expectedTargets);
-
-    const vectors = adjacency.edges.map(edge =>
-        adjacencyFeedbackVector(adjacency.center, edge.midpoint));
-    assert.equal(new Set(vectors.map(vector =>
-        `${vector.x.toFixed(6)},${vector.y.toFixed(6)}`)).size, 6);
-
-    for (const [index, edge] of adjacency.edges.entries()) {
-        const selected = currentHexAdjacency(adjacency.currentCell, "PointyTop", index);
-        assert.equal(selected.selectedEdgeId, edge.id);
-        assert.deepEqual(adjacencyEdgeForDirection(selected, index)?.targetCell, expectedTargets[index]);
-        const vector = vectors[index];
-        const radial = {
-            x: edge.midpoint.x - adjacency.center.x,
-            y: edge.midpoint.y - adjacency.center.y
-        };
-        assert.ok(vector.x * radial.x + vector.y * radial.y > 0);
+    assert.equal(current.adjacencies.length, 6);
+    assert.equal(current.selectedAdjacencyId, "adjacency-1");
+    for (const adjacency of current.adjacencies) {
+        const [start, end] = adjacency.boundarySegment;
+        const tangent = { x: end.x - start.x, y: end.y - start.y };
+        assert.ok(Math.abs(
+            tangent.x * adjacency.outwardVector.x
+            + tangent.y * adjacency.outwardVector.y) < 1e-12);
+        assert.ok(Math.abs(Math.hypot(
+            adjacency.outwardVector.x,
+            adjacency.outwardVector.y) - 1) < 1e-12);
     }
+    const raw = regularHexCorners("FlatTop");
+    const rawWidth = Math.max(...raw.map(p => p.x)) - Math.min(...raw.map(p => p.x));
+    const rawHeight = Math.max(...raw.map(p => p.y)) - Math.min(...raw.map(p => p.y));
+    const shownWidth = Math.max(...current.boundary.map(p => p.x)) - Math.min(...current.boundary.map(p => p.x));
+    const shownHeight = Math.max(...current.boundary.map(p => p.y)) - Math.min(...current.boundary.map(p => p.y));
+    assert.ok(Math.abs(shownWidth / shownHeight - rawWidth / rawHeight) < 1e-12);
+    assert.ok(Math.abs(shownWidth / shownHeight - (2 / Math.sqrt(3))) < 1e-12);
 });
 
-test("grid rotation changes screen-relative presentation without changing runtime edge identity", () => {
-    const unrotated = currentHexAdjacency({ q: 0, r: 0 }, "PointyTop", 0, 0);
-    const rotated = currentHexAdjacency({ q: 0, r: 0 }, "PointyTop", 0, 90);
-
-    assert.deepEqual(unrotated.edges[0].targetCell, rotated.edges[0].targetCell);
-    assert.equal(unrotated.edges[0].label, "right edge");
-    assert.equal(rotated.edges[0].label, "lower edge");
-    assert.equal(rotated.edges[0].shortLabel, "↓");
+test("mapless geometry is resolved before the navigator consumes it", () => {
+    const current = currentRuntimeCellAdjacency({
+        currentCell: { q: 0, r: 0 },
+        tilingGjhNotation: CURRENT_HEX_GJH_NOTATION,
+        selectedDirection: null,
+        worldGrid: null,
+        abstractOrientation: "PointyTop"
+    });
+    assert.equal(current.boundary.length, 6);
+    assert.equal(current.adjacencies.length, 6);
+    assert.ok(current.adjacencies.every(value => value.boundarySegment.length === 2));
 });
 
-test("map target and navigator direction resolve to the same semantic edge", () => {
-    const adjacency = currentHexAdjacency({ q: 0, r: 0 }, "FlatTop", null);
-    const byDirection = adjacencyEdgeForDirection(adjacency, 2);
-    assert.ok(byDirection);
+test("current runtime adapter rejects an unsupported tiling outside the generic navigator", () => {
+    assert.throws(() => currentRuntimeCellAdjacency({
+        currentCell: { q: 0, r: 0 },
+        tilingGjhNotation: "future/tiling",
+        selectedDirection: null,
+        worldGrid: null,
+        abstractOrientation: "PointyTop"
+    }), /does not yet support tiling/);
+});
 
-    const byCell = adjacencyEdgeForCell(adjacency, byDirection.targetCell, sameHex);
-    assert.equal(byCell?.id, byDirection.id);
-    assert.equal(byCell?.label, "upper edge");
+test("map target and navigator intent resolve to the same adjacency interface", () => {
+    const current = currentRuntimeCellAdjacency({
+        currentCell: { q: 0, r: 0 },
+        tilingGjhNotation: CURRENT_HEX_GJH_NOTATION,
+        selectedDirection: null,
+        worldGrid: null,
+        abstractOrientation: "FlatTop"
+    });
+    const byIntent = adjacencyForIntent(current, 2);
+    assert.ok(byIntent);
+    const byCell = adjacencyForCell(current, byIntent.targetCell, sameHexCell);
+    assert.equal(byCell?.id, byIntent.id);
 });

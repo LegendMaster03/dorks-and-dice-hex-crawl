@@ -59,7 +59,8 @@ public sealed partial class PostgresHexCrawlStore
         while (await reader.ReadAsync(cancellationToken))
         {
             var context = Deserialize<CrawlSessionContextSnapshot>(reader.GetString(1)).ToDomain();
-            var procedure = Deserialize<CampaignProcedure>(reader.GetString(3));
+            var procedure = CampaignProcedureSchema.Upgrade(
+                Deserialize<CampaignProcedure>(reader.GetString(3)));
             procedure.Validate();
             result.Add(new ExpeditionSummary(
                 reader.GetGuid(0), context, reader.GetString(2), procedure.Name,
@@ -87,7 +88,8 @@ public sealed partial class PostgresHexCrawlStore
         var result = new List<ExpeditionSummary>();
         while (await reader.ReadAsync(cancellationToken))
         {
-            var procedure = Deserialize<CampaignProcedure>(reader.GetString(2));
+            var procedure = CampaignProcedureSchema.Upgrade(
+                Deserialize<CampaignProcedure>(reader.GetString(2)));
             procedure.Validate();
             result.Add(new ExpeditionSummary(
                 reader.GetGuid(0), new WorldBoundCrawlSessionContext(overworldId), reader.GetString(1),
@@ -134,7 +136,8 @@ public sealed partial class PostgresHexCrawlStore
         var journey = Deserialize<ExpeditionJourneyState>(reader.GetString(9));
         journey.Validate(party, effects.AppliedConsequences.Select(value => value.ConsequenceId).ToHashSet());
         var generatedResolutions = Deserialize<IReadOnlyList<GeneratedProcedureResolution>>(reader.GetString(10));
-        var procedure = Deserialize<CampaignProcedure>(reader.GetString(11));
+        var procedure = CampaignProcedureSchema.Upgrade(
+            Deserialize<CampaignProcedure>(reader.GetString(11)));
         procedure.Validate();
         JourneyAggregateProcedureValidator.Validate(procedure, journey);
         var procedureOrigin = reader.IsDBNull(12) ? null : Deserialize<ProcedureOriginMetadata>(reader.GetString(12));

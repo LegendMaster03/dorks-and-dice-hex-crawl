@@ -160,9 +160,12 @@ public sealed class ProcedureCanonicalJsonService(
         return procedure;
     }
 
-    private static CampaignProcedure Deserialize(string canonicalJson) =>
-        JsonSerializer.Deserialize<CampaignProcedure>(canonicalJson, JsonOptions)
-        ?? throw new JsonException("Canonical procedure JSON was empty.");
+    private static CampaignProcedure Deserialize(string canonicalJson)
+    {
+        var procedure = JsonSerializer.Deserialize<CampaignProcedure>(canonicalJson, JsonOptions)
+            ?? throw new JsonException("Canonical procedure JSON was empty.");
+        return CampaignProcedureSchema.Upgrade(procedure);
+    }
 
     private static JsonSerializerOptions CreateJsonOptions()
     {
