@@ -521,7 +521,7 @@ test("Phase 15 spatial travel uses semantic current-cell adjacency and focused n
     assert.match(adjacency, /CurrentCellAdjacency/);
     assert.doesNotMatch(adjacency, /HexCoordinate|HexOrientation|PointyTop|FlatTop/);
     assert.match(adjacency, /center: polygonCenter\(boundary\)/);
-    assert.match(adjacency, /adjacencyFeedbackVector/);
+    assert.match(adjacency, /outwardVector: AdjacencyPoint/);
     assert.doesNotMatch(adjacency, /adjacencies\.length === 6/);
     assert.match(view, /renderCurrentCellNavigator/);
     assert.match(view, /renderCurrentCellNavigator/);
@@ -600,12 +600,12 @@ test("navigator feedback preserves edge centering and moves along geometry inste
     const phaseStyles = fs.readFileSync(path.join(sourceDir, "phase15-styles.ts"), "utf8");
     const baseStyles = fs.readFileSync(path.join(sourceDir, "styles.ts"), "utf8");
 
-    assert.match(baseStyles, /button:active:not\(:disabled\) \{ transform: translateY\(1px\); \}/);
-    assert.doesNotMatch(navigator, /adjacency\.center.*candidate\.anchor/);
-    assert.match(navigator, /candidate\.outwardVector/);
     const navigator = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/cell-navigator.ts"),
         "utf8");
+    assert.match(baseStyles, /button:active:not\(:disabled\) \{ transform: translateY\(1px\); \}/);
+    assert.doesNotMatch(navigator, /adjacency\.center.*candidate\.anchor/);
+    assert.match(navigator, /candidate\.outwardVector/);
     assert.match(navigator, /--hc-adjacency-feedback-x/);
     assert.match(navigator, /--hc-adjacency-feedback-y/);
     assert.match(phaseStyles, /button\.hc-adjacency-interface:active:not\(:disabled\)/);
