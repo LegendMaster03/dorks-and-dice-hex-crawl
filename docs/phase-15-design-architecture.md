@@ -113,13 +113,13 @@ The map is contextual rather than mandatory input. Selecting a hex can expose re
 
 ### Current-cell adjacency presentation boundary
 
-Routine spatial travel uses a current-cell adjacency abstraction rather than a hardcoded compass widget. Presentation consumes the current cell's display polygon, ordered edges, traversable adjacent cells, and selected edge. A topology-specific adapter may translate that selection into the runtime representation; for the current regular-hex runtime this remains the existing numeric direction value.
+Routine spatial travel uses a current-cell adjacency abstraction rather than a hardcoded compass widget. Presentation consumes the **specific current cell instance's** resolved boundary and ordered adjacency interfaces. It does not reconstruct a shape from hex orientation, ruleset identity, or a tiling name. A topology-specific adapter may translate a selected adjacency interface into the current runtime representation; for the present regular-hex runtime this remains the existing numeric direction value.
 
-The floating navigator is positioned over the map, defaults to the upper-left, and places one semantic button on each traversable edge. Its visible arrow points outward from the cell geometry. Accessible names use screen-relative edge position and adjacent-cell identity. Hex orientation alone does not establish map north, so cardinal labels are not inferred by default.
+The floating navigator is positioned over the map, defaults to the upper-left, draws the supplied current-cell boundary, and places one semantic button on each traversable adjacency interface. An adjacency interface can cover only part of one polygon side, so the contract does not assume edge-to-edge tilings or one neighbor per polygon side. Its visible arrow points outward from the resolved interface geometry. Accessible names use screen-relative boundary position and adjacent-cell identity. Map orientation alone does not establish compass north, so cardinal labels are not inferred by default.
 
 Map and navigator input are bidirectional views of the same intended adjacent-cell selection. Neither input mutates position. The explicit travel action remains the durable boundary where movement amount, navigation, partial progress, encounters, terrain/routes, forced travel, consequences, interruption, and boundary crossing resolve through application/runtime authority.
 
-The presentation contract permits a non-six-edge fixture so future topology work does not have to replace the interaction architecture. Phase 15 does **not** implement square, triangular, mixed, or other alternate runtime tilings.
+The generic navigator has no `HexCoordinate`, `HexOrientation`, six-edge, pointy/flat, or axial-step knowledge. The current adapter resolves `6/m30/r(h1)` into the current cell geometry before the navigator is called. Future regular, mixed-cell, non-edge-to-edge, or periodic isogonal topology support can replace that adapter with one that supplies the occupied cell's actual boundary and adjacency interfaces without changing the navigator UI.
 
 ## Nonspatial and journey adaptation
 

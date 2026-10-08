@@ -36,7 +36,9 @@ Release-level migration and compatibility guarantees remain a separate future de
 
 `CrawlProcedurePresetDefinition` contains creation-time preset identity, display metadata, revision, and a `GenericProcedurePresetRecipe`.
 
-Applying a preset materializes a standalone `CampaignProcedure` containing complete selected module/mechanic snapshots and parameters. `ProcedureOriginMetadata` is optional provenance only.
+Applying a preset materializes a standalone `CampaignProcedure` containing complete selected module/mechanic snapshots, parameters, a procedure-schema version, and the ruleset's GomJau-Hogg periodic-tiling notation. `ProcedureOriginMetadata` is optional provenance only.
+
+The current procedure schema is **v1.1**. Every built-in preset explicitly uses `6/m30/r(h1)`, the only currently supported tiling. Blank custom procedures receive the same value automatically; there is intentionally no tiling selector until another topology is supported. Existing v1 procedure JSON is upgraded on read by inserting `6/m30/r(h1)` and normalizing the schema version to v1.1, so this additive change does not require a second procedure model or a PostgreSQL schema change.
 
 The deterministic runtime path is:
 

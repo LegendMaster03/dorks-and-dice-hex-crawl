@@ -18,6 +18,9 @@ public sealed class GenericProcedureArchitectureTests
 
             Assert.Equal(1, materialized.Procedure.Revision);
             Assert.NotEqual(Guid.Empty, materialized.Procedure.ProcedureId);
+            Assert.Equal(CampaignProcedureSchema.CurrentVersion, materialized.Procedure.SchemaVersion);
+            Assert.Equal(CampaignProcedureSchema.CurrentHexTilingGjhNotation, preset.Recipe.TilingGjhNotation);
+            Assert.Equal(CampaignProcedureSchema.CurrentHexTilingGjhNotation, materialized.Procedure.TilingGjhNotation);
             Assert.Equal(preset.Origin, materialized.Origin);
             Assert.NotEmpty(materialized.Procedure.Modules);
             Assert.All(materialized.Procedure.Modules, module =>
