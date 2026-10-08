@@ -392,7 +392,7 @@ test("Phase 15 map selection is contextual and never directly mutates expedition
 
     assert.match(view, /Selecting an adjacent cell expresses travel intent only; it does not move the party/);
     assert.match(view, /map\.setHexSelectionHandler/);
-    assert.match(view, /selectTravelIntent\(edge\.directionValue, edge\.targetCell\)/);
+    assert.match(view, /selectTravelIntent\\(edge\\.intentValue\\)/);
     assert.match(view, /syncTravelIntentControls\(\)/);
     const selection = view.slice(
         view.indexOf("const selectTravelIntent"),
@@ -974,7 +974,7 @@ test("travel-target map selection follows persisted course across authoritative 
     assert.match(view, /if \(selectedHex !== null && !selectedHexTracksTravelIntent\) return/);
     assert.match(view, /selectedHex = adjacency[\s\S]*adjacencyForIntent\(adjacency, preferences\.direction\)\?\.targetCell/);
     assert.match(view, /preferences = mergeRuntimeTravelPreferences\(runtime, preferences\);[\s\S]*synchronizeTravelTargetProjection\(\);/);
-    assert.match(view, /if \(hex\)[\s\S]*selectTravelIntent\(edge\.directionValue, edge\.targetCell\);[\s\S]*selectedHexTracksTravelIntent = false;/);
+    assert.match(view, /if \(hex\)[\s\S]*selectTravelIntent\\(edge\\.intentValue\\);[\s\S]*selectedHexTracksTravelIntent = false;/);
 });
 
 
@@ -1063,7 +1063,7 @@ test("focused navigation reuses valid intended course and routes missing intent 
     assert.match(navigation, /Choose an adjacent course before resolving navigation/);
     assert.match(navigation, /button\("Choose course"/);
     assert.match(navigation, /button\("Change course"/);
-    assert.match(navigation, /const direction = intendedEdge\.directionValue/);
+    assert.match(navigation, /const direction = intendedEdge\\.intentValue/);
     assert.doesNotMatch(navigation, /name = "intendedDirection"/);
     assert.doesNotMatch(navigation, /labelled\("Intended course", course\)/);
 });
@@ -1079,7 +1079,7 @@ test("secondary travel course changes use the same authoritative course mutation
         view.indexOf("const openRepositionWorkspace"));
     assert.match(workspace, /captureTravelDirectionFromControls/);
     assert.match(workspace, /adjacencyForIntent\(adjacency, parsed\)/);
-    assert.match(workspace, /selectTravelIntent\(edge\.directionValue, edge\.targetCell\)/);
+    assert.match(workspace, /selectTravelIntent\\(edge\\.intentValue\\)/);
     assert.doesNotMatch(workspace, /preferences\.direction = parsed/);
 });
 
