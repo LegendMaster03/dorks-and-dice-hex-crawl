@@ -1,5 +1,5 @@
-import { hexCorners, regularHexCorners } from "../../hex-math";
-import type { GridDefinition, HexCoordinate, HexOrientation } from "../../types";
+import { hexCorners, regularHexCorners } from "../../hex-math.js";
+import type { GridDefinition, HexCoordinate, HexOrientation } from "../../types.js";
 import {
     createCurrentCellAdjacency,
     fitAdjacencyGeometry,
@@ -7,7 +7,7 @@ import {
     type AdjacencyPoint,
     type CurrentCellAdjacency,
     type SpatialAdjacencyInterface
-} from "./spatial-adjacency";
+} from "./spatial-adjacency.js";
 
 export const CURRENT_HEX_GJH_NOTATION = "6/m30/r(h1)";
 
