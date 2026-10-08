@@ -848,7 +848,7 @@ test("DM can reposition the party without routing through ordinary travel proced
     const api = fs.readFileSync(path.join(sourceDir, "api.ts"), "utf8");
 
     assert.match(view, /button\("Teleport party", \(\) => openRepositionWorkspace\(selectedHex\)\)/);
-    assert.match(view, /if \(!edge && !sameHex\(runtime\.expedition\.currentHex, selectedHex\)\)[\s\S]*button\("Teleport party here", \(\) => openRepositionWorkspace\(selectedHex\)\)/);
+    assert.match(view, /if \(!edge && !sameHexCell\(runtime\.expedition\.currentHex, selectedHex\)\)[\s\S]*button\("Teleport party here", \(\) => openRepositionWorkspace\(selectedHex\)\)/);
     assert.match(view, /Teleport party directly repositions the party without resolving travel/);
     assert.match(view, /api\.repositionExpedition/);
     assert.match(view, /preferences\.direction = null/);
