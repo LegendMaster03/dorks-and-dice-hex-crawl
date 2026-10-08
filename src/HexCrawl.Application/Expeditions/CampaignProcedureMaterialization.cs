@@ -22,7 +22,10 @@ public sealed record ProcedureModuleSelection(string ModuleKey, bool Included)
 public sealed record GenericProcedurePresetRecipe(
     string DefaultProcedureKey,
     string DefaultProcedureName,
-    IReadOnlyList<ProcedureModuleRecipe> ModuleSelections);
+    IReadOnlyList<ProcedureModuleRecipe> ModuleSelections)
+{
+    public string TilingGjhNotation { get; init; } = CampaignProcedureSchema.CurrentHexTilingGjhNotation;
+}
 
 public sealed record MaterializedCampaignProcedure(
     CampaignProcedure Procedure,
@@ -62,6 +65,8 @@ public static class CampaignProcedureMaterializer
             Revision = 1,
             Key = preset.Recipe.DefaultProcedureKey,
             Name = preset.Recipe.DefaultProcedureName,
+            SchemaVersion = CampaignProcedureSchema.CurrentVersion,
+            TilingGjhNotation = preset.Recipe.TilingGjhNotation,
             Modules = modules,
             Overrides = []
         };

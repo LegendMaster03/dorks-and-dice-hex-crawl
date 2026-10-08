@@ -320,12 +320,38 @@ public sealed record ProcedureDependencyReport(IReadOnlyList<ProcedureDependency
         or ProcedureDependencyIssueKind.IncompatibleMechanic);
 }
 
+public static class CampaignProcedureSchema
+{
+    public const string LegacyVersion = "1";
+    public const string CurrentVersion = "1.1";
+    public const string CurrentHexTilingGjhNotation = "6/m30/r(h1)";
+
+    public static CampaignProcedure Upgrade(CampaignProcedure procedure)
+    {
+        ArgumentNullException.ThrowIfNull(procedure);
+        if (!string.Equals(procedure.SchemaVersion, LegacyVersion, StringComparison.Ordinal))
+        {
+            return procedure;
+        }
+
+        return procedure with
+        {
+            SchemaVersion = CurrentVersion,
+            TilingGjhNotation = string.IsNullOrWhiteSpace(procedure.TilingGjhNotation)
+                ? CurrentHexTilingGjhNotation
+                : procedure.TilingGjhNotation
+        };
+    }
+}
+
 public sealed record CampaignProcedure
 {
     public required Guid ProcedureId { get; init; }
     public required int Revision { get; init; }
     public required string Key { get; init; }
     public required string Name { get; init; }
+    public string SchemaVersion { get; init; } = CampaignProcedureSchema.CurrentVersion;
+    public string TilingGjhNotation { get; init; } = CampaignProcedureSchema.CurrentHexTilingGjhNotation;
     public required IReadOnlyList<MaterializedProcedureModule> Modules { get; init; }
     public IReadOnlyList<CampaignProcedureOverride> Overrides { get; init; } = [];
 
@@ -335,6 +361,8 @@ public sealed record CampaignProcedure
         && Revision == other.Revision
         && string.Equals(Key, other.Key, StringComparison.Ordinal)
         && string.Equals(Name, other.Name, StringComparison.Ordinal)
+        && string.Equals(SchemaVersion, other.SchemaVersion, StringComparison.Ordinal)
+        && string.Equals(TilingGjhNotation, other.TilingGjhNotation, StringComparison.Ordinal)
         && ProcedureStructuralEquality.SequenceEquals(Modules, other.Modules)
         && ProcedureStructuralEquality.OverrideSequenceEquals(Overrides, other.Overrides);
 
@@ -345,6 +373,8 @@ public sealed record CampaignProcedure
         hash.Add(Revision);
         hash.Add(Key, StringComparer.Ordinal);
         hash.Add(Name, StringComparer.Ordinal);
+        hash.Add(SchemaVersion, StringComparer.Ordinal);
+        hash.Add(TilingGjhNotation, StringComparer.Ordinal);
         hash.Add(ProcedureStructuralEquality.SequenceHash(Modules));
         hash.Add(ProcedureStructuralEquality.OverrideSequenceHash(Overrides));
         return hash.ToHashCode();
@@ -362,6 +392,12 @@ public sealed record CampaignProcedure
         }
         MechanicDefinition.Require(Key, "Campaign procedure key");
         MechanicDefinition.Require(Name, "Campaign procedure name");
+        if (!string.Equals(SchemaVersion, CampaignProcedureSchema.CurrentVersion, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"Campaign procedure schema version '{SchemaVersion}' is not supported. Expected {CampaignProcedureSchema.CurrentVersion}.");
+        }
+        MechanicDefinition.Require(TilingGjhNotation, "Campaign procedure GomJau-Hogg tiling notation");
         if (Modules.Count == 0)
         {
             throw new InvalidOperationException("Campaign procedure requires at least one module.");

@@ -16,6 +16,8 @@ internal static class ProcedureComposerCustomProcedureFactory
             Revision = 1,
             Key = "custom-expedition-procedure",
             Name = "Custom expedition procedure",
+            SchemaVersion = CampaignProcedureSchema.CurrentVersion,
+            TilingGjhNotation = CampaignProcedureSchema.CurrentHexTilingGjhNotation,
             Modules = [],
             Overrides = []
         };
