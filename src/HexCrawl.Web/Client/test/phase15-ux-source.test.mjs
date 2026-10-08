@@ -467,11 +467,13 @@ test("navigator renders supplied cell boundary and adjacency interfaces with con
 
     assert.match(navigator, /adjacency\.boundary/);
     assert.match(navigator, /for \(const candidate of adjacency\.adjacencies\)/);
+    assert.match(navigator, /const vector = candidate\.outwardVector/);
     assert.match(navigator, /candidate\.anchor\.x \+ vector\.x \* 0\.045/);
     assert.match(navigator, /data.*adjacencyInterfaceId|dataset\.adjacencyInterfaceId/);
     assert.match(navigator, /hc-adjacency-arrow-shape/);
     assert.match(navigator, /M2 15 H38 V4 L62 20 L38 36 V25 H2 Z/);
     assert.match(adjacency, /boundarySegment/);
+    assert.match(adjacency, /outwardVector/);
     assert.doesNotMatch(adjacency, /HexCoordinate|HexOrientation|PointyTop|FlatTop|axialSteps/);
     assert.match(styles, /\.hc-adjacency-arrow-shape path/);
     assert.match(styles, /fill:#fff/);
@@ -599,8 +601,8 @@ test("navigator feedback preserves edge centering and moves along geometry inste
     const baseStyles = fs.readFileSync(path.join(sourceDir, "styles.ts"), "utf8");
 
     assert.match(baseStyles, /button:active:not\(:disabled\) \{ transform: translateY\(1px\); \}/);
-    assert.match(adjacency, /adjacencyFeedbackVector/);
-    assert.match(adjacency, /Math\.hypot\(dx, dy\)/);
+    assert.doesNotMatch(navigator, /adjacency\.center.*candidate\.anchor/);
+    assert.match(navigator, /candidate\.outwardVector/);
     const navigator = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/cell-navigator.ts"),
         "utf8");

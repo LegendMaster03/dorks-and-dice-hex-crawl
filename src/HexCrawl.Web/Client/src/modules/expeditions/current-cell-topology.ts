@@ -51,6 +51,10 @@ export function currentRuntimeCellAdjacency(
         ? hexCorners(input.worldGrid, input.currentCell)
         : regularHexCorners(input.abstractOrientation ?? "PointyTop");
 
+    const cellCenter = input.worldGrid
+        ? hexCenter(input.worldGrid, input.currentCell)
+        : { x: 0, y: 0 };
+
     const raw: SpatialAdjacencyInterface<HexCoordinate, number>[] =
         axialSteps.map((step, direction) => {
             const [startIndex, endIndex] = directionBoundaryCorners[direction];
@@ -71,6 +75,10 @@ export function currentRuntimeCellAdjacency(
                 label: "",
                 boundarySegment,
                 anchor: midpoint(boundarySegment[0], boundarySegment[1]),
+                outwardVector: outwardNormal(
+                    boundarySegment[0],
+                    boundarySegment[1],
+                    cellCenter),
                 traversable: true,
                 disabledReason: null
             };
@@ -97,4 +105,31 @@ function midpoint(left: AdjacencyPoint, right: AdjacencyPoint): AdjacencyPoint {
         x: (left.x + right.x) / 2,
         y: (left.y + right.y) / 2
     };
+}
+
+function hexCenter(grid: GridDefinition, cell: HexCoordinate): AdjacencyPoint {
+    const corners = hexCorners(grid, cell);
+    return {
+        x: corners.reduce((sum, point) => sum + point.x, 0) / corners.length,
+        y: corners.reduce((sum, point) => sum + point.y, 0) / corners.length
+    };
+}
+
+function outwardNormal(
+    start: AdjacencyPoint,
+    end: AdjacencyPoint,
+    cellCenter: AdjacencyPoint): AdjacencyPoint {
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const length = Math.hypot(dx, dy);
+    if (length <= Number.EPSILON) {
+        throw new Error("A current-cell adjacency interface requires non-zero boundary geometry.");
+    }
+
+    const anchor = midpoint(start, end);
+    const first = { x: -dy / length, y: dx / length };
+    const towardAnchor = { x: anchor.x - cellCenter.x, y: anchor.y - cellCenter.y };
+    return first.x * towardAnchor.x + first.y * towardAnchor.y >= 0
+        ? first
+        : { x: -first.x, y: -first.y };
 }

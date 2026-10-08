@@ -5,7 +5,6 @@ import { regularHexCorners } from "../.test-dist/hex-math.js";
 import {
     adjacencyForCell,
     adjacencyForIntent,
-    adjacencyFeedbackVector,
     createCurrentCellAdjacency,
     screenRelativeAdjacencyLabel
 } from "../.test-dist/modules/expeditions/spatial-adjacency.js";
@@ -20,11 +19,11 @@ test("current-cell presentation supports more adjacency interfaces than polygon 
         "center",
         [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }],
         [
-            { id: "top", order: 1, targetCell: "a", targetLabel: "a", intentValue: "A", label: "upper boundary", boundarySegment: [{ x: 0, y: 0 }, { x: 1, y: 0 }], anchor: { x: 0.5, y: 0 }, traversable: true, disabledReason: null },
-            { id: "right-upper", order: 2, targetCell: "b", targetLabel: "b", intentValue: "B", label: "upper-right boundary", boundarySegment: [{ x: 1, y: 0 }, { x: 1, y: 0.5 }], anchor: { x: 1, y: 0.25 }, traversable: true, disabledReason: null },
-            { id: "right-lower", order: 3, targetCell: "c", targetLabel: "c", intentValue: "C", label: "lower-right boundary", boundarySegment: [{ x: 1, y: 0.5 }, { x: 1, y: 1 }], anchor: { x: 1, y: 0.75 }, traversable: true, disabledReason: null },
-            { id: "bottom", order: 4, targetCell: "d", targetLabel: "d", intentValue: "D", label: "lower boundary", boundarySegment: [{ x: 1, y: 1 }, { x: 0, y: 1 }], anchor: { x: 0.5, y: 1 }, traversable: true, disabledReason: null },
-            { id: "left", order: 5, targetCell: "e", targetLabel: "e", intentValue: "E", label: "left boundary", boundarySegment: [{ x: 0, y: 1 }, { x: 0, y: 0 }], anchor: { x: 0, y: 0.5 }, traversable: true, disabledReason: null }
+            { id: "top", order: 1, targetCell: "a", targetLabel: "a", intentValue: "A", label: "upper boundary", boundarySegment: [{ x: 0, y: 0 }, { x: 1, y: 0 }], anchor: { x: 0.5, y: 0 }, outwardVector: { x: 0, y: -1 }, traversable: true, disabledReason: null },
+            { id: "right-upper", order: 2, targetCell: "b", targetLabel: "b", intentValue: "B", label: "upper-right boundary", boundarySegment: [{ x: 1, y: 0 }, { x: 1, y: 0.5 }], anchor: { x: 1, y: 0.25 }, outwardVector: { x: 1, y: 0 }, traversable: true, disabledReason: null },
+            { id: "right-lower", order: 3, targetCell: "c", targetLabel: "c", intentValue: "C", label: "lower-right boundary", boundarySegment: [{ x: 1, y: 0.5 }, { x: 1, y: 1 }], anchor: { x: 1, y: 0.75 }, outwardVector: { x: 1, y: 0 }, traversable: true, disabledReason: null },
+            { id: "bottom", order: 4, targetCell: "d", targetLabel: "d", intentValue: "D", label: "lower boundary", boundarySegment: [{ x: 1, y: 1 }, { x: 0, y: 1 }], anchor: { x: 0.5, y: 1 }, outwardVector: { x: 0, y: 1 }, traversable: true, disabledReason: null },
+            { id: "left", order: 5, targetCell: "e", targetLabel: "e", intentValue: "E", label: "left boundary", boundarySegment: [{ x: 0, y: 1 }, { x: 0, y: 0 }], anchor: { x: 0, y: 0.5 }, outwardVector: { x: -1, y: 0 }, traversable: true, disabledReason: null }
         ],
         "C");
 
@@ -35,10 +34,9 @@ test("current-cell presentation supports more adjacency interfaces than polygon 
     assert.equal(adjacencyForCell(current, "c", (left, right) => left === right)?.intentValue, "C");
 });
 
-test("screen-relative labels and feedback vectors are derived from supplied adjacency geometry", () => {
+test("screen-relative labels are derived from supplied adjacency geometry", () => {
     assert.equal(screenRelativeAdjacencyLabel({ x: 0.9, y: 0.5 }), "right boundary");
     assert.equal(screenRelativeAdjacencyLabel({ x: 0.8, y: 0.2 }), "upper-right boundary");
-    assert.deepEqual(adjacencyFeedbackVector({ x: 0.5, y: 0.5 }, { x: 0.9, y: 0.5 }), { x: 1, y: 0 });
 });
 
 test("world-backed navigator geometry comes from the same authoritative cell corners as the map", () => {
@@ -61,6 +59,16 @@ test("world-backed navigator geometry comes from the same authoritative cell cor
 
     assert.equal(current.adjacencies.length, 6);
     assert.equal(current.selectedAdjacencyId, "adjacency-1");
+    for (const adjacency of current.adjacencies) {
+        const [start, end] = adjacency.boundarySegment;
+        const tangent = { x: end.x - start.x, y: end.y - start.y };
+        assert.ok(Math.abs(
+            tangent.x * adjacency.outwardVector.x
+            + tangent.y * adjacency.outwardVector.y) < 1e-12);
+        assert.ok(Math.abs(Math.hypot(
+            adjacency.outwardVector.x,
+            adjacency.outwardVector.y) - 1) < 1e-12);
+    }
     const raw = regularHexCorners("FlatTop");
     const rawWidth = Math.max(...raw.map(p => p.x)) - Math.min(...raw.map(p => p.x));
     const rawHeight = Math.max(...raw.map(p => p.y)) - Math.min(...raw.map(p => p.y));

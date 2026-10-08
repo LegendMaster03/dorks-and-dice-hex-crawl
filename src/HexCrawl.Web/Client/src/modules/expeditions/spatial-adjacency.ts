@@ -12,6 +12,7 @@ export type SpatialAdjacencyInterface<TCell, TIntent> = {
     label: string;
     boundarySegment: AdjacencyPoint[];
     anchor: AdjacencyPoint;
+    outwardVector: AdjacencyPoint;
     traversable: boolean;
     disabledReason: string | null;
 };
@@ -52,16 +53,6 @@ export function adjacencyForIntent<TCell, TIntent>(
     adjacency: CurrentCellAdjacency<TCell, TIntent>,
     intent: TIntent): SpatialAdjacencyInterface<TCell, TIntent> | null {
     return adjacency.adjacencies.find(candidate => Object.is(candidate.intentValue, intent)) ?? null;
-}
-
-export function adjacencyFeedbackVector(
-    center: AdjacencyPoint,
-    anchor: AdjacencyPoint): AdjacencyPoint {
-    const dx = anchor.x - center.x;
-    const dy = anchor.y - center.y;
-    const length = Math.hypot(dx, dy);
-    if (length <= Number.EPSILON) return { x: 0, y: 0 };
-    return { x: dx / length, y: dy / length };
 }
 
 export function screenRelativeAdjacencyLabel(anchor: AdjacencyPoint): string {

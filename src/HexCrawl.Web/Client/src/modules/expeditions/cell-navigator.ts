@@ -1,5 +1,4 @@
 import {
-    adjacencyFeedbackVector,
     type CurrentCellAdjacency,
     type SpatialAdjacencyInterface
 } from "./spatial-adjacency";
@@ -31,7 +30,7 @@ export function renderCurrentCellNavigator<TCell, TIntent>(
     navigator.append(svg);
 
     for (const candidate of adjacency.adjacencies) {
-        const vector = adjacencyFeedbackVector(adjacency.center, candidate.anchor);
+        const vector = candidate.outwardVector;
         const angleDegrees = Math.atan2(vector.y, vector.x) * 180 / Math.PI;
         const control = document.createElement("button");
         control.type = "button";
