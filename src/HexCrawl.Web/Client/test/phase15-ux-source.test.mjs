@@ -177,7 +177,7 @@ test("navigator accent follows the host site primary token without changing shar
     assert.equal((styles.match(/--hc-primary: var\(--bs-primary, #6d61dc\);/g) ?? []).length, 2);
     assert.equal((styles.match(/--hc-focus: #6557d2;/g) ?? []).length, 1);
     assert.equal((styles.match(/--hc-focus: #a99df5;/g) ?? []).length, 2);
-    assert.match(phaseStyles, /\.hc-adjacency-edge\.is-selected \.hc-adjacency-arrow-shape path \{ stroke:var\(--hc-primary\); \}/);
+    assert.match(phaseStyles, /\.hc-adjacency-interface\.is-selected \.hc-adjacency-arrow-shape path \{ stroke:var\(--hc-primary\); \}/);
 });
 
 test("Compact procedure edits keep their focused workspace across draft recomposition", () => {
@@ -323,8 +323,8 @@ test("routine spatial travel reuses intent and suppresses fixed movement inputs 
         "utf8");
 
     assert.match(view, /hc-adjacency-navigator/);
-    assert.match(view, /currentHexAdjacency/);
-    assert.match(view, /adjacencyEdgeForCell/);
+    assert.match(view, /currentRuntimeCellAdjacency/);
+    assert.match(view, /adjacencyForCell/);
     assert.match(intent, /hex-crawl\.expedition\.\$\{expeditionId\}\.travel-intent/);
     assert.match(view, /Reusable course and pace stay filled until changed/);
     assert.match(view, /movementComposition\.suggestedExpectedDistance/);
@@ -404,16 +404,18 @@ test("Phase 15 map selection is contextual and never directly mutates expedition
     assert.doesNotMatch(view, /setHexSelectionHandler[\s\S]{0,800}advanceExpedition/);
 });
 
-test("current-cell adjacency is memoized across unchanged render and summary reads", () => {
+test("current-cell topology is memoized independently from selected intent", () => {
     const view = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
         "utf8");
 
     assert.match(view, /let adjacencyCache:/);
     assert.match(view, /if \(adjacencyCache\?\.key !== key\)/);
-    assert.match(view, /currentHexAdjacency\(cell, orientation, null, rotation\)/);
+    assert.match(view, /currentRuntimeCellAdjacency\(\{/);
+    assert.match(view, /tilingGjhNotation: runtime\.procedure\.tilingGjhNotation/);
+    assert.match(view, /selectedDirection: null/);
     assert.match(view, /const base = adjacencyCache\.value/);
-    assert.match(view, /selectedEdgeId: selected\?\.id \?\? null/);
+    assert.match(view, /selectedAdjacencyId: selected\?\.id \?\? null/);
     const keyBlock = view.slice(
         view.indexOf("const key = ["),
         view.indexOf("].join", view.indexOf("const key = [")));
@@ -451,41 +453,27 @@ test("focused travel drawer explicitly removes its course and pace listeners on 
     assert.match(view, /controller\.dispose\(\)/);
 });
 
-test("navigator controls use midpoint-anchored white SVG arrows with consistent interaction outlines", () => {
-    const view = fs.readFileSync(
-        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
+test("navigator renders supplied cell boundary and adjacency interfaces with consistent arrow affordance", () => {
+    const navigator = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/cell-navigator.ts"),
+        "utf8");
+    const adjacency = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/spatial-adjacency.ts"),
         "utf8");
     const styles = fs.readFileSync(path.join(sourceDir, "phase15-styles.ts"), "utf8");
 
-    assert.match(view, /--hc-edge-angle/);
-    assert.match(view, /edge\.midpoint\.x \+ vector\.x \* 0\.045/);
-    assert.match(view, /hc-adjacency-arrow-shape/);
-    assert.match(view, /M2 15 H38 V4 L62 20 L38 36 V25 H2 Z/);
-    assert.match(view, /const selectTravelIntent =/);
-    assert.match(view, /const clearTravelIntent =/);
-    assert.match(view, /const toggleTravelIntent =/);
-    assert.match(view, /if \(preferences\.direction !== direction\) \{\s*selectTravelIntent\(direction, target\)/);
-    assert.match(view, /clearTravelIntent\(\)/);
-    assert.match(view, /runtime\.expedition\.activeWatchNumber !== null/);
-    assert.match(view, /active travel watch requires an intended course/);
-    assert.match(view, /setExpeditionCourseIntent/);
-    assert.match(view, /button\("", \(\) => toggleTravelIntent\(edge\.directionValue, edge\.targetCell\)\)/);
-    assert.match(view, /if \(edge\) selectTravelIntent\(edge\.directionValue, edge\.targetCell\)/);
-    assert.doesNotMatch(view, /data-adjacency-edge-mark/);
-    assert.doesNotMatch(view, /edgeMarks/);
-    assert.doesNotMatch(view, /hc-adjacency-caption/);
+    assert.match(navigator, /adjacency\.boundary/);
+    assert.match(navigator, /for \(const candidate of adjacency\.adjacencies\)/);
+    assert.match(navigator, /candidate\.anchor\.x \+ vector\.x \* 0\.045/);
+    assert.match(navigator, /data.*adjacencyInterfaceId|dataset\.adjacencyInterfaceId/);
+    assert.match(navigator, /hc-adjacency-arrow-shape/);
+    assert.match(navigator, /M2 15 H38 V4 L62 20 L38 36 V25 H2 Z/);
+    assert.match(adjacency, /boundarySegment/);
+    assert.doesNotMatch(adjacency, /HexCoordinate|HexOrientation|PointyTop|FlatTop|axialSteps/);
     assert.match(styles, /\.hc-adjacency-arrow-shape path/);
     assert.match(styles, /fill:#fff/);
     assert.match(styles, /stroke:transparent/);
-    assert.match(styles, /paint-order:stroke fill/);
-    assert.match(styles, /:hover:not\(:disabled\) \.hc-adjacency-arrow-shape path \{ stroke:var\(--hc-primary\)/);
-    assert.match(styles, /\.is-selected \.hc-adjacency-arrow-shape path \{ stroke:var\(--hc-primary\)/);
-    assert.doesNotMatch(styles, /hc-adjacency-edge-mark/);
-    assert.match(styles, /#tool-root\.hex-crawl-app button\.hc-adjacency-edge \{/);
-    assert.match(styles, /#tool-root\.hex-crawl-app button\.hc-adjacency-edge:hover:not\(:disabled\)/);
-    assert.match(styles, /#tool-root\.hex-crawl-app button\.hc-adjacency-edge:focus-visible/);
-    assert.match(styles, /#tool-root\.hex-crawl-app button\.hc-adjacency-edge:disabled/);
-    assert.match(styles, /cursor:pointer/);
+    assert.match(styles, /#tool-root\.hex-crawl-app button\.hc-adjacency-interface \{/);
     assert.match(styles, /outline:3px solid var\(--hc-primary\)/);
     assert.match(styles, /min-width:2\.75rem; min-height:2\.75rem/);
 });
@@ -526,13 +514,13 @@ test("Phase 15 spatial travel uses semantic current-cell adjacency and focused n
 
     assert.match(adjacency, /createCurrentCellAdjacency/);
     assert.match(adjacency, /CurrentCellAdjacency/);
-    assert.match(adjacency, /currentHexAdjacency/);
-    assert.match(adjacency, /center: polygonCenter\(polygon\)/);
+    assert.doesNotMatch(adjacency, /HexCoordinate|HexOrientation|PointyTop|FlatTop/);
+    assert.match(adjacency, /center: polygonCenter\(boundary\)/);
     assert.match(adjacency, /adjacencyFeedbackVector/);
-    assert.doesNotMatch(adjacency, /edges\.length === 6/);
-    assert.match(view, /aria-label", "Current-cell adjacent travel"/);
-    assert.match(view, /aria-pressed/);
-    assert.match(view, /current actual resolved course/);
+    assert.doesNotMatch(adjacency, /adjacencies\.length === 6/);
+    assert.match(view, /renderCurrentCellNavigator/);
+    assert.match(view, /renderCurrentCellNavigator/);
+    assert.match(view, /actualIntent: runtime\.expedition\.actualDirection/);
     assert.match(view, /recordNavigationAssistant/);
     assert.match(view, /openNavigationWorkspace/);
     assert.match(model, /navigationResolutionDue/);
@@ -605,12 +593,15 @@ test("navigator feedback preserves edge centering and moves along geometry inste
     assert.match(baseStyles, /button:active:not\(:disabled\) \{ transform: translateY\(1px\); \}/);
     assert.match(adjacency, /adjacencyFeedbackVector/);
     assert.match(adjacency, /Math\.hypot\(dx, dy\)/);
-    assert.match(view, /--hc-edge-feedback-x/);
-    assert.match(view, /--hc-edge-feedback-y/);
-    assert.match(phaseStyles, /button\.hc-adjacency-edge:active:not\(:disabled\)/);
+    const navigator = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/cell-navigator.ts"),
+        "utf8");
+    assert.match(navigator, /--hc-adjacency-feedback-x/);
+    assert.match(navigator, /--hc-adjacency-feedback-y/);
+    assert.match(phaseStyles, /button\.hc-adjacency-interface:active:not\(:disabled\)/);
     assert.match(
         phaseStyles,
-        /translate\(calc\(-50% \+ var\(--hc-edge-feedback-x\)\),calc\(-50% \+ var\(--hc-edge-feedback-y\)\)\)/);
+        /translate\(calc\(-50% \+ var\(--hc-adjacency-feedback-x\)\),calc\(-50% \+ var\(--hc-adjacency-feedback-y\)\)\)/);
 });
 
 test("lost-boundary resolution is a dedicated focused mutation and does not require hidden travel input", () => {
@@ -981,7 +972,7 @@ test("travel-target map selection follows persisted course across authoritative 
     assert.match(view, /synchronizeTravelTargetProjection\(\);/);
     assert.match(view, /selectedHexTracksTravelIntent = selectedHex !== null/);
     assert.match(view, /if \(selectedHex !== null && !selectedHexTracksTravelIntent\) return/);
-    assert.match(view, /selectedHex = adjacency[\s\S]*adjacencyEdgeForDirection\(adjacency, preferences\.direction\)\?\.targetCell/);
+    assert.match(view, /selectedHex = adjacency[\s\S]*adjacencyForIntent\(adjacency, preferences\.direction\)\?\.targetCell/);
     assert.match(view, /preferences = mergeRuntimeTravelPreferences\(runtime, preferences\);[\s\S]*synchronizeTravelTargetProjection\(\);/);
     assert.match(view, /if \(hex\)[\s\S]*selectTravelIntent\(edge\.directionValue, edge\.targetCell\);[\s\S]*selectedHexTracksTravelIntent = false;/);
 });
@@ -1087,7 +1078,7 @@ test("secondary travel course changes use the same authoritative course mutation
         view.indexOf("const openTravelWorkspace"),
         view.indexOf("const openRepositionWorkspace"));
     assert.match(workspace, /captureTravelDirectionFromControls/);
-    assert.match(workspace, /adjacencyEdgeForDirection\(adjacency, parsed\)/);
+    assert.match(workspace, /adjacencyForIntent\(adjacency, parsed\)/);
     assert.match(workspace, /selectTravelIntent\(edge\.directionValue, edge\.targetCell\)/);
     assert.doesNotMatch(workspace, /preferences\.direction = parsed/);
 });
@@ -1100,7 +1091,7 @@ test("course intent UI serializes server mutations so rapid clicks can not race 
     assert.match(view, /let courseIntentMutationPending = false/);
     assert.match(view, /if \(!runtime\.expedition\.isSpatial \|\| courseIntentMutationPending\) return/);
     assert.match(view, /setCourseIntentMutationPending\(true\)/);
-    assert.match(view, /\[data-adjacency-edge\], \[data-adjacency-select\], select\[name="direction"\]/);
+    assert.match(view, /\[data-adjacency-interface-id\], \[data-adjacency-select\], select\[name="direction"\]/);
     assert.match(view, /finally \{\s*if \(!disposed\) setCourseIntentMutationPending\(false\)/);
 });
 

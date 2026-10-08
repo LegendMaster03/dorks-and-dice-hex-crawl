@@ -187,17 +187,20 @@ test("DM-facing world authoring copy explains empty states and keeps deeper map 
 test("direction controls retain numeric runtime values while current-cell adjacency stays topology-derived", () => {
     const runtime = read("runtime-view.ts");
     const adjacency = read("modules/expeditions/spatial-adjacency.ts");
+    const navigator = read("modules/expeditions/cell-navigator.ts");
     const expedition = read("modules/expeditions/expedition-view.ts");
     const watch = read("modules/expeditions/expedition-watch-controller.ts");
     const assistant = read("modules/assistants/expedition-assistant-view.ts");
     assert.match(runtime, /Edge \${direction \+ 1}/);
     assert.doesNotMatch(runtime, /"North"|"South"|"East"|"West"/);
     assert.match(adjacency, /createCurrentCellAdjacency/);
-    assert.match(adjacency, /edges: SpatialAdjacencyEdge/);
+    assert.match(adjacency, /adjacencies: SpatialAdjacencyInterface/);
+    assert.match(adjacency, /boundarySegment/);
+    assert.doesNotMatch(adjacency, /HexCoordinate|HexOrientation|PointyTop|FlatTop/);
     assert.doesNotMatch(expedition, /direction < 6/);
-    assert.match(expedition, /for \(const edge of adjacency\.edges\)/);
-    assert.match(expedition, /control\.dataset\.adjacencyEdge = String\(edge\.directionValue\)/);
-    assert.match(expedition, /aria-label", "Current-cell adjacent travel"/);
+    assert.match(navigator, /for \(const candidate of adjacency\.adjacencies\)/);
+    assert.match(navigator, /control\.dataset\.adjacencyInterfaceId = candidate\.id/);
+    assert.match(navigator, /aria-label", "Current-cell adjacent travel"/);
     assert.match(assistant, /<option value="">Select intended direction<\/option>/);
     assert.match(assistant, /\$\{directionLabel\(value\)\}<\/option>/);
     assert.match(watch, /state\.intendedDirection === null \? "" : String\(state\.intendedDirection\)/);

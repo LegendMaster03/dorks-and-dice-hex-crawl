@@ -106,15 +106,44 @@ export async function renderExpedition(
         ?? runtime.context.hexCenterDistance?.unit.symbol
         ?? null;
     normalizeTravelModeSelection();
+    let adjacencyCache: {
+        key: string;
+        value: ReturnType<typeof currentRuntimeCellAdjacency>;
+    } | null = null;
+
     const currentAdjacency = () => {
         if (!runtime.expedition.isSpatial) return null;
-        return currentRuntimeCellAdjacency({
-            currentCell: runtime.expedition.currentHex,
-            tilingGjhNotation: runtime.procedure.tilingGjhNotation,
-            selectedDirection: preferences.direction,
-            worldGrid: world?.grid ?? null,
-            abstractOrientation: runtime.context.orientation
-        });
+        const cell = runtime.expedition.currentHex;
+        const grid = world?.grid ?? null;
+        const key = [
+            cell.q,
+            cell.r,
+            runtime.procedure.tilingGjhNotation,
+            world?.version ?? "abstract",
+            grid?.orientation ?? runtime.context.orientation ?? "PointyTop",
+            grid?.rotationDegrees ?? 0,
+            grid?.hexRadiusWorldUnits ?? 1
+        ].join(":");
+        if (adjacencyCache?.key !== key) {
+            adjacencyCache = {
+                key,
+                value: currentRuntimeCellAdjacency({
+                    currentCell: cell,
+                    tilingGjhNotation: runtime.procedure.tilingGjhNotation,
+                    selectedDirection: null,
+                    worldGrid: grid,
+                    abstractOrientation: runtime.context.orientation
+                })
+            };
+        }
+
+        const base = adjacencyCache.value;
+        if (preferences.direction === null) return base;
+        const selected = adjacencyForIntent(base, preferences.direction);
+        return {
+            ...base,
+            selectedAdjacencyId: selected?.id ?? null
+        };
     };
 
     const normalizeTravelDirectionSelection = (): void => {
@@ -125,7 +154,7 @@ export async function renderExpedition(
         const adjacency = currentAdjacency();
         preferences.direction = normalizeTravelDirectionPreference(
             preferences.direction,
-            adjacency?.edges.map(edge => edge.intentValue) ?? []);
+            adjacency?.adjacencies.map(edge => edge.intentValue) ?? []);
     };
     normalizeTravelDirectionSelection();
 
@@ -592,7 +621,7 @@ export async function renderExpedition(
     const setCourseIntentMutationPending = (pending: boolean): void => {
         courseIntentMutationPending = pending;
         for (const control of root.querySelectorAll<HTMLButtonElement | HTMLSelectElement>(
-            '[data-adjacency-edge], [data-adjacency-select], select[name="direction"]')) {
+            '[data-adjacency-interface-id], [data-adjacency-select], select[name="direction"]')) {
             control.disabled = pending;
         }
     };
@@ -1316,7 +1345,7 @@ export async function renderExpedition(
                 submit);
             form.addEventListener("submit", event => {
                 event.preventDefault();
-                const direction = intendedEdge.directionValue;
+                const direction = intendedEdge.intentValue;
                 const lost = outcome.value === "lost";
                 const resolvedVeer = lost ? Number(veer.value) : 0;
                 if (!Number.isInteger(resolvedVeer) || (lost && resolvedVeer === 0)) {
