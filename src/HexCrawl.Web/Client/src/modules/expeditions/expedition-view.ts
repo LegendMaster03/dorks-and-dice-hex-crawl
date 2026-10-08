@@ -11,7 +11,7 @@ import { discoveredSubjectIds, directionLabel, formatDistance, formatHours } fro
 import { SurvivalResourcesApi } from "../../survival-api";
 import type { SurvivalResources } from "../../survival-types";
 import { canonicalExpeditionRoute } from "../../tool-route";
-import type { ExpeditionDetail, HexCoordinate, HexOrientation, Overworld, ResolutionSource, ToolHostContext } from "../../types";
+import type { ExpeditionDetail, HexCoordinate, Overworld, ResolutionSource, ToolHostContext } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
 import { badge, disclosure, openWorkspaceDrawer, statAction, textElement, type WorkspaceDrawer } from "../../ui/workspace";
 import { applyGuidedExperience, guidedDisclosure, guidancePreferenceButton } from "../../ui/guidance";
@@ -19,13 +19,9 @@ import { ExpeditionEffectsPanel } from "./effects-panel";
 import { ExpeditionEnvironmentPanel } from "./environment-panel";
 import { ExpeditionJourneyPanel } from "./journey-panel";
 import { ExpeditionPartySheetController } from "./expedition-party-sheet";
-import {
-    adjacencyEdgeForCell,
-    adjacencyEdgeForDirection,
-    adjacencyFeedbackVector,
-    currentHexAdjacency,
-    sameHex
-} from "./spatial-adjacency";
+import { adjacencyForCell, adjacencyForIntent } from "./spatial-adjacency";
+import { renderCurrentCellNavigator } from "./cell-navigator";
+import { currentRuntimeCellAdjacency, sameHexCellCell } from "./current-cell-topology";
 import { publishExpeditionRuntimeChanged } from "./expedition-runtime-events";
 import { ExpeditionSurvivalResourcesPanel } from "./survival-resources-panel";
 import { ExpeditionWatchController } from "./expedition-watch-controller";
@@ -110,39 +106,15 @@ export async function renderExpedition(
         ?? runtime.context.hexCenterDistance?.unit.symbol
         ?? null;
     normalizeTravelModeSelection();
-    let adjacencyCache: {
-        key: string;
-        value: ReturnType<typeof currentHexAdjacency>;
-    } | null = null;
-
-    const spatialOrientation = (): HexOrientation =>
-        runtime.context.orientation ?? world?.grid.orientation ?? "PointyTop";
-    const spatialRotation = (): number => world?.grid.rotationDegrees ?? 0;
-
     const currentAdjacency = () => {
         if (!runtime.expedition.isSpatial) return null;
-        const cell = runtime.expedition.currentHex;
-        const orientation = spatialOrientation();
-        const rotation = spatialRotation();
-        const key = [
-            cell.q,
-            cell.r,
-            orientation,
-            rotation
-        ].join(":");
-        if (adjacencyCache?.key !== key) {
-            adjacencyCache = {
-                key,
-                value: currentHexAdjacency(cell, orientation, null, rotation)
-            };
-        }
-        const base = adjacencyCache.value;
-        if (preferences.direction === null) return base;
-        const selected = adjacencyEdgeForDirection(base, preferences.direction);
-        return {
-            ...base,
-            selectedEdgeId: selected?.id ?? null
-        };
+        return currentRuntimeCellAdjacency({
+            currentCell: runtime.expedition.currentHex,
+            tilingGjhNotation: runtime.procedure.tilingGjhNotation,
+            selectedDirection: preferences.direction,
+            worldGrid: world?.grid ?? null,
+            abstractOrientation: runtime.context.orientation
+        });
     };
 
     const normalizeTravelDirectionSelection = (): void => {
@@ -153,7 +125,7 @@ export async function renderExpedition(
         const adjacency = currentAdjacency();
         preferences.direction = normalizeTravelDirectionPreference(
             preferences.direction,
-            adjacency?.edges.map(edge => edge.directionValue) ?? []);
+            adjacency?.edges.map(edge => edge.intentValue) ?? []);
     };
     normalizeTravelDirectionSelection();
 
@@ -169,7 +141,7 @@ export async function renderExpedition(
         if (selectedHex !== null && !selectedHexTracksTravelIntent) return;
         const adjacency = currentAdjacency();
         selectedHex = adjacency
-            ? adjacencyEdgeForDirection(adjacency, preferences.direction)?.targetCell ?? null
+            ? adjacencyForIntent(adjacency, preferences.direction)?.targetCell ?? null
             : null;
         selectedHexTracksTravelIntent = selectedHex !== null;
     };
@@ -178,7 +150,7 @@ export async function renderExpedition(
     const courseLabel = (direction: number | null): string => {
         const adjacency = currentAdjacency();
         if (direction === null || !adjacency) return directionLabel(direction);
-        const edge = adjacencyEdgeForDirection(adjacency, direction);
+        const edge = adjacencyForIntent(adjacency, direction);
         return edge ? edgeCourseLabel(edge) : directionLabel(direction);
     };
 
@@ -361,7 +333,7 @@ export async function renderExpedition(
                     ? "Continue travel"
                     : action.label,
             detail: courseRequired
-                ? "Choose an adjacent edge or map cell. Your pace stays reusable; selecting a course does not move the party."
+                ? "Choose an adjacent cell from the navigator or map. Your pace stays reusable; selecting a course does not move the party."
                 : routineSpatialTravel
                     ? "Use the selected course and pace. Only unresolved procedure inputs will be requested."
                     : action.detail
@@ -642,7 +614,7 @@ export async function renderExpedition(
                 }
             } else {
                 const adjacency = currentAdjacency();
-                const edge = adjacency ? adjacencyEdgeForDirection(adjacency, direction) : null;
+                const edge = adjacency ? adjacencyForIntent(adjacency, direction) : null;
                 selectedHex = edge?.targetCell ?? null;
                 selectedHexTracksTravelIntent = selectedHex !== null;
             }
@@ -665,7 +637,7 @@ export async function renderExpedition(
         }
     };
 
-    const selectTravelIntent = (direction: number, _target: HexCoordinate): void => {
+    const selectTravelIntent = (direction: number): void => {
         if (!runtime.expedition.isSpatial) return;
         void commitTravelIntent(direction);
     };
@@ -675,10 +647,10 @@ export async function renderExpedition(
         void commitTravelIntent(null);
     };
 
-    const toggleTravelIntent = (direction: number, target: HexCoordinate): void => {
+    const toggleTravelIntent = (direction: number): void => {
         if (!runtime.expedition.isSpatial) return;
         if (preferences.direction !== direction) {
-            selectTravelIntent(direction, target);
+            selectTravelIntent(direction);
             return;
         }
         if (runtime.expedition.activeWatchNumber !== null) {
@@ -697,9 +669,8 @@ export async function renderExpedition(
         const adjacency = currentAdjacency();
         if (!adjacency) return;
 
-        for (const control of root.querySelectorAll<HTMLButtonElement>("[data-adjacency-edge]")) {
-            const direction = Number(control.dataset.adjacencyEdge);
-            const selected = preferences.direction === direction;
+        for (const control of root.querySelectorAll<HTMLButtonElement>("[data-adjacency-interface-id]")) {
+            const selected = adjacency.selectedAdjacencyId === control.dataset.adjacencyInterfaceId;
             control.setAttribute("aria-pressed", String(selected));
             control.classList.toggle("is-selected", selected);
         }
@@ -729,66 +700,12 @@ export async function renderExpedition(
 
     const renderAdjacencyNavigator = (): HTMLElement => {
         const adjacency = currentAdjacency();
-        const navigator = document.createElement("div");
-        navigator.className = "hc-adjacency-navigator";
-        navigator.setAttribute("role", "group");
-        navigator.setAttribute("aria-label", "Current-cell adjacent travel");
-        if (!adjacency) return navigator;
-
-        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-        svg.setAttribute("viewBox", "0 0 100 100");
-        svg.setAttribute("aria-hidden", "true");
-        svg.classList.add("hc-adjacency-cell");
-        const polygon = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
-        polygon.setAttribute("points", adjacency.polygon
-            .map(point => `${point.x * 100},${point.y * 100}`)
-            .join(" "));
-        svg.append(polygon);
-        navigator.append(svg);
-
         const action = expeditionWorkspacePresentation(runtime, journey, survival).action;
-        const courseSelectable = action.kind === "travel" || action.kind === "navigation";
-        for (const edge of adjacency.edges) {
-            const vector = adjacencyFeedbackVector(adjacency.center, edge.midpoint);
-            const angleDegrees = Math.atan2(vector.y, vector.x) * 180 / Math.PI;
-            const control = button("", () => toggleTravelIntent(edge.directionValue, edge.targetCell));
-            const identity = edgeCourseLabel(edge);
-            const targetIdentity = `cell ${edge.targetCell.q}, ${edge.targetCell.r}`;
-            control.className = "hc-adjacency-edge";
-            control.dataset.adjacencyEdge = String(edge.directionValue);
-            control.dataset.adjacencyEdgeId = edge.id;
-            control.style.setProperty("--hc-edge-x", `${(edge.midpoint.x + vector.x * 0.045) * 100}%`);
-            control.style.setProperty("--hc-edge-y", `${(edge.midpoint.y + vector.y * 0.045) * 100}%`);
-            control.style.setProperty("--hc-edge-feedback-x", `${vector.x * 0.2}rem`);
-            control.style.setProperty("--hc-edge-feedback-y", `${vector.y * 0.2}rem`);
-            control.style.setProperty("--hc-edge-angle", `${angleDegrees}deg`);
-
-            const arrow = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-            arrow.classList.add("hc-adjacency-arrow-shape");
-            arrow.setAttribute("viewBox", "0 0 64 40");
-            arrow.setAttribute("aria-hidden", "true");
-            const arrowPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
-            arrowPath.setAttribute("d", "M2 15 H38 V4 L62 20 L38 36 V25 H2 Z");
-            arrow.append(arrowPath);
-            control.append(arrow);
-
-            const actualCourse = runtime.expedition.actualDirection === edge.directionValue
-                && runtime.expedition.actualDirection !== preferences.direction;
-            control.setAttribute(
-                "aria-label",
-                actualCourse
-                    ? `Travel through ${identity} to ${targetIdentity}; this is the current actual resolved course`
-                    : `Travel through ${identity} to ${targetIdentity}`);
-            control.setAttribute("aria-pressed", String(adjacency.selectedEdgeId === edge.id));
-            control.title = actualCourse
-                ? `${identity} to ${targetIdentity} · actual course`
-                : `${identity} to ${targetIdentity}`;
-            control.disabled = !courseSelectable || !edge.traversable;
-            if (adjacency.selectedEdgeId === edge.id) control.classList.add("is-selected");
-            if (actualCourse) control.classList.add("is-actual-course");
-            navigator.append(control);
-        }
-        return navigator;
+        return renderCurrentCellNavigator(adjacency, {
+            selectable: action.kind === "travel" || action.kind === "navigation",
+            actualIntent: runtime.expedition.actualDirection,
+            onToggle: selected => toggleTravelIntent(selected.intentValue)
+        });
     };
 
     const renderCurrentTravel = (): HTMLElement => {
@@ -822,9 +739,9 @@ export async function renderExpedition(
             empty.value = "";
             empty.textContent = "Choose adjacent cell";
             course.append(empty);
-            for (const edge of adjacency.edges) {
+            for (const edge of adjacency.adjacencies) {
                 const option = document.createElement("option");
-                option.value = String(edge.directionValue);
+                option.value = String(edge.intentValue);
                 option.textContent = edgeCourseLabel(edge);
                 course.append(option);
             }
@@ -834,8 +751,8 @@ export async function renderExpedition(
                     clearTravelIntent();
                     return;
                 }
-                const edge = adjacencyEdgeForDirection(adjacency, Number(course.value));
-                if (edge) selectTravelIntent(edge.directionValue, edge.targetCell);
+                const edge = adjacencyForIntent(adjacency, Number(course.value));
+                if (edge) selectTravelIntent(edge.intentValue);
             });
             section.append(labelled("Course", course));
         }
@@ -926,20 +843,20 @@ export async function renderExpedition(
         host.append(textElement("h3", "Selected map cell"));
         const adjacency = currentAdjacency();
         const edge = adjacency
-            ? adjacencyEdgeForCell(adjacency, selectedHex, sameHex)
+            ? adjacencyForCell(adjacency, selectedHex, sameHexCell)
             : null;
         if (edge) {
             host.append(textElement(
                 "p",
                 `Intended next cell · ${edgeCourseLabel(edge)}. Selecting an adjacent cell expresses travel intent only; it does not move the party.`,
                 "hc-muted"));
-        } else if (sameHex(runtime.expedition.currentHex, selectedHex)) {
+        } else if (sameHexCell(runtime.expedition.currentHex, selectedHex)) {
             host.append(textElement("p", "The party is currently in this cell.", "hc-muted"));
         } else {
             host.append(textElement("p", "Inspecting a non-adjacent cell does not change travel intent or expedition position.", "hc-muted"));
         }
 
-        if (!edge && !sameHex(runtime.expedition.currentHex, selectedHex)) {
+        if (!edge && !sameHexCell(runtime.expedition.currentHex, selectedHex)) {
             const move = button("Teleport party here", () => openRepositionWorkspace(selectedHex));
             move.className = "hc-secondary-action";
             host.append(move);
@@ -947,10 +864,10 @@ export async function renderExpedition(
 
         const subjects = [
             ...currentWorld.locations
-                .filter(item => sameHex(worldToHex(currentWorld.grid, item.position), selectedHex!))
+                .filter(item => sameHexCell(worldToHex(currentWorld.grid, item.position), selectedHex!))
                 .map(item => ({ id: item.id, name: item.name, type: "Location" as const })),
             ...currentWorld.features
-                .filter(item => item.kind === "Point" && item.position && sameHex(worldToHex(currentWorld.grid, item.position), selectedHex!))
+                .filter(item => item.kind === "Point" && item.position && sameHexCell(worldToHex(currentWorld.grid, item.position), selectedHex!))
                 .map(item => ({ id: item.id, name: item.name, type: "Feature" as const }))
         ];
         if (subjects.length > 0) {
@@ -989,10 +906,10 @@ export async function renderExpedition(
                 if (hex) {
                     const adjacency = currentAdjacency();
                     const edge = adjacency
-                        ? adjacencyEdgeForCell(adjacency, hex, sameHex)
+                        ? adjacencyForCell(adjacency, hex, sameHexCell)
                         : null;
                     if (edge) {
-                        selectTravelIntent(edge.directionValue, edge.targetCell);
+                        selectTravelIntent(edge.intentValue);
                         return;
                     }
                 }
@@ -1071,9 +988,9 @@ export async function renderExpedition(
                 const parsed = Number(directionControl.value);
                 const adjacency = currentAdjacency();
                 const edge = Number.isInteger(parsed) && adjacency
-                    ? adjacencyEdgeForDirection(adjacency, parsed)
+                    ? adjacencyForIntent(adjacency, parsed)
                     : null;
-                if (edge) selectTravelIntent(edge.directionValue, edge.targetCell);
+                if (edge) selectTravelIntent(edge.intentValue);
             }
 
             function captureTravelPaceFromControls(): void {
@@ -1228,7 +1145,7 @@ export async function renderExpedition(
 
             const intendedEdge = preferences.direction === null
                 ? null
-                : adjacencyEdgeForDirection(adjacency, preferences.direction);
+                : adjacencyForIntent(adjacency, preferences.direction);
             if (!intendedEdge) {
                 body.append(textElement(
                     "p",
@@ -1304,7 +1221,7 @@ export async function renderExpedition(
             const navigationDue = navigationResolutionDue(runtime, false, false);
             const intendedEdge = preferences.direction === null
                 ? null
-                : adjacencyEdgeForDirection(adjacency, preferences.direction);
+                : adjacencyForIntent(adjacency, preferences.direction);
             body.append(
                 textElement("h3", navigationDue ? "Navigation required" : "Navigation status"),
                 contextLine("Navigator", assigned.join(", ") || "No navigator role assigned"),
@@ -1816,8 +1733,8 @@ export async function renderExpedition(
     };
 
     const focusTravelCourse = (): void => {
-        const selected = root.querySelector<HTMLButtonElement>(".hc-adjacency-edge.is-selected:not(:disabled)");
-        const first = root.querySelector<HTMLButtonElement>(".hc-adjacency-edge:not(:disabled)");
+        const selected = root.querySelector<HTMLButtonElement>(".hc-adjacency-interface.is-selected:not(:disabled)");
+        const first = root.querySelector<HTMLButtonElement>(".hc-adjacency-interface:not(:disabled)");
         const fallback = root.querySelector<HTMLSelectElement>("[data-adjacency-select]");
         const target = selected ?? first ?? fallback;
         target?.scrollIntoView({ block: "nearest", inline: "nearest" });
@@ -1832,7 +1749,7 @@ export async function renderExpedition(
         const adjacency = currentAdjacency();
         const edge = preferences.direction === null || !adjacency
             ? null
-            : adjacencyEdgeForDirection(adjacency, preferences.direction);
+            : adjacencyForIntent(adjacency, preferences.direction);
         const state = runtime.expedition;
         const active = state.activeWatchNumber !== null;
         const suppressesNavigation = active ? state.activeSuppressesNavigationCheck : false;
@@ -1879,7 +1796,7 @@ export async function renderExpedition(
             applyRuntime(await ExpeditionWatchController.continueResolvedTravel(
                 api,
                 runtime,
-                edge.directionValue,
+                edge.intentValue,
                 preferences.pace));
         });
     };
@@ -2362,7 +2279,7 @@ function encounterSummary(runtime: ExpeditionDetail): string {
 
 function currentCourseLabel(
     preferences: TravelPreferences,
-    adjacency: ReturnType<typeof currentHexAdjacency> | null): string {
+    adjacency: ReturnType<typeof currentRuntimeCellAdjacency> | null): string {
     return preferences.direction === null
         ? "No course selected"
         : adjacencyCourseLabel(adjacency, preferences.direction);
@@ -2370,7 +2287,7 @@ function currentCourseLabel(
 
 function actualCourseLabel(
     runtime: ExpeditionDetail,
-    adjacency: ReturnType<typeof currentHexAdjacency> | null): string {
+    adjacency: ReturnType<typeof currentRuntimeCellAdjacency> | null): string {
     if (!runtime.expedition.isSpatial || runtime.expedition.actualDirection === null) {
         return "Not yet resolved";
     }
@@ -2391,7 +2308,7 @@ function travelProgressDetail(runtime: ExpeditionDetail): string {
 function travelIntentSummary(
     runtime: ExpeditionDetail,
     preferences: TravelPreferences,
-    adjacency: ReturnType<typeof currentHexAdjacency> | null): string {
+    adjacency: ReturnType<typeof currentRuntimeCellAdjacency> | null): string {
     if (!runtime.expedition.isSpatial) return "";
     const intended = preferences.direction === null
         ? "No intended course"
@@ -2403,14 +2320,14 @@ function travelIntentSummary(
 }
 
 function adjacencyCourseLabel(
-    adjacency: ReturnType<typeof currentHexAdjacency> | null,
+    adjacency: ReturnType<typeof currentRuntimeCellAdjacency> | null,
     direction: number): string {
-    const edge = adjacency ? adjacencyEdgeForDirection(adjacency, direction) : null;
+    const edge = adjacency ? adjacencyForIntent(adjacency, direction) : null;
     return edge ? edgeCourseLabel(edge) : directionLabel(direction);
 }
 
 function edgeCourseLabel(
-    edge: ReturnType<typeof currentHexAdjacency>["edges"][number]): string {
+    edge: ReturnType<typeof currentRuntimeCellAdjacency>["adjacencies"][number]): string {
     return edge.label;
 }
 
@@ -2448,7 +2365,7 @@ function escapeHtml(value: string): string {
         .replaceAll("'", "&#39;");
 }
 
-function watchWorkspaceMarkup(adjacency: ReturnType<typeof currentHexAdjacency> | null, travelModes: readonly string[], distanceUnit: string | null): string {
+function watchWorkspaceMarkup(adjacency: ReturnType<typeof currentRuntimeCellAdjacency> | null, travelModes: readonly string[], distanceUnit: string | null): string {
     return `
         <section class="hc-running-sheet hc-focused-watch-workspace">
             <div class="hc-sheet-ledger-heading">
@@ -2545,9 +2462,9 @@ function distanceInputLabel(label: string, unit: string | null): string {
     return unit ? `${escapeHtml(label)} (${escapeHtml(unit)})` : escapeHtml(label);
 }
 
-function directionOptions(adjacency: ReturnType<typeof currentHexAdjacency> | null): string {
+function directionOptions(adjacency: ReturnType<typeof currentRuntimeCellAdjacency> | null): string {
     if (!adjacency) return "";
-    return adjacency.edges
-        .map(edge => `<option value="${edge.directionValue}">${edgeCourseLabel(edge)}</option>`)
+    return adjacency.adjacencies
+        .map(edge => `<option value="${edge.intentValue}">${edgeCourseLabel(edge)}</option>`)
         .join("");
 }

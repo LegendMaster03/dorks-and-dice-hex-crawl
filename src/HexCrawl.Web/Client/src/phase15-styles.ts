@@ -208,18 +208,18 @@ export function ensurePhase15Styles(): void {
         .hc-adjacency-navigator { position:absolute; z-index:6; top:.8rem; left:.8rem; width:8.5rem; aspect-ratio:1; pointer-events:none; filter:drop-shadow(0 .2rem .4rem rgba(0,0,0,.24)); }
         .hc-adjacency-cell { position:absolute; inset:0; width:100%; height:100%; overflow:visible; pointer-events:none; }
         .hc-adjacency-cell polygon { fill:color-mix(in srgb,var(--hc-surface) 36%,transparent); stroke:var(--hc-text-strong); stroke-width:5; stroke-linejoin:round; vector-effect:non-scaling-stroke; }
-        #tool-root.hex-crawl-app button.hc-adjacency-edge { position:absolute; pointer-events:auto; left:var(--hc-edge-x); top:var(--hc-edge-y); transform:translate(-50%,-50%); display:grid; place-items:center; width:2.75rem; height:2.75rem; min-width:2.75rem; min-height:2.75rem; padding:0; border:0; border-radius:.35rem; background:transparent; color:inherit; line-height:1; box-shadow:none; cursor:pointer; }
-        .hc-adjacency-arrow-shape { width:2.45rem; height:1.4rem; overflow:visible; transform:rotate(var(--hc-edge-angle)); transform-origin:center; pointer-events:none; filter:drop-shadow(0 .1rem .13rem rgba(0,0,0,.58)); }
+        #tool-root.hex-crawl-app button.hc-adjacency-interface { position:absolute; pointer-events:auto; left:var(--hc-adjacency-x); top:var(--hc-adjacency-y); transform:translate(-50%,-50%); display:grid; place-items:center; width:2.75rem; height:2.75rem; min-width:2.75rem; min-height:2.75rem; padding:0; border:0; border-radius:.35rem; background:transparent; color:inherit; line-height:1; box-shadow:none; cursor:pointer; }
+        .hc-adjacency-arrow-shape { width:2.45rem; height:1.4rem; overflow:visible; transform:rotate(var(--hc-adjacency-angle)); transform-origin:center; pointer-events:none; filter:drop-shadow(0 .1rem .13rem rgba(0,0,0,.58)); }
         .hc-adjacency-arrow-shape path { fill:#fff; stroke:transparent; stroke-width:4; stroke-linejoin:round; paint-order:stroke fill; vector-effect:non-scaling-stroke; }
-        #tool-root.hex-crawl-app button.hc-adjacency-edge:hover:not(:disabled) { transform:translate(-50%,-50%) scale(1.06); border-color:transparent; background:transparent; }
-        .hc-adjacency-edge:hover:not(:disabled) .hc-adjacency-arrow-shape path { stroke:var(--hc-primary); }
-        #tool-root.hex-crawl-app button.hc-adjacency-edge:focus-visible { transform:translate(-50%,-50%) scale(1.06); border-color:transparent; outline:3px solid var(--hc-primary); outline-offset:2px; background:transparent; z-index:2; }
-        .hc-adjacency-edge:focus-visible .hc-adjacency-arrow-shape path { stroke:var(--hc-primary); }
-        #tool-root.hex-crawl-app button.hc-adjacency-edge:active:not(:disabled) { transform:translate(calc(-50% + var(--hc-edge-feedback-x)),calc(-50% + var(--hc-edge-feedback-y))) scale(1.02); border-color:transparent; background:transparent; }
-        #tool-root.hex-crawl-app button.hc-adjacency-edge:active:not(:disabled) .hc-adjacency-arrow-shape path { stroke:var(--hc-primary); }
-        .hc-adjacency-edge.is-selected .hc-adjacency-arrow-shape path { stroke:var(--hc-primary); }
-        .hc-adjacency-edge.is-actual-course:not(.is-selected) .hc-adjacency-arrow-shape path { stroke:var(--hc-warning); }
-        #tool-root.hex-crawl-app button.hc-adjacency-edge:disabled { border-color:transparent; background:transparent; color:inherit; opacity:.45; cursor:not-allowed; }
+        #tool-root.hex-crawl-app button.hc-adjacency-interface:hover:not(:disabled) { transform:translate(-50%,-50%) scale(1.06); border-color:transparent; background:transparent; }
+        .hc-adjacency-interface:hover:not(:disabled) .hc-adjacency-arrow-shape path { stroke:var(--hc-primary); }
+        #tool-root.hex-crawl-app button.hc-adjacency-interface:focus-visible { transform:translate(-50%,-50%) scale(1.06); border-color:transparent; outline:3px solid var(--hc-primary); outline-offset:2px; background:transparent; z-index:2; }
+        .hc-adjacency-interface:focus-visible .hc-adjacency-arrow-shape path { stroke:var(--hc-primary); }
+        #tool-root.hex-crawl-app button.hc-adjacency-interface:active:not(:disabled) { transform:translate(calc(-50% + var(--hc-adjacency-feedback-x)),calc(-50% + var(--hc-adjacency-feedback-y))) scale(1.02); border-color:transparent; background:transparent; }
+        #tool-root.hex-crawl-app button.hc-adjacency-interface:active:not(:disabled) .hc-adjacency-arrow-shape path { stroke:var(--hc-primary); }
+        .hc-adjacency-interface.is-selected .hc-adjacency-arrow-shape path { stroke:var(--hc-primary); }
+        .hc-adjacency-interface.is-actual-course:not(.is-selected) .hc-adjacency-arrow-shape path { stroke:var(--hc-warning); }
+        #tool-root.hex-crawl-app button.hc-adjacency-interface:disabled { border-color:transparent; background:transparent; color:inherit; opacity:.45; cursor:not-allowed; }
         .hc-map-context-overlay { position:absolute; z-index:5; right:.75rem; bottom:.75rem; width:min(22rem,calc(100% - 1.5rem)); max-height:min(18rem,55%); overflow:auto; display:grid; gap:.5rem; padding:.7rem .8rem; border:1px solid var(--hc-border); border-radius:.7rem; background:color-mix(in srgb,var(--hc-surface) 92%,transparent); color:var(--hc-text); box-shadow:0 .3rem .9rem rgba(0,0,0,.2); }
         .hc-map-context-overlay h3, .hc-map-context-overlay p { margin:0; }
         .hc-current-travel { display:grid; gap:.6rem; padding:.75rem .85rem; border:1px solid var(--hc-border); border-radius:.7rem; background:var(--hc-surface-elevated); }
@@ -329,7 +329,7 @@ export function ensurePhase15Styles(): void {
             .hc-advanced-index { max-height:none; }
             .hc-phase15-expedition .hc-map-host { height:clamp(20rem,48vh,30rem); min-height:0; }
             .hc-adjacency-navigator { width:7.5rem; top:.55rem; left:.55rem; }
-            .hc-adjacency-edge { min-width:2.75rem; min-height:2.75rem; }
+            .hc-adjacency-interface { min-width:2.75rem; min-height:2.75rem; }
             .hc-current-travel-facts { grid-template-columns:auto minmax(0,1fr); }
             .hc-movement-ledger-table, .hc-readable-table { display:block; width:100%; max-width:100%; overflow-x:auto; overscroll-behavior-inline:contain; }
             .hc-readable-facts { grid-template-columns:1fr; }
