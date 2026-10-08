@@ -321,8 +321,11 @@ test("routine spatial travel reuses intent and suppresses fixed movement inputs 
     const intent = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/expedition-travel-intent.ts"),
         "utf8");
+    const navigator = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/cell-navigator.ts"),
+        "utf8");
 
-    assert.match(view, /hc-adjacency-navigator/);
+    assert.match(navigator, /hc-adjacency-navigator/);
     assert.match(view, /currentRuntimeCellAdjacency/);
     assert.match(view, /adjacencyForCell/);
     assert.match(intent, /hex-crawl\.expedition\.\$\{expeditionId\}\.travel-intent/);
