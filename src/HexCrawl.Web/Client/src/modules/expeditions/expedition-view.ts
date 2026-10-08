@@ -21,7 +21,7 @@ import { ExpeditionJourneyPanel } from "./journey-panel";
 import { ExpeditionPartySheetController } from "./expedition-party-sheet";
 import { adjacencyForCell, adjacencyForIntent } from "./spatial-adjacency";
 import { renderCurrentCellNavigator } from "./cell-navigator";
-import { currentRuntimeCellAdjacency, sameHexCellCell } from "./current-cell-topology";
+import { currentRuntimeCellAdjacency, sameHexCell } from "./current-cell-topology";
 import { publishExpeditionRuntimeChanged } from "./expedition-runtime-events";
 import { ExpeditionSurvivalResourcesPanel } from "./survival-resources-panel";
 import { ExpeditionWatchController } from "./expedition-watch-controller";

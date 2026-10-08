@@ -398,6 +398,15 @@ public sealed record CampaignProcedure
                 $"Campaign procedure schema version '{SchemaVersion}' is not supported. Expected {CampaignProcedureSchema.CurrentVersion}.");
         }
         MechanicDefinition.Require(TilingGjhNotation, "Campaign procedure GomJau-Hogg tiling notation");
+        if (!string.Equals(
+                TilingGjhNotation,
+                CampaignProcedureSchema.CurrentHexTilingGjhNotation,
+                StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"Campaign procedure tiling '{TilingGjhNotation}' is not supported by schema {CampaignProcedureSchema.CurrentVersion}. "
+                + $"The current schema supports only '{CampaignProcedureSchema.CurrentHexTilingGjhNotation}'.");
+        }
         if (Modules.Count == 0)
         {
             throw new InvalidOperationException("Campaign procedure requires at least one module.");
