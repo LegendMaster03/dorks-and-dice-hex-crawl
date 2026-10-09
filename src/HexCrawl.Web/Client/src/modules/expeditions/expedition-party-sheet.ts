@@ -155,7 +155,7 @@ export class ExpeditionPartySheetController {
             <form class="hc-form hc-party-form" data-party-form>
                 <p class="hc-hint">
                     Persistent table-facing information. Participant roles and activities are expedition state;
-                    the selected campaign procedure defines which generic assignments are available.
+                    the selected ruleset determines which activities are available.
                 </p>
 
                 <fieldset>

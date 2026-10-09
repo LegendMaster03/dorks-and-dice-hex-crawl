@@ -758,6 +758,7 @@ export class ExpeditionWatchController {
         event.preventDefault();
         if (this.advancePending || this.resolutionPending || this.disposed) return;
 
+        const idleActionLabel = this.advanceButton.textContent || watchActionLabel(this.getRuntime());
         this.clearAdvanceError();
         this.advancePending = true;
         this.advanceButton.disabled = true;
@@ -896,8 +897,7 @@ export class ExpeditionWatchController {
                 this.advancePending = false;
                 if (!this.disposed) {
                     this.advanceButton.disabled = false;
-                    this.advanceButton.textContent =
-                        watchActionLabel(this.getRuntime());
+                    this.advanceButton.textContent = idleActionLabel;
                     this.syncResolutionHelperVisibility();
                 }
             }

@@ -65,7 +65,7 @@ export class ProcedureComposerApi {
             : `/revisions/${encodeURIComponent(String(revision))}`;
         return this.getJson(
             `/api/procedures/${encodeURIComponent(procedureId)}${suffix}`,
-            "Campaign procedure");
+            "Campaign ruleset");
     }
 
     public getReference(procedureId: string, revision?: number | null): Promise<ProcedureReference> {
