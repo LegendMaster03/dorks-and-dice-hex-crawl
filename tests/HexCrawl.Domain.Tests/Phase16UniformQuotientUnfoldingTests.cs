@@ -31,7 +31,7 @@ public sealed class Phase16UniformQuotientUnfoldingTests
             cover.Symbol, DelaneyDressTopology.Inspect(source).Symbol!));
         Assert.All(witness.MotifCells, cell => Assert.All(cell.Boundary, edge =>
         {
-            var peer = Assert.Single(witness.MotifCells.Where(c => c.Id == edge.TargetMotifCellId));
+            var peer = Assert.Single(witness.MotifCells, c => c.Id == edge.TargetMotifCellId);
             var reciprocal = peer.Boundary[edge.ReciprocalInterfaceIndex];
             Assert.Equal(cell.Id, reciprocal.TargetMotifCellId);
             Assert.Equal(edge.Index, reciprocal.ReciprocalInterfaceIndex);
