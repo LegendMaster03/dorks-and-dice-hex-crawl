@@ -2056,6 +2056,8 @@ if (stateName === "course-change-reload") {
             || initialHint.includes("runtime can not derive")) {
             throw new Error("Rendered movement hint lost the field, period, or unit.");
         }
+        const originalActionLabel = form.querySelector("[data-advance-button]")?.textContent?.trim();
+        if (originalActionLabel !== "Resolve movement and continue") throw new Error(`Unexpected movement action: ${originalActionLabel}`);
         effective.value = "";
         source.value = "DmOverride";
         form.requestSubmit();
@@ -2065,10 +2067,12 @@ if (stateName === "course-change-reload") {
             && validation.includes("travel period") && !validation.includes("effectiveDistance requires a number");
         if (!movementValidationVerified || movementRetryCalls !== 0) throw new Error("Blank movement validation did not block travel with plain-language context.");
         await waitForCondition(() => !form.querySelector("[data-advance-button]").disabled, "validation returned control");
+        if (form.querySelector("[data-advance-button]")?.textContent?.trim() !== originalActionLabel) throw new Error("Movement action label changed after validation.");
         effective.value = "2";
         form.requestSubmit();
         await waitForCondition(() => movementRetryCalls === 1, "retry reached authoritative advance");
-        movementRetryVerified = !root.querySelector('[data-watch-advance-error]');
+        movementRetryVerified = !root.querySelector('[data-watch-advance-error]')
+            && form.querySelector("[data-advance-button]")?.textContent?.trim() === originalActionLabel;
         if (!movementRetryVerified) throw new Error("Retry did not clear the validation error.");
     }
 } else if (stateName === "movement-composition" || stateName === "nonspatial-movement-composition") {
