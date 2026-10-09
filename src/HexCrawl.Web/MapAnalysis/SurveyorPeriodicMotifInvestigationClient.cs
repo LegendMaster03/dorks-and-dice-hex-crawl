@@ -323,7 +323,9 @@ public sealed class SurveyorPeriodicMotifInvestigationClient(
             || evidence.RejectedHypotheses != evidence.CheckedHypotheses - evidence.MatchedHypotheses)
             throw new MapAnalysisProtocolException("Surveyor hypothesis counts are inconsistent.");
 
+        var candidate = new PeriodicMotifCandidate(symbol, basis, cells);
+        ObservedRasterMotifGeometryValidator.Validate(candidate, evidence, analysisDetails);
         return new(status, reason, false, "experimental", "v3",
-            new(symbol, basis, cells), evidence, sourceDimensions, analysisDetails);
+            candidate, evidence, sourceDimensions, analysisDetails);
     }
 }
