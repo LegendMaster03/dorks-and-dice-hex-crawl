@@ -53,6 +53,42 @@ Both symbol-to-torus implementations enumerate every face cycle using one global
 Both feature branches have executed their GitHub Actions validation suites, including domain tests, Surveyor raster benchmarks, and database-backed tests where configured. Individual successful CI runs do **not** prove cross-deployment compatibility, real-image generalization, live signed-in workflows, data preservation on deployment, or generalized product integration. Those release gates are still open, and Phase 16 must not be merged on CI status alone.
 
 
+## Independent raster geometry plausibility and combinatorial symmetry quotient
+
+The read-only v3 client now independently checks provisional source-pixel
+polygon simplicity, orientation, nonzero sides, bounded fundamental-domain
+area coherence, and reciprocal pixel-segment matching after translating by
+the observed lattice generators. It permits bounded white-contour/ink
+uncertainty in the **analysis-image pixel space**, then maps that tolerance to
+source pixels; it does not incorrectly cap source-pixel errors when Surveyor
+downscales an image. A failure returns a protocol error and never saves a
+candidate or changes the established v2 path.
+
+Provider tests reject valid D-symbols paired with forged geometries, including
+crossing polygons and wrong translation lengths; subpixel and downsampled
+measurement cases must remain provisional candidates. Additional interop
+tests construct image-free validated mixed triangle/quadrilateral and
+non-edge-to-edge polygon motifs, serialize them through the actual v3
+candidate wire shape, and verify their full reciprocal incidence is consumed
+without pattern-name lookup or a single-shape assumption. These are
+mathematical fixtures, **not real Surveyor image detections**.
+
+The bounded `DelaneyDressChamberSymmetryReduction.Construct` additionally
+enumerates all color/multiplicity-preserving automorphisms of a finite
+connected Euclidean chamber graph (at most one automorphism per possible
+image of its first chamber), constructs their orbit quotient, and requires an
+independent covering projection from the source. The same mathematical
+operation is independently implemented in Surveyor. A square translation
+torus reduces to the one-chamber square D-symbol, and mixed/non-edge-to-edge
+test cases remain valid covering witnesses.
+
+**Crucial boundary:** this is a maximal **combinatorial** quotient. It does
+not prove that measured Euclidean polygon geometry possesses those
+isometries. Therefore no observed v3 D-symbol is replaced automatically
+by the combinatorial quotient, and no raster candidate is promoted into a
+saved world. Metric-symmetry verification, calibrated real-image detection
+and generalized authoritative world integration remain open.
+
 ## Read-only Surveyor v3 capability negotiation (new Hex Crawl consumer)
 
 The additive `SurveyorPeriodicMotifInvestigationClient` registers separately
