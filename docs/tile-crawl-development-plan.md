@@ -1,7 +1,7 @@
 # Tile Crawl transition — development plan
 
 **Status:** proposed; implementation has not started  
-**Roadmap:** Phases 16–22 (the successor to the completed Hex Crawl / generic-procedure roadmap)  
+**Roadmap:** Phases 16–21 (the successor to the completed Hex Crawl / generic-procedure roadmap)  
 **Primary repository:** LegendMaster03/dorks-and-dice-hex-crawl  
 **Analysis-service repository:** LegendMaster03/dorks-and-dice-surveyor  
 **Planning baseline:** Hex Crawl main at 70629398cf1b30c43addef5299ce1ad23efbfd7a; Surveyor main at e9ad1cc9f04ce375fa1baf241894357abc116e09 (9 October 2026)
@@ -12,7 +12,7 @@ Complete the product and architectural transition from **Hex Crawl** to **Tile C
 
 This is **one coordinated project with separately validated and merged phases**, not one enormous development cycle. The old generic-procedure development plan is superseded and removed. Existing architecture, proof, and completed Phase 15 design documents remain historical/architectural references, not competing roadmaps.
 
-**Execution risk:** Phase 20 is an open-ended computer-vision/reconstruction problem and is **not guaranteed** by the earlier notation/API migration. Before committing to an unrestricted implementation, run an early feasibility spike on unfamiliar mixed motifs, measure cost and detection errors, and make a documented proceed/revise decision. If the agreed generality proves infeasible, stop and request an explicit scope decision; do not relabel a catalog of three detectors as a general solution. Maintain the existing supported hex workflow throughout this research.
+**Phase 16 scope decision:** generalize **Surveyor's existing periodic-grid detector** in the same phase as the shared D-symbol/operational-topology foundation. This extends the proven edge evidence, autocorrelation, Hough/translation fitting, continuous parameter refinement, multi-region support and original-image rigid-fit checks; it is **not a greenfield detector rewrite**. Generalized motif reconstruction and D-symbol derivation are additional stages where the current three-geometry selection cannot express mixed-cell arrangements. Prove feasibility early on unfamiliar mixed motifs; retain explicit checkpoints and measured acceptance tests because implementation effort cannot be assumed from the size of the proposed abstraction. If a blocker requires changing the agreed scope, report it rather than silently substituting a larger catalog of hard-coded shape detectors. The existing live hex workflow must remain available.
 
 **Completion is not the ability to select hexagons, squares, or triangles from a list.** Completion is the ability to ingest a structurally valid supported periodic tiling and its suitable geometric realization, address and render its cells, cross their actual boundaries, and run the relevant generic procedures **without adding pattern-specific source code**. Surveyor must additionally discover the structure of supported unfamiliar periodic tilings from sufficient image evidence without being told which pattern to find.
 
@@ -52,7 +52,7 @@ This is **one coordinated project with separately validated and merged phases**,
 - **Reset only as a last resort.** If preservation is genuinely impractical after investigating targeted migration, data repair and backup/restore alternatives, document the blocker, affected data, expected tester impact, recovery options, and why a reset is justified. Obtain the project owner's **explicit authorization for that specific reset** before performing it, preserve a recoverable backup where feasible, and provide a clear explanation to affected testers. A broad phase/plan approval or permission to merge does **not** authorize deleting tester data. Resetting to make an implementation easier is not acceptable.
 - **Separate merge from deployment risk.** Each phase gate verifies main-branch tests, deployed service readiness, data migration and user-visible workflows. A failed deployment or migration is a phase failure requiring recovery; do not treat merge success alone as acceptance.
 
-### Gate evidence required for **every** Phase 16–22
+### Gate evidence required for **every** Phase 16–21
 
 A phase handoff must report: exact commits for both repositories; migration steps and source/target schema versions; pre/post data integrity checks and backup/restore readiness (or “no database change”); explicit verification of existing tester workflows; targeted new-feature tests; deployment compatibility and rollback plan; post-deploy health/readiness plus signed-in existing-data smoke results; known defects and any required tester notice. **No phase can be accepted while the deployed tool is knowingly nonfunctional or a data migration remains unverified.**
 
@@ -90,11 +90,11 @@ Tile Crawl must provide a **versioned, maintainable, data-only catalog** for rec
 
 **Important:** All freshly created worlds currently have a default hex grid. A mere unused default is **not** a contradiction. An expedition using hex addresses, grid-dependent feature anchoring, previously accepted incompatible map registrations, or immutable active procedure snapshots may be. Determine the actual dependency, not merely the presence of a grid object.
 
-## Phase 16 — D-symbol and operational topology contracts
+## Phase 16 — D-symbol, operational topology, and generalized Surveyor detection
 
 **Owners:** Tile Crawl domain and Surveyor periodic-tiling resource.  
 **Prerequisite:** merged Surveyor v2 / procedure schema 1.2 baseline.  
-**Goal:** establish one mathematically sound, versionable cross-service contract before changing production spatial authority.
+**Goal:** establish one mathematically sound, versionable cross-service contract **and generalize the existing Surveyor lattice-fitting pipeline to discover unfamiliar periodic motifs and derive their D-symbols**, before changing production spatial authority. This is one coordinated phase with work in both repositories.
 
 ### Implementation
 
@@ -112,16 +112,44 @@ Tile Crawl must provide a **versioned, maintainable, data-only catalog** for rec
 - Resolve what is *not* determined by a D-symbol (for example, free geometric parameters). Define explicit user-supplied/derived realization requirements rather than hard-coded realizations for named patterns.
 - Audit all existing HexCoordinate, HexGridDefinition, HexGeometry, HexTraversalState, HexId, map-feature, renderer, and world/expedition persistence consumers. Record a field-by-field migration matrix before implementing Phase 17.
 - Define status semantics and API compatibility/version rollout across both repositories. Remove expectedDsSymbol from Surveyor only in the coordinated API rollout; do not break the deployed consumer between merges.
-- Run an **early Surveyor research spike** using periodic translation extraction, motif boundary assembly and D-symbol derivation on a synthetic *non-regular mixed-cell tiling*. Record initial accuracy, ambiguity, CPU/memory cost, and unresolved mathematical assumptions. This is feasibility evidence and may prototype algorithmic internals, but does not claim Phase 20 completion.
+- Start Surveyor work with a **bounded feasibility check** using the current detector's periodic translation fitting and a synthetic *non-regular mixed-cell tiling*. Record accuracy, ambiguity, CPU/memory cost, and missing topology/realization steps **before** committing to broader changes. This is the first implementation checkpoint **within Phase 16**, not a substitute for delivering the generalized extension and its acceptance tests in this phase.
 
 ### Acceptance gate
 
 - Independent D-symbol conformance corpus includes equivalent chamber relabelings, **axiom-invalid inputs that happen to give an apparent zero-curvature sum**, valid zero-curvature Euclidean symbols, invalid or self-intersecting *metric witnesses*, nontrivial multi-chamber mixed motifs, and alternative realizations/group descriptions for the same underlying periodic structure. No test may presume a fully valid zero-curvature 2D D-symbol is topologically nonrealizable.
 - The fundamental-domain model can represent triangle, quadrilateral, hexagon, rhombille, and mixed-polygon fixtures **through input data, with no required registration or pattern-specific source paths**. Optional nomenclature entries do not affect whether these fixtures execute.
 - Deriving the translation cover and finite motif from nontrivial D-symbols produces reciprocal adjacency and stable translation-relative cell addresses, round-tripping deterministically with and without source imagery. If the translation cover cannot be constructed within supported limits, Phase 16 cannot be accepted. No terrain, labels, or ruleset semantics appear in the structural contract.
-- All existing Surveyor and Tile Crawl tests pass; contract changes are versioned and documented before either service is deployed. Publish the Phase 20 feasibility-spike findings and an explicit proceed/revise recommendation before authorizing major downstream work.
+- All existing Surveyor and Tile Crawl tests pass; generalized Surveyor detection passes the additional Phase 16 gates below, and shared contracts are versioned and documented before either service is deployed. Publish the initial feasibility findings, remaining limitations, and exact evidence that the generalized extension is ready; **no later Surveyor implementation phase is planned**. Do not mark Phase 16 complete based on a spike alone.
 
 **Mathematical references for independent verification:** Olaf Delgado-Friedrichs, [*Data Structures and Algorithms for Tilings I*](https://gavrog.org/TCS.pdf), especially the 2D curvature/realizability theorem; and the Australian National University's [introduction to Delaney–Dress chamber systems](https://epinet.anu.edu.au/page/epinet2_mathematics_delaney_dress). These are mathematical references, not dependencies on either project's software implementation.
+
+### Surveyor implementation — extend the existing detector within Phase 16
+
+**Owner:** Surveyor; the Tile Crawl domain consumes the shared topology/geometry contract.  
+**Approach:** reuse and generalize the algorithms already implemented in `src/analysis/hex-grid/detector.ts` and `src/analysis/regular-tiling/`. Preserve their original-raster, multi-region and global-fit behavior. **Do not replace the established detector simply to create a new algorithm.**
+
+The existing detector already performs edge sampling, repeated line-family and periodicity analysis, rotation/spacing/phase fitting, alternative candidate evaluation and checks against distant parts of the source image. Its current limitation is the fixed triangle/square/hexagon geometry profiles and their hard-coded correspondence to D-symbols. Generalize the representation of a repeated geometric motif and reconstruct its combinatorial structure from evidence, while retaining the successful fitting/refinement operations and any proven general optimizations.
+
+#### Implementation
+
+- Remove the three-pattern catalog as the **authority for determining observed tiling identity**. Do not create a larger catalog of implementations or add a separate detector for every named pattern.
+- Extend the existing evidence and fitting pipeline to handle a periodic **translation basis, multiple edge families and offsets, mixed polygons, distinct cells per repeat unit, and their boundary/incidence relationships**. Extend/refactor existing fitting kernels before introducing new ones; add only the topology-reconstruction stages the proven fitter cannot supply.
+- Implement and test four ordered checkpoints: (1) detect a stable translation lattice using the existing global evidence techniques; (2) reconstruct a repeating geometric motif with edges and cells; (3) derive consistent chamber adjacency and a validated D-symbol under Phase 16 conventions; (4) verify the complete motif, including its geometry and identity hypotheses, against the unchanged source raster. Report failures instead of fabricating a result.
+- Evaluate multiple complete hypotheses when the image is ambiguous. Distinguish gridless, inconclusive, supported-but-unreliable, structurally invalid and presently unsupported image geometry. No shape hint, expected D-symbol, selected ruleset or campaign metadata is permitted to influence the observed pattern's identity.
+- Preserve **multi-region checks, continuous spacing and rotation fitting, global rigid-lattice residuals, candidate comparison and original-image verification**. All motif components must support the same jointly evaluated transformation. Avoid repeatedly adjusting locally corrected intermediate images; this causes cumulative drift.
+- Bound raster preparation, hypothesis count, motif complexity, CPU/memory, worker queue, timeouts, cancellation and fallback behavior. Search must remain feasible without enumerating all periodic tilings.
+- Publish a versioned observed-pattern result containing **derived** canonical D-symbol, measured motif/geometry, image registration, uncertainty, confidence and supporting evidence. Keep semantics, rulesets, accepted worlds, and persistence out of Surveyor.
+- Remove the `expectedDsSymbol` API hint **only through a compatible rollout**. While the current Hex Crawl deployment relies on the existing API, keep it fully functional; provide an additive/versioned path for the generalized results, verify both client/service versions and retire obsolete selectors only after consumers switch safely.
+- Preserve the existing three regular-grid regression cases as part of the new generalized detector's test corpus. An existing fast kernel can remain if it is a numerical optimization behind the generic reconstruction process, not an allowlist that decides whether an unfamiliar valid motif can be detected.
+
+#### Additional Phase 16 Surveyor acceptance gates
+
+- Publish a declared operating envelope for motif complexity, detectable line quality/noise, image size/transform and analysis-time limits **before** final validation.
+- Verify regular hexagons, squares, triangles, rhombille and mixed-polygon motifs, including translated, rotated, scaled, cropped and noisy raster examples, distractor patterns and images with no detectable grid.
+- Recover **multiple independently generated held-out unfamiliar periodic motifs**, including at least one mixed-cell pattern and one whose translation unit has inequivalent cells, with a correct derived D-symbol, incidence/adjacency and useful image alignment within independently established tolerances. A name/shape-registration change is not allowed to make these tests pass.
+- Reject locally plausible but globally incorrect candidates using distant-region evidence. Evaluate ambiguity, false positives, residual drift, calibration, timeouts and resource limits against predeclared thresholds. Underconstrained images should return inconclusive rather than a confident wrong identity.
+- Validate **end-to-end compatibility** of the existing authenticated hex grid detection and image-import workflow and the coordinated new contract. No production user-facing exposure of nonhex worlds is required yet, and no existing tester workflow may become nonfunctional.
+- A completed research spike or an expanded fixed-shape catalog **does not satisfy** the Phase 16 Surveyor completion requirement. Any proven blocker must be reported with evidence and a proposed roadmap revision for explicit approval.
 
 ## Phase 17 — Generalize world/cell authority and persistence
 
@@ -190,35 +218,10 @@ Tile Crawl must provide a **versioned, maintainable, data-only catalog** for rec
 - Mobile/tablet/desktop, embedded, light/dark, keyboard and pointer review covers no map, unrecognized map, geometry mismatch, current cell, travel, encounter and nonspatial states. Normal selectors, map dialogs, navigation, error recovery, and Advanced screens contain no raw D-symbols; the JSON editor is tested as the explicit code-editing exception.
 - Existing hex and Wonderdraft alignment tests remain green, including interaction with previously saved tester maps and expeditions after deployment; no interim phase removes the working map UI.
 
-## Phase 20 — Surveyor general periodic-motif discovery
-
-**Owner:** Surveyor.  
-**Depends on:** Phase 16 contracts; can proceed in parallel with Tile Crawl Phases 17–19.  
-**Goal:** discover unknown supported periodic structures from raster evidence, instead of selecting a known tiling and running its detector.
-
-### Implementation
-
-- Remove the public expectedDsSymbol request hint and the fixed triangular/square/hexagonal tiling catalog as an authority for discovery. Do not replace them with a bigger registry of named patterns.
-- Generalize reusable edge/line detection, orientation analysis, autocorrelation, translation-basis search, repeating offset/motif extraction, vertex and edge junction reconstruction, polygon/cell incidence and symmetry reduction. Structure research as **separate checkpoints**: (1) recover a stable translation basis, (2) recover and validate a repeating geometric motif, (3) derive consistent chamber adjacency and D-symbol, (4) verify full source-raster evidence and calibrate confidence. Failure at a checkpoint should be reported before proceeding, not hidden behind a guessed D-symbol.
-- Infer a candidate fundamental-domain topology **from the image**, derive and validate its D-symbol and geometric realization, and then verify the *entire* inferred periodic motif against the original raster.
-- Search/verify multiple hypotheses where evidence is ambiguous. Separate insufficient evidence, supported-but-inconclusive, structurally invalid, and presently unsupported image geometry; never manufacture a symbol to satisfy a hint.
-- Preserve the proven detector's multi-shape, multi-region, continuous-spacing, and distant/global-rigid-fit checks. All candidate components share one jointly evaluated fit. **Do not iteratively refine transformed output by repeated local corrections**, which previously caused geometric drift.
-- Bound image preparation, worker CPU/memory, candidate complexity, motif size, search horizon, timeout and cancellation. Prevent the unknown-pattern search from becoming an unbounded exhaustive tiling enumerator.
-- Publish a versioned observed-pattern response containing D-symbol, measured realization/motif, image transform, uncertainty and evidence. Keep all terrain, labels, icons, game semantics and accepted world state out of Surveyor.
-- Retain proven regular-pattern detection as optional *generic numerical optimization kernels* only; no catalog-based pattern identity or shape-specific gate in the final public algorithm. Add cross-version adapter tests during the coordinated rollout, then delete obsolete public selectors/contracts.
-
-### Acceptance gate
-
-- Synthetic and representative authored raster fixtures include regular hex/square/triangle, rhombille, mixed polygon motifs, variable offsets, transformed/noisy/cropped maps, distractors and gridless imagery. Publish a **bounded target envelope** (motif size, image dimensions, noise/line quality, allowable distortions and analysis time) before building the complete algorithm; this envelope may be revised only through explicit scope review.
-- **Multiple independently generated held-out unfamiliar motifs**, including at least one mixed-cell pattern and one whose translation unit contains inequivalent cells, must be recovered with correct D-symbol under the chosen convention, topology, and useful global alignment within predeclared tolerances. Holdout data and expected results must not be used to tune a named-pattern lookup.
-- Incorrect but locally plausible candidates are rejected by distant-region evidence. False identification, ambiguity, confidence calibration, elapsed time and resource use are measured against **thresholds set before the final holdout evaluation**, with a regression corpus and an explicit operating envelope. Underconstrained/noisy images may correctly be marked inconclusive rather than being forced into a false positive.
-- Outputs that cannot be reconstructed reliably are explicitly inconclusive/unsupported, not spuriously "detected".
-- Tile Crawl performs the expected-pattern comparison locally; Surveyor receives no expected shape, D-symbol, ruleset or campaign data. **The currently deployed image-import/hex-detector workflow must remain operational throughout the rollout**; replace the old API only after compatible client/deployment sequencing and existing-map regression smokes.
-
-## Phase 21 — Ruleset/map mismatch reconciliation
+## Phase 20 — Ruleset/map mismatch reconciliation
 
 **Owner:** Tile Crawl; Surveyor only supplies observations.  
-**Depends on:** Phases 17–20.  
+**Depends on:** Phases 16–19, including completed generalized Surveyor detection in Phase 16.  
 **Goal:** resolve imported-map/ruleset mismatches directly where safe, without settings-menu detours or silent destructive changes.
 
 ### Implementation
@@ -245,10 +248,10 @@ Tile Crawl must provide a **versioned, maintainable, data-only catalog** for rec
 - All UI messages use ordinary shape vocabulary or a well-supported catalog name. Catalog misses and geometrically ambiguous names fall back to derived descriptions, and adding a catalog name changes no detection or traversal behavior. **Assert that the only UI surfaces containing raw D-symbols are the explicitly selected JSON editor and an error for a supported but unnamed pattern**; all other flows use ordinary descriptions, including Advanced editing, empty states, map mismatches, and routine successful detection. The special unnamed-pattern error explains the problem first and provides code only as a secondary labeled identifier. Accessibility and narrow-screen interaction are reviewed.
 - The same reconciliation path handles a held-out unfamiliar polygon mix with no pattern-specific conditional branches.
 
-## Phase 22 — Tile Crawl cutover, cleanup, and stabilization
+## Phase 21 — Tile Crawl cutover, cleanup, and stabilization
 
 **Owners:** Tile Crawl and Surveyor.  
-**Depends on:** completed Phases 16–21 and their accepted migrations.  
+**Depends on:** completed Phases 16–20 and their accepted migrations.  
 **Goal:** make the generalized system the sole supported path and complete the product transition.
 
 ### Implementation
@@ -295,7 +298,7 @@ For any applicable visual and numerical acceptance check, specify expected geome
 2. Before coding each phase, inventory affected APIs/types/schema and write the change/migration plan **against actual tester data and currently deployed versions**, including backup, recovery, version overlap and the effect of a failed upgrade. Treat both the phase's acceptance gate and the mandatory continuous-usability/data-preservation gate as the implementation contract. Update this roadmap's status only when evidence exists.
 3. Preserve **all live tester workflows**, with existing hex functionality as an automated regression oracle until the general runtime proves parity. Any phase that changes an authority must still deploy as a complete working increment. Do **not** expand an interim catalog of known patterns as a shortcut toward the target.
 4. Keep API contract changes coordinated. Prefer expand/migrate/cutover/contract in an explicitly versioned API and schema, with old/new conformance and rollback tests. Avoid depending on a live deployment containing half of an incompatible change. Maintain and test the old operational hex path until the new client/server/runtime path is verified; intermediate phases may merge behind **non-user-exposed capability gates**, never leaving testers with an unusable tool or advertising unsupported tilings.
-5. Run complete appropriate suites (Surveyor parser/raster/worker/API/container; Tile Crawl domain/application/integration/PostgreSQL/client/embedded/container), **realistic pre-upgrade snapshot migration and recovery tests**, security/ownership/concurrency tests and representative rendered visual checks. Continue internal tester feedback and bounded user-facing stabilization **during every phase**; use post-deployment signed-in existing-data smoke checks rather than deferring all repairs until Phase 22.
+5. Run complete appropriate suites (Surveyor parser/raster/worker/API/container; Tile Crawl domain/application/integration/PostgreSQL/client/embedded/container), **realistic pre-upgrade snapshot migration and recovery tests**, security/ownership/concurrency tests and representative rendered visual checks. Continue internal tester feedback and bounded user-facing stabilization **during every phase**; use post-deployment signed-in existing-data smoke checks rather than deferring all repairs until Phase 21.
 6. Conduct a self-review for hidden hex assumptions, pattern-specific branching, incorrect identity claims, unstable IDs, geometry drift, performance blow-ups, regression in nonspatial flows and overly technical UI language.
 7. Report exact repository heads, test failures, live compatibility and migration/backups/recovery evidence. **Do not merge without explicit authorization.** After authorization merge coordinated branches as close together as practical, verify both main heads, post-merge validation, compatible deployment and signed-in tester-data workflows. A pair of GitHub merges is coordinated but not mathematically atomic: define rollback/compatibility strategy before breaking changes. **Merge authorization never implies authorization for database reset or data deletion**.
 8. No phase is complete while its acceptance gates are red, while deployed tester workflows are broken, while data migrations or recovery remain unverified, while user data can be silently corrupted, or while a claim of arbitrary-tiling support rests only on three familiar examples. A genuinely unavoidable destructive reset requires separate explicit owner approval and tester communication; it is never the default exit from a failed migration.
@@ -304,13 +307,12 @@ For any applicable visual and numerical acceptance check, specify expected geome
 
 | Phase | Focus | State |
 | --- | --- | --- |
-| 16 | D-symbol and topology contracts | Not started |
+| 16 | D-symbol, operational topology and Surveyor motif detection | Not started |
 | 17 | World/cell model and persistence | Not started |
 | 18 | Spatial traversal/runtime | Not started |
 | 19 | Rendering, UI and map registration | Not started |
-| 20 | General image-pattern discovery in Surveyor | Not started |
-| 21 | Ruleset/map reconciliation and one-click change | Not started |
-| 22 | Tile Crawl cutover and full stabilization | Not started |
+| 20 | Ruleset/map reconciliation and one-click change | Not started |
+| 21 | Tile Crawl cutover and full stabilization | Not started |
 
 ### Reference architecture
 
