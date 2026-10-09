@@ -10,7 +10,7 @@ The roadmap sequence is now:
 - **Phase 15 — complete:** core UX and presentation architecture: unified expedition workspace, Compact, Advanced, expert JSON editing, preset browsing, procedure-aware presentation, responsive interaction patterns, and reusable UI primitives.
 - **After Phase 15 acceptance:** internal human testing begins and provides direct usability evidence.
 - **Phase 15.1 — current:** Guided Hex Crawl experience for users who understand tabletop RPGs/D&D but do not already know hexcrawling. Guided enriches/wraps Compact rather than forking the application.
-- **Phase 15.5 — later:** internal-testing stabilization and pre-release hardening.
+- **Phase 15.5 — historical proposal:** its separate milestone was superseded by the active Tile Crawl Phases 16–22 plan, which includes stabilization.
 
 Battle Map ownership and cross-tool tactical-map integration are **outside the Hex Crawl roadmap**. Phase 15 does not design or implement a Battle Map tool and does not decide its future ownership architecture. Block Initiative remains authoritative for tactical combat; existing provider-neutral linked-scene references and encounter-handoff behavior remain valid integration surfaces without implying a future Battle Map design.
 
@@ -235,7 +235,7 @@ Guided should later be able to add inline explanations, "Why?" affordances, reco
 Phase 15 intentionally does not implement:
 
 - Phase 15.1 Guided onboarding/coaching;
-- Phase 15.5 internal-testing stabilization;
+- the then-planned Phase 15.5 stabilization milestone (now subsumed into Tile Crawl Phase 22);
 - a Battle Map tool or Battle Map ownership/integration architecture;
 - square/triangle Hex Crawl runtime topology;
 - unrelated Rules Core, Character Sheet, or Block Initiative feature work.

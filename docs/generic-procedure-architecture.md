@@ -1,6 +1,6 @@
 # Generic Procedure Architecture
 
-This document describes the current generic procedure architecture through Phase 15. Detailed implementation history remains in `docs/generic-procedure-development-plan.md`; this document describes the architecture that should be carried forward.
+This document records the implemented generic procedure architecture established through Phase 15. It remains architectural reference material, not an active development roadmap. The current transition plan is `docs/tile-crawl-development-plan.md`; completed implementation history remains available through Git history and the focused Phase 15 design/implementation documents.
 
 ## Architectural boundary
 
@@ -40,11 +40,11 @@ See `docs/phase-15-design-architecture.md`.
 
 ## Pre-release compatibility policy
 
-Hex Crawl remains pre-release.
+Hex Crawl remains pre-release, but **human testing started after Phase 15**. Current development must preserve usable tester workflows at every deployed phase, including existing world/expedition/procedure and nonspatial flows. The earlier database-reset-tolerant pre-testing policy is historical and no longer the operative default.
 
-Before Phase 15 acceptance, obsolete development API/persistence/UI/internal representations should be removed rather than preserved through fallback infrastructure, and development database resets remain acceptable.
+Existing tester data, saved worlds, pinned procedure revisions, sessions and external map assets must normally survive through versioned, tested migrations with backup/recovery evidence. Temporary compatibility adapters and feature gates are acceptable for safe intermediate releases and should be removed once the replacement path is verified.
 
-After Phase 15 acceptance, internal human testing begins. Tester data has a human cost, so a straightforward architecture-preserving migration should be preferred before breaking persisted tester data where practical. This preference does not justify parallel obsolete models or permanent compatibility infrastructure, and resets remain possible when architecture warrants them.
+**No automatic or routine database reset is permitted.** When a genuinely unavoidable data-destructive change remains after evaluating targeted migration, data repair and backup/restore, the project owner must separately authorize that specific reset and affected testers must receive an explanation. A phase or merge authorization is not permission to delete tester data. The active detailed rules and acceptance gates are documented in `docs/tile-crawl-development-plan.md`.
 
 ## Generic modules and mechanics
 
@@ -289,7 +289,7 @@ Implemented architecture now includes:
 - Phase 14 server-authoritative v2 encounter handoff;
 - Phase 15 unified procedure-aware expedition workspace with spatial and no-interval/nonspatial adaptation.
 
-Phase 15 is the internal-human-testing gate. After Phase 15 acceptance, human testing begins; Phase 15.1 adds the Guided experience while testing continues, and Phase 15.5 is the later internal-testing stabilization/pre-release-hardening phase.
+Phase 15 established the internal-human-testing gate, followed by Guided and subsequent UI refinements. The former separate Phase 15.5 stabilization proposal has been superseded by the Tile Crawl transition's final validation/stabilization phase (`docs/tile-crawl-development-plan.md`).
 
 A Battle Map tool and tactical-map ownership/integration architecture are outside the Hex Crawl roadmap and remain work for a future Battle Map roadmap once that product exists.
 

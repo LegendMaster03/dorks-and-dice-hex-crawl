@@ -284,4 +284,4 @@ Phase 3 stops at architectural proof for the new structural families. It does no
 - multi-stage journey execution;
 - expanded encounter runtime.
 
-Those remain owned by later phases in `docs/generic-procedure-development-plan.md`.
+These are historical Phase 3 deferrals, not automatic commitments for the new Tile Crawl roadmap. Current scope and acceptance gates are defined in `docs/tile-crawl-development-plan.md`; existing generic procedure behavior is described in `docs/generic-procedure-architecture.md`.

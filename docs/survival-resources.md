@@ -186,4 +186,4 @@ Phase 12 owns multi-stage journey execution, journey-event opportunities, journe
 
 Phase 14 projects encounter-relevant linked resource/effect context through the server-authoritative v2 handoff while Block Initiative remains authoritative for tactical combat. Phase 15 changes presentation around those boundaries but does not move or duplicate their authority.
 
-Phase 15 is the internal-human-testing gate. After acceptance, testing begins, followed by Phase 15.1 Guided work and later Phase 15.5 stabilization. A future Battle Map tool and its cross-tool ownership/integration are outside the Hex Crawl roadmap.
+Phase 15 established the internal-human-testing gate and was followed by Guided refinements. The separate Phase 15.5 stabilization proposal has been superseded by the Tile Crawl Phases 16–22 transition. A future Battle Map tool and its cross-tool ownership/integration remain outside that roadmap.
