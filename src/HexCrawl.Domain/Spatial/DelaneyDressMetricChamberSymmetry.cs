@@ -284,10 +284,18 @@ public static class DelaneyDressMetricChamberSymmetry
                         int next = maps[k][f];
                         var source = k == 2 ? flags[f].Shift : default;
                         var target = k == 2 ? flags[permutation[f]].Shift : default;
-                        long appliedU = matrix[0] * source.U + matrix[2] * source.V;
-                        long appliedV = matrix[1] * source.U + matrix[3] * source.V;
-                        if (offsets[next].U + appliedU != offsets[f].U + target.U
-                            || offsets[next].V + appliedV != offsets[f].V + target.V)
+                        // Integer edge voltages can be as large as the
+                        // lossless JSON wire range. Apply the unimodular
+                        // basis action with exact arithmetic, never long
+                        // overflow or floating-point cancellation.
+                        var appliedU = (System.Numerics.BigInteger)matrix[0] * source.U
+                            + (System.Numerics.BigInteger)matrix[2] * source.V;
+                        var appliedV = (System.Numerics.BigInteger)matrix[1] * source.U
+                            + (System.Numerics.BigInteger)matrix[3] * source.V;
+                        if ((System.Numerics.BigInteger)offsets[next].U + appliedU
+                                != (System.Numerics.BigInteger)offsets[f].U + target.U
+                            || (System.Numerics.BigInteger)offsets[next].V + appliedV
+                                != (System.Numerics.BigInteger)offsets[f].V + target.V)
                         {
                             works = false; break;
                         }
