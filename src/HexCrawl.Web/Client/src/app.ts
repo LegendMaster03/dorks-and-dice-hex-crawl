@@ -116,7 +116,7 @@ function injectProcedureComposerShortcut(
     const button = document.createElement("button");
     button.type = "button";
     button.dataset.procedureComposerShortcut = "";
-    button.textContent = "Procedures";
+    button.textContent = "Exploration rulesets";
     button.addEventListener("click", () => navigate("/procedures"));
     nav.append(button);
 }

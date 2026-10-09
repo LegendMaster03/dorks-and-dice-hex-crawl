@@ -15,7 +15,7 @@ internal static class ProcedureComposerCustomProcedureFactory
             ProcedureId = Guid.NewGuid(),
             Revision = 1,
             Key = "custom-expedition-procedure",
-            Name = "Custom expedition procedure",
+            Name = "Custom exploration ruleset",
             SchemaVersion = CampaignProcedureSchema.CurrentVersion,
             TilingDsSymbol = CampaignProcedureSchema.CurrentHexTilingDsSymbol,
             Modules = [],

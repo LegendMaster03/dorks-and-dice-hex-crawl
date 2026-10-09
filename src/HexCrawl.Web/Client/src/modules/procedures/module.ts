@@ -6,8 +6,8 @@ export const proceduresModule: HexCrawlClientModule = {
     id: "procedures",
     routeKinds: ["procedures", "procedure", "procedure-revision", "procedure-reference"],
     loadingMessage: route => route.kind === "procedure-reference"
-        ? "Loading procedure reference…"
-        : "Loading exploration procedure…",
+        ? "Loading ruleset reference…"
+        : "Loading exploration ruleset…",
     async render(route, context) {
         if (route.kind === "procedures") {
             return await renderProcedureAuthoringWorkspace(context.root, context.api, null, context.navigate);
@@ -52,7 +52,7 @@ function attachReferenceAction(
     button.type = "button";
     button.className = "hc-procedure-reference-launcher";
     button.dataset.procedureReference = "";
-    button.textContent = "View procedure reference";
+    button.textContent = "View ruleset reference";
     button.addEventListener("click", () => {
         const base = `/procedures/${encodeURIComponent(procedureId)}`;
         navigate(revision === null
