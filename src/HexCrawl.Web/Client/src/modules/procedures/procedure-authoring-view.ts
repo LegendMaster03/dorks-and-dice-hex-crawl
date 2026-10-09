@@ -383,7 +383,7 @@ export async function renderProcedureAuthoringWorkspace(
         saved.className = "hc-procedure-home-section";
         saved.append(sectionHeading("Saved rulesets", "Campaign-owned procedures you can edit and use in an expedition."));
         if (savedProcedures.length === 0) {
-            saved.append(emptyState("No saved procedures yet", "Create one below or start from a familiar procedure."));
+            saved.append(emptyState("No saved rulesets yet", "Create one below or start from a familiar ruleset."));
         } else {
             const grid = document.createElement("div");
             grid.className = "hc-saved-procedure-grid";
@@ -405,7 +405,7 @@ export async function renderProcedureAuthoringWorkspace(
 
         const familiar = document.createElement("section");
         familiar.className = "hc-procedure-home-section";
-        const heading = sectionHeading("Start from a known procedure", "Inspect the rules first, then materialize an editable campaign-owned copy.");
+        const heading = sectionHeading("Start from a known ruleset", "Compare the rules first, then save an editable campaign copy.");
         const browse = button("Browse all presets", "secondary");
         browse.addEventListener("click", () => { entry = "presets"; render(); });
         heading.append(browse);
@@ -511,13 +511,13 @@ export async function renderProcedureAuthoringWorkspace(
         closeDrawer();
         activeDrawer = openWorkspaceDrawer(root, {
             title: preset.displayName,
-            description: "Inspect the procedure before using it as the starting point for your table.",
+            description: "Inspect the ruleset before using it as the starting point for your table.",
             onClose: () => { activeDrawer = null; }
         });
         activeDrawer.body.append(presetFacts(preset), presetGuidanceCard(preset));
         const behavior = document.createElement("section");
         behavior.className = "hc-focus-workspace-module hc-inspect-rules";
-        behavior.append(textElement("h3", "Procedure rules"));
+        behavior.append(textElement("h3", "Ruleset rules"));
         for (const module of preset.procedure.modules) {
             const row = document.createElement("article");
             row.className = "hc-inspect-rule";
@@ -565,7 +565,7 @@ export async function renderProcedureAuthoringWorkspace(
         left.append(guidancePreferenceButton(root));
         const right = document.createElement("div");
         right.className = "hc-preset-actions";
-        const home = button("Procedure home", "secondary");
+        const home = button("Ruleset home", "secondary");
         home.addEventListener("click", returnToProcedureHome);
 
         if (sourceProcedureId && revisions.length > 0) {

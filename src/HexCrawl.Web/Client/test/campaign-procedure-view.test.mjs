@@ -126,7 +126,7 @@ test("structural procedures remain presentable without an executable runtime pro
 
     assert.equal(
         campaignProcedureSummary(structural),
-        "1 materialized modules · structural procedure · not executable by the current runtime");
+        "1 configured rules · manual or reference behavior · not fully automated");
     assert.deepEqual(procedureHelperMechanics(structural), { travel: null, navigation: null, encounter: null });
     assert.match(procedureMechanicLines(structural)[0], /multi-stage-expedition-process v1/);
 });

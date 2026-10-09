@@ -155,12 +155,17 @@ export function ensurePhase15Styles(): void {
         .hc-current-action h2 { margin:0; color:var(--hc-text-strong); }
         .hc-current-action-primary { font-size:1.05rem; margin:0; }
         .hc-current-action-detail { margin:0; color:var(--hc-muted); }
+        .hc-guided-action-guide { display:grid; gap:.3rem; padding:.55rem .65rem; border-inline-start:3px solid var(--hc-primary); background:var(--hc-surface-elevated); }
+        .hc-guided-action-guide p { margin:0; color:var(--hc-muted); }
+        .hc-guided-action-guide strong { color:var(--hc-text-strong); }
         @media (min-width: 1041px) {
             .hc-current-action { grid-template-columns:minmax(11rem,.48fr) minmax(0,1fr) auto; align-items:center; gap:.35rem .9rem; padding:.72rem .85rem; }
             .hc-current-action header { grid-column:1; grid-row:1 / span 2; display:grid; justify-content:start; gap:.3rem; align-content:center; }
             .hc-current-action-primary { grid-column:2; grid-row:1; align-self:end; }
             .hc-current-action-detail { grid-column:2; grid-row:2; align-self:start; }
             .hc-current-action > .hc-button-row { grid-column:3; grid-row:1 / span 2; justify-content:flex-end; align-self:center; }
+            .hc-current-action > .hc-guided-action-guide,
+            .hc-current-action > .hc-guided-help { grid-column:1 / -1; }
             .hc-current-action header .hc-ux-badge { justify-self:start; width:max-content; }
             .hc-current-travel { grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:.28rem .8rem; padding:.55rem .7rem; }
             .hc-current-travel > h3 { grid-column:1; grid-row:1; white-space:nowrap; }

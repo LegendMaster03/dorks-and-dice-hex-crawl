@@ -55,39 +55,45 @@ export async function renderAssistantEntry(
                     <p class="hc-muted">${createHint(assistant)} This creates only the state this focused tool actually needs.</p>
                     <form class="hc-form" data-create>
                         <label>Session name <input name="name" required autocomplete="off"></label>
-                        <label>Procedure <select name="procedure"></select></label>
+                        <label>Exploration ruleset <select name="procedure"></select></label>
                         <p class="hc-hint" data-procedure-summary></p>
-                        <details class="hc-optional-reference"><summary>Procedure details</summary><ul data-procedure-mechanics></ul></details>
-                        <p class="hc-hint">Saved procedures use the selected revision. A preset creates a new saved procedure when the assistant session begins.</p>
+                        <details class="hc-optional-reference"><summary>Ruleset details</summary><ul data-procedure-mechanics></ul></details>
+                        <p class="hc-hint">Saved rulesets use the selected revision. A preset saves an editable campaign copy when this utility session begins.</p>
                         ${assistant === "travel" ? `
                             <label>Bookkeeping mode
                                 <select name="mode">
                                     <option value="nonspatial">Time / interval only</option>
-                                    <option value="abstract">Spatial travel on an abstract hex grid</option>
+                                    <option value="abstract">Mapless spatial travel</option>
                                 </select>
                             </label>
                         ` : ""}
                         <div data-nonspatial>
-                            <label>Context name <input name="nonSpatialName" value="${defaultContextName(assistant, false)}" autocomplete="off"></label>
-                            <p class="hc-hint">No Overworld, grid, coordinates, direction, or distance scale will be created.</p>
+                            <label>Setup name <input name="nonSpatialName" value="${defaultContextName(assistant, false)}" autocomplete="off"></label>
+                            <p class="hc-hint">No map, grid, coordinates, travel direction, or map scale will be created.</p>
                         </div>
                         <div class="hc-form" data-abstract hidden>
-                            <label>Context name <input name="contextName" value="${defaultContextName(assistant, true)}" autocomplete="off"></label>
-                            <label>Hex orientation
+                            <label>Setup name <input name="contextName" value="${defaultContextName(assistant, true)}" autocomplete="off"></label>
+                            <label>Grid orientation
                                 <select name="orientation">
                                     <option value="PointyTop">Pointy top</option>
                                     <option value="FlatTop">Flat top</option>
                                 </select>
                             </label>
-                            <label>Hex center distance <input name="scale" type="number" min="0.001" step="any" placeholder="required"></label>
-                            <label>Distance unit
-                                <select name="unit">
-                                    <option value="">Select distance unit</option>
-                                    <option value="Mile">Miles</option>
-                                    <option value="Kilometer">Kilometers</option>
-                                    <option value="Custom">Custom</option>
-                                </select>
-                            </label>
+                            <fieldset class="hc-field-group hc-map-scale-field">
+                                <legend>Map scale</legend>
+                                <div class="hc-inline">
+                                    <label>Distance <input name="scale" type="number" min="0.001" step="any" placeholder="required"></label>
+                                    <label>Unit
+                                        <select name="unit">
+                                            <option value="">Select unit</option>
+                                            <option value="Mile">Miles</option>
+                                            <option value="Kilometer">Kilometers</option>
+                                            <option value="Custom">Custom</option>
+                                        </select>
+                                    </label>
+                                </div>
+                                <p class="hc-hint">Game-world distance from the center of one adjacent cell to the next.</p>
+                            </fieldset>
                             <div class="hc-form" data-custom-unit hidden>
                                 <label>Custom symbol <input name="symbol" autocomplete="off"></label>
                                 <label>Custom meters per unit <input name="meters" type="number" min="0.001" step="any"></label>
@@ -96,8 +102,8 @@ export async function renderAssistantEntry(
                                 <label>Start q <input name="q" type="number" step="1" value="0"></label>
                                 <label>Start r <input name="r" type="number" step="1" value="0"></label>
                             </div>
-                            <p class="hc-hint hc-guided-only">q/r are axial hex coordinates. For a new abstract grid, 0 / 0 is a normal starting point.</p>
-                            <p class="hc-hint">This creates only mathematical hex context. It does not create or load an Overworld.</p>
+                            <p class="hc-hint hc-guided-only">q/r are axial cell coordinates. For a new mapless grid, 0 / 0 is a normal starting point.</p>
+                            <p class="hc-hint">Spatial positions are tracked, but no authored map is created or loaded.</p>
                         </div>
                         <button type="submit" class="hc-primary-action" data-submit>${createButton(assistant)}</button>
                     </form>
@@ -117,14 +123,14 @@ export async function renderAssistantEntry(
     const customUnitPanel = required<HTMLElement>(form, "[data-custom-unit]");
     const submit = required<HTMLButtonElement>(form, "[data-submit]");
     input(form, "name").value = defaultSessionName(assistant);
-    attachFieldHelp(procedure, "Procedure", "The procedure defines the table rules this focused utility will follow.");
+    attachFieldHelp(procedure, "Exploration ruleset", "The exploration ruleset defines the table rules this focused utility will follow.");
     const modeField = form.querySelector<HTMLSelectElement>('select[name="mode"]');
     if (modeField) {
-        attachFieldHelp(modeField, "Bookkeeping mode", "Time / interval only avoids creating spatial state. Abstract hex travel adds only the mathematical grid information needed for spatial travel.");
+        attachFieldHelp(modeField, "Bookkeeping mode", "Time / interval only avoids creating spatial state. Mapless travel adds only the grid information needed to track position and direction.");
     }
     attachFieldHelp(select(form, "orientation"), "Hex orientation", "Pointy-top and flat-top describe the grid geometry. They do not define map north.");
-    attachFieldHelp(input(form, "scale"), "Hex center distance", "This is the game-world distance from the center of one hex to the center of an adjacent hex.", "If adjacent hexes represent 6 miles, enter 6 and choose Miles.");
-    attachFieldHelp(select(form, "unit"), "Distance unit", "The physical unit represented by the hex center distance.");
+    attachFieldHelp(input(form, "scale"), "Map scale", "This is the game-world distance from the center of one cell to the center of an adjacent cell.", "If adjacent cells represent 6 miles, enter 6 and choose Miles.");
+    attachFieldHelp(select(form, "unit"), "Map scale unit", "The physical unit used by the map scale.");
     attachFieldHelp(input(form, "meters"), "Custom meters per unit", "Only used for Custom units. Enter the number of meters represented by one custom unit.");
 
     const composerApi = await ProcedureComposerApi.create(root);
@@ -354,14 +360,14 @@ function title(assistant: ExpeditionAssistant): string {
 }
 
 function subtitle(assistant: ExpeditionAssistant): string {
-    if (assistant === "travel") return "Start with generic watch/time bookkeeping, or opt into abstract-hex spatial travel. No Overworld is required.";
-    if (assistant === "navigation") return "Use an existing spatial crawl or create only the abstract hex context required for direction and navigation.";
-    return "Record encounter cadence against a saved procedure session without requiring a world, grid, or distance scale.";
+    if (assistant === "travel") return "Start with travel/time bookkeeping, or use mapless spatial travel. No authored map is required.";
+    if (assistant === "navigation") return "Use an existing mapped or mapless expedition, or create the minimal mapless setup needed for direction and navigation.";
+    return "Record encounter cadence against a saved ruleset session without requiring a map, grid, or map scale.";
 }
 
 function existingHint(assistant: ExpeditionAssistant): string {
     return assistant === "navigation"
-        ? "World-bound and abstract-hex sessions are compatible. Non-spatial sessions are excluded because navigation needs direction."
+        ? "Mapped and mapless spatial expeditions are compatible. Journey-without-grid sessions are excluded because navigation needs direction."
         : "Open a compatible saved session directly; no world-editor navigation is required.";
 }
 
@@ -372,9 +378,9 @@ function createButton(assistant: ExpeditionAssistant): string {
 }
 
 function createHint(assistant: ExpeditionAssistant): string {
-    if (assistant === "navigation") return "Creates an AbstractHex session only. No Overworld or map authoring is involved.";
-    if (assistant === "encounters") return "Creates a NonSpatial session with procedure/history state only.";
-    return "Watch/time defaults to NonSpatial. Choose abstract hex only when you actually want spatial travel bookkeeping.";
+    if (assistant === "navigation") return "Creates a mapless spatial session only. No authored map is required.";
+    if (assistant === "encounters") return "Creates a journey-without-grid session with ruleset and history state only.";
+    return "Travel/time defaults to no grid. Choose mapless spatial travel only when you need position and direction bookkeeping.";
 }
 
 function defaultSessionName(assistant: ExpeditionAssistant): string {
@@ -384,14 +390,14 @@ function defaultSessionName(assistant: ExpeditionAssistant): string {
 }
 
 function defaultContextName(assistant: ExpeditionAssistant, spatial: boolean): string {
-    if (spatial) return assistant === "navigation" ? "Abstract navigation grid" : "Abstract travel grid";
-    return assistant === "encounters" ? "Encounter procedure" : "Watch procedure";
+    if (spatial) return assistant === "navigation" ? "Mapless navigation" : "Mapless travel";
+    return assistant === "encounters" ? "Encounter session" : "Travel / time session";
 }
 
 function contextLabel(session: ExpeditionSummary): string {
-    if (session.context.kind === "WorldBound") return `World-bound: ${session.context.name}`;
-    if (session.context.kind === "AbstractHex") return `Abstract hex: ${session.context.name}`;
-    return `Non-spatial: ${session.context.name}`;
+    if (session.context.kind === "WorldBound") return `Map: ${session.context.name}`;
+    if (session.context.kind === "AbstractHex") return `Mapless: ${session.context.name}`;
+    return `Journey / no grid: ${session.context.name}`;
 }
 
 function openLabel(assistant: ExpeditionAssistant, session: ExpeditionSummary): string {

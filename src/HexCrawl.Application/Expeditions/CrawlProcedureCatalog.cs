@@ -33,7 +33,7 @@ public static class CrawlProcedureCatalog
         var bx = Preset(
             BxPresetKey,
             "B/X",
-            "Daily wilderness travel with terrain-sensitive movement, getting-lost procedure, encounter scheduling, foraging, and ration/resource concepts.",
+            "Daily wilderness travel where terrain, getting lost, encounters, foraging, and supplies matter.",
             "daily-wilderness-travel",
             "Daily wilderness travel",
             [
@@ -57,7 +57,7 @@ public static class CrawlProcedureCatalog
         var ose = new CrawlProcedurePresetDefinition(
             OseClassicPresetKey,
             "Old-School Essentials Classic Fantasy",
-            "Aliases the B/X generic wilderness procedure because Phase 3 research identified no Hex Crawl-relevant procedural difference that warrants a separate runtime recipe.",
+            "Uses the same wilderness-travel behavior as B/X while preserving Old-School Essentials as its own source identity.",
             1,
             bx.Recipe,
             "Old-School Essentials is referenced only as preset metadata; the materialized procedure is the shared generic B/X recipe.");
@@ -67,7 +67,7 @@ public static class CrawlProcedureCatalog
             Preset(
                 "alexandrian-advanced",
                 "Alexandrian Advanced",
-                "Four-hour continuous-distance travel with navigation, persistent veer, per-watch encounters, and procedure helpers.",
+                "Four-hour distance travel with navigation, persistent veer, per-watch encounters, and built-in resolution helpers.",
                 "alexandrian-advanced",
                 "Alexandrian Advanced",
                 ExecutableCore(
@@ -93,7 +93,7 @@ public static class CrawlProcedureCatalog
             Preset(
                 "simple-fixed-distance",
                 "Simple Fixed Distance",
-                "A minimal four-hour distance-travel procedure for tables that want fixed movement with partial cell progress, but no navigation or encounter checks.",
+                "Four-hour fixed-distance travel with partial cell progress and no navigation or encounter checks.",
                 "simple-fixed-distance",
                 "Simple Fixed Distance",
                 ExecutableCore(
@@ -110,7 +110,7 @@ public static class CrawlProcedureCatalog
             Preset(
                 "simple-hex-step",
                 "Simple Hex Step",
-                "A minimal four-hour whole-cell procedure for tables that want discrete hex steps with no partial progress, navigation, or encounter checks.",
+                "Four-hour whole-cell travel with no partial progress, navigation, or encounter checks.",
                 "simple-hex-step",
                 "Simple Hex Step",
                 ExecutableCore(
@@ -131,7 +131,7 @@ public static class CrawlProcedureCatalog
             Preset(
                 Adnd2ePresetKey,
                 "AD&D 2e",
-                "Daily overland travel represented with terrain movement costs and an explicit getting-lost outcome contract. Exact encounter scheduling remains intentionally manual where Phase 3 evidence was incomplete.",
+                "Daily overland travel with terrain movement costs and getting lost; encounter scheduling remains manual where source detail is uncertain.",
                 "daily-movement-point-travel",
                 "Daily movement-point travel",
                 [
@@ -150,7 +150,7 @@ public static class CrawlProcedureCatalog
             Preset(
                 Dnd35PresetKey,
                 "D&D 3.5e",
-                "Hourly overland travel with difficult-terrain effects, getting lost, foraging, forced-march checks, and persistent fatigue consequences represented generically.",
+                "Hourly overland travel with difficult terrain, getting lost, foraging, forced-march checks, and fatigue consequences.",
                 "hourly-overland-travel",
                 "Hourly overland travel",
                 [
@@ -173,7 +173,7 @@ public static class CrawlProcedureCatalog
             Preset(
                 Dnd2024PresetKey,
                 "D&D 5.5e / 2024",
-                "Hourly travel with pace and terrain limits plus extended-travel exhaustion represented as generic movement, terrain, forced-travel, and persistent-effect contracts.",
+                "Hourly travel with pace and terrain limits, party activities, and extended-travel exhaustion.",
                 "hourly-pace-travel",
                 "Hourly pace travel",
                 [
@@ -197,7 +197,7 @@ public static class CrawlProcedureCatalog
             Preset(
                 Pathfinder2eHexplorationPresetKey,
                 "Pathfinder 2e Hexploration",
-                "Daily hexploration with a speed-derived activity budget, group and individual activities, terrain activity costs, reconnoitering, camping, and subsistence represented generically.",
+                "Daily Hexploration with speed-based activity budgets, terrain costs, reconnoitering, camping, and subsistence.",
                 "activity-budget-hexploration",
                 "Activity-budget hexploration",
                 [
@@ -220,7 +220,7 @@ public static class CrawlProcedureCatalog
             Preset(
                 ForbiddenLandsPresetKey,
                 "Forbidden Lands",
-                "Quarter-day journey structure with participant activities, leading the way, keeping watch, resource dice, foraging, camping, forced travel, and mishap/effect concepts represented generically.",
+                "Quarter-day journeys with assigned travel roles, resource dice, foraging, camping, forced travel, and mishaps.",
                 "quarter-day-expedition",
                 "Quarter-day expedition",
                 [
@@ -250,7 +250,7 @@ public static class CrawlProcedureCatalog
             Preset(
                 WorldsWithoutNumberPresetKey,
                 "Worlds Without Number",
-                "Ten-hour overland travel day with terrain speed, separate travel/camp encounter opportunities, supplies, foraging, camping, and expedition-day concepts represented generically.",
+                "Ten-hour expedition days with terrain speed, travel/camp encounter checks, supplies, foraging, and camping.",
                 "ten-hour-expedition-day",
                 "Ten-hour expedition day",
                 [
@@ -273,7 +273,7 @@ public static class CrawlProcedureCatalog
             Preset(
                 OneRing2ePresetKey,
                 "The One Ring 2e",
-                "Role-driven journey process with route planning, Guide progress tests, targeted journey events, terrain influence, and persistent fatigue represented as manual/assisted generic contracts.",
+                "Role-driven journeys with route planning, Guide progress, journey events, terrain influence, and fatigue.",
                 "role-driven-journey",
                 "Role-driven journey",
                 [

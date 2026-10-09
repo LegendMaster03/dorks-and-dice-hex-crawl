@@ -312,13 +312,13 @@ function emitSpecialMetrics(surface) {
         pageTitle: root.querySelector("h1")?.textContent?.trim() || null,
         openExpeditionButtons: buttons.filter(button => button.textContent?.trim() === "Open expedition").length,
         startExpeditionVisible: text.includes("Start expedition"),
-        manageProceduresVisible: text.includes("Manage procedures"),
+        manageRulesetsVisible: text.includes("Manage rulesets"),
         manageWorldsVisible: text.includes("Manage worlds"),
         gmUtilitiesVisible: text.includes("GM utilities"),
         compactVisible: Boolean(root.querySelector(".hc-compact-procedure")),
         advancedVisible: Boolean(root.querySelector(".hc-advanced-layout")),
         jsonVisible: Boolean(root.querySelector(".hc-json-editor")),
-        procedureHomeVisible: text.includes("Saved procedures") && text.includes("Build my own"),
+        procedureHomeVisible: text.includes("Saved rulesets") && text.includes("Build my own"),
         procedureModuleCards: root.querySelectorAll(".hc-rule-card").length,
         procedureFactGroups: root.querySelectorAll(".hc-rule-fact-group").length,
         referenceVisible: Boolean(root.querySelector(".hc-procedure-reference")),
@@ -326,10 +326,21 @@ function emitSpecialMetrics(surface) {
         referenceFactGroups: root.querySelectorAll(".hc-reference-rule-group").length,
         exactParameterDisclosures: Array.from(root.querySelectorAll("summary")).filter(summary => summary.textContent?.trim() === "Exact parameter detail").length,
         technicalModeLabels: ["Compact", "Advanced", "JSON"].filter(label => text.includes(label)).length,
-        guidedPrimerVisible: text.includes("New to hex crawls? Start here."),
+        guidedSetupVisible: text.includes("Set up the expedition you want to run."),
         guidanceToggleVisible: buttons.some(button => ["Hide beginner help", "Show beginner help"].includes(button.textContent?.trim() || "")),
         guidedFieldHelpCount: root.querySelectorAll("[data-guided-help]").length,
-        guidedPresetAdviceCount: root.querySelectorAll(".hc-guided-preset-advice").length,
+        presetDecisionFactGroups: root.querySelectorAll(".hc-preset-decision-facts").length,
+        presetViewDetailsButtons: buttons.filter(button => button.textContent?.trim() === "View details").length,
+        guidedSetupStepCount: root.querySelectorAll("[data-setup-step]").length,
+        visibleGuidedSetupSteps: Array.from(root.querySelectorAll("[data-setup-step]")).filter(step => !step.hidden).length,
+        guidedSetupPreservesInputs: root.dataset.guidedSetupPreservesInputs === "true",
+        guidedSetupAllContexts: root.dataset.guidedSetupAllContexts === "true",
+        guidedSetupTransitioned: root.dataset.guidedSetupTransitioned === "true",
+        guidedSetupDirectShowsAll: root.dataset.guidedSetupDirectShowsAll === "true",
+        guidedSetupReenablePreservesStep: root.dataset.guidedSetupReenablePreservesStep === "true",
+        guidedSetupCreateCalls: Number(root.dataset.guidedSetupCreateCalls || "0"),
+        mapScaleFieldCount: root.querySelectorAll(".hc-map-scale-field").length,
+        guidedActionGuideVisible: Boolean(root.querySelector(".hc-guided-action-guide")),
         compactGuidanceVisible: text.includes("How to use Compact"),
         guidedRuleWhyCount: Array.from(root.querySelectorAll("summary")).filter(summary => summary.textContent?.trim() === "Why?").length,
         guidedNextActionWhyVisible: Array.from(root.querySelectorAll("summary")).some(summary => summary.textContent?.trim() === "Why is this next?"),
@@ -347,6 +358,7 @@ function emitSpecialMetrics(surface) {
 
 if (stateName === "home") {
     const restoreFetch = installProcedureFetch();
+    let createCalls = 0;
     const api = {
         listExpeditions: async () => [{
             id: "visual-expedition",
@@ -364,9 +376,80 @@ if (stateName === "home") {
             createdAt: "2026-10-01T12:00:00Z",
             updatedAt: "2026-10-06T04:00:00Z"
         }],
-        getProcedurePresets: async () => [visualPreset()]
+        getProcedurePresets: async () => [visualPreset()],
+        startStandaloneSession: async () => { createCalls += 1; throw new Error("visual review must not create"); },
+        startConfiguredExpedition: async () => { createCalls += 1; throw new Error("visual review must not create"); }
     };
     await renderToolHome(root, api, () => {});
+
+    const setup = root.querySelector("[data-start-mapless]");
+    const context = setup?.querySelector('select[name="context"]');
+    const nextContext = setup?.querySelector('[data-setup-next="1"]');
+    const nextRules = setup?.querySelector('[data-setup-next="2"]');
+    const backRules = setup?.querySelector('[data-setup-back="1"]');
+    const backContext = setup?.querySelector('[data-setup-back="0"]');
+    const name = setup?.querySelector('input[name="name"]');
+    const scale = setup?.querySelector('input[name="scale"]');
+    const unit = setup?.querySelector('select[name="unit"]');
+    const guidanceToggle = root.querySelector(".hc-guidance-toggle");
+    if (context && nextContext && nextRules && backRules && backContext && name && scale && unit && guidanceToggle) {
+        context.value = "__abstract__";
+        context.dispatchEvent(new Event("change", { bubbles: true }));
+        const atStep = number => {
+            const active = Array.from(root.querySelectorAll("[data-setup-step]")).filter(step => !step.hidden);
+            return active.length === 1 && Number(active[0].dataset.setupStep) === number;
+        };
+        const couldAdvanceContext = !nextContext.disabled;
+        nextContext.click();
+        const reachedRules = atStep(1) && !nextRules.disabled;
+        nextRules.click();
+        const reachedDetails = atStep(2);
+        root.dataset.guidedSetupTransitioned = String(couldAdvanceContext && reachedRules && reachedDetails);
+        const abstractShown = !setup.querySelector("[data-abstract-context]").hidden
+            && !setup.querySelector("[data-spatial-start]").hidden
+            && setup.querySelector("[data-nonspatial-context]").hidden;
+        name.value = "Preserved expedition";
+        scale.value = "6";
+        unit.value = "Mile";
+        unit.dispatchEvent(new Event("change", { bubbles: true }));
+        backRules.click();
+
+        guidanceToggle.click();
+        const setupSteps = Array.from(root.querySelectorAll("[data-setup-step]"));
+        root.dataset.guidedSetupDirectShowsAll = String(setupSteps.every(step => !step.hidden));
+        guidanceToggle.click();
+        const ruleStep = root.querySelector('[data-setup-step="1"]');
+        root.dataset.guidedSetupReenablePreservesStep = String(
+            Boolean(ruleStep && !ruleStep.hidden && setupSteps.filter(step => !step.hidden).length === 1));
+
+        nextRules.click();
+        root.dataset.guidedSetupPreservesInputs = String(
+            name.value === "Preserved expedition" && scale.value === "6" && unit.value === "Mile");
+        backRules.click();
+        backContext.click();
+        context.value = "visual-world";
+        context.dispatchEvent(new Event("change", { bubbles: true }));
+        nextContext.click();
+        nextRules.click();
+        const worldShown = setup.querySelector("[data-abstract-context]").hidden
+            && !setup.querySelector("[data-spatial-start]").hidden
+            && setup.querySelector("[data-nonspatial-context]").hidden;
+        backRules.click();
+        backContext.click();
+        context.value = "__nonspatial__";
+        context.dispatchEvent(new Event("change", { bubbles: true }));
+        nextContext.click();
+        nextRules.click();
+        const nonspatialShown = setup.querySelector("[data-abstract-context]").hidden
+            && setup.querySelector("[data-spatial-start]").hidden
+            && !setup.querySelector("[data-nonspatial-context]").hidden;
+        root.dataset.guidedSetupAllContexts = String(abstractShown && worldShown && nonspatialShown);
+        backRules.click();
+        backContext.click();
+        context.value = "__abstract__";
+        context.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    root.dataset.guidedSetupCreateCalls = String(createCalls);
     emitSpecialMetrics("home");
     restoreFetch();
 } else if (stateName.startsWith("procedure-")) {

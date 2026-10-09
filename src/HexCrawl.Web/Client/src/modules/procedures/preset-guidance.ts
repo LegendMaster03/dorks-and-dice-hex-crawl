@@ -137,8 +137,9 @@ export function presetGuidance(procedure: CampaignProcedure): PresetGuidance {
         activeModules([[helpersActive, get("procedure.helpers")]]),
         false);
 
-    const travelActive =
-        timeActive || movementResolutionActive || hexProgressActive || movementBudgetActive || terrainActive;
+    const spatialTravelActive =
+        movementResolutionActive || hexProgressActive || movementBudgetActive || terrainActive;
+    const travelActive = timeActive || spatialTravelActive;
     const navigationActive = navigationCheckActive || navigationOutcomeActive;
     const survivalActive =
         resourcesActive || foragingActive || campingActive || forcedTravelActive || exposureActive || effectsActive;
@@ -184,7 +185,7 @@ export function presetGuidance(procedure: CampaignProcedure): PresetGuidance {
                 label: "Workflow",
                 value: journeyProcessActive
                     ? "Staged journey"
-                    : travelActive
+                    : spatialTravelActive
                         ? "Spatial travel"
                         : timeActive
                             ? "Time / interval"
@@ -218,15 +219,14 @@ export function presetGuidance(procedure: CampaignProcedure): PresetGuidance {
 }
 
 function automationSummary(modules: ProcedureModule[], nonExecutable: boolean): string {
-    if (nonExecutable) return "Reference / manual";
-    if (modules.length === 0) return "Table-resolved";
     const modes = new Set(modules.map(module => module.automationLevel));
     const labels = [
         modes.has("Automatic") ? "Automatic" : null,
         modes.has("Assisted") ? "DM-assisted" : null,
         modes.has("Manual") ? "Manual" : null
     ].filter((value): value is string => value !== null);
-    return labels.join(" + ") || "Table-resolved";
+    const handling = labels.join(" + ") || "Table-resolved";
+    return nonExecutable ? `${handling} · partial support` : handling;
 }
 
 function addArea(

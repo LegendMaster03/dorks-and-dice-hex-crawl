@@ -144,9 +144,15 @@ export async function renderWorldEditor(
 
                     <details><summary>World and grid</summary><form class="hc-form" data-grid-form>
                         <label>Name <input name="name" required></label>
-                        <label>Orientation <select name="orientation"><option value="PointyTop">Pointy top</option><option value="FlatTop">Flat top</option></select></label>
-                        <label>Hex center distance <input name="scale" type="number" min="0.001" step="any" required><span class="hc-hint">Center-to-center distance between adjacent hexes.</span></label>
-                        <label>Unit <select name="unitKind"><option value="Mile">Miles</option><option value="Kilometer">Kilometers</option><option value="Custom">Custom</option></select></label>
+                        <label>Grid orientation <select name="orientation"><option value="PointyTop">Pointy top</option><option value="FlatTop">Flat top</option></select></label>
+                        <fieldset class="hc-field-group hc-map-scale-field">
+                            <legend>Map scale</legend>
+                            <div class="hc-inline">
+                                <label>Distance <input name="scale" type="number" min="0.001" step="any" required></label>
+                                <label>Unit <select name="unitKind"><option value="Mile">Miles</option><option value="Kilometer">Kilometers</option><option value="Custom">Custom</option></select></label>
+                            </div>
+                            <p class="hc-hint">Game-world distance from the center of one adjacent cell to the next.</p>
+                        </fieldset>
                         <div class="hc-custom-unit-fields" data-custom-unit hidden>
                             <label>Custom symbol <input name="unitSymbol"></label>
                             <label>Custom meters per unit <input name="metersPerUnit" type="number" min="0.001" step="any"></label>
@@ -191,7 +197,7 @@ export async function renderWorldEditor(
                     <details><summary>Expeditions using this world</summary><div data-expedition-list></div>
                         <form class="hc-form" data-expedition-form>
                             <label>Name <input name="name" required value="Expedition"></label>
-                            <label>Procedure <select name="procedure"></select></label>
+                            <label>Exploration ruleset <select name="procedure"></select></label>
                             <div class="hc-inline"><label>Start hex q <input name="q" type="number" step="1" value="0"></label><label>Start hex r <input name="r" type="number" step="1" value="0"></label></div>
                             <p class="hc-hint">Advanced: q/r are axial hex coordinates and remain the persisted coordinate format.</p>
                             <button type="submit" class="hc-primary-action">Start expedition</button>
@@ -217,8 +223,8 @@ export async function renderWorldEditor(
     const metersPerUnitInput = input(gridForm, "metersPerUnit");
     required<HTMLElement>(root, "[data-guidance-controls]").append(guidancePreferenceButton(root));
     attachFieldHelp(select(gridForm, "orientation"), "Hex orientation", "Pointy-top and flat-top describe the grid geometry. They do not define map north.");
-    attachFieldHelp(input(gridForm, "scale"), "Hex center distance", "This is the game-world distance from the center of one hex to the center of an adjacent hex.", "If adjacent hexes represent 6 miles, enter 6 and choose Miles.");
-    attachFieldHelp(unitKindSelect, "Unit", "The physical unit represented by the center-to-center distance between adjacent hexes.");
+    attachFieldHelp(input(gridForm, "scale"), "Map scale", "This is the game-world distance from the center of one cell to the center of an adjacent cell.", "If adjacent cells represent 6 miles, enter 6 and choose Miles.");
+    attachFieldHelp(unitKindSelect, "Map scale unit", "The physical unit used by the map scale.");
     attachFieldHelp(metersPerUnitInput, "Custom meters per unit", "Only used for Custom units. Enter the number of meters represented by one custom unit.");
     attachFieldHelp(input(gridForm, "radius"), "Hex radius (world units)", "This controls internal map geometry. It is separate from the physical distance represented by each hex and normally remains unchanged.");
     const selectedCellEmpty = required<HTMLElement>(root, "[data-selected-cell-empty]");

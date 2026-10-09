@@ -342,7 +342,7 @@ test("expedition setup accepts saved revisions and materializes preset selection
     assert.match(setup, /ProcedureComposerApi\.create/);
     assert.match(setup, /populateProcedureStartChoices/);
     assert.match(setup, /applyWorldProcedureChoice/);
-    assert.match(setup, /Saved procedures use the selected revision/);
+    assert.match(setup, /Saved rulesets use the selected revision/);
     assert.match(setup, /applyWorldProcedureChoice/);
     assert.match(setup, /choice\.revision/);
     assert.match(selection, /procedureKey: choice\.presetKey/);
@@ -398,7 +398,7 @@ test("procedure mechanics use shared presentation policy and the unified expedit
     assert.match(setup, /campaignProcedureSummary/);
     assert.match(assistant, /campaignProcedureSummary/);
     assert.match(home, /campaignProcedureSummary/);
-    assert.match(expedition, /Procedure reference/);
+    assert.match(expedition, /Ruleset reference/);
     assert.match(expedition, /\/procedures\/\$\{encodeURIComponent\(runtime\.procedure\.procedureId\)\}\/revisions\/\$\{runtime\.procedure\.revision\}\/reference/);
     assert.match(campaignProcedureView, /exit factors start/);
     assert.match(campaignProcedureView, /actual distance = expected distance/);

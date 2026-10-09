@@ -30,13 +30,13 @@ export async function enhanceExpeditionSetup(
     form.dataset.expeditionForm = "";
     form.innerHTML = `
         <label>Name <input name="name" required value="Expedition"></label>
-        <label>Procedure <select name="procedure"></select></label>
+        <label>Exploration ruleset <select name="procedure"></select></label>
         <p class="hc-hint" data-procedure-summary></p>
-        <details class="hc-optional-reference"><summary>Procedure details</summary><ul data-procedure-mechanics></ul></details>
+        <details class="hc-optional-reference"><summary>Ruleset details</summary><ul data-procedure-mechanics></ul></details>
         <label>Map presentation <select name="presentation"></select></label>
         <p class="hc-hint" data-presentation-summary></p>
         <div class="hc-inline"><label>Start q <input name="q" type="number" step="1" value="0"></label><label>Start r <input name="r" type="number" step="1" value="0"></label></div>
-        <p class="hc-hint">Saved procedures use the selected revision. A preset creates a new saved procedure when play begins.</p>
+        <p class="hc-hint">Saved rulesets use the selected revision. A preset saves an editable campaign copy when play begins.</p>
         <button type="submit" class="hc-primary-action">Start expedition</button>`;
     previous.replaceWith(form);
 
@@ -50,7 +50,7 @@ export async function enhanceExpeditionSetup(
         const mechanics = required<HTMLElement>(form, "[data-procedure-mechanics]");
         mechanics.replaceChildren();
         if (!procedure.value) {
-            required<HTMLElement>(form, "[data-procedure-summary]").textContent = "No runnable procedure is available.";
+            required<HTMLElement>(form, "[data-procedure-summary]").textContent = "No runnable exploration ruleset is available.";
             return;
         }
         const choice = readProcedureStartChoice(procedure.value);

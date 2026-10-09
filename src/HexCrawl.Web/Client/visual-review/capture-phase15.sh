@@ -165,15 +165,27 @@ if surface == "home":
         raise SystemExit(f'wrong home title: {metrics}')
     if metrics["openExpeditionButtons"] < 1:
         raise SystemExit(f'home does not expose Open expedition: {metrics}')
-    if not all((metrics["startExpeditionVisible"], metrics["manageProceduresVisible"], metrics["manageWorldsVisible"], metrics["gmUtilitiesVisible"])):
+    if not all((metrics["startExpeditionVisible"], metrics["manageRulesetsVisible"], metrics["manageWorldsVisible"], metrics["gmUtilitiesVisible"])):
         raise SystemExit(f'home hierarchy is incomplete: {metrics}')
-    if not metrics["guidedPrimerVisible"] or not metrics["guidanceToggleVisible"] or metrics["guidedFieldHelpCount"] < 4:
+    if not metrics["guidedSetupVisible"] or not metrics["guidanceToggleVisible"] or metrics["guidedFieldHelpCount"] < 4:
         raise SystemExit(f'Guided home onboarding is incomplete: {metrics}')
+    if metrics["guidedSetupStepCount"] != 3 or metrics["visibleGuidedSetupSteps"] != 1:
+        raise SystemExit(f'Guided setup did not return to one clear current step: {metrics}')
+    if not metrics["guidedSetupPreservesInputs"] or not metrics["guidedSetupDirectShowsAll"] or not metrics["guidedSetupReenablePreservesStep"]:
+        raise SystemExit(f'Guided setup lost state across back/direct/re-enable transitions: {metrics}')
+    if not metrics["guidedSetupTransitioned"] or not metrics["guidedSetupAllContexts"]:
+        raise SystemExit(f'Guided setup did not traverse mapped, mapless and nonspatial paths: {metrics}')
+    if metrics["guidedSetupCreateCalls"] != 0:
+        raise SystemExit(f'Guided navigation created an expedition before explicit submit: {metrics}')
+    if metrics["mapScaleFieldCount"] < 1:
+        raise SystemExit(f'Map scale is not presented as a grouped value/unit field: {metrics}')
 elif surface == "procedure":
     if state == "procedure-home" and not metrics["procedureHomeVisible"]:
         raise SystemExit(f'procedure home is incomplete: {metrics}')
-    if state == "procedure-home" and metrics["guidedPresetAdviceCount"] < 1:
+    if state == "procedure-home" and metrics["presetDecisionFactGroups"] < 1:
         raise SystemExit(f'Guided preset discovery is missing: {metrics}')
+    if state == "procedure-home" and metrics["presetViewDetailsButtons"] < 1:
+        raise SystemExit(f'Preset details are not progressively disclosed: {metrics}')
     if state == "procedure-home" and not metrics["guidanceToggleVisible"]:
         raise SystemExit(f'Guided procedure preference control is missing: {metrics}')
     expected = {
@@ -211,7 +223,7 @@ elif surface == "world":
     if metrics["mapHeight"] < 250:
         raise SystemExit(f'world authoring map is too short to remain usable: {metrics}')
 else:
-    if not metrics["guidedNextActionWhyVisible"]:
+    if not metrics["guidedNextActionWhyVisible"] or not metrics["guidedActionGuideVisible"]:
         raise SystemExit(f'Guided next-action explanation is missing: {metrics}')
     nonspatial = state.startswith("journey-") or state in {"history-workspace", "nonspatial-movement-composition"}
     abstract_spatial = state == "abstract-spatial-course"
@@ -275,7 +287,7 @@ else:
         raise SystemExit(f'Guided pending-consequence explanation is missing: {metrics}')
 
     if state == "no-course":
-        if metrics["selectedEdges"] != 0 or metrics["primaryAction"] != "Choose course":
+        if metrics["selectedEdges"] != 0 or metrics["primaryAction"] != "Choose travel direction":
             raise SystemExit(f'no-course state is inconsistent: {metrics}')
     if state in {"selected-edge", "persisted-course"} and metrics["selectedEdges"] != 1:
         raise SystemExit(f'expected exactly one selected edge: {metrics}')
@@ -306,9 +318,9 @@ else:
     if state == "course-clear-reload":
         if metrics["selectedEdges"] != 0 or metrics["runtimeIntendedDirection"] is not None:
             raise SystemExit(f'explicitly cleared course resurrected after fresh-client render: {metrics}')
-        if metrics["currentTravelCourseText"] != "No course selected":
+        if metrics["currentTravelCourseText"] != "No direction selected":
             raise SystemExit(f'Current travel did not retain explicit no-course state: {metrics}')
-        if metrics["primaryAction"] != "Choose course":
+        if metrics["primaryAction"] != "Choose travel direction":
             raise SystemExit(f'cleared course did not return workflow to course selection: {metrics}')
         stored = json.loads(metrics["storedTravelPreferences"] or "{}")
         if "direction" in stored:

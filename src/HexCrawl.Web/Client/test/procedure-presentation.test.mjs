@@ -47,7 +47,7 @@ test("Compact starting-exit help describes the runtime exit requirement rather t
 
     assert.equal(presentation?.control, "number");
     assert.match(presentation?.help ?? "", /required to leave the starting hex/i);
-    assert.match(presentation?.help ?? "", /hex center distance/i);
+    assert.match(presentation?.help ?? "", /map scale/i);
     assert.doesNotMatch(presentation?.help ?? "", /already counted/i);
     assert.notEqual(presentation?.help, "Starting exit progress factor.");
 

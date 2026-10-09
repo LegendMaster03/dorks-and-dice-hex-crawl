@@ -58,10 +58,10 @@ export async function renderToolHome(
 
                         <section class="hc-setup-step" data-setup-step="0">
                             <h3>1. What do you want to run?</h3>
-                            <label>Map or travel setup <select name="context"></select></label>
+                            <label>Map or travel setup <select name="context" required></select></label>
                             <p class="hc-hint" data-context-summary></p>
                             <div class="hc-button-row hc-guided-only">
-                                <button type="button" class="hc-primary-action" data-setup-next="1">Next: choose rules</button>
+                                <button type="button" class="hc-primary-action" data-setup-next="1" disabled>Next: choose rules</button>
                             </div>
                         </section>
 
@@ -72,7 +72,7 @@ export async function renderToolHome(
                             <details class="hc-optional-reference"><summary>View ruleset details</summary><ul data-procedure-mechanics></ul></details>
                             <div class="hc-button-row hc-guided-only">
                                 <button type="button" data-setup-back="0">Back</button>
-                                <button type="button" class="hc-primary-action" data-setup-next="2">Next: expedition details</button>
+                                <button type="button" class="hc-primary-action" data-setup-next="2" disabled>Next: expedition details</button>
                             </div>
                         </section>
 
@@ -94,11 +94,13 @@ export async function renderToolHome(
                                     <label>Custom symbol <input name="symbol" autocomplete="off"></label>
                                     <label>Custom meters per unit <input name="meters" type="number" min="0.001" step="any"></label>
                                 </div>
-                                <div class="hc-inline">
-                                    <label>Start q <input name="q" type="number" step="1" value="0"></label>
-                                    <label>Start r <input name="r" type="number" step="1" value="0"></label>
-                                </div>
                                 <p class="hc-hint">There is no authored map, but spatial positions and adjacent-cell travel are still tracked.</p>
+                            </div>
+                            <div data-spatial-start hidden>
+                                <div class="hc-inline">
+                                    <label>Starting cell q <input name="q" type="number" step="1" value="0"></label>
+                                    <label>Starting cell r <input name="r" type="number" step="1" value="0"></label>
+                                </div>
                             </div>
                             <div data-nonspatial-context hidden>
                                 <label>Setup name <input name="nonSpatialName" value="Journey" autocomplete="off"></label>
@@ -163,6 +165,7 @@ export async function renderToolHome(
     const procedure = select(form, "procedure");
     const unit = select(form, "unit");
     const abstractContext = required<HTMLElement>(form, "[data-abstract-context]");
+    const spatialStart = required<HTMLElement>(form, "[data-spatial-start]");
     const nonSpatialContext = required<HTMLElement>(form, "[data-nonspatial-context]");
     const customUnit = required<HTMLElement>(form, "[data-custom-unit]");
     const startButton = required<HTMLButtonElement>(form, "[data-start-button]");
@@ -194,6 +197,7 @@ export async function renderToolHome(
     }
     required<HTMLElement>(root, "[data-guidance-controls]").append(
         guidancePreferenceButton(root, () => syncGuidedSetup()));
+    syncGuidedSetup();
 
     attachFieldHelp(
         procedure,
@@ -230,11 +234,13 @@ export async function renderToolHome(
         const nonSpatial = context.value === NON_SPATIAL_CONTEXT;
         abstractContext.hidden = !abstract;
         nonSpatialContext.hidden = !nonSpatial;
+        const spatial = Boolean(context.value) && !nonSpatial;
+        spatialStart.hidden = !spatial;
         input(form, "contextName").required = abstract;
         input(form, "scale").required = abstract;
         unit.required = abstract;
-        input(form, "q").required = abstract;
-        input(form, "r").required = abstract;
+        input(form, "q").required = spatial;
+        input(form, "r").required = spatial;
         input(form, "nonSpatialName").required = nonSpatial;
         contextNext.disabled = !context.value;
         required<HTMLElement>(form, "[data-context-summary]").textContent = nonSpatial
@@ -292,12 +298,13 @@ export async function renderToolHome(
         presets = procedurePresets;
         savedProcedures = procedures;
         populateProcedureStartChoices(procedure, savedProcedures, presets);
+        context.append(option("", "Choose map or travel setup"));
         for (const world of worlds) context.append(option(world.id, `Use map: ${world.name}`));
         context.append(
             option(ABSTRACT_CONTEXT, "Explore without a map"),
             option(NON_SPATIAL_CONTEXT, "Journey without a grid")
         );
-        if (worlds.length === 0) context.value = ABSTRACT_CONTEXT;
+        context.value = "";
 
         syncExpeditionCount(count, expeditions.length);
         renderExpeditions(list, expeditions, worlds, api, error, count, navigate);

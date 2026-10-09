@@ -126,6 +126,29 @@ test("preset guidance surfaces non-executable behavior before selection", () => 
     ], false));
 
     assert.equal(summary(guidance).Workflow, "Staged journey");
-    assert.equal(summary(guidance)["Table handling"], "Reference / manual");
+    assert.equal(summary(guidance)["Table handling"], "Manual · partial support");
     assert.match(guidance.caution, /can not run this entire ruleset automatically/i);
+});
+
+
+test("preset summary distinguishes time-only bookkeeping from spatial travel", () => {
+    const guidance = presetGuidance(procedure([
+        module("time.interval", { durationTicks: "144000000000" }, "Automatic")
+    ]));
+
+    assert.equal(summary(guidance).Workflow, "Time / interval");
+    assert.equal(summary(guidance).Travel, "Not used");
+    assert.equal(summary(guidance).Navigation, "Not used");
+});
+
+test("partial support does not conceal working automatic helpers", () => {
+    const guidance = presetGuidance(procedure([
+        module("time.interval", { durationTicks: "144000000000" }, "Automatic"),
+        module("journey.process", {
+            stageModel: "ordered",
+            progressModel: "table-defined"
+        }, "Manual")
+    ], false));
+    assert.equal(summary(guidance)["Table handling"], "Automatic + Manual · partial support");
+    assert.match(guidance.caution, /can not run this entire ruleset automatically/);
 });

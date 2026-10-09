@@ -649,8 +649,8 @@ test("urgent travel pauses preserve valid reusable course and ask only for chang
     assert.match(review, /const intendedEdge = preferences\.direction === null/);
     assert.match(review, /contextLine\(\s*"Course"/);
     assert.match(review, /labelled\("Pace \/ travel mode", pace\)/);
-    assert.match(review, /button\("Change course"/);
-    assert.match(review, /button\("Choose course"/);
+    assert.match(review, /button\("Change travel direction"/);
+    assert.match(review, /button\("Choose travel direction"/);
     assert.match(review, /previous course is not available from the current cell/);
     assert.doesNotMatch(review, /labelled\("Course", course\)/);
     assert.doesNotMatch(review, /Select intended adjacent cell/);
@@ -774,8 +774,8 @@ test("no-course travel identifies course selection as the immediate task", () =>
         "utf8");
 
     assert.match(view, /const courseRequired = routineSpatialTravel && preferences\.direction === null/);
-    assert.match(view, /courseRequired\s*\? "Choose course"/);
-    assert.match(view, /selecting a course does not move the party/);
+    assert.match(view, /courseRequired\s*\? "Choose travel direction"/);
+    assert.match(view, /selecting a direction does not move the party/);
 });
 
 test("focused expedition panels accept the drawer body itself as their page host", () => {
@@ -1071,8 +1071,8 @@ test("focused navigation reuses valid intended course and routes missing intent 
     assert.match(navigation, /const intendedEdge = preferences\.direction === null/);
     assert.match(navigation, /contextLine\("Intended course", intendedEdge/);
     assert.match(navigation, /Choose an adjacent course before resolving navigation/);
-    assert.match(navigation, /button\("Choose course"/);
-    assert.match(navigation, /button\("Change course"/);
+    assert.match(navigation, /button\("Choose travel direction"/);
+    assert.match(navigation, /button\("Change travel direction"/);
     assert.match(navigation, /const direction = intendedEdge\.intentValue/);
     assert.doesNotMatch(navigation, /name = "intendedDirection"/);
     assert.doesNotMatch(navigation, /labelled\("Intended course", course\)/);
@@ -1289,6 +1289,10 @@ test("Phase 15.1 Guided layers beginner help over existing Compact and runtime a
     assert.match(procedure, /guidedDisclosure\(/);
     assert.match(expedition, /Why is this next\?/);
     assert.match(expedition, /guidedActionExplanation/);
+    assert.match(expedition, /guidedActionInput/);
+    assert.match(expedition, /guidedActionResult/);
+    assert.match(expedition, /movementComposition\.missingInputs\.length/);
+    assert.match(expedition, /selecting a direction does not move the party/);
     assert.doesNotMatch(guidance, /fetch\(|CampaignProcedure|procedure\.modules|runtime\./);
 });
 
@@ -1299,12 +1303,13 @@ test("Phase 15.1 explains domain-specific numeric grid settings at their point o
     const assistant = fs.readFileSync(path.join(sourceDir, "modules/assistants/assistant-entry-view.ts"), "utf8");
     for (const source of [home, worlds, editor, assistant]) {
         assert.match(source, /attachFieldHelp/);
-        assert.match(source, /Hex center distance/);
-        assert.match(source, /center of one hex to the center of an adjacent hex/);
+        assert.match(source, /Map scale/);
+        assert.doesNotMatch(source, /Hex center distance/);
     }
-    assert.match(worlds, /internal coordinate frame/);
+    assert.match(home, /center of one cell to the center of an adjacent cell/);
+    assert.match(worlds, /center of one adjacent cell to the next/);
     assert.match(editor, /They are not travel-distance settings/);
-    assert.match(assistant, /q\/r are axial hex coordinates/);
+    assert.match(assistant, /q\/r are axial cell coordinates/);
 });
 
 

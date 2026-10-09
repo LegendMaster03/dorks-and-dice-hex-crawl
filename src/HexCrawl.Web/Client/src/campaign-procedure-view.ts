@@ -4,7 +4,7 @@ import type { CampaignProcedure, DiceRollFormula, ProcedureRuntime } from "./typ
 export function campaignProcedureSummary(procedure: CampaignProcedure): string {
     const runtime = procedure.runtime;
     if (!runtime) {
-        return `${procedure.modules.length} materialized modules · structural procedure · not executable by the current runtime`;
+        return `${procedure.modules.length} configured rules · manual or reference behavior · not fully automated`;
     }
 
     return `${formatHours(runtime.intervalHours)} watches · ${runtime.travelResolution === "HexSteps"
@@ -31,7 +31,7 @@ export function procedureMechanicLines(procedure: CampaignProcedure): string[] {
         return procedure.modules.length > 0
             ? procedure.modules.map(module =>
                 `${module.moduleName}: ${module.mechanicKey} v${module.mechanicVersion} · ${module.automationLevel.toLowerCase()} · ${module.executionHandler}.`)
-            : ["This materialized procedure contains no selected modules."];
+            : ["This ruleset contains no selected rules."];
     }
 
     const travel = runtime.travelResolution === "HexSteps"

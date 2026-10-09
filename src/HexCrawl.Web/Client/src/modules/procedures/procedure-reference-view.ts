@@ -15,7 +15,7 @@ export async function renderProcedureReference(
     revision: number | null,
     navigate: (route: string, replace?: boolean) => void): Promise<() => void> {
     ensureReferenceStyles();
-    root.innerHTML = `<section class="hc-page"><p class="hc-muted">Loading procedure reference…</p></section>`;
+    root.innerHTML = `<section class="hc-page"><p class="hc-muted">Loading exploration rules reference…</p></section>`;
     const referenceApi = await ProcedureComposerApi.create(root);
     let disposed = false;
 
@@ -45,11 +45,11 @@ function render(
     const header = element("header", "hc-page-header hc-reference-header");
     const title = document.createElement("div");
     title.append(
-        text("p", "Procedure reference", "hc-reference-kicker"),
+        text("p", "Exploration rules reference", "hc-reference-kicker"),
         text("h1", reference.name),
         text("p", `Revision ${reference.revision} · ${moduleCount(reference)} modules`));
     const actions = element("nav", "hc-button-row hc-reference-actions");
-    const back = button("Back to procedure");
+    const back = button("Back to ruleset");
     back.dataset.referenceBack = "";
     back.addEventListener("click", () => navigate(
         `/procedures/${encodeURIComponent(reference.procedureId)}/revisions/${reference.revision}`));
@@ -62,7 +62,7 @@ function render(
 
     const layout = element("div", "hc-reference-layout");
     const index = element("aside", "hc-panel hc-reference-index");
-    index.append(text("h2", "Procedure areas"));
+    index.append(text("h2", "Ruleset areas"));
     const indexList = document.createElement("ul");
     for (const section of reference.sections) {
         const item = document.createElement("li");
@@ -92,10 +92,10 @@ function renderSummary(reference: ProcedureReference): HTMLElement {
     const summary = element("section", "hc-reference-summary");
     const snapshot = element("section", "hc-panel");
     snapshot.append(
-        text("h2", "Procedure snapshot"),
+        text("h2", "Ruleset snapshot"),
         text("p", reference.isExecutable
-            ? "This exact procedure revision currently binds to native execution."
-            : "This exact procedure revision includes structural, manual, or unsupported behavior and is not fully native-executable."),
+            ? "Hex Crawl can run the supported parts of this saved ruleset automatically."
+            : "This saved ruleset includes manual, reference-only, or unsupported behavior and is not fully automated."),
         text("p", `${reference.modifiedModuleCount} modified modules · ${reference.modificationCount} recorded changes.`, "hc-muted"));
 
     const dependency = element("section", "hc-panel");
@@ -116,12 +116,12 @@ function renderSummary(reference: ProcedureReference): HTMLElement {
     const origin = element("section", "hc-panel");
     origin.append(text("h2", "Origin"));
     if (!reference.origin) {
-        origin.append(text("p", "No origin preset is recorded. The materialized snapshot fully defines this reference.", "hc-muted"));
+        origin.append(text("p", "No origin preset is recorded. This saved ruleset revision fully defines the reference.", "hc-muted"));
     } else {
         const name = reference.origin.presetDisplayName ?? reference.origin.presetKey ?? "Recorded preset";
         origin.append(
             text("p", `${name}${reference.origin.presetRevision == null ? "" : ` · preset revision ${reference.origin.presetRevision}`}`),
-            text("p", "Origin is provenance only; the procedure sections below come from this saved revision.", "hc-muted"));
+            text("p", "Origin is provenance only; the rules below come from this saved revision.", "hc-muted"));
         if (reference.origin.attribution) origin.append(text("p", reference.origin.attribution, "hc-muted"));
         if (reference.origin.disclaimer) origin.append(text("p", reference.origin.disclaimer, "hc-muted"));
     }
