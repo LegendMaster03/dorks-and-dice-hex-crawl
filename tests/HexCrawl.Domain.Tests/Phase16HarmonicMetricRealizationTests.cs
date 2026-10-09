@@ -66,6 +66,47 @@ public sealed class Phase16HarmonicMetricRealizationTests
         Assert.Equal("realized", feasible.Status);
         Assert.True(PeriodicMetricWitnessValidator.Validate(feasible.Topology!, feasible.Realization!));
 
+        // Fit unequal periods and an oblique angle without altering topology.
+        // This must construct actual polygons rather than merely inspect the
+        // original orthogonal uniform-scale embedding.
+        var oblique = DelaneyDressHarmonicMetricRealization.Construct(
+            source, 2, "km", rotationDegrees: 17, constraints:
+            [
+                new TilingMetricConstraint("period-u-length", "km", 4, 4),
+                new TilingMetricConstraint("period-u-length", "km", 3, 5),
+                new TilingMetricConstraint("period-v-length", "km", 3, 3),
+                new TilingMetricConstraint("period-angle-degrees", "degrees", 65, 65)
+            ]);
+        Assert.True(oblique.Status == "realized", oblique.Reason);
+        Assert.Equal(baseline.Topology!.TranslationDsSymbol, oblique.Topology!.TranslationDsSymbol);
+        Assert.True(PeriodicMetricWitnessValidator.Validate(oblique.Topology, oblique.Realization!));
+        var obliqueMetric = oblique.Realization!;
+        double uSize = Math.Sqrt(obliqueMetric.TranslationU.X * obliqueMetric.TranslationU.X
+            + obliqueMetric.TranslationU.Y * obliqueMetric.TranslationU.Y);
+        double vSize = Math.Sqrt(obliqueMetric.TranslationV.X * obliqueMetric.TranslationV.X
+            + obliqueMetric.TranslationV.Y * obliqueMetric.TranslationV.Y);
+        Assert.InRange(uSize, 4 - 1e-8, 4 + 1e-8);
+        Assert.InRange(vSize, 3 - 1e-8, 3 + 1e-8);
+
+        var conflictingIntervals = DelaneyDressHarmonicMetricRealization.Construct(
+            source, 2, "km", constraints:
+            [
+                new TilingMetricConstraint("period-u-length", "km", 3, 4),
+                new TilingMetricConstraint("period-u-length", "km", 5, 6)
+            ]);
+        Assert.Equal("unresolved-geometry", conflictingIntervals.Status);
+        Assert.Null(conflictingIntervals.Realization);
+
+        // Fitting period vectors must not bypass independent polygon constraints.
+        var impossibleEdges = DelaneyDressHarmonicMetricRealization.Construct(
+            source, 2, "km", constraints:
+            [
+                new TilingMetricConstraint("period-angle-degrees", "degrees", 60, 60),
+                new TilingMetricConstraint("edge-length", "km", 100, 101)
+            ]);
+        Assert.Equal("unresolved-geometry", impossibleEdges.Status);
+        Assert.Null(impossibleEdges.Realization);
+
         var incompatible = DelaneyDressHarmonicMetricRealization.Construct(
             source, 2, "km", constraints:
             [
