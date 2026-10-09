@@ -296,12 +296,15 @@ export async function renderExpedition(
                 position?.value ?? presentation.routeLabel ?? runtime.context.name,
                 runtime.expedition.isSpatial ? position?.detail ?? null : "Journey / no grid",
                 runtime.expedition.isSpatial ? focusTravelCourse : openHistory,
-                runtime.pauseReason ? "warning" : "neutral"),
-            statAction(
+                runtime.pauseReason ? "warning" : "neutral"));
+        // Party management remains in the GM tools; an empty, unused party is not a status condition.
+        if (runtime.party.members.length > 0 || runtime.party.activityAssignments.length > 0) {
+            stats.append(statAction(
                 "Party",
                 `${runtime.party.members.length} member${runtime.party.members.length === 1 ? "" : "s"}`,
                 partyActivitySummary(runtime),
                 openPartyWorkspace));
+        }
         if (presentation.capabilities.travel) {
             stats.append(statAction(
                 "Movement",
@@ -310,7 +313,12 @@ export async function renderExpedition(
                 runtime.expedition.isSpatial ? () => openTravelWorkspace("movement") : openPartyWorkspace,
                 runtime.movementComposition.missingInputs.length > 0 ? "warning" : "neutral"));
         }
-        if (presentation.capabilities.navigation && presentation.navigationLabel) {
+        const navigationConfigured = runtime.procedure.modules.some(module =>
+            module.moduleKey.includes("navigation")
+            && module.parameters.usesNavigationChecks !== "false"
+            && module.parameters.usesPersistentVeer !== "false");
+        if (presentation.capabilities.navigation && presentation.navigationLabel
+            && (navigationConfigured || runtime.expedition.isLost || navigationResolutionDue(runtime, false, false))) {
             stats.append(statAction(
                 "Navigation",
                 presentation.navigationLabel,
@@ -320,7 +328,12 @@ export async function renderExpedition(
                 openNavigationWorkspace,
                 runtime.expedition.isSpatial && runtime.expedition.isLost ? "warning" : "neutral"));
         }
-        if (presentation.capabilities.encounters) {
+        const encounterConfigured = runtime.procedure.modules.some(module =>
+            (module.moduleKey.includes("encounter") && module.parameters.cadence !== undefined
+                && module.parameters.cadence !== "None")
+            || module.moduleKey === "encounters.schedule");
+        if ((presentation.capabilities.encounters && encounterConfigured)
+            || runtime.pauseReason === "EncounterTriggered" || runtime.expedition.pendingEncounter) {
             stats.append(statAction(
                 "Encounters",
                 runtime.pauseReason === "EncounterTriggered" ? "Encounter active" : encounterSummary(runtime),
@@ -834,7 +847,7 @@ export async function renderExpedition(
         const facts = document.createElement("dl");
         facts.className = "hc-current-travel-facts";
         facts.append(
-            travelFact("Course", currentCourseLabel(preferences, adjacency), "currentTravelCourse"),
+            travelFact("Travel direction", currentCourseLabel(preferences, adjacency), "currentTravelCourse"),
             travelFact("Pace", humanize(preferences.pace), "currentTravelPace"),
             travelFact("Actual", actualCourseLabel(runtime, adjacency), "currentTravelActual"),
             travelFact("Progress", travelProgressDetail(runtime), "currentTravelProgress"));
