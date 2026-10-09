@@ -19,7 +19,7 @@ test("Phase 15 procedure authoring separates entry choice from one shared Campai
         path.join(repositoryRoot, "src/HexCrawl.Application/Expeditions/ProcedureComposerCustomProcedureFactory.cs"),
         "utf8");
 
-    assert.match(workspace, /Start from a known procedure/);
+    assert.match(workspace, /Start from a known ruleset/);
     assert.match(workspace, /Build my own/);
     assert.match(workspace, /EntryState = "landing" \| "presets" \| "workspace"/);
     assert.match(workspace, /ProcedureAuthoringMode = "compact" \| "advanced" \| "json"/);
@@ -329,7 +329,7 @@ test("routine spatial travel reuses intent and suppresses fixed movement inputs 
     assert.match(view, /currentRuntimeCellAdjacency/);
     assert.match(view, /adjacencyForCell/);
     assert.match(intent, /hex-crawl\.expedition\.\$\{expeditionId\}\.travel-intent/);
-    assert.match(view, /Reusable course and pace stay filled until changed/);
+    assert.match(view, /Reusable travel direction and pace stay filled until changed/);
     assert.match(view, /movementComposition\.suggestedExpectedDistance/);
     assert.match(controller, /suggestedWatchDistance\(runtime\)/);
     assert.match(controller, /authoritativeFixedWatchDistance\(runtime\)/);
@@ -1356,7 +1356,7 @@ test("Phase 15.1 Compact supplies domain explanations for numeric procedure sett
         assert.match(presentation, new RegExp(key + ":"));
     }
     assert.match(presentation, /numericHelp\[key\] \?\? definition\.description \?\? null/);
-    assert.match(presentation, /0\.5 means half the configured center-to-center distance/);
+    assert.match(presentation, /0\.5 means half the map scale/);
 });
 
 test("Phase 15.1 rendered review requires Guided onboarding, preset advice, and next-action explanations", () => {
@@ -1367,8 +1367,8 @@ test("Phase 15.1 rendered review requires Guided onboarding, preset advice, and 
         path.join(sourceDir, "../visual-review/phase15.ts"),
         "utf8");
 
-    assert.match(fixture, /guidedPrimerVisible/);
-    assert.match(fixture, /guidedPresetAdviceCount/);
+    assert.match(fixture, /guidedSetupVisible/);
+    assert.match(fixture, /presetDecisionFactGroups/);
     assert.match(fixture, /guidedRuleWhyCount/);
     assert.ok((fixture.match(/guidedNextActionWhyVisible/g) ?? []).length >= 2);
     assert.match(fixture, /visualPreset/);

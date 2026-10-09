@@ -65,7 +65,7 @@ test("crawl creation surfaces do not assume a 12-mile physical scale", () => {
     const editor = read("modules/worlds/world-editor-view.ts");
     for (const source of [world, home, assistant]) {
         assert.doesNotMatch(source, /name="scale"[^>]*value="12"/);
-        assert.match(source, /Select distance unit/);
+        assert.match(source, /Select unit/);
     }
     for (const source of [world, home, assistant, editor]) {
         assert.doesNotMatch(source, /name="(?:symbol|unitSymbol)"[^>]*value="u"/);
@@ -380,9 +380,9 @@ test("procedure selectors expose materialized procedure mechanics before a sessi
         assert.match(source, /renderProcedureMechanicList/);
         assert.match(source, /getProcedurePresets/);
     }
-    assert.match(setup, /<summary>Procedure details<\/summary>/);
+    assert.match(setup, /<summary>Ruleset details<\/summary>/);
     assert.match(setup, /populateProcedureStartChoices/);
-    assert.match(assistant, /<summary>Procedure details<\/summary>/);
+    assert.match(assistant, /<summary>Ruleset details<\/summary>/);
     assert.match(assistant, /populateProcedureStartChoices/);
     assert.match(assistant, /applyStandaloneProcedureChoice/);
     assert.match(assistant, /ProcedureComposerApi\.create/);
