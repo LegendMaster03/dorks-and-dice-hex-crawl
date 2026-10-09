@@ -223,6 +223,18 @@ public static class PeriodicMetricWitnessValidator
             double area = SignedArea(polygon);
             Require(area > tolerance * tolerance, "Polygon must be simple, nondegenerate and counterclockwise.");
             Require(!SelfIntersection(polygon, tolerance), "Polygon has intersecting or repeated edges.");
+            // The exhaustive periodic intersection check below is bounded
+            // to a finite translation neighborhood. As in the TypeScript
+            // witness verifier, only admit representatives near that
+            // neighborhood, never silently accept far-spanning polygons.
+            foreach (var point in polygon)
+            {
+                double u = Cross(point, geometry.TranslationV) / det;
+                double v = Cross(geometry.TranslationU, point) / det;
+                Require(double.IsFinite(u) && double.IsFinite(v)
+                    && Math.Abs(u) <= 2.000001 && Math.Abs(v) <= 2.000001,
+                    "Metric polygon representative must lie within two lattice periods of the origin.");
+            }
             areaSum += area;
         }
         Require(Math.Abs(areaSum - det) <= Math.Max(1e-8, 1e-7 * Math.Abs(det)),
@@ -247,8 +259,8 @@ public static class PeriodicMetricWitnessValidator
         {
             foreach (var (otherId, otherPolygon) in polygons)
             {
-                for (int u = -2; u <= 2; u++)
-                    for (int v = -2; v <= 2; v++)
+                for (int u = -4; u <= 4; u++)
+                    for (int v = -4; v <= 4; v++)
                     {
                         if (id == otherId && u == 0 && v == 0) continue;
                         var delta = Translation(geometry, new LatticeDisplacement(u, v));

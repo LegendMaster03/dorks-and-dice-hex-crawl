@@ -137,4 +137,23 @@ public sealed class Phase16MetricWitnessValidatorTests
         Assert.Throws<InvalidOperationException>(() =>
             PeriodicMetricWitnessValidator.Validate(topology, degenerate));
     }
+    [Fact]
+    public void RejectsFarTranslatedRepresentativesOutsideTheVerifiedPeriodicNeighborhood()
+    {
+        var topology = SquareTopology();
+        // This is a globally translated rectangle with the same area,
+        // reciprocal edge correspondence and basis. It must be recentered
+        // before this bounded validator can certify all periodic copies.
+        var distant = new[]
+        {
+            new TilingWorldPoint(24, 0),
+            new TilingWorldPoint(26, 0),
+            new TilingWorldPoint(26, 1),
+            new TilingWorldPoint(24, 1)
+        };
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            PeriodicMetricWitnessValidator.Validate(topology, Rectangle(distant)));
+        Assert.Contains("two lattice periods", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
 }

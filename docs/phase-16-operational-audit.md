@@ -131,3 +131,15 @@ geometrically admissible D-symbols can be realized under user-supplied
 constraints. Existing geometry and asset pathways remain untouched.
 The corresponding domain regression cases include a valid periodic
 rectangle, metric constraints and adversarial invalid witnesses.
+
+
+### Bounded geometry representative audit
+
+The independent .NET metric verifier now bounds each polygon vertex to two
+fundamental-lattice periods in the supplied basis before checking intersections.
+It then checks the same `[-4,4] × [-4,4]` periodic copy neighborhood as the
+TypeScript polygon-witness validator, avoiding a narrower-than-documented
+collision search. More distant but equivalent polygon representatives must be
+translated back near the origin by an exact lattice gauge change before they
+can be certified; they are not classified as mathematically invalid tilings.
+An adversarial distant-representative regression test enforces this limit.
