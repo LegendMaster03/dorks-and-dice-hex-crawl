@@ -1,6 +1,6 @@
 # Tile Crawl transition — development plan
 
-**Status:** proposed; implementation has not started  
+**Status:** Phase 16 implementation in progress on feature branches; acceptance gates remain unmet  
 **Roadmap:** Phases 16–21 (the successor to the completed Hex Crawl / generic-procedure roadmap)  
 **Primary repository:** LegendMaster03/dorks-and-dice-hex-crawl  
 **Analysis-service repository:** LegendMaster03/dorks-and-dice-surveyor  

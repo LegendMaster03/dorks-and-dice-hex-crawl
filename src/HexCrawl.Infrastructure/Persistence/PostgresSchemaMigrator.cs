@@ -48,7 +48,7 @@ public sealed class PostgresSchemaMigrator(string connectionString)
             else if (current != CurrentVersion)
             {
                 throw new InvalidOperationException(
-                    $"Hex Crawl PostgreSQL schema version {current} predates the current pre-release journey-process architecture. Reset the development database and initialize schema version {CurrentVersion}.");
+                    $"Hex Crawl PostgreSQL schema version {current} has no verified non-destructive upgrade path to schema version {CurrentVersion}. The existing database has been preserved. Restore a compatible application version or provide and test a data-preserving migration before retrying.");
             }
 
             await transaction.CommitAsync(cancellationToken);

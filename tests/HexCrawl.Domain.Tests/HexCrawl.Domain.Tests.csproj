@@ -14,4 +14,7 @@
   <ItemGroup>
     <ProjectReference Include="../../src/HexCrawl.Domain/HexCrawl.Domain.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <None Update="Fixtures/periodic-topology-v1.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>
