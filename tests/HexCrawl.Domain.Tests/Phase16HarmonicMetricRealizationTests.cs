@@ -107,13 +107,18 @@ public sealed class Phase16HarmonicMetricRealizationTests
         Assert.Equal("unresolved-geometry", impossibleEdges.Status);
         Assert.Null(impossibleEdges.Realization);
 
-        var incompatible = DelaneyDressHarmonicMetricRealization.Construct(
+        // The former verification-only implementation could not satisfy
+        // this period interval. Affine fitting now constructs the requested
+        // longer basis and independently validates the complete motif.
+        var fitted = DelaneyDressHarmonicMetricRealization.Construct(
             source, 2, "km", constraints:
             [
                 new TilingMetricConstraint("period-u-length", "km", 8, 9)
             ]);
-        Assert.Equal("unresolved-geometry", incompatible.Status);
-        Assert.Null(incompatible.Realization);
+        Assert.True(fitted.Status == "realized", fitted.Reason);
+        Assert.True(PeriodicMetricWitnessValidator.Validate(fitted.Topology!, fitted.Realization!));
+        var fittedU = fitted.Realization!.TranslationU;
+        Assert.InRange(Math.Sqrt(fittedU.X * fittedU.X + fittedU.Y * fittedU.Y), 8 - 1e-8, 8 + 1e-8);
         Assert.Null(incompatible.Topology);
     }
 
