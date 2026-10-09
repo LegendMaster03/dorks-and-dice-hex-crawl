@@ -2064,6 +2064,7 @@ if (stateName === "course-change-reload") {
         movementValidationVerified = validation.includes("Effective distance (mi)")
             && validation.includes("travel period") && !validation.includes("effectiveDistance requires a number");
         if (!movementValidationVerified || movementRetryCalls !== 0) throw new Error("Blank movement validation did not block travel with plain-language context.");
+        await waitForCondition(() => !form.querySelector("[data-advance-button]").disabled, "validation returned control");
         effective.value = "2";
         form.requestSubmit();
         await waitForCondition(() => movementRetryCalls === 1, "retry reached authoritative advance");
