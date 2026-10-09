@@ -62,8 +62,13 @@ internal static class ObservedRasterMotifGeometryValidator
         // The original-image contour has independent stroke width and
         // decimation uncertainty. Do not require mathematically identical
         // sides, but also do not silently accept arbitrary polygon offsets.
+        // Bound tolerances in analysis pixels, then map to the original
+        // source-pixel coordinates. A fixed source-pixel ceiling would
+        // reject legitimate strongly downsampled, but correctly registered,
+        // Surveyor observations.
         double contourTolerance = Math.Clamp(
-            4 / analysis.Scale + 2 * evidence.MaximumRigidVertexResidualSourcePixels, 4, 48);
+            4 + 2 * evidence.MaximumRigidVertexResidualSourcePixels * analysis.Scale,
+            4, 24) / analysis.Scale;
         double totalArea = 0;
         double totalPerimeter = 0;
         foreach (var cell in candidate.MotifCells)
