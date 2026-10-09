@@ -391,7 +391,13 @@ export async function renderExpedition(
                 if (!runtime.expedition.isSpatial) return "Use the current interval rules and any table or DM values requested by the travel/time workspace.";
                 if (preferences.direction === null) return "Choose an adjacent destination from the map or navigator. That choice records intended travel only; it does not move the party.";
                 if (runtime.movementComposition.missingInputs.length > 0) {
-                    return `Movement still has ${runtime.movementComposition.missingInputs.length} unresolved ${runtime.movementComposition.missingInputs.length === 1 ? "input" : "inputs"}. The travel workspace requests those values from the table or DM before movement resolves.`;
+                    const period = travelPeriodDetail(runtime);
+                    const unit = movementDistanceUnit();
+                    const suggested = runtime.movementComposition.suggestedExpectedDistance;
+                    const basis = suggested
+                        ? `The saved movement calculation suggests ${formatNumber(suggested.value)} ${suggested.unit.symbol}; confirm it against the table's actual result.`
+                        : "No authoritative movement formula supplied a distance. Use the distance resolved by your ruleset, dice, another system, or the DM for this period; do not assume zero.";
+                    return `Enter the travel distance${unit ? ` in ${unit}` : ""} for ${period || "this travel period"}, then choose its source (calculated, rolled, or DM decision). ${basis}`;
                 }
                 return "The saved travel direction, pace, and movement state are reused. The travel workspace asks only for any remaining table or DM decisions.";
             case "navigation": return "Enter the configured navigation result or DM decision in the navigation workspace. The intended direction remains the reference point.";
