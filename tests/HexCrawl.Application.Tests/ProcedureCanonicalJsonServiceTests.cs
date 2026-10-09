@@ -139,6 +139,16 @@ public sealed class ProcedureCanonicalJsonServiceTests
         Assert.Equal(CampaignProcedureSchema.CurrentVersion, explicitResult.Procedure!.SchemaVersion);
         Assert.Equal(CampaignProcedureSchema.CurrentHexTilingDsSymbol, explicitResult.Procedure.TilingDsSymbol);
 
+        var previousVersion = JsonNode.Parse(canonical.Serialize(current))!.AsObject();
+        previousVersion["schemaVersion"] = CampaignProcedureSchema.PreviousVersion;
+        previousVersion.Remove("tilingDsSymbol");
+        previousVersion["tilingGjhNotation"] = "6/m30/r(h1)";
+        var previousResult = canonical.Validate(previousVersion.ToJsonString());
+        Assert.True(previousResult.IsValid, previousResult.Error);
+        Assert.Equal("1.2", previousResult.Procedure!.SchemaVersion);
+        Assert.Equal(CampaignProcedureSchema.CurrentHexTilingDsSymbol, previousResult.Procedure.TilingDsSymbol);
+        Assert.DoesNotContain("tilingGjhNotation", canonical.Serialize(previousResult.Procedure));
+
         var unsupported = current with { TilingDsSymbol = "<1:1,1,1:4,4>" };
         var unsupportedResult = canonical.Validate(canonical.Serialize(unsupported));
         Assert.False(unsupportedResult.IsValid);
