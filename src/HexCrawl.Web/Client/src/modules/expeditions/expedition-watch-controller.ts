@@ -298,10 +298,10 @@ export class ExpeditionWatchController {
         this.syncResolutionHelperVisibility(runtime);
 
         const directionHelp = execution.directionChangesCostProgress
-            ? "Changing course can consume intra-hex progress under this procedure. The runtime applies the configured cost."
-            : "Direction changes do not consume additional progress under this procedure.";
+            ? "Changing travel direction can consume progress through the current cell under this ruleset. The saved rules determine the cost."
+            : "Changing travel direction does not consume additional progress under this ruleset.";
         required<HTMLElement>(this.form, "[data-direction-hint]").textContent =
-            `${directionHelp} Course labels identify the intended adjacent cell; the runtime remains authoritative for resolved movement.`;
+            `${directionHelp} The selected adjacent cell indicates intended travel; the ruleset determines actual movement.`;
     }
 
     public dispose(): void {
@@ -392,9 +392,36 @@ export class ExpeditionWatchController {
         this.travelNoteRow.hidden = false;
         this.travelOverrideButton.hidden = derived === null;
         this.travelOverrideButton.textContent = "Use derived movement";
+        const period = spatialState(runtime).activeWatchRemainingHours ?? execution.intervalHours;
+        const scope = `for this ${formatHours(period)} travel period`;
+        const unit = spatialState(runtime).distanceTraveled.unit.symbol;
+        const requested = fixed ? `Effective distance (${unit})`
+            : variable ? `Expected distance and actual resolved distance (${unit})`
+                : "Resolved hex steps";
         this.travelResolutionHint.textContent = derived === null
-            ? "Authoritative party movement is prefilled when available. Enter only movement information the runtime can not derive."
-            : `Authoritative party movement is ${formatNumber(derived)} ${spatialState(runtime).distanceTraveled.unit.symbol}. Edit only to record an explicit override.`;
+            ? `Enter ${requested} ${scope}. Use the distance calculated by the ruleset or resolved at the table (including a roll or DM decision); the selected source records where the value came from. No automatic distance is available.`
+            : `Authoritative party movement is ${formatNumber(derived)} ${unit} ${scope}. Edit only to record an explicit override.`;
+    }
+
+    private readMovementNumber(
+        name: string,
+        label: string,
+        runtime: ExpeditionDetail,
+        wholeSteps = false): number {
+        const control = input(this.form, name);
+        const raw = control.value.trim();
+        const period = spatialState(runtime).activeWatchRemainingHours
+            ?? runtime.procedure.runtime?.intervalHours;
+        const scope = period !== undefined && period !== null
+            ? ` for this ${formatHours(period)} travel period` : " for this travel period";
+        const unit = wholeSteps ? "" : ` (${spatialState(runtime).distanceTraveled.unit.symbol})`;
+        const nameWithContext = `${label}${unit}${scope}`;
+        const value = Number(raw);
+        if (!raw || !Number.isFinite(value) || value < 0 || (wholeSteps && !Number.isInteger(value))) {
+            control.focus();
+            throw new Error(`Enter a valid ${nameWithContext}. Use the value calculated by your ruleset, rolled at the table, or decided by the DM; do not leave it blank.`);
+        }
+        return value;
     }
 
     private markDerivedTravelEdited(): void {
@@ -789,12 +816,12 @@ export class ExpeditionWatchController {
                 };
 
                 if (continuous && execution.actualDistanceResolution === "Fixed") {
-                    request.effectiveDistance = numeric(input(this.form, "effectiveDistance"));
+                    request.effectiveDistance = this.readMovementNumber("effectiveDistance", "Effective distance", runtime);
                 } else if (continuous) {
-                    request.expectedDistance = numeric(input(this.form, "expectedDistance"));
-                    request.actualDistance = numeric(input(this.form, "actualDistance"));
+                    request.expectedDistance = this.readMovementNumber("expectedDistance", "Expected distance", runtime);
+                    request.actualDistance = this.readMovementNumber("actualDistance", "Actual resolved distance", runtime);
                 } else {
-                    request.hexSteps = integer(input(this.form, "hexSteps"));
+                    request.hexSteps = this.readMovementNumber("hexSteps", "Resolved hex steps", runtime, true);
                 }
 
                 if (navRequired) {
