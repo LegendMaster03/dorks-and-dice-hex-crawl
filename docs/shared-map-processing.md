@@ -11,7 +11,7 @@ Hex Crawl browser
     -> user clicks Detect / repair hex grid
     -> Hex Crawl ownership-scoped source-map API
     -> Hex Crawl server opens the authoritative map image
-    -> Surveyor POST /v1/periodic-tiling/detect
+    -> Surveyor POST /v2/periodic-tiling/detect
        expectedDsSymbol=<1:1,1,1:6,3>
     -> Hex Crawl validates/interprets the observation
     -> browser builds a transient Hex Crawl-owned alignment proposal

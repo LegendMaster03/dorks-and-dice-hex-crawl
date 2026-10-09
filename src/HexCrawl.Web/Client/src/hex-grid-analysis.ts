@@ -23,7 +23,7 @@ export type HexLatticeDetection = {
 
 export type SourceMapGridAnalysis = HexLatticeDetection & {
     tilingDsSymbol: string | null;
-    apiVersion: "v1";
+    apiVersion: "v2";
     capability: "map.periodic-tiling.detect";
     source: { width: number; height: number; mediaType: string };
     analysis: {

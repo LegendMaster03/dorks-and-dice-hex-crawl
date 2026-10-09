@@ -33,7 +33,7 @@ public sealed class SurveyorMapAnalysisClientTests
 
         Assert.NotNull(observed);
         Assert.Equal(HttpMethod.Post, observed.Method);
-        Assert.Equal("http://surveyor.internal/v1/periodic-tiling/detect", observed.RequestUri!.GetLeftPart(UriPartial.Path));
+        Assert.Equal("http://surveyor.internal/v2/periodic-tiling/detect", observed.RequestUri!.GetLeftPart(UriPartial.Path));
         var query = observed.RequestUri.Query;
         Assert.DoesNotContain("periodicTilingType=", query, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("expectedDsSymbol=%3C1%3A1%2C1%2C1%3A6%2C3%3E", query, StringComparison.OrdinalIgnoreCase);
@@ -47,7 +47,7 @@ public sealed class SurveyorMapAnalysisClientTests
         Assert.Equal("hex-correlation-1", Assert.Single(observed.Headers.GetValues("X-Correlation-ID")));
         Assert.Equal("image/png", observed.Content!.Headers.ContentType!.MediaType);
         Assert.Equal(raster, observedBody);
-        Assert.Equal("v1", result.ApiVersion);
+        Assert.Equal("v2", result.ApiVersion);
         Assert.Equal("map.periodic-tiling.detect", result.Capability);
         Assert.Equal("detected", result.Status);
         Assert.Equal("<1:1,1,1:6,3>", result.TilingDsSymbol);
@@ -162,7 +162,7 @@ public sealed class SurveyorMapAnalysisClientTests
     private static string ValidDetectedJson() =>
         """
         {
-          "apiVersion":"v1",
+          "apiVersion":"v2",
           "capability":"map.periodic-tiling.detect",
           "tiling":{
             "dsSymbol":"<1:1,1,1:6,3>"

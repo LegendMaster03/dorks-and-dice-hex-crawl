@@ -12,7 +12,7 @@ public sealed class SurveyorMapAnalysisClient(
     IOptions<SurveyorOptions> configuredOptions,
     ILogger<SurveyorMapAnalysisClient> logger) : IMapAnalysisService
 {
-    private const string ApiVersion = "v1";
+    private const string ApiVersion = "v2";
     private const string Capability = "map.periodic-tiling.detect";
     private const string ExpectedDsSymbol = "<1:1,1,1:6,3>";
 
@@ -103,7 +103,7 @@ public sealed class SurveyorMapAnalysisClient(
         AddDouble("maximumSpacingPixels", options.MaximumSpacingPixels);
         AddInteger("maximumEdgeSamples", options.MaximumEdgeSamples);
         AddDouble("minimumConfidence", options.MinimumConfidence);
-        var relative = "/v1/periodic-tiling/detect?" + string.Join('&', parameters);
+        var relative = "/v2/periodic-tiling/detect?" + string.Join('&', parameters);
         return new Uri(new Uri(baseUrl.TrimEnd('/') + "/", UriKind.Absolute), relative.TrimStart('/'));
 
         void AddDouble(string name, double? value)
