@@ -32,8 +32,35 @@ public static class DelaneyDressHarmonicMetricRealization
         new(a.X + b.X, a.Y + b.Y);
     private static LatticeDisplacement Sub(LatticeDisplacement a, LatticeDisplacement b) =>
         a.Add(b.Opposite());
-    private static TilingWorldPoint Transform(TilingWorldPoint p, double scale, double cosine, double sine) =>
-        new(scale * (p.X * cosine - p.Y * sine), scale * (p.X * sine + p.Y * cosine));
+    private static TilingWorldPoint Transform(TilingWorldPoint p, double uLength,
+        double vLength, double periodCosine, double periodSine, double cosine, double sine)
+    {
+        double x = p.X * uLength + p.Y * vLength * periodCosine;
+        double y = p.Y * vLength * periodSine;
+        return new(x * cosine - y * sine, x * sine + y * cosine);
+    }
+
+    // Fit compatible interval constraints before validating the complete
+    // polygon embedding. Other constraint types are still independently checked
+    // against the resulting geometry, never silently assumed satisfiable.
+    private static double? SelectPeriodTarget(
+        IReadOnlyList<TilingMetricConstraint>? constraints, string key,
+        string expectedUnit, double preferred)
+    {
+        double minimum = double.NegativeInfinity, maximum = double.PositiveInfinity;
+        foreach (var constraint in constraints ?? [])
+        {
+            if (constraint.Key != key) continue;
+            if (constraint.Unit != expectedUnit || !double.IsFinite(constraint.Min)
+                || !double.IsFinite(constraint.Max) || constraint.Min > constraint.Max)
+                return null;
+            minimum = Math.Max(minimum, constraint.Min);
+            maximum = Math.Min(maximum, constraint.Max);
+        }
+        if (minimum > maximum) return null;
+        double selected = Math.Clamp(preferred, minimum, maximum);
+        return double.IsFinite(selected) ? selected : null;
+    }
 
     private static double[]? SolveReducedLaplacian(double[,] full, double[] rhs)
     {
@@ -278,17 +305,38 @@ public static class DelaneyDressHarmonicMetricRealization
                 };
             }
             shiftedTopology.ValidateAdjacency();
+            // Every invertible, orientation-preserving affine image of a proved
+            // periodic polygonal tiling has the same chamber incidence and
+            // integer-addressed translation graph. Choose a basis that satisfies
+            // the requested period intervals, then validate every polygon.
+            double? targetU = SelectPeriodTarget(
+                constraints, "period-u-length", units, worldUnitsPerAbstractPeriod);
+            double? targetV = SelectPeriodTarget(
+                constraints, "period-v-length", units, worldUnitsPerAbstractPeriod);
+            double? targetAngle = SelectPeriodTarget(
+                constraints, "period-angle-degrees", "degrees", 90);
+            if (targetU is null || targetV is null || targetAngle is null
+                || targetU <= 1e-6 || targetV <= 1e-6
+                || targetU > 1e6 || targetV > 1e6
+                || targetAngle <= 0 || targetAngle >= 180)
+                return Unresolved("The requested period metric intervals have no admissible bounded affine basis.");
+            double angle = targetAngle.Value * Math.PI / 180;
+            double periodCosine = Math.Cos(angle), periodSine = Math.Sin(angle);
+            if (periodSine <= 1e-8)
+                return Unresolved("The requested period angle would collapse the fundamental domain.");
             double radians = rotationDegrees * Math.PI / 180;
             double cosine = Math.Cos(radians), sine = Math.Sin(radians);
+            TilingWorldPoint Apply(TilingWorldPoint point) => Transform(
+                point, targetU.Value, targetV.Value,
+                periodCosine, periodSine, cosine, sine);
             var metric = new PeriodicMetricRealization(
                 units,
-                Transform(new TilingWorldPoint(1, 0), worldUnitsPerAbstractPeriod, cosine, sine),
-                Transform(new TilingWorldPoint(0, 1), worldUnitsPerAbstractPeriod, cosine, sine),
+                Apply(new TilingWorldPoint(1, 0)),
+                Apply(new TilingWorldPoint(0, 1)),
                 polygons.ToDictionary(
                     pair => pair.Key,
                     pair => (IReadOnlyList<TilingWorldPoint>)pair.Value
-                        .Select(p => Transform(p, worldUnitsPerAbstractPeriod, cosine, sine))
-                        .ToArray(),
+                        .Select(Apply).ToArray(),
                     StringComparer.Ordinal),
                 constraints ?? []);
             PeriodicMetricWitnessValidator.Validate(shiftedTopology, metric);
