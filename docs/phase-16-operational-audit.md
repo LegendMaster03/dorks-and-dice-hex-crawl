@@ -82,3 +82,30 @@ already oriented symbols and reports any remaining local branching.
 `orientationCoverCases` is byte-identical to Surveyor's versioned fixture.
 This is not a translation lattice or a metric embedding; removal of residual
 rotational branching is still required before generalized acceptance.
+
+## General mixed-cell Euclidean quotient translation construction
+
+`DelaneyDressGeneralQuotientUnfolding` implements the same bounded
+orientation-plus-cyclic-holonomy covering method as Surveyor. A
+connected orientation double strips reflection identifications; local
+cone-point orders are read directly from two-involution chamber orbits,
+and a sparse integral voltage flow produces a cyclic unbranching cover.
+The resulting chamber graph must be orientable, locally unbranched,
+combinatorially a torus, and independently confirmed to have reciprocal
+cell interfaces, **primitive Z² lattice generators**, and a projection
+back to the original quotient.
+
+This method supports nonuniform polygon degrees and vertex valences,
+including independent symmetry-reduced mixed square/triangle and
+non-edge-to-edge examples. It does not consult a list of pattern names.
+The shared `generalQuotientCases` conformance set exercises its
+supported, invalid and resource-limited outcomes in both runtimes.
+The actual user-facing Tile Crawl spatial authority is unchanged.
+
+Surveyor has additionally demonstrated an image-free harmonic metric
+construction with independent polygonal proof for eight regular and
+mixed-cell cases. The image-free metric algorithm is not yet part of
+the .NET operational path, and not every metric constraint or arbitrary
+Euclidean D-symbol has a proved realization. Domain work must not
+silently accept unverified geometry or treat this milestone as the
+generalized detector acceptance gate.
