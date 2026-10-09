@@ -11,7 +11,7 @@
 - Typed finite motif addresses `(motifCellId, translation.u, translation.v)` and reciprocal adjacency: implemented in the C# domain. The independent structural validator reconstructs chamber incidence and proves the claimed translational graph; the separate bounded metric verifier checks concrete polygon geometry. These guarantees do not yet establish generalized runtime spatial authority.
 - Image-independent constructors in both languages now build bounded primitive translation covers directly from fully valid Euclidean D-symbols, including nonuniform symmetry quotients. Separate harmonic constructors attempt concrete polygon geometry without an image and accept only independently validated witnesses. Not every admissible Euclidean symbol has a demonstrated nondegenerate metric construction under the current bounds.
 - Surveyor's opt-in authenticated v3 investigation extends the original edge and translation pipeline to reconstruct candidate polygons, reciprocal motif adjacency, derived D-symbols, and original-image global rigid-fit evidence. Candidates are explicitly non-authoritative, may be inconclusive, and cannot be persisted as accepted world topology.
-- Raster-derived incidence, provisional source-pixel geometry, basic held-out synthetic mixed motifs, and multi-region residual checks are implemented experimentally. A statistically independent real-map corpus, calibrated confidence, authoritative candidate resolution, proven maximal-symmetry reduction, complete v3-to-Tile-Crawl integration, and signed-in regression testing remain **unmet Phase 16 acceptance requirements**.
+- Raster-derived incidence, provisional source-pixel geometry, basic held-out synthetic mixed motifs, and multi-region residual checks are implemented experimentally. A statistically independent real-map corpus, calibrated confidence, authoritative candidate resolution, proven maximal-symmetry reduction, production world/ruleset integration, and signed-in regression testing remain **unmet Phase 16 acceptance requirements**. An opt-in read-only v3 consumer now exists but is not an accepted spatial runtime.
 
 ## Structural witness verification and face orientation correction
 
@@ -42,8 +42,8 @@ Both symbol-to-torus implementations enumerate every face cycle using one global
 
 1. Old Tile Crawl client + old Surveyor v2: required to keep working unchanged.
 2. Old Tile Crawl client + augmented Surveyor: required to preserve v2 request/response and old `expectedDsSymbol` hint while consumers transition.
-3. New Tile Crawl client + old Surveyor v2: explicit capability negotiation and hex-only fallback, no fabricated generalized result.
-4. New Tile Crawl client + augmented Surveyor: use independently observed symbols and local compatibility only after generalized contract validation.
+3. New Tile Crawl client + old Surveyor v2: the opt-in investigation client probes capabilities; a missing v3 capability produces `unsupported` without attempting v3 or fabricating a candidate. Existing hex grid analysis still uses v2. Verified with an isolated HTTP provider stub; cross-deployment tests are still required.
+4. New Tile Crawl client + augmented Surveyor: an explicit authenticated v3 observation request validates response version, experimental/non-authoritative flags, finite basis, bounded candidate geometry, and the claimed primitive translational chamber graph independently in .NET. Verified with provider contract fixtures; real end-to-end mixed-image and production world/ruleset integration remain unverified.
 5. Old/new database snapshots: no mutation in Phase 16; migration of established spatial identities belongs to Phase 17 and must be non-destructive.
 
 **No database schema change** is part of this staged implementation. No database reset or deployment is authorized. The known reset-oriented error text is not permission to reset.
@@ -52,6 +52,41 @@ Both symbol-to-torus implementations enumerate every face cycle using one global
 
 Both feature branches have executed their GitHub Actions validation suites, including domain tests, Surveyor raster benchmarks, and database-backed tests where configured. Individual successful CI runs do **not** prove cross-deployment compatibility, real-image generalization, live signed-in workflows, data preservation on deployment, or generalized product integration. Those release gates are still open, and Phase 16 must not be merged on CI status alone.
 
+
+## Read-only Surveyor v3 capability negotiation (new Hex Crawl consumer)
+
+The additive `SurveyorPeriodicMotifInvestigationClient` registers separately
+from `SurveyorMapAnalysisClient`. Only the explicit authenticated
+`POST /api/overworlds/{overworldId}/source-maps/{sourceMapId}/motif-investigation`
+route invokes it; normal grid analysis continues unchanged on v2.
+
+Before consuming a source raster, the client queries Surveyor's root discovery,
+requires the exact experimental, non-authoritative `map.periodic-tiling.investigate`
+capability and rejects any expectation of caller-provided tiling identity.
+Old Surveyor deployments produce an explicit `unsupported` result with no
+candidate and no v3 POST. The client bounds remote JSON input, checks
+metadata and numeric evidence, and independently derives a .NET
+`PeriodicTopologyWitness` from every candidate's reciprocal motif boundaries.
+Only a valid Euclidean, primitive Z² chamber graph with the claimed canonical
+D-symbol can be surfaced as a **provisional raster observation**. Candidate
+polygon pixel coordinates are not promoted to validated world metric geometry.
+
+The source-map route checks account ownership before opening the stored asset,
+verifies returned source dimensions/media against stored metadata, marks results
+non-cacheable, and does not change world versions, grids, source maps, files,
+registrations, procedures, expeditions or database schema. Ordinary UI does not
+display experimental D-symbol notation. It is an opt-in developer/API seam,
+**not** the final Tile Crawl generalized map-authoring experience.
+
+On the Hex Crawl branch, [CI run 37983749528](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/37983749528)
+passed 297 client tests, 112 domain tests, 332 application tests, and 145
+PostgreSQL-backed HTTP integration tests, including new provider contract,
+old-service fallback, malformed/forged candidate rejection, authorization,
+read-only version preservation, and source-metadata mismatch cases.
+The separate Surveyor branch retains successful CI run 37982387751.
+These automated tests do not substitute for a deployed cross-version
+matrix, independent real-raster calibration or existing signed-in tester smoke
+checks. No merge, deployment, or migration was performed at this checkpoint.
 
 ## New bounded Euclidean multi-chamber quotient construction
 
