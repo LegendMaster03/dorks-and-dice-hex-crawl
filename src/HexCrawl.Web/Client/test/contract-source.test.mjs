@@ -206,7 +206,7 @@ test("direction controls retain numeric runtime values while current-cell adjace
     assert.match(watch, /state\.intendedDirection === null \? "" : String\(state\.intendedDirection\)/);
     assert.match(watch, /else if \(!direction\.value && state\.intendedDirection !== null\)/);
     assert.match(watch, /direction\.value = String\(state\.intendedDirection\)/);
-    assert.match(watch, /Course labels identify the intended adjacent cell/);
+    assert.match(watch, /selected adjacent cell indicates intended travel/);
 });
 
 test("non-spatial primary workspace does not fabricate route, navigation, course, or pace state", () => {
@@ -246,7 +246,7 @@ test("expedition watch controller owns watch form policy and mutation submission
     assert.match(controller, /api\.advanceExpedition/);
     assert.match(controller, /navigationResolutionDue/);
     assert.match(controller, /encounterCheckDue/);
-    assert.match(controller, /Course labels identify the intended adjacent cell/);
+    assert.match(controller, /selected adjacent cell indicates intended travel/);
 });
 
 test("focused party workspace exposes the persisted party register through a dedicated controller", () => {
