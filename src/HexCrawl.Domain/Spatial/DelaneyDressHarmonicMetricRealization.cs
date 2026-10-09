@@ -239,6 +239,44 @@ public static class DelaneyDressHarmonicMetricRealization
                 shiftedCells.Add(cells[c] with { Boundary = revisedEdges });
             }
             var shiftedTopology = topology with { MotifCells = shiftedCells };
+
+            // An abstract harmonic embedding has two equally valid global
+            // orientations. Some chamber presentations yield all clockwise
+            // polygons while their combinatorial torus is still correct.
+            // Reflect the ENTIRE embedding and the same lattice voltage
+            // coordinate, never individual cell boundaries or only polygons.
+            // Inconsistent per-cell orientations remain unresolved.
+            var signedAreas = polygons.Values.Select(p =>
+            {
+                double twiceArea = 0;
+                for (int i = 0; i < p.Count; i++)
+                {
+                    var a = p[i]; var b = p[(i + 1) % p.Count];
+                    twiceArea += a.X * b.Y - a.Y * b.X;
+                }
+                return twiceArea / 2;
+            }).ToArray();
+            if (signedAreas.Any(area => !double.IsFinite(area) || Math.Abs(area) < 1e-12))
+                return Unresolved("The harmonic embedding contains a degenerate polygon.");
+            bool clockwise = signedAreas.All(area => area < 0);
+            if (!clockwise && signedAreas.Any(area => area < 0))
+                return Unresolved("The harmonic embedding has inconsistent polygon orientations.");
+            if (clockwise)
+            {
+                foreach (string id in polygons.Keys.ToArray())
+                    polygons[id] = polygons[id].Select(p => new TilingWorldPoint(p.X, -p.Y)).ToArray();
+                shiftedTopology = shiftedTopology with
+                {
+                    MotifCells = shiftedTopology.MotifCells.Select(cell => cell with
+                    {
+                        Boundary = cell.Boundary.Select(edge => edge with
+                        {
+                            TargetTranslation = new LatticeDisplacement(
+                                edge.TargetTranslation.U, checked(-edge.TargetTranslation.V))
+                        }).ToArray()
+                    }).ToArray()
+                };
+            }
             shiftedTopology.ValidateAdjacency();
             double radians = rotationDegrees * Math.PI / 180;
             double cosine = Math.Cos(radians), sine = Math.Sin(radians);
