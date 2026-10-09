@@ -39,3 +39,7 @@ docker build -t dorks-and-dice-hex-crawl:test -f src/HexCrawl.Web/Dockerfile .
 ```
 
 See `docs/postgresql-persistence.md`, `docs/architecture.md`, `docs/design-references.md`, and `docs/tool-hosting.md` for persistence, architecture, design references, and hosting decisions.
+
+## Development roadmap
+
+The phased transition from Hex Crawl to Tile Crawl is documented in [the Tile Crawl development plan](docs/tile-crawl-development-plan.md). The previous generic-procedure roadmap has been retired; implemented procedure and UX architecture remains documented separately.

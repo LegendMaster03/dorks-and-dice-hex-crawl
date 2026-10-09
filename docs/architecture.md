@@ -235,11 +235,11 @@ Important retained guarantees include:
 - Compact, Advanced, and JSON remain presentations over one canonical `CampaignProcedure`;
 - spatial and nonspatial workspaces follow stored procedure behavior rather than named preset identity.
 
-Phase 13 extracted shared raster preparation and lattice detection into Surveyor. Phase 14 completed the broad architecture/correctness/security/performance review and expanded the server-authoritative v2 encounter handoff while Block Initiative remained tactical-combat authority. Phase 15 is the core UX/presentation phase and is the new internal-human-testing gate. After Phase 15 acceptance, internal human testing begins while Phase 15.1 Guided work proceeds. Phase 15.5 is the later testing-stabilization/pre-release-hardening phase.
+Phase 13 extracted shared raster preparation and lattice detection into Surveyor. Phase 14 completed the broad architecture/correctness/security/performance review and expanded the server-authoritative v2 encounter handoff while Block Initiative remained tactical-combat authority. Phases 15, 15.1 and 15.1.1 established the current user-facing, tester-oriented procedure experience. The active next roadmap is **Tile Crawl Phases 16–22** in docs/tile-crawl-development-plan.md, including stabilization; the previously proposed separate Phase 15.5 milestone is superseded.
 
 Battle Map ownership evaluation has been removed from the Hex Crawl roadmap and belongs to a future Battle Map roadmap once that product exists and is sufficiently mature.
 
-See `docs/generic-procedure-architecture.md`, `docs/environment-context.md`, `docs/movement-capability-composition.md`, `docs/survival-resources.md`, `docs/journey-processes.md`, `docs/postgresql-persistence.md`, `docs/generic-procedure-development-plan.md`, `docs/phase-3-proof-matrix.md`, and `docs/phase-15-design-architecture.md`.
+See `docs/generic-procedure-architecture.md`, `docs/environment-context.md`, `docs/movement-capability-composition.md`, `docs/survival-resources.md`, `docs/journey-processes.md`, `docs/postgresql-persistence.md`, `docs/tile-crawl-development-plan.md`, `docs/phase-3-proof-matrix.md`, and `docs/phase-15-design-architecture.md`.
 
 ## Shared map processing (Phase 13)
 

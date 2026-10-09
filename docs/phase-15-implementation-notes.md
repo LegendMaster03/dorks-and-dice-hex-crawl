@@ -1,6 +1,6 @@
 # Phase 15 implementation notes
 
-This document records the Phase 15 interaction architecture as implemented. The design intent and acceptance criteria remain authoritative in `docs/phase-15-design-architecture.md` and `docs/generic-procedure-development-plan.md`.
+This document records Phase 15 interaction architecture as implemented. The historical design intent is captured by `docs/phase-15-design-architecture.md`; active future work is governed by `docs/tile-crawl-development-plan.md`.
 
 ## Procedure authoring
 
@@ -136,7 +136,9 @@ The next release step after managerial acceptance is comprehensive WorkChat test
 
 Automated validation covers frontend build/tests, Embedded Module smoke, .NET build and domain/application/integration tests, PostgreSQL persistence, render-lifecycle guards, container build, and restart smoke tests.
 
-Phase 15 acceptance also requires rendered visual review across the viewport/state matrix listed in `docs/generic-procedure-development-plan.md`. That visual review is an acceptance activity in addition to exact-head CI and is not replaced by source-contract tests.
+Phase 15 acceptance also required rendered visual review across the viewport/state matrix below. That visual review is distinct from exact-head CI and is not replaced by source-contract tests.
+
+The preserved Phase 15 visual-review matrix covers wide desktop, ordinary laptop, embedded Site width, tablet-like width, and narrow/mobile width. At each relevant breakpoint review the default Compact expedition, expanded status/context, focused workspace, preset browser, Compact procedure overview, Advanced procedure editor, JSON editor, nonspatial journey, loading/error/conflict/empty states, long content, and scrolling/off-screen controls. This is historical UX evidence and a regression baseline for the Tile Crawl plan.
 
 ## Pre-human-test remediation
 

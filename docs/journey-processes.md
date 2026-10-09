@@ -159,6 +159,6 @@ Phase 12 completes generic multi-stage journey/challenge state and journey-event
 - named-system runtime branches;
 - compatibility reconstruction for obsolete pre-test development representations.
 
-Phase 14 subsequently added structured encounter handoff across the Hex Crawl/Block Initiative ownership boundary without moving tactical combat into Hex Crawl. Phase 15 is now the core UX/presentation phase and the internal-human-testing gate; its nonspatial workspace preserves journey-first/no-interval behavior rather than forcing journey procedures into watch-based UI. After Phase 15 acceptance, internal human testing begins, followed by Phase 15.1 Guided work and later Phase 15.5 stabilization.
+Phase 14 subsequently added structured encounter handoff across the Hex Crawl/Block Initiative ownership boundary without moving tactical combat into Hex Crawl. Phase 15 is now the core UX/presentation phase and the internal-human-testing gate; its nonspatial workspace preserves journey-first/no-interval behavior rather than forcing journey procedures into watch-based UI. Phase 15 and the subsequent Guided refinements established the internal-testing baseline; the active Tile Crawl plan supersedes the separate Phase 15.5 milestone and carries stabilization into its own completion gates.
 
 A future Battle Map tool and cross-tool tactical-map ownership/integration are outside the Hex Crawl roadmap.
