@@ -23,8 +23,7 @@ public sealed class Phase16HarmonicMetricRealizationTests
         foreach (var (name, source) in Examples)
         {
             var result = DelaneyDressHarmonicMetricRealization.Construct(source, 1, "abstract");
-            Assert.Equal("realized", $"{name}: {result.Status}: {result.Reason}" is var report
-                && result.Status != "realized" ? report : result.Status);
+            Assert.True(result.Status == "realized", $"{name}: {result.Status}: {result.Reason}");
             var topology = Assert.IsType<PeriodicTopologyWitness>(result.Topology);
             var metric = Assert.IsType<PeriodicMetricRealization>(result.Realization);
             Assert.True(PeriodicMetricWitnessValidator.Validate(topology, metric));
