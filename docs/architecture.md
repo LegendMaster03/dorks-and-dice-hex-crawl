@@ -237,7 +237,7 @@ Important retained guarantees include:
 - Compact, Advanced, and JSON remain presentations over one canonical `CampaignProcedure`;
 - spatial and nonspatial workspaces follow stored procedure behavior rather than named preset identity.
 
-Phase 13 extracted shared raster preparation and lattice detection into Surveyor. Phase 14 completed the broad architecture/correctness/security/performance review and expanded the server-authoritative v2 encounter handoff while Block Initiative remained tactical-combat authority. Phases 15, 15.1 and 15.1.1 established the current user-facing, tester-oriented procedure experience. The active next roadmap is **Tile Crawl Phases 16–22** in docs/tile-crawl-development-plan.md, including stabilization; the previously proposed separate Phase 15.5 milestone is superseded.
+Phase 13 extracted shared raster preparation and lattice detection into Surveyor. Phase 14 completed the broad architecture/correctness/security/performance review and expanded the server-authoritative v2 encounter handoff while Block Initiative remained tactical-combat authority. Phases 15, 15.1 and 15.1.1 established the current user-facing, tester-oriented procedure experience. The active next roadmap is **Tile Crawl Phases 16–21** in docs/tile-crawl-development-plan.md, including stabilization; the previously proposed separate Phase 15.5 milestone is superseded.
 
 Battle Map ownership evaluation has been removed from the Hex Crawl roadmap and belongs to a future Battle Map roadmap once that product exists and is sufficiently mature.
 
