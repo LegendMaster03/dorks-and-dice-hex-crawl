@@ -2084,6 +2084,7 @@ const metrics = {
     primaryAction: root.querySelector(".hc-current-action-primary")?.textContent?.trim() || null,
     guidedNextActionWhyVisible: Array.from(root.querySelectorAll("summary"))
         .some(summary => summary.textContent?.trim() === "Why is this next?"),
+    guidedActionGuideVisible: Boolean(root.querySelector(".hc-guided-action-guide")),
     guidedConsequenceHelpCount: Array.from(root.querySelectorAll("summary"))
         .filter(summary => summary.textContent?.trim() === "Why is this pending?").length,
     focusedTitle: root.querySelector("[data-phase15-drawer] h2")?.textContent?.trim() || null,
