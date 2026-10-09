@@ -10,6 +10,7 @@ public static class PeriodicTopologyContractVersion
     public const int Current = 1;
     public const string Capability = "tiling.topology.periodic-translation-cover";
     public const long MaxWireTranslation = 9007199254740991L;
+    public const long MaxEnumeratedCells = 100000L;
 }
 
 /// <summary>Translation coordinates are integer-valued and independent of pixel/world scale.</summary>
@@ -93,6 +94,8 @@ public sealed record PeriodicTopologyWitness(
         new LatticeDisplacement(maxU, maxV).ValidateWireRange();
         if (minU > maxU || minV > maxV || limit < 1)
             throw new ArgumentOutOfRangeException(nameof(limit));
+        if (limit > PeriodicTopologyContractVersion.MaxEnumeratedCells)
+            throw new ArgumentOutOfRangeException(nameof(limit), "Enumeration limit exceeds the maximum safe cell count.");
         // Subtract before adding to prevent long overflow from silently producing a short interval.
         var count = checked(checked(maxU - minU + 1) * checked(maxV - minV + 1) * MotifCells.Count);
         if (count > limit) throw new ArgumentOutOfRangeException(nameof(limit), "Region exceeds cell limit.");

@@ -40,6 +40,10 @@ public static class DelaneyDressTopology
     {
         try
         {
+            // Bound hostile input before the regex or chamber canonicalization.
+            // The largest supported 2048-chamber notation remains well below 128 KiB.
+            if (text is { Length: > 131072 })
+                throw new SymbolException(DelaneyDressStatus.LimitExceeded, "D-symbol exceeds the bounded input length.");
             var match = Grammar.Match(text ?? "");
             if (!match.Success)
                 throw new SymbolException(DelaneyDressStatus.SyntaxInvalid, "Expected <size:s0,s1,s2:m01,m12>.");

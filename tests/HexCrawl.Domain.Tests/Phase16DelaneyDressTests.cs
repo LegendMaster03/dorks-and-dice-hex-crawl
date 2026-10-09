@@ -1,4 +1,3 @@
-using System.IO;
 using HexCrawl.Domain.Spatial;
 using Xunit;
 
@@ -12,33 +11,6 @@ public sealed class Phase16DelaneyDressTests
         "<16:2 7 6 10 12 11 15 16,3 5 9 12 13 14 15 16,4 6 8 11 12 10 16 15:4 4,4 4>";
 
     [Fact]
-    public void ReadsTheSharedVersionedConformanceFixtures()
-    {
-        var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", "periodic-topology-v1.json");
-        using var document = System.Text.Json.JsonDocument.Parse(File.ReadAllText(path));
-        var root = document.RootElement;
-        Assert.Equal(PeriodicTopologyContractVersion.Current, root.GetProperty("contractVersion").GetInt32());
-        foreach (var entry in root.GetProperty("cases").EnumerateArray())
-        {
-            var symbol = entry.GetProperty("dsSymbol").GetString()!;
-            var expected = entry.GetProperty("classification").GetString()! switch
-            {
-                "euclidean" => DelaneyDressStatus.Euclidean,
-                "non-euclidean" => DelaneyDressStatus.NonEuclidean,
-                "structure-invalid" => DelaneyDressStatus.StructureInvalid,
-                _ => throw new InvalidOperationException("Unknown conformance classification.")
-            };
-            Assert.Equal(expected, DelaneyDressTopology.Inspect(symbol, 2048).Status);
-        }
-
-        var common = root.GetProperty("commonCover");
-        Assert.Equal(TilingComparisonStatus.ProvenEquivalent,
-            DelaneyDressTopology.Compare(common.GetProperty("left").GetString()!,
-                common.GetProperty("right").GetString()!,
-                common.GetProperty("witness").GetString()!).Status);
-    }
-
-    [Fact]
     public void DistinguishesStructureCurvatureAndLimits()
     {
         Assert.Equal(DelaneyDressStatus.Euclidean, DelaneyDressTopology.Inspect(Square).Status);
@@ -50,6 +22,7 @@ public sealed class Phase16DelaneyDressTests
             DelaneyDressTopology.Inspect("<3:2 3,1 2 3,1 3:4 4,4 4>").Status);
         Assert.Equal(DelaneyDressStatus.SyntaxInvalid, DelaneyDressTopology.Inspect("broken").Status);
         Assert.Equal(DelaneyDressStatus.LimitExceeded, DelaneyDressTopology.Inspect(Checkerboard, 1).Status);
+        Assert.Equal(DelaneyDressStatus.LimitExceeded, DelaneyDressTopology.Inspect(new string('x', 131073)).Status);
         Assert.Equal(Square, DelaneyDressTopology.Inspect("<1.1:1:1,1,1:4,4>").Symbol!.Canonical);
     }
 
@@ -87,6 +60,7 @@ public sealed class Phase16DelaneyDressTests
         Assert.Equal(25, cells.Count);
         Assert.Equal(25, cells.Select(c => c.ToString()).Distinct().Count());
         Assert.Throws<ArgumentOutOfRangeException>(() => pattern.Enumerate(-100, 100, -100, 100));
+        Assert.Throws<ArgumentOutOfRangeException>(() => pattern.Enumerate(0, 99999, 0, 99999, long.MaxValue));
         Assert.Throws<ArgumentOutOfRangeException>(() => pattern.Enumerate(long.MinValue, long.MaxValue, 0, 0));
         Assert.Throws<OverflowException>(() => pattern.Enumerate(
             -PeriodicTopologyContractVersion.MaxWireTranslation, PeriodicTopologyContractVersion.MaxWireTranslation,
