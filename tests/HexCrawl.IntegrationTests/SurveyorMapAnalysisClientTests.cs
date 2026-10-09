@@ -12,7 +12,7 @@ public sealed class SurveyorMapAnalysisClientTests
     private const string Token = "integration-surveyor-token";
 
     [Fact]
-    public async Task ClientSendsRasterCredentialCorrelationAndNotationFirstTilingRequestAndMapsValidResponse()
+    public async Task ClientSendsRasterCredentialCorrelationAndOptionalExpectedTilingHintAndMapsValidResponse()
     {
         HttpRequestMessage? observed = null;
         byte[]? observedBody = null;
@@ -36,7 +36,7 @@ public sealed class SurveyorMapAnalysisClientTests
         Assert.Equal("http://surveyor.internal/v1/periodic-tiling/detect", observed.RequestUri!.GetLeftPart(UriPartial.Path));
         var query = observed.RequestUri.Query;
         Assert.DoesNotContain("periodicTilingType=", query, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("crNotation=6%5E3", query, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("expectedDsSymbol=%3C1%3A1%2C1%2C1%3A6%2C3%3E", query, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("shape=", query, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("minimumSpacingPixels=12.5", query);
         Assert.Contains("maximumSpacingPixels=400.25", query);
@@ -50,6 +50,7 @@ public sealed class SurveyorMapAnalysisClientTests
         Assert.Equal("v1", result.ApiVersion);
         Assert.Equal("map.periodic-tiling.detect", result.Capability);
         Assert.Equal("detected", result.Status);
+        Assert.Equal("<1:1,1,1:6,3>", result.TilingDsSymbol);
         Assert.Equal(2048, result.Source.Width);
         Assert.NotNull(result.Fit);
         Assert.Equal("FlatTop", result.Fit.Orientation);
@@ -77,16 +78,28 @@ public sealed class SurveyorMapAnalysisClientTests
 
     [Theory]
     [InlineData("{not-json")]
-    [InlineData("{\"apiVersion\":\"v2\",\"capability\":\"map.periodic-tiling.detect\",\"tiling\":{\"periodicTilingType\":\"Regular\",\"crNotation\":\"6^3\",\"gjhNotation\":\"6/m30/r(h1)\"},\"status\":\"gridless\",\"reason\":\"x\",\"source\":{\"width\":1,\"height\":1,\"mediaType\":\"image/png\"},\"analysis\":{\"width\":1,\"height\":1,\"scale\":1,\"sourceResolutionVerified\":true},\"fit\":null}")]
-    [InlineData("{\"apiVersion\":\"v1\",\"capability\":\"map.periodic-tiling.detect\",\"tiling\":{\"periodicTilingType\":\"Regular\",\"crNotation\":\"4^4\",\"gjhNotation\":\"4/m45/r(h1)\"},\"status\":\"gridless\",\"reason\":\"x\",\"source\":{\"width\":1,\"height\":1,\"mediaType\":\"image/png\"},\"analysis\":{\"width\":1,\"height\":1,\"scale\":1,\"sourceResolutionVerified\":true},\"fit\":null}")]
-    [InlineData("{\"apiVersion\":\"v1\",\"capability\":\"map.periodic-tiling.detect\",\"tiling\":{\"periodicTilingType\":\"Regular\",\"crNotation\":\"6^3\",\"gjhNotation\":\"6/m30/r(h1)\"},\"status\":\"detected\",\"reason\":\"x\",\"source\":{\"width\":1,\"height\":1,\"mediaType\":\"image/png\"},\"analysis\":{\"width\":1,\"height\":1,\"scale\":1,\"sourceResolutionVerified\":true},\"fit\":null}")]
-    [InlineData("{\"apiVersion\":\"v1\",\"capability\":\"map.periodic-tiling.detect\",\"tiling\":{\"periodicTilingType\":\"Regular\",\"crNotation\":\"6^3\",\"gjhNotation\":\"6/m30/r(h1)\"},\"status\":\"gridless\",\"reason\":\"x\",\"source\":{\"width\":1,\"height\":1,\"mediaType\":\"image/png\"},\"analysis\":{\"width\":1,\"height\":1,\"scale\":1,\"sourceResolutionVerified\":true},\"fit\":{\"orientation\":\"FlatTop\",\"rotationDegrees\":0,\"centerSpacingPixels\":80,\"anchorPixel\":{\"x\":0,\"y\":0},\"confidence\":1,\"residualPixels\":0,\"supportCoverage\":1,\"orientationSupport\":1,\"translationScore\":1,\"competingTranslationScore\":0,\"linePeriodicityScore\":1,\"phaseScore\":1}}")]
-    [InlineData("{\"apiVersion\":\"v1\",\"capability\":\"map.periodic-tiling.detect\",\"tiling\":{\"periodicTilingType\":\"Regular\",\"crNotation\":\"6^3\",\"gjhNotation\":\"6/m30/r(h1)\"},\"status\":\"detected\",\"reason\":\"x\",\"source\":{\"width\":1,\"height\":1,\"mediaType\":\"image/png\"},\"analysis\":{\"width\":1,\"height\":1,\"scale\":1,\"sourceResolutionVerified\":true},\"fit\":{\"orientation\":\"FlatTop\",\"rotationDegrees\":0,\"centerSpacingPixels\":80,\"anchorPixel\":{\"x\":0,\"y\":0},\"confidence\":2,\"residualPixels\":0,\"supportCoverage\":1,\"orientationSupport\":1,\"translationScore\":1,\"competingTranslationScore\":0,\"linePeriodicityScore\":1,\"phaseScore\":1}}")]
+    [InlineData("{\"apiVersion\":\"v2\",\"capability\":\"map.periodic-tiling.detect\",\"tiling\":null,\"status\":\"gridless\",\"reason\":\"x\",\"source\":{\"width\":1,\"height\":1,\"mediaType\":\"image/png\"},\"analysis\":{\"width\":1,\"height\":1,\"scale\":1,\"sourceResolutionVerified\":true},\"fit\":null}")]
+    [InlineData("{\"apiVersion\":\"v1\",\"capability\":\"map.periodic-tiling.detect\",\"tiling\":null,\"status\":\"detected\",\"reason\":\"x\",\"source\":{\"width\":1,\"height\":1,\"mediaType\":\"image/png\"},\"analysis\":{\"width\":1,\"height\":1,\"scale\":1,\"sourceResolutionVerified\":true},\"fit\":null}")]
+    [InlineData("{\"apiVersion\":\"v1\",\"capability\":\"map.periodic-tiling.detect\",\"tiling\":{\"dsSymbol\":\"<1:1,1,1:6,3>\"},\"status\":\"gridless\",\"reason\":\"x\",\"source\":{\"width\":1,\"height\":1,\"mediaType\":\"image/png\"},\"analysis\":{\"width\":1,\"height\":1,\"scale\":1,\"sourceResolutionVerified\":true},\"fit\":null}")]
     public async Task ClientRejectsMalformedOrIncompatibleSurveyorResponses(string payload)
     {
         var client = CreateClient(new DelegateHandler((_, _) => Task.FromResult(Json(HttpStatusCode.OK, payload))));
         await Assert.ThrowsAsync<MapAnalysisProtocolException>(() => client.DetectHexGridAsync(
             new MemoryStream([1]), "image/png", new MapAnalysisOptions()));
+    }
+
+    [Fact]
+    public async Task DifferentObservedTilingIsPreservedWithoutTryingToParseAsHexGeometry()
+    {
+        var payload = ValidDetectedJson().Replace(
+            "<1:1,1,1:6,3>", "<1:1,1,1:4,4>", StringComparison.Ordinal);
+        var client = CreateClient(new DelegateHandler((_, _) =>
+            Task.FromResult(Json(HttpStatusCode.OK, payload))));
+        var observation = await client.DetectHexGridAsync(
+            new MemoryStream([1]), "image/png", new MapAnalysisOptions());
+        Assert.Equal("detected", observation.Status);
+        Assert.Equal("<1:1,1,1:4,4>", observation.TilingDsSymbol);
+        Assert.Null(observation.Fit);
     }
 
     [Fact]
@@ -152,9 +165,7 @@ public sealed class SurveyorMapAnalysisClientTests
           "apiVersion":"v1",
           "capability":"map.periodic-tiling.detect",
           "tiling":{
-            "periodicTilingType":"Regular",
-            "crNotation":"6^3",
-            "gjhNotation":"6/m30/r(h1)"
+            "dsSymbol":"<1:1,1,1:6,3>"
           },
           "status":"detected",
           "reason":"fixture",

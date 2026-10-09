@@ -54,6 +54,11 @@ export class SourceMapGridAlignmentController {
             }
 
             if (!this.isCurrent(generation, sourceMap.id, abortController)) return false;
+            if (analyzed.status === "detected" && analyzed.tilingDsSymbol !== "<1:1,1,1:6,3>") {
+                throw new Error(
+                    "Surveyor detected a different tiling (" + (analyzed.tilingDsSymbol ?? "unknown")
+                    + "). This world currently supports hexagonal navigation only; no grid was changed.");
+            }
             if (!analyzed.fit || analyzed.status === "gridless") {
                 throw new Error(
                     "A usable hex grid could not be detected. The map remains visible; try again or use Manual placement.");

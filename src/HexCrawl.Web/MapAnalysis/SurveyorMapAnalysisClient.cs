@@ -14,9 +14,7 @@ public sealed class SurveyorMapAnalysisClient(
 {
     private const string ApiVersion = "v1";
     private const string Capability = "map.periodic-tiling.detect";
-    private const string PeriodicTilingType = "Regular";
-    private const string CrNotation = "6^3";
-    private const string GjhNotation = "6/m30/r(h1)";
+    private const string ExpectedDsSymbol = "<1:1,1,1:6,3>";
 
     public async Task<MapHexGridAnalysis> DetectHexGridAsync(
         Stream raster,
@@ -99,7 +97,7 @@ public sealed class SurveyorMapAnalysisClient(
     {
         var parameters = new List<string>
         {
-            $"crNotation={Uri.EscapeDataString(CrNotation)}"
+            $"expectedDsSymbol={Uri.EscapeDataString(ExpectedDsSymbol)}"
         };
         AddDouble("minimumSpacingPixels", options.MinimumSpacingPixels);
         AddDouble("maximumSpacingPixels", options.MaximumSpacingPixels);
@@ -133,7 +131,7 @@ public sealed class SurveyorMapAnalysisClient(
             throw new MapAnalysisProtocolException("Surveyor returned an unsupported API version or capability identity.");
         }
 
-        ValidateRequestedTiling(root);
+        var observedDsSymbol = ParseObservedTiling(root);
 
         var status = RequiredString(root, "status");
         if (status is not ("detected" or "inconclusive" or "gridless"))
@@ -154,7 +152,9 @@ public sealed class SurveyorMapAnalysisClient(
             RequiredBoolean(analysisElement, "sourceResolutionVerified"));
 
         MapHexGridFit? fit = null;
-        if (root.TryGetProperty("fit", out var fitElement) && fitElement.ValueKind != JsonValueKind.Null)
+        if (root.TryGetProperty("fit", out var fitElement)
+            && fitElement.ValueKind != JsonValueKind.Null
+            && string.Equals(observedDsSymbol, ExpectedDsSymbol, StringComparison.Ordinal))
         {
             if (fitElement.ValueKind != JsonValueKind.Object)
                 throw new MapAnalysisProtocolException("Surveyor fit must be an object or null.");
@@ -176,23 +176,26 @@ public sealed class SurveyorMapAnalysisClient(
                 RequiredUnit(fitElement, "linePeriodicityScore"),
                 RequiredUnit(fitElement, "phaseScore"));
         }
-        if (status == "detected" && fit is null)
-            throw new MapAnalysisProtocolException("A detected Surveyor result must include a fit.");
+        if (status == "detected" && observedDsSymbol is null)
+            throw new MapAnalysisProtocolException("A detected Surveyor result must identify the observed D-symbol.");
+        if (status != "detected" && observedDsSymbol is not null)
+            throw new MapAnalysisProtocolException("A non-detected Surveyor result must not claim a tiling.");
+        if (status == "detected" && observedDsSymbol == ExpectedDsSymbol && fit is null)
+            throw new MapAnalysisProtocolException("A detected hexagonal Surveyor result must include a hex fit.");
         if (status != "detected" && fit is not null)
             throw new MapAnalysisProtocolException("A non-detected Surveyor result must not include a fit.");
 
-        return new MapHexGridAnalysis(apiVersion, capability, status, reason, source, analysis, fit);
+        return new MapHexGridAnalysis(apiVersion, capability, status, reason, source, analysis, fit, observedDsSymbol);
     }
 
-    private static void ValidateRequestedTiling(JsonElement root)
+    private static string? ParseObservedTiling(JsonElement root)
     {
-        var tiling = RequiredObject(root, "tiling");
-        if (!string.Equals(RequiredString(tiling, "periodicTilingType"), PeriodicTilingType, StringComparison.Ordinal)
-            || !string.Equals(RequiredString(tiling, "crNotation"), CrNotation, StringComparison.Ordinal)
-            || !string.Equals(RequiredString(tiling, "gjhNotation"), GjhNotation, StringComparison.Ordinal))
-        {
-            throw new MapAnalysisProtocolException("Surveyor returned a different periodic tiling than Hex Crawl requested.");
-        }
+        if (!root.TryGetProperty("tiling", out var value))
+            throw new MapAnalysisProtocolException("Surveyor response is missing tiling identity.");
+        if (value.ValueKind == JsonValueKind.Null) return null;
+        if (value.ValueKind != JsonValueKind.Object)
+            throw new MapAnalysisProtocolException("Surveyor tiling must be an object or null.");
+        return RequiredString(value, "dsSymbol");
     }
 
     private static JsonElement RequiredObject(JsonElement value, string name) =>
