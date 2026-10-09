@@ -109,3 +109,25 @@ the .NET operational path, and not every metric constraint or arbitrary
 Euclidean D-symbol has a proved realization. Domain work must not
 silently accept unverified geometry or treat this milestone as the
 generalized detector acceptance gate.
+
+
+## Independent bounded .NET metric witness validation
+
+`PeriodicMetricWitnessValidator.Validate` now provides an additive,
+non-authoritative .NET check for a supplied concrete realization paired with
+an independently validated topology witness. It rejects polygon
+self-intersection, nonfinite or degenerate vertices, unpaired translated
+interfaces, mismatched fundamental-domain area, overlapping periodic
+interiors, invalid orientation, missing cell identities and unsatisfied or
+unknown metric constraints. Named constraint keys currently verified are
+`period-u-length`, `period-v-length`, `period-angle-degrees`,
+`edge-length`, `tile-area`, and `cell-area:<cellId>`.
+
+The domain validator is limited to 24 polygonal motif cells and 64 corners
+per cell and does not perform an image analysis, construct world state, or
+write to the database. It does not yet supply a .NET harmonic embedding
+constructor, expose a saved-world creation path, or guarantee all
+geometrically admissible D-symbols can be realized under user-supplied
+constraints. Existing geometry and asset pathways remain untouched.
+The corresponding domain regression cases include a valid periodic
+rectangle, metric constraints and adversarial invalid witnesses.
