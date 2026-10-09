@@ -59,6 +59,30 @@ public sealed class Phase16UniformQuotientUnfoldingTests
     }
 
     [Fact]
+    public void SharedVersionedUniformQuotientCorpusMatchesSurveyorEnvelope()
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", "periodic-topology-v1.json");
+        using var json = JsonDocument.Parse(File.ReadAllText(path));
+        foreach (var entry in json.RootElement.GetProperty("uniformQuotientCases").EnumerateArray())
+        {
+            string name = entry.GetProperty("name").GetString()!;
+            string symbol = entry.GetProperty("dsSymbol").GetString()!;
+            int limit = entry.TryGetProperty("chamberLimit", out var value) ? value.GetInt32() : 768;
+            var expected = entry.GetProperty("status").GetString()! switch
+            {
+                "constructed" => DelaneyDressCoverStatus.Constructed,
+                "unsupported" => DelaneyDressCoverStatus.Unsupported,
+                "invalid" => DelaneyDressCoverStatus.Invalid,
+                _ => throw new InvalidOperationException($"Unrecognized uniform quotient status: {name}")
+            };
+            var result = DelaneyDressUniformQuotientUnfolding.Construct(symbol, limit);
+            Assert.True(result.Status == expected, $"{name}: expected {expected}, got {result.Status}. {result.Reason}");
+            if (expected == DelaneyDressCoverStatus.Constructed)
+                result.Witness!.ValidateAdjacency();
+        }
+    }
+
+    [Fact]
     public void MixedDegreeEuclideanAndInvalidSymbolsFailClosed()
     {
         const string mixed = "<20:2 7 6 10 12 13 15 17 20 19,3 5 9 12 10 13 16 18 19 20,4 6 8 11 12 14 15 17 19 20:3 3 4,5 5>";

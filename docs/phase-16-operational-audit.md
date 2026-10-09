@@ -51,3 +51,22 @@ Both symbol-to-torus implementations enumerate every face cycle using one global
 ## Verification limitations
 
 The TypeScript core was compiled with local `tsc` and its focused topology tests passed. C# tests are included but were not executed locally because a .NET SDK is unavailable in this execution environment. The complete CI suites, database-backed tests, live signed-in tester smoke checks and held-out generalized image analysis have not been run. This work must not be marked Phase 16 complete or merged until all mandatory gates pass.
+
+
+## New bounded Euclidean multi-chamber quotient construction
+
+Both C# `DelaneyDressUniformQuotientUnfolding` and TypeScript
+`unfoldUniformEuclideanQuotient` now construct a **connected fiber product**
+of a regular Euclidean reflection torus with a quotient chamber action whose
+`m01` and `m12` orders are each constant and satisfy
+`(p-2)(q-2)=4`. An independent tree/cotree construction verifies primitive
+integer translation generators, and the C#/TypeScript structural witness
+verifiers rebuild the incidence and require a valid projection onto the
+original quotient. The universal reflection-torus seed is verified, not
+treated as an arbitrary shape-registration result. The common
+`uniformQuotientCases` fixture explicitly names accepted, rejected, and
+limit-exceeded examples.
+
+This is still **not** general mixed-face-orbit or metric-embedding
+reconstruction. It is additive domain logic only; no schema or existing
+spatial authority changes. Tests must be rerun before Phase 16 acceptance.
