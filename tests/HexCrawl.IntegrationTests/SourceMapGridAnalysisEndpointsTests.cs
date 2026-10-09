@@ -182,6 +182,115 @@ public sealed class SourceMapGridAnalysisEndpointsTests
         }
     }
 
+    [Fact]
+    public async Task OptInMotifInvestigationReadsOwnerMapWithoutPersistingCandidateOrChangingV2()
+    {
+        var database = TestWebHost.NewDatabasePath();
+        try
+        {
+            var fake = new RecordingMotifInvestigationService((bytes, mediaType) =>
+            {
+                Assert.Equal(TinyPng, bytes);
+                Assert.Equal("image/png", mediaType);
+                return new PeriodicMotifInvestigation(
+                    "inconclusive", "insufficient repeated evidence", false, "experimental", "v3",
+                    null, null, new MapAnalysisSource(1, 1, "image/png"),
+                    new MapAnalysisRaster(1, 1, 1, true));
+            });
+            using var factory = WithInvestigation(TestWebHost.Create(database, "alice"), fake);
+            using var client = factory.CreateClient();
+            var (worldId, sourceMapId, version) = await CreateWorldAndMap(client);
+            using var response = await client.PostAsync(
+                $"/api/overworlds/{worldId:D}/source-maps/{sourceMapId:D}/motif-investigation", null);
+            response.EnsureSuccessStatusCode();
+            Assert.Contains("no-store", response.Headers.CacheControl?.ToString() ?? "");
+            var result = await response.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("inconclusive", result.GetProperty("status").GetString());
+            Assert.False(result.GetProperty("authoritative").GetBoolean());
+            Assert.Equal(JsonValueKind.Null, result.GetProperty("candidate").ValueKind);
+            Assert.Equal(1, fake.Calls);
+
+            var reopened = await client.GetFromJsonAsync<JsonElement>($"/api/overworlds/{worldId:D}");
+            Assert.Equal(version, reopened.GetProperty("version").GetInt64());
+            Assert.Equal(JsonValueKind.Null,
+                reopened.GetProperty("sourceMaps")[0].GetProperty("alignment").ValueKind);
+        }
+        finally { TestWebHost.DeleteDatabase(database); }
+    }
+
+    [Fact]
+    public async Task OldSurveyorUnsupportedInvestigationIsExplicitAndReadOnly()
+    {
+        var database = TestWebHost.NewDatabasePath();
+        try
+        {
+            var fake = new RecordingMotifInvestigationService((_, _) =>
+                new PeriodicMotifInvestigation(
+                    "unsupported", "Connected Surveyor supports only v2.", false,
+                    "experimental", null, null, null, null, null));
+            using var factory = WithInvestigation(TestWebHost.Create(database, "alice"), fake);
+            using var client = factory.CreateClient();
+            var (worldId, sourceMapId, version) = await CreateWorldAndMap(client);
+            using var response = await client.PostAsync(
+                $"/api/overworlds/{worldId:D}/source-maps/{sourceMapId:D}/motif-investigation", null);
+            response.EnsureSuccessStatusCode();
+            var result = await response.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("unsupported", result.GetProperty("status").GetString());
+            Assert.Equal(JsonValueKind.Null, result.GetProperty("candidate").ValueKind);
+            var world = await client.GetFromJsonAsync<JsonElement>($"/api/overworlds/{worldId:D}");
+            Assert.Equal(version, world.GetProperty("version").GetInt64());
+        }
+        finally { TestWebHost.DeleteDatabase(database); }
+    }
+
+    [Fact]
+    public async Task ExperimentalInvestigationChecksOwnershipAndRasterMetadataBeforeExposingResults()
+    {
+        var database = TestWebHost.NewDatabasePath();
+        try
+        {
+            var fake = new RecordingMotifInvestigationService((_, _) =>
+                new PeriodicMotifInvestigation(
+                    "inconclusive", "unmatched raster", false, "experimental", "v3",
+                    null, null, new MapAnalysisSource(2, 1, "image/png"),
+                    new MapAnalysisRaster(2, 1, 1, true)));
+            Guid worldId, sourceMapId;
+            long version;
+            using (var ownerFactory = WithInvestigation(TestWebHost.Create(database, "alice"), fake))
+            using (var owner = ownerFactory.CreateClient())
+                (worldId, sourceMapId, version) = await CreateWorldAndMap(owner);
+
+            using (var otherFactory = WithInvestigation(TestWebHost.Create(database, "bob"), fake))
+            using (var other = otherFactory.CreateClient())
+            {
+                using var denied = await other.PostAsync(
+                    $"/api/overworlds/{worldId:D}/source-maps/{sourceMapId:D}/motif-investigation", null);
+                Assert.Equal(HttpStatusCode.NotFound, denied.StatusCode);
+            }
+            Assert.Equal(0, fake.Calls);
+            using (var ownerFactory = WithInvestigation(TestWebHost.Create(database, "alice"), fake))
+            using (var owner = ownerFactory.CreateClient())
+            {
+                using var rejected = await owner.PostAsync(
+                    $"/api/overworlds/{worldId:D}/source-maps/{sourceMapId:D}/motif-investigation", null);
+                Assert.Equal(HttpStatusCode.BadGateway, rejected.StatusCode);
+                var reopened = await owner.GetFromJsonAsync<JsonElement>($"/api/overworlds/{worldId:D}");
+                Assert.Equal(version, reopened.GetProperty("version").GetInt64());
+            }
+            Assert.Equal(1, fake.Calls);
+        }
+        finally { TestWebHost.DeleteDatabase(database); }
+    }
+
+    private static WebApplicationFactory<Program> WithInvestigation(
+        WebApplicationFactory<Program> factory,
+        IPeriodicMotifInvestigationService investigation) =>
+        factory.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
+        {
+            services.RemoveAll<IPeriodicMotifInvestigationService>();
+            services.AddSingleton(investigation);
+        }));
+
     private static WebApplicationFactory<Program> WithAnalysis(
         WebApplicationFactory<Program> factory,
         IMapAnalysisService analysis) =>
@@ -244,6 +353,22 @@ public sealed class SourceMapGridAnalysisEndpointsTests
             worldId,
             updated.GetProperty("sourceMaps")[0].GetProperty("id").GetGuid(),
             updated.GetProperty("version").GetInt64());
+    }
+
+    private sealed class RecordingMotifInvestigationService(
+        Func<byte[], string, PeriodicMotifInvestigation> investigate)
+        : IPeriodicMotifInvestigationService
+    {
+        public int Calls { get; private set; }
+        public async Task<PeriodicMotifInvestigation> InvestigateAsync(
+            Stream raster, string mediaType, string? correlationId = null,
+            CancellationToken cancellationToken = default)
+        {
+            Calls++;
+            using var copy = new MemoryStream();
+            await raster.CopyToAsync(copy, cancellationToken);
+            return investigate(copy.ToArray(), mediaType);
+        }
     }
 
     private sealed class RecordingMapAnalysisService(
