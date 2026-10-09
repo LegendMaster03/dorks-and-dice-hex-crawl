@@ -19,12 +19,12 @@ This is **one coordinated project with separately validated and merged phases**,
 1. **Delaney–Dress is the only periodic-tiling notation.** Neither Cundy–Rollett nor GomJau–Hogg returns as a persisted, public, or parallel notation. Standard D-symbols are not a custom Tile Crawl syntax; avoid Tegula-specific wire formats and importing restrictive third-party implementations.
 2. **No hard-coded catalog of supported pattern implementations or per-pattern engine dispatch.** Example tilings are test fixtures, not the set of patterns the system can recognize or traverse. A **data-only catalog of familiar tiling names, aliases, and descriptions is encouraged** as a nonauthoritative presentation aid; its entries must never determine recognition, validity, realizability, or support. General-purpose image-analysis operations, mathematical constraints, and optimized numerical kernels are allowed; an unfamiliar valid tiling must not require a named shape-specific code path.
 3. **Surveyor observes; Tile Crawl decides.** Surveyor receives an image and analysis options, without an expected D-symbol or information about the selected ruleset. It derives and reports a supported detected D-symbol, measured geometry, evidence, and uncertainty. Tile Crawl compares that observation with its ruleset and world state locally.
-4. **A D-symbol is structural, not a complete geometric map.** It encodes incidence/symmetry information under an explicitly chosen group and convention. Exact polygon coordinates, embedding, metric scale, distortions, image alignment, and registration are separately represented *measured or realized geometry*, not alternative tiling notations or attributes stuffed into the D-symbol.
+4. **A D-symbol is structural, not a complete geometric map.** It encodes incidence/symmetry information under an explicitly chosen group and convention. It does not by itself specify the chosen translational cover, an integer-addressed fundamental motif, or a unique straight-edge metric embedding. Exact polygon coordinates, chosen geometric embedding, metric scale, distortions, image alignment, and registration are separately represented *measured or realized geometry*, not alternative tiling notations or attributes stuffed into the D-symbol.
 5. **World topology, ruleset requirements, and source images are distinct authorities.** A procedure/ruleset expresses the expected tiling. The world owns its accepted spatial topology and stable cells. The source map holds its image and alignment. Surveyor cannot silently change any of them.
 6. **Map semantics remain separate.** Terrain, biome, labels, regions, roads, rivers, structures, locations, visibility, encounters, and gameplay state must not become part of a tiling identity or geometric motif.
 7. **Existing runtime behavior is a regression contract.** Preserve movement budgeting, navigation/lost/veer, partial traversal, double-back, discoveries, encounters, environment, effects, survival, and the current user-oriented Guided/Compact UI. Nonspatial and no-interval procedures remain first-class.
 8. **Incompatible data is never silently rewritten.** Existing world/expedition geometry, procedure revisions, anchored content, and tester data require explicit consistency checks and an intentional migration. No auto-reset and no silent conversion from an established hex world into a different tiling.
-9. **No invented certainty.** A syntactically valid D-symbol, an internally consistent chamber system, Euclidean realizability, a supplied metric realization, and a tiling actually found in an image are different claims. APIs, validators, and UI must distinguish them.
+9. **No invented certainty.** A parseable string, a mathematically valid D-symbol, a theorem-backed Euclidean periodic tiling, a *particular admissible metric realization*, and a tiling actually observed in an image are different claims. The standard two-dimensional zero-curvature criterion applies to fully valid D-symbols; it does **not** certify that arbitrary chosen polygon coordinates or image evidence match. APIs, validators, and UI must distinguish these claims.
 10. **Shared contract, independent services.** The two repositories must pass the same D-symbol and geometry conformance fixtures, but Tile Crawl may not call Surveyor simply to compare a detected pattern with the selected ruleset.
 11. **The tiling code is not ordinary user-facing language.** Normal users interact with named tilings and understandable shape descriptions, not D-symbols. **Raw Delaney–Dress notation may be exposed only in the explicit JSON editor, or in an error that identifies a *supported* tiling for which Tile Crawl cannot resolve a reliable human-readable name.** No ordinary selector, Guided/Compact/Advanced authoring screen, map-alignment prompt, navigation display, help card, success notification, or named-pattern contradiction message may require users to read, type, paste, or understand the notation. Developer logs and machine-readable API/persistence formats remain unaffected by this presentation restriction.
 
@@ -34,7 +34,7 @@ A **pattern** is the combinatorial periodic tiling; its authoritative identity i
 
 The initial mathematically explicit target is **two-dimensional Euclidean periodic polygonal tilings with a finite repeating fundamental domain**, including mixed polygon types. The design must account for subdivided edges and more than one cell orbit. Treat non-edge-to-edge incidences explicitly; do not silently force T-junctions into one-edge/one-neighbor assumptions. The plan does not claim that every non-polygonal, fractal, aperiodic, curved-surface, or arbitrarily illustrated pattern is automatically reconstructible. When a tiling class is unsupported or the evidence insufficient, return a specific unsupported/inconclusive state rather than a fabricated identity.
 
-A standard D-symbol may not uniquely determine metric geometry; different choices of symmetry group can also alter the symbol used to describe a visually similar arrangement. Phase 16 must establish and test **one documented identity/symmetry convention** and distinguish graph-isomorphism canonicalization from semantic equivalence of different symmetry representations. Do not assume two strings are equivalent merely because their displayed polygons look alike. Test independently derived examples instead of assuming the current three one-chamber symbols prove general correctness.
+A standard D-symbol may not uniquely determine metric geometry; different choices of symmetry group can also alter the symbol used to describe a visually similar arrangement. Phase 16 must establish and test **one documented identity/symmetry convention** and distinguish chamber-relabeling isomorphism, equivalence under alternative group presentations, and metric-shape compatibility. Two strings can describe the same underlying periodic cell structure under different valid group choices, while identical combinatorics can have metrically incompatible realizations. Do not assume raw D-symbol string equality alone establishes all ruleset/world compatibility, and do not equate visually similar polygons without checking their incidence. Test independently derived examples instead of assuming the current three one-chamber symbols prove general correctness.
 
 ### Human-readable tiling nomenclature catalog
 
@@ -53,7 +53,7 @@ Tile Crawl should maintain an **optional, editable/versionable data catalog** fo
 1. User selects a ruleset/procedure and imports an image into Tile Crawl.
 2. Tile Crawl sends **only raster data and detector options** to Surveyor. Remove the currently optional expectedDsSymbol request parameter; no replacement shape/category/side-count selector.
 3. Surveyor searches for periodic structure, derives a validated observed D-symbol and geometric realization/fit when supported, or reports uncertainty with grounded diagnostics.
-4. Tile Crawl locally compares the observed identity with the selected procedure/ruleset's expected identity, and with the world's established topology.
+4. Tile Crawl locally compares the observed identity and **documented structural-equivalence/metric constraints** with the selected procedure/ruleset's expected tiling and the world's established topology. No Surveyor round-trip is needed to do this comparison.
 5. If patterns agree and geometry is compatible, provide the normal map alignment workflow.
 6. If they differ, the server evaluates authoritative contradictions. With none, offer a **one-click change of the selected campaign-owned procedure/ruleset and applicable world geometry**. With blockers, explain them concretely in ordinary shape language; do not modify data.
 7. Recheck versions and compatibility at commit time. An accepted change updates its legitimate authorities atomically and records the resulting procedure revision/provenance. A canceled, stale, unsupported, or failed action makes no changes.
@@ -68,16 +68,16 @@ Tile Crawl should maintain an **optional, editable/versionable data catalog** fo
 
 ### Implementation
 
-- Audit Delaney–Dress validation/canonicalization in Surveyor against independent mathematical examples; cover involutions, orbit/multiplicity axioms, orientability where applicable, connectedness, Euclidean conditions, isomorphism, and the chosen symmetry/normal-form convention. Explicitly distinguish structural validity, Euclidean realizability, unsupported geometry, and image observation.
+- Audit Delaney–Dress validation/canonicalization in Surveyor against independent mathematical examples; cover involutions, orbit/multiplicity axioms, orientability where applicable, connectedness, Euclidean curvature, isomorphism, and the chosen symmetry/normal-form convention. Respect the two-dimensional realizability theorem: a **valid** D-symbol with zero curvature encodes a Euclidean periodic topological tiling, but not every supplied metric embedding is admissible or recoverable. Explicitly distinguish incomplete/axiom-invalid input, Euclidean topological validity, invalid/incompatible requested geometry, implementation limits, and image observation.
 - Define the shared, versioned *conceptual contract*, with matching language-specific DTOs and conformance vectors rather than creating a new Tile Crawl tiling notation:
   - canonical D-symbol and optional validation/realizability status;
   - finite fundamental-domain cell and vertex/edge incidence;
-  - stable motif-cell IDs plus integer lattice translations for globally addressable cells;
+  - a **constructed periodic translation cover** of the D-symbol's symmetry quotient, including translational generators, a finite lifted motif and deterministic motif-cell IDs plus integer lattice translations for globally addressable cells;
   - reciprocal adjacency interfaces with periodic displacement and boundary segments;
   - independently supplied planar realization, translation basis, polygon coordinates, units, and map registration;
   - source pixel provenance, confidence/residuals, ambiguity and unsupported reasons.
-- Specify how a geometric realization is validated against a D-symbol, including closure, legal shared boundaries, nonoverlap, connectivity, deterministic address enumeration, orientation, and traversal reciprocity. Store metric data separately from tiling identity.
-- Design a local Tile Crawl equality/canonicalization verifier, so the ruleset comparison does not require Surveyor. Share test vectors across C# and TypeScript, not runtime authority.
+- Specify how a geometric realization is **constructed or obtained**, then validated against a D-symbol, including the symmetry-to-translation cover, finite motif assembly, polygon closure, legal shared boundaries, nonoverlap, connectivity, deterministic address enumeration, orientation, and traversal reciprocity. Store metric data separately from tiling identity. Provide a path for generating/choosing a valid realization from **a D-symbol plus explicit metric constraints, without importing an image**; if more information is required, surface that as a normal guided choice, not raw-notation entry.
+- Design a local Tile Crawl equivalence/compatibility service that distinguishes (a) exact canonical symbol, (b) provably equivalent underlying tilings under permitted symmetry/group presentations, and (c) same combinatorial topology with unmet geometry/metric restrictions. If equivalence cannot be proved, return an **uncertain/inconclusive** assessment rather than silently declaring a mismatch or a match. Share test vectors across C# and TypeScript; do not use Surveyor as runtime comparison authority.
 - Define the **non-authoritative tiling nomenclature catalog schema** and its geometry-qualified lookup/fallback contract, including a testable two-exception policy for displaying raw D-symbols. No naming lookup may restrict which structurally valid tilings can be created, detected, or traversed.
 - Resolve what is *not* determined by a D-symbol (for example, free geometric parameters). Define explicit user-supplied/derived realization requirements rather than hard-coded realizations for named patterns.
 - Audit all existing HexCoordinate, HexGridDefinition, HexGeometry, HexTraversalState, HexId, map-feature, renderer, and world/expedition persistence consumers. Record a field-by-field migration matrix before implementing Phase 17.
@@ -85,9 +85,9 @@ Tile Crawl should maintain an **optional, editable/versionable data catalog** fo
 
 ### Acceptance gate
 
-- Independent D-symbol conformance corpus includes equivalent chamber relabelings, invalid symbols, zero-curvature-but-not-realizable edge cases, nontrivial multi-chamber mixed motifs, and alternative geometry realizations for the same structure.
+- Independent D-symbol conformance corpus includes equivalent chamber relabelings, **axiom-invalid inputs that happen to give an apparent zero-curvature sum**, valid zero-curvature Euclidean symbols, invalid or self-intersecting *metric witnesses*, nontrivial multi-chamber mixed motifs, and alternative realizations/group descriptions for the same underlying periodic structure. No test may presume a fully valid zero-curvature 2D D-symbol is topologically nonrealizable.
 - The fundamental-domain model can represent triangle, quadrilateral, hexagon, rhombille, and mixed-polygon fixtures **through input data, with no required registration or pattern-specific source paths**. Optional nomenclature entries do not affect whether these fixtures execute.
-- Reciprocal adjacency and stable translation-relative cell addressing round-trip deterministically. No terrain, labels, or ruleset semantics appear in the structural contract.
+- Deriving the translation cover and finite motif from nontrivial D-symbols produces reciprocal adjacency and stable translation-relative cell addresses, round-tripping deterministically with and without source imagery. If the translation cover cannot be constructed within supported limits, Phase 16 cannot be accepted. No terrain, labels, or ruleset semantics appear in the structural contract.
 - All existing Surveyor and Tile Crawl tests pass; contract changes are versioned and documented before either service is deployed.
 
 ## Phase 17 — Generalize world/cell authority and persistence
@@ -104,12 +104,12 @@ Tile Crawl should maintain an **optional, editable/versionable data catalog** fo
 - Update source-map registration and world spatial semantics to reference world topology plus realization/transform independently. Avoid tying unrelated feature, terrain, or player knowledge state to the tiling symbol.
 - Design and implement a tested persistence migration for current hex worlds and already saved expeditions. Preserve stable IDs, locations, route/selection state, source map transforms, relevant semantic features and ownership checks wherever possible. Explicitly classify records that cannot be migrated automatically. No blanket database reset.
 - Keep standalone and nonspatial procedures/sessions operational without a fabricated spatial topology. Ensure changing ruleset default tiling does not silently mutate pinned expedition procedure snapshots.
-- Maintain optimistic concurrency, owners' authorization, and existing protections against geometry changes while dependent expeditions or spatial records exist.
+- Maintain optimistic concurrency, owners' authorization, and existing protections against geometry changes while dependent expeditions or spatial records exist. During the phased transition, **feature-gate creation/acceptance of nonhex worlds** until generalized traversal and rendering are operational; internal data-only fixtures may precede those capabilities, but production users must never be offered a nonfunctional tiling.
 
 ### Acceptance gate
 
 - Existing hex worlds/expeditions produce identical cell identity, neighbors, feature intersection and coordinate conversion after migration; stored data round-trips and replay remains deterministic.
-- A previously unseen generated finite periodic motif can be instantiated, addressed, indexed and persisted without modifying application source or catalogs.
+- A previously unseen generated finite periodic motif can be instantiated, addressed, indexed and persisted **from structural and geometric input without an imported image**, without modifying application source or catalogs.
 - Corrupt adjacency, nonreciprocal boundary, invalid coordinate basis, duplicate cell, or stale version is rejected safely.
 - World-less sessions and nonspatial procedures remain unchanged.
 
@@ -143,7 +143,7 @@ Tile Crawl should maintain an **optional, editable/versionable data catalog** fo
 
 ### Implementation
 
-- Replace authoritative hex corner/center drawing assumptions in world rendering, hit testing, selection, highlighting, projection, route previews and overlays with realized polygon and interface geometry.
+- Replace authoritative hex corner/center drawing assumptions in world rendering, hit testing, selection, highlighting, projection, route previews and overlays with realized polygon and interface geometry. Support world setup and manual polygonal-grid use **without any source image** as well as Surveyor-driven import; the D-symbol and its chosen realization do not depend on image analysis.
 - Reuse the existing topology-neutral spatial-adjacency component and make the current-cell navigator consume returned cell interfaces, including cells with different side counts.
 - Keep map image alignment as a transform separate from world topology. Support independently measured pixel scale, rotation and motif phase; retain Wonderdraft physical-scale checks when applicable without treating them as a general tiling definition.
 - Adapt source-map feature intersection, coverage bounds, semantic overlays, player/DM knowledge and discovery behavior to general cells. Never infer terrain, labels or activated structures from D-symbols.
@@ -152,7 +152,7 @@ Tile Crawl should maintain an **optional, editable/versionable data catalog** fo
 
 ### Acceptance gate
 
-- The same UI and renderer can handle hexagonal, quadrilateral, triangular, rhombille and mixed-cell fixtures without tiling-specific UI components.
+- The same UI and renderer can handle hexagonal, quadrilateral, triangular, rhombille and mixed-cell fixtures **including a no-image world**, without tiling-specific UI components. Unlisted patterns with missing metric parameters receive a guided, understandable configuration path rather than a forced JSON edit.
 - Polygon hit testing, boundary previews, zoom/pan, transformed source imagery and selected-cell actions agree; no map shift/drift from repeated local fitting.
 - Mobile/tablet/desktop, embedded, light/dark, keyboard and pointer review covers no map, unrecognized map, geometry mismatch, current cell, travel, encounter and nonspatial states. Normal selectors, map dialogs, navigation, error recovery, and Advanced screens contain no raw D-symbols; the JSON editor is tested as the explicit code-editing exception.
 - Existing hex and Wonderdraft alignment tests remain green.
@@ -190,7 +190,7 @@ Tile Crawl should maintain an **optional, editable/versionable data catalog** fo
 
 ### Implementation
 
-- Retrieve the expected canonical D-symbol from the **selected materialized ruleset/procedure**, and the observed canonical D-symbol from Surveyor. Perform all equality and compatibility checks inside Tile Crawl. Do not require Surveyor to know which ruleset is being used.
+- Retrieve the expected canonical D-symbol and any geometry restrictions from the **selected materialized ruleset/procedure**, and the observed canonical D-symbol plus measured realization from Surveyor. Perform structural equivalence, metric compatibility, and authoritative-world contradiction checks inside Tile Crawl. Avoid false mismatches caused only by alternative legitimate symmetry representations, and do not treat equal structural identity as automatic proof that the metric requirements match. Do not require Surveyor to know which ruleset is being used.
 - Resolve human-readable names through Tile Crawl's **optional data-driven tiling nomenclature catalog** where the canonical identity and any required geometric qualifiers match. Otherwise derive descriptions from actual topology and measured geometry. Use "hexagons", "squares", "triangles", a familiar named tiling, or "a repeating mix of shapes" only when justified by evidence; a four-sided cell is not necessarily a square. No names or aliases participate in authoritative identity comparison. The absence of a familiar name must not send the user to the JSON editor or force them to handle a D-symbol.
 - Add an authoritative server-side conflict assessment that distinguishes:
   - a fresh unused default topology (safe to replace);
@@ -206,7 +206,7 @@ Tile Crawl should maintain an **optional, editable/versionable data catalog** fo
 
 ### Acceptance gate
 
-- Matching image/ruleset: proceed normally. Mismatch on unused default: show one-click option and persist correct new revision/world geometry without requiring settings navigation.
+- Matching image/ruleset (including provably equivalent symmetry representations): proceed normally after metric checks. Inconclusive equivalence: request review, not a false mismatch. Genuine mismatch on unused default: show one-click option and persist correct new revision/world geometry without requiring settings navigation.
 - Mismatch on established expedition: block with an explanation citing the expedition and preserved position. Map already accepted with incompatible registration: block or require an explicit safe migration.
 - Nonspatial procedure does not become an artificial blocker. Stale world/procedure versions produce a safe conflict and reload; no half-updated rule/world state.
 - All UI messages use ordinary shape vocabulary or a well-supported catalog name. Catalog misses and geometrically ambiguous names fall back to derived descriptions, and adding a catalog name changes no detection or traversal behavior. **Assert that the only UI surfaces containing raw D-symbols are the explicitly selected JSON editor and an error for a supported but unnamed pattern**; all other flows use ordinary descriptions, including Advanced editing, empty states, map mismatches, and routine successful detection. The special unnamed-pattern error explains the problem first and provides code only as a secondary labeled identifier. Accessibility and narrow-screen interaction are reviewed.
@@ -230,7 +230,7 @@ Tile Crawl should maintain an **optional, editable/versionable data catalog** fo
 
 ### Final acceptance gate — definition of Tile Crawl complete
 
-- A new structurally valid supported Euclidean periodic tiling and supplied realization can be **loaded, stored, rendered, navigated and replayed with no new pattern-registration/code path**.
+- A new structurally valid supported Euclidean periodic tiling can be **constructed into an operational translation-periodic cell system**, given a valid or explicitly parameterized metric realization, and **loaded, stored, rendered, navigated and replayed without a source image or new pattern-registration/code path**. Importing a suitable image of such a tiling must also work when Surveyor provides sufficient evidence.
 - Surveyor can infer the equivalent topology from sufficiently informative unfamiliar raster patterns without a tiling hint, and can explicitly decline when evidence or capability is insufficient.
 - A ruleset mismatch is handled entirely in Tile Crawl, with safe one-click conversion only when there are no real authoritative contradictions.
 - Existing hexagonal maps and campaigns, their travel procedures, saved expeditions, and nonspatial journeys survive the transition without regressions.
@@ -244,12 +244,12 @@ The following are **test categories**, not supported-pattern registrations:
 | Category | Required cases |
 | --- | --- |
 | Topology | regular triangle, square, hexagon; rhombille; mixed motif; a held-out newly generated periodic tiling |
-| Identity | equivalent chamber relabelings; multi-chamber D-symbols; alternate realizations; invalid/non-Euclidean/non-realizable inputs |
+| Identity | equivalent chamber relabelings; multi-chamber D-symbols; alternative symmetry quotients; valid Euclidean symbols; non-Euclidean/axiom-invalid inputs; invalid metric witnesses; inconclusive equivalence |
 | Periodicity | rotated/scaled/cropped/noisy motifs; distant regions; variable offsets; misleading local periodicity |
 | Geometry | unequal cell sizes, varying side/adjacency counts, T-junctions, corner/vertex ambiguity, reciprocal boundaries, nonoverlap |
 | Movement | continuous distance, cell steps, partial progress, boundary exit, lost/veer, deliberate double-back, encounter pause and deterministic replay |
 | Data | pre-migration hex worlds, persisted expedition positions, pinned procedure revisions, feature overlays, asset registrations, concurrency conflicts |
-| Sessions | world-bound, mapless abstract, no-interval journey, nonspatial rulesets |
+| Sessions | world-bound with and without any imported image; mapless abstract, no-interval journey, nonspatial rulesets |
 | Reconciliation | matched patterns, fresh default mismatch, established-world contradiction, unsupported detection, low confidence, stale save, canceled action |
 | Tiling terminology | known names and aliases; geometry-qualified names; alternate symmetry conventions; unknown mixed motifs; accurate plain-English fallback; raw D-symbol visible **only** in JSON editor or supported-but-unnamed error |
 | UI | desktop/mobile/embedded, pointer/keyboard, light/dark, source image alignment, selection, error recovery, Guided/Compact/Advanced/JSON |
