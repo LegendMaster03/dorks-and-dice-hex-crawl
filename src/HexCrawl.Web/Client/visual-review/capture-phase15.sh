@@ -320,7 +320,7 @@ else:
             raise SystemExit(f'Current travel disagrees with changed authoritative course: {metrics}')
         if "Intended lower-right boundary" not in (metrics["navigationStatText"] or ""):
             raise SystemExit(f'Navigation summary disagrees with changed authoritative course: {metrics}')
-        if "Intended course: lower-right boundary" not in (metrics["focusedNavigationText"] or ""):
+        if "Intended travel direction: lower-right boundary" not in (metrics["focusedNavigationText"] or ""):
             raise SystemExit(f'focused Navigation disagrees with changed authoritative course: {metrics}')
         if metrics["drawerCount"] != 1 or metrics["focusedTitle"] != "Navigation":
             raise SystemExit(f'changed-course reload did not reach focused Navigation: {metrics}')
