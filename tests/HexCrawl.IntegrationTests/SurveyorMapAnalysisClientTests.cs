@@ -78,9 +78,9 @@ public sealed class SurveyorMapAnalysisClientTests
 
     [Theory]
     [InlineData("{not-json")]
-    [InlineData("{\"apiVersion\":\"v2\",\"capability\":\"map.periodic-tiling.detect\",\"tiling\":null,\"status\":\"gridless\",\"reason\":\"x\",\"source\":{\"width\":1,\"height\":1,\"mediaType\":\"image/png\"},\"analysis\":{\"width\":1,\"height\":1,\"scale\":1,\"sourceResolutionVerified\":true},\"fit\":null}")]
-    [InlineData("{\"apiVersion\":\"v1\",\"capability\":\"map.periodic-tiling.detect\",\"tiling\":null,\"status\":\"detected\",\"reason\":\"x\",\"source\":{\"width\":1,\"height\":1,\"mediaType\":\"image/png\"},\"analysis\":{\"width\":1,\"height\":1,\"scale\":1,\"sourceResolutionVerified\":true},\"fit\":null}")]
-    [InlineData("{\"apiVersion\":\"v1\",\"capability\":\"map.periodic-tiling.detect\",\"tiling\":{\"dsSymbol\":\"<1:1,1,1:6,3>\"},\"status\":\"gridless\",\"reason\":\"x\",\"source\":{\"width\":1,\"height\":1,\"mediaType\":\"image/png\"},\"analysis\":{\"width\":1,\"height\":1,\"scale\":1,\"sourceResolutionVerified\":true},\"fit\":null}")]
+    [InlineData("{\"apiVersion\":\"v3\",\"capability\":\"map.periodic-tiling.detect\",\"tiling\":null,\"status\":\"gridless\",\"reason\":\"x\",\"source\":{\"width\":1,\"height\":1,\"mediaType\":\"image/png\"},\"analysis\":{\"width\":1,\"height\":1,\"scale\":1,\"sourceResolutionVerified\":true},\"fit\":null}")]
+    [InlineData("{\"apiVersion\":\"v2\",\"capability\":\"map.periodic-tiling.detect\",\"tiling\":null,\"status\":\"detected\",\"reason\":\"x\",\"source\":{\"width\":1,\"height\":1,\"mediaType\":\"image/png\"},\"analysis\":{\"width\":1,\"height\":1,\"scale\":1,\"sourceResolutionVerified\":true},\"fit\":null}")]
+    [InlineData("{\"apiVersion\":\"v2\",\"capability\":\"map.periodic-tiling.detect\",\"tiling\":{\"dsSymbol\":\"<1:1,1,1:6,3>\"},\"status\":\"gridless\",\"reason\":\"x\",\"source\":{\"width\":1,\"height\":1,\"mediaType\":\"image/png\"},\"analysis\":{\"width\":1,\"height\":1,\"scale\":1,\"sourceResolutionVerified\":true},\"fit\":null}")]
     public async Task ClientRejectsMalformedOrIncompatibleSurveyorResponses(string payload)
     {
         var client = CreateClient(new DelegateHandler((_, _) => Task.FromResult(Json(HttpStatusCode.OK, payload))));
