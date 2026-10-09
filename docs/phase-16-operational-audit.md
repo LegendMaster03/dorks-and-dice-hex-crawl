@@ -53,6 +53,35 @@ Both symbol-to-torus implementations enumerate every face cycle using one global
 Both feature branches have executed their GitHub Actions validation suites, including domain tests, Surveyor raster benchmarks, and database-backed tests where configured. Individual successful CI runs do **not** prove cross-deployment compatibility, real-image generalization, live signed-in workflows, data preservation on deployment, or generalized product integration. Those release gates are still open, and Phase 16 must not be merged on CI status alone.
 
 
+## Independent geometric isometry proof for exact periodic polygons
+
+`DelaneyDressMetricChamberSymmetry.Verify` now takes a topology and metric
+witness and **first performs the existing independent structural and
+polygon-overlap/reciprocity/constraint verification**. For each possible
+chamber automorphism, it builds an explicit rigid planar transformation and
+requires every barycentric flag (vertex, edge midpoint and cell center)
+to map into one globally shared realization. It checks that both lattice
+periods transform by a primitive unimodular integer basis matrix and that
+every periodic adjacency shift respects the induced map, using
+`BigInteger` to avoid integer overflow. The resulting metric-symmetry
+quotient is independently checked as a Euclidean D-symbol and as a valid
+projection of the original finite translation cover.
+
+In independent C# and TypeScript tests, a true square geometry retains
+eight symmetries; unequal-sided rectangular geometry retains four, and a
+skewed parallelogram retains two. This explicitly prevents accidental
+promotion of the maximal **combinatorial** quotient to an unearned
+metric-symmetry claim. Mixed-cell and non-edge-to-edge polygon witnesses
+also retain covering proofs. This adds no source-image detector,
+production world authority, data migration or UI control.
+
+A metric proof from independently supplied exact polygons is **not**
+original-image evidence. It does not show that raster contours admit those
+symmetries within calibrated uncertainty, and the v3 observational
+identity remains a translation-group D-symbol, not the derived maximal
+metric quotient. Live cross-deployment, independent real-map benchmarks,
+confidence calibration and generalized runtime integration remain open.
+
 ## Independent raster geometry plausibility and combinatorial symmetry quotient
 
 The read-only v3 client now independently checks provisional source-pixel
