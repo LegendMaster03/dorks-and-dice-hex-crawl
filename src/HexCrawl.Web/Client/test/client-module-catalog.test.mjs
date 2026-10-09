@@ -46,7 +46,7 @@ test("procedure module exposes read-only reference navigation for the explicit s
     const procedures = await source("modules/procedures/module.ts");
     const reference = await source("modules/procedures/procedure-reference-view.ts");
 
-    assert.match(procedures, /View procedure reference/);
+    assert.match(procedures, /View ruleset reference/);
     assert.match(procedures, /route\.kind === "procedure-revision" \? route\.revision : null/);
     assert.match(procedures, /revision === null[\s\S]*\$\{base\}\/reference[\s\S]*revisions\/\$\{encodeURIComponent\(String\(revision\)\)\}\/reference/);
     assert.doesNotMatch(procedures, /button\[data-revision\]:disabled/);

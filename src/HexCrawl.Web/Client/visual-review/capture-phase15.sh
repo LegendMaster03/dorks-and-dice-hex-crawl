@@ -54,6 +54,8 @@ cases=(
   "08-spatial-selected-edge|selected-edge|light|1366|900"
   "09-spatial-persisted-course|persisted-course|light|1366|900"
   "10-spatial-movement|movement-input-pending|light|1366|900"
+  "10d-spatial-movement-validation-desktop|movement-validation-retry|light|1366|900"
+  "10e-spatial-movement-validation-narrow|movement-validation-retry|dark|500|844|390"
   "10a-spatial-movement-composition|movement-composition|light|1366|900"
   "10b-spatial-movement-composition-mobile|movement-composition|dark|500|844|390"
   "10c-nonspatial-movement-composition|nonspatial-movement-composition|light|1366|900"
@@ -318,7 +320,7 @@ else:
             raise SystemExit(f'Current travel disagrees with changed authoritative course: {metrics}')
         if "Intended lower-right boundary" not in (metrics["navigationStatText"] or ""):
             raise SystemExit(f'Navigation summary disagrees with changed authoritative course: {metrics}')
-        if "Intended course: lower-right boundary" not in (metrics["focusedNavigationText"] or ""):
+        if "Intended travel direction: lower-right boundary" not in (metrics["focusedNavigationText"] or ""):
             raise SystemExit(f'focused Navigation disagrees with changed authoritative course: {metrics}')
         if metrics["drawerCount"] != 1 or metrics["focusedTitle"] != "Navigation":
             raise SystemExit(f'changed-course reload did not reach focused Navigation: {metrics}')
@@ -337,6 +339,9 @@ else:
             raise SystemExit(f'course clear survived only in browser direction state: {metrics}')
     if state == "map-nonadjacent" and not metrics["teleportContextVisible"]:
         raise SystemExit(f'non-adjacent inspection did not expose deliberate teleport authority: {metrics}')
+    if state == "movement-validation-retry":
+        if not metrics["movementUnitVisible"] or not metrics["movementValidationVerified"] or not metrics["movementRetryVerified"] or metrics["movementRetryCalls"] != 1:
+            raise SystemExit(f'rendered movement validation/retry failed: {metrics}')
     if state == "movement-input-pending" and not metrics["movementUnitVisible"]:
         raise SystemExit(f'movement resolution omitted its authoritative unit: {metrics}')
     if state == "movement-composition":

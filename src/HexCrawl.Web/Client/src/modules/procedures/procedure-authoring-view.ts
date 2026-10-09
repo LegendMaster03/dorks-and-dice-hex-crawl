@@ -70,7 +70,7 @@ export async function renderProcedureAuthoringWorkspace(
     let jsonLoadFailed = false;
     let jsonValidation: ProcedureCanonicalValidation | null = null;
 
-    root.replaceChildren(loadingPanel("Loading exploration procedures…"));
+    root.replaceChildren(loadingPanel("Loading exploration rulesets…"));
     const composerApi = await ProcedureComposerApi.create(root);
     [presets, savedProcedures] = await Promise.all([
         api.getProcedurePresets(),
@@ -448,7 +448,7 @@ export async function renderProcedureAuthoringWorkspace(
         const page = pageShell("Ruleset starting points", "Compare the table experience first. Open details only when you need exact mechanics, automation, or source information.");
         const toolbar = document.createElement("div");
         toolbar.className = "hc-procedure-toolbar";
-        const back = button("Back to procedures", "secondary");
+        const back = button("Back to rulesets", "secondary");
         back.addEventListener("click", () => { entry = "landing"; render(); });
         toolbar.append(back, guidancePreferenceButton(root));
         page.append(toolbar, errorBox());
@@ -457,7 +457,7 @@ export async function renderProcedureAuthoringWorkspace(
             "Compare the four facts on each card. Use View details for exact rules and source information; partial or manual support is flagged before selection."));
 
         const familiar = familiarPresets(presets);
-        if (familiar.length > 0) page.append(presetSection("Familiar procedures", familiar));
+        if (familiar.length > 0) page.append(presetSection("Familiar exploration rulesets", familiar));
         const generic = genericPresets(presets);
         if (generic.length > 0) page.append(presetSection("Generic starting points", generic,
             "Small generic procedures useful when you want a minimal foundation rather than a named methodology."));

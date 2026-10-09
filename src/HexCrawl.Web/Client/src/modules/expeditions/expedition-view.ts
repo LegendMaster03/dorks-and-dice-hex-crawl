@@ -883,7 +883,7 @@ export async function renderExpedition(
                 const edge = adjacencyForIntent(adjacency, Number(course.value));
                 if (edge) selectTravelIntent(edge.intentValue);
             });
-            section.append(labelled("Course", course));
+            section.append(labelled("Travel direction", course));
         }
 
         const summary = textElement("p", travelIntentSummary(runtime, preferences, adjacency), "hc-muted");
@@ -1295,7 +1295,7 @@ export async function renderExpedition(
             }
 
             body.append(contextLine(
-                "Course",
+                "Travel direction",
                 `${edgeCourseLabel(intendedEdge)} → cell ${intendedEdge.targetCell.q}, ${intendedEdge.targetCell.r}`));
 
             const form = document.createElement("form");

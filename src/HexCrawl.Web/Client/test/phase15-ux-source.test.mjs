@@ -647,7 +647,7 @@ test("urgent travel pauses preserve valid reusable course and ask only for chang
         view.indexOf("const openTravelReviewWorkspace"),
         view.indexOf("const openNavigationWorkspace"));
     assert.match(review, /const intendedEdge = preferences\.direction === null/);
-    assert.match(review, /contextLine\(\s*"Course"/);
+    assert.match(review, /contextLine\(\s*"Travel direction"/);
     assert.match(review, /labelled\("Pace \/ travel mode", pace\)/);
     assert.match(review, /button\("Change travel direction"/);
     assert.match(review, /button\("Choose travel direction"/);
