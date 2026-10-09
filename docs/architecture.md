@@ -17,13 +17,15 @@ Named systems exist only as removable creation-time presets. Runtime behavior de
 
 ## Pre-release compatibility policy
 
-Hex Crawl is pre-release. Development-era API, persistence, UI, and internal model compatibility is not preserved unless a specific requirement is explicitly approved.
+Hex Crawl remains pre-release, but **human testing began after Phase 15**. The earlier disposable-development-data policy no longer governs ongoing releases.
 
-Before Phase 15 is accepted and internal human testing begins, obsolete representations should be removed instead of maintained beside the target architecture. Breaking development migrations and database resets remain acceptable; compatibility scaffolding should not be added merely to preserve throwaway development data.
+**Every Tile Crawl development phase must leave the deployed tester application usable**, including already supported hex/world/expedition, map, procedure, and nonspatial operations. Temporary compatibility adapters and disabled feature gates are appropriate when needed to ship a working increment; obsolete models should be retired after the safe cutover rather than kept permanently.
 
-After Phase 15 acceptance, tester data has a human cost. Hex Crawl still remains pre-release and resets remain possible, but a straightforward architecture-preserving migration should be preferred before breaking persisted tester data where practical. Tester data does not justify retaining obsolete parallel models or permanent compatibility infrastructure.
+**Preserving tester PostgreSQL data and independently stored map assets is the default.** Use versioned, verified migrations, pre-deployment backup/recovery planning, and existing-data regression tests. Neither deployment nor startup may automatically reset/drop/reinitialize a database. Unsupported schema versions must fail safely without modifying user data, with guidance for recovering or migrating them.
 
-Release-level migration and compatibility guarantees remain a separate future decision.
+A destructive reset is possible only as an **exceptional last resort** when targeted migration/data repair and backup/restore alternatives have been assessed. It requires explicit project-owner authorization *for that reset* and a clear explanation to affected testers. Phase approval or merge approval is not reset authorization.
+
+The active operational release gates and data policy are in `docs/tile-crawl-development-plan.md`.
 
 ## Project structure
 
@@ -131,7 +133,7 @@ The deterministic runtime receives only the context data actually required for t
 
 PostgreSQL remains behind `IHexCrawlStore`; application/domain code has no Npgsql dependency.
 
-The current pre-release schema is version 8. Earlier development schemas are intentionally rejected with a reset instruction rather than upgraded through retired compatibility paths.
+The current application PostgreSQL schema is version **9** (see `PostgresSchemaMigrator.CurrentVersion`). Version 8 is upgraded to 9 transactionally; other unsupported historical versions currently fail with a legacy reset-oriented diagnostic. **That existing diagnostic is not the target policy for post-Phase-15 tester data** and must be replaced by actionable, non-destructive recovery guidance during the transition. Do not reset tester databases to resolve unsupported schema versions.
 
 The `overworlds` table stores the complete `OverworldDefinition` in `world_json`, including static environment annotations.
 
