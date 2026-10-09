@@ -31,7 +31,7 @@ export function ensurePhase15Styles(): void {
         .hc-card-meta { display:flex; gap:.4rem; flex-wrap:wrap; }
         .hc-preset-browser { display:grid; gap:1rem; }
         .hc-preset-browser-header { display:flex; align-items:end; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
-        .hc-preset-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,18rem),1fr)); gap:.85rem; align-items:stretch; }
+        .hc-preset-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,22rem),26rem)); gap:.85rem; align-items:stretch; }
         .hc-preset-card { border:1px solid var(--hc-border); border-radius:.85rem; padding:1rem; display:grid; grid-template-rows:auto auto auto; align-content:start; gap:.75rem; background:var(--hc-surface); color:var(--hc-text); min-width:0; }
         .hc-preset-card h3 { margin:0; color:var(--hc-text-strong); }
         .hc-preset-card-head { min-height:0; }

@@ -450,6 +450,8 @@ if (stateName === "home") {
         context.dispatchEvent(new Event("change", { bubbles: true }));
     }
     root.dataset.guidedSetupCreateCalls = String(createCalls);
+    document.activeElement?.blur?.();
+    window.scrollTo(0, 0);
     emitSpecialMetrics("home");
     restoreFetch();
 } else if (stateName.startsWith("procedure-")) {
