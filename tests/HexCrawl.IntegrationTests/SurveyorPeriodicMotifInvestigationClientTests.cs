@@ -153,6 +153,46 @@ public sealed class SurveyorPeriodicMotifInvestigationClientTests
         Assert.NotNull(result.Candidate);
     }
 
+    [Fact]
+    public async Task DownsampledSourceUsesAnalysisPixelToleranceWithoutRelaxingTopology()
+    {
+        var observed = JsonNode.Parse(Candidate())!;
+        var candidate = observed["candidate"]!;
+        foreach (var vector in (JsonArray)candidate["translationBasisSourcePixels"]!)
+        {
+            vector!["x"] = vector["x"]!.GetValue<int>() * 10;
+            vector["y"] = vector["y"]!.GetValue<int>() * 10;
+        }
+        var polygon = (JsonArray)candidate["motifCells"]![0]!["polygonSourcePixels"]!;
+        foreach (var point in polygon)
+        {
+            point!["x"] = point["x"]!.GetValue<int>() * 10;
+            point["y"] = point["y"]!.GetValue<int>() * 10;
+        }
+        polygon[1]!["x"] = 695; // 5.5 pixels of contour disagreement at analysis resolution
+        observed["source"]!["width"] = 1280;
+        observed["source"]!["height"] = 1280;
+        observed["analysis"]!["scale"] = 0.1;
+        observed["analysis"]!["sourceResolutionVerified"] = false;
+        observed["evidence"]!["maximumRigidVertexResidualSourcePixels"] = 12.0;
+        var payload = observed.ToJsonString();
+        var client = Client(new DelegateHandler((request, _) =>
+            Task.FromResult(Json(request.Method == HttpMethod.Get ? Discovery() : payload))));
+        var result = await client.InvestigateAsync(new MemoryStream([1]), "image/png");
+        Assert.Equal("consistent-candidate", result.Status);
+        Assert.False(result.Analysis!.SourceResolutionVerified);
+        Assert.Equal(0.1, result.Analysis.Scale, 8);
+
+        // A much larger displaced corner remains invalid even when a scan
+        // was downscaled. Contour tolerance is not unlimited.
+        polygon[1]!["x"] = 900;
+        var corrupted = observed.ToJsonString();
+        var invalid = Client(new DelegateHandler((request, _) =>
+            Task.FromResult(Json(request.Method == HttpMethod.Get ? Discovery() : corrupted))));
+        await Assert.ThrowsAsync<MapAnalysisProtocolException>(() =>
+            invalid.InvestigateAsync(new MemoryStream([1]), "image/png"));
+    }
+
     [Theory]
     [InlineData("<20:2 7 6 10 12 13 15 17 20 19,3 5 9 12 10 13 16 18 19 20,4 6 8 11 12 14 15 17 19 20:3 3 4,5 5>")]
     [InlineData("<14:2 5 7 9 11 13 14,1 4 6 8 10 12 14 13,3 5 4 6 7 8 9 14 11 13:6 4,3 4 4 3>")]
