@@ -393,7 +393,7 @@ export async function renderProcedureAuthoringWorkspace(
         copy.append(
             textElement("h2", "Build my own"),
             textElement("p", "Start without hidden timing or movement assumptions. Add only the rules your table uses."));
-        const action = button("Build a custom procedure", "primary");
+        const action = button("Build a custom ruleset", "primary");
         action.addEventListener("click", () => void startCustom());
         build.append(copy, action);
         page.append(build);
@@ -541,7 +541,7 @@ export async function renderProcedureAuthoringWorkspace(
             root.replaceChildren(loadingPanel("Loading procedure…"));
             return;
         }
-        const page = pageShell(displayedName(), "Edit the rules the DM will actually run. Compact, Advanced, and JSON edit the same campaign procedure.");
+        const page = pageShell(displayedName(), "Edit the rules the DM will actually run. Compact, Advanced, and JSON all edit the same saved ruleset.");
         const toolbar = document.createElement("section");
         toolbar.className = "hc-panel hc-procedure-toolbar";
         const left = document.createElement("div");
@@ -780,7 +780,7 @@ export async function renderProcedureAuthoringWorkspace(
         details.open = draft.modules.length === 0;
         const summary = document.createElement("summary");
         summary.textContent = "Add exploration rules";
-        details.append(summary, textElement("p", "Browse by tabletop purpose. Dependencies are described here so you do not need to know the internal procedure graph."));
+        details.append(summary, textElement("p", "Browse by what you want the ruleset to handle. Required supporting rules are explained when you select an option."));
 
         const groups: Array<{ title: string; description: string; keys: string[] }> = [
             {
@@ -905,7 +905,7 @@ export async function renderProcedureAuthoringWorkspace(
         if (group === "Survival & resources") return "This rule adds resource, recovery, forced-travel, exposure, or persistent-effect consequences when its trigger occurs. Leave it out if your table does not track that concern.";
         if (group === "Journey & events") return "This rule handles journey stages or events as a process. It is useful for travel that is better represented as a sequence of challenges than as repeated hex movement.";
         if (group === "Automation") return "This rule can generate supported results for the procedure. Automation supplements the same authoritative procedure; it does not replace or bypass it.";
-        return "This rule is part of the saved campaign procedure. Add or change it only when your table needs that behavior.";
+        return "This rule is part of the saved ruleset. Add or change it only when your table needs that behavior.";
     };
 
     const compactFacts = (module: ProcedureModuleComposer): HTMLElement => {
