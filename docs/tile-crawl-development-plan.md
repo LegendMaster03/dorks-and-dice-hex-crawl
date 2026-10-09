@@ -26,6 +26,7 @@ This is **one coordinated project with separately validated and merged phases**,
 8. **Incompatible data is never silently rewritten.** Existing world/expedition geometry, procedure revisions, anchored content, and tester data require explicit consistency checks and an intentional migration. No auto-reset and no silent conversion from an established hex world into a different tiling.
 9. **No invented certainty.** A syntactically valid D-symbol, an internally consistent chamber system, Euclidean realizability, a supplied metric realization, and a tiling actually found in an image are different claims. APIs, validators, and UI must distinguish them.
 10. **Shared contract, independent services.** The two repositories must pass the same D-symbol and geometry conformance fixtures, but Tile Crawl may not call Surveyor simply to compare a detected pattern with the selected ruleset.
+11. **The tiling code is not ordinary user-facing language.** Normal users interact with named tilings and understandable shape descriptions, not D-symbols. **Raw Delaney–Dress notation may be exposed only in the explicit JSON editor, or in an error that identifies a *supported* tiling for which Tile Crawl cannot resolve a reliable human-readable name.** No ordinary selector, Guided/Compact/Advanced authoring screen, map-alignment prompt, navigation display, help card, success notification, or named-pattern contradiction message may require users to read, type, paste, or understand the notation. Developer logs and machine-readable API/persistence formats remain unaffected by this presentation restriction.
 
 ## Scope and definitions
 
@@ -42,8 +43,9 @@ Tile Crawl should maintain an **optional, editable/versionable data catalog** fo
 - **Lookup:** use a canonical D-symbol under the documented symmetry convention as the initial lookup key; where a familiar name requires additional geometric evidence (for example, square versus general quadrilateral, or rhombus versus general parallelogram), attach and validate explicit geometric qualifiers before using that name. Do not assume an arbitrary abstract D-symbol uniquely fixes metric shape or everyday nomenclature.
 - **Entry:** preferred everyday name, optional established mathematical name, aliases/search terms, concise explanation, possible localization identifier, source/provenance, and optional geometric qualifiers. Do not store terrain, encounters, map annotations, or gameplay settings in this catalog.
 - **Many-to-one and one-to-many:** multiple aliases may name the same structure, and a visually familiar family may have variant symbol representations depending on symmetry convention. Treat ambiguous matches explicitly; never use display-name equality to establish ruleset compatibility.
-- **Fallback:** if no catalog entry applies, derive accurate plain-language descriptions from the observed/realized cell geometry and topology (side counts, repeated shape mixes, and actual angles/lengths where known), such as "a repeating pattern of triangles and four-sided cells." A four-sided polygon is not necessarily a square. Never display a raw D-symbol as the default explanation.
-- **Responsibility:** catalog names are for readable explanations, search, ruleset browsing, and mismatch dialogs only. The canonical D-symbol and authoritative topology determine structure and compatibility. An unlisted tiling remains fully usable.
+- **Fallback:** if no catalog entry applies, derive accurate plain-language descriptions from the observed/realized cell geometry and topology (side counts, repeated shape mixes, and actual angles/lengths where known), such as "a repeating pattern of triangles and four-sided cells." A four-sided polygon is not necessarily a square. Use that description in all ordinary, successful, or routine mismatch interfaces; lack of a catalog name does not make a valid tiling unsupported.
+- **Only permitted user-facing notation surfaces:** the explicitly selected JSON editor, which represents raw authoritative procedure data, and a genuine *error* describing a tiling that the system supports but cannot resolve to a reliable human-readable name. In that narrowly scoped error, explain in plain English first; a labeled D-symbol may appear as a secondary identifier for reporting/identifying the otherwise unnamed pattern. Do not use the exception for regular unnamed-pattern confirmations, selections, comparisons, authoring, or successful analysis results. Unrecognized/invalid/unsupported patterns do not get raw code merely to fill a missing message.
+- **Responsibility:** catalog names are for readable explanations, search, ruleset browsing, and mismatch dialogs only. The canonical D-symbol and authoritative topology determine structure and compatibility. An unlisted tiling remains fully usable. The UI must not require code entry as a workaround for missing names outside the JSON editor.
 - **Validation:** allow new catalog data entries without changing algorithms; verify aliases, ambiguous identities, geometric qualifiers, and localization-safe fallback wording. A missing or invalid catalog entry must never corrupt a world or prevent traversal.
 
 ### Target system flow
@@ -76,7 +78,7 @@ Tile Crawl should maintain an **optional, editable/versionable data catalog** fo
   - source pixel provenance, confidence/residuals, ambiguity and unsupported reasons.
 - Specify how a geometric realization is validated against a D-symbol, including closure, legal shared boundaries, nonoverlap, connectivity, deterministic address enumeration, orientation, and traversal reciprocity. Store metric data separately from tiling identity.
 - Design a local Tile Crawl equality/canonicalization verifier, so the ruleset comparison does not require Surveyor. Share test vectors across C# and TypeScript, not runtime authority.
-- Define the **non-authoritative tiling nomenclature catalog schema** and its geometry-qualified lookup/fallback contract. No naming lookup may restrict which structurally valid tilings can be created, detected, or traversed.
+- Define the **non-authoritative tiling nomenclature catalog schema** and its geometry-qualified lookup/fallback contract, including a testable two-exception policy for displaying raw D-symbols. No naming lookup may restrict which structurally valid tilings can be created, detected, or traversed.
 - Resolve what is *not* determined by a D-symbol (for example, free geometric parameters). Define explicit user-supplied/derived realization requirements rather than hard-coded realizations for named patterns.
 - Audit all existing HexCoordinate, HexGridDefinition, HexGeometry, HexTraversalState, HexId, map-feature, renderer, and world/expedition persistence consumers. Record a field-by-field migration matrix before implementing Phase 17.
 - Define status semantics and API compatibility/version rollout across both repositories. Remove expectedDsSymbol from Surveyor only in the coordinated API rollout; do not break the deployed consumer between merges.
@@ -145,14 +147,14 @@ Tile Crawl should maintain an **optional, editable/versionable data catalog** fo
 - Reuse the existing topology-neutral spatial-adjacency component and make the current-cell navigator consume returned cell interfaces, including cells with different side counts.
 - Keep map image alignment as a transform separate from world topology. Support independently measured pixel scale, rotation and motif phase; retain Wonderdraft physical-scale checks when applicable without treating them as a general tiling definition.
 - Adapt source-map feature intersection, coverage bounds, semantic overlays, player/DM knowledge and discovery behavior to general cells. Never infer terrain, labels or activated structures from D-symbols.
-- Present boundary labels in human terms and provide keyboard/accessible alternatives to map-click selection. On smaller viewports, show only relevant operations; retain improved Phase 15.1.1 layout, progressive disclosure and procedural guidance.
+- Present tiling names, cell shapes, and boundary labels in ordinary language; no raw D-symbol or code-entry control in normal map interaction or Guided/Compact/Advanced editors. Provide keyboard/accessible alternatives to map-click selection. On smaller viewports, show only relevant operations; retain improved Phase 15.1.1 layout, progressive disclosure and procedural guidance.
 - Update UI/domain variable names only when the generalized behavior is proven; avoid broad cosmetic renaming that obscures architecture defects.
 
 ### Acceptance gate
 
 - The same UI and renderer can handle hexagonal, quadrilateral, triangular, rhombille and mixed-cell fixtures without tiling-specific UI components.
 - Polygon hit testing, boundary previews, zoom/pan, transformed source imagery and selected-cell actions agree; no map shift/drift from repeated local fitting.
-- Mobile/tablet/desktop, embedded, light/dark, keyboard and pointer review covers no map, unrecognized map, geometry mismatch, current cell, travel, encounter and nonspatial states.
+- Mobile/tablet/desktop, embedded, light/dark, keyboard and pointer review covers no map, unrecognized map, geometry mismatch, current cell, travel, encounter and nonspatial states. Normal selectors, map dialogs, navigation, error recovery, and Advanced screens contain no raw D-symbols; the JSON editor is tested as the explicit code-editing exception.
 - Existing hex and Wonderdraft alignment tests remain green.
 
 ## Phase 20 — Surveyor general periodic-motif discovery
@@ -189,7 +191,7 @@ Tile Crawl should maintain an **optional, editable/versionable data catalog** fo
 ### Implementation
 
 - Retrieve the expected canonical D-symbol from the **selected materialized ruleset/procedure**, and the observed canonical D-symbol from Surveyor. Perform all equality and compatibility checks inside Tile Crawl. Do not require Surveyor to know which ruleset is being used.
-- Resolve human-readable names through Tile Crawl's **optional data-driven tiling nomenclature catalog** where the canonical identity and any required geometric qualifiers match. Otherwise derive descriptions from actual topology and measured geometry. Use "hexagons", "squares", "triangles", a familiar named tiling, or "a repeating mix of shapes" only when justified by evidence; a four-sided cell is not necessarily a square. No names or aliases participate in authoritative identity comparison.
+- Resolve human-readable names through Tile Crawl's **optional data-driven tiling nomenclature catalog** where the canonical identity and any required geometric qualifiers match. Otherwise derive descriptions from actual topology and measured geometry. Use "hexagons", "squares", "triangles", a familiar named tiling, or "a repeating mix of shapes" only when justified by evidence; a four-sided cell is not necessarily a square. No names or aliases participate in authoritative identity comparison. The absence of a familiar name must not send the user to the JSON editor or force them to handle a D-symbol.
 - Add an authoritative server-side conflict assessment that distinguishes:
   - a fresh unused default topology (safe to replace);
   - existing expeditions and pinned procedure snapshots using old cell identities;
@@ -198,7 +200,7 @@ Tile Crawl should maintain an **optional, editable/versionable data catalog** fo
   - unrelated nonspatial content that creates no contradiction.
 - For a validated mismatch with **no blockers**, show a direct button such as **Use square cells for this world**. The command must create the correct campaign-owned procedure revision (never mutate preset templates or historical pinned snapshots), update world topology/registration where legitimate, and persist the change transactionally with expected versions. Preserve provenance and user ownership.
 - If the world/ruleset edit cannot be completed atomically across required aggregates, provide an application-level transaction/recovery strategy *before* exposing the button. A failed or stale action must leave all authoritative state consistent.
-- When contradictions exist, use plain English to say what shape the imported map has, what shape the existing world expects, and *which existing objects* prevent conversion. No raw D-symbols in default copy; expose technical details only on demand.
+- When contradictions exist, use plain English to say what shape the imported map has, what shape the existing world expects, and *which existing objects* prevent conversion. **Never expose raw D-symbols in a named-pattern contradiction or ordinary technical-details expansion.** Only an actual error involving a **supported but unnamed** pattern may include a labeled D-symbol identifier beneath a plain-English explanation; this error must not ask the user to manually configure the notation.
 - Offer appropriate alternatives, such as keeping the current configuration and using another map, adjusting an unsaved draft, or starting a separate world. Never offer a one-click conversion if runtime/geometry realization is not actually implemented.
 - Distinguish low-confidence, unsupported, gridless and technically failed analyses. They should offer manual placement/retry where safe, not a false ruleset switch.
 
@@ -207,7 +209,7 @@ Tile Crawl should maintain an **optional, editable/versionable data catalog** fo
 - Matching image/ruleset: proceed normally. Mismatch on unused default: show one-click option and persist correct new revision/world geometry without requiring settings navigation.
 - Mismatch on established expedition: block with an explanation citing the expedition and preserved position. Map already accepted with incompatible registration: block or require an explicit safe migration.
 - Nonspatial procedure does not become an artificial blocker. Stale world/procedure versions produce a safe conflict and reload; no half-updated rule/world state.
-- All UI messages use ordinary shape vocabulary or a well-supported catalog name; default messages contain no D-symbol/implementation jargon. Catalog misses and geometrically ambiguous names fall back to derived descriptions, and adding a catalog name changes no detection or traversal behavior. Accessibility and narrow-screen interaction are reviewed.
+- All UI messages use ordinary shape vocabulary or a well-supported catalog name. Catalog misses and geometrically ambiguous names fall back to derived descriptions, and adding a catalog name changes no detection or traversal behavior. **Assert that the only UI surfaces containing raw D-symbols are the explicitly selected JSON editor and an error for a supported but unnamed pattern**; all other flows use ordinary descriptions, including Advanced editing, empty states, map mismatches, and routine successful detection. The special unnamed-pattern error explains the problem first and provides code only as a secondary labeled identifier. Accessibility and narrow-screen interaction are reviewed.
 - The same reconciliation path handles a held-out unfamiliar polygon mix with no pattern-specific conditional branches.
 
 ## Phase 22 — Tile Crawl cutover, cleanup, and stabilization
@@ -224,7 +226,7 @@ Tile Crawl should maintain an **optional, editable/versionable data catalog** fo
 - Reaudit Surveyor API discovery and downstream consumers, the world/ruleset/source-map authority boundaries, and the absence of a hard-coded **pattern-implementation** catalog. Retain the separate, optional data-driven tiling-name catalog as presentation only.
 - Reconcile all authoritative documentation and eliminate stale instructions suggesting a required expectedDsSymbol hint, a fixed six-neighbor runtime, or a three-entry catalog. Preserve completed Phase 15 design and architecture documents as history.
 - Run full CI and manual visual/workflow review at exact commit heads for each repository. Test deployments together and perform live signed-in user flows against the deployed services before calling the project complete.
-- Preserve the Phase 15/15.1.1 emphasis on understandable language, directly actionable error repair, progressive disclosure, and accessible focused workflows. Tiling generalization is not a reason to overwhelm the UI with advanced geometry controls.
+- Preserve the Phase 15/15.1.1 emphasis on understandable language, directly actionable error repair, progressive disclosure, and accessible focused workflows. Tiling generalization is not a reason to overwhelm the UI with advanced geometry controls. Audit all visible copy/controls so code appears only in the JSON editor or the specifically allowed supported-but-unnamed tiling error.
 
 ### Final acceptance gate — definition of Tile Crawl complete
 
@@ -249,7 +251,7 @@ The following are **test categories**, not supported-pattern registrations:
 | Data | pre-migration hex worlds, persisted expedition positions, pinned procedure revisions, feature overlays, asset registrations, concurrency conflicts |
 | Sessions | world-bound, mapless abstract, no-interval journey, nonspatial rulesets |
 | Reconciliation | matched patterns, fresh default mismatch, established-world contradiction, unsupported detection, low confidence, stale save, canceled action |
-| Tiling terminology | known names and aliases; geometry-qualified names; alternate symmetry conventions; unknown mixed motifs; accurate plain-English fallback |
+| Tiling terminology | known names and aliases; geometry-qualified names; alternate symmetry conventions; unknown mixed motifs; accurate plain-English fallback; raw D-symbol visible **only** in JSON editor or supported-but-unnamed error |
 | UI | desktop/mobile/embedded, pointer/keyboard, light/dark, source image alignment, selection, error recovery, Guided/Compact/Advanced/JSON |
 
 For any applicable visual and numerical acceptance check, specify expected geometry, coordinate space, error tolerance, and source-of-truth ownership in the phase test rather than merely asserting that the UI rendered.
