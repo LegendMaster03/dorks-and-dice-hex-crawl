@@ -138,10 +138,12 @@ public sealed class SurveyorPeriodicMotifInvestigationClient(
     }
 
     private static bool IsString(JsonElement item, string key, string expected) =>
-        item.TryGetProperty(key, out var value)
+        item.ValueKind == JsonValueKind.Object
+        && item.TryGetProperty(key, out var value)
         && value.ValueKind == JsonValueKind.String && value.GetString() == expected;
     private static bool IsFalse(JsonElement item, string key) =>
-        item.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.False;
+        item.ValueKind == JsonValueKind.Object
+        && item.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.False;
 
     private static JsonElement Object(JsonElement parent, string key)
     {
