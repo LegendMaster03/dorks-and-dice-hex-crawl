@@ -9,7 +9,7 @@ import {
     type SpatialAdjacencyInterface
 } from "./spatial-adjacency.js";
 
-export const CURRENT_HEX_GJH_NOTATION = "6/m30/r(h1)";
+export const CURRENT_HEX_DS_SYMBOL = "<1:1,1,1:6,3>";
 
 const axialSteps = [
     { q: 1, r: 0 },
@@ -34,7 +34,7 @@ const directionBoundaryCorners = [
 
 export type CurrentRuntimeCellTopologyInput = {
     currentCell: HexCoordinate;
-    tilingGjhNotation: string;
+    tilingDsSymbol: string;
     selectedDirection: number | null;
     worldGrid: GridDefinition | null;
     abstractOrientation: HexOrientation | null;
@@ -42,9 +42,9 @@ export type CurrentRuntimeCellTopologyInput = {
 
 export function currentRuntimeCellAdjacency(
     input: CurrentRuntimeCellTopologyInput): CurrentCellAdjacency<HexCoordinate, number> {
-    if (input.tilingGjhNotation !== CURRENT_HEX_GJH_NOTATION) {
+    if (input.tilingDsSymbol !== CURRENT_HEX_DS_SYMBOL) {
         throw new Error(
-            `The current runtime adapter does not yet support tiling '${input.tilingGjhNotation}'.`);
+            `The current runtime adapter does not yet support tiling '${input.tilingDsSymbol}'.`);
     }
 
     const boundary = input.worldGrid

@@ -131,3 +131,5 @@ CI runs application persistence tests, HTTP integration tests, and container res
 The mapped smoke persists structured state and a filesystem map asset, restarts PostgreSQL and the application, and verifies both survive. A separate mapless smoke persists and reloads a `NonSpatial` crawl session, including the mapless state boundaries used by role-driven journey/process execution.
 
 The retired SQLite-to-PostgreSQL production cutover utility and its migration-only tests are intentionally not part of the ongoing repository surface after Phase 0 completion.
+
+Schema version 9 migrates previously saved procedure and expedition JSON from procedure schema 1/1.1 to 1.2 and removes the obsolete tiling notation field atomically.

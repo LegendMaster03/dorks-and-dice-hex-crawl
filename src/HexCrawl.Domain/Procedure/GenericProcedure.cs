@@ -323,13 +323,15 @@ public sealed record ProcedureDependencyReport(IReadOnlyList<ProcedureDependency
 public static class CampaignProcedureSchema
 {
     public const string LegacyVersion = "1";
-    public const string CurrentVersion = "1.1";
-    public const string CurrentHexTilingGjhNotation = "6/m30/r(h1)";
+    public const string PreviousVersion = "1.1";
+    public const string CurrentVersion = "1.2";
+    public const string CurrentHexTilingDsSymbol = "<1:1,1,1:6,3>";
 
     public static CampaignProcedure Upgrade(CampaignProcedure procedure)
     {
         ArgumentNullException.ThrowIfNull(procedure);
-        if (!string.Equals(procedure.SchemaVersion, LegacyVersion, StringComparison.Ordinal))
+        if (!string.Equals(procedure.SchemaVersion, LegacyVersion, StringComparison.Ordinal)
+            && !string.Equals(procedure.SchemaVersion, PreviousVersion, StringComparison.Ordinal))
         {
             return procedure;
         }
@@ -337,9 +339,7 @@ public static class CampaignProcedureSchema
         return procedure with
         {
             SchemaVersion = CurrentVersion,
-            TilingGjhNotation = string.IsNullOrWhiteSpace(procedure.TilingGjhNotation)
-                ? CurrentHexTilingGjhNotation
-                : procedure.TilingGjhNotation
+            TilingDsSymbol = CurrentHexTilingDsSymbol
         };
     }
 }
@@ -351,7 +351,7 @@ public sealed record CampaignProcedure
     public required string Key { get; init; }
     public required string Name { get; init; }
     public string SchemaVersion { get; init; } = CampaignProcedureSchema.CurrentVersion;
-    public string TilingGjhNotation { get; init; } = CampaignProcedureSchema.CurrentHexTilingGjhNotation;
+    public string TilingDsSymbol { get; init; } = CampaignProcedureSchema.CurrentHexTilingDsSymbol;
     public required IReadOnlyList<MaterializedProcedureModule> Modules { get; init; }
     public IReadOnlyList<CampaignProcedureOverride> Overrides { get; init; } = [];
 
@@ -362,7 +362,7 @@ public sealed record CampaignProcedure
         && string.Equals(Key, other.Key, StringComparison.Ordinal)
         && string.Equals(Name, other.Name, StringComparison.Ordinal)
         && string.Equals(SchemaVersion, other.SchemaVersion, StringComparison.Ordinal)
-        && string.Equals(TilingGjhNotation, other.TilingGjhNotation, StringComparison.Ordinal)
+        && string.Equals(TilingDsSymbol, other.TilingDsSymbol, StringComparison.Ordinal)
         && ProcedureStructuralEquality.SequenceEquals(Modules, other.Modules)
         && ProcedureStructuralEquality.OverrideSequenceEquals(Overrides, other.Overrides);
 
@@ -374,7 +374,7 @@ public sealed record CampaignProcedure
         hash.Add(Key, StringComparer.Ordinal);
         hash.Add(Name, StringComparer.Ordinal);
         hash.Add(SchemaVersion, StringComparer.Ordinal);
-        hash.Add(TilingGjhNotation, StringComparer.Ordinal);
+        hash.Add(TilingDsSymbol, StringComparer.Ordinal);
         hash.Add(ProcedureStructuralEquality.SequenceHash(Modules));
         hash.Add(ProcedureStructuralEquality.OverrideSequenceHash(Overrides));
         return hash.ToHashCode();
@@ -397,15 +397,15 @@ public sealed record CampaignProcedure
             throw new InvalidOperationException(
                 $"Campaign procedure schema version '{SchemaVersion}' is not supported. Expected {CampaignProcedureSchema.CurrentVersion}.");
         }
-        MechanicDefinition.Require(TilingGjhNotation, "Campaign procedure GomJau-Hogg tiling notation");
+        MechanicDefinition.Require(TilingDsSymbol, "Campaign procedure Delaney-Dress tiling notation");
         if (!string.Equals(
-                TilingGjhNotation,
-                CampaignProcedureSchema.CurrentHexTilingGjhNotation,
+                TilingDsSymbol,
+                CampaignProcedureSchema.CurrentHexTilingDsSymbol,
                 StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
-                $"Campaign procedure tiling '{TilingGjhNotation}' is not supported by schema {CampaignProcedureSchema.CurrentVersion}. "
-                + $"The current schema supports only '{CampaignProcedureSchema.CurrentHexTilingGjhNotation}'.");
+                $"Campaign procedure tiling '{TilingDsSymbol}' is not supported by schema {CampaignProcedureSchema.CurrentVersion}. "
+                + $"The current schema supports only '{CampaignProcedureSchema.CurrentHexTilingDsSymbol}'.");
         }
         if (Modules.Count == 0)
         {

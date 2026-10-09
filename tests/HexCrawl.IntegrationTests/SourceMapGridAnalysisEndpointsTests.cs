@@ -36,7 +36,7 @@ public sealed class SourceMapGridAnalysisEndpointsTests
                 content: null);
             response.EnsureSuccessStatusCode();
             var analyzed = await response.Content.ReadFromJsonAsync<JsonElement>();
-            Assert.Equal("v1", analyzed.GetProperty("apiVersion").GetString());
+            Assert.Equal("v2", analyzed.GetProperty("apiVersion").GetString());
             Assert.Equal("map.periodic-tiling.detect", analyzed.GetProperty("capability").GetString());
             Assert.Equal("detected", analyzed.GetProperty("status").GetString());
             Assert.Equal(80, analyzed.GetProperty("fit").GetProperty("centerSpacingPixels").GetDouble(), 8);
@@ -192,7 +192,7 @@ public sealed class SourceMapGridAnalysisEndpointsTests
         }));
 
     private static MapHexGridAnalysis Detected(int width, int height) => new(
-        "v1",
+        "v2",
         "map.periodic-tiling.detect",
         "detected",
         "fixture",

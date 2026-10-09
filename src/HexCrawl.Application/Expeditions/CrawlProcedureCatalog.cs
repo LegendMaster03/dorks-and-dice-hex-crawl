@@ -330,7 +330,7 @@ public static class CrawlProcedureCatalog
             1,
             new GenericProcedurePresetRecipe(procedureKey, procedureName, modules.ToArray())
             {
-                TilingGjhNotation = CampaignProcedureSchema.CurrentHexTilingGjhNotation
+                TilingDsSymbol = CampaignProcedureSchema.CurrentHexTilingDsSymbol
             },
             attribution,
             disclaimer,

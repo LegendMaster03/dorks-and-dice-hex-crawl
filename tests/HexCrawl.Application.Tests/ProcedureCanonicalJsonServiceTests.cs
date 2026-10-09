@@ -123,23 +123,33 @@ public sealed class ProcedureCanonicalJsonServiceTests
 
         var implicitLegacy = JsonNode.Parse(canonical.Serialize(current))!.AsObject();
         implicitLegacy.Remove("schemaVersion");
-        implicitLegacy.Remove("tilingGjhNotation");
+        implicitLegacy.Remove("tilingDsSymbol");
         var implicitResult = canonical.Validate(implicitLegacy.ToJsonString());
 
         Assert.True(implicitResult.IsValid, implicitResult.Error);
         Assert.Equal(CampaignProcedureSchema.CurrentVersion, implicitResult.Procedure!.SchemaVersion);
-        Assert.Equal(CampaignProcedureSchema.CurrentHexTilingGjhNotation, implicitResult.Procedure.TilingGjhNotation);
+        Assert.Equal(CampaignProcedureSchema.CurrentHexTilingDsSymbol, implicitResult.Procedure.TilingDsSymbol);
 
         var explicitLegacy = JsonNode.Parse(canonical.Serialize(current))!.AsObject();
         explicitLegacy["schemaVersion"] = CampaignProcedureSchema.LegacyVersion;
-        explicitLegacy.Remove("tilingGjhNotation");
+        explicitLegacy.Remove("tilingDsSymbol");
         var explicitResult = canonical.Validate(explicitLegacy.ToJsonString());
 
         Assert.True(explicitResult.IsValid, explicitResult.Error);
         Assert.Equal(CampaignProcedureSchema.CurrentVersion, explicitResult.Procedure!.SchemaVersion);
-        Assert.Equal(CampaignProcedureSchema.CurrentHexTilingGjhNotation, explicitResult.Procedure.TilingGjhNotation);
+        Assert.Equal(CampaignProcedureSchema.CurrentHexTilingDsSymbol, explicitResult.Procedure.TilingDsSymbol);
 
-        var unsupported = current with { TilingGjhNotation = "4/m45/r(h1)" };
+        var previousVersion = JsonNode.Parse(canonical.Serialize(current))!.AsObject();
+        previousVersion["schemaVersion"] = CampaignProcedureSchema.PreviousVersion;
+        previousVersion.Remove("tilingDsSymbol");
+        previousVersion["tilingGjhNotation"] = "6/m30/r(h1)";
+        var previousResult = canonical.Validate(previousVersion.ToJsonString());
+        Assert.True(previousResult.IsValid, previousResult.Error);
+        Assert.Equal("1.2", previousResult.Procedure!.SchemaVersion);
+        Assert.Equal(CampaignProcedureSchema.CurrentHexTilingDsSymbol, previousResult.Procedure.TilingDsSymbol);
+        Assert.DoesNotContain("tilingGjhNotation", canonical.Serialize(previousResult.Procedure));
+
+        var unsupported = current with { TilingDsSymbol = "<1:1,1,1:4,4>" };
         var unsupportedResult = canonical.Validate(canonical.Serialize(unsupported));
         Assert.False(unsupportedResult.IsValid);
         Assert.Contains("not supported", unsupportedResult.Error, StringComparison.OrdinalIgnoreCase);

@@ -11,8 +11,8 @@ Hex Crawl browser
     -> user clicks Detect / repair hex grid
     -> Hex Crawl ownership-scoped source-map API
     -> Hex Crawl server opens the authoritative map image
-    -> Surveyor POST /v1/periodic-tiling/detect
-       crNotation=6^3
+    -> Surveyor POST /v2/periodic-tiling/detect
+       expectedDsSymbol=<1:1,1,1:6,3>
     -> Hex Crawl validates/interprets the observation
     -> browser builds a transient Hex Crawl-owned alignment proposal
     -> when Surveyor returned a usable fit, the same user action PUTs grid-alignment
@@ -20,7 +20,16 @@ Hex Crawl browser
 
 There is no second user-facing Preview / Apply / Confirm sequence. The analysis request remains non-mutating, and the `grid-alignment` request remains the explicit persistence boundary in the architecture. The browser simply performs both parts behind the single Detect / repair action.
 
-Surveyor's API is capability-based rather than hex-specific. Known-tiling detection is one operation; future tiling recognition and unrelated computer-vision operations belong on separate endpoints. Hex Crawl requests `6^3` directly by Cundy-Rollett notation. Surveyor derives the periodic-tiling classification from that notation and returns the normalized Cundy-Rollett (`crNotation`), GomJau-Hogg (`gjhNotation`), and `periodicTilingType` identities. Hex Crawl validates all three response fields before accepting the observation. A separate request-side tiling type, shape name, or side-count shorthand is not part of the public service contract.
+Surveyor's v2 API is capability-based rather than hex-specific.
+Hex Crawl currently passes the optional expectedDsSymbol hint for the
+hexagonal grid (`<1:1,1,1:6,3>`) to prioritize detection. Surveyor
+independently evaluates the image and returns the observed canonical
+Delaney-Dress symbol in `tiling.dsSymbol` when an identification is
+supported; inconclusive and gridless responses have `tiling: null`.
+The expected hint never dictates the observed identity. Hex Crawl retains
+authority over its world grid and will not apply a detected tiling that
+its current hexagonal geometry and movement implementation cannot support.
+
 
 The browser never calls Surveyor directly and does not receive the Surveyor service credential. Surveyor does not fetch URLs or resolve Hex Crawl asset keys. Hex Crawl loads the image through `IMapAssetStore` after normal world/source-map authorization and streams the encoded bytes to Surveyor.
 
@@ -72,4 +81,4 @@ Retrying analysis is safe because the observation request has no persistence sid
 
 ## Scope
 
-Phase 13 extracts generic image/grid computation only. It does not add terrain, road, river, icon, or semantic feature recognition; OCR; arbitrary URL fetching; AI/ML inference; battle-map ownership; automatic tiling recognition; or automatic neighboring-map alignment. Those concerns require separate capability and authority decisions rather than being inferred from periodic-grid analysis.
+Phase 13 extracts generic image/grid computation only. It does not add terrain, road, river, icon, or semantic feature recognition; OCR; arbitrary URL fetching; AI/ML inference; battle-map ownership; arbitrary-tiling recognition beyond the current three Regular families; or automatic neighboring-map alignment. Those concerns require separate capability and authority decisions rather than being inferred from periodic-grid analysis.

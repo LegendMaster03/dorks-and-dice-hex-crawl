@@ -32,7 +32,8 @@ public sealed record MapHexGridAnalysis(
     string Reason,
     MapAnalysisSource Source,
     MapAnalysisRaster Analysis,
-    MapHexGridFit? Fit);
+    MapHexGridFit? Fit,
+    string? TilingDsSymbol = null);
 
 public interface IMapAnalysisService
 {

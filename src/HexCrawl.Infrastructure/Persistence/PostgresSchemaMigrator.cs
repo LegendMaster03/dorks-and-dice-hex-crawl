@@ -5,7 +5,7 @@ namespace HexCrawl.Infrastructure.Persistence;
 
 public sealed class PostgresSchemaMigrator(string connectionString)
 {
-    public const int CurrentVersion = 8;
+    public const int CurrentVersion = 9;
     private const long MigrationLockKey = 0x484558435241574C;
 
     public async Task MigrateAsync(CancellationToken cancellationToken = default)
@@ -41,6 +41,10 @@ public sealed class PostgresSchemaMigrator(string connectionString)
                 await ApplyCurrentSchemaAsync(connection, transaction, cancellationToken);
                 current = CurrentVersion;
             }
+            else if (current == 8)
+            {
+                await UpgradeProcedureTilingIdentityAsync(connection, transaction, cancellationToken);
+            }
             else if (current != CurrentVersion)
             {
                 throw new InvalidOperationException(
@@ -65,6 +69,60 @@ public sealed class PostgresSchemaMigrator(string connectionString)
         command.Transaction = transaction;
         command.CommandText = "SELECT COALESCE(MAX(version), 0) FROM hex_crawl_schema_migrations;";
         return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken));
+    }
+
+    /// <summary>
+    /// Rewrites previously validated v1 / v1.1 hex-procedure snapshots once, including
+    /// historical revisions and active expeditions, without modifying revision numbers.
+    /// The old serialized property is removed, not retained as a parallel notation.
+    /// </summary>
+    private static async Task UpgradeProcedureTilingIdentityAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            DO $$
+            BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM campaign_procedure_revisions
+                    WHERE procedure_json ? 'tilingGjhNotation'
+                      AND procedure_json->>'tilingGjhNotation' <> '6/m30/r(h1)'
+                ) OR EXISTS (
+                    SELECT 1 FROM expeditions
+                    WHERE procedure_json ? 'tilingGjhNotation'
+                      AND procedure_json->>'tilingGjhNotation' <> '6/m30/r(h1)'
+                ) THEN
+                    RAISE EXCEPTION 'Unexpected legacy procedure tiling; migration cannot silently change topology';
+                END IF;
+            END $$;
+
+            UPDATE campaign_procedure_revisions
+            SET procedure_json = jsonb_set(
+                jsonb_set(
+                    procedure_json - 'tilingGjhNotation',
+                    '{schemaVersion}', to_jsonb('1.2'::text), true),
+                '{tilingDsSymbol}', to_jsonb('<1:1,1,1:6,3>'::text), true)
+            WHERE COALESCE(procedure_json->>'schemaVersion', '1') IN ('1', '1.1')
+               OR procedure_json ? 'tilingGjhNotation';
+
+            UPDATE expeditions
+            SET procedure_json = jsonb_set(
+                jsonb_set(
+                    procedure_json - 'tilingGjhNotation',
+                    '{schemaVersion}', to_jsonb('1.2'::text), true),
+                '{tilingDsSymbol}', to_jsonb('<1:1,1,1:6,3>'::text), true)
+            WHERE COALESCE(procedure_json->>'schemaVersion', '1') IN ('1', '1.1')
+               OR procedure_json ? 'tilingGjhNotation';
+
+            INSERT INTO hex_crawl_schema_migrations(version, applied_at)
+            VALUES (@version, @appliedAt);
+            """;
+        command.Parameters.AddWithValue("version", NpgsqlDbType.Bigint, CurrentVersion);
+        command.Parameters.AddWithValue("appliedAt", NpgsqlDbType.TimestampTz, DateTime.UtcNow);
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private static async Task ApplyCurrentSchemaAsync(

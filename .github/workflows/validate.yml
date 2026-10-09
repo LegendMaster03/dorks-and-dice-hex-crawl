@@ -63,7 +63,7 @@ jobs:
             -e POSTGRES_DB=postgres \
             -e POSTGRES_USER=hex_crawl_test \
             -e POSTGRES_PASSWORD=hex_crawl_test \
-            postgres:18 >/dev/null
+            postgres:18 -c max_connections=300 >/dev/null
 
           sleep 10
           consecutive=0

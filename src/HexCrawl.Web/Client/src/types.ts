@@ -189,7 +189,7 @@ export type CampaignProcedure = {
     key: string;
     name: string;
     schemaVersion: string;
-    tilingGjhNotation: string;
+    tilingDsSymbol: string;
     isExecutable: boolean;
     runtime: ProcedureRuntime | null;
     focusedIntervalPolicy: FocusedIntervalPolicy;

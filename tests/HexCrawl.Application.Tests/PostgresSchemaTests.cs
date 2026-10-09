@@ -60,7 +60,68 @@ public sealed class PostgresSchemaTests
         await using var versionCommand = connection.CreateCommand();
         versionCommand.CommandText = "SELECT MAX(version) FROM hex_crawl_schema_migrations;";
         Assert.Equal(PostgresSchemaMigrator.CurrentVersion, Convert.ToInt32(await versionCommand.ExecuteScalarAsync()));
-        Assert.Equal(8, PostgresSchemaMigrator.CurrentVersion);
+        Assert.Equal(9, PostgresSchemaMigrator.CurrentVersion);
+    }
+
+    [Fact]
+    public async Task VersionEightUpgradeRewritesStoredProceduresWithoutKeepingLegacyNotation()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var store = new PostgresHexCrawlStore(database.ConnectionString);
+        await store.InitializeAsync();
+        await using var connection = new NpgsqlConnection(database.ConnectionString);
+        await connection.OpenAsync();
+        await using (var seed = connection.CreateCommand())
+        {
+            seed.CommandText = """
+                UPDATE hex_crawl_schema_migrations SET version = 8 WHERE version = 9;
+                INSERT INTO campaign_procedure_revisions(
+                    procedure_id, revision, owner_user_id, procedure_json, created_at)
+                VALUES (
+                    @procedureId, 1, 'migration-test',
+                    '{"schemaVersion":"1.1","tilingGjhNotation":"6/m30/r(h1)","keep":"value"}'::jsonb,
+                    now());
+                INSERT INTO expeditions(
+                    id, context_json, owner_user_id, name, state_json,
+                    party_json, environment_json, effects_json, resources_json,
+                    survival_json, journey_state_json, generated_resolutions_json,
+                    procedure_json, remaining_watch_ticks, version, created_at, updated_at)
+                VALUES (
+                    @expeditionId, '{}'::jsonb, 'migration-test', 'Legacy test',
+                    '{}'::jsonb, '{}'::jsonb, '{}'::jsonb, '{}'::jsonb, '{}'::jsonb,
+                    '{}'::jsonb, '{}'::jsonb, '[]'::jsonb,
+                    '{"schemaVersion":"1.1","tilingGjhNotation":"6/m30/r(h1)"}'::jsonb,
+                    0, 1, now(), now());
+                """;
+            seed.Parameters.AddWithValue("procedureId", Guid.NewGuid());
+            seed.Parameters.AddWithValue("expeditionId", Guid.NewGuid());
+            await seed.ExecuteNonQueryAsync();
+        }
+
+        var migrator = new PostgresSchemaMigrator(database.ConnectionString);
+        await migrator.MigrateAsync();
+        await migrator.MigrateAsync();
+
+        await using var check = connection.CreateCommand();
+        check.CommandText = """
+            SELECT procedure_json::text
+            FROM campaign_procedure_revisions
+            UNION ALL
+            SELECT procedure_json::text
+            FROM expeditions;
+            """;
+        await using var reader = await check.ExecuteReaderAsync();
+        var examined = 0;
+        while (await reader.ReadAsync())
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(reader.GetString(0));
+            var root = document.RootElement;
+            Assert.Equal("1.2", root.GetProperty("schemaVersion").GetString());
+            Assert.Equal("<1:1,1,1:6,3>", root.GetProperty("tilingDsSymbol").GetString());
+            Assert.False(root.TryGetProperty("tilingGjhNotation", out _));
+            examined++;
+        }
+        Assert.Equal(2, examined);
     }
 
     [Fact]
