@@ -1277,8 +1277,13 @@ test("Phase 15.1 Guided layers beginner help over existing Compact and runtime a
     assert.match(guidance, /hex-crawl\.guided\.enabled/);
     assert.match(guidance, /stored !== "false"/);
     assert.match(guidance, /hc-guidance-off/);
-    assert.match(home, /New to hex crawls\? Start here\./);
-    assert.match(home, /A 6-mile value means one adjacent hex represents 6 miles center-to-center/);
+    assert.match(home, /Set up the expedition you want to run\./);
+    assert.match(home, /Explore without a map/);
+    assert.match(home, /Journey without a grid/);
+    assert.match(home, /guidedExperienceEnabled/);
+    assert.match(home, /data-setup-step="0"/);
+    assert.match(home, /data-setup-step="1"/);
+    assert.match(home, /data-setup-step="2"/);
     assert.match(procedure, /ProcedureAuthoringMode = "compact" \| "advanced" \| "json"/);
     assert.match(procedure, /How to use Compact/);
     assert.match(procedure, /guidedDisclosure\(/);
@@ -1311,11 +1316,13 @@ test("Phase 15.1 preset discovery explains fit and DM workload from configured g
         path.join(sourceDir, "modules/procedures/preset-guidance.ts"),
         "utf8");
 
-    assert.match(workspace, /Choosing a starting point/);
-    assert.match(workspace, /Good fit when/);
-    assert.match(workspace, /You will manage/);
-    assert.match(workspace, /Setup breadth/);
+    assert.match(workspace, /Choosing a ruleset/);
+    assert.match(workspace, /View details/);
+    assert.match(workspace, /Use this preset/);
+    assert.match(workspace, /presetDecisionFacts/);
     assert.match(workspace, /presetGuidance\(preset\.procedure\)/);
+    assert.doesNotMatch(workspace, /Good fit when/);
+    assert.doesNotMatch(workspace, /You will manage/);
     assert.match(guidance, /usesNavigationChecks/);
     assert.match(guidance, /cadence/);
     assert.match(guidance, /travel\.enabled/);

@@ -366,22 +366,22 @@ export async function renderProcedureAuthoringWorkspace(
     };
 
     const renderHome = (): void => {
-        const page = pageShell("Exploration Procedures", "Choose an existing procedure, build your own, or start from a familiar method.");
+        const page = pageShell("Exploration rulesets", "Choose a saved ruleset, build your own, or start from a familiar method.");
         const error = errorBox();
         page.querySelector<HTMLElement>(".hc-page-header")?.append(guidancePreferenceButton(root));
         page.append(error);
         page.append(guidedCallout(
-            "New to exploration procedures?",
-            "A procedure is the set of table rules Hex Crawl will use during an expedition. Starting from a preset is the simplest path because it gives you a complete, editable example.",
+            "New to exploration rulesets?",
+            "An exploration ruleset is the table procedure Hex Crawl follows during an expedition. A preset is the shortest path to a complete, editable starting point.",
             [
-                "Choose a familiar preset when you want a working starting point.",
-                "Use Build my own only when you already know which travel, navigation, encounter, survival, or journey rules you want.",
-                "Saving creates a campaign-owned procedure. Later preset changes do not rewrite it."
+                "Choose a familiar preset when its table workflow matches what you want to run.",
+                "Use Build my own when you already know which travel, navigation, encounter, survival, or journey rules you want.",
+                "Saving creates your own campaign copy. Later preset changes do not rewrite it."
             ]));
 
         const saved = document.createElement("section");
         saved.className = "hc-procedure-home-section";
-        saved.append(sectionHeading("Saved procedures", "Campaign-owned procedures you can edit and use in an expedition."));
+        saved.append(sectionHeading("Saved rulesets", "Campaign-owned procedures you can edit and use in an expedition."));
         if (savedProcedures.length === 0) {
             saved.append(emptyState("No saved procedures yet", "Create one below or start from a familiar procedure."));
         } else {
@@ -450,7 +450,7 @@ export async function renderProcedureAuthoringWorkspace(
     };
 
     const renderCatalog = (): void => {
-        const page = pageShell("Procedure starting points", "Compare behavior using the same fields, inspect details, then choose a starting point.");
+        const page = pageShell("Ruleset starting points", "Compare the table experience first. Open details only when you need exact mechanics, automation, or source information.");
         const toolbar = document.createElement("div");
         toolbar.className = "hc-procedure-toolbar";
         const back = button("Back to procedures", "secondary");
@@ -458,12 +458,12 @@ export async function renderProcedureAuthoringWorkspace(
         toolbar.append(back, guidancePreferenceButton(root));
         page.append(toolbar, errorBox());
         page.append(guidedCallout(
-            "Choosing a starting point",
-            "Choose the procedure whose ordinary table workflow is closest to what you want to run. A larger procedure is not automatically better; you can edit the campaign-owned copy after choosing it.",
+            "Choosing a ruleset",
+            "Choose the table workflow that is closest to what you want to run. More rules are not automatically better; you can edit your campaign copy after choosing it.",
             [
-                "Start with the Good fit when summary rather than the procedure name.",
-                "Check You will manage to see which parts of exploration the procedure expects at the table.",
-                "Use Inspect when two starting points look similar or when you want exact rule details before choosing."
+                "Compare the four facts on each card.",
+                "Open View details when two choices look similar or when you need exact rule and source information.",
+                "Manual or reference-only behavior stays visible before you choose."
             ]));
 
         const familiar = familiarPresets(presets);
@@ -491,18 +491,16 @@ export async function renderProcedureAuthoringWorkspace(
         const head = document.createElement("div");
         head.className = "hc-preset-card-head";
         head.append(textElement("h3", preset.displayName), textElement("p", presetTagline(preset)));
-        card.append(head, presetFacts(preset), presetGuidanceCard(preset));
-        const provenance = document.createElement("details");
-        provenance.className = "hc-ux-disclosure hc-preset-provenance";
-        provenance.innerHTML = `<summary>Source and provenance</summary>`;
-        provenance.append(textElement("p", preset.attribution ?? "Generic Dorks & Dice procedure starting point."));
-        if (preset.disclaimer) provenance.append(textElement("p", preset.disclaimer));
-        card.append(provenance);
+        const guidance = presetGuidance(preset.procedure);
+        card.append(head, presetDecisionFacts(guidance));
+        if (guidance.caution) {
+            card.append(textElement("p", guidance.caution, "hc-preset-caution"));
+        }
         const actions = document.createElement("footer");
         actions.className = "hc-preset-actions";
-        const inspect = button("Inspect", "secondary");
+        const inspect = button("View details", "secondary");
         inspect.addEventListener("click", () => inspectPreset(preset));
-        const use = button("Use as starting point", "primary");
+        const use = button("Use this preset", "primary");
         use.addEventListener("click", () => void selectPreset(preset));
         actions.append(inspect, use);
         card.append(actions);
@@ -540,7 +538,7 @@ export async function renderProcedureAuthoringWorkspace(
             if (preset.disclaimer) source.append(textElement("p", preset.disclaimer));
             activeDrawer.body.append(source);
         }
-        const use = button("Use as starting point", "primary");
+        const use = button("Use this preset", "primary");
         use.addEventListener("click", () => void selectPreset(preset));
         activeDrawer.body.append(use);
     };
@@ -1395,15 +1393,24 @@ export async function renderProcedureAuthoringWorkspace(
 function presetGuidanceCard(preset: ProcedurePreset): HTMLElement {
     const guidance = presetGuidance(preset.procedure);
     const section = document.createElement("section");
-    section.className = "hc-guided-preset-advice hc-guided-only";
+    section.className = "hc-guided-preset-advice";
     section.append(
-        textElement("strong", "Good fit when"),
+        textElement("strong", "Best fit"),
         textElement("p", guidance.bestFor),
-        textElement("strong", "You will manage"),
+        textElement("strong", "Table work"),
         textElement("p", guidance.manage),
-        textElement("strong", "Setup breadth"),
+        textElement("strong", "Ruleset breadth"),
         textElement("p", `${guidance.breadth} · ${guidance.areaCount} ${guidance.areaCount === 1 ? "rule area" : "rule areas"}`));
     return section;
+}
+
+function presetDecisionFacts(guidance: ReturnType<typeof presetGuidance>): HTMLElement {
+    const facts = document.createElement("dl");
+    facts.className = "hc-preset-facts hc-preset-decision-facts";
+    for (const fact of guidance.summaryFacts) {
+        facts.append(textElement("dt", fact.label), textElement("dd", fact.value));
+    }
+    return facts;
 }
 
 function presetFacts(preset: ProcedurePreset): HTMLElement {

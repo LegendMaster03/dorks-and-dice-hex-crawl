@@ -1,10 +1,17 @@
 import type { CampaignProcedure, ProcedureAutomationLevel, ProcedureModule } from "../../types";
 
+export type PresetGuidanceFact = {
+    label: string;
+    value: string;
+};
+
 export type PresetGuidance = {
     bestFor: string;
     manage: string;
     breadth: "Focused" | "Moderate" | "Broad";
     areaCount: number;
+    summaryFacts: PresetGuidanceFact[];
+    caution: string | null;
 };
 
 type GuidanceArea = {
@@ -158,14 +165,68 @@ export function presetGuidance(procedure: CampaignProcedure): PresetGuidance {
 
     const areaCount = areas.length;
     const breadth = areaCount <= 2 ? "Focused" : areaCount <= 4 ? "Moderate" : "Broad";
+    const active = areas.flatMap(area => area.modules);
+    const automation = automationSummary(active, procedure.isExecutable === false);
+    const caution = procedure.isExecutable === false
+        ? "Some configured rules are reference or manual only; Hex Crawl can not run this entire ruleset automatically."
+        : active.some(module => module.automationLevel === "Manual")
+            ? "This ruleset includes manual tracking or result entry."
+            : null;
     return {
         bestFor,
         manage: areaCount > 0
             ? areas.map(describeArea).join(", ")
-            : "only the procedure-specific rules shown above",
+            : "only the ruleset-specific rules shown in details",
         breadth,
-        areaCount
+        areaCount,
+        summaryFacts: [
+            {
+                label: "Workflow",
+                value: journeyProcessActive
+                    ? "Staged journey"
+                    : travelActive
+                        ? "Spatial travel"
+                        : timeActive
+                            ? "Time / interval"
+                            : "Ruleset-specific"
+            },
+            {
+                label: "Travel",
+                value: terrainActive
+                    ? "Terrain / route adjusted"
+                    : movementBudgetActive
+                        ? "Pace / budget based"
+                        : movementResolutionActive
+                            ? "Distance / cell travel"
+                            : "Not used"
+            },
+            {
+                label: "Navigation",
+                value: navigationOutcomeActive
+                    ? "Getting lost / recovery"
+                    : navigationCheckActive
+                        ? "Route checks"
+                        : "Not used"
+            },
+            {
+                label: "Table handling",
+                value: automation
+            }
+        ],
+        caution
     };
+}
+
+function automationSummary(modules: ProcedureModule[], nonExecutable: boolean): string {
+    if (nonExecutable) return "Reference / manual";
+    if (modules.length === 0) return "Table-resolved";
+    const modes = new Set(modules.map(module => module.automationLevel));
+    const labels = [
+        modes.has("Automatic") ? "Automatic" : null,
+        modes.has("Assisted") ? "DM-assisted" : null,
+        modes.has("Manual") ? "Manual" : null
+    ].filter((value): value is string => value !== null);
+    return labels.join(" + ") || "Table-resolved";
 }
 
 function addArea(

@@ -21,7 +21,9 @@ export function applyGuidedExperience(root: HTMLElement): void {
     root.classList.toggle("hc-guidance-off", !guidedExperienceEnabled());
 }
 
-export function guidancePreferenceButton(root: HTMLElement): HTMLButtonElement {
+export function guidancePreferenceButton(
+    root: HTMLElement,
+    onChange?: (enabled: boolean) => void): HTMLButtonElement {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "hc-guidance-toggle";
@@ -37,6 +39,7 @@ export function guidancePreferenceButton(root: HTMLElement): HTMLButtonElement {
         setGuidedExperienceEnabled(!guidedExperienceEnabled());
         applyGuidedExperience(root);
         sync();
+        onChange?.(guidedExperienceEnabled());
     });
     sync();
     return button;
