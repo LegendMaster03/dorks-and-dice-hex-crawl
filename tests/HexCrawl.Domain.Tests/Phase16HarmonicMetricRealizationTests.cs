@@ -123,6 +123,32 @@ public sealed class Phase16HarmonicMetricRealizationTests
     }
 
     [Fact]
+    public void AffineFittingPreservesUnfamiliarMixedAndNonEdgeTopology()
+    {
+        foreach (var (name, source) in Examples.Where(entry =>
+            entry.Name is "mixed-quotient" or "nonedge-mixed-quotient"))
+        {
+            var baseline = DelaneyDressHarmonicMetricRealization.Construct(source, 1, "world");
+            var result = DelaneyDressHarmonicMetricRealization.Construct(
+                source, 1, "world", rotationDegrees: -22, constraints:
+                [
+                    new TilingMetricConstraint("period-u-length", "world", 1.25, 1.25),
+                    new TilingMetricConstraint("period-v-length", "world", 1.75, 1.75),
+                    new TilingMetricConstraint("period-angle-degrees", "degrees", 73, 73)
+                ]);
+            Assert.True(baseline.Status == "realized", name + ": " + baseline.Reason);
+            Assert.True(result.Status == "realized", name + ": " + result.Reason);
+            Assert.True(PeriodicMetricWitnessValidator.Validate(result.Topology!, result.Realization!));
+            Assert.Equal(baseline.Topology!.TranslationDsSymbol,
+                result.Topology!.TranslationDsSymbol);
+            Assert.Equal(baseline.Realization!.Polygons.Values
+                    .Select(p => p.Count).OrderBy(x => x),
+                result.Realization!.Polygons.Values
+                    .Select(p => p.Count).OrderBy(x => x));
+        }
+    }
+
+    [Fact]
     public void InvalidConstraintsAndOutOfCapacityDoNotFabricateWorldGeometry()
     {
         foreach (var invalid in new[] { 0d, -1d, double.NaN, double.PositiveInfinity, 1e12 })
