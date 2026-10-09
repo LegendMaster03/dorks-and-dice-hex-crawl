@@ -93,6 +93,8 @@ Tile Crawl must provide a **versioned, maintainable, data-only catalog** for rec
 - Deriving the translation cover and finite motif from nontrivial D-symbols produces reciprocal adjacency and stable translation-relative cell addresses, round-tripping deterministically with and without source imagery. If the translation cover cannot be constructed within supported limits, Phase 16 cannot be accepted. No terrain, labels, or ruleset semantics appear in the structural contract.
 - All existing Surveyor and Tile Crawl tests pass; contract changes are versioned and documented before either service is deployed. Publish the Phase 20 feasibility-spike findings and an explicit proceed/revise recommendation before authorizing major downstream work.
 
+**Mathematical references for independent verification:** Olaf Delgado-Friedrichs, [*Data Structures and Algorithms for Tilings I*](https://gavrog.org/TCS.pdf), especially the 2D curvature/realizability theorem; and the Australian National University's [introduction to Delaney–Dress chamber systems](https://epinet.anu.edu.au/page/epinet2_mathematics_delaney_dress). These are mathematical references, not dependencies on either project's software implementation.
+
 ## Phase 17 — Generalize world/cell authority and persistence
 
 **Owner:** Tile Crawl.  
