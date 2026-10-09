@@ -12,22 +12,28 @@ export async function renderWorldList(
     root.innerHTML = `
         <section class="hc-page">
             <header class="hc-page-header">
-                <div><span class="hc-sheet-kicker">Map preparation</span><h1>Overworlds</h1><p>Create and manage persistent hex-crawl worlds separately from the expedition.</p></div>
+                <div><span class="hc-sheet-kicker">Map preparation</span><h1>Worlds / maps</h1><p>Create and manage the authored maps used by expeditions.</p></div>
                 <nav class="hc-button-row"><button type="button" data-home>Expeditions</button><span data-guidance-controls></span></nav>
             </header>
             <div class="hc-error" data-error hidden role="alert"></div>
             <div class="hc-columns">
                 <section class="hc-panel">
-                    <div class="hc-panel-heading"><h2>Your overworlds</h2><p class="hc-muted" data-world-count></p></div>
+                    <div class="hc-panel-heading"><h2>Your worlds / maps</h2><p class="hc-muted" data-world-count></p></div>
                     <div class="hc-world-list" data-world-list role="list"></div>
                 </section>
                 <section class="hc-panel">
-                    <h2>New overworld</h2>
+                    <h2>New world / map</h2>
                     <form data-create-world class="hc-form">
                         <label>Name <input name="name" required value="New overworld" autocomplete="off"></label>
-                        <label>Orientation <select name="orientation"><option value="PointyTop">Pointy top</option><option value="FlatTop">Flat top</option></select></label>
-                        <label>Hex center distance <input name="scale" type="number" min="0.001" step="any" required><span class="hc-hint">Center-to-center distance between adjacent hexes. No default physical scale is assumed.</span></label>
-                        <label>Unit <select name="unit" required><option value="">Select distance unit</option><option value="Mile">Miles</option><option value="Kilometer">Kilometers</option><option value="Custom">Custom</option></select></label>
+                        <label>Grid orientation <select name="orientation"><option value="PointyTop">Pointy top</option><option value="FlatTop">Flat top</option></select></label>
+                        <fieldset class="hc-field-group hc-map-scale-field">
+                            <legend>Map scale</legend>
+                            <div class="hc-inline">
+                                <label>Distance <input name="scale" type="number" min="0.001" step="any" required></label>
+                                <label>Unit <select name="unit" required><option value="">Select unit</option><option value="Mile">Miles</option><option value="Kilometer">Kilometers</option><option value="Custom">Custom</option></select></label>
+                            </div>
+                            <p class="hc-hint">Game-world distance from the center of one adjacent cell to the next. No default physical scale is assumed.</p>
+                        </fieldset>
                         <div class="hc-custom-unit-fields" data-custom-unit hidden>
                             <label>Custom symbol <input name="symbol" autocomplete="off"></label>
                             <label>Custom meters per unit <input name="meters" type="number" min="0.001" step="any"></label>
@@ -40,7 +46,7 @@ export async function renderWorldList(
                                 <label>Hex radius (world units) <input name="radius" type="number" min="0.001" step="any" value="1"></label>
                             </div>
                         </details>
-                        <button type="submit" class="hc-primary-action" data-create-button>Create overworld</button>
+                        <button type="submit" class="hc-primary-action" data-create-button>Create world</button>
                     </form>
                 </section>
             </div>
@@ -58,8 +64,8 @@ export async function renderWorldList(
     const metersInput = input(form, "meters");
     const createButton = required<HTMLButtonElement>(form, "[data-create-button]");
     attachFieldHelp(select(form, "orientation"), "Hex orientation", "Pointy-top and flat-top describe the grid geometry. They do not define map north.");
-    attachFieldHelp(input(form, "scale"), "Hex center distance", "This is the game-world distance from the center of one hex to the center of an adjacent hex.", "A 6-mile map uses 6 with Miles.");
-    attachFieldHelp(unitSelect, "Unit", "The physical unit represented by the center-to-center distance between adjacent hexes.");
+    attachFieldHelp(input(form, "scale"), "Map scale", "This is the game-world distance from the center of one cell to the center of an adjacent cell.", "A 6-mile map uses 6 with Miles.");
+    attachFieldHelp(unitSelect, "Map scale unit", "The physical unit used by the map scale.");
     attachFieldHelp(metersInput, "Custom meters per unit", "Only used for Custom units. Enter the number of meters represented by one custom unit.");
     attachFieldHelp(input(form, "radius"), "Hex radius (world units)", "This is an internal map-coordinate scale used for grid geometry, not the game-world travel distance. Most worlds should leave it at 1.");
     let disposed = false;
@@ -73,7 +79,7 @@ export async function renderWorldList(
         if (list.querySelector(".hc-empty-state")) return;
         const empty = document.createElement("div");
         empty.className = "hc-empty-state";
-        empty.innerHTML = "<strong>No overworlds yet.</strong><span>Create the first overworld with the form beside this list.</span>";
+        empty.innerHTML = "<strong>No worlds / maps yet.</strong><span>Create the first map with the form beside this list.</span>";
         list.append(empty);
     };
 

@@ -7,8 +7,12 @@ function module(moduleKey, parameters, automationLevel = "Assisted") {
     return { moduleKey, parameters, automationLevel };
 }
 
-function procedure(modules) {
-    return { modules };
+function procedure(modules, isExecutable = true) {
+    return { modules, isExecutable };
+}
+
+function summary(guidance) {
+    return Object.fromEntries(guidance.summaryFacts.map(fact => [fact.label, fact.value]));
 }
 
 test("preset guidance excludes disabled native navigation, encounters, and helpers from minimal travel", () => {
@@ -42,6 +46,9 @@ test("preset guidance excludes disabled native navigation, encounters, and helpe
     assert.doesNotMatch(guidance.manage, /navigation/i);
     assert.doesNotMatch(guidance.manage, /encounter/i);
     assert.doesNotMatch(guidance.manage, /automatic result generation/i);
+    assert.equal(summary(guidance).Navigation, "Not used");
+    assert.equal(summary(guidance).Travel, "Distance / cell travel");
+    assert.equal(guidance.caution, null);
 });
 
 test("preset guidance recognizes richer pace, terrain, activity, and extended-travel behavior", () => {
@@ -89,6 +96,9 @@ test("preset guidance recognizes richer pace, terrain, activity, and extended-tr
     assert.doesNotMatch(guidance.bestFor, /small foundation/i);
     assert.match(guidance.manage, /travel roles and activities \(manual tracking\)/i);
     assert.match(guidance.manage, /survival, resources, and expedition effects \(DM-assisted \+ manual tracking\)/i);
+    assert.match(summary(guidance)["Table handling"], /DM-assisted/);
+    assert.match(summary(guidance)["Table handling"], /Manual/);
+    assert.match(guidance.caution, /manual tracking or result entry/i);
 });
 
 test("preset guidance includes result-generation workload only when a helper is enabled", () => {
@@ -103,4 +113,42 @@ test("preset guidance includes result-generation workload only when a helper is 
 
     assert.equal(guidance.areaCount, 2);
     assert.match(guidance.manage, /automatic result generation/i);
+});
+
+
+test("preset guidance surfaces non-executable behavior before selection", () => {
+    const guidance = presetGuidance(procedure([
+        module("journey.process", {
+            stageModel: "custom",
+            progressModel: "table-defined",
+            completionModel: "table-defined"
+        }, "Manual")
+    ], false));
+
+    assert.equal(summary(guidance).Workflow, "Staged journey");
+    assert.equal(summary(guidance)["Table handling"], "Manual · partial support");
+    assert.match(guidance.caution, /can not run this entire ruleset automatically/i);
+});
+
+
+test("preset summary distinguishes time-only bookkeeping from spatial travel", () => {
+    const guidance = presetGuidance(procedure([
+        module("time.interval", { durationTicks: "144000000000" }, "Automatic")
+    ]));
+
+    assert.equal(summary(guidance).Workflow, "Time / interval");
+    assert.equal(summary(guidance).Travel, "Not used");
+    assert.equal(summary(guidance).Navigation, "Not used");
+});
+
+test("partial support does not conceal working automatic helpers", () => {
+    const guidance = presetGuidance(procedure([
+        module("time.interval", { durationTicks: "144000000000" }, "Automatic"),
+        module("journey.process", {
+            stageModel: "ordered",
+            progressModel: "table-defined"
+        }, "Manual")
+    ], false));
+    assert.equal(summary(guidance)["Table handling"], "Automatic + Manual · partial support");
+    assert.match(guidance.caution, /can not run this entire ruleset automatically/);
 });

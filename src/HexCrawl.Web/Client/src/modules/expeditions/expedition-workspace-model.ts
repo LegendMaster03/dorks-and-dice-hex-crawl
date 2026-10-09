@@ -74,7 +74,7 @@ export function spatialPositionPresentation(runtime: ExpeditionDetail): SpatialP
         return {
             value,
             detail: runtime.context.kind === "AbstractHex"
-                ? "Abstract spatial position"
+                ? "Mapless spatial position"
                 : "Mapped spatial position"
         };
     }
@@ -257,8 +257,8 @@ export function expeditionWorkspaceAction(
 
     return {
         kind: "procedure",
-        label: "Review procedure",
-        detail: "This expedition has no currently executable travel or journey action. The materialized procedure remains authoritative for reference and manual play.",
+        label: "Review exploration rules",
+        detail: "This expedition has no automatic travel or journey action available. The saved ruleset remains the table authority for reference and manual play.",
         urgent: false
     };
 }

@@ -254,6 +254,15 @@ export function ensureStyles(): void {
         .hc-run-toolbar .hc-active-view { border-color: var(--hc-primary); background: color-mix(in srgb, var(--hc-primary) 12%, var(--hc-surface)); box-shadow: inset 0 -2px 0 var(--hc-primary); }
         .hc-guidance-off .hc-guided-only { display: none !important; }
         .hc-guidance-toggle { white-space: nowrap; }
+        .hc-expedition-setup { align-content: start; }
+        .hc-setup-step { display: grid; gap: .65rem; align-content: start; min-width: 0; }
+        .hc-setup-step[hidden] { display: none !important; }
+        .hc-setup-step > h3 { margin: 0; color: var(--hc-text-strong); }
+        .hc-guided-setup-status { margin: 0; font-size: .78rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--hc-muted); }
+        .hc-field-group { min-width: 0; margin: 0; padding: .7rem; border: 1px solid var(--hc-border); border-radius: .55rem; }
+        .hc-field-group > legend { padding: 0 .25rem; font-weight: 700; color: var(--hc-text-strong); }
+        .hc-map-scale-field .hc-inline { align-items: end; }
+        .hc-map-scale-field .hc-hint { margin-bottom: 0; }
         .hc-guided-callout {
             display: grid;
             gap: .65rem;

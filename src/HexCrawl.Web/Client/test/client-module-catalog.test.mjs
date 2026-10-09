@@ -52,7 +52,7 @@ test("procedure module exposes read-only reference navigation for the explicit s
     assert.doesNotMatch(procedures, /button\[data-revision\]:disabled/);
     assert.match(reference, /Print reference/);
     assert.match(reference, /@media print/);
-    assert.match(reference, /Back to procedure/);
+    assert.match(reference, /Back to ruleset/);
     assert.match(reference, /Stored unknown parameter/);
     assert.doesNotMatch(reference, /createElement\("input"\)|<input/);
 });

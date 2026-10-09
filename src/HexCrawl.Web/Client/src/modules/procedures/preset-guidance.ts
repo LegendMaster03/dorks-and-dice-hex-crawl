@@ -1,10 +1,17 @@
 import type { CampaignProcedure, ProcedureAutomationLevel, ProcedureModule } from "../../types";
 
+export type PresetGuidanceFact = {
+    label: string;
+    value: string;
+};
+
 export type PresetGuidance = {
     bestFor: string;
     manage: string;
     breadth: "Focused" | "Moderate" | "Broad";
     areaCount: number;
+    summaryFacts: PresetGuidanceFact[];
+    caution: string | null;
 };
 
 type GuidanceArea = {
@@ -130,8 +137,9 @@ export function presetGuidance(procedure: CampaignProcedure): PresetGuidance {
         activeModules([[helpersActive, get("procedure.helpers")]]),
         false);
 
-    const travelActive =
-        timeActive || movementResolutionActive || hexProgressActive || movementBudgetActive || terrainActive;
+    const spatialTravelActive =
+        movementResolutionActive || hexProgressActive || movementBudgetActive || terrainActive;
+    const travelActive = timeActive || spatialTravelActive;
     const navigationActive = navigationCheckActive || navigationOutcomeActive;
     const survivalActive =
         resourcesActive || foragingActive || campingActive || forcedTravelActive || exposureActive || effectsActive;
@@ -158,14 +166,67 @@ export function presetGuidance(procedure: CampaignProcedure): PresetGuidance {
 
     const areaCount = areas.length;
     const breadth = areaCount <= 2 ? "Focused" : areaCount <= 4 ? "Moderate" : "Broad";
+    const active = areas.flatMap(area => area.modules);
+    const automation = automationSummary(active, procedure.isExecutable === false);
+    const caution = procedure.isExecutable === false
+        ? "Some configured rules are reference or manual only; Hex Crawl can not run this entire ruleset automatically."
+        : active.some(module => module.automationLevel === "Manual")
+            ? "This ruleset includes manual tracking or result entry."
+            : null;
     return {
         bestFor,
         manage: areaCount > 0
             ? areas.map(describeArea).join(", ")
-            : "only the procedure-specific rules shown above",
+            : "only the ruleset-specific rules shown in details",
         breadth,
-        areaCount
+        areaCount,
+        summaryFacts: [
+            {
+                label: "Workflow",
+                value: journeyProcessActive
+                    ? "Staged journey"
+                    : spatialTravelActive
+                        ? "Spatial travel"
+                        : timeActive
+                            ? "Time / interval"
+                            : "Ruleset-specific"
+            },
+            {
+                label: "Travel",
+                value: terrainActive
+                    ? "Terrain / route adjusted"
+                    : movementBudgetActive
+                        ? "Pace / budget based"
+                        : movementResolutionActive
+                            ? "Distance / cell travel"
+                            : "Not used"
+            },
+            {
+                label: "Navigation",
+                value: navigationOutcomeActive
+                    ? "Getting lost / recovery"
+                    : navigationCheckActive
+                        ? "Route checks"
+                        : "Not used"
+            },
+            {
+                label: "Table handling",
+                value: automation
+            }
+        ],
+        caution
     };
+}
+
+function automationSummary(modules: ProcedureModule[], nonExecutable: boolean): string {
+    const modes = new Set(modules.map(module => module.automationLevel));
+    const labels = [
+        modes.has("Automatic") ? "Automatic" : null,
+        modes.has("Assisted") ? "DM-assisted" : null,
+        modes.has("Manual") ? "Manual" : null
+    ].filter((value): value is string => value !== null);
+    const handling = labels.join(" + ") || "Table-resolved";
+    return nonExecutable ? `${handling} · partial support` : handling;
 }
 
 function addArea(

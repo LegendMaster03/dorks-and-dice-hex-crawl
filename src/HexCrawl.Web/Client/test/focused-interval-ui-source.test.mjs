@@ -31,9 +31,9 @@ test("focused utility separates non-spatial interval bookkeeping from full runti
 
 test("non-spatial utility status distinguishes executable procedures from structural focused capability", () => {
     assert.match(assistant, /focusedIntervalProcedurePresentation\(runtime\)/);
-    assert.match(assistant, /statusCell\("Procedure", focusedPresentation\.procedureLabel\)/);
+    assert.match(assistant, /statusCell\("Ruleset", focusedPresentation\.procedureLabel\)/);
     assert.match(assistant, /execution\s*\? statusCell\("Execution", focusedPresentation\.executionLabel\)\s*:\s*statusCell\("Focused interval", "Supported"\)/);
     assert.doesNotMatch(
         assistant,
-        /statusCell\("Procedure", `\$\{runtime\.procedure\.name\} · structural`\),\s*statusCell\("Focused interval", "Supported"\)/s);
+        /statusCell\("Ruleset", `\$\{runtime\.procedure\.name\} · structural`\),\s*statusCell\("Focused interval", "Supported"\)/s);
 });

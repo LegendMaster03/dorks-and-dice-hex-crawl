@@ -76,7 +76,7 @@ export async function renderExpeditionAssistant(
     const apply = (next: ExpeditionDetail): void => {
         runtime = next;
         required<HTMLElement>(root, "[data-title]").textContent = next.name;
-        required<HTMLElement>(root, "[data-context]").textContent = `Crawl context: ${next.context.name}`;
+        required<HTMLElement>(root, "[data-context]").textContent = `Setup: ${next.context.name}`;
         required<HTMLElement>(root, "[data-mode]").textContent = modeLabel(mode, next.expedition.isSpatial);
         const travelButton = required<HTMLButtonElement>(root, "[data-travel]");
         travelButton.hidden = false;
@@ -98,8 +98,8 @@ export async function renderExpeditionAssistant(
             && canUseFocusedNonSpatialWatch(runtime);
         if (!execution && !focusedWatch) {
             const cells = [
-                statusCell("Procedure", focusedPresentation.procedureLabel),
-                statusCell("Execution", "Not supported by the current runtime")
+                statusCell("Ruleset", focusedPresentation.procedureLabel),
+                statusCell("Automation", "This ruleset requires manual or unsupported steps here")
             ];
             if (mode === "travel" && !state.isSpatial) {
                 cells.push(statusCell("Time / interval", focusedIntervalUnavailableMessage(runtime)));
@@ -112,7 +112,7 @@ export async function renderExpeditionAssistant(
             ? state.isSpatial
                 ? travelStatus(state)
                 : [
-                    statusCell("Procedure", focusedPresentation.procedureLabel),
+                    statusCell("Ruleset", focusedPresentation.procedureLabel),
                     execution
                         ? statusCell("Execution", focusedPresentation.executionLabel)
                         : statusCell("Focused interval", "Supported"),
@@ -125,7 +125,7 @@ export async function renderExpeditionAssistant(
                     statusCell("Current day", String(state.currentDay)),
                     statusCell("Upcoming watch", String(state.completedWatches + 1)),
                     statusCell("Check due", assistantEncounterCheckDue(runtime) ? "Yes" : "No"),
-                    statusCell("Context", runtime.context.kind === "NonSpatial" ? "Non-spatial" : runtime.context.kind === "AbstractHex" ? "Abstract hex" : "World-bound")
+                    statusCell("Setup", runtime.context.kind === "NonSpatial" ? "Journey / no grid" : runtime.context.kind === "AbstractHex" ? "Mapless" : "Map")
                 ];
         required<HTMLElement>(root, "[data-status]").replaceChildren(...cells);
     };
@@ -212,8 +212,8 @@ export async function renderExpeditionAssistant(
         if (!assistantOperationAvailable(runtime, mode)) {
             const detail = mode === "travel" && !state.isSpatial
                 ? focusedIntervalUnavailableMessage(runtime)
-                : "This materialized procedure is structural and is not executable by the current runtime.";
-            form.innerHTML = `<p class="hc-hint">${escapeHtml(detail)} Its stored snapshot remains available on the expedition for reference.</p>`;
+                : "This ruleset includes manual or unsupported behavior that this utility can not run automatically.";
+            form.innerHTML = `<p class="hc-hint">${escapeHtml(detail)} The saved rules remain available on the expedition for reference and manual play.</p>`;
             warning.hidden = true;
             return;
         }
@@ -463,7 +463,7 @@ function requireFocusedIntervalHours(runtime: ExpeditionDetail): number {
 function requireProcedureRuntime(runtime: ExpeditionDetail): ProcedureRuntime {
     const execution = runtime.procedure.runtime;
     if (!execution) {
-        throw new Error(`Procedure ${runtime.procedure.name} is structural and is not executable by the current runtime.`);
+        throw new Error(`Exploration ruleset ${runtime.procedure.name} requires manual or unsupported behavior in this utility.`);
     }
     return execution;
 }

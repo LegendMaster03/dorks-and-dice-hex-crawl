@@ -42,7 +42,7 @@ export function canonicalDistanceUnit(
 export function createOverworldInput(draft: CreateOverworldDraft): CreateOverworldInput {
     if (!draft.name.trim()) throw new Error("Name is required.");
     if (!Number.isFinite(draft.centerDistance) || draft.centerDistance <= 0) {
-        throw new Error("Hex center distance must be greater than zero.");
+        throw new Error("Map scale must be greater than zero.");
     }
     return {
         name: draft.name.trim(),

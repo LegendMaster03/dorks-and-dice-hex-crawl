@@ -269,7 +269,7 @@ export async function renderExpedition(
         if (runtime.overworldId) {
             nav.append(button("World authoring", () => navigate(`/worlds/${runtime.overworldId}/edit`)));
         }
-        nav.append(button("Procedure reference", () =>
+        nav.append(button("Ruleset reference", () =>
             navigate(`/procedures/${encodeURIComponent(runtime.procedure.procedureId)}/revisions/${runtime.procedure.revision}/reference`)));
         nav.append(guidancePreferenceButton(root));
         header.append(heading, nav);
@@ -294,7 +294,7 @@ export async function renderExpedition(
             statAction(
                 runtime.expedition.isSpatial ? "Position" : "Context",
                 position?.value ?? presentation.routeLabel ?? runtime.context.name,
-                runtime.expedition.isSpatial ? position?.detail ?? null : "Non-spatial expedition",
+                runtime.expedition.isSpatial ? position?.detail ?? null : "Journey / no grid",
                 runtime.expedition.isSpatial ? focusTravelCourse : openHistory,
                 runtime.pauseReason ? "warning" : "neutral"),
             statAction(
@@ -357,14 +357,14 @@ export async function renderExpedition(
         const courseRequired = routineSpatialTravel && preferences.direction === null;
         return {
             label: courseRequired
-                ? "Choose course"
+                ? "Choose travel direction"
                 : routineSpatialTravel
                     ? "Continue travel"
                     : action.label,
             detail: courseRequired
-                ? "Choose an adjacent cell from the navigator or map. Your pace stays reusable; selecting a course does not move the party."
+                ? "Choose an adjacent destination from the navigator or map. Your pace stays reusable; selecting a direction does not move the party."
                 : routineSpatialTravel
-                    ? "Use the selected course and pace. Only unresolved procedure inputs will be requested."
+                    ? "Use the selected direction and pace. Only unresolved ruleset inputs will be requested."
                     : action.detail
         };
     };
@@ -372,16 +372,74 @@ export async function renderExpedition(
     const guidedActionExplanation = (
         kind: ReturnType<typeof expeditionWorkspacePresentation>["action"]["kind"]): string => {
         switch (kind) {
-            case "travel": return "Travel is the routine progression step. Choose or keep the party's course and pace, then let the procedure resolve movement, partial progress, navigation, encounters, and other consequences through the normal runtime.";
-            case "navigation": return "Navigation is due before more travel can resolve. It determines how the intended course relates to the party's actual course; resolving it does not by itself advance movement.";
-            case "encounter": return "An encounter interrupted the expedition. Travel remains paused so the encounter can be resolved and handed off without losing the authoritative expedition state.";
-            case "survival": return "A forced-travel, resource, or survival consequence is pending. Resolving it first prevents later travel from skipping a consequence the procedure already created.";
-            case "journey": return "The active journey has a stage, event, approach, or resolution that must be handled before the process can continue.";
-            case "watch": return "This procedure uses a repeating travel period. Running or resuming the watch advances that configured interval without inventing spatial movement.";
-            case "boundary": return "The party reached a boundary while its position or course needs a decision. Resolve that ambiguity before additional travel changes the expedition state.";
-            case "procedure": return "There is no automatic travel or journey step available right now. Use the saved procedure as the table authority and resolve any unsupported or manual behavior explicitly.";
+            case "travel": return "Travel is the routine progression step. The saved ruleset resolves movement, partial progress, navigation, encounters, and consequences from the inputs you provide.";
+            case "navigation": return "Navigation is due before more travel can resolve. It compares intended travel with the party's actual route; resolving it does not move the party by itself.";
+            case "encounter": return "An encounter interrupted travel. Resolve or hand off that encounter before the expedition can continue.";
+            case "survival": return "A forced-travel, resource, or survival consequence is already pending and must be resolved before later travel.";
+            case "journey": return "The active journey has a stored stage, event, approach, or resolution that needs table input before it can continue.";
+            case "watch": return "This ruleset uses a repeating travel period. Running or resuming it advances configured time without inventing spatial movement.";
+            case "boundary": return "The party reached a boundary where its position or direction needs a decision before more travel changes expedition state.";
+            case "procedure": return "There is no automatic travel or journey step available. Use the saved ruleset as the table authority and enter manual results where required.";
         }
-        return "Follow the authoritative current action before advancing the expedition.";
+        return "Follow the current saved action before advancing the expedition.";
+    };
+
+    const guidedActionInput = (
+        kind: ReturnType<typeof expeditionWorkspacePresentation>["action"]["kind"]): string => {
+        switch (kind) {
+            case "travel":
+                if (!runtime.expedition.isSpatial) return "Use the current interval rules and any table or DM values requested by the travel/time workspace.";
+                if (preferences.direction === null) return "Choose an adjacent destination from the map or navigator. That choice records intended travel only; it does not move the party.";
+                if (runtime.movementComposition.missingInputs.length > 0) {
+                    return `Movement still has ${runtime.movementComposition.missingInputs.length} unresolved ${runtime.movementComposition.missingInputs.length === 1 ? "input" : "inputs"}. The travel workspace requests those values from the table or DM before movement resolves.`;
+                }
+                return "The saved travel direction, pace, and movement state are reused. The travel workspace asks only for any remaining table or DM decisions.";
+            case "navigation": return "Enter the configured navigation result or DM decision in the navigation workspace. The intended direction remains the reference point.";
+            case "encounter": return "Use the encounter already recorded by the expedition. Hand it off if useful, then mark it resolved only after the table has finished it.";
+            case "survival": return "Use the pending check or consequence already shown in Resources & effects. Enter the table result or DM decision where the ruleset requires one.";
+            case "journey": return "Use the current journey stage and pending action shown in the journey workspace. Any roll or decision comes from that saved action and the table.";
+            case "watch": return "Use the saved interval settings and enter only the values the time workspace requests.";
+            case "boundary": return "Choose the boundary, recognition, or reorientation decision requested by the saved travel state.";
+            case "procedure": return "Consult this saved ruleset. Enter manual or unsupported results explicitly instead of assuming automatic resolution.";
+        }
+        return "Use the inputs shown by the current action.";
+    };
+
+    const guidedActionResult = (
+        kind: ReturnType<typeof expeditionWorkspacePresentation>["action"]["kind"]): string => {
+        switch (kind) {
+            case "travel": return "When travel resolves, saved time, position, cell progress, and any new navigation, encounter, or survival consequence are updated from the actual result. The Next action card then recalculates.";
+            case "navigation": return "The navigation result updates route or lost-state information. It does not advance position by itself; the next travel action uses the resulting state.";
+            case "encounter": return "Resolving the encounter clears that interruption. Travel resumes only after the saved expedition state confirms there is no remaining encounter pause.";
+            case "survival": return "The resolved consequence updates the applicable resource, effect, or forced-travel state. Any remaining consequence becomes the next required action.";
+            case "journey": return "The saved journey process updates its stage, progress, event, or completion state according to the resolved action, then exposes the next pending step.";
+            case "watch": return "The configured interval advances time and records the result without creating spatial movement.";
+            case "boundary": return "The decision updates travel intent or position handling at the boundary, after which the Next action is recalculated from saved state.";
+            case "procedure": return "Manual entries remain explicit history/state; Hex Crawl does not invent an outcome for rules it can not execute.";
+        }
+        return "After resolution, the Next action is recalculated from saved expedition state.";
+    };
+
+    const renderGuidedActionGuide = (
+        action: ReturnType<typeof expeditionWorkspacePresentation>["action"]): HTMLElement => {
+        const guide = document.createElement("details");
+        guide.className = "hc-guided-action-guide hc-guided-only";
+        const summary = document.createElement("summary");
+        summary.textContent = "What this action needs and changes";
+        guide.append(summary);
+        const row = (label: string, copy: string): HTMLElement => {
+            const paragraph = document.createElement("p");
+            paragraph.append(textElement("strong", label), document.createTextNode(` ${copy}`));
+            return paragraph;
+        };
+        guide.append(
+            row("Input:", guidedActionInput(action.kind)),
+            row("After resolution:", guidedActionResult(action.kind)));
+        const latest = runtime.history.at(-1);
+        if (latest) {
+            guide.append(row("Latest recorded event:", latest.message));
+        }
+        return guide;
     };
 
     const renderCurrentAction = (action: ReturnType<typeof expeditionWorkspacePresentation>["action"]): HTMLElement => {
@@ -401,7 +459,7 @@ export async function renderExpedition(
         primary.className = "hc-primary-action";
         primary.dataset.currentActionButton = "";
         row.append(primary);
-        section.append(row);
+        section.append(row, renderGuidedActionGuide(action));
         section.append(guidedDisclosure("Why is this next?", copy.label, guidedActionExplanation(action.kind)));
         return section;
     };
@@ -412,7 +470,7 @@ export async function renderExpedition(
 
         const primary = document.createElement("div");
         primary.className = "hc-panel hc-map-panel";
-        primary.append(textElement("h2", world ? "Expedition map" : "Spatial expedition"));
+        primary.append(textElement("h2", world ? "Expedition map" : "Mapless exploration"));
         if (!world) primary.append(renderCurrentTravel());
         if (world) {
             const frame = document.createElement("div");
@@ -427,7 +485,7 @@ export async function renderExpedition(
             frame.append(host, renderAdjacencyNavigator(), context);
             primary.append(frame);
         } else {
-            primary.append(textElement("p", "This spatial crawl has no authored world map. Choose an adjacent cell from the accessible course control below.", "hc-muted"));
+            primary.append(textElement("p", "There is no authored map. Spatial positions are still tracked; choose an adjacent destination with the travel-direction control below.", "hc-muted"));
         }
 
         const secondary = document.createElement("aside");
@@ -852,7 +910,7 @@ export async function renderExpedition(
         }
         row.append(
             button("History", openHistory),
-            button("Procedure reference", () =>
+            button("Ruleset reference", () =>
                 navigate(`/procedures/${encodeURIComponent(runtime.procedure.procedureId)}/revisions/${runtime.procedure.revision}/reference`)));
         tools.append(row);
         return tools;
@@ -1180,7 +1238,7 @@ export async function renderExpedition(
                     "p",
                     "The previous course is not available from the current cell. Choose an adjacent course before resuming travel.",
                     "hc-muted"));
-                const choose = button("Choose course", () => {
+                const choose = button("Choose travel direction", () => {
                     closeDrawer();
                     queueMicrotask(focusTravelCourse);
                 });
@@ -1220,7 +1278,7 @@ export async function renderExpedition(
                 continueTravel(true);
             });
 
-            const changeCourse = button("Change course", () => {
+            const changeCourse = button("Change travel direction", () => {
                 closeDrawer();
                 queueMicrotask(focusTravelCourse);
             });
@@ -1274,7 +1332,7 @@ export async function renderExpedition(
                     "p",
                     "Choose an adjacent course before resolving navigation. The selected navigator edge or adjacent map cell will be reused by later travel stages.",
                     "hc-muted"));
-                const choose = button("Choose course", () => {
+                const choose = button("Choose travel direction", () => {
                     closeDrawer();
                     queueMicrotask(focusTravelCourse);
                 });
@@ -1364,7 +1422,7 @@ export async function renderExpedition(
                 });
             });
 
-            const changeCourse = button("Change course", () => {
+            const changeCourse = button("Change travel direction", () => {
                 closeDrawer();
                 queueMicrotask(focusTravelCourse);
             });
@@ -2310,7 +2368,7 @@ function currentCourseLabel(
     preferences: TravelPreferences,
     adjacency: ReturnType<typeof currentRuntimeCellAdjacency> | null): string {
     return preferences.direction === null
-        ? "No course selected"
+        ? "No direction selected"
         : adjacencyCourseLabel(adjacency, preferences.direction);
 }
 
@@ -2340,11 +2398,11 @@ function travelIntentSummary(
     adjacency: ReturnType<typeof currentRuntimeCellAdjacency> | null): string {
     if (!runtime.expedition.isSpatial) return "";
     const intended = preferences.direction === null
-        ? "No intended course"
+        ? "No intended direction"
         : `Intended ${adjacencyCourseLabel(adjacency, preferences.direction)}`;
     const actual = runtime.expedition.actualDirection === null
-        ? "actual course not yet resolved"
-        : `actual ${adjacencyCourseLabel(adjacency, runtime.expedition.actualDirection)}`;
+        ? "actual direction not yet resolved"
+        : `actual direction ${adjacencyCourseLabel(adjacency, runtime.expedition.actualDirection)}`;
     return `${intended} · ${preferences.pace} pace · ${actual}`;
 }
 
@@ -2399,7 +2457,7 @@ function watchWorkspaceMarkup(adjacency: ReturnType<typeof currentRuntimeCellAdj
         <section class="hc-running-sheet hc-focused-watch-workspace">
             <div class="hc-sheet-ledger-heading">
                 <h3 data-watch-summary>Run watch</h3>
-                <span>Reusable course and pace stay filled until changed.</span>
+                <span>Reusable travel direction and pace stay filled until changed.</span>
             </div>
             <div class="hc-form hc-watch-requirements" data-requirements></div>
             <form class="hc-form" data-advance>
@@ -2416,8 +2474,8 @@ function watchWorkspaceMarkup(adjacency: ReturnType<typeof currentRuntimeCellAdj
                 </fieldset>
 
                 <fieldset data-resolution-helper hidden>
-                    <legend>Automatic procedure resolution</legend>
-                    <p class="hc-hint">Use procedure-defined helpers only for inputs that are still unresolved.</p>
+                    <legend>Automatic ruleset resolution</legend>
+                    <p class="hc-hint">Use ruleset-defined helpers only for inputs that are still unresolved.</p>
                     <div data-helper-travel>
                         <p class="hc-hint" data-helper-travel-mechanic></p>
                         <p class="hc-hint">Travel uses the expected distance below as the situational input.</p>
@@ -2429,13 +2487,13 @@ function watchWorkspaceMarkup(adjacency: ReturnType<typeof currentRuntimeCellAdj
                         <label>Failure veer <input name="helperFailureVeer" type="number" step="1" placeholder="+1 or -1"></label>
                     </div>
                     <div data-helper-encounter><p class="hc-hint" data-helper-encounter-mechanic></p></div>
-                    <button type="button" data-resolution-helper-button>Resolve available procedure inputs</button>
+                    <button type="button" data-resolution-helper-button>Resolve available ruleset inputs</button>
                     <p class="hc-hint" data-resolution-helper-result aria-live="polite"></p>
                 </fieldset>
 
                 <fieldset data-travel-resolution data-focus-group="advanced movement">
                     <legend>Movement result</legend>
-                    <p class="hc-hint">Authoritative party movement is prefilled when available. Enter only movement information the runtime can not derive.</p>
+                    <p class="hc-hint">Authoritative party movement is prefilled when available. Enter only movement information Hex Crawl can not derive.</p>
                     <div data-fixed-distance><label>${distanceInputLabel("Effective distance", distanceUnit)} <input name="effectiveDistance" type="number" min="0" step="any"></label></div>
                     <div data-variable-distance><label>${distanceInputLabel("Expected distance", distanceUnit)} <input name="expectedDistance" type="number" min="0" step="any"></label><label>${distanceInputLabel("Actual resolved distance", distanceUnit)} <input name="actualDistance" type="number" min="0" step="any"></label></div>
                     <div data-step-distance><label>Resolved hex steps <input name="hexSteps" type="number" min="0" step="1"></label></div>

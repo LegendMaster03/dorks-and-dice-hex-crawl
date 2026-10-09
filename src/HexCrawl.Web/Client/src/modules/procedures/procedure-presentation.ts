@@ -150,11 +150,11 @@ const labels: Record<string, string> = {
 };
 
 const numericHelp: Partial<Record<string, string>> = {
-    startingExitProgressFactor: "The fraction of the configured hex center distance required to leave the starting hex before an entry side is known. 0.5 means half the configured center-to-center distance.",
-    nearExitProgressFactor: "The fraction of the configured hex center distance required to leave through a nearby side after an entry side is known. 0.5 means half the configured center-to-center distance.",
-    farExitProgressFactor: "The fraction of the configured hex center distance required to leave through a far side after an entry side is known. 1 means the full configured center-to-center distance.",
-    backExitProgressFactor: "The fraction of the configured hex center distance required to leave back through the entry side. 0.5 means half the configured center-to-center distance.",
-    directionChangeProgressCostFactor: "The fraction of the configured hex center distance subtracted from accumulated progress when a course change costs progress. 0.5 means half the configured center-to-center distance.",
+    startingExitProgressFactor: "The fraction of the configured map scale required to leave the starting hex before an entry side is known. 0.5 means half the map scale.",
+    nearExitProgressFactor: "The fraction of the configured map scale required to leave through a nearby side after an entry side is known. 0.5 means half the map scale.",
+    farExitProgressFactor: "The fraction of the configured map scale required to leave through a far side after an entry side is known. 1 means the full configured center-to-center distance.",
+    backExitProgressFactor: "The fraction of the configured map scale required to leave back through the entry side. 0.5 means half the map scale.",
+    directionChangeProgressCostFactor: "The fraction of the configured map scale subtracted from accumulated progress when a direction change costs progress. 0.5 means half the map scale.",
     baseBudget: "The unadjusted movement allowance before terrain, routes, weather, load, effects, or DM overrides are applied. The Movement unit setting supplies the unit.",
     travelChecksPerInterval: "How many encounter checks this schedule makes during each configured travel period.",
     timeCost: "How many units of the selected Time unit this activity or procedure step consumes.",

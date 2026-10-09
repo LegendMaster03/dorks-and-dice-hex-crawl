@@ -84,3 +84,17 @@ The Site authentication/access-denied behavior remains a host-level follow-up ra
 ## Acceptance direction
 
 Phase 15.1 is successful when a tester with general tabletop RPG knowledge can begin from the Hex Crawl home page, choose a reasonable starting procedure/context, understand unfamiliar required settings, and follow current-action coaching through representative spatial and nonspatial play without needing Discord explanations from the developer.
+
+## Phase 15.1.1 — guided workflow and progressive disclosure
+
+Phase 15.1.1 refines the Phase 15.1 interaction model. Earlier references to a large, default-on home primer or all-at-once preset advice describe the previous UI; the current presentation prioritizes a concrete task and makes supplemental explanations optional.
+
+- **Home/start:** Guided setup presents map/travel setup, exploration ruleset, and expedition details as three reversible steps over the same existing form and start API. Hiding beginner help shows all steps in a direct form; re-enabling guidance restores the current step without discarding input. Selecting a step never creates an expedition or a campaign ruleset.
+- **Map scale:** A grouped distance/value and unit replace the ambiguous `Hex center distance` label in home, world setup/editor, and focused utility setup. Center-to-center distance is still explained at the field; internal grid radius, origin, and rotation remain separate, advanced values.
+- **Preset selection:** The first card shows name, short experience description, four aligned facts derived from configured module behavior, and an up-front manual/non-executable caution when applicable. `View details` retains full rule coverage, automation, table burden, and source/provenance; `Use this preset` is the explicit selection action. The rendering uses active modules, not preset-name switches. Catalog descriptions are written for tabletop decisions rather than implementation history.
+- **Active play:** The current authoritative Next action remains the only progression entry. A concise guided action guide identifies the current input, what resolving it can change, and the latest recorded event when available. Pause, journey, survival, navigation, and movement-composition state supply the action; guidance never resolves a roll or moves the party.
+- **Direct/advanced access:** Guided help is presentation-only. Custom Compact, Advanced, and JSON modes, focused utilities, campaign ruleset revisions, DM authority, and manual resolution stay available.
+
+The Site-owned restricted deep-link sign-in/access-denied experience remains a separate host-level dependency. Phase 15.1.1 does not introduce Hex Crawl authentication or grant access to testers.
+
+See `docs/phase-15.1.1-coverage.md` for the surface audit and validation record. Passing automated checks alone does not establish that new human testers complete onboarding successfully.

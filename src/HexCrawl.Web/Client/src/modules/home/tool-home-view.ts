@@ -6,7 +6,7 @@ import type { ExpeditionSummary, OverworldSummary, ProcedurePreset, StartStandal
 import { clearUiError, showUiError } from "../../ui-error";
 import { campaignProcedureSummary, renderProcedureMechanicList } from "../../campaign-procedure-view";
 import { input, integer, numeric, option, required, select } from "../../ui/dom";
-import { applyGuidedExperience, attachFieldHelp, guidancePreferenceButton } from "../../ui/guidance";
+import { applyGuidedExperience, attachFieldHelp, guidedExperienceEnabled, guidancePreferenceButton } from "../../ui/guidance";
 import {
     applyStandaloneProcedureChoice,
     applyWorldProcedureChoice,
@@ -30,39 +30,17 @@ export async function renderToolHome(
             <header class="hc-page-header">
                 <div>
                     <h1>Hex Crawl</h1>
-                    <p>Run expeditions with campaign-owned exploration procedures, spatial maps when needed, and focused GM utilities.</p>
+                    <p>Run expeditions with campaign-owned exploration rules, maps when needed, and focused GM utilities.</p>
                 </div>
                 <nav class="hc-button-row" data-guidance-controls></nav>
             </header>
             <div class="hc-error" data-error hidden role="alert"></div>
             <section class="hc-guided-callout hc-guided-only" aria-labelledby="hc-guided-start-title">
                 <div>
-                    <span class="hc-sheet-kicker">Guided</span>
-                    <h2 id="hc-guided-start-title">New to hex crawls? Start here.</h2>
-                    <p>A hex crawl turns exploration into a repeatable table procedure. Hex Crawl keeps the current state and next action visible so you do not have to memorize the procedure first.</p>
+                    <span class="hc-sheet-kicker">Guided setup</span>
+                    <h2 id="hc-guided-start-title">Set up the expedition you want to run.</h2>
+                    <p>Choose whether you are using a map, choose the exploration rules, then enter only the details that choice needs. Hide beginner help at any time to see the complete setup form.</p>
                 </div>
-                <ol class="hc-guided-steps">
-                    <li><strong>Pick a procedure.</strong> If you are unsure, use a familiar preset instead of building one from scratch.</li>
-                    <li><strong>Pick the expedition context.</strong> Use an authored world/map when you have one, an abstract hex grid for mapless spatial travel, or a non-spatial session for journey procedures that do not use hexes.</li>
-                    <li><strong>Start the expedition.</strong> During play, follow the Next action card; it tells you what the current procedure needs before play can continue.</li>
-                    <li><strong>Open details only when needed.</strong> Party, movement, navigation, encounters, resources, and journey state remain available without becoming separate workflows.</li>
-                </ol>
-                <details class="hc-guided-lesson">
-                    <summary>Travel basics and terms</summary>
-                    <dl class="hc-guided-terms">
-                        <dt>Procedure</dt><dd>The rules that define how this expedition handles time, movement, navigation, encounters, survival, and journeys.</dd>
-                        <dt>Hex center distance</dt><dd>The game-world distance from the center of one hex to the center of an adjacent hex. A 6-mile value means one adjacent hex represents 6 miles center-to-center.</dd>
-                        <dt>Travel period / watch</dt><dd>A repeating chunk of travel time defined by the selected procedure. Not every procedure uses watches.</dd>
-                        <dt>Course</dt><dd>The direction the party intends to travel. Selecting a course does not move the party; travel resolves only when you take the travel action.</dd>
-                        <dt>Navigation</dt><dd>The procedure that determines whether the party follows its intended course, becomes lost, recognizes that problem, or reorients.</dd>
-                        <dt>Pace / travel mode</dt><dd>A reusable travel choice such as normal, slow, or fast when the selected procedure defines those choices.</dd>
-                        <dt>q / r</dt><dd>Axial coordinates used to identify hexes. For a new abstract grid, 0 / 0 is a normal starting point.</dd>
-                    </dl>
-                </details>
-                <details class="hc-guided-lesson">
-                    <summary>When do I need advanced setup?</summary>
-                    <p>Usually you do not. Start with a preset and ordinary map/context values. Advanced grid alignment, custom units, Advanced procedure editing, and JSON exist for unusual maps, house rules, imports, or exact technical control.</p>
-                </details>
             </section>
             <div class="hc-columns hc-home-three-column-grid hc-home-main-grid">
                 <section class="hc-panel">
@@ -74,43 +52,75 @@ export async function renderToolHome(
                 </section>
                 <section class="hc-panel">
                     <h2>Start expedition</h2>
-                    <p class="hc-muted">Choose the procedure and only the spatial context that procedure needs.</p>
-                    <form class="hc-form" data-start-mapless>
-                        <label>Expedition name <input name="name" required value="Expedition" autocomplete="off"></label>
-                        <label>Procedure <select name="procedure"></select></label>
-                        <p class="hc-hint" data-procedure-summary></p>
-                        <details class="hc-optional-reference"><summary>Procedure details</summary><ul data-procedure-mechanics></ul></details>
-                        <label>Expedition context <select name="context"></select></label>
-                        <div class="hc-form" data-abstract-context hidden>
-                            <label>Context name <input name="contextName" value="Mapless hex crawl" autocomplete="off"></label>
-                            <label>Hex orientation <select name="orientation"><option value="PointyTop">Pointy top</option><option value="FlatTop">Flat top</option></select></label>
-                            <label>Hex center distance <input name="scale" type="number" min="0.001" step="any" placeholder="required"></label>
-                            <label>Distance unit <select name="unit"><option value="">Select distance unit</option><option value="Mile">Miles</option><option value="Kilometer">Kilometers</option><option value="Custom">Custom</option></select></label>
-                            <div class="hc-form" data-custom-unit hidden>
-                                <label>Custom symbol <input name="symbol" autocomplete="off"></label>
-                                <label>Custom meters per unit <input name="meters" type="number" min="0.001" step="any"></label>
+                    <p class="hc-muted">Use guided setup, or hide beginner help to edit all setup fields directly.</p>
+                    <form class="hc-form hc-expedition-setup" data-start-mapless>
+                        <p class="hc-guided-setup-status hc-guided-only" data-setup-status role="status"></p>
+
+                        <section class="hc-setup-step" data-setup-step="0">
+                            <h3>1. What do you want to run?</h3>
+                            <label>Map or travel setup <select name="context" required></select></label>
+                            <p class="hc-hint" data-context-summary></p>
+                            <div class="hc-button-row hc-guided-only">
+                                <button type="button" class="hc-primary-action" data-setup-next="1" disabled>Next: choose rules</button>
                             </div>
-                            <div class="hc-inline">
-                                <label>Start q <input name="q" type="number" step="1" value="0"></label>
-                                <label>Start r <input name="r" type="number" step="1" value="0"></label>
+                        </section>
+
+                        <section class="hc-setup-step" data-setup-step="1">
+                            <h3>2. Choose exploration rules</h3>
+                            <label>Exploration ruleset <select name="procedure"></select></label>
+                            <p class="hc-hint" data-procedure-summary></p>
+                            <details class="hc-optional-reference"><summary>View ruleset details</summary><ul data-procedure-mechanics></ul></details>
+                            <div class="hc-button-row hc-guided-only">
+                                <button type="button" data-setup-back="0">Back</button>
+                                <button type="button" class="hc-primary-action" data-setup-next="2" disabled>Next: expedition details</button>
                             </div>
-                            <p class="hc-hint">Abstract hex stores crawl-scale context without creating a world or source map.</p>
-                        </div>
-                        <div data-nonspatial-context hidden>
-                            <label>Context name <input name="nonSpatialName" value="Procedure session" autocomplete="off"></label>
-                            <p class="hc-hint">Non-spatial expeditions persist procedure and history state without fabricating coordinates, distance, course, pace, or map state.</p>
-                        </div>
-                        <p class="hc-hint">Saved procedures use the selected revision. A preset creates a new saved procedure when play begins.</p>
-                        <button type="submit" class="hc-primary-action" data-start-button>Start expedition</button>
+                        </section>
+
+                        <section class="hc-setup-step" data-setup-step="2">
+                            <h3>3. Expedition details</h3>
+                            <label>Expedition name <input name="name" required value="Expedition" autocomplete="off"></label>
+                            <div class="hc-form" data-abstract-context hidden>
+                                <label>Setup name <input name="contextName" value="Mapless exploration" autocomplete="off"></label>
+                                <label>Grid orientation <select name="orientation"><option value="PointyTop">Pointy top</option><option value="FlatTop">Flat top</option></select></label>
+                                <fieldset class="hc-field-group hc-map-scale-field">
+                                    <legend>Map scale</legend>
+                                    <div class="hc-inline">
+                                        <label>Distance <input name="scale" type="number" min="0.001" step="any" placeholder="required"></label>
+                                        <label>Unit <select name="unit"><option value="">Select unit</option><option value="Mile">Miles</option><option value="Kilometer">Kilometers</option><option value="Custom">Custom</option></select></label>
+                                    </div>
+                                    <p class="hc-hint">The game-world distance from the center of one cell to the center of an adjacent cell.</p>
+                                </fieldset>
+                                <div class="hc-form" data-custom-unit hidden>
+                                    <label>Custom symbol <input name="symbol" autocomplete="off"></label>
+                                    <label>Custom meters per unit <input name="meters" type="number" min="0.001" step="any"></label>
+                                </div>
+                                <p class="hc-hint">There is no authored map, but spatial positions and adjacent-cell travel are still tracked.</p>
+                            </div>
+                            <div data-spatial-start hidden>
+                                <div class="hc-inline">
+                                    <label>Starting cell q <input name="q" type="number" step="1" value="0"></label>
+                                    <label>Starting cell r <input name="r" type="number" step="1" value="0"></label>
+                                </div>
+                            </div>
+                            <div data-nonspatial-context hidden>
+                                <label>Setup name <input name="nonSpatialName" value="Journey" autocomplete="off"></label>
+                                <p class="hc-hint">No grid, coordinates, map scale, or travel direction are created. The selected ruleset and journey state remain available.</p>
+                            </div>
+                            <p class="hc-hint">Saved rulesets use the selected revision. A preset saves an editable campaign copy when play begins.</p>
+                            <div class="hc-button-row">
+                                <button type="button" class="hc-guided-only" data-setup-back="1">Back</button>
+                                <button type="submit" class="hc-primary-action" data-start-button>Start expedition</button>
+                            </div>
+                        </section>
                     </form>
                 </section>
             </div>
             <section class="hc-mode-section" aria-label="Hex Crawl management">
                 <div class="hc-mode-grid hc-home-three-column-grid">
                     <article class="hc-mode-card">
-                        <h2>Procedures</h2>
-                        <p>Create, inspect, and manage the exploration procedures used by expeditions.</p>
-                        <button type="button" class="hc-primary-action" data-procedures>Manage procedures</button>
+                        <h2>Exploration rulesets</h2>
+                        <p>Create, inspect, and manage the exploration rules used by expeditions.</p>
+                        <button type="button" class="hc-primary-action" data-procedures>Manage rulesets</button>
                     </article>
                     <article class="hc-mode-card">
                         <h2>Worlds / maps</h2>
@@ -147,7 +157,6 @@ export async function renderToolHome(
     required<HTMLButtonElement>(root, "[data-assistant-travel]").addEventListener("click", () => navigate("/assistants/travel"));
     required<HTMLButtonElement>(root, "[data-assistant-navigation]").addEventListener("click", () => navigate("/assistants/navigation"));
     required<HTMLButtonElement>(root, "[data-assistant-encounters]").addEventListener("click", () => navigate("/assistants/encounters"));
-    required<HTMLElement>(root, "[data-guidance-controls]").append(guidancePreferenceButton(root));
     const error = required<HTMLElement>(root, "[data-error]");
     const list = required<HTMLElement>(root, "[data-expedition-list]");
     const count = required<HTMLElement>(root, "[data-expedition-count]");
@@ -156,31 +165,62 @@ export async function renderToolHome(
     const procedure = select(form, "procedure");
     const unit = select(form, "unit");
     const abstractContext = required<HTMLElement>(form, "[data-abstract-context]");
+    const spatialStart = required<HTMLElement>(form, "[data-spatial-start]");
     const nonSpatialContext = required<HTMLElement>(form, "[data-nonspatial-context]");
     const customUnit = required<HTMLElement>(form, "[data-custom-unit]");
     const startButton = required<HTMLButtonElement>(form, "[data-start-button]");
+    const setupStatus = required<HTMLElement>(form, "[data-setup-status]");
+    const setupSteps = Array.from(form.querySelectorAll<HTMLElement>("[data-setup-step]"));
+    const contextNext = required<HTMLButtonElement>(form, '[data-setup-next="1"]');
+    const rulesNext = required<HTMLButtonElement>(form, '[data-setup-next="2"]');
+    let guidedStep = 0;
+
+    const syncGuidedSetup = (): void => {
+        const guided = guidedExperienceEnabled();
+        setupStatus.hidden = !guided;
+        setupStatus.textContent = guided ? `Step ${guidedStep + 1} of 3` : "";
+        for (const step of setupSteps) {
+            step.hidden = guided && Number(step.dataset.setupStep) !== guidedStep;
+        }
+    };
+    const goToGuidedStep = (step: number): void => {
+        guidedStep = Math.max(0, Math.min(2, step));
+        syncGuidedSetup();
+        const target = setupSteps.find(value => Number(value.dataset.setupStep) === guidedStep);
+        target?.querySelector<HTMLElement>("select, input, button:not([disabled])")?.focus();
+    };
+    for (const control of form.querySelectorAll<HTMLButtonElement>("[data-setup-next]")) {
+        control.addEventListener("click", () => goToGuidedStep(Number(control.dataset.setupNext)));
+    }
+    for (const control of form.querySelectorAll<HTMLButtonElement>("[data-setup-back]")) {
+        control.addEventListener("click", () => goToGuidedStep(Number(control.dataset.setupBack)));
+    }
+    required<HTMLElement>(root, "[data-guidance-controls]").append(
+        guidancePreferenceButton(root, () => syncGuidedSetup()));
+    syncGuidedSetup();
+
     attachFieldHelp(
         procedure,
-        "Procedure",
-        "The procedure is the expedition ruleset. It decides which travel, navigation, encounter, survival, and journey steps exist.",
-        "If you are new to hex crawling, choose a preset first; you can edit the saved campaign copy later.");
+        "Exploration ruleset",
+        "The exploration ruleset decides which travel, navigation, encounter, survival, and journey steps exist.",
+        "If you are new to hex crawling, start from a preset; you can edit the saved campaign copy later.");
     attachFieldHelp(
         context,
-        "Expedition context",
-        "The context tells Hex Crawl whether this expedition uses an authored world map, an abstract mathematical hex grid, or no spatial grid at all.");
+        "Map or travel setup",
+        "Choose an authored map, mapless spatial exploration, or a journey that does not use a grid.");
     attachFieldHelp(
         select(form, "orientation"),
         "Hex orientation",
         "Pointy-top and flat-top describe how the hexes are drawn. Orientation alone does not define north or change the distance represented by a hex.");
     attachFieldHelp(
         input(form, "scale"),
-        "Hex center distance",
-        "This is the game-world distance from the center of one hex to the center of an adjacent hex.",
+        "Map scale",
+        "This is the game-world distance from the center of one cell to the center of an adjacent cell.",
         "If adjacent hexes on your map represent 6 miles of travel, enter 6 and choose Miles.");
     attachFieldHelp(
         unit,
-        "Distance unit",
-        "This is the unit used by the hex center distance and spatial travel calculations.");
+        "Map scale unit",
+        "This is the unit used by the map scale and spatial travel calculations.");
     attachFieldHelp(
         input(form, "meters"),
         "Custom meters per unit",
@@ -194,12 +234,22 @@ export async function renderToolHome(
         const nonSpatial = context.value === NON_SPATIAL_CONTEXT;
         abstractContext.hidden = !abstract;
         nonSpatialContext.hidden = !nonSpatial;
+        const spatial = Boolean(context.value) && !nonSpatial;
+        spatialStart.hidden = !spatial;
         input(form, "contextName").required = abstract;
         input(form, "scale").required = abstract;
         unit.required = abstract;
-        input(form, "q").required = abstract;
-        input(form, "r").required = abstract;
+        input(form, "q").required = spatial;
+        input(form, "r").required = spatial;
         input(form, "nonSpatialName").required = nonSpatial;
+        contextNext.disabled = !context.value;
+        required<HTMLElement>(form, "[data-context-summary]").textContent = nonSpatial
+            ? "Journey without a grid creates no coordinates, map scale, or travel direction. Choose a ruleset that can run without spatial travel."
+            : abstract
+                ? "Explore without a map. Spatial positions and adjacent destinations are still tracked, and the selected ruleset decides which travel mechanics apply."
+                : context.value
+                    ? "Use an authored map. The selected ruleset still decides which travel, navigation, and journey mechanics apply."
+                    : "Choose how this expedition relates to a map.";
         syncUnit();
     };
     const syncUnit = (): void => {
@@ -211,8 +261,9 @@ export async function renderToolHome(
     const syncProcedure = async (): Promise<void> => {
         const mechanics = required<HTMLElement>(form, "[data-procedure-mechanics]");
         mechanics.replaceChildren();
+        rulesNext.disabled = !procedure.value;
         if (!procedure.value) {
-            required<HTMLElement>(form, "[data-procedure-summary]").textContent = "No runnable procedure is available.";
+            required<HTMLElement>(form, "[data-procedure-summary]").textContent = "No runnable exploration ruleset is available.";
             return;
         }
         const choice = readProcedureStartChoice(procedure.value);
@@ -222,7 +273,7 @@ export async function renderToolHome(
             const preset = presets.find(candidate => candidate.presetKey === choice.presetKey);
             if (preset) {
                 required<HTMLElement>(form, "[data-procedure-summary]").textContent =
-                    `${preset.description} · ${campaignProcedureSummary(preset.procedure)} · creates a new saved procedure when play begins`;
+                    `${preset.description} · ${campaignProcedureSummary(preset.procedure)} · saves an editable campaign copy when play begins`;
                 renderProcedureMechanicList(mechanics, preset.procedure);
             }
             return;
@@ -247,17 +298,19 @@ export async function renderToolHome(
         presets = procedurePresets;
         savedProcedures = procedures;
         populateProcedureStartChoices(procedure, savedProcedures, presets);
-        for (const world of worlds) context.append(option(world.id, `World: ${world.name}`));
+        context.append(option("", "Choose map or travel setup"));
+        for (const world of worlds) context.append(option(world.id, `Use map: ${world.name}`));
         context.append(
-            option(ABSTRACT_CONTEXT, "Abstract hex (no Overworld)"),
-            option(NON_SPATIAL_CONTEXT, "Non-spatial procedure session")
+            option(ABSTRACT_CONTEXT, "Explore without a map"),
+            option(NON_SPATIAL_CONTEXT, "Journey without a grid")
         );
-        if (worlds.length === 0) context.value = ABSTRACT_CONTEXT;
+        context.value = "";
 
         syncExpeditionCount(count, expeditions.length);
         renderExpeditions(list, expeditions, worlds, api, error, count, navigate);
         syncContext();
         await syncProcedure();
+        syncGuidedSetup();
         startButton.disabled = !procedure.value;
     } catch (value) {
         if (!disposed) showUiError(error, value);
@@ -305,7 +358,7 @@ export async function renderToolHome(
                         }
                     }, choice));
                 } else {
-                    if (!context.value) throw new Error("A crawl context is required.");
+                    if (!context.value) throw new Error("A map or travel setup is required.");
                     expedition = await api.startConfiguredExpedition(context.value, applyWorldProcedureChoice({
                         name,
                         presentationKey: "dm-controlled",
@@ -420,9 +473,9 @@ function distanceUnit(kind: DistanceUnitKind, form: HTMLFormElement) {
 }
 
 function contextLabel(kind: ExpeditionSummary["context"]["kind"]): string {
-    if (kind === "WorldBound") return "World";
-    if (kind === "AbstractHex") return "Abstract hex";
-    return "Non-spatial";
+    if (kind === "WorldBound") return "Map";
+    if (kind === "AbstractHex") return "Mapless spatial";
+    return "Journey / no grid";
 }
 
 function action(label: string, onClick: () => void, primary = false): HTMLButtonElement {

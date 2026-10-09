@@ -19,7 +19,7 @@ test("Phase 15 procedure authoring separates entry choice from one shared Campai
         path.join(repositoryRoot, "src/HexCrawl.Application/Expeditions/ProcedureComposerCustomProcedureFactory.cs"),
         "utf8");
 
-    assert.match(workspace, /Start from a known procedure/);
+    assert.match(workspace, /Start from a known ruleset/);
     assert.match(workspace, /Build my own/);
     assert.match(workspace, /EntryState = "landing" \| "presets" \| "workspace"/);
     assert.match(workspace, /ProcedureAuthoringMode = "compact" \| "advanced" \| "json"/);
@@ -329,7 +329,7 @@ test("routine spatial travel reuses intent and suppresses fixed movement inputs 
     assert.match(view, /currentRuntimeCellAdjacency/);
     assert.match(view, /adjacencyForCell/);
     assert.match(intent, /hex-crawl\.expedition\.\$\{expeditionId\}\.travel-intent/);
-    assert.match(view, /Reusable course and pace stay filled until changed/);
+    assert.match(view, /Reusable travel direction and pace stay filled until changed/);
     assert.match(view, /movementComposition\.suggestedExpectedDistance/);
     assert.match(controller, /suggestedWatchDistance\(runtime\)/);
     assert.match(controller, /authoritativeFixedWatchDistance\(runtime\)/);
@@ -649,8 +649,8 @@ test("urgent travel pauses preserve valid reusable course and ask only for chang
     assert.match(review, /const intendedEdge = preferences\.direction === null/);
     assert.match(review, /contextLine\(\s*"Course"/);
     assert.match(review, /labelled\("Pace \/ travel mode", pace\)/);
-    assert.match(review, /button\("Change course"/);
-    assert.match(review, /button\("Choose course"/);
+    assert.match(review, /button\("Change travel direction"/);
+    assert.match(review, /button\("Choose travel direction"/);
     assert.match(review, /previous course is not available from the current cell/);
     assert.doesNotMatch(review, /labelled\("Course", course\)/);
     assert.doesNotMatch(review, /Select intended adjacent cell/);
@@ -774,8 +774,8 @@ test("no-course travel identifies course selection as the immediate task", () =>
         "utf8");
 
     assert.match(view, /const courseRequired = routineSpatialTravel && preferences\.direction === null/);
-    assert.match(view, /courseRequired\s*\? "Choose course"/);
-    assert.match(view, /selecting a course does not move the party/);
+    assert.match(view, /courseRequired\s*\? "Choose travel direction"/);
+    assert.match(view, /selecting a direction does not move the party/);
 });
 
 test("focused expedition panels accept the drawer body itself as their page host", () => {
@@ -1071,8 +1071,8 @@ test("focused navigation reuses valid intended course and routes missing intent 
     assert.match(navigation, /const intendedEdge = preferences\.direction === null/);
     assert.match(navigation, /contextLine\("Intended course", intendedEdge/);
     assert.match(navigation, /Choose an adjacent course before resolving navigation/);
-    assert.match(navigation, /button\("Choose course"/);
-    assert.match(navigation, /button\("Change course"/);
+    assert.match(navigation, /button\("Choose travel direction"/);
+    assert.match(navigation, /button\("Change travel direction"/);
     assert.match(navigation, /const direction = intendedEdge\.intentValue/);
     assert.doesNotMatch(navigation, /name = "intendedDirection"/);
     assert.doesNotMatch(navigation, /labelled\("Intended course", course\)/);
@@ -1277,13 +1277,22 @@ test("Phase 15.1 Guided layers beginner help over existing Compact and runtime a
     assert.match(guidance, /hex-crawl\.guided\.enabled/);
     assert.match(guidance, /stored !== "false"/);
     assert.match(guidance, /hc-guidance-off/);
-    assert.match(home, /New to hex crawls\? Start here\./);
-    assert.match(home, /A 6-mile value means one adjacent hex represents 6 miles center-to-center/);
+    assert.match(home, /Set up the expedition you want to run\./);
+    assert.match(home, /Explore without a map/);
+    assert.match(home, /Journey without a grid/);
+    assert.match(home, /guidedExperienceEnabled/);
+    assert.match(home, /data-setup-step="0"/);
+    assert.match(home, /data-setup-step="1"/);
+    assert.match(home, /data-setup-step="2"/);
     assert.match(procedure, /ProcedureAuthoringMode = "compact" \| "advanced" \| "json"/);
     assert.match(procedure, /How to use Compact/);
     assert.match(procedure, /guidedDisclosure\(/);
     assert.match(expedition, /Why is this next\?/);
     assert.match(expedition, /guidedActionExplanation/);
+    assert.match(expedition, /guidedActionInput/);
+    assert.match(expedition, /guidedActionResult/);
+    assert.match(expedition, /movementComposition\.missingInputs\.length/);
+    assert.match(expedition, /selecting a direction does not move the party/);
     assert.doesNotMatch(guidance, /fetch\(|CampaignProcedure|procedure\.modules|runtime\./);
 });
 
@@ -1294,12 +1303,13 @@ test("Phase 15.1 explains domain-specific numeric grid settings at their point o
     const assistant = fs.readFileSync(path.join(sourceDir, "modules/assistants/assistant-entry-view.ts"), "utf8");
     for (const source of [home, worlds, editor, assistant]) {
         assert.match(source, /attachFieldHelp/);
-        assert.match(source, /Hex center distance/);
-        assert.match(source, /center of one hex to the center of an adjacent hex/);
+        assert.match(source, /Map scale/);
+        assert.doesNotMatch(source, /Hex center distance/);
     }
-    assert.match(worlds, /internal coordinate frame/);
+    assert.match(home, /center of one cell to the center of an adjacent cell/);
+    assert.match(worlds, /center of one adjacent cell to the next/);
     assert.match(editor, /They are not travel-distance settings/);
-    assert.match(assistant, /q\/r are axial hex coordinates/);
+    assert.match(assistant, /q\/r are axial cell coordinates/);
 });
 
 
@@ -1311,11 +1321,13 @@ test("Phase 15.1 preset discovery explains fit and DM workload from configured g
         path.join(sourceDir, "modules/procedures/preset-guidance.ts"),
         "utf8");
 
-    assert.match(workspace, /Choosing a starting point/);
-    assert.match(workspace, /Good fit when/);
-    assert.match(workspace, /You will manage/);
-    assert.match(workspace, /Setup breadth/);
+    assert.match(workspace, /Choosing a ruleset/);
+    assert.match(workspace, /View details/);
+    assert.match(workspace, /Use this preset/);
+    assert.match(workspace, /presetDecisionFacts/);
     assert.match(workspace, /presetGuidance\(preset\.procedure\)/);
+    assert.doesNotMatch(workspace, /Good fit when/);
+    assert.doesNotMatch(workspace, /You will manage/);
     assert.match(guidance, /usesNavigationChecks/);
     assert.match(guidance, /cadence/);
     assert.match(guidance, /travel\.enabled/);
@@ -1344,7 +1356,7 @@ test("Phase 15.1 Compact supplies domain explanations for numeric procedure sett
         assert.match(presentation, new RegExp(key + ":"));
     }
     assert.match(presentation, /numericHelp\[key\] \?\? definition\.description \?\? null/);
-    assert.match(presentation, /0\.5 means half the configured center-to-center distance/);
+    assert.match(presentation, /0\.5 means half the map scale/);
 });
 
 test("Phase 15.1 rendered review requires Guided onboarding, preset advice, and next-action explanations", () => {
@@ -1355,8 +1367,8 @@ test("Phase 15.1 rendered review requires Guided onboarding, preset advice, and 
         path.join(sourceDir, "../visual-review/phase15.ts"),
         "utf8");
 
-    assert.match(fixture, /guidedPrimerVisible/);
-    assert.match(fixture, /guidedPresetAdviceCount/);
+    assert.match(fixture, /guidedSetupVisible/);
+    assert.match(fixture, /presetDecisionFactGroups/);
     assert.match(fixture, /guidedRuleWhyCount/);
     assert.ok((fixture.match(/guidedNextActionWhyVisible/g) ?? []).length >= 2);
     assert.match(fixture, /visualPreset/);
