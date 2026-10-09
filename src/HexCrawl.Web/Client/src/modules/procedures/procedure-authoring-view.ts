@@ -372,12 +372,7 @@ export async function renderProcedureAuthoringWorkspace(
         page.append(error);
         page.append(guidedCallout(
             "New to exploration rulesets?",
-            "An exploration ruleset is the table procedure Hex Crawl follows during an expedition. A preset is the shortest path to a complete, editable starting point.",
-            [
-                "Choose a familiar preset when its table workflow matches what you want to run.",
-                "Use Build my own when you already know which travel, navigation, encounter, survival, or journey rules you want.",
-                "Saving creates your own campaign copy. Later preset changes do not rewrite it."
-            ]));
+            "Rulesets define how your table handles exploration. Start from a preset or build your own; either way, saving creates a campaign copy you can edit."));
 
         const saved = document.createElement("section");
         saved.className = "hc-procedure-home-section";
@@ -459,12 +454,7 @@ export async function renderProcedureAuthoringWorkspace(
         page.append(toolbar, errorBox());
         page.append(guidedCallout(
             "Choosing a ruleset",
-            "Choose the table workflow that is closest to what you want to run. More rules are not automatically better; you can edit your campaign copy after choosing it.",
-            [
-                "Compare the four facts on each card.",
-                "Open View details when two choices look similar or when you need exact rule and source information.",
-                "Manual or reference-only behavior stays visible before you choose."
-            ]));
+            "Compare the four facts on each card. Use View details for exact rules and source information; partial or manual support is flagged before selection."));
 
         const familiar = familiarPresets(presets);
         if (familiar.length > 0) page.append(presetSection("Familiar procedures", familiar));

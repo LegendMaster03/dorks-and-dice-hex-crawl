@@ -314,11 +314,11 @@ else:
             raise SystemExit(f'changed course did not survive a fresh-client render: {metrics}')
         if metrics["runtimeActualDirection"] != 1:
             raise SystemExit(f'course selection overwrote previously resolved actual direction: {metrics}')
-        if metrics["currentTravelCourseText"] != "lower-right edge":
+        if metrics["currentTravelCourseText"] != "lower-right boundary":
             raise SystemExit(f'Current travel disagrees with changed authoritative course: {metrics}')
-        if "Intended lower-right edge" not in (metrics["navigationStatText"] or ""):
+        if "Intended lower-right boundary" not in (metrics["navigationStatText"] or ""):
             raise SystemExit(f'Navigation summary disagrees with changed authoritative course: {metrics}')
-        if "Intended course: lower-right edge" not in (metrics["focusedNavigationText"] or ""):
+        if "Intended course: lower-right boundary" not in (metrics["focusedNavigationText"] or ""):
             raise SystemExit(f'focused Navigation disagrees with changed authoritative course: {metrics}')
         if metrics["drawerCount"] != 1 or metrics["focusedTitle"] != "Navigation":
             raise SystemExit(f'changed-course reload did not reach focused Navigation: {metrics}')
