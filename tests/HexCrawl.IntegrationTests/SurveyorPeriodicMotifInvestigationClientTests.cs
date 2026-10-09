@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Text.Encodings.Web;
 using HexCrawl.Application;
 using HexCrawl.Web.MapAnalysis;
 using Microsoft.Extensions.Options;
@@ -217,7 +218,7 @@ public sealed class SurveyorPeriodicMotifInvestigationClientTests
         source = new { width = 128, height = 128, mediaType = "image/png" },
         analysis = new { width = 128, height = 128, scale = 1,
             sourceResolutionVerified = true }
-    });
+    }, new JsonSerializerOptions { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
 
     private sealed class DelegateHandler(
         Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> action) : HttpMessageHandler
