@@ -8,10 +8,10 @@
 
 - Independently specified numerical D-symbol parsing/classification, exact-rational curvature, chamber relabeling, finite connected involutions and m-orbit axioms: staged C# and TypeScript implementations with matching conformance examples.
 - Chamber-isomorphism and explicitly supplied common-cover tests: staged. Inconclusive is distinct from proved non-equivalence. Metric interval conflicts are distinct from structural conflicts.
-- Typed finite motif addresses `(motifCellId, translation.u, translation.v)` and boundary-relative reciprocal adjacency: staged C# contract. Full metric consistency and correspondence from those boundary records back to the asserted chamber cover are **not** certified in C#.
-- A general polygonal witness can be validated and its full translation-group chamber graph derived without an image in the staged TypeScript implementation. This accepts unfamiliar mixed-cell motifs and subdivided boundaries. **However, it requires an externally supplied geometric translation basis and cell polygons; it does not construct a translation cover from a D-symbol alone.** This is an unmet mandatory acceptance condition.
-- New detected-translation candidate module consumes the retained Surveyor edge evidence and tests pairs of rigid shifts across distant source regions. This is only step 1 of the generalized detector, not an observed D-symbol.
-- Surveyor raster-derived polygons, edge/vertex incidence, D-symbol quotient reduction, held-out mixed-motif detection, confidence calibration and complete original-raster residual validation: **unmet**. These must be implemented and verified within Phase 16 following PR #66, not deferred to a separate Phase 20.
+- Typed finite motif addresses `(motifCellId, translation.u, translation.v)` and reciprocal adjacency: implemented in the C# domain. The independent structural validator reconstructs chamber incidence and proves the claimed translational graph; the separate bounded metric verifier checks concrete polygon geometry. These guarantees do not yet establish generalized runtime spatial authority.
+- Image-independent constructors in both languages now build bounded primitive translation covers directly from fully valid Euclidean D-symbols, including nonuniform symmetry quotients. Separate harmonic constructors attempt concrete polygon geometry without an image and accept only independently validated witnesses. Not every admissible Euclidean symbol has a demonstrated nondegenerate metric construction under the current bounds.
+- Surveyor's opt-in authenticated v3 investigation extends the original edge and translation pipeline to reconstruct candidate polygons, reciprocal motif adjacency, derived D-symbols, and original-image global rigid-fit evidence. Candidates are explicitly non-authoritative, may be inconclusive, and cannot be persisted as accepted world topology.
+- Raster-derived incidence, provisional source-pixel geometry, basic held-out synthetic mixed motifs, and multi-region residual checks are implemented experimentally. A statistically independent real-map corpus, calibrated confidence, authoritative candidate resolution, proven maximal-symmetry reduction, complete v3-to-Tile-Crawl integration, and signed-in regression testing remain **unmet Phase 16 acceptance requirements**.
 
 ## Structural witness verification and face orientation correction
 
@@ -50,7 +50,7 @@ Both symbol-to-torus implementations enumerate every face cycle using one global
 
 ## Verification limitations
 
-The TypeScript core was compiled with local `tsc` and its focused topology tests passed. C# tests are included but were not executed locally because a .NET SDK is unavailable in this execution environment. The complete CI suites, database-backed tests, live signed-in tester smoke checks and held-out generalized image analysis have not been run. This work must not be marked Phase 16 complete or merged until all mandatory gates pass.
+Both feature branches have executed their GitHub Actions validation suites, including domain tests, Surveyor raster benchmarks, and database-backed tests where configured. Individual successful CI runs do **not** prove cross-deployment compatibility, real-image generalization, live signed-in workflows, data preservation on deployment, or generalized product integration. Those release gates are still open, and Phase 16 must not be merged on CI status alone.
 
 
 ## New bounded Euclidean multi-chamber quotient construction
@@ -129,10 +129,12 @@ per cell and does not perform image analysis, construct world state, or
 write to the database. The additive .NET
 `DelaneyDressHarmonicMetricRealization.Construct` independently derives a
 bounded polygon witness from the general Euclidean translation cover and
-verifies it with this validator. The constructor currently supports a
-uniform period scale, optional rotation, and supported explicit metric
-constraint checks; it does not guarantee solutions for all geometrically
-admissible D-symbols or solve arbitrary user constraints. Existing geometry and asset pathways remain untouched.
+verifies it with this validator. The constructor now also fits requested period-u length, period-v length,
+and included-angle intervals through a bounded, positive-orientation affine
+transformation, with the entire polygonal realization then independently
+validated. It still does not solve arbitrary vertex-angle, polygon edge-length,
+area, or other coupled metric constraints, nor does it guarantee a solution
+for every geometrically admissible Euclidean D-symbol. Existing geometry and asset pathways remain untouched.
 The corresponding domain regression cases include a valid periodic
 rectangle, metric constraints and adversarial invalid witnesses.
 
