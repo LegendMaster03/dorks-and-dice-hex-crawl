@@ -313,10 +313,13 @@ export async function renderExpedition(
                 runtime.expedition.isSpatial ? () => openTravelWorkspace("movement") : openPartyWorkspace,
                 runtime.movementComposition.missingInputs.length > 0 ? "warning" : "neutral"));
         }
-        const navigationConfigured = runtime.procedure.modules.some(module =>
-            module.moduleKey.includes("navigation")
-            && module.parameters.usesNavigationChecks !== "false"
-            && module.parameters.usesPersistentVeer !== "false");
+        const navigationConfigured = Boolean(
+            runtime.procedure.runtime?.usesNavigationChecks
+            || runtime.procedure.runtime?.usesPersistentVeer
+            || runtime.procedure.modules.some(module =>
+                module.moduleKey.includes("navigation")
+                && module.parameters.checkTriggerModel !== undefined
+                && module.parameters.checkTriggerModel !== "none"));
         if (presentation.capabilities.navigation && presentation.navigationLabel
             && (navigationConfigured || runtime.expedition.isLost || navigationResolutionDue(runtime, false, false))) {
             stats.append(statAction(
@@ -328,11 +331,7 @@ export async function renderExpedition(
                 openNavigationWorkspace,
                 runtime.expedition.isSpatial && runtime.expedition.isLost ? "warning" : "neutral"));
         }
-        const encounterConfigured = runtime.procedure.modules.some(module =>
-            (module.moduleKey.includes("encounter") && module.parameters.cadence !== undefined
-                && module.parameters.cadence !== "None")
-            || module.moduleKey === "encounters.schedule");
-        if ((presentation.capabilities.encounters && encounterConfigured)
+        if ((presentation.capabilities.encounters && encounterScheduleAvailable(runtime))
             || runtime.pauseReason === "EncounterTriggered" || runtime.expedition.pendingEncounter) {
             stats.append(statAction(
                 "Encounters",
