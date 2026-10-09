@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
 namespace HexCrawl.Domain.Spatial;
@@ -25,13 +26,13 @@ public static class PeriodicMetricWitnessValidator
         a.X * b.Y - a.Y * b.X;
     private static double Dot(TilingWorldPoint a, TilingWorldPoint b) =>
         a.X * b.X + a.Y * b.Y;
-    private static double Length(TilingWorldPoint v) => Math.Hypot(v.X, v.Y);
+    private static double Length(TilingWorldPoint v) => Math.Sqrt(v.X * v.X + v.Y * v.Y);
     private static double Distance(TilingWorldPoint a, TilingWorldPoint b) =>
         Length(Sub(a, b));
     private static bool Finite(TilingWorldPoint p) =>
         double.IsFinite(p.X) && double.IsFinite(p.Y)
         && Math.Abs(p.X) < 1e12 && Math.Abs(p.Y) < 1e12;
-    private static void Require(bool condition, string reason)
+    private static void Require([DoesNotReturnIf(false)] bool condition, string reason)
     {
         if (!condition) throw new InvalidOperationException(reason);
     }
