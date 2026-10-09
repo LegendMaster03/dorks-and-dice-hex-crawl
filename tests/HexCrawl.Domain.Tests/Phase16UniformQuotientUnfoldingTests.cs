@@ -1,3 +1,4 @@
+using System.Text.Json;
 using HexCrawl.Domain.Spatial;
 
 namespace HexCrawl.Domain.Tests;
@@ -37,7 +38,7 @@ public sealed class Phase16UniformQuotientUnfoldingTests
             Assert.Equal(edge.TargetTranslation.Opposite(), reciprocal.TargetTranslation);
         }));
         var again = DelaneyDressUniformQuotientUnfolding.Construct(source);
-        Assert.Equal(witness, again.Witness);
+        Assert.Equal(JsonSerializer.Serialize(witness), JsonSerializer.Serialize(again.Witness));
     }
 
     public static TheoryData<string> ReflectionCases()
