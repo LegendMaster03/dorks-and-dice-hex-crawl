@@ -232,7 +232,7 @@ test("structured procedure authoring exposes human-readable procedure naming", (
         path.join(repositoryRoot, "src/HexCrawl.Web/Modules/Procedures/ProcedureComposerContracts.cs"),
         "utf8");
 
-    assert.match(workspace, /Procedure name/);
+    assert.match(workspace, /Ruleset name/);
     assert.match(workspace, /nameInput\.name = "procedureName"/);
     assert.match(workspace, /nameOverride/);
     assert.match(workspace, /name: nameOverride/);
@@ -1069,7 +1069,7 @@ test("focused navigation reuses valid intended course and routes missing intent 
         view.indexOf("const openNavigationWorkspace"),
         view.indexOf("const applyTravelPreferences"));
     assert.match(navigation, /const intendedEdge = preferences\.direction === null/);
-    assert.match(navigation, /contextLine\("Intended course", intendedEdge/);
+    assert.match(navigation, /contextLine\("Intended travel direction", intendedEdge/);
     assert.match(navigation, /Choose an adjacent course before resolving navigation/);
     assert.match(navigation, /button\("Choose travel direction"/);
     assert.match(navigation, /button\("Change travel direction"/);
