@@ -42,6 +42,9 @@ cases=(
   "01-home-desktop|home|light|1440|1000"
   "02-home-narrow|home|light|500|900|390"
   "03-procedure-home|procedure-home|light|1366|1000"
+  "03a-procedure-home-container-390|procedure-home|dark|500|900|390"
+  "03b-procedure-catalog|procedure-catalog|light|1366|1000"
+  "03c-procedure-catalog-container-390|procedure-catalog|dark|500|900|390"
   "04-procedure-compact|procedure-compact|light|1366|1000"
   "04a-procedure-compact-container-390|procedure-compact|dark|390|844|390"
   "04b-procedure-reference|procedure-reference|light|1366|1000"
@@ -186,6 +189,13 @@ elif surface == "procedure":
         raise SystemExit(f'Guided preset discovery is missing: {metrics}')
     if state == "procedure-home" and metrics["presetViewDetailsButtons"] < 1:
         raise SystemExit(f'Preset details are not progressively disclosed: {metrics}')
+    if state in ("procedure-home", "procedure-catalog"):
+        if metrics["presetDecisionFactGroups"] < 3 or metrics["presetCautionCount"] < 2:
+            raise SystemExit(f'Representative catalog facts or partial-support warnings are missing: {metrics}')
+        if not {"B/X", "Old-School Essentials Classic Fantasy"}.issubset(set(metrics["representativePresetTitles"])):
+            raise SystemExit(f'Distinct shared-behavior sources are missing: {metrics}')
+    if state == "procedure-catalog" and "Simple Fixed Distance" not in metrics["representativePresetTitles"]:
+        raise SystemExit(f'Simple disabled-navigation/encounter case is missing from catalog: {metrics}')
     if state == "procedure-home" and not metrics["guidanceToggleVisible"]:
         raise SystemExit(f'Guided procedure preference control is missing: {metrics}')
     expected = {

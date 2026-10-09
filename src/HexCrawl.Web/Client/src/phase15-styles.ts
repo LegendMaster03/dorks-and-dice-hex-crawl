@@ -155,7 +155,10 @@ export function ensurePhase15Styles(): void {
         .hc-current-action h2 { margin:0; color:var(--hc-text-strong); }
         .hc-current-action-primary { font-size:1.05rem; margin:0; }
         .hc-current-action-detail { margin:0; color:var(--hc-muted); }
-        .hc-guided-action-guide { display:grid; gap:.3rem; padding:.55rem .65rem; border-inline-start:3px solid var(--hc-primary); background:var(--hc-surface-elevated); }
+        .hc-guided-action-guide { display:block; padding:.35rem .65rem; border-inline-start:3px solid var(--hc-primary); background:var(--hc-surface-elevated); }
+        .hc-guided-action-guide[open] { display:grid; gap:.3rem; }
+        .hc-guided-action-guide > summary { cursor:pointer; color:var(--hc-primary); font-weight:700; }
+        .hc-guided-action-guide:not([open]) > :not(summary) { display:none !important; }
         .hc-guided-action-guide p { margin:0; color:var(--hc-muted); }
         .hc-guided-action-guide strong { color:var(--hc-text-strong); }
         @media (min-width: 1041px) {

@@ -241,6 +241,84 @@ function visualPreset() {
     };
 }
 
+// Representative snapshots copied from current built-in catalog semantics for readability review.
+// These do not replace the catalog or claim to be an API-backed real campaign.
+function representativeCatalogPresets() {
+    const base = visualPreset();
+    const item = (moduleKey, parameters, automationLevel) => ({
+        moduleKey,
+        moduleName: visualTitle(moduleKey),
+        mechanicKey: moduleKey + ".catalog-snapshot",
+        mechanicVersion: 1,
+        executionHandler: "visual-review",
+        automationLevel,
+        parameters
+    });
+    const preset = (presetKey, displayName, description, modules, isExecutable, category = "Familiar procedures") => ({
+        ...base,
+        presetKey,
+        displayName,
+        description,
+        category,
+        procedure: {
+            ...base.procedure,
+            procedureId: presetKey,
+            key: presetKey,
+            name: displayName,
+            isExecutable,
+            runtime: isExecutable ? { ...base.procedure.runtime, usesNavigationChecks: false, encounterCadence: "None" } : null,
+            modules
+        },
+        attribution: "Representative snapshot of the built-in catalog.",
+        disclaimer: isExecutable ? null : "Some table results remain DM-assisted or manual."
+    });
+
+    const bxModules = [
+        item("time.interval", { durationTicks: "864000000000" }, "Automatic"),
+        item("encounters.cadence", { cadence: "PerDay" }, "Automatic"),
+        item("movement.budget", { budgetModel: "fixed-per-day", baseBudget: "1", budgetUnit: "travel-day", limitingScope: "party-limiting" }, "Assisted"),
+        item("movement.terrain", { adjustmentModel: "multiplier", terrainAdjustments: "clear=1;broken=0.75;difficult=0.5" }, "Assisted"),
+        item("navigation.outcome", { checkTriggerModel: "daily-terrain-or-context", failureStateModel: "lost-until-recognized" }, "Assisted"),
+        item("encounters.schedule", { scheduleModel: "daily-terrain-sensitive", travelChecksPerInterval: "1" }, "Assisted"),
+        item("survival.resources", { resourceKinds: "food;water", consumptionModel: "fixed-per-person" }, "Manual"),
+        item("exploration.foraging", { resolutionModel: "procedure-check" }, "Assisted")
+    ];
+    const bxDescription = "Daily wilderness travel where terrain, getting lost, encounters, foraging, and supplies matter.";
+    const simpleModules = [
+        item("time.interval", { durationTicks: "144000000000" }, "Automatic"),
+        item("movement.resolution", { travelResolution: "ContinuousDistance", actualDistanceResolution: "Fixed" }, "Automatic"),
+        item("movement.hex-progress", { tracksIntraHexProgress: "true" }, "Automatic"),
+        item("navigation.check", { usesNavigationChecks: "false", usesPersistentVeer: "false" }, "Automatic"),
+        item("encounters.cadence", { cadence: "None" }, "Automatic")
+    ];
+    return [
+        preset("bx-wilderness", "B/X", bxDescription, bxModules, false),
+        preset("ose-classic-fantasy", "Old-School Essentials Classic Fantasy",
+            "Uses the same wilderness-travel behavior as B/X while preserving Old-School Essentials as its own source identity.",
+            bxModules.map(module => ({ ...module, parameters: { ...module.parameters } })), false),
+        preset("simple-fixed-distance", "Simple Fixed Distance",
+            "Four-hour fixed-distance travel with partial cell progress and no navigation or encounter checks.",
+            simpleModules, true, "Generic starting points"),
+        preset("adnd2e-wilderness", "AD&D 2e",
+            "Daily overland travel with terrain movement costs and getting lost; encounter scheduling remains manual where source detail is uncertain.",
+            [
+                item("time.interval", { durationTicks: "864000000000" }, "Automatic"),
+                item("movement.budget", { budgetModel: "movement-points", baseBudget: "1" }, "Assisted"),
+                item("movement.terrain", { adjustmentModel: "movement-points-per-distance" }, "Assisted"),
+                item("navigation.outcome", { checkTriggerModel: "daily-terrain-or-context" }, "Assisted"),
+                item("encounters.schedule", { scheduleModel: "manual-contextual" }, "Assisted")
+            ], false),
+        preset("one-ring-2e-journey", "The One Ring 2e",
+            "Role-driven journeys with route planning, Guide progress, journey events, terrain influence, and fatigue.",
+            [
+                item("movement.budget", { budgetModel: "journey-progress" }, "Assisted"),
+                item("party.activities", { activityBudgetModel: "journey-role", roleKeys: "guide;hunter;lookout;scout" }, "Manual"),
+                item("journey.process", { stageModel: "route-then-events-then-arrival", progressModel: "guide-marching-progress", completionModel: "arrival" }, "Manual"),
+                item("journey.events", { triggerModel: "journey-events" }, "Manual")
+            ], false)
+    ];
+}
+
 const savedProcedure = {
     procedureId: "visual-procedure",
     revision: 3,
@@ -330,6 +408,8 @@ function emitSpecialMetrics(surface) {
         guidanceToggleVisible: buttons.some(button => ["Hide beginner help", "Show beginner help"].includes(button.textContent?.trim() || "")),
         guidedFieldHelpCount: root.querySelectorAll("[data-guided-help]").length,
         presetDecisionFactGroups: root.querySelectorAll(".hc-preset-decision-facts").length,
+        presetCautionCount: root.querySelectorAll(".hc-preset-caution").length,
+        representativePresetTitles: Array.from(root.querySelectorAll(".hc-preset-card h3")).map(node => node.textContent?.trim()),
         presetViewDetailsButtons: buttons.filter(button => button.textContent?.trim() === "View details").length,
         guidedSetupStepCount: root.querySelectorAll("[data-setup-step]").length,
         visibleGuidedSetupSteps: Array.from(root.querySelectorAll("[data-setup-step]")).filter(step => !step.hidden).length,
@@ -456,10 +536,14 @@ if (stateName === "home") {
     restoreFetch();
 } else if (stateName.startsWith("procedure-")) {
     const restoreFetch = installProcedureFetch();
-    const api = { getProcedurePresets: async () => [visualPreset()] };
-    if (stateName === "procedure-home") {
+    const api = { getProcedurePresets: async () => [visualPreset(), ...representativeCatalogPresets()] };
+    if (stateName === "procedure-home" || stateName === "procedure-catalog") {
         localStorage.removeItem("hex-crawl.procedure-authoring.mode");
         await renderProcedureAuthoringWorkspace(root, api, null, () => {});
+        if (stateName === "procedure-catalog") {
+            Array.from(root.querySelectorAll("button"))
+                .find(button => button.textContent?.trim() === "Browse all presets")?.click();
+        }
     } else if (stateName === "procedure-reference") {
         await renderProcedureReference(root, "visual-procedure", 3, () => {});
     } else {

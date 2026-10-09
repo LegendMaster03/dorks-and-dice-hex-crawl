@@ -28,7 +28,7 @@ This records the developer audit and intended validation of presentation-only ch
 
 Frontend checks: client test suite, TypeScript typechecking, production build, and embedded smoke. Rendered review: existing `visual-review/capture-phase15.sh` across its desktop, embedded-container, narrow viewport, and light/dark states, including a guided setup back/forward, help-toggle, and retained-input scenario. Evaluate screenshots, not only overflow dimensions; capture them with the exact workflow/head, viewport sizes, and state names.
 
-Source-contract tests validate readable wording and intact architecture but are not substitutes for interactions. Preset guidance tests cover configured behavior; visual fixtures are synthetic and must not be described as a real-catalog usability test. Human onboarding success remains unverified pending tester observation.
+Source-contract tests validate readable wording and intact architecture but are not substitutes for interactions. Preset guidance tests cover configured behavior. In addition to the generic expedition fixture, the visual chooser now includes representative parameter/automation snapshots of current built-in B/X, Old-School Essentials, Simple Fixed Distance, AD&D 2e, and The One Ring 2e catalog choices. These exercise shared source behavior, disabled checks, and partial support, but are static snapshots rather than live catalog API responses or human usability tests. Human onboarding success remains unverified pending tester observation.
 
 ## Remaining dependencies
 

@@ -422,8 +422,11 @@ export async function renderExpedition(
 
     const renderGuidedActionGuide = (
         action: ReturnType<typeof expeditionWorkspacePresentation>["action"]): HTMLElement => {
-        const guide = document.createElement("section");
+        const guide = document.createElement("details");
         guide.className = "hc-guided-action-guide hc-guided-only";
+        const summary = document.createElement("summary");
+        summary.textContent = "What this action needs and changes";
+        guide.append(summary);
         const row = (label: string, copy: string): HTMLElement => {
             const paragraph = document.createElement("p");
             paragraph.append(textElement("strong", label), document.createTextNode(` ${copy}`));
