@@ -57,12 +57,12 @@ public sealed record PeriodicTopologyWitness(
             throw new InvalidOperationException("Unsupported periodic topology contract version.");
         if (string.IsNullOrWhiteSpace(Provenance))
             throw new InvalidOperationException("Topology witness provenance is required.");
-        var quotient = DelaneyDressTopology.Inspect(QuotientDsSymbol);
+        var quotient = DelaneyDressTopology.Inspect(QuotientDsSymbol, 2048);
         var cover = DelaneyDressTopology.Inspect(TranslationDsSymbol, 2048);
         if (quotient.Status != DelaneyDressStatus.Euclidean || cover.Status != DelaneyDressStatus.Euclidean
             || DelaneyDressTopology.ProjectChambers(cover.Symbol!, quotient.Symbol!) is null)
             throw new InvalidOperationException("Translation chamber graph does not cover the quotient D-symbol.");
-        if (MotifCells.Count == 0 || MotifCells.Count > 128 || MotifCells.Any(c => string.IsNullOrWhiteSpace(c.Id)))
+        if (MotifCells.Count == 0 || MotifCells.Count > 256 || MotifCells.Any(c => string.IsNullOrWhiteSpace(c.Id)))
             throw new InvalidOperationException("Invalid finite motif cell count or identity.");
         var byId = MotifCells.ToDictionary(c => c.Id, StringComparer.Ordinal);
         foreach (var cell in MotifCells)

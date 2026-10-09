@@ -54,6 +54,20 @@ public sealed class Phase16TorusCoverTests
     }
 
     [Fact]
+    public void ValidatesExpandedSymbolsAboveTheDefaultParserLimit()
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", "periodic-topology-v1.json");
+        using var json = JsonDocument.Parse(File.ReadAllText(path));
+        var source = json.RootElement.GetProperty("symbolCoverCases").EnumerateArray()
+            .Single(c => c.GetProperty("name").GetString() == "unbranched-square-36-face-torus")
+            .GetProperty("dsSymbol").GetString()!;
+        var result = DelaneyDressTorusCover.Construct(source);
+        Assert.Equal(DelaneyDressCoverStatus.Constructed, result.Status);
+        Assert.Equal(36, result.Witness!.MotifCells.Count);
+        result.Witness.ValidateAdjacency();
+    }
+
+    [Fact]
     public void RejectsSymmetryQuotientsAsUnsupportedNotInvalidMathematics()
     {
         foreach (var symbol in new[] { "<1:1,1,1:4,4>", "<1:1,1,1:3,6>", "<1:1,1,1:6,3>" })
