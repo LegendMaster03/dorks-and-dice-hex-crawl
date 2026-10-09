@@ -255,8 +255,9 @@ public sealed class SurveyorPeriodicMotifInvestigationClient(
         var basisJson = Array(candidateJson, "translationBasisSourcePixels", 2, 2);
         var basis = basisJson.EnumerateArray().Select(Point).ToArray();
         double determinant = basis[0].X * basis[1].Y - basis[0].Y * basis[1].X;
-        double relativeArea = determinant /
-            (Math.Hypot(basis[0].X, basis[0].Y) * Math.Hypot(basis[1].X, basis[1].Y));
+        double firstLength = Math.Sqrt(basis[0].X * basis[0].X + basis[0].Y * basis[0].Y);
+        double secondLength = Math.Sqrt(basis[1].X * basis[1].X + basis[1].Y * basis[1].Y);
+        double relativeArea = determinant / (firstLength * secondLength);
         if (!double.IsFinite(relativeArea) || Math.Abs(relativeArea) <= 1e-6)
             throw new MapAnalysisProtocolException("Surveyor translation basis is degenerate.");
 
