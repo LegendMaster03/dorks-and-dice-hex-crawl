@@ -70,3 +70,15 @@ limit-exceeded examples.
 This is still **not** general mixed-face-orbit or metric-embedding
 reconstruction. It is additive domain logic only; no schema or existing
 spatial authority changes. Tests must be rerun before Phase 16 acceptance.
+
+
+## Bounded orientation double for arbitrary Euclidean quotient
+
+`DelaneyDressOrientationCover.Construct` implements the connected parity
+double cover for valid zero-curvature D-symbols, including nonuniform
+face-degree and vertex-valence examples. It proves each chamber projection,
+eliminates all fixed-point involutions, returns an idempotent result for
+already oriented symbols and reports any remaining local branching.
+`orientationCoverCases` is byte-identical to Surveyor's versioned fixture.
+This is not a translation lattice or a metric embedding; removal of residual
+rotational branching is still required before generalized acceptance.
