@@ -464,6 +464,12 @@ export async function renderExpedition(
             if (position) guide.append(row("Saved position and progress:", [position.value, position.detail].filter(Boolean).join(" · ")));
         }
         guide.append(row("Current time:", expeditionWorkspacePresentation(runtime, journey, survival).timeLabel));
+        if (runtime.expedition.isSpatial) {
+            const state = runtime.expedition;
+            const total = state.distanceTraveled;
+            guide.append(row("Saved travel totals:",
+                `${state.completedWatches} completed ${state.completedWatches === 1 ? "watch" : "watches"} · ${formatHours(state.elapsedTravelHours)} travel elapsed · ${formatNumber(total.value)} ${total.unit.symbol} traveled`));
+        }
         if (runtime.pauseReason) guide.append(row("Current interruption:", pauseInstruction(runtime) ?? runtime.pauseReason));
         guide.append(row("Next required action:", currentActionCopy(action).label));
         if (runtime.history.length > 0) {
