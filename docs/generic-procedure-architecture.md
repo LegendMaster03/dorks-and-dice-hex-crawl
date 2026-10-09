@@ -40,11 +40,11 @@ See `docs/phase-15-design-architecture.md`.
 
 ## Pre-release compatibility policy
 
-Hex Crawl remains pre-release.
+Hex Crawl remains pre-release, but **human testing started after Phase 15**. Current development must preserve usable tester workflows at every deployed phase, including existing world/expedition/procedure and nonspatial flows. The earlier database-reset-tolerant pre-testing policy is historical and no longer the operative default.
 
-Before Phase 15 acceptance, obsolete development API/persistence/UI/internal representations should be removed rather than preserved through fallback infrastructure, and development database resets remain acceptable.
+Existing tester data, saved worlds, pinned procedure revisions, sessions and external map assets must normally survive through versioned, tested migrations with backup/recovery evidence. Temporary compatibility adapters and feature gates are acceptable for safe intermediate releases and should be removed once the replacement path is verified.
 
-After Phase 15 acceptance, internal human testing begins. Tester data has a human cost, so a straightforward architecture-preserving migration should be preferred before breaking persisted tester data where practical. This preference does not justify parallel obsolete models or permanent compatibility infrastructure, and resets remain possible when architecture warrants them.
+**No automatic or routine database reset is permitted.** When a genuinely unavoidable data-destructive change remains after evaluating targeted migration, data repair and backup/restore, the project owner must separately authorize that specific reset and affected testers must receive an explanation. A phase or merge authorization is not permission to delete tester data. The active detailed rules and acceptance gates are documented in `docs/tile-crawl-development-plan.md`.
 
 ## Generic modules and mechanics
 
