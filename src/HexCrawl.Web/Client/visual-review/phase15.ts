@@ -1471,8 +1471,13 @@ switch (stateName) {
         runtime.pauseReason = "LostRecognitionRequired";
         break;
     case "movement-input-pending":
+    case "movement-validation-retry":
         runtime.expedition.intendedDirection = 3;
         runtime.movementComposition = movement(false);
+        if (stateName === "movement-validation-retry") {
+            runtime.procedure.runtime.usesNavigationChecks = false;
+            runtime.procedure.runtime.encounterCadence = "None";
+        }
         break;
     case "movement-composition":
         runtime.expedition.intendedDirection = 3;
@@ -1920,8 +1925,13 @@ window.fetch = async input => {
     });
 };
 
+let movementRetryCalls = 0;
 const api = new Proxy({
     getExpedition: async () => runtime,
+    advanceExpedition: async () => {
+        movementRetryCalls += 1;
+        return runtime;
+    },
     getOverworld: async () => world,
     setExpeditionCourseIntent: async (_expeditionId, input) => {
         if (input.expectedVersion !== runtime.version) {
@@ -1984,6 +1994,8 @@ async function waitForCondition(predicate, label, attempts = 30) {
 await new Promise(resolve => setTimeout(resolve, 0));
 
 let focusReturnVerified = false;
+let movementValidationVerified = false;
+let movementRetryVerified = false;
 
 if (stateName === "course-change-reload") {
     const changedEdge = root.querySelector('[data-adjacency-interface-id="adjacency-5"]');
@@ -2002,7 +2014,7 @@ if (stateName === "course-change-reload") {
         "fresh client restored changed course");
 
     findButton("Resolve navigation")?.click();
-    await waitForRootText("Intended course:");
+    await waitForRootText("Intended travel direction:");
 } else if (stateName === "course-clear-reload") {
     const selectedEdge = root.querySelector('[data-adjacency-interface-id="adjacency-1"]');
     selectedEdge?.click();
@@ -2031,8 +2043,33 @@ if (stateName === "course-change-reload") {
     }
 } else if (stateName === "navigation-pending" || stateName === "abstract-spatial-course") {
     findButton("Resolve navigation")?.click();
-} else if (stateName === "movement-input-pending") {
+} else if (stateName === "movement-input-pending" || stateName === "movement-validation-retry") {
     findButton("Continue travel")?.click();
+    await waitForCondition(() => Boolean(root.querySelector('[data-phase15-drawer] [data-advance]')), "rendered movement form");
+    if (stateName === "movement-validation-retry") {
+        const form = root.querySelector('[data-phase15-drawer] [data-advance]');
+        const hint = root.querySelector('[data-phase15-drawer] [data-travel-resolution] .hc-hint');
+        const effective = form.querySelector('[name="effectiveDistance"]');
+        const source = form.querySelector('[name="travelSource"]');
+        const initialHint = root.querySelector('[data-phase15-drawer]')?.textContent || "";
+        if (!initialHint.includes("Effective distance (mi)") || !initialHint.includes("travel period")
+            || initialHint.includes("runtime can not derive")) {
+            throw new Error("Rendered movement hint lost the field, period, or unit.");
+        }
+        effective.value = "";
+        source.value = "DmOverride";
+        form.requestSubmit();
+        await waitForCondition(() => Boolean(root.querySelector('[data-watch-advance-error]')), "blank-distance validation");
+        const validation = root.querySelector('[data-watch-advance-error]')?.textContent || "";
+        movementValidationVerified = validation.includes("Effective distance (mi)")
+            && validation.includes("travel period") && !validation.includes("effectiveDistance requires a number");
+        if (!movementValidationVerified || movementRetryCalls !== 0) throw new Error("Blank movement validation did not block travel with plain-language context.");
+        effective.value = "2";
+        form.requestSubmit();
+        await waitForCondition(() => movementRetryCalls === 1, "retry reached authoritative advance");
+        movementRetryVerified = !root.querySelector('[data-watch-advance-error]');
+        if (!movementRetryVerified) throw new Error("Retry did not clear the validation error.");
+    }
 } else if (stateName === "movement-composition" || stateName === "nonspatial-movement-composition") {
     findStatAction("Movement")?.click();
     await waitForRootText("Movement composition contributors");
@@ -2216,8 +2253,11 @@ const metrics = {
     journeyPendingRawInternalsVisible: stateName === "journey-pending"
         && /ProcessProgress|journey-event-opportunity|event-1:pass:progress/.test(normalJourneyText),
     movementUnitVisible: rootText.includes("Effective distance (mi)"),
+    movementValidationVerified,
+    movementRetryVerified,
+    movementRetryCalls,
     navigationCourseReadOnly: !["navigation-pending", "abstract-spatial-course"].includes(stateName) || (
-        rootText.includes("Intended course:")
+        rootText.includes("Intended travel direction:")
         && !root.querySelector('[data-phase15-drawer] select[name="intendedDirection"]')
     ),
     abstractSpatialCourseReused: stateName !== "abstract-spatial-course" || (
