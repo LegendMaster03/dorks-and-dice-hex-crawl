@@ -435,9 +435,27 @@ export async function renderExpedition(
         guide.append(
             row("Input:", guidedActionInput(action.kind)),
             row("After resolution:", guidedActionResult(action.kind)));
-        const latest = runtime.history.at(-1);
-        if (latest) {
-            guide.append(row("Latest recorded event:", latest.message));
+        // Present the current authoritative state, not the final provenance/diagnostic history row.
+        const latestOutcome = [...runtime.history].reverse().find(event =>
+            !/provenance|diagnostic|resolved input source/i.test(event.message));
+        if (latestOutcome) {
+            guide.append(row("Recorded event:", latestOutcome.message));
+        }
+        if (runtime.expedition.isSpatial) {
+            const position = spatialPositionPresentation(runtime);
+            if (position) guide.append(row("Saved position and progress:", [position.value, position.detail].filter(Boolean).join(" · ")));
+        }
+        guide.append(row("Current time:", expeditionWorkspacePresentation(runtime, journey, survival).timeLabel));
+        if (runtime.pauseReason) guide.append(row("Current interruption:", pauseInstruction(runtime) ?? runtime.pauseReason));
+        guide.append(row("Next required action:", currentActionCopy(action).label));
+        if (runtime.history.length > 0) {
+            const technical = document.createElement("details");
+            technical.className = "hc-optional-reference";
+            const caption = document.createElement("summary");
+            caption.textContent = "Technical history and result sources";
+            technical.append(caption);
+            for (const event of runtime.history.slice(-5)) technical.append(textElement("p", event.message));
+            guide.append(technical);
         }
         return guide;
     };
@@ -1312,7 +1330,7 @@ export async function renderExpedition(
             body.append(
                 textElement("h3", navigationDue ? "Navigation required" : "Navigation status"),
                 contextLine("Navigator", assigned.join(", ") || "No navigator role assigned"),
-                contextLine("Intended course", intendedEdge
+                contextLine("Intended travel direction", intendedEdge
                     ? `${edgeCourseLabel(intendedEdge)} → cell ${intendedEdge.targetCell.q}, ${intendedEdge.targetCell.r}`
                     : "Not selected"),
                 contextLine("Current navigation state", state.isLost
@@ -2493,7 +2511,7 @@ function watchWorkspaceMarkup(adjacency: ReturnType<typeof currentRuntimeCellAdj
 
                 <fieldset data-travel-resolution data-focus-group="advanced movement">
                     <legend>Movement result</legend>
-                    <p class="hc-hint">Authoritative party movement is prefilled when available. Enter only movement information Hex Crawl can not derive.</p>
+                    <p class="hc-hint">Enter the distance actually resolved for this travel period, using the unit shown below. Use a ruleset calculation or table roll when one is available; otherwise enter the distance decided at the table. Choose its source below. A blank value is not an automatic zero.</p>
                     <div data-fixed-distance><label>${distanceInputLabel("Effective distance", distanceUnit)} <input name="effectiveDistance" type="number" min="0" step="any"></label></div>
                     <div data-variable-distance><label>${distanceInputLabel("Expected distance", distanceUnit)} <input name="expectedDistance" type="number" min="0" step="any"></label><label>${distanceInputLabel("Actual resolved distance", distanceUnit)} <input name="actualDistance" type="number" min="0" step="any"></label></div>
                     <div data-step-distance><label>Resolved hex steps <input name="hexSteps" type="number" min="0" step="1"></label></div>

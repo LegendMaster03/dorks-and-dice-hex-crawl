@@ -592,7 +592,7 @@ export async function renderProcedureAuthoringWorkspace(
             left.append(revisionField);
         }
 
-        const save = button(savePending ? "Saving…" : sourceProcedureId ? "Save new revision" : "Save procedure", "primary");
+        const save = button(savePending ? "Saving…" : sourceProcedureId ? "Save new revision" : "Save ruleset", "primary");
         save.dataset.procedureSave = "";
         save.disabled = savePending
             || historical()
@@ -617,7 +617,7 @@ export async function renderProcedureAuthoringWorkspace(
             identity.className = "hc-panel hc-procedure-identity";
             const nameField = document.createElement("label");
             nameField.className = "hc-compact-field";
-            nameField.append(textElement("span", "Procedure name"));
+            nameField.append(textElement("span", "Ruleset name"));
             const nameInput = document.createElement("input");
             nameInput.type = "text";
             nameInput.name = "procedureName";
@@ -628,7 +628,7 @@ export async function renderProcedureAuthoringWorkspace(
                 const error = root.querySelector<HTMLElement>("[data-error]");
                 if (!next) {
                     nameInput.value = displayedName();
-                    if (error) showUiError(error, new Error("Procedure name is required."));
+                    if (error) showUiError(error, new Error("Ruleset name is required."));
                     return;
                 }
                 if (error) clearUiError(error);

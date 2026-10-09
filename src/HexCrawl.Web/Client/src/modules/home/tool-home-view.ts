@@ -81,7 +81,7 @@ export async function renderToolHome(
                             <label>Expedition name <input name="name" required value="Expedition" autocomplete="off"></label>
                             <div class="hc-form" data-abstract-context hidden>
                                 <label>Setup name <input name="contextName" value="Mapless exploration" autocomplete="off"></label>
-                                <label>Grid orientation <select name="orientation"><option value="PointyTop">Pointy top</option><option value="FlatTop">Flat top</option></select></label>
+                                <details class="hc-optional-reference"><summary>Optional grid orientation</summary><label>Grid orientation <select name="orientation"><option value="PointyTop">Pointy top</option><option value="FlatTop">Flat top</option></select></label><p class="hc-hint">Keep pointy top unless your grid uses flat-top cells.</p></details>
                                 <fieldset class="hc-field-group hc-map-scale-field">
                                     <legend>Map scale</legend>
                                     <div class="hc-inline">
@@ -97,10 +97,14 @@ export async function renderToolHome(
                                 <p class="hc-hint">There is no authored map, but spatial positions and adjacent-cell travel are still tracked.</p>
                             </div>
                             <div data-spatial-start hidden>
-                                <div class="hc-inline">
-                                    <label>Starting cell q <input name="q" type="number" step="1" value="0"></label>
-                                    <label>Starting cell r <input name="r" type="number" step="1" value="0"></label>
-                                </div>
+                                <details class="hc-optional-reference">
+                                    <summary>Optional starting position (defaults to cell 0, 0)</summary>
+                                    <p class="hc-hint">Leave these coordinates unchanged to begin at the default cell. For an existing grid, enter the exact cell coordinates if you need another starting point.</p>
+                                    <div class="hc-inline">
+                                        <label>Cell coordinate q <input name="q" type="number" step="1" value="0"></label>
+                                        <label>Cell coordinate r <input name="r" type="number" step="1" value="0"></label>
+                                    </div>
+                                </details>
                             </div>
                             <div data-nonspatial-context hidden>
                                 <label>Setup name <input name="nonSpatialName" value="Journey" autocomplete="off"></label>
