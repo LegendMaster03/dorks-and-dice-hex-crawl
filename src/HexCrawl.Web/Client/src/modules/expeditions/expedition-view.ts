@@ -118,7 +118,7 @@ export async function renderExpedition(
         const key = [
             cell.q,
             cell.r,
-            runtime.procedure.tilingGjhNotation,
+            runtime.procedure.tilingDsSymbol,
             world?.version ?? "abstract",
             grid?.orientation ?? runtime.context.orientation ?? "PointyTop",
             grid?.rotationDegrees ?? 0,
@@ -129,7 +129,7 @@ export async function renderExpedition(
                 key,
                 value: currentRuntimeCellAdjacency({
                     currentCell: cell,
-                    tilingGjhNotation: runtime.procedure.tilingGjhNotation,
+                    tilingDsSymbol: runtime.procedure.tilingDsSymbol,
                     selectedDirection: null,
                     worldGrid: grid,
                     abstractOrientation: runtime.context.orientation

@@ -110,7 +110,7 @@ function composerFixture() {
         key: "visual-procedure",
         name: "Shattered Marches Procedure",
         schemaVersion: "1.1",
-        tilingGjhNotation: "6/m30/r(h1)",
+        tilingDsSymbol: "<1:1,1,1:6,3>",
         isExecutable: true,
         modificationCount: 0,
         modifiedModuleCount: 0,
@@ -168,7 +168,7 @@ function referenceFixture() {
         key: "visual-procedure",
         name: "Shattered Marches Procedure",
         schemaVersion: "1.1",
-        tilingGjhNotation: "6/m30/r(h1)",
+        tilingDsSymbol: "<1:1,1,1:6,3>",
         isExecutable: true,
         modificationCount: 0,
         modifiedModuleCount: 0,
@@ -199,7 +199,7 @@ function visualPreset() {
             key: "visual-guided-travel",
             name: "Classic exploration travel",
             schemaVersion: "1.1",
-            tilingGjhNotation: "6/m30/r(h1)",
+            tilingDsSymbol: "<1:1,1,1:6,3>",
             isExecutable: true,
             runtime: {
                 intervalHours: 4,
@@ -354,7 +354,7 @@ function installProcedureFetch() {
                     procedureId: "visual-procedure",
                     revision: 3,
                     schemaVersion: "1.1",
-                    tilingGjhNotation: "6/m30/r(h1)",
+                    tilingDsSymbol: "<1:1,1,1:6,3>",
                     name: "Shattered Marches Procedure",
                     modules: Object.entries(richProcedureParameters).map(([moduleKey, parameters]) => ({ moduleKey, parameters }))
                 }, null, 2)
@@ -703,7 +703,7 @@ function procedure() {
         key: "phase15-visual",
         name: "Expedition Procedure",
         schemaVersion: "1.1",
-        tilingGjhNotation: "6/m30/r(h1)",
+        tilingDsSymbol: "<1:1,1,1:6,3>",
         isExecutable: true,
         runtime: {
             intervalHours: 4,

@@ -9,7 +9,7 @@ import {
     screenRelativeAdjacencyLabel
 } from "../.test-dist/modules/expeditions/spatial-adjacency.js";
 import {
-    CURRENT_HEX_GJH_NOTATION,
+    CURRENT_HEX_DS_SYMBOL,
     currentRuntimeCellAdjacency,
     sameHexCell
 } from "../.test-dist/modules/expeditions/current-cell-topology.js";
@@ -51,7 +51,7 @@ test("world-backed navigator geometry comes from the same authoritative cell cor
     };
     const current = currentRuntimeCellAdjacency({
         currentCell: { q: 4, r: -2 },
-        tilingGjhNotation: CURRENT_HEX_GJH_NOTATION,
+        tilingDsSymbol: CURRENT_HEX_DS_SYMBOL,
         selectedDirection: 1,
         worldGrid: grid,
         abstractOrientation: null
@@ -81,7 +81,7 @@ test("world-backed navigator geometry comes from the same authoritative cell cor
 test("mapless geometry is resolved before the navigator consumes it", () => {
     const current = currentRuntimeCellAdjacency({
         currentCell: { q: 0, r: 0 },
-        tilingGjhNotation: CURRENT_HEX_GJH_NOTATION,
+        tilingDsSymbol: CURRENT_HEX_DS_SYMBOL,
         selectedDirection: null,
         worldGrid: null,
         abstractOrientation: "PointyTop"
@@ -94,7 +94,7 @@ test("mapless geometry is resolved before the navigator consumes it", () => {
 test("current runtime adapter rejects an unsupported tiling outside the generic navigator", () => {
     assert.throws(() => currentRuntimeCellAdjacency({
         currentCell: { q: 0, r: 0 },
-        tilingGjhNotation: "future/tiling",
+        tilingDsSymbol: "future/tiling",
         selectedDirection: null,
         worldGrid: null,
         abstractOrientation: "PointyTop"
@@ -104,7 +104,7 @@ test("current runtime adapter rejects an unsupported tiling outside the generic 
 test("map target and navigator intent resolve to the same adjacency interface", () => {
     const current = currentRuntimeCellAdjacency({
         currentCell: { q: 0, r: 0 },
-        tilingGjhNotation: CURRENT_HEX_GJH_NOTATION,
+        tilingDsSymbol: CURRENT_HEX_DS_SYMBOL,
         selectedDirection: null,
         worldGrid: null,
         abstractOrientation: "FlatTop"

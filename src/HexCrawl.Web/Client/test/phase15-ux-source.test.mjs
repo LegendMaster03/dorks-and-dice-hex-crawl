@@ -415,7 +415,7 @@ test("current-cell topology is memoized independently from selected intent", () 
     assert.match(view, /let adjacencyCache:/);
     assert.match(view, /if \(adjacencyCache\?\.key !== key\)/);
     assert.match(view, /currentRuntimeCellAdjacency\(\{/);
-    assert.match(view, /tilingGjhNotation: runtime\.procedure\.tilingGjhNotation/);
+    assert.match(view, /tilingDsSymbol: runtime\.procedure\.tilingDsSymbol/);
     assert.match(view, /selectedDirection: null/);
     assert.match(view, /const base = adjacencyCache\.value/);
     assert.match(view, /selectedAdjacencyId: selected\?\.id \?\? null/);

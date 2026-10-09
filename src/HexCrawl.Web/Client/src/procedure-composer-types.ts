@@ -101,7 +101,7 @@ export type ProcedureComposer = {
     key: string;
     name: string;
     schemaVersion: string;
-    tilingGjhNotation: string;
+    tilingDsSymbol: string;
     isExecutable: boolean;
     modificationCount: number;
     modifiedModuleCount: number;
