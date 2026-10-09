@@ -296,12 +296,15 @@ export async function renderExpedition(
                 position?.value ?? presentation.routeLabel ?? runtime.context.name,
                 runtime.expedition.isSpatial ? position?.detail ?? null : "Journey / no grid",
                 runtime.expedition.isSpatial ? focusTravelCourse : openHistory,
-                runtime.pauseReason ? "warning" : "neutral"),
-            statAction(
+                runtime.pauseReason ? "warning" : "neutral"));
+        // Party management remains in the GM tools; an empty, unused party is not a status condition.
+        if (runtime.party.members.length > 0 || runtime.party.activityAssignments.length > 0) {
+            stats.append(statAction(
                 "Party",
                 `${runtime.party.members.length} member${runtime.party.members.length === 1 ? "" : "s"}`,
                 partyActivitySummary(runtime),
                 openPartyWorkspace));
+        }
         if (presentation.capabilities.travel) {
             stats.append(statAction(
                 "Movement",
@@ -310,7 +313,15 @@ export async function renderExpedition(
                 runtime.expedition.isSpatial ? () => openTravelWorkspace("movement") : openPartyWorkspace,
                 runtime.movementComposition.missingInputs.length > 0 ? "warning" : "neutral"));
         }
-        if (presentation.capabilities.navigation && presentation.navigationLabel) {
+        const navigationConfigured = Boolean(
+            runtime.procedure.runtime?.usesNavigationChecks
+            || runtime.procedure.runtime?.usesPersistentVeer
+            || runtime.procedure.modules.some(module =>
+                module.moduleKey.includes("navigation")
+                && module.parameters.checkTriggerModel !== undefined
+                && module.parameters.checkTriggerModel !== "none"));
+        if (presentation.capabilities.navigation && presentation.navigationLabel
+            && (navigationConfigured || runtime.expedition.isLost || navigationResolutionDue(runtime, false, false))) {
             stats.append(statAction(
                 "Navigation",
                 presentation.navigationLabel,
@@ -320,7 +331,8 @@ export async function renderExpedition(
                 openNavigationWorkspace,
                 runtime.expedition.isSpatial && runtime.expedition.isLost ? "warning" : "neutral"));
         }
-        if (presentation.capabilities.encounters) {
+        if ((presentation.capabilities.encounters && encounterScheduleAvailable(runtime))
+            || runtime.pauseReason === "EncounterTriggered" || runtime.expedition.pendingEncounter) {
             stats.append(statAction(
                 "Encounters",
                 runtime.pauseReason === "EncounterTriggered" ? "Encounter active" : encounterSummary(runtime),
@@ -391,7 +403,13 @@ export async function renderExpedition(
                 if (!runtime.expedition.isSpatial) return "Use the current interval rules and any table or DM values requested by the travel/time workspace.";
                 if (preferences.direction === null) return "Choose an adjacent destination from the map or navigator. That choice records intended travel only; it does not move the party.";
                 if (runtime.movementComposition.missingInputs.length > 0) {
-                    return `Movement still has ${runtime.movementComposition.missingInputs.length} unresolved ${runtime.movementComposition.missingInputs.length === 1 ? "input" : "inputs"}. The travel workspace requests those values from the table or DM before movement resolves.`;
+                    const period = travelPeriodDetail(runtime);
+                    const unit = movementDistanceUnit();
+                    const suggested = runtime.movementComposition.suggestedExpectedDistance;
+                    const basis = suggested
+                        ? `The saved movement calculation suggests ${formatNumber(suggested.value)} ${suggested.unit.symbol}; confirm it against the table's actual result.`
+                        : "No authoritative movement formula supplied a distance. Use the distance resolved by your ruleset, dice, another system, or the DM for this period; do not assume zero.";
+                    return `Enter the travel distance${unit ? ` in ${unit}` : ""} for ${period || "this travel period"}, then choose its source (calculated, rolled, or DM decision). ${basis}`;
                 }
                 return "The saved travel direction, pace, and movement state are reused. The travel workspace asks only for any remaining table or DM decisions.";
             case "navigation": return "Enter the configured navigation result or DM decision in the navigation workspace. The intended direction remains the reference point.";
@@ -435,9 +453,33 @@ export async function renderExpedition(
         guide.append(
             row("Input:", guidedActionInput(action.kind)),
             row("After resolution:", guidedActionResult(action.kind)));
-        const latest = runtime.history.at(-1);
-        if (latest) {
-            guide.append(row("Latest recorded event:", latest.message));
+        // Present the current authoritative state, not the final provenance/diagnostic history row.
+        const latestOutcome = [...runtime.history].reverse().find(event =>
+            !/provenance|diagnostic|resolved input source/i.test(event.message));
+        if (latestOutcome) {
+            guide.append(row("Recorded event:", latestOutcome.message));
+        }
+        if (runtime.expedition.isSpatial) {
+            const position = spatialPositionPresentation(runtime);
+            if (position) guide.append(row("Saved position and progress:", [position.value, position.detail].filter(Boolean).join(" · ")));
+        }
+        guide.append(row("Current time:", expeditionWorkspacePresentation(runtime, journey, survival).timeLabel));
+        if (runtime.expedition.isSpatial) {
+            const state = runtime.expedition;
+            const total = state.distanceTraveled;
+            guide.append(row("Saved travel totals:",
+                `${state.completedWatches} completed ${state.completedWatches === 1 ? "watch" : "watches"} · ${formatHours(state.elapsedTravelHours)} travel elapsed · ${formatNumber(total.value)} ${total.unit.symbol} traveled`));
+        }
+        if (runtime.pauseReason) guide.append(row("Current interruption:", pauseInstruction(runtime) ?? runtime.pauseReason));
+        guide.append(row("Next required action:", currentActionCopy(action).label));
+        if (runtime.history.length > 0) {
+            const technical = document.createElement("details");
+            technical.className = "hc-optional-reference";
+            const caption = document.createElement("summary");
+            caption.textContent = "Technical history and result sources";
+            technical.append(caption);
+            for (const event of runtime.history.slice(-5)) technical.append(textElement("p", event.message));
+            guide.append(technical);
         }
         return guide;
     };
@@ -810,7 +852,7 @@ export async function renderExpedition(
         const facts = document.createElement("dl");
         facts.className = "hc-current-travel-facts";
         facts.append(
-            travelFact("Course", currentCourseLabel(preferences, adjacency), "currentTravelCourse"),
+            travelFact("Travel direction", currentCourseLabel(preferences, adjacency), "currentTravelCourse"),
             travelFact("Pace", humanize(preferences.pace), "currentTravelPace"),
             travelFact("Actual", actualCourseLabel(runtime, adjacency), "currentTravelActual"),
             travelFact("Progress", travelProgressDetail(runtime), "currentTravelProgress"));
@@ -1312,7 +1354,7 @@ export async function renderExpedition(
             body.append(
                 textElement("h3", navigationDue ? "Navigation required" : "Navigation status"),
                 contextLine("Navigator", assigned.join(", ") || "No navigator role assigned"),
-                contextLine("Intended course", intendedEdge
+                contextLine("Intended travel direction", intendedEdge
                     ? `${edgeCourseLabel(intendedEdge)} → cell ${intendedEdge.targetCell.q}, ${intendedEdge.targetCell.r}`
                     : "Not selected"),
                 contextLine("Current navigation state", state.isLost
@@ -2493,7 +2535,7 @@ function watchWorkspaceMarkup(adjacency: ReturnType<typeof currentRuntimeCellAdj
 
                 <fieldset data-travel-resolution data-focus-group="advanced movement">
                     <legend>Movement result</legend>
-                    <p class="hc-hint">Authoritative party movement is prefilled when available. Enter only movement information Hex Crawl can not derive.</p>
+                    <p class="hc-hint">Enter the distance actually resolved for this travel period, using the unit shown below. Use a ruleset calculation or table roll when one is available; otherwise enter the distance decided at the table. Choose its source below. A blank value is not an automatic zero.</p>
                     <div data-fixed-distance><label>${distanceInputLabel("Effective distance", distanceUnit)} <input name="effectiveDistance" type="number" min="0" step="any"></label></div>
                     <div data-variable-distance><label>${distanceInputLabel("Expected distance", distanceUnit)} <input name="expectedDistance" type="number" min="0" step="any"></label><label>${distanceInputLabel("Actual resolved distance", distanceUnit)} <input name="actualDistance" type="number" min="0" step="any"></label></div>
                     <div data-step-distance><label>Resolved hex steps <input name="hexSteps" type="number" min="0" step="1"></label></div>

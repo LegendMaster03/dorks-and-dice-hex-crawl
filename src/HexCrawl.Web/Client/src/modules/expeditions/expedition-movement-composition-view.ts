@@ -63,7 +63,7 @@ export function movementCompositionLedger(runtime: ExpeditionDetail): HTMLElemen
         empty.className = "hc-muted";
         empty.textContent = composition.missingInputs.length > 0
             ? "No movement contributors are currently resolved."
-            : "No composed movement contributors were returned.";
+            : "This ruleset has no calculated party movement value. Supply the distance resolved for the current travel period.";
         section.append(empty);
     } else {
         const table = document.createElement("table");
@@ -106,10 +106,16 @@ export function movementCompositionLedger(runtime: ExpeditionDetail): HTMLElemen
 
     const diagnostics = diagnosticSummary(runtime);
     if (diagnostics) {
+        const technical = document.createElement("details");
+        technical.className = "hc-optional-reference";
+        const title = document.createElement("summary");
+        title.textContent = "Technical movement diagnostics";
+        technical.append(title);
         const note = document.createElement("p");
         note.className = "hc-movement-ledger-diagnostic";
         note.textContent = diagnostics;
-        section.append(note);
+        technical.append(note);
+        section.append(technical);
     }
     return section;
 }
@@ -164,12 +170,14 @@ function limiterSummary(runtime: ExpeditionDetail): string {
         const member = runtime.party.members.find(value => value.id === composition.limitingParticipantId);
         if (member) return member.name;
     }
-    return composition.limitingContributorKey ?? "—";
+    return composition.limitingContributorKey === "procedure-base-budget"
+        ? "Ruleset movement budget"
+        : composition.limitingContributorKey ? humanizeKey(composition.limitingContributorKey) : "—";
 }
 
 function contributorSummary(runtime: ExpeditionDetail): string {
     const contributors = runtime.movementComposition.contributors;
-    if (contributors.length === 0) return "No composed contributors";
+    if (contributors.length === 0) return "No calculated movement inputs";
     return contributors.map(contributorLabel).join(" · ");
 }
 
