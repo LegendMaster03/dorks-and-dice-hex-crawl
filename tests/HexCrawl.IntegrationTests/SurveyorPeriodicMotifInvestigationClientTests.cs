@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Encodings.Web;
 using HexCrawl.Application;
 using HexCrawl.Web.MapAnalysis;
@@ -105,6 +106,50 @@ public sealed class SurveyorPeriodicMotifInvestigationClientTests
             await Assert.ThrowsAsync<MapAnalysisProtocolException>(() =>
                 client.InvestigateAsync(new MemoryStream([1]), "image/png"));
         }
+    }
+
+    [Fact]
+    public async Task StructurallyCorrectButGeometricallyForgedMotifsAreRejected()
+    {
+        // These mutations leave the canonical D-symbol and the periodic
+        // reciprocal edge graph intact: only the measured image geometry is
+        // false. The independent topology verifier alone would accept them.
+        var warped = JsonNode.Parse(Candidate())!;
+        warped["candidate"]!["motifCells"]![0]!["polygonSourcePixels"]![1]!["x"] = 110;
+        var crossing = JsonNode.Parse(Candidate())!;
+        crossing["candidate"]!["motifCells"]![0]!["polygonSourcePixels"]![1]!["y"] = 64;
+        crossing["candidate"]!["motifCells"]![0]!["polygonSourcePixels"]![2]!["y"] = 0;
+        var wrongPeriod = JsonNode.Parse(Candidate())!;
+        wrongPeriod["candidate"]!["translationBasisSourcePixels"]![0]!["x"] = 120;
+
+        foreach (var payload in new[]
+        {
+            warped.ToJsonString(), crossing.ToJsonString(), wrongPeriod.ToJsonString()
+        })
+        {
+            var client = Client(new DelegateHandler((request, _) =>
+                Task.FromResult(Json(request.Method == HttpMethod.Get ? Discovery() : payload))));
+            await Assert.ThrowsAsync<MapAnalysisProtocolException>(() =>
+                client.InvestigateAsync(new MemoryStream([1]), "image/png"));
+        }
+    }
+
+    [Fact]
+    public async Task SubpixelUncertaintyDoesNotRequireArtificiallyExactSharedInkBoundaries()
+    {
+        var noisy = JsonNode.Parse(Candidate())!;
+        var poly = noisy["candidate"]!["motifCells"]![0]!["polygonSourcePixels"]!;
+        poly[1]!["x"] = 64.4;
+        poly[2]!["x"] = 63.8;
+        poly[2]!["y"] = 64.2;
+        poly[3]!["y"] = 63.6;
+        var payload = noisy.ToJsonString();
+        var client = Client(new DelegateHandler((request, _) =>
+            Task.FromResult(Json(request.Method == HttpMethod.Get ? Discovery() : payload))));
+        var result = await client.InvestigateAsync(new MemoryStream([1]), "image/png");
+        Assert.Equal("consistent-candidate", result.Status);
+        Assert.False(result.Authoritative);
+        Assert.NotNull(result.Candidate);
     }
 
     [Fact]
