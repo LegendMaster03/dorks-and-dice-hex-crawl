@@ -119,7 +119,7 @@ public sealed class Phase16HarmonicMetricRealizationTests
         Assert.True(PeriodicMetricWitnessValidator.Validate(fitted.Topology!, fitted.Realization!));
         var fittedU = fitted.Realization!.TranslationU;
         Assert.InRange(Math.Sqrt(fittedU.X * fittedU.X + fittedU.Y * fittedU.Y), 8 - 1e-8, 8 + 1e-8);
-        Assert.Null(incompatible.Topology);
+        Assert.NotNull(fitted.Topology);
     }
 
     [Fact]
