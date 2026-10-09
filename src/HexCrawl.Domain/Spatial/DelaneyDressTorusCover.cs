@@ -208,6 +208,25 @@ public static class DelaneyDressTorusCover
                 return Inconclusive("Torus voltages do not close around a vertex.");
         }
 
+        // A face boundary must start from the same oriented chamber parity for
+        // every face. Arbitrarily selecting the least chamber can reverse some
+        // face cycles and corrupt start/end incidence across their shared edges.
+        var parity = new int[n + 1];
+        parity[1] = 1;
+        var orientationQueue = new List<int> { 1 };
+        for (int p = 0; p < orientationQueue.Count; p++)
+        {
+            int current = orientationQueue[p];
+            foreach (var map in symbol.Involutions)
+            {
+                int next = map[current];
+                int expected = -parity[current];
+                if (parity[next] == 0) { parity[next] = expected; orientationQueue.Add(next); }
+                else if (parity[next] != expected)
+                    return Unsupported("Torus presentation has inconsistent chamber orientation.");
+            }
+        }
+
         // The same combinatorial face may meet itself on two opposing sides of
         // a fundamental domain. Preserve both sides, not just distinct edge IDs.
         var pending = new List<PendingBoundary>[faceCount];
@@ -215,7 +234,8 @@ public static class DelaneyDressTorusCover
         {
             var orbit = faces.Orbits[face];
             int sides = orbit.Length / 2;
-            int chamber = orbit[0];
+            int chamber = orbit.First(c => parity[c] == 1);
+            int firstChamber = chamber;
             var boundaries = new List<PendingBoundary>();
             for (int side = 0; side < sides; side++)
             {
@@ -229,7 +249,7 @@ public static class DelaneyDressTorusCover
                     positive ? voltage : voltage.Opposite()));
                 chamber = s1[s0[chamber]];
             }
-            if (chamber != orbit[0]) return Unsupported("An ordered face boundary is ambiguous.");
+            if (chamber != firstChamber) return Unsupported("An ordered face boundary is ambiguous.");
             pending[face] = boundaries;
         }
         var motif = new List<PeriodicMotifCell>();

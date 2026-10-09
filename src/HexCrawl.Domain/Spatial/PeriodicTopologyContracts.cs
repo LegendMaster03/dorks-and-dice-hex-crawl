@@ -49,8 +49,8 @@ public sealed record PeriodicTopologyWitness(
     IReadOnlyList<PeriodicMotifCell> MotifCells,
     string Provenance)
 {
-    /// <summary>Checks address uniqueness and reciprocal periodic adjacency only;
-    /// does not certify that a supplied chamber cover was constructed from these edges.</summary>
+    /// <summary>Checks reciprocal interfaces, chamber incidence, closed vertex orbits, and primitive
+    /// translation connectivity. The metric embedding is validated separately.</summary>
     public void ValidateAdjacency()
     {
         if (ContractVersion != PeriodicTopologyContractVersion.Current)
@@ -82,6 +82,8 @@ public sealed record PeriodicTopologyWitness(
                     throw new InvalidOperationException("Nonreciprocal periodic interface.");
             }
         }
+        // Reconstruct the chamber graph and verify the primitive periodic cover.
+        PeriodicWitnessStructuralValidator.Validate(this);
     }
 
     public IReadOnlyList<PeriodicCellAddress> Enumerate(
