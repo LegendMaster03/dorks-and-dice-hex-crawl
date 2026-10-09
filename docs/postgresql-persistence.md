@@ -66,9 +66,11 @@ Journey event environment facts are historical snapshots attached to occurrences
 
 Schema generation is tracked in `hex_crawl_schema_migrations`. `PostgresSchemaMigrator` applies application schema changes transactionally and uses a PostgreSQL transaction advisory lock so concurrent service starts can not race schema creation.
 
-The current pre-release schema version is **8**. Version 8 includes the Phase 12 `journey_state_json jsonb NOT NULL` expedition column together with the Phase 9–11 `environment_json`, `effects_json`, `resources_json`, and `survival_json` aggregate boundaries.
+The current schema version is **9** (`PostgresSchemaMigrator.CurrentVersion`). Version 8 established the Phase 12 `journey_state_json jsonb NOT NULL` expedition column alongside the Phase 9–11 `environment_json`, `effects_json`, `resources_json`, and `survival_json` boundaries. Version 9 transactionally upgrades stored procedure revisions and expedition JSON from procedure schema 1/1.1 to 1.2 and replaces the obsolete tiling field.
 
-Hex Crawl is still pre-release and deliberately does not maintain compatibility infrastructure for earlier development schemas. A database whose recorded schema version is not the current version is rejected with a reset/reinitialize instruction rather than silently reshaping obsolete development data. Production data is never recreated or reset automatically.
+**Post-Phase-15 operating policy:** existing tester databases and separately stored map assets must normally be migrated, not reset, between releases. Before deploying a schema change, test the upgrade from actual prior tester versions, establish recoverable PostgreSQL and map-asset backups, rehearse recovery as appropriate, verify idempotent/interrupted migration behavior, and confirm saved expeditions and maps still work afterward. Each phase must leave the deployed application usable.
+
+The current migrator explicitly upgrades schema 8 → 9. Unrecognized earlier schema versions currently throw a legacy error instructing the operator to reset the development database. This is a **documented gap to remediate**, not authorization to reset tester data. Unknown versions must stop safely with non-destructive guidance. An exceptional destructive reset may occur only after alternatives are assessed, with specific project-owner authorization and communication to affected testers; it must never be automatic or the default path.
 
 This schema migrator is part of the live PostgreSQL persistence layer and is distinct from the retired one-time SQLite cutover tooling.
 
@@ -132,4 +134,4 @@ The mapped smoke persists structured state and a filesystem map asset, restarts 
 
 The retired SQLite-to-PostgreSQL production cutover utility and its migration-only tests are intentionally not part of the ongoing repository surface after Phase 0 completion.
 
-Schema version 9 migrates previously saved procedure and expedition JSON from procedure schema 1/1.1 to 1.2 and removes the obsolete tiling notation field atomically.
+Migration history: schema 9 migrates previously saved procedure and expedition JSON from procedure schema 1/1.1 to 1.2 and removes the obsolete tiling notation field atomically. Subsequent Tile Crawl migrations must follow the tester-data preservation policy above.
