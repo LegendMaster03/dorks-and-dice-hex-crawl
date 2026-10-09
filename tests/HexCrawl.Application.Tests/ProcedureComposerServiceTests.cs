@@ -21,7 +21,7 @@ public sealed class ProcedureComposerServiceTests
         Assert.Equal(CrawlProcedureCatalog.Dnd2024PresetKey, draft.Origin?.PresetKey);
         Assert.Equal(1, draft.Procedure.Revision);
         Assert.Equal(CampaignProcedureSchema.CurrentVersion, draft.Procedure.SchemaVersion);
-        Assert.Equal(CampaignProcedureSchema.CurrentHexTilingGjhNotation, draft.Procedure.TilingGjhNotation);
+        Assert.Equal(CampaignProcedureSchema.CurrentHexTilingDsSymbol, draft.Procedure.TilingDsSymbol);
         Assert.Contains(draft.Procedure.Modules, module =>
             module.Module.Key == GenericProcedureCatalog.TerrainMovementModule
             && module.Parameters["terrainAdjustments"].Contains(
@@ -47,7 +47,7 @@ public sealed class ProcedureComposerServiceTests
 
         Assert.Null(draft.Origin);
         Assert.Equal(CampaignProcedureSchema.CurrentVersion, draft.Procedure.SchemaVersion);
-        Assert.Equal(CampaignProcedureSchema.CurrentHexTilingGjhNotation, draft.Procedure.TilingGjhNotation);
+        Assert.Equal(CampaignProcedureSchema.CurrentHexTilingDsSymbol, draft.Procedure.TilingDsSymbol);
         Assert.DoesNotContain(draft.Procedure.Modules, module =>
             module.Module.Key == GenericProcedureCatalog.TimeIntervalModule);
         Assert.Contains(draft.Procedure.Modules, module =>

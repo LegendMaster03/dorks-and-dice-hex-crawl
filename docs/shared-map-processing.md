@@ -12,7 +12,7 @@ Hex Crawl browser
     -> Hex Crawl ownership-scoped source-map API
     -> Hex Crawl server opens the authoritative map image
     -> Surveyor POST /v1/periodic-tiling/detect
-       crNotation=6^3
+       expectedDsSymbol=<1:1,1,1:6,3>
     -> Hex Crawl validates/interprets the observation
     -> browser builds a transient Hex Crawl-owned alignment proposal
     -> when Surveyor returned a usable fit, the same user action PUTs grid-alignment
@@ -20,7 +20,7 @@ Hex Crawl browser
 
 There is no second user-facing Preview / Apply / Confirm sequence. The analysis request remains non-mutating, and the `grid-alignment` request remains the explicit persistence boundary in the architecture. The browser simply performs both parts behind the single Detect / repair action.
 
-Surveyor's API is capability-based rather than hex-specific. Known-tiling detection is one operation; future tiling recognition and unrelated computer-vision operations belong on separate endpoints. Hex Crawl requests `6^3` directly by Cundy-Rollett notation. Surveyor derives the periodic-tiling classification from that notation and returns the normalized Cundy-Rollett (`crNotation`), GomJau-Hogg (`gjhNotation`), and `periodicTilingType` identities. Hex Crawl validates all three response fields before accepting the observation. A separate request-side tiling type, shape name, or side-count shorthand is not part of the public service contract.
+Surveyor's API is capability-based rather than hex-specific. Known-tiling detection is one operation; future tiling recognition and unrelated computer-vision operations belong on separate endpoints. Hex Crawl requests `6^3` directly by Delaney-Dress notation. Surveyor derives the periodic-tiling classification from that notation and returns the normalized Delaney-Dress (`expectedDsSymbol`), Delaney-Dress (`dsSymbol`), and `dsSymbol` identities. Hex Crawl validates all three response fields before accepting the observation. A separate request-side tiling type, shape name, or side-count shorthand is not part of the public service contract.
 
 The browser never calls Surveyor directly and does not receive the Surveyor service credential. Surveyor does not fetch URLs or resolve Hex Crawl asset keys. Hex Crawl loads the image through `IMapAssetStore` after normal world/source-map authorization and streams the encoded bytes to Surveyor.
 
