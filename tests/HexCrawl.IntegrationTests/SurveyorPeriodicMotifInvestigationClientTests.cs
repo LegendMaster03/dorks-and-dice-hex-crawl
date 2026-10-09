@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Encodings.Web;
 using HexCrawl.Application;
+using HexCrawl.Domain.Spatial;
 using HexCrawl.Web.MapAnalysis;
 using Microsoft.Extensions.Options;
 
@@ -150,6 +151,89 @@ public sealed class SurveyorPeriodicMotifInvestigationClientTests
         Assert.Equal("consistent-candidate", result.Status);
         Assert.False(result.Authoritative);
         Assert.NotNull(result.Candidate);
+    }
+
+    [Theory]
+    [InlineData("<20:2 7 6 10 12 13 15 17 20 19,3 5 9 12 10 13 16 18 19 20,4 6 8 11 12 14 15 17 19 20:3 3 4,5 5>")]
+    [InlineData("<14:2 5 7 9 11 13 14,1 4 6 8 10 12 14 13,3 5 4 6 7 8 9 14 11 13:6 4,3 4 4 3>")]
+    public async Task GeneralMixedAndNonEdgeTopologySurvivesExperimentalWireParsing(string sourceSymbol)
+    {
+        // An independent C# D-symbol-to-periodic-metric constructor creates
+        // unfamiliar mixed-cell geometry without registration or a raster.
+        // Encode it using Surveyor's v3 wire shape and validate that the
+        // protocol consumer preserves its full motif rather than assuming
+        // a single four-sided or six-sided cell.
+        var built = DelaneyDressHarmonicMetricRealization.Construct(sourceSymbol, 1, "pixel");
+        Assert.True(built.Status == "realized", built.Reason);
+        var topology = built.Topology!;
+        var geometry = built.Realization!;
+        Assert.True(PeriodicMetricWitnessValidator.Validate(topology, geometry));
+        var points = geometry.Polygons.Values.SelectMany(x => x).ToArray();
+        double minimumX = points.Min(p => p.X);
+        double minimumY = points.Min(p => p.Y);
+        double maximumX = points.Max(p => p.X);
+        double maximumY = points.Max(p => p.Y);
+        const double magnification = 160;
+        int width = (int)Math.Ceiling((maximumX - minimumX) * magnification) + 80;
+        int height = (int)Math.Ceiling((maximumY - minimumY) * magnification) + 80;
+        MapAnalysisPoint Pixel(TilingWorldPoint p) => new(
+            40 + (p.X - minimumX) * magnification,
+            40 + (p.Y - minimumY) * magnification);
+        MapAnalysisPoint Period(TilingWorldPoint p) => new(
+            p.X * magnification, p.Y * magnification);
+        var payload = JsonSerializer.Serialize(new
+        {
+            apiVersion = "v3", capability = "map.periodic-tiling.investigate",
+            maturity = "experimental", authoritative = false,
+            status = "consistent-candidate", reason = "independent polygon witness",
+            candidate = new
+            {
+                dsSymbol = topology.TranslationDsSymbol,
+                translationBasisSourcePixels = new[]
+                {
+                    Period(geometry.TranslationU), Period(geometry.TranslationV)
+                },
+                motifCells = topology.MotifCells.Select(cell => new
+                {
+                    provisionalId = cell.Id,
+                    polygonSourcePixels = geometry.Polygons[cell.Id].Select(Pixel).ToArray(),
+                    boundaries = cell.Boundary.Select(edge => new
+                    {
+                        sideIndex = edge.Index,
+                        targetProvisionalId = edge.TargetMotifCellId,
+                        targetSideIndex = edge.ReciprocalInterfaceIndex,
+                        translation = new
+                        {
+                            u = edge.TargetTranslation.U,
+                            v = edge.TargetTranslation.V
+                        },
+                        supportingObservations = 6
+                    }).ToArray()
+                }).ToArray()
+            },
+            evidence = new
+            {
+                matchedHypotheses = 1, checkedHypotheses = 2,
+                rejectedHypotheses = 1, minimumEdgeObservations = 6,
+                originalRasterEdgeSupport = 0.98,
+                maximumRigidVertexResidualSourcePixels = 0.5,
+                translationRefinementResidualSourcePixels = (double?)null
+            },
+            source = new { width, height, mediaType = "image/png" },
+            analysis = new
+            {
+                width, height, scale = 1, sourceResolutionVerified = true
+            }
+        }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var client = Client(new DelegateHandler((request, _) =>
+            Task.FromResult(Json(request.Method == HttpMethod.Get ? Discovery() : payload))));
+        var observed = await client.InvestigateAsync(new MemoryStream([1]), "image/png");
+        Assert.False(observed.Authoritative);
+        Assert.Equal("consistent-candidate", observed.Status);
+        Assert.Equal(topology.TranslationDsSymbol, observed.Candidate!.DsSymbol);
+        Assert.Equal(topology.MotifCells.Count, observed.Candidate.MotifCells.Count);
+        Assert.Equal(topology.MotifCells.Sum(c => c.Boundary.Count),
+            observed.Candidate.MotifCells.Sum(c => c.Boundaries.Count));
     }
 
     [Fact]
