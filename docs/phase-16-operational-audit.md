@@ -104,9 +104,10 @@ The actual user-facing Tile Crawl spatial authority is unchanged.
 
 Surveyor has additionally demonstrated an image-free harmonic metric
 construction with independent polygonal proof for eight regular and
-mixed-cell cases. The image-free metric algorithm is not yet part of
-the .NET operational path, and not every metric constraint or arbitrary
-Euclidean D-symbol has a proved realization. Domain work must not
+mixed-cell cases. The same bounded image-free harmonic metric construction is now independently
+implemented in .NET and verified against the domain metric validator. Neither
+implementation guarantees a nondegenerate embedding under arbitrary metric
+constraints, and not every Euclidean D-symbol has a proved realization. Domain work must not
 silently accept unverified geometry or treat this milestone as the
 generalized detector acceptance gate.
 
@@ -124,11 +125,14 @@ unknown metric constraints. Named constraint keys currently verified are
 `edge-length`, `tile-area`, and `cell-area:<cellId>`.
 
 The domain validator is limited to 24 polygonal motif cells and 64 corners
-per cell and does not perform an image analysis, construct world state, or
-write to the database. It does not yet supply a .NET harmonic embedding
-constructor, expose a saved-world creation path, or guarantee all
-geometrically admissible D-symbols can be realized under user-supplied
-constraints. Existing geometry and asset pathways remain untouched.
+per cell and does not perform image analysis, construct world state, or
+write to the database. The additive .NET
+`DelaneyDressHarmonicMetricRealization.Construct` independently derives a
+bounded polygon witness from the general Euclidean translation cover and
+verifies it with this validator. The constructor currently supports a
+uniform period scale, optional rotation, and supported explicit metric
+constraint checks; it does not guarantee solutions for all geometrically
+admissible D-symbols or solve arbitrary user constraints. Existing geometry and asset pathways remain untouched.
 The corresponding domain regression cases include a valid periodic
 rectangle, metric constraints and adversarial invalid witnesses.
 
@@ -143,3 +147,22 @@ collision search. More distant but equivalent polygon representatives must be
 translated back near the origin by an exact lattice gauge change before they
 can be certified; they are not classified as mathematically invalid tilings.
 An adversarial distant-representative regression test enforces this limit.
+
+
+### Image-independent .NET harmonic construction checkpoint
+
+The .NET harmonic constructor has been exercised on eight representative
+regular and nonuniform Euclidean D-symbols, including a symmetry-reduced
+non-edge-to-edge motif, with independent polygon, reciprocal-edge, overlap,
+periodicity, and metric-constraint validation. It globally normalizes a
+clockwise harmonic solution only by reflecting **both** every polygon and
+the corresponding lattice-voltage coordinate; mixed or degenerate face
+orientations remain unresolved. The constructor makes no Surveyor request.
+
+The verifier additionally bounds polygon representatives to two lattice
+periods from the origin, and checks periodic intersections through a
+`[-4,4] × [-4,4]` lattice neighborhood. Valid more-distant representatives
+must be recentered by exact periodic translations before validation. These
+bounds are computational limits, not statements that the underlying
+Euclidean tiling is invalid. Neither capability creates or modifies saved
+expeditions, worlds, maps, assets, or PostgreSQL schema.
