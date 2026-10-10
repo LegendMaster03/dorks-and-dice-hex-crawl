@@ -39,6 +39,7 @@ public sealed class ExpeditionModule : IHexCrawlModule
         api.MapGet("/overworlds/{overworldId:guid}/expeditions", ListExpeditionsAsync);
         api.MapPost("/overworlds/{overworldId:guid}/expeditions", StartExpeditionAsync);
         api.MapGet("/expeditions/{expeditionId:guid}", GetExpeditionAsync);
+        api.MapGet("/expeditions/{expeditionId:guid}/cell-topology", GetCellTopologyAsync);
         api.MapDelete("/expeditions/{expeditionId:guid}", DeleteExpeditionAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/advance", AdvanceExpeditionAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/encounters/{occurrenceId:guid}/resolve", ResolveEncounterAsync);
@@ -130,6 +131,21 @@ public sealed class ExpeditionModule : IHexCrawlModule
         var owner = UserId(context);
         var expedition = await service.GetExpeditionAsync(expeditionId, owner, cancellationToken);
         return Results.Ok(await ContractAsync(expedition, owner, service, cancellationToken));
+    }
+
+    private static async Task<IResult> GetCellTopologyAsync(
+        Guid expeditionId,
+        HttpContext context,
+        HexCrawlService service,
+        CancellationToken cancellationToken)
+    {
+        var owner = UserId(context);
+        var expedition = await service.GetExpeditionAsync(expeditionId, owner, cancellationToken);
+        if (expedition.Runtime is not CellExpeditionState cell
+            || expedition.Context is not WorldBoundCrawlSessionContext worldContext)
+            throw new NotSupportedException("This expedition does not have a generalized cell traversal.");
+        var world = await service.GetOverworldAsync(worldContext.WorldId, owner, cancellationToken);
+        return Results.Ok(CellTraversalContextContract.From(world.World.SpatialTiling, cell));
     }
 
     private static async Task<IResult> DeleteExpeditionAsync(
