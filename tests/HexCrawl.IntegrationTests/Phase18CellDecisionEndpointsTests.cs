@@ -193,8 +193,10 @@ public sealed class Phase18CellDecisionEndpointsTests
         });
     }
 
-    [Fact]
-    public async Task CanonicalVersionTwoProcedureCanBeAuthoredAndPinnedThroughHttpForCellStart()
+    [Theory]
+    [InlineData("<1:1,1,1:4,4>")]
+    [InlineData("<1:1,1,1:6,3>")]
+    public async Task CanonicalVersionTwoProcedureCanBeAuthoredAndPinnedThroughHttpForCellStart(string dsSymbol)
     {
         await WithWorldAsync(async (database, _, world, procedure, cell) =>
         {
@@ -241,7 +243,7 @@ public sealed class Phase18CellDecisionEndpointsTests
                         .GetRawText(), ApiJson));
             Assert.Null(await new PostgresHexCrawlStore(database)
                 .GetExpeditionAsync(runtime.GetProperty("id").GetGuid(), "bob"));
-        });
+        }, dsSymbol);
     }
 
     [Fact]
