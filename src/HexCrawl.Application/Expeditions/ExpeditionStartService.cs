@@ -137,6 +137,10 @@ public sealed class ExpeditionStartService(
             _ => throw new ArgumentException("Unsupported crawl session context.", nameof(context))
         };
         var selected = await ResolveProcedureAsync(owner, selection, cancellationToken);
+        if (context is AbstractHexCrawlSessionContext
+            && selected.Procedure.TilingDsSymbol != LegacyHexTilingCompatibility.HexQuotient)
+            throw new NotSupportedException(
+                "This abstract hex runtime cannot execute a nonhex tiling until Phase 18.");
 
         var now = DateTimeOffset.UtcNow;
         return await store.CreateExpeditionAsync(new StoredExpedition(

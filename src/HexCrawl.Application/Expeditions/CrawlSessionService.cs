@@ -23,6 +23,10 @@ public sealed class CrawlSessionService(IHexCrawlStore store)
         }
 
         var materialized = CrawlProcedureCatalog.Resolve(command.ProcedureKey).MaterializeGeneric();
+        if (command.Context is AbstractHexCrawlSessionContext
+            && materialized.Procedure.TilingDsSymbol != LegacyHexTilingCompatibility.HexQuotient)
+            throw new NotSupportedException(
+                "This abstract hex runtime cannot execute a nonhex tiling until Phase 18.");
 
         var id = Guid.NewGuid();
         CrawlSessionRuntimeState runtime = command.Context switch
