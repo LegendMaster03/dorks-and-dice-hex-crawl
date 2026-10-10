@@ -64,6 +64,66 @@ def square_image():
                 pixels[y*width+x]=0
     return png(pixels,width,height)
 
+def polygon_raster(polygons,basis,width=640,height=640,phase=(31,53),rotation=0,scale=1):
+    """Same independent pixel geometry as Surveyor's frozen raster qualifications."""
+    pixels=bytearray([255])*(width*height)
+    angle=math.radians(rotation)
+    c,s=math.cos(angle)*scale,math.sin(angle)*scale
+    def rnd(v): return math.floor(v+0.5)  # JS Math.round used by the qualification generator
+    def transform(p):
+        x,y=p
+        return (rnd(phase[0]+x*c-y*s),rnd(phase[1]+x*s+y*c))
+    def draw(a,b):
+        dx,dy=b[0]-a[0],b[1]-a[1]
+        steps=max(1,math.ceil(max(abs(dx),abs(dy))*2))
+        for i in range(steps+1):
+            x=rnd(a[0]+dx*i/steps)
+            y=rnd(a[1]+dy*i/steps)
+            for oy in range(-1,2):
+                for ox in range(-1,2):
+                    xx,yy=x+ox,y+oy
+                    if 0<=xx<width and 0<=yy<height:
+                        pixels[yy*width+xx]=0
+    for u in range(-14,15):
+        for v in range(-14,15):
+            delta=(basis[0][0]*u+basis[1][0]*v,
+                   basis[0][1]*u+basis[1][1]*v)
+            for polygon in polygons:
+                points=[transform((x+delta[0],y+delta[1])) for x,y in polygon]
+                for j in range(len(points)):
+                    draw(points[j],points[(j+1)%len(points)])
+    return png(pixels,width,height)
+
+def triangle_image():
+    r=math.sqrt(3)/2
+    return polygon_raster(
+        [[(0,0),(80,0),(120,80*r)],[(0,0),(120,80*r),(40,80*r)]],
+        [(80,0),(40,80*r)],phase=(39,51))
+
+def mixed_image(seed=1907,rotation=0,scale=1):
+    """Generate held-out polygon classes without giving their identity to Surveyor."""
+    state=seed
+    def random():
+        nonlocal state
+        state=(state+0x6D2B79F5)&0xffffffff
+        t=state
+        t=((t^(t>>15))*(1|t))&0xffffffff
+        t=(t^((t+(((t^(t>>7))*(61|t))&0xffffffff))&0xffffffff))&0xffffffff
+        return ((t^(t>>14))&0xffffffff)/4294967296
+    modes=[int(random()*3) for _ in range(6)]
+    modes[:3]=[0,1,2]
+    polygons=[]
+    for row in range(2):
+        for col in range(3):
+            x,y=48*col,48*row
+            a,b,c,d=(x,y),(x+48,y),(x+48,y+48),(x,y+48)
+            mode=modes[3*row+col]
+            if mode==0: polygons.append([a,b,c,d])
+            elif mode==1: polygons.extend([[a,b,c],[a,c,d]])
+            else: polygons.extend([[a,b,d],[b,c,d]])
+    return polygon_raster(polygons,[(144,0),(0,96)],
+                          rotation=rotation,scale=scale)
+
 def multipart(fields,name,image):
     boundary="phase16-"+uuid.uuid4().hex
     body=bytearray()
