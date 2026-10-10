@@ -156,7 +156,7 @@ public sealed class Phase18CellWatchRuntimeTests
                 Encounter: ResolvedEncounter.None));
 
         Assert.Null(result.PauseReason);
-        Assert.Empty(result.Events.Where(e => e.Kind == CrawlRuntimeEventKind.CellEntered));
+        Assert.DoesNotContain(result.Events, e => e.Kind == CrawlRuntimeEventKind.CellEntered);
         Assert.Equal(state.Traversal.CurrentCell, result.Expedition.Traversal.CurrentCell);
         Assert.Equal(1, result.Expedition.CompletedWatches);
         Assert.Equal(GenericProcedureRuntime.Bind(procedure).Time.IntervalDuration,
