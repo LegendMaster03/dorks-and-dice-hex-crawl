@@ -36,6 +36,11 @@ jobs:
           ref: feature/tile-crawl-phase-16
           path: surveyor
 
+      - name: Verify actual workflow cancellation and recovery cleanup conditions
+        run: |
+          python3 hex-current/.github/scripts/phase16-deploy-outcome-contract.py \
+            --workflow "${{ matrix.workflow_path }}"
+
       - name: Rehearse exact production shell steps against disposable Compose services
         run: |
           set -euo pipefail
