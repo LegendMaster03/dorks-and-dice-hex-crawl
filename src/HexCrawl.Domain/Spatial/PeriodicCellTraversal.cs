@@ -190,6 +190,14 @@ public static class PeriodicCellTraversalGeometry
             chosen = nearest[0];
         }
 
+        // An explicitly selected interface is not permission to move backward
+        // through it while the heading actually points into the current cell.
+        // Resolved metric polygons have positive (counterclockwise) winding.
+        var selectedEdge = chosen.Boundary.End - chosen.Boundary.Start;
+        if (Cross(selectedEdge, direction) >= -Length(selectedEdge) * edgeTolerance)
+            return ResolveAdjudication([chosen.Boundary],
+                "The course does not leave the current cell through this interface.");
+
         // Never rely on mere geometric proximity for the destination.
         var reciprocal = world.Reciprocal(chosen.Boundary);
         if (reciprocal.To != traversal.CurrentCell
