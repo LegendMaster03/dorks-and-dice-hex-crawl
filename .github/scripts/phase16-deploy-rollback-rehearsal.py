@@ -185,9 +185,9 @@ def main(workflow, service):
                 occupied_port.listen(1)
                 port = occupied_port.getsockname()[1]
                 compose_file.write_text(base_compose.replace(
-                    "    restart: unless-stopped\\n",
-                    "    restart: unless-stopped\\n"
-                    + f'    ports:\\n      - "127.0.0.1:{port}:8080"\\n'))
+                    "    restart: unless-stopped\n",
+                    "    restart: unless-stopped\n"
+                    + f'    ports:\n      - "127.0.0.1:{port}:8080"\n'))
                 try:
                     run(steps["deploy"], root, env, expected_success=False)
                 finally:
