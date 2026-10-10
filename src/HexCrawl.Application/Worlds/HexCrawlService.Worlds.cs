@@ -83,6 +83,21 @@ public sealed partial class HexCrawlService
             world, owner, 1, now, now), cancellationToken);
     }
 
+    // Metadata-only update uses the same owner and expected-version boundary;
+    // it does not reinterpret any legacy or generalized cell identities.
+    public async Task<StoredOverworld> RenameOverworldAsync(
+        Guid overworldId, string ownerUserId, string name, long expectedVersion,
+        CancellationToken cancellationToken = default)
+    {
+        var current = await GetOverworldAsync(overworldId, ownerUserId, cancellationToken);
+        RequireVersion(expectedVersion, current.Version);
+        var updated = current with
+        {
+            World = current.World with { Name = RequiredText(name, "Overworld name") }
+        };
+        return await SaveWorldAsync(updated, expectedVersion, cancellationToken);
+    }
+
     public async Task<StoredOverworld> UpdateOverworldAsync(
         Guid overworldId,
         string ownerUserId,

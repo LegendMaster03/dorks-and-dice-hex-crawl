@@ -231,6 +231,11 @@ export class HexCrawlApi {
         return this.sendJson("POST", "/api/overworlds", input, "Create overworld");
     }
 
+    public renameOverworld(id: string, name: string, expectedVersion: number): Promise<Overworld> {
+        return this.sendJson("PUT", `/api/overworlds/${encodeURIComponent(id)}/name`,
+            { name, expectedVersion }, "Rename overworld");
+    }
+
     public updateOverworld(id: string, name: string, grid: GridDefinition, expectedVersion: number): Promise<Overworld> {
         return this.sendJson("PUT", `/api/overworlds/${encodeURIComponent(id)}`, { name, grid, expectedVersion }, "Update overworld");
     }

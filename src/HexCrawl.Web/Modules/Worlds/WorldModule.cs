@@ -30,6 +30,7 @@ public sealed class WorldModule : IHexCrawlModule
         api.MapGet("/overworlds/{overworldId:guid}/cells/containing", GetContainingCellsAsync);
         api.MapGet("/overworlds/{overworldId:guid}/cells/resolve", ResolveCellAsync);
         api.MapPut("/overworlds/{overworldId:guid}", UpdateOverworldAsync);
+        api.MapPut("/overworlds/{overworldId:guid}/name", RenameOverworldAsync);
         api.MapDelete("/overworlds/{overworldId:guid}", DeleteOverworldAsync);
 
         api.MapPost("/overworlds/{overworldId:guid}/locations", CreateLocationAsync);
@@ -109,8 +110,9 @@ public sealed class WorldModule : IHexCrawlModule
         var stored = await service.GetOverworldAsync(overworldId, owner, cancellationToken);
         if (stored.World.HasLegacyHexGrid || stored.World.Tiling is null)
             throw new NotSupportedException("This world already uses legacy hex procedures.");
-        var template = CrawlProcedureCatalog.Resolve("simple-fixed-distance")
-            .MaterializeGeneric().Procedure;
+        var materialized = CrawlProcedureCatalog.Resolve("simple-fixed-distance")
+            .MaterializeGeneric();
+        var template = materialized.Procedure;
         var modules = template.Modules
             .Where(module => module.Mechanic.ExecutionHandler !=
                 GenericProcedureExecutionHandlers.HexProgressPolicy)
@@ -141,7 +143,7 @@ public sealed class WorldModule : IHexCrawlModule
         if (bound.Movement.MechanicVersion != 2
             || bound.Movement.TravelResolution != TravelResolutionMode.CellSteps)
             throw new InvalidOperationException("The generated cell ruleset is not executable.");
-        var saved = await procedures.CreateAsync(owner, edition, null,
+        var saved = await procedures.CreateAsync(owner, edition, materialized.Origin,
             cancellationToken: cancellationToken);
         return Results.Created($"/api/procedures/{saved.ProcedureId:D}",
             new { procedureId = saved.ProcedureId, revision = saved.Revision,
@@ -206,6 +208,15 @@ public sealed class WorldModule : IHexCrawlModule
             motifCellId, new HexCrawl.Domain.Spatial.LatticeDisplacement(u, v));
         return Results.Ok(world.World.SpatialTiling.Resolve(address));
     }
+
+    private sealed record RenameOverworldRequest(string Name, long ExpectedVersion);
+
+    private static async Task<IResult> RenameOverworldAsync(
+        Guid overworldId, RenameOverworldRequest request,
+        HttpContext context, HexCrawlService service, CancellationToken cancellationToken) =>
+        Results.Ok(OverworldContract.From(await service.RenameOverworldAsync(
+            overworldId, UserId(context), request.Name, request.ExpectedVersion,
+            cancellationToken)));
 
     private static async Task<IResult> UpdateOverworldAsync(
         Guid overworldId,

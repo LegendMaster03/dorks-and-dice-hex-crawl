@@ -316,6 +316,14 @@ export async function renderWorldEditor(
 
     const fillGrid = (): void => {
         input(gridForm, "name").value = world.name;
+        const nameLabel = input(gridForm, "name").closest("label");
+        const saveButton = gridForm.querySelector<HTMLButtonElement>('button[type="submit"]');
+        if (saveButton) saveButton.textContent =
+            world.grid ? "Save world and grid" : "Save world name";
+        for (const child of Array.from(gridForm.children)) {
+            if (child === nameLabel || child === saveButton) continue;
+            (child as HTMLElement).hidden = !world.grid;
+        }
         if (!world.grid) {
             gridForm.querySelectorAll<HTMLInputElement | HTMLSelectElement>("input, select").forEach(control => {
                 if (control.name !== "name") control.disabled = true;
@@ -1060,7 +1068,11 @@ export async function renderWorldEditor(
     gridForm.addEventListener("submit", event => {
         event.preventDefault();
         void run(gridForm, async () => {
-            if (!world.grid) throw new Error("This world uses generalized geometry. Hex-only grid controls can not change its topology.");
+            if (!world.grid) {
+                applyWorld(await api.renameOverworld(
+                    world.id, input(gridForm, "name").value.trim(), world.version));
+                return;
+            }
             const kind = unitKindSelect.value as DistanceUnitKind;
             const centerDistance = numeric(input(gridForm, "scale"));
             let nextGrid = gridWithSelectedUnit(
