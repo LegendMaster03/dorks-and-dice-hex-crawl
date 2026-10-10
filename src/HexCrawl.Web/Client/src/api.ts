@@ -21,6 +21,7 @@ import type {
     ProcedurePreset,
     ProcedureResolutionHelperRequest,
     ProcedureResolutionHelperResult,
+    MapRegistrationTransform,
     RegistrationControlPoint,
     RuntimeAdvanceRequest,
     ResolveBoundaryDecisionRequest,
