@@ -121,6 +121,16 @@ public interface IHexCrawlStore
         long expectedVersion,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Atomic topology replacement restricted to unused worlds. The store
+    /// holds a world-row lock and checks expedition references before writing;
+    /// world-bound expedition creation obtains a conflicting SHARE lock.
+    /// </summary>
+    Task<SaveResult<StoredOverworld>> ReplaceUnusedPeriodicWorldAsync(
+        StoredOverworld overworld,
+        long expectedVersion,
+        CancellationToken cancellationToken = default);
+
     Task<DeleteOverworldOutcome> DeleteOverworldAsync(
         Guid overworldId,
         string ownerUserId,

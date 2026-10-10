@@ -19,6 +19,39 @@ public sealed partial class PostgresHexCrawlStore
 
         await using var connection = await OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        if (expedition.Context is WorldBoundCrawlSessionContext worldContext)
+        {
+            // FOR SHARE conflicts with the FOR UPDATE lock used by safe
+            // topology replacement. Without it a concurrently prepared
+            // expedition could commit old cell identities after replacement.
+            await using var worldLock = connection.CreateCommand();
+            worldLock.Transaction = transaction;
+            worldLock.CommandText = """
+                SELECT world_json::text FROM overworlds
+                WHERE id = @world AND owner_user_id = @owner
+                FOR SHARE;
+                """;
+            worldLock.Parameters.AddWithValue("world", NpgsqlDbType.Uuid, worldContext.WorldId);
+            worldLock.Parameters.AddWithValue("owner", NpgsqlDbType.Text, expedition.OwnerUserId);
+            var snapshot = await worldLock.ExecuteScalarAsync(cancellationToken);
+            if (snapshot is not string worldJson)
+                throw new HexCrawlConflictException(
+                    "The world was removed or changed before the expedition could start. Reload the world.");
+            if (expedition.Runtime is CellExpeditionState cell)
+            {
+                var currentWorld = Deserialize<WorldSnapshot>(worldJson).ToDomain();
+                if (cell.Traversal.CurrentCell.TilingId != currentWorld.SpatialTiling.Id)
+                    throw new HexCrawlConflictException(
+                        "The world cell pattern changed before the expedition started. Reload and select the starting cell again.");
+                try { cell.Validate(currentWorld.SpatialTiling); }
+                catch (Exception invalid) when (
+                    invalid is ArgumentException or InvalidOperationException)
+                {
+                    throw new HexCrawlConflictException(
+                        "The world geometry changed before the expedition started. Reload the world.");
+                }
+            }
+        }
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
         command.CommandText = """
