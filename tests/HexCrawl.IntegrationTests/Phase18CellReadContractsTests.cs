@@ -110,6 +110,22 @@ public sealed class Phase18CellReadContractsTests
                 Assert.Equal(JsonValueKind.Null, ev.GetProperty("hex").ValueKind);
                 Assert.Equal(boundary.InterfaceIndex, ev.GetProperty("boundaryInterfaceIndex").GetInt32());
                 Assert.Equal(boundary.ReciprocalInterfaceIndex, ev.GetProperty("reciprocalInterfaceIndex").GetInt32());
+
+                using var topologyResponse = await client.GetAsync($"/api/expeditions/{runtime.Id:D}/cell-topology");
+                topologyResponse.EnsureSuccessStatusCode();
+                var topology = await topologyResponse.Content.ReadFromJsonAsync<JsonElement>();
+                Assert.Equal(PeriodicCellTraversal.CurrentFormatVersion, topology.GetProperty("formatVersion").GetInt32());
+                Assert.Equal(cell.Id.TilingId, topology.GetProperty("currentCell").GetProperty("tilingId").GetGuid());
+                Assert.False(topology.GetProperty("hasPhysicalCalibration").GetBoolean());
+                Assert.Equal(cell.Polygon.Count, topology.GetProperty("polygon").GetArrayLength());
+                var interfaces = topology.GetProperty("interfaces").EnumerateArray().ToArray();
+                Assert.Equal(tiling.Boundaries(cell.Id.Address).Count, interfaces.Length);
+                var first = interfaces.Single(value =>
+                    value.GetProperty("interfaceIndex").GetInt32() == boundary.InterfaceIndex);
+                Assert.Equal(boundary.ReciprocalInterfaceIndex,
+                    first.GetProperty("reciprocalInterfaceIndex").GetInt32());
+                Assert.Equal(boundary.To.TilingId,
+                    first.GetProperty("neighborCell").GetProperty("tilingId").GetGuid());
             }
 
             using (var otherFactory = TestWebHost.Create(database, "bob"))
@@ -117,6 +133,8 @@ public sealed class Phase18CellReadContractsTests
             using (var blocked = await other.GetAsync($"/api/expeditions/{runtime.Id:D}"))
             {
                 Assert.Equal(HttpStatusCode.NotFound, blocked.StatusCode);
+                using var hiddenTopology = await other.GetAsync($"/api/expeditions/{runtime.Id:D}/cell-topology");
+                Assert.Equal(HttpStatusCode.NotFound, hiddenTopology.StatusCode);
             }
         }
         finally
