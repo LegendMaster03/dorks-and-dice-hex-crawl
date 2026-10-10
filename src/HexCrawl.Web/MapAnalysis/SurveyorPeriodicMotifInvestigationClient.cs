@@ -239,6 +239,16 @@ public sealed class SurveyorPeriodicMotifInvestigationClient(
             throw new MapAnalysisProtocolException(
                 "Surveyor image-analysis scale conflicts with the source and analysis dimensions.");
 
+        // A supported whole-image projection is impossible on a raster this
+        // small or this large: Surveyor's independent projection gate requires
+        // >=96 pixels per side and <=1.5M analysis pixels. Dimension rounding
+        // alone must not make a fake near-zero scale acceptable.
+        if (status == "consistent-candidate"
+            && (analysisDetails.Width < 96 || analysisDetails.Height < 96
+                || (long)analysisDetails.Width * analysisDetails.Height > 1_500_000))
+            throw new MapAnalysisProtocolException(
+                "Surveyor reports a candidate outside the supported source-projection raster envelope.");
+
         if (!root.TryGetProperty("candidate", out var candidateJson)
             || !root.TryGetProperty("evidence", out var evidenceJson))
             throw new MapAnalysisProtocolException("Surveyor investigation candidate and evidence are required.");
