@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using HexCrawl.Application;
 using HexCrawl.Application.Persistence;
 using HexCrawl.Domain.Knowledge;
@@ -41,10 +42,14 @@ public sealed record PendingEncounterContract(
     Guid? LocationId,
     string? Note)
 {
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorldCellId? Cell { get; init; }
+
     public static PendingEncounterContract? From(PendingEncounterOccurrence? occurrence) =>
         occurrence is null ? null : new PendingEncounterContract(
             occurrence.Id, occurrence.TriggerSequence, occurrence.WatchNumber, occurrence.Outcome,
-            occurrence.ExpeditionElapsedTime.TotalHours, occurrence.Hex, occurrence.LocationId, occurrence.Note);
+            occurrence.ExpeditionElapsedTime.TotalHours, occurrence.Hex, occurrence.LocationId, occurrence.Note)
+        { Cell = occurrence.Cell };
 }
 
 public sealed record WorkbenchExpeditionStateContract(
@@ -83,6 +88,17 @@ public sealed record WorkbenchExpeditionStateContract(
     bool? ActiveEncounterHandled,
     PendingEncounterContract? PendingEncounter)
 {
+    // Additive qualified-cell authority. These fields are absent from legacy
+    // hex and nonspatial JSON rather than populated with invented coordinates.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorldCellId? CurrentCell { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public PeriodicCellTraversal? CellTraversal { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorldPoint? IntendedHeading { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorldPoint? ActualHeading { get; init; }
+
     public static WorkbenchExpeditionStateContract From(CrawlSessionRuntimeState runtime) => runtime switch
     {
         ExpeditionState expedition => new(
@@ -122,6 +138,7 @@ public sealed record WorkbenchExpeditionStateContract(
             expedition.ActiveWatch?.Encounter.OccursAt?.TotalHours,
             expedition.ActiveWatch?.EncounterHandled,
             PendingEncounterContract.From(expedition.PendingEncounter)),
+        CellExpeditionState cells => FromCells(cells),
         NonSpatialSessionState nonSpatial => new(
             nonSpatial.Id,
             false,
@@ -161,6 +178,48 @@ public sealed record WorkbenchExpeditionStateContract(
             PendingEncounterContract.From(nonSpatial.PendingEncounter)),
         _ => throw new ArgumentOutOfRangeException(nameof(runtime))
     };
+    private static WorkbenchExpeditionStateContract FromCells(CellExpeditionState cells) => new(
+        Id: cells.Id,
+        IsSpatial: true,
+        CurrentHex: null,
+        Position: cells.Traversal.Position,
+        PositionPrecision: WorldPositionPrecision.Exact,
+        EntryDirection: null,
+        LastTravelDirection: null,
+        IntendedDirection: null,
+        ActualDirection: null,
+        IsLost: cells.IsLost,
+        VeerSteps: null,
+        VeerDegrees: cells.ResolvedVeerDegrees,
+        DistanceTraveled: cells.DistanceTraveled is { } distance ? DistanceContract.From(distance) : null,
+        HexProgress: null,
+        ExitRequirement: null,
+        ElapsedTravelHours: cells.ElapsedTravelTime.TotalHours,
+        CurrentDay: (int)Math.Floor(cells.ElapsedTravelTime.TotalDays) + 1,
+        CompletedWatches: cells.CompletedWatches,
+        ActiveWatchNumber: cells.ActiveWatch?.WatchNumber,
+        ActiveWatchTotalHours: cells.ActiveWatch?.TotalDuration.TotalHours,
+        ActiveWatchElapsedHours: cells.ActiveWatch?.Elapsed.TotalHours,
+        ActiveWatchRemainingHours: cells.ActiveWatch?.Remaining.TotalHours,
+        ActiveWatchPendingDecision: cells.ActiveWatch?.PendingDecision,
+        ActivePaceKey: cells.ActiveWatch?.Plan.Mode.PaceKey,
+        ActiveActivityAssignments: cells.ActiveWatch?.Plan.Mode.ActivityAssignments
+            .Select(ParticipantActivityAssignmentContract.From).ToArray() ?? [],
+        ActiveNavigationAidKey: cells.ActiveWatch?.Plan.NavigationAid.Key,
+        ActiveSuppressesNavigationCheck: cells.ActiveWatch?.Plan.NavigationAid.SuppressesNavigationCheck ?? false,
+        ActiveResetsVeerAtBoundary: cells.ActiveWatch?.Plan.NavigationAid.ResetsVeerAtBoundary ?? false,
+        ActiveDeliberateDoubleBack: cells.ActiveWatch?.Plan.DeliberateDoubleBack ?? false,
+        ActiveContinueAcrossBoundaries: cells.ActiveWatch?.Plan.ContinueAcrossBoundaries ?? false,
+        ActiveEncounterKind: cells.ActiveWatch?.Encounter.Kind,
+        ActiveEncounterHour: cells.ActiveWatch?.Encounter.OccursAt?.TotalHours,
+        ActiveEncounterHandled: cells.ActiveWatch?.EncounterHandled,
+        PendingEncounter: PendingEncounterContract.From(cells.PendingEncounter))
+    {
+        CurrentCell = cells.Traversal.CurrentCell,
+        CellTraversal = cells.Traversal,
+        IntendedHeading = cells.IntendedHeading,
+        ActualHeading = cells.Traversal.TravelHeading
+    };
 }
 
 public sealed record CrawlContextContract(
@@ -176,8 +235,9 @@ public sealed record CrawlContextContract(
             context.Kind,
             world?.Name ?? "World-bound crawl",
             worldContext.WorldId,
-            world?.Grid.Orientation,
-            world is null ? null : DistanceContract.From(world.Grid.NeighborCenterDistance)),
+            world is { HasLegacyHexGrid: true } ? world.Grid.Orientation : null,
+            world is { HasLegacyHexGrid: true }
+                ? DistanceContract.From(world.Grid.NeighborCenterDistance) : null),
         AbstractHexCrawlSessionContext abstractContext => new(
             context.Kind,
             abstractContext.DisplayName,
