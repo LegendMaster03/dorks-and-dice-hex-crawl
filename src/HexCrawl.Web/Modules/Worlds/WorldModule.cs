@@ -22,6 +22,8 @@ public sealed class WorldModule : IHexCrawlModule
         api.MapGet("/overworlds", ListOverworldsAsync);
         api.MapPost("/overworlds", CreateOverworldAsync);
         api.MapGet("/overworlds/{overworldId:guid}", GetOverworldAsync);
+        api.MapGet("/overworlds/{overworldId:guid}/cells/viewport", GetVisibleCellsAsync);
+        api.MapGet("/overworlds/{overworldId:guid}/cells/containing", GetContainingCellsAsync);
         api.MapPut("/overworlds/{overworldId:guid}", UpdateOverworldAsync);
         api.MapDelete("/overworlds/{overworldId:guid}", DeleteOverworldAsync);
 
@@ -61,6 +63,40 @@ public sealed class WorldModule : IHexCrawlModule
             overworldId,
             UserId(context),
             cancellationToken)));
+
+    // Geometry is calculated only by the authoritative domain world, and only after
+    // the existing owner-scoped world lookup. Never derive tiles in the browser.
+    private static async Task<IResult> GetVisibleCellsAsync(
+        Guid overworldId,
+        double minX,
+        double minY,
+        double maxX,
+        double maxY,
+        HttpContext context,
+        HexCrawlService service,
+        CancellationToken cancellationToken)
+    {
+        var bounds = new HexCrawl.Domain.Spatial.WorldBounds(minX, minY, maxX, maxY);
+        bounds.Validate();
+        var world = await service.GetOverworldAsync(overworldId, UserId(context), cancellationToken);
+        // Hard cap on candidate enumeration, not merely on response length.
+        return Results.Ok(world.World.SpatialTiling.Intersecting(bounds, limit: 2500));
+    }
+
+    private static async Task<IResult> GetContainingCellsAsync(
+        Guid overworldId,
+        double x,
+        double y,
+        HttpContext context,
+        HexCrawlService service,
+        CancellationToken cancellationToken)
+    {
+        if (!double.IsFinite(x) || !double.IsFinite(y))
+            throw new ArgumentOutOfRangeException(nameof(x), "Point coordinates must be finite.");
+        var world = await service.GetOverworldAsync(overworldId, UserId(context), cancellationToken);
+        return Results.Ok(world.World.SpatialTiling.Containing(
+            new HexCrawl.Domain.Spatial.WorldPoint(x, y), limit: 2500));
+    }
 
     private static async Task<IResult> UpdateOverworldAsync(
         Guid overworldId,

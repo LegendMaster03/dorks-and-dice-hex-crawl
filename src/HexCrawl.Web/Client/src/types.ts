@@ -13,6 +13,41 @@ export type WorldCellId = {
     address: PeriodicCellAddress;
 };
 
+export type WorldCellGeometry = {
+    id: WorldCellId;
+    polygon: WorldPoint[];
+    center: WorldPoint;
+};
+
+export type WorldCellLookup = {
+    status: "NotFound" | "Unique" | "Ambiguous";
+    candidates: WorldCellId[];
+};
+
+export type CellInterface = {
+    interfaceIndex: number;
+    boundarySideIndex: number;
+    neighborCell: WorldCellId;
+    reciprocalInterfaceIndex: number;
+    start: WorldPoint;
+    end: WorldPoint;
+};
+
+export type CellTraversalContext = {
+    formatVersion: number;
+    currentCell: WorldCellId;
+    position: WorldPoint;
+    center: WorldPoint;
+    polygon: WorldPoint[];
+    heading: WorldPoint | null;
+    enteredFrom: WorldCellId | null;
+    entryInterfaceIndex: number | null;
+    selectedExitInterfaceIndex: number | null;
+    hasPhysicalCalibration: boolean;
+    interfaces: CellInterface[];
+};
+
+
 export type DistanceUnit = {
     kind: "Mile" | "Kilometer" | "Custom";
     symbol: string;

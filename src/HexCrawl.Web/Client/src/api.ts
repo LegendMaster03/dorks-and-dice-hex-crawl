@@ -1,6 +1,9 @@
 import type { SourceMapGridAnalysis } from "./hex-grid-analysis";
 import type { CreateEncounterHandoffRequest, HexCrawlEncounterHandoffV2 } from "./encounter-handoff";
 import type {
+    CellTraversalContext,
+    WorldCellGeometry,
+    WorldCellLookup,
     ExpeditionDetail,
     ExpeditionSummary,
     GridDefinition,
@@ -161,6 +164,27 @@ export class HexCrawlApi {
 
     public getOverworld(id: string): Promise<Overworld> {
         return this.getJson(`/api/overworlds/${encodeURIComponent(id)}`, "Overworld");
+    }
+
+    public listVisibleCells(
+        worldId: string,
+        bounds: { minX: number; minY: number; maxX: number; maxY: number }): Promise<WorldCellGeometry[]> {
+        const params = new URLSearchParams({
+            minX: String(bounds.minX),
+            minY: String(bounds.minY),
+            maxX: String(bounds.maxX),
+            maxY: String(bounds.maxY)
+        });
+        return this.getJson(
+            `/api/overworlds/${encodeURIComponent(worldId)}/cells/viewport?${params}`,
+            "Visible world cells");
+    }
+
+    public lookupWorldCell(worldId: string, point: WorldPoint): Promise<WorldCellLookup> {
+        const params = new URLSearchParams({ x: String(point.x), y: String(point.y) });
+        return this.getJson(
+            `/api/overworlds/${encodeURIComponent(worldId)}/cells/containing?${params}`,
+            "World cell selection");
     }
 
     public createOverworld(input: CreateOverworldInput): Promise<Overworld> {
@@ -379,6 +403,12 @@ export class HexCrawlApi {
 
     public startStandaloneSession(input: StartStandaloneCrawlSessionInput): Promise<ExpeditionDetail> {
         return this.sendJson("POST", "/api/expeditions", input, "Start expedition");
+    }
+
+    public getCellTopology(expeditionId: string): Promise<CellTraversalContext> {
+        return this.getJson(
+            `/api/expeditions/${encodeURIComponent(expeditionId)}/cell-topology`,
+            "Current cell topology");
     }
 
     public getExpedition(expeditionId: string): Promise<ExpeditionDetail> {
