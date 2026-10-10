@@ -14,6 +14,28 @@ public static class FeatureIntersection
         };
     }
 
+
+    /// <summary>The shortest Euclidean distance to a polygon (zero on or inside it).</summary>
+    public static double DistanceToPolygon(WorldPoint point, IReadOnlyList<WorldPoint> polygon)
+    {
+        if (polygon.Count < 3)
+            throw new ArgumentException("A polygon must have at least three vertices.", nameof(polygon));
+        if (PointInPolygon(point, polygon)) return 0;
+        double best = double.PositiveInfinity;
+        for (int i = 0; i < polygon.Count; i++)
+        {
+            var a = polygon[i];
+            var b = polygon[(i + 1) % polygon.Count];
+            double x = b.X - a.X, y = b.Y - a.Y;
+            double squared = x * x + y * y;
+            if (squared == 0) continue;
+            double t = Math.Clamp(((point.X - a.X) * x + (point.Y - a.Y) * y) / squared, 0, 1);
+            double dx = point.X - a.X - t * x, dy = point.Y - a.Y - t * y;
+            best = Math.Min(best, Math.Sqrt(dx * dx + dy * dy));
+        }
+        return best;
+    }
+
     private static bool PolylineIntersectsPolygon(IReadOnlyList<WorldPoint> path, IReadOnlyList<WorldPoint> polygon)
     {
         if (path.Count == 0)
@@ -37,7 +59,7 @@ public static class FeatureIntersection
         return false;
     }
 
-    private static bool PolygonsIntersect(IReadOnlyList<WorldPoint> left, IReadOnlyList<WorldPoint> right)
+    public static bool PolygonsIntersect(IReadOnlyList<WorldPoint> left, IReadOnlyList<WorldPoint> right)
     {
         if (left.Count < 3 || right.Count < 3)
         {
@@ -80,7 +102,7 @@ public static class FeatureIntersection
         return false;
     }
 
-    private static bool PointInPolygon(WorldPoint point, IReadOnlyList<WorldPoint> polygon)
+    public static bool PointInPolygon(WorldPoint point, IReadOnlyList<WorldPoint> polygon)
     {
         if (polygon.Count < 3)
         {
