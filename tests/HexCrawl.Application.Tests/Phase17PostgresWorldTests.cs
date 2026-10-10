@@ -148,6 +148,50 @@ public sealed class Phase17PostgresWorldTests
     }
 
     [Fact]
+    public async Task WorldReadRejectsSnapshotIdMismatchWithoutRewritingData()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var store = new PostgresHexCrawlStore(database.ConnectionString);
+        await store.InitializeAsync();
+        var original = new OverworldDefinition
+        {
+            Id = Guid.NewGuid(), Name = "Identity mismatch",
+            Grid = new HexGridDefinition
+            {
+                Id = Guid.NewGuid(), HexRadiusWorldUnits = 1,
+                NeighborCenterDistance = new DistanceMeasure(12, DistanceUnit.Miles)
+            }
+        };
+        var now = DateTimeOffset.UtcNow;
+        await store.CreateOverworldAsync(new StoredOverworld(original, "owner", 4, now, now));
+        var wrongId = Guid.NewGuid();
+        await using var connection = new NpgsqlConnection(database.ConnectionString);
+        await connection.OpenAsync();
+        await using (var corrupt = connection.CreateCommand())
+        {
+            corrupt.CommandText = """
+                UPDATE overworlds
+                SET world_json = jsonb_set(world_json, '{id}', to_jsonb(@wrongId::text))
+                WHERE id = @id;
+                """;
+            corrupt.Parameters.AddWithValue("id", original.Id);
+            corrupt.Parameters.AddWithValue("wrongId", wrongId.ToString());
+            await corrupt.ExecuteNonQueryAsync();
+        }
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            store.GetOverworldAsync(original.Id, "owner"));
+        await using var verify = connection.CreateCommand();
+        verify.CommandText = """
+            SELECT world_json->>'id', version FROM overworlds WHERE id = @id;
+            """;
+        verify.Parameters.AddWithValue("id", original.Id);
+        await using var reader = await verify.ExecuteReaderAsync();
+        Assert.True(await reader.ReadAsync());
+        Assert.Equal(wrongId.ToString(), reader.GetString(0));
+        Assert.Equal(4L, reader.GetInt64(1));
+    }
+
+    [Fact]
     public async Task FutureWorldSnapshotVersionFailsClosedAndDoesNotMutateRecord()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
