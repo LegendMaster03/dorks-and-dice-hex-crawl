@@ -99,45 +99,53 @@ drop, truncate, reset, re-seed, or recreate production data.
 No Phase 16 database migration or source-map binary transformation is
 required.
 
-## 5. Image retention, failed-deploy rollback and operator limits
+## 5. Image retention, immutable runtime preflight and failure recovery
 
-The feature-branch deployment workflows now capture the **currently running**
-production container image **before** overwriting `:latest`, tag it
-`dorks-and-dice-{service}:pre-deploy`, and build the new image under
-both `:latest` and its immutable full Git commit SHA. Production deploys are
-serialized rather than cancelled mid-recreation. Compose configuration
-preflight now runs **before** building any replacement image; a missing or
-invalid configuration stops the job without triggering rollback of a healthy
-running container. For these established services, **failure to capture the
-currently running image aborts deployment before any build or image-tag mutation**. The missing-service state requires
-an operator to investigate and authorize a specific recovery procedure; it is
-not interpreted as a routine first deployment.
+The feature-branch production workflows capture the **actual running** container
+image before modifying the `:latest` tag. They preserve a `:pre-deploy`
+reference and tag new images by their full commit SHA. Main-branch deployments
+are serialized rather than cancelled during container replacement. Missing
+prior running containers **abort before any build or image-tag mutation**.
 
-If deploy or post-deploy verification fails, the workflows attempt to
-recreate the previous image using the same Compose project, environment,
-external network and persistent volumes; they then check readiness and
-the restored container's exact image ID. The GitHub run remains failed even
-when restore succeeds. A failed rollback requires immediate human intervention
-and must not be described as safe recovery. The [isolated deployment rehearsal](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38017893857)
-executed the workflow's actual capture, deploy, verify and restore shell blocks
-against disposable Compose containers for both services. Healthy rollout,
-preflight failure preserving the running service, failed-readiness restoration,
-wrong-revision restoration, actual Compose startup failure after removing the
-old container, and missing-running-image **deployment abort before tag mutation**
-all passed. Retained-volume content survived all rollback cases. Each service
-passed all six rehearsal cases. These automatic branches
-have **not** been exercised against production.
+Before building, the runner creates a **private, ephemeral known-good snapshot**
+from the live container: environment variables, resolved volume mounts,
+networks and restart policy. The helper
+`.github/scripts/phase16-deployment-config.py` records the snapshot in a
+mode-0700 directory with mode-0600 files. This snapshot **contains secrets**.
+It is never uploaded as an Actions artifact, written to logs, checked into
+source control, or shared with testers. The deployment preflight compares the
+proposed Compose configuration and host environment against the actual
+running configuration; **even syntactically valid setting changes fail
+closed**, so separately authorized configuration changes need a dedicated
+operator procedure. The new image and previous image are both recreated
+using the frozen known-good environment rather than a mutable host `.env`.
 
-For a **manual** rollback, an operator must first establish that
-`:pre-deploy` points to the correct previously healthy image and that
-the current database/schema remains backward-compatible. The normal
-workflow uses only stable named volumes; never remove those volumes.
-Do not run an operator rollback without explicit authorization.
+If deployment/verification fails, the workflow attempts to restore the
+retained image with the captured environment, volumes and network
+configuration, checks readiness and verifies the exact restored image ID.
+The workflow remains failed even if recovery succeeds. The private snapshot
+is erased after a healthy deployment or verified rollback. If recovery fails,
+the snapshot is retained for an authorized operator's intervention; protect
+the runner and do not publish the secret-bearing directory.
 
-The `:pre-deploy` tag contains only the immediately prior running image,
-not historical backups. Preserve external database/asset backups separately,
-and verify the deployed Git revision and the post-rollback existing-record
-checks before declaring recovery.
+The [isolated recovery rehearsal](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38020927282)
+exercised the real workflow shell steps on disposable Docker containers
+for **both services**, including a valid rollout, altered configuration
+rejected before replacement, failed-readiness restoration with the **host
+environment deliberately left invalid**, revision mismatch, failed Compose
+container replacement, no-prior-image refusal, and retention of a persisted
+volume record. All observed cases passed. The rehearsal is **not** proof of
+host-level rollback, application credential correctness, GitHub job cancellation
+recovery, or compatibility of arbitrary future schema changes.
+
+Manual rollback requires an operator to verify that `:pre-deploy` still
+references the appropriate healthy image, that the former runtime
+configuration is recoverable, and that the actual persisted schema and assets
+are backward compatible. A `:pre-deploy` tag is **one preceding image, not a
+historical backup**. Independently verify database and asset backup
+recoverability. Never remove persistent volumes. A failed automatic rollback
+needs immediate authorized operator intervention, not a database reset.
+No operator-initiated rollback is authorized by this runbook.
 
 ## 6. Sign-off
 
