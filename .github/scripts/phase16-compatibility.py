@@ -260,6 +260,11 @@ def main():
                 metric=evidence["evidence"]["metricRegistration"]
                 assert metric["status"]=="registered",(label,metric)
                 assert metric["sourceProjection"]["status"]=="supported",(label,metric)
+                if label=="mixed-downsampled-1907":
+                    assert evidence["source"]["width"]==1280,evidence
+                    assert evidence["analysis"]["width"]==640,evidence
+                    assert evidence["analysis"]["scale"]==0.5,evidence
+                    assert evidence["analysis"]["sourceResolutionVerified"] is False,evidence
                 assert jcall(APP,f"/api/overworlds/{wid}")["version"]==version
                 print(f"PHASE16_MATRIX qualified full HTTP motif {label} PASS",flush=True)
 
