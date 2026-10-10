@@ -29,8 +29,8 @@ public sealed class Phase18CellWatchRuntimeTests
         Assert.Null(result.Expedition.ActiveWatch);
         Assert.NotNull(result.Expedition.DistanceTraveled);
         Assert.True(result.Expedition.DistanceTraveled!.Value.Value > 0);
-        var exited = Assert.Single(result.Events.Where(e => e.Kind == CrawlRuntimeEventKind.CellExited));
-        var entered = Assert.Single(result.Events.Where(e => e.Kind == CrawlRuntimeEventKind.CellEntered));
+        var exited = Assert.Single(result.Events, e => e.Kind == CrawlRuntimeEventKind.CellExited);
+        var entered = Assert.Single(result.Events, e => e.Kind == CrawlRuntimeEventKind.CellEntered);
         Assert.Equal(state.Traversal.CurrentCell, exited.Cell);
         Assert.Equal(result.Expedition.Traversal.CurrentCell, entered.Cell);
         Assert.Equal(exited.ReciprocalInterfaceIndex, entered.BoundaryInterfaceIndex);
@@ -50,7 +50,7 @@ public sealed class Phase18CellWatchRuntimeTests
         var engine = new CrawlRuntimeEngine();
         var paused = engine.AdvanceCellWatch(world, procedure, state, plan, Inputs(3));
         Assert.Equal(RuntimePauseReason.ConditionsReviewRequired, paused.PauseReason);
-        Assert.Single(paused.Events.Where(e => e.Kind == CrawlRuntimeEventKind.CellEntered));
+        Assert.Single(paused.Events, e => e.Kind == CrawlRuntimeEventKind.CellEntered);
         Assert.True(paused.RemainingWatchTime > TimeSpan.Zero);
         Assert.True(paused.Expedition.ElapsedTravelTime > TimeSpan.Zero);
 
@@ -159,7 +159,7 @@ public sealed class Phase18CellWatchRuntimeTests
         Assert.Null(resumed.PauseReason);
         Assert.Equal(1, resumed.Expedition.CompletedWatches);
         Assert.Equal(total, resumed.Expedition.ElapsedTravelTime);
-        Assert.Single(resumed.Expedition.History.Where(e => e.Kind == CrawlRuntimeEventKind.EncounterTriggered));
+        Assert.Single(resumed.Expedition.History, e => e.Kind == CrawlRuntimeEventKind.EncounterTriggered);
     }
 
     private static CellWatchAdvanceInputs Inputs(int steps) => new(
