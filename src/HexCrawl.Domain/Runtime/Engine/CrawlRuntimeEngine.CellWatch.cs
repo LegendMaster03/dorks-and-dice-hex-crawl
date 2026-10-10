@@ -62,6 +62,9 @@ public sealed partial class CrawlRuntimeEngine
         {
             if (pause == RuntimePauseReason.EncounterTriggered)
                 throw new InvalidOperationException("Resolve the pending encounter before resuming travel.");
+            if (pause == RuntimePauseReason.CellCourseAdjudicationRequired)
+                throw new InvalidOperationException(
+                    "Resolve the ambiguous atomic exit with ResolveCellCourse before resuming travel.");
             if (pause == RuntimePauseReason.LostRecognitionRequired)
             {
                 var decision = inputs.BoundaryDecision
@@ -269,6 +272,9 @@ public sealed partial class CrawlRuntimeEngine
         ArgumentNullException.ThrowIfNull(expedition);
         ArgumentNullException.ThrowIfNull(decision);
         expedition.Validate(world);
+        if (expedition.ActiveWatch?.PendingDecision != RuntimePauseReason.CellCourseAdjudicationRequired)
+            throw new InvalidOperationException(
+                "An atomic exit decision requires a pending course-adjudication pause.");
         if (expedition.PendingEncounter is not null)
             throw new InvalidOperationException("Resolve the pending encounter before changing course.");
         if (expedition.ActiveWatch?.PendingDecision == RuntimePauseReason.LostRecognitionRequired)

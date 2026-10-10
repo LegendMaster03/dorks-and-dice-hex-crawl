@@ -34,6 +34,17 @@ public sealed record CellExpeditionState : CrawlSessionRuntimeState
             throw new InvalidOperationException("Expedition time and watch counters must be non-negative.");
         if (world.PhysicalDistancePerWorldUnit is not null && DistanceTraveled is null)
             throw new InvalidOperationException("A calibrated cell expedition requires physical travel accounting.");
+        if (DistanceTraveled is { } traveled
+            && (!double.IsFinite(traveled.Value) || traveled.Value < 0))
+            throw new InvalidOperationException("Physical travel accounting must be finite and nonnegative.");
+        if (PendingEncounter is { } pending
+            && (pending.Hex is not null || pending.Cell != Traversal.CurrentCell
+                || ActiveWatch?.PendingDecision != RuntimePauseReason.EncounterTriggered
+                || ActiveWatch.WatchNumber != pending.WatchNumber))
+            throw new InvalidOperationException(
+                "A cell encounter must be bound to its authoritative current cell and paused watch.");
+        if (ActiveWatch is { } watch && watch.WatchNumber <= CompletedWatches)
+            throw new InvalidOperationException("An active watch must follow the last completed watch.");
         ActiveWatch?.Validate();
         if (ActiveWatch is { } active && IntendedHeading != active.Plan.IntendedHeading)
             throw new InvalidOperationException("Active watch intent must agree with the expedition's intended heading.");

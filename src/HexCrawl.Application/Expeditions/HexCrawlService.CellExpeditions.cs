@@ -22,16 +22,28 @@ public sealed partial class HexCrawlService
         RequireVersion(expectedVersion, expedition.Version);
         var state = expedition.Runtime as CellExpeditionState
             ?? throw new InvalidOperationException("This expedition has no generalized cell traversal state.");
+        JourneyRuntimeIntegration.EnsureRelevantTravelAllowed(expedition);
         var context = expedition.Context as WorldBoundCrawlSessionContext
             ?? throw new InvalidOperationException("Generalized cell travel requires an authoritative world.");
         var world = await GetOverworldAsync(context.WorldId, ownerUserId, cancellationToken);
         var result = _runtime.AdvanceCellWatch(
             world.World.SpatialTiling, expedition.CampaignProcedure, state, plan, inputs);
+        var forcedTravel = ForcedTravelAccounting.AccountTravelMutation(
+            expedition, state, result.Expedition, expectedVersion,
+            "cell-watch-travel",
+            new ExpeditionConsequenceProvenance(
+                ExpeditionConsequenceSourceKind.Procedure,
+                "cell-watch-travel",
+                Note: inputs.DmOverrideNote ?? inputs.Travel.Provenance.Note));
+        var journey = JourneyRuntimeIntegration.ObserveCompletedWatches(
+            expedition, state, result.Expedition, expedition.Journey);
         var updated = expedition with
         {
             Runtime = result.Expedition,
             PauseReason = result.PauseReason,
-            RemainingWatchTime = result.RemainingWatchTime
+            RemainingWatchTime = result.RemainingWatchTime,
+            Survival = forcedTravel.Survival,
+            Journey = journey
         };
         return await SaveExpeditionAsync(updated, expectedVersion, cancellationToken);
     }
