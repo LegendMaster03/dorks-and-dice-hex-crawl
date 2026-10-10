@@ -254,8 +254,9 @@ public static class Phase19RasterRegistration
         double determinant = t.M11 * t.M22 - t.M12 * t.M21;
         var dx = actual.X - predicted.X;
         var dy = actual.Y - predicted.Y;
-        return Math.Hypot((t.M22 * dx - t.M12 * dy) / determinant,
-            (t.M11 * dy - t.M21 * dx) / determinant);
+        return Math.Sqrt(
+            Math.Pow((t.M22 * dx - t.M12 * dy) / determinant, 2)
+            + Math.Pow((t.M11 * dy - t.M21 * dx) / determinant, 2));
     }
 
     public static bool Equivalent(MapRegistrationTransform a, MapRegistrationTransform b) =>
