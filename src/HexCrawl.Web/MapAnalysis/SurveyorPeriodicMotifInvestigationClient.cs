@@ -226,11 +226,18 @@ public sealed class SurveyorPeriodicMotifInvestigationClient(
                 && verified.ValueKind is JsonValueKind.True or JsonValueKind.False
                 ? verified.GetBoolean()
                 : throw new MapAnalysisProtocolException("Missing source-resolution verification status."));
-        if (analysisDetails.SourceResolutionVerified
-            && (analysisDetails.Width != sourceDimensions.Width
-                || analysisDetails.Height != sourceDimensions.Height
-                || Math.Abs(analysisDetails.Scale - 1) > 1e-9))
-            throw new MapAnalysisProtocolException("Surveyor source-resolution verification conflicts with image dimensions.");
+        // Scale is upstream metadata, not an authorization to loosen independent
+        // polygon geometry checks. Sharp rounds each resized dimension to the
+        // nearest pixel. Check both dimensions even when full-resolution
+        // verification is false, so forged scales cannot multiply tolerance.
+        if (Math.Abs(analysisDetails.Width - sourceDimensions.Width * analysisDetails.Scale) > 0.501
+            || Math.Abs(analysisDetails.Height - sourceDimensions.Height * analysisDetails.Scale) > 0.501
+            || (analysisDetails.SourceResolutionVerified
+                && (analysisDetails.Width != sourceDimensions.Width
+                    || analysisDetails.Height != sourceDimensions.Height
+                    || Math.Abs(analysisDetails.Scale - 1) > 1e-9)))
+            throw new MapAnalysisProtocolException(
+                "Surveyor image-analysis scale conflicts with the source and analysis dimensions.");
 
         if (!root.TryGetProperty("candidate", out var candidateJson)
             || !root.TryGetProperty("evidence", out var evidenceJson))
