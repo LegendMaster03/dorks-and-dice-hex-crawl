@@ -19,6 +19,7 @@ import { Viewport } from "./viewport";
 export class CanvasMapRenderer {
     public selectedHex: HexCoordinate | null = null;
     public selectedWorldCell: WorldCellGeometry | null = null;
+    public currentWorldCell: WorldCellGeometry | null = null;
     public visibleWorldCells: WorldCellGeometry[] = [];
     public expeditionPosition: WorldPoint | null = null;
     public expeditionHex: HexCoordinate | null = null;
@@ -378,6 +379,24 @@ export class CanvasMapRenderer {
     }
 
     private drawExpedition(ctx: CanvasRenderingContext2D, world: DemoWorld, width: number, height: number): void {
+        // Current cell and inspected cell are separate visual states. Use the
+        // authoritative Phase 18 polygon, not an inferred hex-shaped marker.
+        if (this.currentWorldCell && world.tiling && !world.grid
+            && this.currentWorldCell.id.tilingId === world.tiling.id
+            && this.currentWorldCell.polygon.length >= 3) {
+            const corners = this.currentWorldCell.polygon.map(point => this.toScreen(point, width, height));
+            ctx.save();
+            ctx.beginPath();
+            corners.forEach((point, index) =>
+                index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
+            ctx.closePath();
+            ctx.fillStyle = "rgba(178, 38, 38, .12)";
+            ctx.fill();
+            ctx.strokeStyle = "rgba(178, 38, 38, .82)";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.restore();
+        }
         if (!this.expeditionPosition && (!this.expeditionHex || !world.grid)) return;
         const position = this.expeditionPosition ?? hexToWorld(world.grid!, this.expeditionHex!);
         const point = this.toScreen(position, width, height);

@@ -366,6 +366,11 @@ export async function renderPeriodicExpeditionWorkbench(
         required<HTMLButtonElement>("[data-advance]").disabled =
             busy || pausedForCourse || !!pendingEncounter || !resolutions || modes.length === 0;
         const mapPoint = topology.position;
+        map.renderer.currentWorldCell = {
+            id: topology.currentCell,
+            polygon: topology.polygon,
+            center: topology.center
+        };
         map.renderer.expeditionPosition = { ...mapPoint };
         if (world?.grid) map.renderer.expeditionHex = null;
         map.requestRender();

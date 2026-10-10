@@ -378,6 +378,7 @@ export class MapSurface {
         if (this.renderer.selectedHex) {
             parts.push(`Selected hex q ${this.renderer.selectedHex.q}, r ${this.renderer.selectedHex.r}`);
         }
+        if (this.renderer.currentWorldCell) parts.push("Current expedition cell is outlined");
         if (this.renderer.selectedWorldCell) parts.push("A world cell is selected");
         if (world) {
             parts.push(`${world.locations.length} authored locations and ${world.features.length} authored map features`);
