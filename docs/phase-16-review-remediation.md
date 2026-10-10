@@ -55,3 +55,48 @@ running-image/backups evidence. After *separately authorized deployment*,
 repeat authenticated existing-record smokes. Automatic main deploy after
 merge makes merge authorization a deployment-risk decision; do not merge
 either repo on a CI-green conclusion alone.
+
+## Second independent review — R1 and R2 remediation
+
+The October 10 second independent review examined Hex
+`d1a3c1a185283b87c9b6dc2359ac0386645b999b` and Surveyor
+`503724c6812785f55a20587d5a4992bb46bbce5a`.
+It independently confirmed that F1–F4 and F6 were resolved, but
+identified two remaining **release blockers** in the deployment safeguards:
+
+| Finding | Defect demonstrated by independent reviewer | Current feature-branch fix |
+| --- | --- | --- |
+| R1 — partial runtime comparison and candidate-dependent rollback | Mount access, published ports, and explicit command/entrypoint were not checked; failed recovery still consumed candidate `docker-compose.yml` | Strict bounded Compose allowlist, safe default handling, live-image command/entrypoint comparison, RW named-volume and no-host-port checks; after successful preflight copy the verified Compose definition privately and restore with the **retained** file while hostile checkout remains unchanged |
+| R2 — cancellation cleanup deletes recovery snapshot | `always()` + `not failure` treated cancelled/skipped outcomes as safe | Explicit cleanup only for successful verify, successful verified rollback, or both deploy/verify skipped; named outcome semantics checked against actual workflow expressions with cancellation matrix |
+
+The recovery design **intentionally fails closed** on new resource,
+security, process and port configuration. This Phase 16 safety measure is
+not intended to perform arbitrary authorized infrastructure changes. Any
+necessary runtime config change requires an independent operator-approved
+deployment procedure with its own recovery plan. The frozen environment
+and Compose files can contain credentials; mode-0700/0600 restricted local
+snapshot files must not be uploaded, logged or added to artifacts. Unknown
+or cancelled outcomes retain the files for operator inspection.
+
+The expanded [both-service real-Docker rehearsal](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38024042740)
+proves restoration with a hostile Compose **port binding, command or
+read-only volume still present**; it also tests known-good environment
+retention with a corrupted host env file, missing prior image, mismatched
+revision, and persisted-volume contents. The exact cleanup and restore
+predicates are tested for cancelled/unknown states by
+`.github/scripts/phase16-deploy-outcome-contract.py`.
+
+**Not established:** actual running production container versions,
+credential and filesystem recoverability, actual runner cancellation
+execution, force-lost host or storage, and signed-in existing tester
+record survival after an authorized deployment. Existing production
+systems and tester data were not modified. Merge/deploy remain NO-GO
+until explicit authorization and the release runbook's live-operational
+gates are met.
+
+The second reviewer found the geometry detector changes technically
+valid but identified a documented bounded deviation from literal
+hex Hough/autocorrelation numerical-kernel reuse. The original Sobel
+kernel is directly reused; generalized displacement-vote fitting
+replaces the hex-specific pitch/phase fitter. Owner/reviewer scope
+disposition remains explicit rather than implied by green CI.
