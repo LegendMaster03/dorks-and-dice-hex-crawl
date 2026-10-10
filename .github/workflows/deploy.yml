@@ -44,7 +44,8 @@ jobs:
             echo "Retained previous running image $previous_image as dorks-and-dice-hex-crawl:pre-deploy"
           else
             echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "No running dorks-and-dice-hex-crawl container; no rollback image for a first deployment"
+            echo "BLOCKED: dorks-and-dice-hex-crawl has no running container to retain as a verified rollback image. Existing-tester deployment requires an operator to investigate and authorize recovery." >&2
+            exit 1
           fi
 
       - name: Build image
