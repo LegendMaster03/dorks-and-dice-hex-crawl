@@ -21,7 +21,6 @@ public sealed class Phase18TraversalExecutionTests
                 var state = Towards(world, cell, exit);
                 var result = PeriodicTraversalExecution.AdvanceCellSteps(world, state, 1, true);
                 Assert.Equal(1, result.CompletedCellSteps);
-                Assert.Equal(1, result.Transitions.Count);
                 var transition = Assert.Single(result.Transitions);
                 Assert.Equal(cell.Id, transition.From);
                 Assert.Equal(exit.To, transition.To);
@@ -61,7 +60,7 @@ public sealed class Phase18TraversalExecutionTests
         Assert.Equal(exit.To, second.Traversal.CurrentCell);
         Assert.InRange(first.ConsumedWorldUnits + second.ConsumedWorldUnits,
             2 * half - 1e-8, 2 * half + 1e-8);
-        Assert.Equal(first.Transitions.Count + second.Transitions.Count, 1);
+        Assert.Equal(1, first.Transitions.Count + second.Transitions.Count);
     }
 
     [Fact]
