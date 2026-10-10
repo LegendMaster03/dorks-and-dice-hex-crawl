@@ -23,6 +23,16 @@ public sealed partial class HexCrawlService
         var state = expedition.Runtime as CellExpeditionState
             ?? throw new InvalidOperationException("This expedition has no generalized cell traversal state.");
         JourneyRuntimeIntegration.EnsureRelevantTravelAllowed(expedition);
+        ParticipantActivityPolicyResolver.ValidateAssignments(
+            expedition.Party,
+            ParticipantActivityPolicyResolver.Resolve(expedition.CampaignProcedure));
+        ArgumentNullException.ThrowIfNull(plan.Mode);
+        var assignments = state.ActiveWatch?.Plan.Mode.ActivityAssignments
+            ?? ParticipantActivityPolicyResolver.SnapshotAssignments(expedition.Party);
+        if (plan.Mode.ActivityAssignments is null
+            || !plan.Mode.ActivityAssignments.SequenceEqual(assignments))
+            throw new InvalidOperationException(
+                "Watch activity assignments must match the authoritative party snapshot.");
         var context = expedition.Context as WorldBoundCrawlSessionContext
             ?? throw new InvalidOperationException("Generalized cell travel requires an authoritative world.");
         var world = await GetOverworldAsync(context.WorldId, ownerUserId, cancellationToken);
