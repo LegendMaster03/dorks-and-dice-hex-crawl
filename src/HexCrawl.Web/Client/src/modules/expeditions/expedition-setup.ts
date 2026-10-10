@@ -43,6 +43,17 @@ export async function enhanceExpeditionSetup(
 
     const procedure = select(form, "procedure");
     populateProcedureStartChoices(procedure, savedProcedures, world.grid ? presets : []);
+    let createCellRulesetButton: HTMLButtonElement | null = null;
+    if (!world.grid) {
+        createCellRulesetButton = document.createElement("button");
+        createCellRulesetButton.type = "button";
+        createCellRulesetButton.textContent = "Create a compatible cell-travel ruleset";
+        createCellRulesetButton.className = "hc-secondary-action";
+        createCellRulesetButton.title =
+            "Creates an editable saved campaign ruleset using existing cell-step movement. Existing procedures are not changed.";
+        required<HTMLElement>(form, "[data-procedure-summary]").after(createCellRulesetButton);
+    }
+
     if (!world.grid) {
         const start = form.querySelector<HTMLElement>(".hc-inline");
         const cells = world.tiling?.topology.motifCells ?? [];
@@ -99,6 +110,34 @@ export async function enhanceExpeditionSetup(
     const error = root.querySelector<HTMLElement>("[data-error]");
     const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
     submit.disabled = !procedure.value;
+    createCellRulesetButton?.addEventListener("click", () => {
+        if (!createCellRulesetButton || createCellRulesetButton.disabled) return;
+        createCellRulesetButton.disabled = true;
+        createCellRulesetButton.textContent = "Creating ruleset…";
+        if (error) clearUiError(error);
+        void (async () => {
+            try {
+                const created = await api.createCellTravelProcedure(worldId);
+                const fresh = await composerApi.listProcedures();
+                savedProcedures.splice(0, savedProcedures.length, ...fresh);
+                populateProcedureStartChoices(procedure, savedProcedures, []);
+                const value = `saved:${created.procedureId}:${created.revision}`;
+                if (![...procedure.options].some(item => item.value === value)) {
+                    throw new Error("The ruleset was created, but the saved-ruleset list is stale. Reload the world.");
+                }
+                procedure.value = value;
+                submit.disabled = false;
+                await renderProcedureSummary();
+            } catch (failure) {
+                if (error) showUiError(error, failure);
+            } finally {
+                if (createCellRulesetButton) {
+                    createCellRulesetButton.disabled = false;
+                    createCellRulesetButton.textContent = "Create a compatible cell-travel ruleset";
+                }
+            }
+        })();
+    });
     form.addEventListener("submit", event => {
         event.preventDefault();
         if (form.dataset.pending === "true") return;
