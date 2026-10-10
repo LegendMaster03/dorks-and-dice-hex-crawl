@@ -136,6 +136,7 @@ def restore_and_verify_database(postgres_image, dump, expected_inventory):
         # Never direct pg_restore at production or perform live DROP commands.
         private_log = dump.parent / "isolated-postgres-restore.log"
         with dump.open("rb") as stream, private_log.open("xb") as diagnostic:
+            private_log.chmod(0o600)
             try:
                 docker("exec", "-i", name, "pg_restore", "--exit-on-error",
                        "--clean", "--if-exists", "--no-owner", "--no-privileges",
