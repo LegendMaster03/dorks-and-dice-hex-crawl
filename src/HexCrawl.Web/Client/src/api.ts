@@ -10,6 +10,7 @@ import type {
     WorldCellLookup,
     ExpeditionDetail,
     ExpeditionSummary,
+    DistanceUnit,
     GridDefinition,
     HexCoordinate,
     HexOrientation,

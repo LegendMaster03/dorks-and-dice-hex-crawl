@@ -40,6 +40,9 @@ export async function renderWorldList(
                             </div>
                             <label>Rotation degrees <input name="periodicRotation" type="number" step="any" value="0"></label>
                             <label>Optional physical distance per world unit <input name="physicalScale" type="number" min="0.000001" step="any" placeholder="Leave blank if uncalibrated"></label>
+                            <label>Physical distance unit
+                                <select name="periodicUnit"><option value="Mile">Miles</option><option value="Kilometer">Kilometers</option></select>
+                            </label>
                             <p class="hc-hint">Physical units use the map-scale unit selected below. Uncalibrated worlds can use cell-step travel but not physical-distance travel.</p>
                             <details data-custom-pattern hidden>
                                 <summary>Explicitly edit custom tiling JSON</summary>
@@ -250,13 +253,10 @@ export async function renderWorldList(
                         throw new Error("Physical map scale must be positive.");
                     const period = numeric(input(form, "periodUnits"));
                     if (!(period > 0)) throw new Error("Repeating-pattern size must be positive.");
-                    const unit = unitSelect.value as DistanceUnitKind;
-                    if (physicalValue !== null && unitSelect.value === "")
-                        throw new Error("Choose a physical distance unit for calibration.");
+                    const unit = select(form, "periodicUnit").value as DistanceUnitKind;
                     const physicalDistancePerWorldUnit = physicalValue === null ? undefined : {
                         value: physicalValue,
-                        unit: canonicalDistanceUnit(unit, symbolInput.value,
-                            unit === "Custom" ? numeric(metersInput) : null)
+                        unit: canonicalDistanceUnit(unit)
                     };
                     const world = await api.createPeriodicOverworld({
                         name: input(form, "name").value.trim(),
