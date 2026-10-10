@@ -3,6 +3,16 @@ export type HexCoordinateConvention = "AxialQr";
 export type WorldPoint = { x: number; y: number };
 export type HexCoordinate = { q: number; r: number };
 
+/** Phase 18: a cell address is qualified by the tiling, not an axial hex. */
+export type PeriodicCellAddress = {
+    motifCellId: string;
+    translation: { u: number; v: number };
+};
+export type WorldCellId = {
+    tilingId: string;
+    address: PeriodicCellAddress;
+};
+
 export type DistanceUnit = {
     kind: "Mile" | "Kilometer" | "Custom";
     symbol: string;

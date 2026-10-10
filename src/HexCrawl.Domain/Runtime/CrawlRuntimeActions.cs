@@ -9,6 +9,11 @@ public sealed record ManualDiscoveryResult(
     PlayerKnowledgeState Knowledge,
     CrawlRuntimeEvent Event);
 
+public sealed record CellManualDiscoveryResult(
+    CellExpeditionState Expedition,
+    PlayerKnowledgeState Knowledge,
+    CrawlRuntimeEvent Event);
+
 public static class CrawlRuntimeActions
 {
     public static ExpeditionState Reposition(
@@ -106,23 +111,7 @@ public static class CrawlRuntimeActions
         ArgumentNullException.ThrowIfNull(expedition);
         ArgumentNullException.ThrowIfNull(knowledge);
 
-        var (exists, name, eventKind) = subjectType switch
-        {
-            KnowledgeSubjectType.Location => (
-                world.Locations.Any(item => item.Id == subjectId),
-                world.Locations.FirstOrDefault(item => item.Id == subjectId)?.Name,
-                CrawlRuntimeEventKind.LocationDiscovered),
-            KnowledgeSubjectType.Feature => (
-                world.Features.Any(item => item.Id == subjectId),
-                world.Features.FirstOrDefault(item => item.Id == subjectId)?.Name,
-                CrawlRuntimeEventKind.FeatureDiscovered),
-            _ => throw new InvalidOperationException("The demonstrator discovery action currently supports locations and features only.")
-        };
-
-        if (!exists)
-        {
-            throw new InvalidOperationException($"The {subjectType.ToString().ToLowerInvariant()} does not exist in this overworld.");
-        }
+        var (name, eventKind) = ResolveWorldDiscoverySubject(world, subjectId, subjectType);
 
         var updatedKnowledge = KnowledgeDiscovery.Discover(
             knowledge,
@@ -147,4 +136,53 @@ public static class CrawlRuntimeActions
 
         return new ManualDiscoveryResult(updatedExpedition, updatedKnowledge, runtimeEvent);
     }
+    public static CellManualDiscoveryResult DiscoverCell(
+        OverworldDefinition world,
+        CellExpeditionState expedition,
+        PlayerKnowledgeState knowledge,
+        Guid subjectId,
+        KnowledgeSubjectType subjectType,
+        string source)
+    {
+        ArgumentNullException.ThrowIfNull(world);
+        ArgumentNullException.ThrowIfNull(expedition);
+        ArgumentNullException.ThrowIfNull(knowledge);
+        expedition.Validate(world.SpatialTiling);
+        if (knowledge.OverworldId != world.Id)
+            throw new InvalidOperationException("Discovery knowledge belongs to another world.");
+
+        var (name, kind) = ResolveWorldDiscoverySubject(world, subjectId, subjectType);
+        var updatedKnowledge = KnowledgeDiscovery.Discover(
+            knowledge, subjectId, subjectType, source);
+        var sequence = expedition.History.Count == 0 ? 1 : expedition.History[^1].Sequence + 1;
+        var watch = expedition.ActiveWatch?.WatchNumber ?? Math.Max(1, expedition.CompletedWatches);
+        var recorded = new CrawlRuntimeEvent(
+            sequence, watch, kind, expedition.ElapsedTravelTime,
+            null, $"Discovered {subjectType.ToString().ToLowerInvariant()} {name}; unrelated contents remain unchanged.",
+            SubjectId: subjectId, SubjectType: subjectType)
+        { Cell = expedition.Traversal.CurrentCell };
+        return new CellManualDiscoveryResult(
+            expedition with { History = [.. expedition.History, recorded] },
+            updatedKnowledge, recorded);
+    }
+
+    private static (string Name, CrawlRuntimeEventKind Kind) ResolveWorldDiscoverySubject(
+        OverworldDefinition world, Guid subjectId, KnowledgeSubjectType type)
+    {
+        // The user-directed discovery action is semantic rather than a
+        // proximity assertion; this intentionally matches existing hex rules.
+        return type switch
+        {
+            KnowledgeSubjectType.Location when world.Locations.FirstOrDefault(x => x.Id == subjectId) is { } location
+                => (location.Name, CrawlRuntimeEventKind.LocationDiscovered),
+            KnowledgeSubjectType.Feature when world.Features.FirstOrDefault(x => x.Id == subjectId) is { } feature
+                => (feature.Name, CrawlRuntimeEventKind.FeatureDiscovered),
+            KnowledgeSubjectType.Location or KnowledgeSubjectType.Feature
+                => throw new InvalidOperationException(
+                    $"The {type.ToString().ToLowerInvariant()} does not exist in this overworld."),
+            _ => throw new InvalidOperationException(
+                "Manual discovery currently supports named locations and features only.")
+        };
+    }
+
 }

@@ -241,17 +241,43 @@ public sealed partial class HexCrawlService
             throw new InvalidOperationException("Semantic discovery requires a world-bound crawl session.");
         }
         var world = await GetOverworldAsync(worldContext.WorldId, ownerUserId, cancellationToken);
-        var state = expedition.Runtime as ExpeditionState
-            ?? throw new InvalidOperationException("World-bound discovery requires spatial expedition state.");
-        var result = CrawlRuntimeActions.Discover(
-            world.World,
-            state,
-            expedition.RequireKnowledge(),
-            command.SubjectId,
-            command.SubjectType,
-            string.IsNullOrWhiteSpace(command.Source) ? "dm:manual-discovery" : command.Source.Trim());
-        var updated = expedition with { Runtime = result.Expedition, Knowledge = result.Knowledge };
+        var knowledge = expedition.RequireKnowledge();
+        var source = string.IsNullOrWhiteSpace(command.Source)
+            ? "dm:manual-discovery" : command.Source.Trim();
+        var updated = expedition.Runtime switch
+        {
+            ExpeditionState state => ApplyHexDiscovery(expedition, world.World,
+                state, knowledge, command, source),
+            CellExpeditionState cells => ApplyCellDiscovery(expedition, world.World,
+                cells, knowledge, command, source),
+            _ => throw new InvalidOperationException(
+                "World-bound discovery requires spatial expedition state.")
+        };
         return await SaveExpeditionAsync(updated, command.ExpectedVersion, cancellationToken);
+    }
+
+    private static StoredExpedition ApplyHexDiscovery(
+        StoredExpedition expedition,
+        HexCrawl.Domain.World.OverworldDefinition world,
+        ExpeditionState state,
+        PlayerKnowledgeState knowledge,
+        DiscoverSubjectCommand command, string source)
+    {
+        var result = CrawlRuntimeActions.Discover(
+            world, state, knowledge, command.SubjectId, command.SubjectType, source);
+        return expedition with { Runtime = result.Expedition, Knowledge = result.Knowledge };
+    }
+
+    private static StoredExpedition ApplyCellDiscovery(
+        StoredExpedition expedition,
+        HexCrawl.Domain.World.OverworldDefinition world,
+        CellExpeditionState state,
+        PlayerKnowledgeState knowledge,
+        DiscoverSubjectCommand command, string source)
+    {
+        var result = CrawlRuntimeActions.DiscoverCell(
+            world, state, knowledge, command.SubjectId, command.SubjectType, source);
+        return expedition with { Runtime = result.Expedition, Knowledge = result.Knowledge };
     }
 
     private async Task<(CrawlRuntimeContext RuntimeContext, StoredOverworld? World)> ResolveSpatialContextAsync(

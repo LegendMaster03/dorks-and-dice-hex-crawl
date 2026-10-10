@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using HexCrawl.Application;
 using HexCrawl.Domain.Procedure;
 using HexCrawl.Domain.Runtime;
@@ -58,31 +59,44 @@ public sealed record ProcedureRuntimeContract(
     bool UsesNavigationChecks,
     bool UsesPersistentVeer,
     bool TracksIntraHexProgress,
-    bool DirectionChangesCostProgress,
-    bool SupportsDeliberateDoubleBack,
-    double StartingExitProgressFactor,
-    double NearExitProgressFactor,
-    double FarExitProgressFactor,
-    double BackExitProgressFactor,
-    double DirectionChangeProgressCostFactor,
+    bool? DirectionChangesCostProgress,
+    bool? SupportsDeliberateDoubleBack,
+    double? StartingExitProgressFactor,
+    double? NearExitProgressFactor,
+    double? FarExitProgressFactor,
+    double? BackExitProgressFactor,
+    double? DirectionChangeProgressCostFactor,
     ProcedureResolutionHelperProfileContract? ResolutionHelpers)
 {
-    public static ProcedureRuntimeContract From(GenericProcedureRuntime runtime) => new(
-        runtime.Time.IntervalDuration.TotalHours,
-        runtime.Movement.TravelResolution,
-        runtime.Movement.ActualDistanceResolution,
-        runtime.Encounters.Cadence,
-        runtime.Navigation.UsesNavigationChecks,
-        runtime.Navigation.UsesPersistentVeer,
-        runtime.Movement.TracksIntraHexProgress,
-        runtime.HexProgress.DirectionChangesCostProgress,
-        runtime.HexProgress.SupportsDeliberateDoubleBack,
-        runtime.HexProgress.StartingExitProgressFactor,
-        runtime.HexProgress.NearExitProgressFactor,
-        runtime.HexProgress.FarExitProgressFactor,
-        runtime.HexProgress.BackExitProgressFactor,
-        runtime.HexProgress.DirectionChangeProgressCostFactor,
-        runtime.ResolutionHelpers is null ? null : ProcedureResolutionHelperProfileContract.From(runtime.ResolutionHelpers));
+    // Version 1 retains exactly its old JSON contract. Version 2 explicitly
+    // advertises the movement handler and omits inapplicable hex factors.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? MovementMechanicVersion { get; init; }
+
+    public static ProcedureRuntimeContract From(GenericProcedureRuntime runtime)
+    {
+        var hex = runtime.Movement.MechanicVersion == 1 ? runtime.HexProgress : null;
+        return new ProcedureRuntimeContract(
+            runtime.Time.IntervalDuration.TotalHours,
+            runtime.Movement.TravelResolution,
+            runtime.Movement.ActualDistanceResolution,
+            runtime.Encounters.Cadence,
+            runtime.Navigation.UsesNavigationChecks,
+            runtime.Navigation.UsesPersistentVeer,
+            runtime.Movement.TracksIntraHexProgress,
+            hex?.DirectionChangesCostProgress,
+            hex?.SupportsDeliberateDoubleBack,
+            hex?.StartingExitProgressFactor,
+            hex?.NearExitProgressFactor,
+            hex?.FarExitProgressFactor,
+            hex?.BackExitProgressFactor,
+            hex?.DirectionChangeProgressCostFactor,
+            runtime.ResolutionHelpers is null ? null : ProcedureResolutionHelperProfileContract.From(runtime.ResolutionHelpers))
+        {
+            MovementMechanicVersion = runtime.Movement.MechanicVersion == 1
+                ? null : runtime.Movement.MechanicVersion
+        };
+    }
 }
 
 public sealed record FocusedIntervalPolicyContract(

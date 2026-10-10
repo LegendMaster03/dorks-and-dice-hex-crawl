@@ -14,18 +14,14 @@ public sealed partial class CrawlRuntimeEngine
         WatchAdvanceInputs inputs,
         EventCollector events)
     {
-        var encounterCheckDue = GenericProcedureRuntimeRequirements.IsEncounterCheckDue(procedure, state);
-        var encounter = ResolveEncounterForNewWatch(
-            procedure.Time.IntervalDuration,
-            encounterCheckDue,
-            inputs.Encounter);
+        var start = PrepareWatchStart(procedure, state, state.CompletedWatches, inputs.Encounter);
         var active = new ActiveWatchState(
-            state.CompletedWatches + 1,
-            procedure.Time.IntervalDuration,
+            start.WatchNumber,
+            start.Duration,
             TimeSpan.Zero,
             plan,
-            encounter,
-            encounter.Kind == EncounterOutcomeKind.None,
+            start.Encounter,
+            start.Encounter.Kind == EncounterOutcomeKind.None,
             null);
         var assignments = plan.Mode.ActivityAssignments.Count == 0
             ? "none"
@@ -47,17 +43,43 @@ public sealed partial class CrawlRuntimeEngine
             events,
             active.WatchNumber);
 
-        if (encounterCheckDue)
+        if (start.EncounterCheckDue)
         {
             events.Add(
                 active.WatchNumber,
                 CrawlRuntimeEventKind.EncounterCheckPerformed,
                 state.ElapsedTravelTime,
                 state.CurrentHex,
-                $"Encounter check resolved as {encounter.Kind}.");
+                $"Encounter check resolved as {start.Encounter.Kind}.");
         }
 
         return (state, active);
+    }
+
+    // The procedure's watch duration, encounter cadence and outcome decision
+    // are one policy for both legacy hex and generalized cell expeditions.
+    // Geometry-specific plans and events remain adapters around this shared
+    // start boundary.
+    private readonly record struct WatchStartPolicy(
+        int WatchNumber,
+        TimeSpan Duration,
+        ResolvedEncounter Encounter,
+        bool EncounterCheckDue);
+
+    private static WatchStartPolicy PrepareWatchStart(
+        GenericProcedureRuntime procedure,
+        CrawlSessionRuntimeState state,
+        int completedWatches,
+        ResolvedEncounter? suppliedEncounter)
+    {
+        if (completedWatches < 0)
+            throw new InvalidOperationException("Completed watch count must be nonnegative.");
+        var checkDue = GenericProcedureRuntimeRequirements.IsEncounterCheckDue(procedure, state);
+        var encounter = ResolveEncounterForNewWatch(
+            procedure.Time.IntervalDuration, checkDue, suppliedEncounter);
+        return new WatchStartPolicy(
+            checked(completedWatches + 1), procedure.Time.IntervalDuration,
+            encounter, checkDue);
     }
 
     private static string DescribeAssignment(ParticipantActivityAssignment assignment)
@@ -69,6 +91,23 @@ public sealed partial class CrawlRuntimeEngine
         return string.IsNullOrWhiteSpace(details) ? target : $"{target}:{details}";
     }
 
+    /// <summary>
+    /// A shared recognition rule for legacy hex and qualified cell watches.
+    /// Refusing reorientation is valid; reorienting without first recognizing
+    /// the navigation error is not.
+    /// </summary>
+    private static bool ValidateLostRecognitionDecision(
+        BoundaryNavigationDecision? decision)
+    {
+        if (decision is null)
+            throw new InvalidOperationException(
+                "A lost-recognition boundary decision is required before travel can continue.");
+        if (decision.Reorient && !decision.RecognizedLost)
+            throw new InvalidOperationException(
+                "Reorientation requires recognizing that the expedition is lost.");
+        return decision.RecognizedLost && decision.Reorient;
+    }
+
     private static (ExpeditionState State, ActiveWatchState Active) ResumePendingDecision(
         ExpeditionState state,
         ActiveWatchState active,
@@ -77,9 +116,7 @@ public sealed partial class CrawlRuntimeEngine
     {
         if (active.PendingDecision == RuntimePauseReason.LostRecognitionRequired)
         {
-            var decision = boundaryDecision
-                ?? throw new InvalidOperationException("A lost-recognition boundary decision is required before travel can continue.");
-            if (decision.RecognizedLost && decision.Reorient)
+            if (ValidateLostRecognitionDecision(boundaryDecision))
             {
                 state = state with { Navigation = new NavigationRuntimeState(false, 0) };
                 events.Add(
@@ -95,6 +132,51 @@ public sealed partial class CrawlRuntimeEngine
         state = state with { ActiveWatch = active };
         return (state, active);
     }
+
+    /// <summary>
+    /// One authoritative encounter-time slicing rule for both legacy hex
+    /// and generalized cell watches. The event itself is owned by each
+    /// session's position adapter; the elapsed-time cutoff is shared.
+    /// </summary>
+    private readonly record struct WatchEncounterWindow(
+        TimeSpan Duration, bool EncounterAtEnd, bool EncounterImmediatelyDue);
+
+    private static WatchEncounterWindow ResolveEncounterWindow(
+        TimeSpan callRemaining,
+        TimeSpan elapsed,
+        TimeSpan totalDuration,
+        ResolvedEncounter encounter,
+        bool alreadyHandled)
+    {
+        if (alreadyHandled || encounter.Kind == EncounterOutcomeKind.None)
+            return new WatchEncounterWindow(callRemaining, false, false);
+
+        var due = encounter.OccursAt
+            ?? throw new InvalidOperationException("A triggered encounter needs its scheduled watch time.");
+        if (due < TimeSpan.Zero || due > totalDuration)
+            throw new InvalidOperationException("The encounter falls outside the active watch.");
+        if (due <= elapsed)
+            return new WatchEncounterWindow(TimeSpan.Zero, false, true);
+
+        var untilEncounter = due - elapsed;
+        if (untilEncounter <= callRemaining)
+            return new WatchEncounterWindow(untilEncounter, true, false);
+        return new WatchEncounterWindow(callRemaining, false, false);
+    }
+
+    /// <summary>
+    /// The final watch tick remains authoritative for an encounter even when
+    /// an intervening navigation/boundary decision paused completion.
+    /// This test is shared by hex and generalized cell execution.
+    /// </summary>
+    private static bool HasEncounterDueAtCurrentTime(
+        TimeSpan remaining,
+        TimeSpan elapsed,
+        TimeSpan duration,
+        ResolvedEncounter encounter,
+        bool handled) =>
+        ResolveEncounterWindow(remaining, elapsed, duration, encounter, handled)
+            .EncounterImmediatelyDue;
 
     private static ResolvedEncounter ResolveEncounterForNewWatch(
         TimeSpan intervalDuration,
@@ -126,26 +208,50 @@ public sealed partial class CrawlRuntimeEngine
         return encounter;
     }
 
+    /// <summary>
+    /// Both spatial runtimes use the same occurrence identity and typed
+    /// encounter-trigger metadata; only their authoritative coordinate differs.
+    /// </summary>
+    private static CrawlRuntimeEvent RecordEncounterTrigger(
+        Guid expeditionId,
+        int watchNumber,
+        TimeSpan elapsed,
+        HexCoordinate? hex,
+        WorldCellId? cell,
+        ResolvedEncounter encounter,
+        EventCollector events,
+        string message)
+    {
+        if (hex.HasValue == cell.HasValue)
+            throw new InvalidOperationException(
+                "An encounter trigger requires exactly one authoritative spatial identity.");
+        var occurrenceId = EncounterOccurrenceIdentity.Create(
+            expeditionId, events.NextSequence);
+        var recorded = events.Add(
+            watchNumber, CrawlRuntimeEventKind.EncounterTriggered,
+            elapsed, hex, message,
+            subjectId: encounter.LocationId,
+            encounterOutcome: encounter.Kind,
+            encounterNote: encounter.Note,
+            encounterProvenance: encounter.Provenance,
+            encounterOccurrenceId: occurrenceId,
+            cell: cell);
+        return recorded;
+    }
+
     private static WatchAdvanceResult TriggerEncounter(
         ExpeditionState state,
         ActiveWatchState active,
         EventCollector events)
     {
         var encounter = active.Encounter;
-        var occurrenceId = EncounterOccurrenceIdentity.Create(state.Id, events.NextSequence);
-        var triggered = events.Add(
-            active.WatchNumber,
-            CrawlRuntimeEventKind.EncounterTriggered,
-            state.ElapsedTravelTime,
-            state.CurrentHex,
+        var triggered = RecordEncounterTrigger(
+            state.Id, active.WatchNumber, state.ElapsedTravelTime,
+            state.CurrentHex, null, encounter, events,
             string.IsNullOrWhiteSpace(encounter.Note)
                 ? $"{encounter.Kind} triggered."
-                : $"{encounter.Kind}: {encounter.Note}",
-            subjectId: encounter.LocationId,
-            encounterOutcome: encounter.Kind,
-            encounterNote: encounter.Note,
-            encounterProvenance: encounter.Provenance,
-            encounterOccurrenceId: occurrenceId);
+                : $"{encounter.Kind}: {encounter.Note}");
+        var occurrenceId = triggered.EncounterOccurrenceId!.Value;
 
         active = active with
         {
@@ -182,28 +288,46 @@ public sealed partial class CrawlRuntimeEngine
         return Finish(state, null, TimeSpan.Zero, events);
     }
 
+    /// <summary>
+    /// Shared DM-override detection and note precedence. A cell/hex adapter
+    /// supplies only its authoritative position to the event collector.
+    /// </summary>
+    private static string? ResolveDmOverrideNote(
+        ResolutionProvenance travel,
+        ResolutionProvenance? navigation,
+        ResolutionProvenance? encounter,
+        ResolutionProvenance? boundary,
+        string? overrideNote)
+    {
+        if (travel.Source != ResolutionSource.DmOverride
+            && navigation?.Source != ResolutionSource.DmOverride
+            && encounter?.Source != ResolutionSource.DmOverride
+            && boundary?.Source != ResolutionSource.DmOverride
+            && string.IsNullOrWhiteSpace(overrideNote))
+            return null;
+
+        return overrideNote
+            ?? travel.Note
+            ?? navigation?.Note
+            ?? encounter?.Note
+            ?? boundary?.Note
+            ?? "DM supplied an authoritative override.";
+    }
+
     private static void EmitDmOverrideIfNeeded(
         ExpeditionState state,
         int watchNumber,
         WatchAdvanceInputs inputs,
         EventCollector events)
     {
-        var overrideApplied = inputs.Travel.Provenance.Source == ResolutionSource.DmOverride
-            || inputs.Navigation?.Provenance.Source == ResolutionSource.DmOverride
-            || inputs.Encounter?.Provenance.Source == ResolutionSource.DmOverride
-            || inputs.BoundaryDecision?.Provenance.Source == ResolutionSource.DmOverride
-            || !string.IsNullOrWhiteSpace(inputs.DmOverrideNote);
-        if (!overrideApplied)
-        {
+        var note = ResolveDmOverrideNote(
+            inputs.Travel.Provenance,
+            inputs.Navigation?.Provenance,
+            inputs.Encounter?.Provenance,
+            inputs.BoundaryDecision?.Provenance,
+            inputs.DmOverrideNote);
+        if (note is null)
             return;
-        }
-
-        var note = inputs.DmOverrideNote
-            ?? inputs.Travel.Provenance.Note
-            ?? inputs.Navigation?.Provenance.Note
-            ?? inputs.Encounter?.Provenance.Note
-            ?? inputs.BoundaryDecision?.Provenance.Note
-            ?? "DM supplied an authoritative override.";
         events.Add(
             watchNumber,
             CrawlRuntimeEventKind.DmOverrideApplied,

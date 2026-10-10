@@ -48,4 +48,26 @@ public sealed class HexCrawlExceptionMiddlewareTests
         using var document = await JsonDocument.ParseAsync(context.Response.Body);
         Assert.Equal("Invalid encounter handoff input.", document.RootElement.GetProperty("error").GetString());
     }
+    [Fact]
+    public async Task MalformedJsonRequestIsClientErrorAndDoesNotExposeParserDetails()
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Method = HttpMethods.Post;
+        context.Request.Path = "/api/expeditions/example/cells/advance";
+        context.Response.Body = new MemoryStream();
+        var middleware = new HexCrawlExceptionMiddleware(
+            _ => throw new BadHttpRequestException(
+                "The JSON payload could not convert private application type information.",
+                StatusCodes.Status400BadRequest),
+            NullLogger<HexCrawlExceptionMiddleware>.Instance);
+
+        await middleware.InvokeAsync(context);
+
+        Assert.Equal(StatusCodes.Status400BadRequest, context.Response.StatusCode);
+        context.Response.Body.Position = 0;
+        using var document = await JsonDocument.ParseAsync(context.Response.Body);
+        Assert.Equal("The request body is malformed or invalid.",
+            document.RootElement.GetProperty("error").GetString());
+    }
+
 }

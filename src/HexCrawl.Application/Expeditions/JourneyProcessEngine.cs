@@ -9,6 +9,7 @@ public sealed record JourneyClockReference(TimeSpan ExpeditionTime, int Complete
     public static JourneyClockReference From(CrawlSessionRuntimeState runtime) => runtime switch
     {
         ExpeditionState spatial => new(spatial.ElapsedTravelTime, spatial.CompletedWatches),
+        CellExpeditionState cells => new(cells.ElapsedTravelTime, cells.CompletedWatches),
         NonSpatialSessionState nonSpatial => new(nonSpatial.ElapsedTime, nonSpatial.CompletedWatches),
         _ => throw new InvalidOperationException("Unsupported expedition runtime state for journey reference.")
     };

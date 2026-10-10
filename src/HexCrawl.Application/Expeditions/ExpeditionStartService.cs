@@ -74,6 +74,7 @@ public sealed class ExpeditionStartService(
         if (!CampaignProcedureSchema.RequiresLegacyHexTiling(selected.Procedure.TilingDsSymbol))
             throw new NotSupportedException(
                 "The selected procedure requires a different tiling; this runtime supports hexagonal worlds only.");
+        RequireLegacyHexMovement(selected.Procedure);
 
         var expeditionId = Guid.NewGuid();
         var state = new ExpeditionState
@@ -103,6 +104,95 @@ public sealed class ExpeditionStartService(
             null,
             TimeSpan.Zero,
             world.OwnerUserId,
+            1,
+            now,
+            now)
+        {
+            CampaignId = selected.CampaignId,
+            ProcedureOrigin = selected.ProcedureOrigin
+        }, cancellationToken);
+    }
+
+    /// <summary>
+    /// Begin a generalized world-bound expedition at an authoritative motif
+    /// cell. No hex coordinate, fake center distance or hex presentation
+    /// projection is created. This is an application capability; the existing
+    /// hex-only HTTP start route stays gated until its cell contracts are ready.
+    /// </summary>
+    public Task<StoredExpedition> StartWorldBoundCellsAsync(
+        Guid overworldId,
+        string ownerUserId,
+        string name,
+        ProcedureStartSelection selection,
+        PeriodicCellAddress startCell,
+        CancellationToken cancellationToken = default) =>
+        StartWorldBoundCellsAsync(overworldId, ownerUserId, name, selection,
+            startCell, "dm-controlled", cancellationToken);
+
+    public async Task<StoredExpedition> StartWorldBoundCellsAsync(
+        Guid overworldId,
+        string ownerUserId,
+        string name,
+        ProcedureStartSelection selection,
+        PeriodicCellAddress startCell,
+        string presentationKey,
+        CancellationToken cancellationToken = default)
+    {
+        var presentation = MapPresentationPolicyCatalog.Resolve(presentationKey);
+        presentation.Validate();
+        var owner = RequiredText(ownerUserId, "Owner user id");
+        var expeditionName = RequiredText(name, "Expedition name");
+        var world = await coreService.GetOverworldAsync(overworldId, owner, cancellationToken);
+        var tiling = world.World.Tiling
+            ?? throw new NotSupportedException("This world has no explicit generalized tiling.");
+
+        // Check the cell address before materializing or loading a procedure.
+        var cell = tiling.Resolve(startCell);
+        var selected = await ResolveProcedureAsync(owner, selection, cancellationToken);
+        var bound = GenericProcedureRuntime.Bind(selected.Procedure);
+        if (bound.Movement.MechanicVersion != 2)
+            throw new NotSupportedException("Generalized world traversal requires movement version 2.");
+
+        var required = DelaneyDressTopology.Inspect(selected.Procedure.TilingDsSymbol, 2048);
+        var actual = DelaneyDressTopology.Inspect(tiling.Topology.QuotientDsSymbol, 2048);
+        if (required.Status != DelaneyDressStatus.Euclidean
+            || actual.Status != DelaneyDressStatus.Euclidean
+            || !string.Equals(required.Symbol?.Canonical, actual.Symbol?.Canonical, StringComparison.Ordinal))
+            throw new InvalidOperationException("The selected procedure does not match this world's topology.");
+
+        var state = new CellExpeditionState
+        {
+            Id = Guid.NewGuid(),
+            Traversal = new PeriodicCellTraversal
+            {
+                CurrentCell = cell.Id,
+                Position = cell.Center
+            },
+            DistanceTraveled = tiling.PhysicalDistancePerWorldUnit is { } calibration
+                ? new DistanceMeasure(0, calibration.Unit)
+                : null
+        };
+        state.Validate(tiling);
+
+        var knowledge = PresentationKnowledgeProjection.InitializeCells(
+            world.World, presentation,
+            new PlayerKnowledgeState
+            {
+                ScopeId = Guid.NewGuid(),
+                OverworldId = world.World.Id,
+                PresentationPolicy = presentation
+            },
+            cell.Id);
+        var now = DateTimeOffset.UtcNow;
+        return await store.CreateExpeditionAsync(new StoredExpedition(
+            expeditionName,
+            state,
+            new WorldBoundCrawlSessionContext(world.World.Id),
+            knowledge,
+            CampaignProcedureSnapshot.Copy(selected.Procedure),
+            null,
+            TimeSpan.Zero,
+            owner,
             1,
             now,
             now)
@@ -142,6 +232,8 @@ public sealed class ExpeditionStartService(
             && !CampaignProcedureSchema.RequiresLegacyHexTiling(selected.Procedure.TilingDsSymbol))
             throw new NotSupportedException(
                 "This abstract hex runtime cannot execute a nonhex tiling until Phase 18.");
+        if (context is AbstractHexCrawlSessionContext)
+            RequireLegacyHexMovement(selected.Procedure);
 
         var now = DateTimeOffset.UtcNow;
         return await store.CreateExpeditionAsync(new StoredExpedition(
@@ -160,6 +252,20 @@ public sealed class ExpeditionStartService(
             CampaignId = selected.CampaignId,
             ProcedureOrigin = selected.ProcedureOrigin
         }, cancellationToken);
+    }
+
+    private static void RequireLegacyHexMovement(CampaignProcedure procedure)
+    {
+        // Existing legacy starts can select symbolic/non-native procedures.
+        // Preserve that established contract; only a concrete generalized
+        // movement handler must be rejected before constructing ExpeditionState.
+        var movement = procedure.Modules.SingleOrDefault(module =>
+            module.Mechanic.ExecutionHandler ==
+                GenericProcedureExecutionHandlers.MovementResolutionPolicy);
+        if (movement is not null && movement.Mechanic.Version != 1)
+            throw new NotSupportedException(
+                "Legacy world-bound and abstract-hex expeditions require movement version 1. " +
+                "Use the explicit cell expedition start for movement version 2.");
     }
 
     private async Task<StoredCampaignProcedureRevision> ResolveProcedureAsync(

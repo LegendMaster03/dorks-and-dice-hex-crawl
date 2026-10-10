@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using HexCrawl.Application;
 using HexCrawl.Domain.Knowledge;
 using HexCrawl.Domain.Runtime;
@@ -32,6 +33,13 @@ public sealed record RuntimeEventContract(
     ResolutionProvenance? EncounterProvenance,
     Guid? EncounterOccurrenceId)
 {
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorldCellId? Cell { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? BoundaryInterfaceIndex { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? ReciprocalInterfaceIndex { get; init; }
+
     public static RuntimeEventContract From(CrawlRuntimeEvent runtimeEvent) => new(
         runtimeEvent.Sequence,
         runtimeEvent.WatchNumber,
@@ -46,7 +54,12 @@ public sealed record RuntimeEventContract(
         runtimeEvent.EncounterOutcome,
         runtimeEvent.EncounterNote,
         runtimeEvent.EncounterProvenance,
-        runtimeEvent.EncounterOccurrenceId);
+        runtimeEvent.EncounterOccurrenceId)
+    {
+        Cell = runtimeEvent.Cell,
+        BoundaryInterfaceIndex = runtimeEvent.BoundaryInterfaceIndex,
+        ReciprocalInterfaceIndex = runtimeEvent.ReciprocalInterfaceIndex
+    };
 }
 
 public sealed record DiscoverSubjectRequest(

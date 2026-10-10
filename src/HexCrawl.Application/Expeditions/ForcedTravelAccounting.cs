@@ -126,6 +126,7 @@ public static class ForcedTravelAccounting
     private static TimeSpan Elapsed(CrawlSessionRuntimeState state) => state switch
     {
         ExpeditionState spatial => spatial.ElapsedTravelTime,
+        CellExpeditionState cellSpatial => cellSpatial.ElapsedTravelTime,
         NonSpatialSessionState nonSpatial => nonSpatial.ElapsedTime,
         _ => throw new InvalidOperationException("Unsupported crawl session runtime state for forced-travel accounting.")
     };

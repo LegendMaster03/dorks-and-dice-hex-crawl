@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using HexCrawl.Domain.Presentation;
 using HexCrawl.Domain.Spatial;
 
@@ -34,5 +35,10 @@ public sealed record PlayerKnowledgeState
     public MapPresentationPolicy? PresentationPolicy { get; init; }
     public IReadOnlyDictionary<Guid, KnowledgeEntry> Entries { get; init; } = new Dictionary<Guid, KnowledgeEntry>();
     public IReadOnlyList<HexCoordinate> KnownHexes { get; init; } = [];
+    // Absent for pre-cell and purely hex snapshots; populated only by
+    // genuine qualified-cell discovery, never by axial projection.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<WorldCellId>? KnownCells { get; init; }
+
     public IReadOnlyList<PlayerAnnotation> Annotations { get; init; } = [];
 }

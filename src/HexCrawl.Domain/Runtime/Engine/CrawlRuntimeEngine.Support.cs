@@ -56,7 +56,7 @@ public sealed partial class CrawlRuntimeEngine
             int watchNumber,
             CrawlRuntimeEventKind kind,
             TimeSpan elapsed,
-            HexCoordinate hex,
+            HexCoordinate? hex,
             string message,
             double? distanceValue = null,
             string? distanceUnit = null,
@@ -65,7 +65,10 @@ public sealed partial class CrawlRuntimeEngine
             EncounterOutcomeKind? encounterOutcome = null,
             string? encounterNote = null,
             ResolutionProvenance? encounterProvenance = null,
-            Guid? encounterOccurrenceId = null)
+            Guid? encounterOccurrenceId = null,
+            WorldCellId? cell = null,
+            int? boundaryInterfaceIndex = null,
+            int? reciprocalInterfaceIndex = null)
         {
             var runtimeEvent = new CrawlRuntimeEvent(
                 _nextSequence++,
@@ -81,7 +84,12 @@ public sealed partial class CrawlRuntimeEngine
                 encounterOutcome,
                 encounterNote,
                 encounterProvenance,
-                EncounterOccurrenceId: encounterOccurrenceId);
+                EncounterOccurrenceId: encounterOccurrenceId)
+            {
+                Cell = cell,
+                BoundaryInterfaceIndex = boundaryInterfaceIndex,
+                ReciprocalInterfaceIndex = reciprocalInterfaceIndex
+            };
             NewEvents.Add(runtimeEvent);
             return runtimeEvent;
         }

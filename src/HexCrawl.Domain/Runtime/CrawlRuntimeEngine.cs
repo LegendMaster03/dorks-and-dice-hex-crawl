@@ -19,6 +19,8 @@ public sealed partial class CrawlRuntimeEngine
             throw new InvalidOperationException("Resolve the pending encounter before continuing travel.");
         }
         var runtime = GenericProcedureRuntime.Bind(procedure);
+        if (runtime.Movement.MechanicVersion != 1)
+            throw new NotSupportedException("The hex watch runtime requires a legacy hex movement procedure. Generalized world movement remains gated.");
         ValidateNativeTravelAmountPolicy(runtime.Movement, inputs.Travel);
         return AdvanceCore(context, runtime, expedition, plan, inputs);
     }
@@ -94,6 +96,9 @@ public sealed partial class CrawlRuntimeEngine
 
         if (active.Remaining <= TimeSpan.Zero)
         {
+            if (HasEncounterDueAtCurrentTime(active.Remaining, active.Elapsed,
+                    active.TotalDuration, active.Encounter, active.EncounterHandled))
+                return TriggerEncounter(state, active, events);
             return CompleteWatch(state, active, events);
         }
 
@@ -112,32 +117,14 @@ public sealed partial class CrawlRuntimeEngine
         ValidateTravelAmountShape(procedure.Movement, inputs.Travel);
         EmitTravelResolution(state, active.WatchNumber, inputs.Travel, events);
 
-        if (!active.EncounterHandled && active.Encounter.Kind != EncounterOutcomeKind.None)
-        {
-            var due = active.Encounter.OccursAt
-                ?? throw new InvalidOperationException("A triggered encounter requires a time within the watch.");
-            if (due <= active.Elapsed)
-            {
-                return TriggerEncounter(state, active, events);
-            }
-        }
-
         var callRemaining = active.Remaining;
-        var segmentDuration = callRemaining;
-        var encounterDueAtSegmentEnd = false;
-        if (!active.EncounterHandled && active.Encounter.Kind != EncounterOutcomeKind.None)
-        {
-            var due = active.Encounter.OccursAt!.Value;
-            if (due > active.Elapsed && due <= active.TotalDuration)
-            {
-                var untilEncounter = due - active.Elapsed;
-                if (untilEncounter <= segmentDuration)
-                {
-                    segmentDuration = untilEncounter;
-                    encounterDueAtSegmentEnd = true;
-                }
-            }
-        }
+        var window = ResolveEncounterWindow(
+            callRemaining, active.Elapsed, active.TotalDuration,
+            active.Encounter, active.EncounterHandled);
+        if (window.EncounterImmediatelyDue)
+            return TriggerEncounter(state, active, events);
+        var segmentDuration = window.Duration;
+        var encounterDueAtSegmentEnd = window.EncounterAtEnd;
 
         var movement = procedure.Movement.TravelResolution switch
         {
