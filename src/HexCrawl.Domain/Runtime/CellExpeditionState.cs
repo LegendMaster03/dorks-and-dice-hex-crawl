@@ -13,7 +13,8 @@ public sealed record CellExpeditionState : CrawlSessionRuntimeState
     public WorldPoint? IntendedHeading { get; init; }
     public bool IsLost { get; init; }
     public double? ResolvedVeerDegrees { get; init; }
-    public required DistanceMeasure DistanceTraveled { get; init; }
+    // Null explicitly means that an uncalibrated world has no known physical distance.
+    public DistanceMeasure? DistanceTraveled { get; init; }
     public TimeSpan ElapsedTravelTime { get; init; }
     public int CompletedWatches { get; init; }
     public CellActiveWatchState? ActiveWatch { get; init; }
@@ -31,14 +32,16 @@ public sealed record CellExpeditionState : CrawlSessionRuntimeState
             throw new InvalidOperationException("Resolved veer requires a lost navigation state.");
         if (CompletedWatches < 0 || ElapsedTravelTime < TimeSpan.Zero)
             throw new InvalidOperationException("Expedition time and watch counters must be non-negative.");
+        if (world.PhysicalDistancePerWorldUnit is not null && DistanceTraveled is null)
+            throw new InvalidOperationException("A calibrated cell expedition requires physical travel accounting.");
         ActiveWatch?.Validate();
+        if (ActiveWatch is { } active && IntendedHeading != active.Plan.IntendedHeading)
+            throw new InvalidOperationException("Active watch intent must agree with the expedition's intended heading.");
     }
 }
 
 public sealed record CellWatchTravelPlan(
     WorldPoint IntendedHeading,
-    WorldPoint ActualHeading,
-    int? ExitInterfaceIndex,
     bool DeliberateDoubleBack,
     bool ContinueAcrossBoundaries,
     TravelModeSelection Mode,
@@ -64,12 +67,10 @@ public sealed record CellActiveWatchState(
         if (WatchNumber <= 0 || TotalDuration <= TimeSpan.Zero
             || Elapsed < TimeSpan.Zero || Elapsed > TotalDuration)
             throw new InvalidOperationException("Invalid generalized watch duration or progress.");
-        foreach (var direction in new[] { Plan.IntendedHeading, Plan.ActualHeading })
-            if (!double.IsFinite(direction.X) || !double.IsFinite(direction.Y)
-                || direction.X == 0 && direction.Y == 0)
-                throw new InvalidOperationException("A generalized travel course requires a nonzero finite heading.");
-        if (Plan.ExitInterfaceIndex < 0)
-            throw new InvalidOperationException("Selected exit interface cannot be negative.");
+        var direction = Plan.IntendedHeading;
+        if (!double.IsFinite(direction.X) || !double.IsFinite(direction.Y)
+            || direction.X == 0 && direction.Y == 0)
+            throw new InvalidOperationException("A generalized travel course requires a nonzero finite heading.");
         ArgumentNullException.ThrowIfNull(Plan.Mode);
         ArgumentNullException.ThrowIfNull(Plan.NavigationAid);
     }

@@ -121,8 +121,7 @@ public sealed partial class PostgresHexCrawlStore
                 ?? throw new InvalidDataException("Persisted generalized expedition has no traversal cursor.");
             if (cursor.FormatVersion != PeriodicCellTraversal.CurrentFormatVersion)
                 throw new InvalidDataException("Unsupported generalized traversal cursor format.");
-            var distance = DistanceTraveled
-                ?? throw new InvalidDataException("Persisted generalized expedition has no distance accounting.");
+            var distance = DistanceTraveled;
             var result = new CellExpeditionState
             {
                 Id = Id,

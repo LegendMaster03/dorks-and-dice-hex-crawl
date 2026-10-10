@@ -63,7 +63,7 @@ public sealed class Phase18CellExpeditionPersistenceTests
         { Cell = startingCell.Id };
         var active = new CellActiveWatchState(
             1, TimeSpan.FromHours(4), TimeSpan.FromHours(1),
-            new CellWatchTravelPlan(heading, heading, edge.InterfaceIndex,
+            new CellWatchTravelPlan(heading,
                 false, true, TravelModeSelection.Normal, NavigationAidSelection.None),
             ResolvedEncounter.None, true, null);
         var state = new CellExpeditionState
@@ -130,7 +130,7 @@ public sealed class Phase18CellExpeditionPersistenceTests
             {
                 Traversal = second.Traversal,
                 DistanceTraveled = new DistanceMeasure(
-                    loadedState.DistanceTraveled.Value + second.ConsumedPhysicalDistance!.Value.Value,
+                    loadedState.DistanceTraveled!.Value.Value + second.ConsumedPhysicalDistance!.Value.Value,
                     DistanceUnit.Miles),
                 ElapsedTravelTime = TimeSpan.FromHours(3),
                 History = [.. loadedState.History, entered]
