@@ -114,32 +114,14 @@ public sealed partial class CrawlRuntimeEngine
         ValidateTravelAmountShape(procedure.Movement, inputs.Travel);
         EmitTravelResolution(state, active.WatchNumber, inputs.Travel, events);
 
-        if (!active.EncounterHandled && active.Encounter.Kind != EncounterOutcomeKind.None)
-        {
-            var due = active.Encounter.OccursAt
-                ?? throw new InvalidOperationException("A triggered encounter requires a time within the watch.");
-            if (due <= active.Elapsed)
-            {
-                return TriggerEncounter(state, active, events);
-            }
-        }
-
         var callRemaining = active.Remaining;
-        var segmentDuration = callRemaining;
-        var encounterDueAtSegmentEnd = false;
-        if (!active.EncounterHandled && active.Encounter.Kind != EncounterOutcomeKind.None)
-        {
-            var due = active.Encounter.OccursAt!.Value;
-            if (due > active.Elapsed && due <= active.TotalDuration)
-            {
-                var untilEncounter = due - active.Elapsed;
-                if (untilEncounter <= segmentDuration)
-                {
-                    segmentDuration = untilEncounter;
-                    encounterDueAtSegmentEnd = true;
-                }
-            }
-        }
+        var window = ResolveEncounterWindow(
+            callRemaining, active.Elapsed, active.TotalDuration,
+            active.Encounter, active.EncounterHandled);
+        if (window.EncounterImmediatelyDue)
+            return TriggerEncounter(state, active, events);
+        var segmentDuration = window.Duration;
+        var encounterDueAtSegmentEnd = window.EncounterAtEnd;
 
         var movement = procedure.Movement.TravelResolution switch
         {

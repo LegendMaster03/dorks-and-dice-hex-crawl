@@ -96,6 +96,37 @@ public sealed partial class CrawlRuntimeEngine
         return (state, active);
     }
 
+    /// <summary>
+    /// One authoritative encounter-time slicing rule for both legacy hex
+    /// and generalized cell watches. The event itself is owned by each
+    /// session's position adapter; the elapsed-time cutoff is shared.
+    /// </summary>
+    private readonly record struct WatchEncounterWindow(
+        TimeSpan Duration, bool EncounterAtEnd, bool EncounterImmediatelyDue);
+
+    private static WatchEncounterWindow ResolveEncounterWindow(
+        TimeSpan callRemaining,
+        TimeSpan elapsed,
+        TimeSpan totalDuration,
+        ResolvedEncounter encounter,
+        bool alreadyHandled)
+    {
+        if (alreadyHandled || encounter.Kind == EncounterOutcomeKind.None)
+            return new WatchEncounterWindow(callRemaining, false, false);
+
+        var due = encounter.OccursAt
+            ?? throw new InvalidOperationException("A triggered encounter needs its scheduled watch time.");
+        if (due < TimeSpan.Zero || due > totalDuration)
+            throw new InvalidOperationException("The encounter falls outside the active watch.");
+        if (due <= elapsed)
+            return new WatchEncounterWindow(TimeSpan.Zero, false, true);
+
+        var untilEncounter = due - elapsed;
+        if (untilEncounter <= callRemaining)
+            return new WatchEncounterWindow(untilEncounter, true, false);
+        return new WatchEncounterWindow(callRemaining, false, false);
+    }
+
     private static ResolvedEncounter ResolveEncounterForNewWatch(
         TimeSpan intervalDuration,
         bool encounterCheckDue,

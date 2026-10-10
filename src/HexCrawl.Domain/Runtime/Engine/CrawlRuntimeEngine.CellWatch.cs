@@ -133,19 +133,13 @@ public sealed partial class CrawlRuntimeEngine
                 : $"Travel resolved at {Format(inputs.Travel.ActualDistance!.Value.Value)} {inputs.Travel.ActualDistance.Value.Unit.Symbol}.");
 
         var callDuration = active.Remaining;
-        var segmentDuration = callDuration;
-        var encounterAtEnd = false;
-        if (!active.EncounterHandled && active.Encounter.Kind != EncounterOutcomeKind.None)
-        {
-            var due = active.Encounter.OccursAt!.Value;
-            if (due <= active.Elapsed)
-                return TriggerCellEncounter(state, active, events);
-            if (due - active.Elapsed <= segmentDuration)
-            {
-                segmentDuration = due - active.Elapsed;
-                encounterAtEnd = true;
-            }
-        }
+        var window = ResolveEncounterWindow(
+            callDuration, active.Elapsed, active.TotalDuration,
+            active.Encounter, active.EncounterHandled);
+        if (window.EncounterImmediatelyDue)
+            return TriggerCellEncounter(state, active, events);
+        var segmentDuration = window.Duration;
+        var encounterAtEnd = window.EncounterAtEnd;
 
         var fraction = Math.Clamp(segmentDuration.Ticks / (double)callDuration.Ticks, 0, 1);
         ResolvedTravelAmount segmentTravel;
