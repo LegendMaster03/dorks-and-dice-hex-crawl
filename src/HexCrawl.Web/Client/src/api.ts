@@ -69,6 +69,15 @@ export type SourceMapCompatibilityAssessment = {
     worldVersion: number;
     blockers: string[];
     canCorrectInPlace: boolean;
+    registration: {
+        status: "unavailable" | "candidates";
+        explanation: string;
+        candidates: Array<{
+            index: number;
+            alignment: MapRegistrationTransform;
+            maximumResidualSourcePixels: number;
+        }>;
+    } | null;
 };
 
 export type CreateOverworldInput = {
@@ -415,6 +424,15 @@ export class HexCrawlApi {
         return this.sendJson("POST",
             `/api/overworlds/${encodeURIComponent(worldId)}/source-maps/${encodeURIComponent(sourceMapId)}/motif-compatibility${query}`,
             {}, "Map pattern compatibility");
+    }
+
+    public applyMotifRegistration(
+        worldId: string, sourceMapId: string, candidateIndex: number,
+        alignment: MapRegistrationTransform, expectedVersion: number
+    ): Promise<Overworld> {
+        return this.sendJson("PUT",
+            `/api/overworlds/${encodeURIComponent(worldId)}/source-maps/${encodeURIComponent(sourceMapId)}/motif-registration`,
+            { candidateIndex, alignment, expectedVersion }, "Accept checked image placement");
     }
 
     public sourceMapAssetUrl(worldId: string, sourceMapId: string): string {

@@ -472,6 +472,10 @@ export class SourceMapWorkspace {
         if (!this.selected) return;
         const assessment = required<HTMLElement>(this.editForm, "[data-pattern-assessment]");
         if (assessment.dataset.sourceMapId !== this.selected.id) {
+            if (this.map.renderer.registrationPreview?.sourceMapId === assessment.dataset.sourceMapId) {
+                this.map.renderer.registrationPreview = null;
+                this.map.requestRender();
+            }
             assessment.hidden = true;
             assessment.replaceChildren();
             assessment.dataset.sourceMapId = this.selected.id;
@@ -550,6 +554,89 @@ export class SourceMapWorkspace {
                     ? "Keep this world configuration and use a different map, or create a separate world. Automatic conversion is not available until its dependencies can be migrated safely."
                     : "Use manual placement or a different image. No world, procedure, or map registration was changed.";
             status.append(next);
+            if (assessment.status === "structure-match" && assessment.registration) {
+                const registration = assessment.registration;
+                const detail = document.createElement("p");
+                detail.className = "hc-hint";
+                detail.textContent = registration.explanation;
+                status.append(detail);
+                if (registration.status === "candidates" && registration.candidates.length) {
+                    const controls = document.createElement("div");
+                    controls.className = "hc-form";
+                    const selector = document.createElement("select");
+                    selector.setAttribute("aria-label", "Choose verified image placement");
+                    for (const candidate of registration.candidates) {
+                        const option = document.createElement("option");
+                        option.value = String(candidate.index);
+                        option.textContent = `Placement ${candidate.index + 1} — maximum motif disagreement ${candidate.maximumResidualSourcePixels.toFixed(1)} image pixels`;
+                        selector.append(option);
+                    }
+                    const preview = document.createElement("button");
+                    preview.type = "button";
+                    preview.textContent = "Preview placement";
+                    const accept = document.createElement("button");
+                    accept.type = "button";
+                    accept.className = "hc-primary-action";
+                    accept.textContent = "Use this placement";
+                    accept.disabled = true;
+                    const previewHint = document.createElement("p");
+                    previewHint.className = "hc-hint";
+                    previewHint.textContent =
+                        "Preview a candidate against the reference image. Acceptance changes this image's placement only, not the world, its cells, or any saved ruleset.";
+                    let previewedIndex: number | null = null;
+                    const clearPreview = (): void => {
+                        previewedIndex = null;
+                        accept.disabled = true;
+                        if (this.map.renderer.registrationPreview?.sourceMapId === sourceMap.id) {
+                            this.map.renderer.registrationPreview = null;
+                            this.map.requestRender();
+                        }
+                    };
+                    selector.addEventListener("change", clearPreview);
+                    preview.addEventListener("click", () => {
+                        if (this.disposed || generation !== this.compatibilityGeneration
+                            || this.selected?.id !== sourceMap.id
+                            || this.getWorld().version !== assessment.worldVersion) return;
+                        const chosen = registration.candidates.find(item =>
+                            item.index === Number(selector.value));
+                        if (!chosen) return;
+                        this.registrationController.cancelActive();
+                        this.ensureVisibleForEditing(sourceMap);
+                        this.map.renderer.registrationPreview = {
+                            sourceMapId: sourceMap.id, transform: chosen.alignment
+                        };
+                        this.map.requestRender();
+                        previewedIndex = chosen.index;
+                        accept.disabled = false;
+                        previewHint.textContent =
+                            "Check the entire overlay, especially distant features and cell boundaries. Choose Use this placement only if it matches.";
+                    });
+                    accept.addEventListener("click", () => {
+                        if (previewedIndex === null) return;
+                        const chosen = registration.candidates.find(item => item.index === previewedIndex);
+                        if (!chosen) return;
+                        accept.disabled = true;
+                        void this.run(null, async () => {
+                            if (this.disposed || generation !== this.compatibilityGeneration
+                                || this.selected?.id !== sourceMap.id
+                                || this.getWorld().version !== assessment.worldVersion)
+                                throw new Error("The map or world changed. Check the image again before accepting placement.");
+                            const saved = await this.api.applyMotifRegistration(
+                                selectedWorld.id, sourceMap.id, chosen.index, chosen.alignment,
+                                assessment.worldVersion);
+                            clearPreview();
+                            this.applyWorld(saved);
+                            status.textContent =
+                                "The selected image placement was saved. The existing world geometry and rulesets were preserved.";
+                            this.mapHint.textContent =
+                                "Detected image alignment saved. You can still repair it using manual placement.";
+                            await this.refresh();
+                        });
+                    });
+                    controls.append(selector, preview, accept, previewHint);
+                    status.append(controls);
+                }
+            }
         } catch (failure) {
             if (!this.disposed && generation === this.compatibilityGeneration
                 && this.selected?.id === sourceMap.id) {
