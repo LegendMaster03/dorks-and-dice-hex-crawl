@@ -330,6 +330,40 @@ public sealed class SurveyorPeriodicMotifInvestigationClient(
             || evidence.RejectedHypotheses != evidence.CheckedHypotheses - evidence.MatchedHypotheses)
             throw new MapAnalysisProtocolException("Surveyor hypothesis counts are inconsistent.");
 
+        // "Consistent candidate" is reserved for a full original-image metric
+        // proof. Never drop these independent checks at the service boundary.
+        var metricJson = Object(evidenceJson, "metricRegistration");
+        var projectionJson = Object(metricJson, "sourceProjection");
+        if (!IsString(metricJson, "status", "registered")
+            || !IsString(projectionJson, "status", "supported"))
+            throw new MapAnalysisProtocolException(
+                "Surveyor candidate lacks complete registered metric and unchanged-source projection.");
+        var contourMax = Number(metricJson, "maximumContourResidualSourcePixels", 0, 12 / analysisDetails.Scale);
+        var contourRms = Number(metricJson, "rmsContourResidualSourcePixels", 0, contourMax);
+        var projection = new PeriodicMotifSourceProjectionEvidence(
+            "supported",
+            Number(projectionJson, "edgeSupport", 0.83, 1),
+            Number(projectionJson, "interiorSupport", 0.82, 1),
+            Integer(projectionJson, "checkedRegions", 7, 9),
+            Integer(projectionJson, "supportedRegions", 7, 9));
+        if (projection.SupportedRegions > projection.CheckedRegions)
+            throw new MapAnalysisProtocolException("Surveyor source-projection region counts conflict.");
+        int checkedSymmetries = Integer(metricJson, "rasterSymmetriesChecked", 0, 2048);
+        int supportedSymmetries = Integer(metricJson, "rasterSymmetriesSupported", 0, checkedSymmetries);
+        int? mathematicalSymmetries = metricJson.TryGetProperty("mathematicalMetricSymmetries", out var symmetries)
+            && symmetries.ValueKind == JsonValueKind.Null ? null
+            : Integer(metricJson, "mathematicalMetricSymmetries", 0, 2048);
+        var metricEvidence = new PeriodicMotifMetricEvidence(
+            "registered", contourMax, contourRms,
+            Number(metricJson, "originalRasterEdgeSupport", 0.83, 1),
+            checkedSymmetries, supportedSymmetries, mathematicalSymmetries,
+            projection);
+        evidence = evidence with { MetricRegistration = metricEvidence };
+        if (evidence.OriginalRasterEdgeSupport < 0.83
+            || evidence.MaximumRigidVertexResidualSourcePixels * analysisDetails.Scale > 5)
+            throw new MapAnalysisProtocolException(
+                "Surveyor candidate exceeds the supported original-image ink or rigid-drift envelope.");
+
         var candidate = new PeriodicMotifCandidate(symbol, basis, cells);
         ObservedRasterMotifGeometryValidator.Validate(candidate, evidence, analysisDetails);
         return new(status, reason, false, "experimental", "v3",
