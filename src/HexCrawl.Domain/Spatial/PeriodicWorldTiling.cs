@@ -87,10 +87,13 @@ public sealed record PeriodicWorldTiling(
 
     private WorldPoint Transform(TilingWorldPoint point, LatticeDisplacement translation)
     {
-        double x = Origin.X + point.X
-            + translation.U * Realization.TranslationU.X + translation.V * Realization.TranslationV.X;
-        double y = Origin.Y + point.Y
-            + translation.U * Realization.TranslationU.Y + translation.V * Realization.TranslationV.Y;
+        // Perform motif/lattice arithmetic in local coordinates before adding
+        // the pose once. Prematurely adding a large world origin destroys the
+        // small offsets that distinguish adjacent cells.
+        double x = Origin.X + (point.X
+            + translation.U * Realization.TranslationU.X + translation.V * Realization.TranslationV.X);
+        double y = Origin.Y + (point.Y
+            + translation.U * Realization.TranslationU.Y + translation.V * Realization.TranslationV.Y);
         if (!double.IsFinite(x) || !double.IsFinite(y))
             throw new ArgumentOutOfRangeException(nameof(translation), "Translated world point is not finite.");
         return new WorldPoint(x, y);
@@ -150,13 +153,15 @@ public sealed record PeriodicWorldTiling(
     // Derive lattice-coordinate bounds from the inverse world-space basis.
     // Motif footprints are included independently, so irregular shapes and
     // motifs spanning the fundamental parallelogram remain discoverable.
-    private (double U, double V) Project(WorldPoint world)
+    private (double U, double V) ProjectLocal(double x, double y)
     {
-        double x = world.X - Origin.X, y = world.Y - Origin.Y;
         var u = Realization.TranslationU; var v = Realization.TranslationV;
         double determinant = u.X * v.Y - u.Y * v.X;
         return ((x * v.Y - y * v.X) / determinant, (u.X * y - u.Y * x) / determinant);
     }
+
+    private (double U, double V) Project(WorldPoint world) =>
+        ProjectLocal(world.X - Origin.X, world.Y - Origin.Y);
 
     private static long CheckedCoordinate(double value)
     {
@@ -179,17 +184,37 @@ public sealed record PeriodicWorldTiling(
         };
         double minU = projected.Min(p => p.U), maxU = projected.Max(p => p.U);
         double minV = projected.Min(p => p.V), maxV = projected.Max(p => p.V);
+        var basisU = Realization.TranslationU;
+        var basisV = Realization.TranslationV;
+        double determinant = basisU.X * basisV.Y - basisU.Y * basisV.X;
+        // A world-coordinate point has already been rounded after addition of
+        // its pose. Allow for that rounding when inverting the lattice. The
+        // uncertainty is expressed in lattice units, so a fixed 1e-9 margin
+        // cannot silently omit a neighboring microunit-scale polygon.
+        const double machineEpsilon = 2.2204460492503131e-16;
+        double worldMagnitude = Math.Max(1,
+            new[] { Origin.X, Origin.Y, region.MinX, region.MinY, region.MaxX, region.MaxY }
+                .Max(value => Math.Abs(value)));
+        double coordinateError = 16 * machineEpsilon * worldMagnitude;
+        double marginU = coordinateError * (Math.Abs(basisV.X) + Math.Abs(basisV.Y)) / determinant;
+        double marginV = coordinateError * (Math.Abs(basisU.X) + Math.Abs(basisU.Y)) / determinant;
         var addresses = new List<PeriodicCellAddress>();
         foreach (var cell in Topology.MotifCells)
         {
+            // Motif footprints are local coordinates. Adding and subtracting
+            // the large world origin here would itself lose precision.
             var local = Realization.Polygons[cell.Id]
-                .Select(p => Project(new WorldPoint(Origin.X + p.X, Origin.Y + p.Y))).ToArray();
-            // Projected bounds produce a conservative candidate set, not a
-            // center-only approximation. Final filtering uses true polygons.
-            long firstU = CheckedCoordinate(Math.Ceiling(minU - local.Max(p => p.U) - 1e-9));
-            long lastU = CheckedCoordinate(Math.Floor(maxU - local.Min(p => p.U) + 1e-9));
-            long firstV = CheckedCoordinate(Math.Ceiling(minV - local.Max(p => p.V) - 1e-9));
-            long lastV = CheckedCoordinate(Math.Floor(maxV - local.Min(p => p.V) + 1e-9));
+                .Select(p => ProjectLocal(p.X, p.Y)).ToArray();
+            double roundingU = 2e-12 * Math.Max(1, new[] {
+                Math.Abs(minU), Math.Abs(maxU), local.Max(p => Math.Abs(p.U)) }.Max());
+            double roundingV = 2e-12 * Math.Max(1, new[] {
+                Math.Abs(minV), Math.Abs(maxV), local.Max(p => Math.Abs(p.V)) }.Max());
+            // Conservative candidate selection; the exact polygon predicate
+            // determines final membership. Preserve the bounded enumeration.
+            long firstU = CheckedCoordinate(Math.Ceiling(minU - local.Max(p => p.U) - marginU - roundingU));
+            long lastU = CheckedCoordinate(Math.Floor(maxU - local.Min(p => p.U) + marginU + roundingU));
+            long firstV = CheckedCoordinate(Math.Ceiling(minV - local.Max(p => p.V) - marginV - roundingV));
+            long lastV = CheckedCoordinate(Math.Floor(maxV - local.Min(p => p.V) + marginV + roundingV));
             if (lastU < firstU || lastV < firstV) continue;
             long count;
             try { count = checked(checked(lastU - firstU + 1) * checked(lastV - firstV + 1)); }
