@@ -188,7 +188,10 @@ export class MapSurface {
             maxX: Math.max(...corners.map(p => p.x)),
             maxY: Math.max(...corners.map(p => p.y))
         };
-        const worldKey = `${world.id}:${world.version}:${world.tiling.id}:${world.tiling.revision}`;
+        // The world aggregate version also changes for facts, map images and
+        // names. Only the authoritative topology revision invalidates
+        // the polygon cache or selected qualified cell.
+        const worldKey = `${world.id}:${world.tiling.id}:${world.tiling.revision}`;
         const cached = this.loadedCells;
         if (cached && cached.worldKey !== worldKey) {
             this.loadedCells = null;

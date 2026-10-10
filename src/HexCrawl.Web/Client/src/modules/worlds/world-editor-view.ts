@@ -305,6 +305,7 @@ export async function renderWorldEditor(
         if (world.version !== next.version) world = { ...world, version: next.version };
         renderSelectedCell();
         if (!world.grid) renderPeriodicCell();
+        mapSurface.requestRender();
     };
 
     const saveWorldEnvironment = async (annotations: EnvironmentAnnotation[]): Promise<void> => {
