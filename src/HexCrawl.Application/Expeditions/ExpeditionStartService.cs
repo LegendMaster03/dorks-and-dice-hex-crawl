@@ -1,3 +1,4 @@
+using HexCrawl.Domain.Procedure;
 using HexCrawl.Application.Persistence;
 using HexCrawl.Domain.Knowledge;
 using HexCrawl.Domain.Presentation;
@@ -70,7 +71,7 @@ public sealed class ExpeditionStartService(
             throw new NotSupportedException(
                 "Generalized world movement is gated until Phase 18. This world was not changed.");
         var selected = await ResolveProcedureAsync(owner, selection, cancellationToken);
-        if (selected.Procedure.TilingDsSymbol != LegacyHexTilingCompatibility.HexQuotient)
+        if (!CampaignProcedureSchema.RequiresLegacyHexTiling(selected.Procedure.TilingDsSymbol))
             throw new NotSupportedException(
                 "The selected procedure requires a different tiling; this runtime supports hexagonal worlds only.");
 
@@ -138,7 +139,7 @@ public sealed class ExpeditionStartService(
         };
         var selected = await ResolveProcedureAsync(owner, selection, cancellationToken);
         if (context is AbstractHexCrawlSessionContext
-            && selected.Procedure.TilingDsSymbol != LegacyHexTilingCompatibility.HexQuotient)
+            && !CampaignProcedureSchema.RequiresLegacyHexTiling(selected.Procedure.TilingDsSymbol))
             throw new NotSupportedException(
                 "This abstract hex runtime cannot execute a nonhex tiling until Phase 18.");
 
