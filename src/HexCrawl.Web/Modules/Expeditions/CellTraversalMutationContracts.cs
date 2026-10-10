@@ -1,4 +1,6 @@
 using HexCrawl.Domain.Runtime;
+using HexCrawl.Domain.Spatial;
+using HexCrawl.Application;
 
 namespace HexCrawl.Web.Api;
 
@@ -7,6 +9,26 @@ namespace HexCrawl.Web.Api;
 /// contracts are intentionally separate from the legacy six-direction route.
 /// No generalized expedition creation or browser workbench is enabled here.
 /// </summary>
+public sealed record StartCellExpeditionRequest(
+    string Name,
+    Guid ProcedureId,
+    int ProcedureRevision,
+    PeriodicCellAddress StartCell)
+{
+    public ProcedureStartSelection Selection()
+    {
+        if (string.IsNullOrWhiteSpace(Name))
+            throw new InvalidOperationException("Expedition name is required.");
+        if (ProcedureId == Guid.Empty || ProcedureRevision <= 0)
+            throw new InvalidOperationException(
+                "Cell starts require an explicitly pinned saved procedure revision.");
+        var selection = new ProcedureStartSelection(
+            ProcedureId: ProcedureId, ProcedureRevision: ProcedureRevision);
+        selection.Validate();
+        return selection;
+    }
+}
+
 public sealed record AdvanceCellWatchRequest(
     long ExpectedVersion,
     CellWatchTravelPlan Plan,
