@@ -6,14 +6,15 @@ using HexCrawl.Domain.World;
 namespace HexCrawl.Application;
 
 public enum EnvironmentContextStatus { Resolved, RequiresAdjudication, Unavailable }
-public enum EnvironmentFactSourceKind { World, Hex, SpatialFeature, ExpeditionCurrent, DmOverride }
+public enum EnvironmentFactSourceKind { World, Hex, SpatialFeature, ExpeditionCurrent, DmOverride, Cell }
 
 public sealed record EnvironmentFactSource(
     EnvironmentFactSourceKind Kind,
     Guid? AnnotationId = null,
     HexCoordinate? Hex = null,
     Guid? FeatureId = null,
-    string? FeatureName = null);
+    string? FeatureName = null,
+    WorldCellId? Cell = null);
 
 public sealed record EffectiveEnvironmentFact(
     EnvironmentFact Fact,
@@ -95,8 +96,18 @@ public static class EnvironmentContextResolver
     private static void AddWorld(StoredExpedition expedition, OverworldDefinition world, List<Candidate> candidates)
     {
         var currentHex = expedition.Runtime is ExpeditionState state ? state.CurrentHex : (HexCoordinate?)null;
-        var intersecting = currentHex.HasValue
-            ? world.FeaturesIntersecting(currentHex.Value).ToDictionary(x => x.Id)
+        WorldCellId? currentCell = expedition.Runtime switch
+        {
+            CellExpeditionState cell => cell.Traversal.CurrentCell,
+            ExpeditionState hex when world.HasLegacyHexGrid =>
+                LegacyHexTilingCompatibility.ToCellId(new HexId(world.Grid.Id, hex.CurrentHex)),
+            _ => null
+        };
+        if (currentCell is { } identity && identity.TilingId != world.SpatialTiling.Id)
+            throw new InvalidOperationException("The expedition is positioned in a different authoritative world tiling.");
+
+        var intersecting = currentCell is { } presentCell
+            ? world.FeaturesIntersecting(presentCell.Address).ToDictionary(x => x.Id)
             : new Dictionary<Guid, SpatialFeature>();
 
         foreach (var annotation in world.EnvironmentAnnotations)
@@ -105,6 +116,12 @@ public static class EnvironmentContextResolver
             {
                 Add(candidates, annotation.Facts,
                     new EnvironmentFactSource(EnvironmentFactSourceKind.World, annotation.Id), 0);
+            }
+            else if (annotation.Scope.Kind == EnvironmentAnnotationScopeKind.Cell
+                     && currentCell is { } cell && annotation.Scope.Cell == cell)
+            {
+                Add(candidates, annotation.Facts,
+                    new EnvironmentFactSource(EnvironmentFactSourceKind.Cell, annotation.Id, Cell: cell), 0);
             }
             else if (annotation.Scope.Kind == EnvironmentAnnotationScopeKind.Hex
                      && currentHex.HasValue && annotation.Scope.Hex == currentHex)
@@ -117,7 +134,7 @@ public static class EnvironmentContextResolver
             {
                 Add(candidates, annotation.Facts,
                     new EnvironmentFactSource(EnvironmentFactSourceKind.SpatialFeature, annotation.Id,
-                        currentHex, feature.Id, feature.Name), 0);
+                        currentHex, feature.Id, feature.Name, currentCell), 0);
             }
         }
     }
@@ -154,6 +171,7 @@ public static class EnvironmentContextResolver
     {
         EnvironmentFactSourceKind.World => 0,
         EnvironmentFactSourceKind.Hex => 1,
+        EnvironmentFactSourceKind.Cell => 1,
         EnvironmentFactSourceKind.SpatialFeature => 2,
         EnvironmentFactSourceKind.ExpeditionCurrent => 3,
         EnvironmentFactSourceKind.DmOverride => 4,
