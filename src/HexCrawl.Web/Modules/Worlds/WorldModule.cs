@@ -21,6 +21,7 @@ public sealed class WorldModule : IHexCrawlModule
     {
         api.MapGet("/overworlds", ListOverworldsAsync);
         api.MapPost("/overworlds", CreateOverworldAsync);
+        api.MapPost("/overworlds/periodic", CreatePeriodicOverworldAsync);
         api.MapGet("/overworlds/{overworldId:guid}", GetOverworldAsync);
         api.MapGet("/overworlds/{overworldId:guid}/cells/viewport", GetVisibleCellsAsync);
         api.MapGet("/overworlds/{overworldId:guid}/cells/containing", GetContainingCellsAsync);
@@ -54,6 +55,42 @@ public sealed class WorldModule : IHexCrawlModule
                 UserId(context),
                 request.ToCommand(),
                 cancellationToken)));
+
+    // An image-independent, general authoring route. Unresolved harmonic
+    // realizations fail closed rather than producing a fabricated grid.
+    private sealed record CreatePeriodicOverworldRequest(
+        string Name,
+        string TilingDsSymbol,
+        double WorldUnitsPerAbstractPeriod,
+        HexCrawl.Domain.Spatial.WorldPoint Origin,
+        double RotationDegrees = 0,
+        HexCrawl.Domain.Spatial.DistanceMeasure? PhysicalDistancePerWorldUnit = null);
+
+    private static async Task<IResult> CreatePeriodicOverworldAsync(
+        CreatePeriodicOverworldRequest request,
+        HttpContext context,
+        HexCrawlService service,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name)
+            || request.TilingDsSymbol is null or { Length: > 131072 }
+            || !double.IsFinite(request.Origin.X) || !double.IsFinite(request.Origin.Y))
+            throw new ArgumentException("A world name, supported pattern and finite origin are required.");
+        var realization = HexCrawl.Domain.Spatial.DelaneyDressHarmonicMetricRealization.Construct(
+            request.TilingDsSymbol, request.WorldUnitsPerAbstractPeriod, "world-unit",
+            request.RotationDegrees);
+        if (realization.Status != "realized" || realization.Topology is null || realization.Realization is null)
+            throw new NotSupportedException(
+                "This repeating tile pattern needs a different or more complete geometric realization. "
+                + (realization.Reason ?? "No valid periodic geometry was constructed."));
+        var worldTiling = new HexCrawl.Domain.Spatial.PeriodicWorldTiling(
+            Guid.NewGuid(), realization.Topology, realization.Realization, request.Origin,
+            PhysicalDistancePerWorldUnit: request.PhysicalDistancePerWorldUnit);
+        worldTiling.Validate();
+        var stored = await service.CreatePeriodicOverworldAsync(
+            UserId(context), request.Name, worldTiling, cancellationToken);
+        return Results.Created($"/api/overworlds/{stored.World.Id:D}", OverworldContract.From(stored));
+    }
 
     private static async Task<IResult> GetOverworldAsync(
         Guid overworldId,
