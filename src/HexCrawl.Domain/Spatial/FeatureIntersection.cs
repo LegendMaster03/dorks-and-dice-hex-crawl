@@ -147,22 +147,54 @@ public static class FeatureIntersection
         return inside;
     }
 
+    // Coordinates are rounded in their global world frame before they reach
+    // polygon queries. For example, at 1e9 the spacing of representable
+    // doubles is about 1.2e-7, even when the cell edge is only one unit.
+    // Take the larger adjacent spacing at powers of two, where consecutive
+    // representable values have different gaps. Never scale this uncertainty
+    // merely by a small local edge length.
+    private static double CoordinateSpacing(double value)
+    {
+        if (!double.IsFinite(value)) return double.PositiveInfinity;
+        double before = Math.Abs(value - Math.BitDecrement(value));
+        double after = Math.Abs(Math.BitIncrement(value) - value);
+        return double.IsFinite(after) ? Math.Max(before, after) : before;
+    }
+
     private static bool PointOnSegment(WorldPoint start, WorldPoint end, WorldPoint point)
     {
         double dx = end.X - start.X, dy = end.Y - start.Y;
         double length = Math.Sqrt(dx * dx + dy * dy);
         if (!double.IsFinite(length) || length == 0) return false;
-        // The cross product is an area, not a distance. Use a tolerance
-        // in world-coordinate length units scaled by the actual edge length.
-        // The previous fixed 1e-9 area tolerance made interior points of
-        // valid microunit-scale cells appear to lie on every nearby edge.
-        double tolerance = Math.Max(1e-13, length * 1e-10);
+
+        // Keep a small, dimensionally correct tolerance in the edge's own
+        // coordinate system. A fixed area tolerance at microunit scales used
+        // to classify unrelated interiors as boundaries.
+        double localTolerance = Math.Max(1e-13, length * 1e-10);
+
+        // The three supplied points may each have incurred independent
+        // coordinate rounding. Bound those errors separately by axis so a
+        // large X origin does not artificially blur the Y classification.
+        // Eight representable spacings cover endpoint construction,
+        // midpoint rounding and difference/cross-product operations.
+        const double roundoffSpacings = 8;
+        double uncertaintyX = roundoffSpacings * Math.Max(
+            CoordinateSpacing(start.X), Math.Max(CoordinateSpacing(end.X), CoordinateSpacing(point.X)));
+        double uncertaintyY = roundoffSpacings * Math.Max(
+            CoordinateSpacing(start.Y), Math.Max(CoordinateSpacing(end.Y), CoordinateSpacing(point.Y)));
+        double toleranceX = localTolerance + uncertaintyX;
+        double toleranceY = localTolerance + uncertaintyY;
         double cross = dx * (point.Y - start.Y) - dy * (point.X - start.X);
-        return Math.Abs(cross) <= tolerance * length
-            && point.X >= Math.Min(start.X, end.X) - tolerance
-            && point.X <= Math.Max(start.X, end.X) + tolerance
-            && point.Y >= Math.Min(start.Y, end.Y) - tolerance
-            && point.Y <= Math.Max(start.Y, end.Y) + tolerance;
+
+        // The cross product has squared-length units. Its uncertainty comes
+        // from both the X and Y components, not an arbitrary fixed area.
+        double crossTolerance = localTolerance * length
+            + Math.Abs(dx) * uncertaintyY + Math.Abs(dy) * uncertaintyX;
+        return Math.Abs(cross) <= crossTolerance
+            && point.X >= Math.Min(start.X, end.X) - toleranceX
+            && point.X <= Math.Max(start.X, end.X) + toleranceX
+            && point.Y >= Math.Min(start.Y, end.Y) - toleranceY
+            && point.Y <= Math.Max(start.Y, end.Y) + toleranceY;
     }
 
     private static bool SegmentsIntersect(WorldPoint a, WorldPoint b, WorldPoint c, WorldPoint d)
