@@ -106,11 +106,15 @@ public static class LegacyHexTilingCompatibility
             HexQuotient, inspected.Symbol!.Canonical,
             [new PeriodicMotifCell(MotifId, interfaces)],
             "legacy-axial-qr:phase-17");
-        var zero = HexGeometry.HexToWorld(grid, new HexCoordinate(0, 0));
-        var translationU = HexGeometry.HexToWorld(grid, new HexCoordinate(1, 0)) - zero;
-        var translationV = HexGeometry.HexToWorld(grid, new HexCoordinate(0, 1)) - zero;
-        var corners = HexGeometry.Corners(grid, new HexCoordinate(0, 0))
-            .Select(p => new TilingWorldPoint(p.X - zero.X, p.Y - zero.Y)).ToArray();
+        // Build local metric geometry before adding the world pose. Calculating
+        // global vertices and subtracting a large origin loses significant
+        // digits and can invalidate otherwise legitimate rotated hex grids.
+        // The original origin remains the authoritative separate world pose.
+        var localGrid = grid with { Origin = new WorldPoint(0, 0) };
+        var translationU = HexGeometry.HexToWorld(localGrid, new HexCoordinate(1, 0));
+        var translationV = HexGeometry.HexToWorld(localGrid, new HexCoordinate(0, 1));
+        var corners = HexGeometry.Corners(localGrid, new HexCoordinate(0, 0))
+            .Select(p => new TilingWorldPoint(p.X, p.Y)).ToArray();
         // Coordinates must remain in the original world/map space. The
         // neighbor-center distance is an independent physical calibration;
         // labeling these unscaled polygon coordinates as miles or kilometers
