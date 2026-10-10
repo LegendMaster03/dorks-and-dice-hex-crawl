@@ -48,9 +48,10 @@ jobs:
 
       - name: Build image
         timeout-minutes: 10
-        run: docker build --label "org.opencontainers.image.revision=$DEPLOY_SHA" \
-          -t dorks-and-dice-hex-crawl:latest -t "dorks-and-dice-hex-crawl:$DEPLOY_SHA" \
-          -f src/HexCrawl.Web/Dockerfile .
+        run: |
+          docker build --label "org.opencontainers.image.revision=$DEPLOY_SHA" \
+            -t dorks-and-dice-hex-crawl:latest -t "dorks-and-dice-hex-crawl:$DEPLOY_SHA" \
+            -f src/HexCrawl.Web/Dockerfile .
 
       - name: Start smoke-test PostgreSQL
         timeout-minutes: 3
