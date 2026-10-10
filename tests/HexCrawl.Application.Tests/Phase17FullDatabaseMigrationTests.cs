@@ -195,7 +195,12 @@ public sealed class Phase17FullDatabaseMigrationTests
             Assert.Equal(4, saved!.Version);
             Assert.Equal(original.Grid, saved.World.Grid);
             Assert.True(LegacyHexTilingCompatibility.Matches(saved.World.SpatialTiling, original.Grid));
-            Assert.Equal(original.SourceMaps[0], Assert.Single(saved.World.SourceMaps));
+            var restoredMap = Assert.Single(saved.World.SourceMaps);
+            Assert.Equal(original.SourceMaps[0].Id, restoredMap.Id);
+            Assert.Equal(original.SourceMaps[0].AssetKey, restoredMap.AssetKey);
+            Assert.Equal(original.SourceMaps[0].Alignment, restoredMap.Alignment);
+            Assert.Equal(original.SourceMaps[0].WorldCoverageBoundary,
+                restoredMap.WorldCoverageBoundary);
             var distant = new HexCoordinate(250000, -70000);
             var reconstructed = saved.World.SpatialTiling.Resolve(
                 LegacyHexTilingCompatibility.ToAddress(distant));
