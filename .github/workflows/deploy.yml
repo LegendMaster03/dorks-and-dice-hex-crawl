@@ -223,7 +223,10 @@ jobs:
           echo 'No automatic database or asset changes have been attempted by this recovery step.' >&2
 
       - name: Erase private known-good configuration after safe completion
-        if: ${{ always() && steps.previous_image.outputs.available == 'true' }}
+        # Keep the exact previous Compose/environment snapshot whenever cutover
+        # failed, was cancelled, or reached an uncertain state. Only discard it
+        # after proven readiness or a failure strictly before deployment.
+        if: ${{ always() && !cancelled() && steps.previous_image.outputs.available == 'true' && (steps.verify.outcome == 'success' || (steps.deploy.outcome == 'skipped' && steps.verify.outcome == 'skipped')) }}
         timeout-minutes: 1
         env:
           DEPLOY_SNAPSHOT_DIR: ${{ steps.previous_image.outputs.snapshot_dir }}
