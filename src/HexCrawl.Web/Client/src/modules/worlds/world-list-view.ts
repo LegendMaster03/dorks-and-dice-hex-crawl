@@ -1,6 +1,6 @@
 import type { HexCrawlApi } from "../../api";
 import { clearUiError, showUiError } from "../../ui-error";
-import { createOverworldInput, customUnitFieldsVisible } from "./world-form";
+import { canonicalDistanceUnit, createOverworldInput, customUnitFieldsVisible } from "./world-form";
 import type { DistanceUnitKind } from "./world-form";
 import { applyGuidedExperience, attachFieldHelp, guidancePreferenceButton } from "../../ui/guidance";
 
@@ -25,6 +25,29 @@ export async function renderWorldList(
                     <h2>New world / map</h2>
                     <form data-create-world class="hc-form">
                         <label>Name <input name="name" required value="New overworld" autocomplete="off"></label>
+                        <label>Cell pattern <select name="pattern">
+                            <option value="hex">Hexagonal</option>
+                            <option value="square">Square</option>
+                            <option value="triangle">Triangular</option>
+                            <option value="custom">Custom repeating pattern (JSON editor)</option>
+                        </select></label>
+                        <div data-periodic-controls hidden class="hc-form">
+                            <p class="hc-hint">Create a repeating polygonal world without uploading a map. Its geometry is verified by the server; physical travel scale is optional.</p>
+                            <label>Repeating-pattern size (world units) <input name="periodUnits" type="number" min="0.000001" max="1000000" step="any" value="1"></label>
+                            <div class="hc-inline">
+                                <label>Origin X <input name="periodicOriginX" type="number" step="any" value="0"></label>
+                                <label>Origin Y <input name="periodicOriginY" type="number" step="any" value="0"></label>
+                            </div>
+                            <label>Rotation degrees <input name="periodicRotation" type="number" step="any" value="0"></label>
+                            <label>Optional physical distance per world unit <input name="physicalScale" type="number" min="0.000001" step="any" placeholder="Leave blank if uncalibrated"></label>
+                            <p class="hc-hint">Physical units use the map-scale unit selected below. Uncalibrated worlds can use cell-step travel but not physical-distance travel.</p>
+                            <details data-custom-pattern hidden>
+                                <summary>Explicitly edit custom tiling JSON</summary>
+                                <label>Tiling source JSON <textarea name="patternJson" rows="4" spellcheck="false" placeholder='{"tilingDsSymbol":"..."}'></textarea></label>
+                                <p class="hc-hint">Advanced: the JSON must contain a supported tilingDsSymbol. The server validates its periodic and metric realization.</p>
+                            </details>
+                        </div>
+                        <div data-hex-controls class="hc-form">
                         <label>Grid orientation <select name="orientation"><option value="PointyTop">Pointy top</option><option value="FlatTop">Flat top</option></select></label>
                         <fieldset class="hc-field-group hc-map-scale-field">
                             <legend>Map scale</legend>
@@ -46,6 +69,7 @@ export async function renderWorldList(
                                 <label>Hex radius (world units) <input name="radius" type="number" min="0.001" step="any" value="1"></label>
                             </div>
                         </details>
+                        </div>
                         <button type="submit" class="hc-primary-action" data-create-button>Create world</button>
                     </form>
                 </section>
@@ -63,6 +87,28 @@ export async function renderWorldList(
     const symbolInput = input(form, "symbol");
     const metersInput = input(form, "meters");
     const createButton = required<HTMLButtonElement>(form, "[data-create-button]");
+    const pattern = select(form, "pattern");
+    const periodicFields = required<HTMLElement>(form, "[data-periodic-controls]");
+    const hexFields = required<HTMLElement>(form, "[data-hex-controls]");
+    const customPattern = required<HTMLDetailsElement>(form, "[data-custom-pattern]");
+    const syncPattern = (): void => {
+        const periodic = pattern.value !== "hex";
+        periodicFields.hidden = !periodic;
+        hexFields.hidden = periodic;
+        customPattern.hidden = pattern.value !== "custom";
+        hexFields.querySelectorAll<HTMLInputElement | HTMLSelectElement>("input, select")
+            .forEach(control => {
+                control.disabled = periodic;
+            });
+        periodicFields.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input, select, textarea")
+            .forEach(control => {
+                control.disabled = !periodic
+                    || (control.name === "patternJson" && pattern.value !== "custom");
+            });
+        syncCustomUnit();
+    };
+    pattern.addEventListener("change", syncPattern);
+
     attachFieldHelp(select(form, "orientation"), "Hex orientation", "Pointy-top and flat-top describe the grid geometry. They do not define map north.");
     attachFieldHelp(input(form, "scale"), "Map scale", "This is the game-world distance from the center of one cell to the center of an adjacent cell.", "A 6-mile map uses 6 with Miles.");
     attachFieldHelp(unitSelect, "Map scale unit", "The physical unit used by the map scale.");
@@ -91,6 +137,7 @@ export async function renderWorldList(
     };
     unitSelect.addEventListener("change", syncCustomUnit);
     syncCustomUnit();
+    syncPattern();
 
     try {
         const worlds = await api.listOverworlds();
@@ -176,6 +223,55 @@ export async function renderWorldList(
             createButton.disabled = true;
             createButton.textContent = "Creating…";
             try {
+                if (pattern.value !== "hex") {
+                    const known: Record<string, string> = {
+                        square: "<1:1,1,1:4,4>",
+                        triangle: "<1:1,1,1:3,6>"
+                    };
+                    let dsSymbol = known[pattern.value];
+                    if (pattern.value === "custom") {
+                        let custom: unknown;
+                        try {
+                            custom = JSON.parse(required<HTMLTextAreaElement>(form, 'textarea[name="patternJson"]').value);
+                        } catch {
+                            throw new Error("The custom tiling JSON must be valid JSON.");
+                        }
+                        if (typeof custom !== "object" || custom === null
+                            || !("tilingDsSymbol" in custom)
+                            || typeof custom.tilingDsSymbol !== "string") {
+                            throw new Error("Custom tiling JSON needs a tilingDsSymbol string.");
+                        }
+                        dsSymbol = custom.tilingDsSymbol;
+                    }
+                    if (!dsSymbol) throw new Error("Select a supported repeating cell pattern.");
+                    const physicalText = input(form, "physicalScale").value.trim();
+                    const physicalValue = physicalText ? numeric(input(form, "physicalScale")) : null;
+                    if (physicalValue !== null && physicalValue <= 0)
+                        throw new Error("Physical map scale must be positive.");
+                    const period = numeric(input(form, "periodUnits"));
+                    if (!(period > 0)) throw new Error("Repeating-pattern size must be positive.");
+                    const unit = unitSelect.value as DistanceUnitKind;
+                    if (physicalValue !== null && unitSelect.value === "")
+                        throw new Error("Choose a physical distance unit for calibration.");
+                    const physicalDistancePerWorldUnit = physicalValue === null ? undefined : {
+                        value: physicalValue,
+                        unit: canonicalDistanceUnit(unit, symbolInput.value,
+                            unit === "Custom" ? numeric(metersInput) : null)
+                    };
+                    const world = await api.createPeriodicOverworld({
+                        name: input(form, "name").value.trim(),
+                        tilingDsSymbol: dsSymbol,
+                        worldUnitsPerAbstractPeriod: period,
+                        origin: {
+                            x: numeric(input(form, "periodicOriginX")),
+                            y: numeric(input(form, "periodicOriginY"))
+                        },
+                        rotationDegrees: numeric(input(form, "periodicRotation")),
+                        physicalDistancePerWorldUnit
+                    });
+                    if (!disposed) navigate(`/worlds/${world.id}/edit`);
+                    return;
+                }
                 const unitKind = unitSelect.value as DistanceUnitKind;
                 const customMeters = unitKind === "Custom" ? numeric(metersInput) : null;
                 const world = await api.createOverworld(createOverworldInput({

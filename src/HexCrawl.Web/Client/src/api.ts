@@ -202,6 +202,17 @@ export class HexCrawlApi {
             "World cell selection");
     }
 
+    public createPeriodicOverworld(input: {
+        name: string;
+        tilingDsSymbol: string;
+        worldUnitsPerAbstractPeriod: number;
+        origin: WorldPoint;
+        rotationDegrees: number;
+        physicalDistancePerWorldUnit?: { value: number; unit: DistanceUnit };
+    }): Promise<Overworld> {
+        return this.sendJson("POST", "/api/overworlds/periodic", input, "Create periodic world");
+    }
+
     public createOverworld(input: CreateOverworldInput): Promise<Overworld> {
         return this.sendJson("POST", "/api/overworlds", input, "Create overworld");
     }
