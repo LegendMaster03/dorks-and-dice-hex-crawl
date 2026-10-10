@@ -178,6 +178,57 @@ public sealed class RuntimeEngineTests
     }
 
     [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void TerminalLostHexStepBoundaryPreservesEncounterThroughRecognition(bool reorient)
+    {
+        var setup = CreateSetup();
+        var procedure = TestProcedureProfiles.HexStep() with
+        {
+            UsesNavigationChecks = true,
+            UsesPersistentVeer = true,
+            EncounterCadence = EncounterCheckCadence.PerWatch
+        };
+        var manual = new ResolutionProvenance(ResolutionSource.ManualRoll);
+        var scheduled = new ResolvedEncounter(
+            EncounterOutcomeKind.WanderingEncounter, TimeSpan.FromHours(4),
+            null, "End-of-watch encounter", manual);
+        var first = _engine.Advance(
+            setup.Context, procedure, setup.Expedition, Plan(0, true),
+            new WatchAdvanceInputs(
+                ResolvedTravelAmount.Steps(1, manual),
+                new ResolvedNavigation(NavigationCheckOutcome.Failed, 1, manual),
+                scheduled));
+        Assert.Equal(RuntimePauseReason.LostRecognitionRequired, first.PauseReason);
+        Assert.Equal(TimeSpan.Zero, first.RemainingWatchTime);
+        Assert.Null(first.Expedition.PendingEncounter);
+        Assert.False(first.Expedition.ActiveWatch!.EncounterHandled);
+        Assert.Equal(TimeSpan.FromHours(4), first.Expedition.ElapsedTravelTime);
+        Assert.Single(first.Expedition.History,
+            e => e.Kind == CrawlRuntimeEventKind.HexEntered);
+
+        var recognized = _engine.ResolveBoundaryDecision(
+            first.Expedition, new BoundaryNavigationDecision(reorient, reorient, manual));
+        Assert.Equal(!reorient, recognized.Expedition.Navigation.IsLost);
+        var after = _engine.Advance(
+            setup.Context, procedure, recognized.Expedition, Plan(0, true),
+            new WatchAdvanceInputs(ResolvedTravelAmount.Steps(0, manual)));
+        Assert.Equal(RuntimePauseReason.EncounterTriggered, after.PauseReason);
+        Assert.Equal(TimeSpan.Zero, after.RemainingWatchTime);
+        var occurrence = Assert.IsType<PendingEncounterOccurrence>(
+            after.Expedition.PendingEncounter);
+        Assert.Equal(after.Expedition.CurrentHex, occurrence.Hex);
+        Assert.Single(after.Expedition.History,
+            e => e.Kind == CrawlRuntimeEventKind.EncounterTriggered
+                 && e.EncounterOccurrenceId == occurrence.Id);
+        Assert.DoesNotContain(after.Expedition.History,
+            e => e.Kind == CrawlRuntimeEventKind.WatchCompleted);
+        Assert.Throws<InvalidOperationException>(() => _engine.Advance(
+            setup.Context, procedure, after.Expedition, Plan(0, true),
+            new WatchAdvanceInputs(ResolvedTravelAmount.Steps(0, manual))));
+    }
+
+    [Theory]
     [InlineData(0, 12)]
     [InlineData(1, 12)]
     [InlineData(2, 6)]
