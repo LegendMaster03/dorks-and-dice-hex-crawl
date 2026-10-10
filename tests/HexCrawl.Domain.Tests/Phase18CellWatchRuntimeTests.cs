@@ -90,6 +90,44 @@ public sealed class Phase18CellWatchRuntimeTests
     }
 
     [Fact]
+    public void ExplicitAtomicExitDecisionResolvesVertexPauseWithoutInventingAdjacency()
+    {
+        var (world, procedure, state, plan) = Setup("<1:1,1,1:4,4>", calibrated: true);
+        var cell = world.Resolve(state.Traversal.CurrentCell.Address);
+        var ambiguousHeading = cell.Polygon[0] - cell.Center;
+        state = state with
+        {
+            Traversal = state.Traversal with { SelectedExitInterfaceIndex = null }
+        };
+        var engine = new CrawlRuntimeEngine();
+        var paused = engine.AdvanceCellWatch(world, procedure, state,
+            plan with { IntendedHeading = ambiguousHeading }, Inputs(1));
+        Assert.Equal(RuntimePauseReason.CellCourseAdjudicationRequired, paused.PauseReason);
+
+        var boundary = world.Boundaries(cell.Id.Address)[0];
+        var midpoint = new WorldPoint(
+            (boundary.Start.X + boundary.End.X) / 2,
+            (boundary.Start.Y + boundary.End.Y) / 2);
+        var heading = midpoint - cell.Center;
+        var invalid = new CellCourseDecision(
+            heading, (boundary.InterfaceIndex + 1) % world.Boundaries(cell.Id.Address).Count, Manual);
+        Assert.Throws<InvalidOperationException>(() =>
+            engine.ResolveCellCourse(world, paused.Expedition, invalid));
+
+        var decided = engine.ResolveCellCourse(world, paused.Expedition,
+            new CellCourseDecision(heading, boundary.InterfaceIndex, Manual));
+        Assert.Null(decided.PauseReason);
+        Assert.Equal(boundary.InterfaceIndex, decided.Expedition.Traversal.SelectedExitInterfaceIndex);
+        var resumed = engine.AdvanceCellWatch(world, procedure,
+            decided.Expedition, decided.Expedition.ActiveWatch!.Plan, Inputs(1));
+        Assert.Null(resumed.PauseReason);
+        Assert.Equal(boundary.To, resumed.Expedition.Traversal.CurrentCell);
+        Assert.Equal(1, resumed.Expedition.CompletedWatches);
+        Assert.Single(resumed.Expedition.History,
+            e => e.Kind == CrawlRuntimeEventKind.CellEntered);
+    }
+
+    [Fact]
     public void NonCalibratedCellStepWatchDoesNotInventDistance()
     {
         var (world, procedure, state, plan) = Setup("<1:1,1,1:4,4>", calibrated: false);
