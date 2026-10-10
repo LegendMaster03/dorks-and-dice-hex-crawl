@@ -118,14 +118,27 @@ public sealed class ExpeditionStartService(
     /// projection is created. This is an application capability; the existing
     /// hex-only HTTP start route stays gated until its cell contracts are ready.
     /// </summary>
+    public Task<StoredExpedition> StartWorldBoundCellsAsync(
+        Guid overworldId,
+        string ownerUserId,
+        string name,
+        ProcedureStartSelection selection,
+        PeriodicCellAddress startCell,
+        CancellationToken cancellationToken = default) =>
+        StartWorldBoundCellsAsync(overworldId, ownerUserId, name, selection,
+            startCell, "dm-controlled", cancellationToken);
+
     public async Task<StoredExpedition> StartWorldBoundCellsAsync(
         Guid overworldId,
         string ownerUserId,
         string name,
         ProcedureStartSelection selection,
         PeriodicCellAddress startCell,
+        string presentationKey,
         CancellationToken cancellationToken = default)
     {
+        var presentation = MapPresentationPolicyCatalog.Resolve(presentationKey);
+        presentation.Validate();
         var owner = RequiredText(ownerUserId, "Owner user id");
         var expeditionName = RequiredText(name, "Expedition name");
         var world = await coreService.GetOverworldAsync(overworldId, owner, cancellationToken);
@@ -160,15 +173,15 @@ public sealed class ExpeditionStartService(
         };
         state.Validate(tiling);
 
-        // Existing hex-only knowledge initialization deliberately does not run
-        // for a generalized cell. Discovery policy will be composed from
-        // qualified cell events by the subsequent application integration.
-        var knowledge = new PlayerKnowledgeState
-        {
-            ScopeId = Guid.NewGuid(),
-            OverworldId = world.World.Id,
-            PresentationPolicy = MapPresentationPolicy.DmControlled()
-        };
+        var knowledge = PresentationKnowledgeProjection.InitializeCells(
+            world.World, presentation,
+            new PlayerKnowledgeState
+            {
+                ScopeId = Guid.NewGuid(),
+                OverworldId = world.World.Id,
+                PresentationPolicy = presentation
+            },
+            cell.Id);
         var now = DateTimeOffset.UtcNow;
         return await store.CreateExpeditionAsync(new StoredExpedition(
             expeditionName,

@@ -13,7 +13,8 @@ public sealed record StartCellExpeditionRequest(
     string Name,
     Guid ProcedureId,
     int ProcedureRevision,
-    PeriodicCellAddress StartCell)
+    PeriodicCellAddress StartCell,
+    string PresentationKey = "dm-controlled")
 {
     public ProcedureStartSelection Selection()
     {

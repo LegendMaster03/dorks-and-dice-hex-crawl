@@ -116,7 +116,7 @@ public sealed class ExpeditionModule : IHexCrawlModule
         var owner = UserId(context);
         var expedition = await starter.StartWorldBoundCellsAsync(
             overworldId, owner, request.Name, selection,
-            request.StartCell, cancellationToken);
+            request.StartCell, request.PresentationKey, cancellationToken);
         return Results.Created(
             $"/api/expeditions/{expedition.Id:D}",
             await ContractAsync(expedition, owner, service, cancellationToken));
