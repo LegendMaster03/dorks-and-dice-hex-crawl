@@ -1,3 +1,5 @@
+using HexCrawl.Domain.Knowledge;
+using HexCrawl.Domain.Presentation;
 using HexCrawl.Application;
 using HexCrawl.Application.Persistence;
 using HexCrawl.Domain.Procedure;
@@ -242,9 +244,14 @@ public sealed class Phase18CellExpeditionPersistenceTests
             new WorldPoint(0, 0));
         tiling.Validate();
         var now = DateTimeOffset.UtcNow;
+        var landmarkCell = tiling.Resolve(new PeriodicCellAddress(
+            tiling.Topology.MotifCells[0].Id, new LatticeDisplacement(0, 0)));
+        var landmark = new Location(Guid.NewGuid(), "Unmapped ruins", "ruin",
+            landmarkCell.Center, LocationDiscoverability.Hidden, []);
         var world = new OverworldDefinition
         {
-            Id = Guid.NewGuid(), Name = "Cell watch application world", Tiling = tiling
+            Id = Guid.NewGuid(), Name = "Cell watch application world", Tiling = tiling,
+            Locations = [landmark]
         };
         await store.CreateOverworldAsync(new StoredOverworld(world, "alice", 1, now, now));
 
@@ -267,7 +274,12 @@ public sealed class Phase18CellExpeditionPersistenceTests
         var initial = new StoredExpedition(
             "Cell steps through app", state,
             new WorldBoundCrawlSessionContext(world.Id),
-            null, CellProcedure(tiling, TravelResolutionMode.CellSteps),
+            new PlayerKnowledgeState
+            {
+                ScopeId = Guid.NewGuid(), OverworldId = world.Id,
+                PresentationPolicy = MapPresentationPolicy.DmControlled()
+            },
+            CellProcedure(tiling, TravelResolutionMode.CellSteps),
             null, TimeSpan.Zero, "alice", 1, now, now);
         await store.CreateExpeditionAsync(initial);
 
@@ -305,6 +317,23 @@ public sealed class Phase18CellExpeditionPersistenceTests
         await Assert.ThrowsAsync<HexCrawlConcurrencyException>(() =>
             service.AdvanceCellExpeditionAsync(initial.Id, "alice", 1, plan, inputs));
 
+        var discovered = await service.DiscoverAsync(initial.Id, "alice",
+            new DiscoverSubjectCommand(saved.Version, landmark.Id,
+                KnowledgeSubjectType.Location, "dm:cell-discovery-test"));
+        Assert.Equal(KnowledgeState.Discovered,
+            discovered.Knowledge!.Entries[landmark.Id].State);
+        var manualEvent = Assert.Single(
+            ((CellExpeditionState)discovered.Runtime).History,
+            e => e.Kind == CrawlRuntimeEventKind.LocationDiscovered);
+        Assert.Null(manualEvent.Hex);
+        Assert.Equal(exit.To, manualEvent.Cell);
+        Assert.Equal(landmark.Id, manualEvent.SubjectId);
+
+        await Assert.ThrowsAsync<HexCrawlConcurrencyException>(() =>
+            service.DiscoverAsync(initial.Id, "alice",
+                new DiscoverSubjectCommand(saved.Version, landmark.Id,
+                    KnowledgeSubjectType.Location, "stale")));
+
         var reopened = new PostgresHexCrawlStore(database.ConnectionString);
         await reopened.InitializeAsync();
         var loaded = await reopened.GetExpeditionAsync(initial.Id, "alice");
@@ -313,8 +342,10 @@ public sealed class Phase18CellExpeditionPersistenceTests
         restored.Validate(tiling);
         Assert.Equal(moved.Traversal.CurrentCell, restored.Traversal.CurrentCell);
         Assert.Equal(moved.ElapsedTravelTime, restored.ElapsedTravelTime);
-        Assert.Equal(saved.Version, loaded.Version);
+        Assert.Equal(discovered.Version, loaded.Version);
+        Assert.Equal(KnowledgeState.Discovered, loaded.Knowledge!.Entries[landmark.Id].State);
         Assert.Single(restored.History, e => e.Kind == CrawlRuntimeEventKind.CellEntered);
+        Assert.Single(restored.History, e => e.Kind == CrawlRuntimeEventKind.LocationDiscovered);
     }
 
     private static CampaignProcedure CellProcedure(PeriodicWorldTiling world, TravelResolutionMode mode = TravelResolutionMode.ContinuousDistance)
