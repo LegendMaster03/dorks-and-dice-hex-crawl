@@ -22,6 +22,7 @@ import { ExpeditionPartySheetController } from "./expedition-party-sheet";
 import { adjacencyForCell, adjacencyForIntent } from "./spatial-adjacency";
 import { renderCurrentCellNavigator } from "./cell-navigator";
 import { currentRuntimeCellAdjacency, sameHexCell } from "./current-cell-topology";
+import { renderPeriodicExpeditionWorkbench } from "./periodic-expedition-workbench";
 import { publishExpeditionRuntimeChanged } from "./expedition-runtime-events";
 import { ExpeditionSurvivalResourcesPanel } from "./survival-resources-panel";
 import { ExpeditionWatchController } from "./expedition-watch-controller";
@@ -62,6 +63,11 @@ export async function renderExpedition(
     }
 
     let world: Overworld | null = runtime.overworldId ? await api.getOverworld(runtime.overworldId) : null;
+    // Phase 18 cell expeditions retain their qualified identity and use the same
+    // expedition route, map and cell navigator. Do not enter the hex adapter.
+    if (runtime.expedition.isSpatial && runtime.expedition.currentCell)
+        return renderPeriodicExpeditionWorkbench(root, api, runtime, world, navigate);
+
     const survivalApi = new SurvivalResourcesApi(toolContext);
     const effectsApi = new ExpeditionEffectsApi(toolContext);
     const journeyApi = new JourneyApi(toolContext);
