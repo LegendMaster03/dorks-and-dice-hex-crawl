@@ -160,6 +160,11 @@ public sealed class PostgresSchemaMigrator(string connectionString)
                 {
                     using var document = JsonDocument.Parse(reader.GetString(1));
                     var root = document.RootElement;
+                    if (!root.TryGetProperty("id", out var worldId)
+                        || worldId.ValueKind != JsonValueKind.String
+                        || !worldId.TryGetGuid(out var snapshotId)
+                        || snapshotId != id)
+                        throw new InvalidDataException("World snapshot identity disagrees with its database row.");
                     var version = root.TryGetProperty("formatVersion", out var field)
                         ? field.GetInt32() : 1;
                     if (version == 2)
