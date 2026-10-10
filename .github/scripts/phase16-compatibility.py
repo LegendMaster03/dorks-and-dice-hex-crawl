@@ -208,6 +208,23 @@ def main():
             assert preview_status=="consistent-candidate" and preview["candidate"]["motifCells"],preview
             assert preview["candidate"]["dsSymbol"],preview
         assert jcall(APP,f"/api/overworlds/{wid}")["version"]==version
+        if PROVIDER=="new":
+            for label,raster in [
+                ("triangle",triangle_image()),
+                ("mixed-seed-1907",mixed_image(1907)),
+                ("mixed-rotated-2911",mixed_image(2911,rotation=8,scale=1.1))
+            ]:
+                motif_id,version=create_map(wid,version,"phase16-"+label,raster)
+                evidence=jcall(APP,
+                    f"/api/overworlds/{wid}/source-maps/{motif_id}/motif-investigation",
+                    method="POST")
+                assert evidence["status"]=="consistent-candidate",(label,evidence)
+                assert evidence["candidate"]["dsSymbol"],label
+                metric=evidence["evidence"]["metricRegistration"]
+                assert metric["status"]=="registered",(label,metric)
+                assert metric["sourceProjection"]["status"]=="supported",(label,metric)
+                assert jcall(APP,f"/api/overworlds/{wid}")["version"]==version
+                print(f"PHASE16_MATRIX qualified full HTTP motif {label} PASS",flush=True)
 
     assert_saved(wid,version,mid,image,sid)
     with open("/tmp/phase16-ci-state.json","w") as f:
