@@ -84,8 +84,8 @@ jobs:
             exit 1
           fi
 
-      - name: Test Phase 17 recovery and failed-cutover outcome contracts
-        run: python3 -m unittest discover -s tests -p 'test_phase17_*.py'
+      - name: Test deployment snapshot safety contracts
+        run: python3 -m unittest discover -s tests -p 'test_deploy_*.py'
 
       - name: Restore
         run: dotnet restore dorks-and-dice-hex-crawl.slnx
@@ -249,7 +249,7 @@ jobs:
       - name: Rehearse isolated PostgreSQL and map-asset backup and restore
         run: |
           set -euo pipefail
-          backup_dir="$RUNNER_TEMP/hex-crawl-phase17-recovery"
+          backup_dir="$RUNNER_TEMP/hex-crawl-backup-rehearsal"
           mkdir -p "$backup_dir"
           docker exec hex-crawl-ci-postgres pg_dump -U hex_crawl_test -d postgres \
             --format=custom --schema=smoke_world > "$backup_dir/database.dump"
