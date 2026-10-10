@@ -50,7 +50,7 @@ public sealed class Phase18CellExpeditionPersistenceTests
         var quarter = tiling.MeasurePhysicalDistance(startingCell.Center,
             new WorldPoint(startingCell.Center.X + heading.X / 4,
                 startingCell.Center.Y + heading.Y / 4));
-        var halfProgress = new DistanceMeasure(quarter.Value * 2, quarter.Unit);
+        var remainingToCross = new DistanceMeasure(quarter.Value * 3.1, quarter.Unit);
         var first = new CrawlRuntimeEngine().ResolveCellTravel(
             tiling, procedure, initial,
             ResolvedTravelAmount.Distance(quarter, quarter, ResolutionProvenance.ProcedureDefault), true);
@@ -111,7 +111,7 @@ public sealed class Phase18CellExpeditionPersistenceTests
 
         var second = new CrawlRuntimeEngine().ResolveCellTravel(
             tiling, loaded.CampaignProcedure, loadedState.Traversal,
-            ResolvedTravelAmount.Distance(halfProgress, halfProgress,
+            ResolvedTravelAmount.Distance(remainingToCross, remainingToCross,
                 ResolutionProvenance.ProcedureDefault), true);
         var crossing = Assert.Single(second.Transitions);
         Assert.Equal(edge.To, crossing.To);
