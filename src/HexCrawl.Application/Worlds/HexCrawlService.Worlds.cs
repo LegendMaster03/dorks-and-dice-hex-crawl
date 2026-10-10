@@ -56,6 +56,33 @@ public sealed partial class HexCrawlService
             now), cancellationToken);
     }
 
+
+    /// <summary>
+    /// Phase 17 internal authoring entry point. No public HTTP creation route is
+    /// exposed while the Phase 18 movement and Phase 19 rendering gates remain.
+    /// </summary>
+    public async Task<StoredOverworld> CreatePeriodicOverworldAsync(
+        string ownerUserId,
+        string name,
+        PeriodicWorldTiling tiling,
+        CancellationToken cancellationToken = default)
+    {
+        var owner = RequireUser(ownerUserId);
+        var title = RequiredText(name, "Overworld name");
+        ArgumentNullException.ThrowIfNull(tiling);
+        tiling.Validate();
+        var now = DateTimeOffset.UtcNow;
+        var world = new OverworldDefinition
+        {
+            Id = Guid.NewGuid(),
+            Name = title,
+            Tiling = tiling
+        };
+        world.ValidateEnvironmentAnnotations();
+        return await _store.CreateOverworldAsync(new StoredOverworld(
+            world, owner, 1, now, now), cancellationToken);
+    }
+
     public async Task<StoredOverworld> UpdateOverworldAsync(
         Guid overworldId,
         string ownerUserId,
