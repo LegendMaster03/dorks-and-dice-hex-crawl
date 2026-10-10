@@ -259,6 +259,43 @@ public static class Phase19RasterRegistration
             + Math.Pow((t.M11 * dy - t.M21 * dx) / determinant, 2));
     }
 
+    /// <summary>
+    /// Constructs fresh, independently checked geometry from a qualified
+    /// observed structure. The raster does not become the world's metric
+    /// witness: the geometric constructor and validator supply authority.
+    /// Registration against the raster must pass Assess separately.
+    /// </summary>
+    public static PeriodicWorldTiling? ConstructReplacement(
+        PeriodicWorldTiling existing, PeriodicMotifInvestigation observed)
+    {
+        if (observed is not
+            { Status: "consistent-candidate", Authoritative: false,
+              Candidate: { } candidate,
+              Evidence.MetricRegistration:
+                  { Status: "registered", SourceProjection.Status: "supported" } }
+            || existing.PhysicalDistancePerWorldUnit is not null
+            || existing.Revision == int.MaxValue)
+            return null;
+        var oldBasis = existing.Realization.TranslationU;
+        double period = Math.Sqrt(oldBasis.X * oldBasis.X + oldBasis.Y * oldBasis.Y);
+        if (!double.IsFinite(period) || period <= 0) return null;
+        var result = DelaneyDressHarmonicMetricRealization.Construct(
+            candidate.DsSymbol, period, "world-unit");
+        if (result.Status != "realized"
+            || result.Topology is null || result.Realization is null)
+            return null;
+        var tiling = new PeriodicWorldTiling(
+            Guid.NewGuid(), result.Topology, result.Realization,
+            existing.Origin, existing.Revision + 1);
+        try { tiling.Validate(); }
+        catch (Exception error) when (
+            error is ArgumentException or InvalidOperationException)
+        {
+            return null;
+        }
+        return tiling;
+    }
+
     public static bool Equivalent(MapRegistrationTransform a, MapRegistrationTransform b) =>
         new[] { (a.M11, b.M11), (a.M12, b.M12), (a.M13, b.M13),
             (a.M21, b.M21), (a.M22, b.M22), (a.M23, b.M23) }
