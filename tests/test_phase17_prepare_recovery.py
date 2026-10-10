@@ -25,8 +25,10 @@ def sample_docker(*args, **kwargs):
     if args[:2] == ("inspect", prepare.POSTGRES):
         return subprocess.CompletedProcess(args, 0, json.dumps([{
             "State": {"Running": True},
-            "Config": {"Image": "postgres:18"}
+            "Config": {"Image": "custom-postgres-with-no-POSTGRES_DB-init"}
         }]).encode())
+    if "SHOW server_version_num" in args:
+        return subprocess.CompletedProcess(args, 0, b"180005\\n")
     return subprocess.CompletedProcess(args, 0, b"")
 
 
@@ -66,7 +68,7 @@ class Phase17PrepareRecoveryTests(unittest.TestCase):
             }):
                 with mock.patch.object(prepare, "docker", side_effect=fake_docker):
                     with mock.patch.object(prepare.subprocess, "run",
-                                           return_value=subprocess.CompletedProcess([], 0)) as subprocess_run:
+                                           return_value=subprocess.CompletedProcess([], 0, b"1")) as subprocess_run:
                         with self.assertRaisesRegex(RuntimeError, "duplicate object"):
                             prepare.restore_and_verify_database(
                                 "postgres:18", dump, "9|1|id|2|id|2|4")
@@ -136,10 +138,84 @@ class Phase17PrepareRecoveryTests(unittest.TestCase):
                                 for call in subprocess_run.call_args_list))
             self.assertFalse((root / "manifest.json").exists())
 
+    def test_pg_isready_is_not_enough_for_isolated_restore_readiness(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            dump = Path(temporary) / "dump"
+            dump.write_bytes(b"archive")
+            status = subprocess.CompletedProcess([], 0, b"")
+            with mock.patch.object(prepare, "docker", side_effect=sample_docker) as docker:
+                with mock.patch.object(prepare.subprocess, "run", return_value=status) as run:
+                    with mock.patch.object(prepare.time, "sleep"):
+                        with self.assertRaisesRegex(RuntimeError, "not ready"):
+                            prepare.restore_and_verify_database(
+                                "postgres:18", dump, "9|1|id|2|id|2|4")
+            self.assertTrue(any(call.args[0][:4] == ["docker", "exec",
+                mock.ANY, "psql"] for call in run.call_args_list
+                if len(call.args[0]) >= 4))
+            self.assertFalse(any("pg_restore" in call.args for call in docker.call_args_list))
+
+    def test_cleanup_preserves_verified_pair_and_live_map_data(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_root = root / "phase17-private-backups"
+            retained = backup_root / (SHA[:12] + "-1234567890123")
+            stale = backup_root / (SHA[:12] + "-1234567890124")
+            retained.mkdir(parents=True)
+            stale.mkdir()
+            (stale / "private.log").write_text("temporary")
+            (retained / "map-volume-source").mkdir()
+            (retained / "map-volume-restored").mkdir()
+            (retained / "isolated-postgres-restore.log").write_text("temporary")
+            dump = retained / "hex-crawl-before-phase17.dump"
+            maps = retained / "map-assets-before-phase17.tar.gz"
+            dump.write_bytes(b"verified archive")
+            maps.write_bytes(b"verified maps")
+            manifest = root / "phase17-recovery-attestation.json"
+            manifest.write_text(json.dumps({
+                "deploymentSha": SHA,
+                "postgresBackupPath": str(dump),
+                "mapAssetsBackupPath": str(maps)
+            }))
+            (root / (manifest.name + ".tmp-stale")).write_text("junk")
+            with mock.patch.object(prepare, "inventory", return_value="10|1|id|2|id|2|4"):
+                with mock.patch.object(prepare.subprocess, "run") as check:
+                    prepare.cleanup_after_verified_deployment(SHA, manifest)
+            self.assertEqual(1, check.call_count)
+            self.assertTrue(dump.exists())
+            self.assertTrue(maps.exists())
+            self.assertFalse(stale.exists())
+            self.assertFalse((retained / "map-volume-source").exists())
+            self.assertFalse((retained / "map-volume-restored").exists())
+            self.assertFalse((retained / "isolated-postgres-restore.log").exists())
+            self.assertFalse((root / (manifest.name + ".tmp-stale")).exists())
+
+    def test_cleanup_never_deletes_recovery_when_schema_not_upgraded(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup = root / "phase17-private-backups" / (SHA[:12] + "-1234567890123")
+            backup.mkdir(parents=True)
+            dump = backup / "hex-crawl-before-phase17.dump"
+            maps = backup / "map-assets-before-phase17.tar.gz"
+            dump.write_bytes(b"database")
+            maps.write_bytes(b"maps")
+            manifest = root / "phase17-recovery-attestation.json"
+            manifest.write_text(json.dumps({
+                "deploymentSha": SHA,
+                "postgresBackupPath": str(dump),
+                "mapAssetsBackupPath": str(maps)
+            }))
+            with mock.patch.object(prepare, "inventory", return_value="9|1|id|2|id|2|4"):
+                with mock.patch.object(prepare.subprocess, "run") as check:
+                    with self.assertRaisesRegex(RuntimeError, "not at schema 10"):
+                        prepare.cleanup_after_verified_deployment(SHA, manifest)
+            self.assertTrue(dump.is_file() and maps.is_file())
+            self.assertEqual(1, check.call_count)
+
     def test_manifest_only_after_isolated_database_and_map_restore(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             events = []
+            restored_image = []
 
             def docker(*args, **kwargs):
                 if args[0] == "stop":
@@ -158,7 +234,9 @@ class Phase17PrepareRecoveryTests(unittest.TestCase):
                 with mock.patch.object(prepare, "inventory", return_value="9|1|id|2|id|2|4"):
                     with mock.patch.object(
                         prepare, "restore_and_verify_database",
-                        side_effect=lambda *a: events.append("isolated db")):
+                        side_effect=lambda *a: (
+                            restored_image.append(a[0]), events.append("isolated db")
+                        )):
                         with mock.patch.object(prepare.subprocess, "run") as gate:
                             prepare.prepare(SHA, root / "manifest.json")
             manifest = json.loads((root / "manifest.json").read_text())
@@ -172,6 +250,9 @@ class Phase17PrepareRecoveryTests(unittest.TestCase):
                              prepare.sha256(Path(manifest["mapAssetsBackupPath"])))
             self.assertEqual(1, manifest["restoredMapAssetCount"])
             self.assertEqual(["writer stopped", "backup", "map", "isolated db"], events)
+            self.assertEqual(["postgres:18"], restored_image)
+            self.assertFalse((Path(manifest["postgresBackupPath"]).parent / "map-volume-source").exists())
+            self.assertFalse((Path(manifest["postgresBackupPath"]).parent / "map-volume-restored").exists())
             self.assertEqual(1, gate.call_count)
             self.assertFalse(any(call.args[0][:3] == ["docker", "start", prepare.SERVICE]
                                  for call in gate.call_args_list))
