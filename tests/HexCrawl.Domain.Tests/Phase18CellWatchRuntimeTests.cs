@@ -103,7 +103,7 @@ public sealed class Phase18CellWatchRuntimeTests
     [Fact]
     public void NavigationUsesAngularVeerWithoutHexDirectionAndDoesNotAutomaticallyRecoverLost()
     {
-        var (world, procedure, state, plan) = Setup("<1:1,1,1:4,4>", calibrated: true);
+        var (world, procedure, state, plan) = Setup("<1:1,1,1:4,4>", calibrated: true, advanced: true);
         var engine = new CrawlRuntimeEngine();
         var failed = engine.AdvanceCellWatch(world, procedure, state, plan,
             Inputs(0) with
@@ -126,7 +126,7 @@ public sealed class Phase18CellWatchRuntimeTests
     [Fact]
     public void EncounterPausesAtScheduledTimeAndCanResolveExactlyOnce()
     {
-        var (world, procedure, state, plan) = Setup("<1:1,1,1:4,4>", calibrated: true);
+        var (world, procedure, state, plan) = Setup("<1:1,1,1:4,4>", calibrated: true, advanced: true);
         var engine = new CrawlRuntimeEngine();
         var total = GenericProcedureRuntime.Bind(procedure).Time.IntervalDuration;
         var encounter = new ResolvedEncounter(
@@ -168,7 +168,7 @@ public sealed class Phase18CellWatchRuntimeTests
         ResolvedEncounter.None);
 
     private static (PeriodicWorldTiling World, CampaignProcedure Procedure, CellExpeditionState State,
-        CellWatchTravelPlan Plan) Setup(string symbol, bool calibrated)
+        CellWatchTravelPlan Plan) Setup(string symbol, bool calibrated, bool advanced = false)
     {
         var generated = DelaneyDressHarmonicMetricRealization.Construct(symbol, 1.5, "world-unit");
         Assert.Equal("realized", generated.Status);
@@ -178,7 +178,7 @@ public sealed class Phase18CellWatchRuntimeTests
                 ? new DistanceMeasure(2, DistanceUnit.Miles)
                 : null);
         world.Validate();
-        var original = TestProcedureProfiles.FixedDistance().Materialize();
+        var original = (advanced ? TestProcedureProfiles.AdvancedContinuous() : TestProcedureProfiles.FixedDistance()).Materialize();
         var modules = original.Modules
             .Where(m => m.Mechanic.ExecutionHandler != GenericProcedureExecutionHandlers.HexProgressPolicy)
             .Select(m =>
@@ -187,6 +187,7 @@ public sealed class Phase18CellWatchRuntimeTests
                     return m;
                 var parameters = m.Parameters.ToDictionary(x => x.Key, x => x.Value);
                 parameters["travelResolution"] = TravelResolutionMode.CellSteps.ToString();
+                parameters["actualDistanceResolution"] = ActualDistanceResolutionMode.Fixed.ToString();
                 parameters["tracksIntraHexProgress"] = "false";
                 return m with { Mechanic = m.Mechanic with { Version = 2 }, Parameters = parameters };
             }).ToArray();
