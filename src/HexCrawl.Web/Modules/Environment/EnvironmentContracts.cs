@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using HexCrawl.Application;
 using HexCrawl.Application.Persistence;
 using HexCrawl.Domain.Spatial;
@@ -42,10 +43,18 @@ public sealed record EnvironmentAnnotationScopeContract(
     HexCoordinate? Hex,
     Guid? FeatureId)
 {
-    public static EnvironmentAnnotationScopeContract From(EnvironmentAnnotationScope value) =>
-        new(value.Kind, value.Hex, value.FeatureId);
+    // Additive Phase 18 field. Legacy hex/world/feature JSON has no cell key,
+    // while an actual cell scope retains its full tiling-qualified identity.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorldCellId? Cell { get; init; }
 
-    public EnvironmentAnnotationScope ToDomain() => new() { Kind = Kind, Hex = Hex, FeatureId = FeatureId };
+    public static EnvironmentAnnotationScopeContract From(EnvironmentAnnotationScope value) =>
+        new(value.Kind, value.Hex, value.FeatureId) { Cell = value.Cell };
+
+    public EnvironmentAnnotationScope ToDomain() => new()
+    {
+        Kind = Kind, Hex = Hex, FeatureId = FeatureId, Cell = Cell
+    };
 }
 
 public sealed record EnvironmentAnnotationContract(
@@ -84,8 +93,12 @@ public sealed record EnvironmentFactSourceContract(
     Guid? FeatureId,
     string? FeatureName)
 {
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorldCellId? Cell { get; init; }
+
     public static EnvironmentFactSourceContract From(EnvironmentFactSource value) => new(
-        value.Kind, value.AnnotationId, value.Hex, value.FeatureId, value.FeatureName);
+        value.Kind, value.AnnotationId, value.Hex, value.FeatureId, value.FeatureName)
+    { Cell = value.Cell };
 }
 
 public sealed record EffectiveEnvironmentFactContract(
