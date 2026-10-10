@@ -150,8 +150,7 @@ public sealed class Phase18CellExpeditionPersistenceTests
 
     private static CampaignProcedure CellProcedure(PeriodicWorldTiling world)
     {
-        var original = CrawlProcedureCatalog.Resolve(CrawlProcedureCatalog.Dnd35PresetKey)
-            .MaterializeGeneric().Procedure;
+        var original = SyntheticProcedureFixtures.MixedProcedure();
         var modules = original.Modules
             .Where(m => m.Mechanic.ExecutionHandler != GenericProcedureExecutionHandlers.HexProgressPolicy)
             .Select(m =>
