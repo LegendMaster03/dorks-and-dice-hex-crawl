@@ -36,22 +36,95 @@ public static partial class SourceMapApiEndpoints
             ? (await procedures.GetAsync(owner, selected, revision, cancellationToken)).Procedure
             : null;
         var expeditions = await crawls.ListExpeditionsAsync(overworldId, owner, cancellationToken);
+        var blockers = CorrectionBlockers(stored, expeditions);
+        var assessment = Phase19TilingCompatibility.Assess(
+            stored.World.SpatialTiling, analyzed.Value, procedure, blockers, stored.Version);
+        return Results.Ok(stored.World.HasLegacyHexGrid
+            ? assessment with {
+                Registration = null, Correction = null, CanCorrectInPlace = false
+              } : assessment);
+    }
+
+    private static IReadOnlyList<string> CorrectionBlockers(
+        StoredOverworld world, IReadOnlyList<ExpeditionSummary> expeditions)
+    {
         var blockers = new List<string>();
         if (expeditions.Count > 0)
             blockers.Add($"{expeditions.Count} saved expeditions, including "
                 + string.Join(", ", expeditions.Take(3).Select(item => item.Name)) + ".");
-        var registrations = stored.World.SourceMaps.Count(map => map.Alignment is not null);
+        var registrations = world.World.SourceMaps.Count(map => map.Alignment is not null);
         if (registrations > 0)
             blockers.Add($"{registrations} existing source-map registrations.");
-        if (stored.World.Features.Count > 0 || stored.World.Locations.Count > 0)
-            blockers.Add($"{stored.World.Features.Count} features and "
-                + $"{stored.World.Locations.Count} locations with world-space positions.");
-        if (stored.World.EnvironmentAnnotations.Count > 0)
-            blockers.Add($"{stored.World.EnvironmentAnnotations.Count} environment annotations.");
+        if (world.World.Features.Count > 0 || world.World.Locations.Count > 0)
+            blockers.Add($"{world.World.Features.Count} features and "
+                + $"{world.World.Locations.Count} locations with world-space positions.");
+        if (world.World.EnvironmentAnnotations.Count > 0)
+            blockers.Add($"{world.World.EnvironmentAnnotations.Count} environment annotations.");
+        if (world.World.SpatialTiling.PhysicalDistancePerWorldUnit is not null)
+            blockers.Add("an existing physical-distance calibration.");
+        return blockers;
+    }
+
+    private sealed record ApplyMotifCorrectionRequest(
+        int CandidateIndex, HexCrawl.Domain.World.MapRegistrationTransform Alignment,
+        long ExpectedVersion, Guid? ProcedureId = null, int? ProcedureRevision = null);
+
+    /// <summary>
+    /// An explicit opt-in correction for an unused uncalibrated world only.
+    /// The candidate is reconstructed independently of Surveyor's measured
+    /// polygons; exact image correspondence is rechecked at this boundary.
+    /// A single guarded database transaction changes the world and image
+    /// alignment, with no procedure or expedition mutation.
+    /// </summary>
+    private static async Task<IResult> ApplyMotifCorrectionAsync(
+        Guid overworldId, Guid sourceMapId,
+        ApplyMotifCorrectionRequest request,
+        HttpContext context,
+        SourceMapApplicationService sourceMaps,
+        IMapAssetStore assets,
+        IPeriodicMotifInvestigationService surveyor,
+        HexCrawlService crawls,
+        CampaignProcedureService procedures,
+        CancellationToken cancellationToken)
+    {
+        if (request.ProcedureId.HasValue != request.ProcedureRevision.HasValue
+            || request.ProcedureRevision is <= 0 || request.ProcedureId == Guid.Empty)
+            throw new ArgumentException("Choose a saved procedure and revision together, or neither.");
+        var owner = UserId(context);
+        var world = await crawls.GetOverworldAsync(overworldId, owner, cancellationToken);
+        if (world.Version != request.ExpectedVersion)
+            throw new HexCrawlConcurrencyException(
+                "The world changed while its replacement cells were being reviewed. Reload and check the image again.");
+        if (world.World.HasLegacyHexGrid)
+            throw new NotSupportedException(
+                "The legacy hex world uses its existing image-alignment workflow.");
+        var observed = await InvestigateMotifAsync(overworldId, sourceMapId,
+            context, sourceMaps, assets, surveyor, cancellationToken);
+        if (observed is not Ok<PeriodicMotifInvestigation> analyzed
+            || analyzed.Value is null) return observed;
+
+        var applicable = request.ProcedureId is { } id && request.ProcedureRevision is { } rev
+            ? (await procedures.GetAsync(owner, id, rev, cancellationToken)).Procedure
+            : null;
+        var expeditions = await crawls.ListExpeditionsAsync(
+            overworldId, owner, cancellationToken);
         var assessment = Phase19TilingCompatibility.Assess(
-            stored.World.SpatialTiling, analyzed.Value, procedure, blockers, stored.Version);
-        return Results.Ok(stored.World.HasLegacyHexGrid
-            ? assessment with { Registration = null } : assessment);
+            world.World.SpatialTiling, analyzed.Value, applicable,
+            CorrectionBlockers(world, expeditions), world.Version);
+        if (!assessment.CanCorrectInPlace || assessment.Correction is not
+            { Status: "candidates" } options
+            || !options.Candidates.Any(candidate => candidate.Index == request.CandidateIndex
+                && Phase19RasterRegistration.Equivalent(candidate.Alignment, request.Alignment)))
+            throw new HexCrawlConflictException(
+                "The observed pattern can not safely replace this world's current cells. No changes were made.");
+        var replacement = Phase19RasterRegistration.ConstructReplacement(
+            world.World.SpatialTiling, analyzed.Value)
+            ?? throw new HexCrawlConflictException(
+                "The observed cell pattern no longer has a verified world geometry.");
+        var updated = await sourceMaps.ReplaceUnusedPeriodicWorldAsync(
+            overworldId, sourceMapId, owner, replacement,
+            request.Alignment, request.ExpectedVersion, cancellationToken);
+        return Results.Ok(OverworldContract.From(updated));
     }
 
     private sealed record ApplyMotifRegistrationRequest(
