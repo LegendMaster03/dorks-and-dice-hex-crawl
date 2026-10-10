@@ -133,7 +133,7 @@ The deterministic runtime receives only the context data actually required for t
 
 PostgreSQL remains behind `IHexCrawlStore`; application/domain code has no Npgsql dependency.
 
-The current application PostgreSQL schema is version **9** (see `PostgresSchemaMigrator.CurrentVersion`). Version 8 is upgraded to 9 transactionally; other unsupported historical versions currently fail with a legacy reset-oriented diagnostic. **That existing diagnostic is not the target policy for post-Phase-15 tester data** and must be replaced by actionable, non-destructive recovery guidance during the transition. Do not reset tester databases to resolve unsupported schema versions.
+The current application PostgreSQL schema is version **10**, with procedure schema 1.3 (see `PostgresSchemaMigrator.CurrentVersion`). New databases initialize at schema 10; unsupported older or future schema versions fail without modifying stored user data. Historical 8→9 and 9→10 upgrade code has been retired after the tester-database cutover. Restore of an older backup requires the archived, tested migration implementation. Do not reset tester databases to resolve unsupported schema versions.
 
 The `overworlds` table stores the complete `OverworldDefinition` in `world_json`, including static environment annotations.
 
