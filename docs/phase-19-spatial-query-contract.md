@@ -1,19 +1,24 @@
-# Phase 19 — bounded world cell queries (integration foundation)
+# Phase 19 — world geometry and browser integration status
 
-**Status:** Implemented server and client contracts; generalized Canvas integration, world authoring, and safe correction are not complete.
+**Branch:** `feature/tile-crawl-phase-19`. **Status:** In progress; not an independent-review candidate yet.
 
-## Authority and ownership
+## Authoritative integration completed
 
-The owner-scoped `GET /api/overworlds/{overworldId}/cells/viewport?minX=&minY=&maxX=&maxY=` endpoint resolves the saved world through `HexCrawlService.GetOverworldAsync`, then calls `SpatialTiling.Intersecting` with a 2,500-candidate bound. The four coordinates are world-space, not raster pixels. The return value contains authoritative `WorldCellGeometry` records (qualified cell ID, polygon, centroid). The caller must supply finite, ordered bounds; clients should select suitable zoom levels rather than ask for unbounded world enumeration.
+- Owner-scoped bounded polygon viewport and containment endpoints delegate to saved `PeriodicWorldTiling`; explicit ambiguity is preserved at shared boundaries. The client renders those polygons, never reconstructs an operational tiling in JavaScript. Qualified cells resolve via the backend.
+- The shared `MapSurface` displays polygonal worlds without a source image, handles keyboard center selection, panning, zoom and reset to world origin. Asynchronous selection and viewport requests suppress stale results.
+- The existing topology-neutral current-cell navigator receives Phase 18 atomic interface indexes, polygon geometry, and qualified neighbors. A cell expedition uses the normal expedition URL with Phase 18 advance/course/encounter endpoints and does not invent axial coordinates.
+- Normal world setup offers square and triangular periodic geometry, optional calibration, and an explicit custom JSON route. The backend accepts any valid independently realizable Euclidean periodic symbol, subject to safe domain limits, not a closed shape allowlist.
+- A new saved, editable cell-step campaign procedure can be generated from the existing `simple-fixed-distance` template, pinned to the accepted world topology, with origin/provenance retained; preset definitions and historical revisions are not rewritten. World name updates preserve topology and existing expeditions.
+- Polygonal world authoring supports qualified-cell terrain and environment facts and inspecting locations and spatial features against returned polygon geometry. Map drawing/placement still uses world coordinates, independent of any source image.
+- Source map placement continues to use the existing three-point affine transform. Experimental Surveyor v3 observations are compared *read-only* with the saved world and optional selected pinned procedure. Uncertain status, unsupported patterns, metric gaps, registered source maps, saved expeditions and authored objects are disclosed rather than silently converted.
+- Existing hex/Wonderdraft automatic grid analysis and the v2 client remain intact. Generalized patterns do not enter those hex-only controls.
 
-`GET /api/overworlds/{overworldId}/cells/containing?x=&y=` resolves the saved world through the same authorization path, then calls `SpatialTiling.Containing`. It returns an explicit `NotFound`, `Unique`, or `Ambiguous` classification and qualified candidates. A map selection must not arbitrarily pick one candidate from an ambiguous shared edge or vertex.
+## Authority boundaries and unresolved gates
 
-These are read-only routes and do not alter world topology, registered map images, procedure revisions, or tester data. Existing `Grid`-based routes remain usable during Phase 19.
+The compatibility response currently sets `canCorrectInPlace=false` deliberately. A Surveyor observation is not an accepted geometric realization or a verified map-to-world phase transform. The current store provides versioned single-aggregate writes, but not a transaction spanning a new procedure revision, world topology, and source-map registration while rechecking all dependencies. Exposing the requested one-click conversion before establishing that transaction would risk broken cell identities and tester data.
 
-The client also exposes the existing versioned `GET /api/expeditions/{expeditionId}/cell-topology` contract and a `currentPeriodicCellAdjacency` adapter. The adapter preserves the backend's atomic `InterfaceIndex`, neighbor's `WorldCellId`, endpoints, and selection identity; it fits only presentation coordinates. It neither constructs adjacency from polygon sides nor executes traversal in TypeScript.
+Additional Phase 19 gates remain: independently registered Surveyor-driven metric/phase alignment; approved safe correction for unblocked defaults; a true mixed/rhombille visual and browser-workflow matrix; broader names/geometry-qualified catalog entries and guided unfamiliar-pattern parameter editing; complete generalized route/coverage/knowledge/overlay parity; mobile, keyboard, dark mode, embedded and signed-in tester verification; and explicit test deployment checks. Keep these open rather than marking Phase 19 complete.
 
-## Outstanding integration gates
+## Test and release guidance
 
-The navigator adapter must still be connected to generalized expedition state, and viewport queries must be used by the Canvas renderer and map selection. Browser travel controls must call the Phase 18 cell endpoints with qualified intent rather than hex directions. The import/Surveyor qualification, world/ruleset compatibility preview and atomic correction workflows remain outstanding. Until those gates are implemented and tested, do not describe Phase 19 as complete or expose a generalized expedition browser workflow as supported.
-
-No persistence schema change is made by these query contracts.
+Existing CI exercises frontend compilation/unit tests, .NET domain/application/HTTP integration tests, container build and PostgreSQL workflows. Phase 19 adds image-free creation, owner isolation, pinned cell-step expedition start, polygon selection, qualified environment scopes and mismatch preview tests. Verify the **exact feature-branch head** passes before handing off. No production deployment, tester-data reset, merge or branch cutover is authorized by this document.

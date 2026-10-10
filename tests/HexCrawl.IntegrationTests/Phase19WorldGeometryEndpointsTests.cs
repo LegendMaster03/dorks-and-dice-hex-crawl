@@ -77,6 +77,20 @@ public sealed class Phase19WorldGeometryEndpointsTests
                 Assert.Equal(cell.GetProperty("id").GetProperty("tilingId").GetGuid(),
                     started.GetProperty("expedition").GetProperty("currentCell")
                         .GetProperty("tilingId").GetGuid());
+                // Metadata-only rename must preserve stored traversal and
+                // the underlying world geometry after an expedition exists.
+                using var renamed = await client.PutAsJsonAsync(
+                    $"/api/overworlds/{worldId:D}/name", new
+                    {
+                        name = "Renamed periodic world",
+                        expectedVersion = world.GetProperty("version").GetInt64()
+                    });
+                renamed.EnsureSuccessStatusCode();
+                var renamedWorld = await renamed.Content.ReadFromJsonAsync<JsonElement>();
+                Assert.Equal("Renamed periodic world", renamedWorld.GetProperty("name").GetString());
+                Assert.Equal(JsonValueKind.Null, renamedWorld.GetProperty("grid").ValueKind);
+                Assert.Equal(cell.GetProperty("id").GetProperty("tilingId").GetGuid(),
+                    renamedWorld.GetProperty("tiling").GetProperty("id").GetGuid());
             }
 
             using (var otherHost = TestWebHost.Create(database, "bob"))
