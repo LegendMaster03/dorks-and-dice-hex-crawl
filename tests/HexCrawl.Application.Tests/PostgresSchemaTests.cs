@@ -105,7 +105,7 @@ public sealed class PostgresSchemaTests
         verify.Parameters.AddWithValue("id", procedureId);
         await using var reader = await verify.ExecuteReaderAsync();
         Assert.True(await reader.ReadAsync());
-        Assert.Equal(oldVersion, reader.GetInt64(0));
+        Assert.Equal((long)oldVersion, reader.GetInt64(0));
         Assert.Equal(1L, reader.GetInt64(1));
     }
 
