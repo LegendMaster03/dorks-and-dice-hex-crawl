@@ -401,6 +401,107 @@ public sealed class Phase18CellWatchRuntimeTests
         Assert.Single(resumed.Expedition.History, e => e.Kind == CrawlRuntimeEventKind.EncounterTriggered);
     }
 
+    [Theory]
+    [InlineData(TravelResolutionMode.CellSteps, true)]
+    [InlineData(TravelResolutionMode.CellSteps, false)]
+    [InlineData(TravelResolutionMode.ContinuousDistance, true)]
+    [InlineData(TravelResolutionMode.ContinuousDistance, false)]
+    public void TerminalLostBoundaryStillTriggersScheduledEncounterOnceAfterRecognition(
+        TravelResolutionMode movementMode, bool reorient)
+    {
+        var (world, procedure, initial, plan) = Setup(
+            "<1:1,1,1:4,4>", calibrated: true, advanced: true, mode: movementMode);
+        const double veerDegrees = 30d;
+        var radians = veerDegrees * Math.PI / 180;
+        var rotated = new WorldPoint(
+            plan.IntendedHeading.X * Math.Cos(radians) - plan.IntendedHeading.Y * Math.Sin(radians),
+            plan.IntendedHeading.X * Math.Sin(radians) + plan.IntendedHeading.Y * Math.Cos(radians));
+        var crossing = PeriodicCellTraversalGeometry.NextCrossing(world,
+            initial.Traversal with { TravelHeading = rotated });
+        Assert.Equal(CellCrossingStatus.Crosses, crossing.Status);
+        var manual = new ResolutionProvenance(ResolutionSource.ManualRoll);
+        ResolvedTravelAmount travel = movementMode == TravelResolutionMode.CellSteps
+            ? ResolvedTravelAmount.CellTransitions(1, manual)
+            : ResolvedTravelAmount.Distance(
+                world.MeasurePhysicalDistance(initial.Traversal.Position, crossing.Point!.Value),
+                world.MeasurePhysicalDistance(initial.Traversal.Position, crossing.Point!.Value),
+                manual);
+        var duration = GenericProcedureRuntime.Bind(procedure).Time.IntervalDuration;
+        var scheduled = new ResolvedEncounter(
+            EncounterOutcomeKind.WanderingEncounter, duration, null,
+            "Terminal encounter", manual);
+        var engine = new CrawlRuntimeEngine();
+        var interrupted = engine.AdvanceCellWatch(
+            world, procedure, initial, plan,
+            new CellWatchAdvanceInputs(
+                travel, new ResolvedCellNavigation(
+                    NavigationCheckOutcome.Failed, veerDegrees, manual), scheduled));
+        Assert.Equal(RuntimePauseReason.LostRecognitionRequired, interrupted.PauseReason);
+        Assert.Equal(TimeSpan.Zero, interrupted.RemainingWatchTime);
+        Assert.Equal(duration, interrupted.Expedition.ElapsedTravelTime);
+        Assert.NotNull(interrupted.Expedition.ActiveWatch);
+        Assert.False(interrupted.Expedition.ActiveWatch!.EncounterHandled);
+        Assert.Null(interrupted.Expedition.PendingEncounter);
+        Assert.DoesNotContain(interrupted.Events, e =>
+            e.Kind == CrawlRuntimeEventKind.EncounterTriggered);
+
+        // Simulate restart from a persisted runtime snapshot at the exact
+        // zero-remaining pause (no requested movement may be replayed).
+        var restored = JsonSerializer.Deserialize<CellExpeditionState>(
+            JsonSerializer.Serialize(interrupted.Expedition))!;
+        restored.Validate(world);
+        var recognized = engine.AdvanceCellWatch(
+            world, procedure, restored, plan,
+            new CellWatchAdvanceInputs(
+                movementMode == TravelResolutionMode.CellSteps
+                    ? ResolvedTravelAmount.CellTransitions(0, manual)
+                    : ResolvedTravelAmount.Distance(
+                        new DistanceMeasure(0, DistanceUnit.Miles),
+                        new DistanceMeasure(0, DistanceUnit.Miles), manual),
+                BoundaryDecision: new BoundaryNavigationDecision(
+                    reorient, reorient, manual)));
+        Assert.Equal(RuntimePauseReason.EncounterTriggered, recognized.PauseReason);
+        Assert.Equal(TimeSpan.Zero, recognized.RemainingWatchTime);
+        Assert.Equal(duration, recognized.Expedition.ElapsedTravelTime);
+        Assert.Equal(!reorient, recognized.Expedition.IsLost);
+        var pending = Assert.IsType<PendingEncounterOccurrence>(
+            recognized.Expedition.PendingEncounter);
+        Assert.Equal(recognized.Expedition.Traversal.CurrentCell, pending.Cell);
+        Assert.Null(pending.Hex);
+        var triggered = Assert.Single(recognized.Events,
+            e => e.Kind == CrawlRuntimeEventKind.EncounterTriggered);
+        Assert.Equal(pending.Id, triggered.EncounterOccurrenceId);
+        Assert.Equal(duration, triggered.ExpeditionElapsedTime);
+        Assert.Equal(pending.Cell, triggered.Cell);
+        Assert.Throws<InvalidOperationException>(() =>
+            engine.AdvanceCellWatch(world, procedure, recognized.Expedition, plan,
+                new CellWatchAdvanceInputs(travel)));
+        var resolved = engine.ResolveCellEncounter(
+            recognized.Expedition, pending.Id, "resolved");
+        Assert.Equal(pending.Id, Assert.Single(resolved.Events,
+            e => e.Kind == CrawlRuntimeEventKind.EncounterResolved).EncounterOccurrenceId);
+        var completed = engine.AdvanceCellWatch(
+            world, procedure, resolved.Expedition, plan,
+            new CellWatchAdvanceInputs(
+                movementMode == TravelResolutionMode.CellSteps
+                    ? ResolvedTravelAmount.CellTransitions(0, manual)
+                    : ResolvedTravelAmount.Distance(
+                        new DistanceMeasure(0, DistanceUnit.Miles),
+                        new DistanceMeasure(0, DistanceUnit.Miles), manual)));
+        Assert.Null(completed.PauseReason);
+        Assert.Equal(1, completed.Expedition.CompletedWatches);
+        Assert.Null(completed.Expedition.ActiveWatch);
+        Assert.Equal(duration, completed.Expedition.ElapsedTravelTime);
+        Assert.Single(completed.Expedition.History,
+            e => e.Kind == CrawlRuntimeEventKind.EncounterTriggered);
+        Assert.Single(completed.Expedition.History,
+            e => e.Kind == CrawlRuntimeEventKind.EncounterResolved);
+        Assert.Single(completed.Expedition.History,
+            e => e.Kind == CrawlRuntimeEventKind.WatchCompleted);
+        Assert.Equal(completed.Expedition.History.Count,
+            completed.Expedition.History.Select(e => e.Sequence).Distinct().Count());
+    }
+
     private static CellWatchAdvanceInputs Inputs(int steps) => new(
         ResolvedTravelAmount.CellTransitions(steps, Manual),
         new ResolvedCellNavigation(NavigationCheckOutcome.Succeeded, null, Manual),
