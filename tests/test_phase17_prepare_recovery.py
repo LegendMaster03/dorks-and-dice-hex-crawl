@@ -55,7 +55,7 @@ class Phase17PrepareRecoveryTests(unittest.TestCase):
                 if "pg_restore" in args:
                     self.assertIn("--clean", args)
                     self.assertIn("--if-exists", args)
-                    self.assertEqual("isolated", args[2] if len(args) > 3 else "")
+                    self.assertTrue(args[2].startswith("hex-crawl-phase17-restore-isolated-"))
                     kwargs["stderr"].write(b'pg_restore: error: schema "public" already exists')
                     raise RuntimeError("Docker exec/pg_restore failed (exit 1)")
                 return subprocess.CompletedProcess(args, 0, b"")
