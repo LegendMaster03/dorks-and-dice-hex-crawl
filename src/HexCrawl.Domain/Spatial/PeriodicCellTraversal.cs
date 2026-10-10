@@ -44,7 +44,7 @@ public sealed record PeriodicCellTraversal
             throw new InvalidOperationException("Selected exit interface is not present on the current cell.");
         if (TravelHeading is { } heading
             && (!double.IsFinite(heading.X) || !double.IsFinite(heading.Y)
-                || Length(heading) <= 0))
+                || (heading.X == 0 && heading.Y == 0)))
             throw new InvalidOperationException("Travel heading must be finite and nonzero.");
     }
 }
