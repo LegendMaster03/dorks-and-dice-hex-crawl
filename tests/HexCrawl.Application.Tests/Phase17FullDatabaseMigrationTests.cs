@@ -108,7 +108,11 @@ public sealed class Phase17FullDatabaseMigrationTests
         Assert.Equal(grid, loaded!.World.Grid);
         Assert.Equal(world.Id, loaded.World.Id);
         Assert.Equal(grid.Id, loaded.World.SpatialTiling.Id);
-        Assert.Equal(map, Assert.Single(loaded.World.SourceMaps));
+        var persistedMap = Assert.Single(loaded.World.SourceMaps);
+        Assert.Equal(map.Id, persistedMap.Id);
+        Assert.Equal(map.AssetKey, persistedMap.AssetKey);
+        Assert.Equal(map.Alignment, persistedMap.Alignment);
+        Assert.Equal(map.WorldCoverageBoundary, persistedMap.WorldCoverageBoundary);
         Assert.Equal(feature.Id, Assert.Single(loaded.World.Features).Id);
         Assert.Equal(3, loaded.Version);
         Assert.Equal(new WorldCellId(grid.Id, LegacyHexTilingCompatibility.ToAddress(coordinate)),
