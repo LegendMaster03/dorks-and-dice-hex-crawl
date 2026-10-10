@@ -41,11 +41,23 @@ SELECT
 
 
 def docker(*args, stdout=None, stdin=None):
-    # Docker, PostgreSQL and restore diagnostics could contain private values.
-    # Fail closed while redacting subprocess stderr from public Actions logs.
-    return subprocess.run(["docker", *args], check=True, stdin=stdin,
-                          stdout=stdout if stdout is not None else subprocess.PIPE,
-                          stderr=subprocess.DEVNULL)
+    # Never send Docker's raw stderr, database content, or environment to
+    # public Actions logs. The *operation name* is safe to disclose and
+    # identifies which phase of recovery preparation needs an operator fix.
+    action = args[0] if args else "unknown"
+    command = args[2] if action == "exec" and len(args) > 2 else ""
+    if action == "exec" and len(args) > 3 and args[2] == "-i":
+        command = args[3]
+    safe_action = action if action in ("inspect", "stop", "start", "cp", "run", "rm") else "other"
+    safe_command = command if command in ("psql", "pg_dump", "pg_restore", "pg_isready") else ""
+    try:
+        return subprocess.run(["docker", *args], check=True, stdin=stdin,
+                              stdout=stdout if stdout is not None else subprocess.PIPE,
+                              stderr=subprocess.DEVNULL)
+    except subprocess.CalledProcessError as failure:
+        raise RuntimeError(
+            "Docker " + safe_action + ("/" + safe_command if safe_command else "")
+            + " failed (exit " + str(failure.returncode) + ")") from None
 
 
 def inventory(container):
@@ -243,6 +255,7 @@ if __name__ == "__main__":
         main()
     except (Exception, KeyboardInterrupt) as error:
         # No credentials, dump content, or saved data is printed.
-        print("Phase 17 backup/recovery preflight failed: " + type(error).__name__
+        detail = str(error) if isinstance(error, RuntimeError) else type(error).__name__
+        print("Phase 17 backup/recovery preflight failed: " + detail
               + ". Existing database was not modified.", file=sys.stderr)
         sys.exit(1)
