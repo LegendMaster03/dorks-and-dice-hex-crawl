@@ -228,7 +228,7 @@ export class CanvasMapRenderer {
     }
 
     private drawGrid(ctx: CanvasRenderingContext2D, world: DemoWorld, width: number, height: number): void {
-        if (!this.gridPreview && world.tiling) {
+        if (!this.gridPreview && world.tiling && !world.grid) {
             ctx.save();
             ctx.strokeStyle = "rgba(52, 67, 55, .38)";
             ctx.lineWidth = 1;
@@ -348,7 +348,7 @@ export class CanvasMapRenderer {
     }
 
     private drawSelection(ctx: CanvasRenderingContext2D, world: DemoWorld, width: number, height: number): void {
-        if (this.selectedWorldCell && world.tiling) {
+        if (this.selectedWorldCell && world.tiling && !world.grid) {
             const cell = this.selectedWorldCell;
             if (cell.id.tilingId !== world.tiling.id || cell.polygon.length < 3) return;
             const points = cell.polygon.map(point => this.toScreen(point, width, height));

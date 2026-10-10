@@ -171,7 +171,7 @@ export class MapSurface {
 
     private loadVisibleCells(): void {
         const world = this.getWorld();
-        if (!world?.tiling || !this.api) return;
+        if (!world?.tiling || world.grid || !this.api) return;
         const width = this.canvas.clientWidth;
         const height = this.canvas.clientHeight;
         if (!(width > 0 && height > 0) || !Number.isFinite(this.viewport.zoom)) return;
@@ -256,7 +256,7 @@ export class MapSurface {
 
         const world = this.getWorld();
         if (world) {
-            if (world.tiling && !this.renderer.gridPreview && this.api) {
+            if (world.tiling && !world.grid && !this.renderer.gridPreview && this.api) {
                 void this.activateWorldCell(world.id, world.tiling.id, point);
                 return;
             }
