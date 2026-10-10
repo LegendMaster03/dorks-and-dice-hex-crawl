@@ -58,6 +58,19 @@ export function sourceMapAssetUrl(worldId: string, sourceMapId: string): string 
     return `${activeBackendBaseUrl}/api/overworlds/${encodeURIComponent(worldId)}/source-maps/${encodeURIComponent(sourceMapId)}/asset`;
 }
 
+export type SourceMapCompatibilityAssessment = {
+    status: "unsupported" | "inconclusive" | "mismatch" | "structure-match";
+    worldShape: string;
+    observedShape: string | null;
+    procedureShape: string | null;
+    explanation: string;
+    worldComparison: string | null;
+    procedureComparison: string | null;
+    worldVersion: number;
+    blockers: string[];
+    canCorrectInPlace: boolean;
+};
+
 export type CreateOverworldInput = {
     name: string;
     orientation: HexOrientation;
@@ -384,6 +397,19 @@ export class HexCrawlApi {
 
     public deleteSourceMap(worldId: string, sourceMapId: string, expectedVersion: number): Promise<Overworld> {
         return this.deleteJson(`/api/overworlds/${encodeURIComponent(worldId)}/source-maps/${encodeURIComponent(sourceMapId)}?expectedVersion=${expectedVersion}`, "Delete source map");
+    }
+
+    public assessSourceMapCompatibility(
+        worldId: string, sourceMapId: string,
+        procedure?: { id: string; revision: number }
+    ): Promise<SourceMapCompatibilityAssessment> {
+        const query = procedure
+            ? "?" + new URLSearchParams({
+                procedureId: procedure.id, procedureRevision: String(procedure.revision)
+            }).toString() : "";
+        return this.sendJson("POST",
+            `/api/overworlds/${encodeURIComponent(worldId)}/source-maps/${encodeURIComponent(sourceMapId)}/motif-compatibility${query}`,
+            {}, "Map pattern compatibility");
     }
 
     public sourceMapAssetUrl(worldId: string, sourceMapId: string): string {
