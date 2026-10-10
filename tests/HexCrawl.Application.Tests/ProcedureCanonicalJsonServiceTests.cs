@@ -145,14 +145,18 @@ public sealed class ProcedureCanonicalJsonServiceTests
         previousVersion["tilingGjhNotation"] = "6/m30/r(h1)";
         var previousResult = canonical.Validate(previousVersion.ToJsonString());
         Assert.True(previousResult.IsValid, previousResult.Error);
-        Assert.Equal("1.2", previousResult.Procedure!.SchemaVersion);
+        Assert.Equal("1.3", previousResult.Procedure!.SchemaVersion);
         Assert.Equal(CampaignProcedureSchema.CurrentHexTilingDsSymbol, previousResult.Procedure.TilingDsSymbol);
         Assert.DoesNotContain("tilingGjhNotation", canonical.Serialize(previousResult.Procedure));
 
-        var unsupported = current with { TilingDsSymbol = "<1:1,1,1:4,4>" };
+        var supported = current with { TilingDsSymbol = "<1:1,1,1:4,4>" };
+        var supportedResult = canonical.Validate(canonical.Serialize(supported));
+        Assert.True(supportedResult.IsValid, supportedResult.Error);
+
+        var unsupported = current with { TilingDsSymbol = "<1:1,1,1:3,3>" };
         var unsupportedResult = canonical.Validate(canonical.Serialize(unsupported));
         Assert.False(unsupportedResult.IsValid);
-        Assert.Contains("not supported", unsupportedResult.Error, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Euclidean", unsupportedResult.Error, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

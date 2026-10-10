@@ -60,7 +60,7 @@ public sealed class PostgresSchemaTests
         await using var versionCommand = connection.CreateCommand();
         versionCommand.CommandText = "SELECT MAX(version) FROM hex_crawl_schema_migrations;";
         Assert.Equal(PostgresSchemaMigrator.CurrentVersion, Convert.ToInt32(await versionCommand.ExecuteScalarAsync()));
-        Assert.Equal(9, PostgresSchemaMigrator.CurrentVersion);
+        Assert.Equal(10, PostgresSchemaMigrator.CurrentVersion);
     }
 
     [Fact]
@@ -74,7 +74,7 @@ public sealed class PostgresSchemaTests
         await using (var seed = connection.CreateCommand())
         {
             seed.CommandText = """
-                UPDATE hex_crawl_schema_migrations SET version = 8 WHERE version = 9;
+                UPDATE hex_crawl_schema_migrations SET version = 8 WHERE version = 10;
                 INSERT INTO campaign_procedure_revisions(
                     procedure_id, revision, owner_user_id, procedure_json, created_at)
                 VALUES (
@@ -116,7 +116,7 @@ public sealed class PostgresSchemaTests
         {
             using var document = System.Text.Json.JsonDocument.Parse(reader.GetString(0));
             var root = document.RootElement;
-            Assert.Equal("1.2", root.GetProperty("schemaVersion").GetString());
+            Assert.Equal("1.3", root.GetProperty("schemaVersion").GetString());
             Assert.Equal("<1:1,1,1:6,3>", root.GetProperty("tilingDsSymbol").GetString());
             Assert.False(root.TryGetProperty("tilingGjhNotation", out _));
             examined++;
@@ -137,7 +137,7 @@ public sealed class PostgresSchemaTests
         await using (var seed = connection.CreateCommand())
         {
             seed.CommandText = """
-                UPDATE hex_crawl_schema_migrations SET version = 7 WHERE version = 9;
+                UPDATE hex_crawl_schema_migrations SET version = 7 WHERE version = 10;
                 INSERT INTO campaign_procedure_revisions
                     (procedure_id, revision, owner_user_id, procedure_json, created_at)
                 VALUES (@id, 1, 'preservation-test',

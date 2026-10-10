@@ -1,6 +1,6 @@
 # Phase 17 — world authority and persistence contract
 
-**Status:** implementation on `feature/tile-crawl-phase-17`; release acceptance requires CI, an isolated pre-upgrade PostgreSQL rehearsal, recovery verification, and independent WorkChat review. No shared tester data has been migrated by this branch.
+**Status:** full transactional upgrade implementation on `feature/tile-crawl-phase-17`; release acceptance requires CI, an isolated pre-upgrade PostgreSQL rehearsal, recovery verification, and independent WorkChat review. No shared tester data has been migrated by this branch.
 
 ## Authority and identity
 
@@ -22,13 +22,13 @@ Existing `HexGridDefinition.Id` and `OverworldDefinition.Id` are retained. A leg
 
 ## Persistence inventory and representation
 
-Relational schema stays at **9**: no new columns, index changes, or destructive SQL migrations are required for the additive world JSON format. The existing transaction advisory lock and optimistic aggregate version checks remain unchanged.
+PostgreSQL schema increments from **9 to 10** (with existing verified 8→9 support), and procedure schema increments from **1.2 to 1.3**. No additional relational columns are required. A locked, transactional **full-database conversion** adds the validated periodic tiling to every existing world snapshot, preserving each legacy grid as a read-only-compatible projection. All stored campaign procedure revisions and expedition-pinned procedure snapshots advance to schema 1.3 without changing their IDs, revision numbers or D-symbol identity. The existing advisory lock and optimistic aggregate version checks remain unchanged.
 
 | Existing owner/field | Phase 17 behavior |
 | --- | --- |
 | `overworlds.id/owner_user_id/version/timestamps` | Unchanged; owner isolation and optimistic concurrency retained |
-| `world_json.id/name/grid` | Legacy **format 1** read unchanged; old grid ID/pose remain authoritative historical input |
-| `world_json.formatVersion/tiling` | **Format 2** carries validated generalized tiling; format 2 requires tiling and no legacy Grid |
+| `world_json.id/name/grid` | Existing **format 1** converted transactionally to format 2; old grid ID/pose retained and checked against new authoritative tiling |
+| `world_json.formatVersion/tiling` | **Format 2** carries validated generalized tiling; optional retained Grid is a verified legacy adapter for hex clients |
 | `world_json.features/locations/sourceMaps` | Unchanged, including all identities, geometry, transforms, raster asset keys |
 | `world_json.environmentAnnotations` | Existing world/hex/feature scopes preserved; additive qualified cell scope |
 | `expeditions.context_json/state_json` | Unchanged, including current hex, directional state and partial progress |
@@ -38,9 +38,11 @@ Relational schema stays at **9**: no new columns, index changes, or destructive 
 | `expedition_events` | Unchanged sequence and payloads; no event replay/renumbering |
 | External filesystem map assets | Untouched; asset storage and map IDs remain separate from PostgreSQL |
 
-**Upgrade strategy:** schema 9 format-1 legacy snapshots are read as-is and lazily projected into validated periodic geometry. Generalized worlds are written as format 2 and validated on every store admission/reload. Existing format-1 worlds are not batch-converted or rewritten at application startup. This no-write path is idempotent and interruption-safe. Unsupported format versions, malformed witnesses and unknown top-level world JSON properties fail closed with the original record still present for repair. Existing tester world/expedition IDs and aggregate versions do not increment merely because newer code reads them.
+**Upgrade strategy:** before accepting normal requests, the schema 9→10 migration locks the database, inspects every world, validates its prior grid, constructs its exact polygonal geometry, and writes both a format-2 marker and the periodic witness using JSONB updates that retain every unrelated field. A malformed world, unsupported snapshot version, mismatched existing topology, or unexpected pinned-procedure schema aborts **the entire transaction**, leaving all records on schema 9. The migration upgrades every stored procedure schemaVersion 1.2 to 1.3 in `campaign_procedure_revisions` and `expeditions`, with `tilingDsSymbol` unchanged. The transaction records schema 10 only after all conversions succeed. A repeat invocation is a no-op. Existing world and expedition aggregate versions, ownership, timestamps and event sequences do not change solely due to schema migration.
 
-**Old/new application coexistence:** previous code remains able to open legacy format-1 hex worlds. The previous code must **not** be expected to open new format-2 generalized worlds; these are feature-gated from ordinary authoring pending Phase 18/19. Do not introduce format-2 records into a database that must roll back to pre-Phase-17 code without a controlled restore/migration plan. Procedure revisions and nonspatial sessions are not changed. If legacy worlds are later permanently migrated to format 2, implement a separate explicit, reversible conversion that preserves legacy IDs, stored grid parameters and history; do not silently rewrite historical data.
+New hex worlds also serialize the generalized tiling plus legacy grid projection, and newly authored nonhex worlds serialize only the tiling. Format-2 snapshots with a legacy grid must pass cross-checks confirming identical physical cell locations and topology, so there is only one authoritative geometry.
+
+**Old/new application coexistence:** schema 9 applications reject schema 10 during startup, so the deploy requires a controlled single-writer cutover. If startup or postdeploy acceptance fails, restore the verified schema-9 PostgreSQL and matching map-asset backup before starting the previous application; the previous image alone is not a viable schema-10 rollback. Never attempt mixed writes from both versions.
 
 ## Operational preflight and recovery (release gates)
 
