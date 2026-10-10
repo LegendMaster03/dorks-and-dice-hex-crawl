@@ -253,7 +253,7 @@ public sealed class Phase17FullDatabaseMigrationTests
             downgrade.CommandText = """
                 UPDATE overworlds SET world_json = jsonb_set(
                     world_json - 'formatVersion' - 'tiling', '{futureSemanticField}',
-                    '\"must-not-be-dropped\"'::jsonb) WHERE id = @id;
+                    '"must-not-be-dropped"'::jsonb) WHERE id = @id;
                 UPDATE hex_crawl_schema_migrations SET version = 9 WHERE version = 10;
                 """;
             downgrade.Parameters.AddWithValue("id", world.Id);
