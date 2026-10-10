@@ -63,65 +63,50 @@ public sealed class PostgresSchemaTests
         Assert.Equal(10, PostgresSchemaMigrator.CurrentVersion);
     }
 
-    [Fact]
-    public async Task VersionEightUpgradeRewritesStoredProceduresWithoutKeepingLegacyNotation()
+    [Theory]
+    [InlineData(8)]
+    [InlineData(9)]
+    [InlineData(11)]
+    public async Task RetiredOrFutureSchemaVersionsFailClosedWithoutChangingExistingRecords(int oldVersion)
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = new PostgresHexCrawlStore(database.ConnectionString);
         await store.InitializeAsync();
+
+        var procedureId = Guid.NewGuid();
         await using var connection = new NpgsqlConnection(database.ConnectionString);
         await connection.OpenAsync();
         await using (var seed = connection.CreateCommand())
         {
             seed.CommandText = """
-                UPDATE hex_crawl_schema_migrations SET version = 8 WHERE version = 10;
-                INSERT INTO campaign_procedure_revisions(
-                    procedure_id, revision, owner_user_id, procedure_json, created_at)
-                VALUES (
-                    @procedureId, 1, 'migration-test',
-                    '{"schemaVersion":"1.1","tilingGjhNotation":"6/m30/r(h1)","keep":"value"}'::jsonb,
-                    now());
-                INSERT INTO expeditions(
-                    id, context_json, owner_user_id, name, state_json,
-                    party_json, environment_json, effects_json, resources_json,
-                    survival_json, journey_state_json, generated_resolutions_json,
-                    procedure_json, remaining_watch_ticks, version, created_at, updated_at)
-                VALUES (
-                    @expeditionId, '{}'::jsonb, 'migration-test', 'Legacy test',
-                    '{}'::jsonb, '{}'::jsonb, '{}'::jsonb, '{}'::jsonb, '{}'::jsonb,
-                    '{}'::jsonb, '{}'::jsonb, '[]'::jsonb,
-                    '{"schemaVersion":"1.1","tilingGjhNotation":"6/m30/r(h1)"}'::jsonb,
-                    0, 1, now(), now());
+                UPDATE hex_crawl_schema_migrations SET version = @oldVersion WHERE version = 10;
+                INSERT INTO campaign_procedure_revisions
+                    (procedure_id, revision, owner_user_id, procedure_json, created_at)
+                VALUES (@id, 1, 'preservation-test',
+                    '{"schemaVersion":"1.2","tilingDsSymbol":"<1:1,1,1:6,3>"}'::jsonb, now());
                 """;
-            seed.Parameters.AddWithValue("procedureId", Guid.NewGuid());
-            seed.Parameters.AddWithValue("expeditionId", Guid.NewGuid());
+            seed.Parameters.AddWithValue("oldVersion", oldVersion);
+            seed.Parameters.AddWithValue("id", procedureId);
             await seed.ExecuteNonQueryAsync();
         }
 
         var migrator = new PostgresSchemaMigrator(database.ConnectionString);
-        await migrator.MigrateAsync();
-        await migrator.MigrateAsync();
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => migrator.MigrateAsync());
+        Assert.Contains("existing database has been preserved", failure.Message,
+            StringComparison.OrdinalIgnoreCase);
 
-        await using var check = connection.CreateCommand();
-        check.CommandText = """
-            SELECT procedure_json::text
-            FROM campaign_procedure_revisions
-            UNION ALL
-            SELECT procedure_json::text
-            FROM expeditions;
+        await using var verify = connection.CreateCommand();
+        verify.CommandText = """
+            SELECT (SELECT max(version) FROM hex_crawl_schema_migrations),
+                (SELECT count(*) FROM campaign_procedure_revisions
+                 WHERE procedure_id = @id AND revision = 1
+                 AND procedure_json->>'schemaVersion' = '1.2');
             """;
-        await using var reader = await check.ExecuteReaderAsync();
-        var examined = 0;
-        while (await reader.ReadAsync())
-        {
-            using var document = System.Text.Json.JsonDocument.Parse(reader.GetString(0));
-            var root = document.RootElement;
-            Assert.Equal("1.3", root.GetProperty("schemaVersion").GetString());
-            Assert.Equal("<1:1,1,1:6,3>", root.GetProperty("tilingDsSymbol").GetString());
-            Assert.False(root.TryGetProperty("tilingGjhNotation", out _));
-            examined++;
-        }
-        Assert.Equal(2, examined);
+        verify.Parameters.AddWithValue("id", procedureId);
+        await using var reader = await verify.ExecuteReaderAsync();
+        Assert.True(await reader.ReadAsync());
+        Assert.Equal(oldVersion, reader.GetInt64(0));
+        Assert.Equal(1L, reader.GetInt64(1));
     }
 
     [Fact]
