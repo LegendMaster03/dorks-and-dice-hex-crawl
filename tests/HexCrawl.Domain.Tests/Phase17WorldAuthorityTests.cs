@@ -190,32 +190,46 @@ public sealed class Phase17WorldAuthorityTests
     }
 
     [Theory]
-    [InlineData("<1:1,1,1:3,6>", 2e-6)]
-    [InlineData("<1:1,1,1:3,6>", 1)]
-    [InlineData("<10:2 5 4 6 7 8 10,1 4 6 5 9 10,3 5 7 8 9 10:3 3 4,5 5>", 2e-6)]
+    [InlineData("<1:1,1,1:3,6>", 2e-6, false)]
+    [InlineData("<1:1,1,1:3,6>", 2e-6, true)]
+    [InlineData("<1:1,1,1:3,6>", 1, false)]
+    [InlineData("<10:2 5 4 6 7 8 10,1 4 6 5 9 10,3 5 7 8 9 10:3 3 4,5 5>", 2e-6, false)]
     public void SmallAndOrdinaryCellCentersAreUniqueButSharedEdgesAreAmbiguous(
-        string symbol, double scale)
+        string symbol, double scale, bool rotate)
     {
         var generated = DelaneyDressHarmonicMetricRealization.Construct(symbol, scale, "world-unit");
         Assert.Equal("realized", generated.Status);
+        var metric = generated.Realization!;
+        if (rotate)
+        {
+            static TilingWorldPoint QuarterTurn(TilingWorldPoint p) => new(-p.Y, p.X);
+            metric = metric with
+            {
+                TranslationU = QuarterTurn(metric.TranslationU),
+                TranslationV = QuarterTurn(metric.TranslationV),
+                Polygons = metric.Polygons.ToDictionary(x => x.Key,
+                    x => (IReadOnlyList<TilingWorldPoint>)x.Value.Select(QuarterTurn).ToArray())
+            };
+        }
         var tiling = new PeriodicWorldTiling(Guid.NewGuid(), generated.Topology!,
-            generated.Realization!, new WorldPoint(12, -7));
+            metric, new WorldPoint(12, -7));
         tiling.Validate();
         foreach (var cell in tiling.Topology.MotifCells)
-        {
-            var address = new PeriodicCellAddress(cell.Id, new(0, 0));
-            var geometry = tiling.Resolve(address);
-            var lookup = tiling.Containing(geometry.Center);
-            Assert.Equal(WorldCellLookupStatus.Unique, lookup.Status);
-            Assert.Equal(geometry.Id, Assert.Single(lookup.Candidates));
-            var edge = tiling.Boundaries(address)[0];
-            var midpoint = new WorldPoint(
-                (edge.Start.X + edge.End.X) / 2, (edge.Start.Y + edge.End.Y) / 2);
-            var edgeLookup = tiling.Containing(midpoint);
-            Assert.Equal(WorldCellLookupStatus.Ambiguous, edgeLookup.Status);
-            Assert.Contains(edge.From, edgeLookup.Candidates);
-            Assert.Contains(edge.To, edgeLookup.Candidates);
-        }
+            foreach (var translation in new[] { new LatticeDisplacement(0, 0), new LatticeDisplacement(-7, 11) })
+            {
+                var address = new PeriodicCellAddress(cell.Id, translation);
+                var geometry = tiling.Resolve(address);
+                var lookup = tiling.Containing(geometry.Center);
+                Assert.Equal(WorldCellLookupStatus.Unique, lookup.Status);
+                Assert.Equal(geometry.Id, Assert.Single(lookup.Candidates));
+                var edge = tiling.Boundaries(address)[0];
+                var midpoint = new WorldPoint(
+                    (edge.Start.X + edge.End.X) / 2, (edge.Start.Y + edge.End.Y) / 2);
+                var edgeLookup = tiling.Containing(midpoint);
+                Assert.Equal(WorldCellLookupStatus.Ambiguous, edgeLookup.Status);
+                Assert.Contains(edge.From, edgeLookup.Candidates);
+                Assert.Contains(edge.To, edgeLookup.Candidates);
+            }
     }
 
     [Fact]
