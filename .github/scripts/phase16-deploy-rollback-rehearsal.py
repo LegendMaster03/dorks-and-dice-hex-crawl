@@ -4,6 +4,7 @@ import argparse
 import os
 from pathlib import Path
 import re
+import shutil
 import socket
 import subprocess
 import tempfile
@@ -103,23 +104,35 @@ def main(workflow, service):
     assert "steps.previous_image.outputs.available == 'true'" in yaml
     assert "$" + "{DEPLOY_ENV_FILE:-" in steps["preflight"]
     assert " config >/dev/null" in steps["preflight"]
+    assert "phase16-deployment-config.py verify" in steps["preflight"]
     assert "$" + "{DEPLOY_ENV_FILE:-" in steps["deploy"]
     assert "$" + "{DEPLOY_ENV_FILE:-" in steps["restore"]
 
     with tempfile.TemporaryDirectory(prefix="phase16-rollback-") as tmp:
         root = Path(tmp)
+        helper = workflow.resolve().parents[1] / "scripts" / "phase16-deployment-config.py"
+        (root / ".github" / "scripts").mkdir(parents=True)
+        shutil.copyfile(helper, root / ".github" / "scripts" / helper.name)
+        snapshots = []
         (root / "docker-compose.yml").write_text(
             f"services:\n  {service}:\n    image: {service}:latest\n"
             f"    container_name: {service}\n    restart: unless-stopped\n"
+            "    environment:\n      PHASE16_SENTINEL: \"${PHASE16_SENTINEL:-valid}\"\n"
             "    volumes:\n      - data:/data\n"
             "    networks:\n      - dorks-and-dice-backend\n"
             "volumes:\n  data:\n"
             "networks:\n  dorks-and-dice-backend:\n    external: true\n")
         env_file = root / ".env"
-        env_file.write_text("CI_DISPOSABLE=true\n")
+        env_file.write_text("PHASE16_SENTINEL=valid\n")
         output = root / "step-output"
         env = dict(os.environ, DEPLOY_ENV_FILE=str(env_file),
                    DEPLOY_HEALTH_ATTEMPTS="3", GITHUB_OUTPUT=str(output))
+        def captured():
+            fields = captured()
+            if "snapshot_dir" in fields:
+                env["DEPLOY_SNAPSHOT_DIR"] = fields["snapshot_dir"]
+                snapshots.append(fields["snapshot_dir"])
+            return fields
         compose = ["docker", "compose", "--project-name", service,
                    "--env-file", str(env_file), "-f", "docker-compose.yml"]
         command(["docker", "network", "create", "dorks-and-dice-backend"])
@@ -131,11 +144,18 @@ def main(workflow, service):
             original = image_id(service)
             preserved(service, original)
 
-            # A missing/invalid configuration must fail before image build
-            # and must not trigger the restore step or disturb a healthy service.
+            # Capture the *actual* running configuration before production
+            # preflight; never use an untrusted new host config for rollback.
+            initial = captured()
+            assert initial["available"] == "true" and initial["image"] == original
             run(steps["preflight"], root, env)
             missing_env = dict(env, DEPLOY_ENV_FILE=str(root / "missing.env"))
             run(steps["preflight"], root, missing_env, expected_success=False)
+            env_file.write_text("PHASE16_SENTINEL=invalid\n")
+            run(steps["preflight"], root, env, expected_success=False)
+            preserved(service, original)
+            env_file.write_text("PHASE16_SENTINEL=valid\n")
+            print(f"{service}: app-invalid deployment config fails before replacement PASS", flush=True)
             preserved(service, original)
             assert command(
                 ["docker", "image", "inspect", "--format", "{{.Id}}",
@@ -143,9 +163,7 @@ def main(workflow, service):
             print(f"{service}: failed Compose preflight preserves running service PASS", flush=True)
 
             # Successful deployment uses the unmodified capture/deploy/verify steps.
-            output.write_text("")
-            run(steps["capture"], root, env)
-            fields = outputs(output)
+            fields = captured()
             assert fields["available"] == "true" and fields["image"] == original
             env["DEPLOY_SHA"] = "1" * 40
             build(fixture(root, "healthy-new", True), service, env["DEPLOY_SHA"], "healthy")
@@ -157,22 +175,26 @@ def main(workflow, service):
             print(f"{service}: good rollout and persisted record PASS", flush=True)
 
             # Negative readiness must fail verification, then restore exact image and data.
-            output.write_text("")
-            run(steps["capture"], root, env)
-            fields = outputs(output)
+            fields = captured()
             assert fields["available"] == "true" and fields["image"] == healthy
             env["DEPLOY_SHA"] = "2" * 40
             build(fixture(root, "unready-new", False), service, env["DEPLOY_SHA"], "unready")
+            # Host configuration becomes invalid *after* preflight. The new
+            # deployment and old-image recovery must both use the captured
+            # known-good runtime, without repairing the host file first.
+            env_file.write_text("PHASE16_SENTINEL=invalid\n")
             run(steps["deploy"], root, env)
             run(steps["verify"], root, env, expected_success=False)
             run(steps["restore"], root, env, previous=healthy)
             preserved(service, healthy)
-            print(f"{service}: failed readiness rollback and preserved record PASS", flush=True)
+            sentinel = command(["docker", "exec", service, "printenv", "PHASE16_SENTINEL"]).strip()
+            assert sentinel == "valid"
+            assert "invalid" in env_file.read_text()
+            env_file.write_text("PHASE16_SENTINEL=valid\n")
+            print(f"{service}: persistent bad-host-config rollback preserves known-good env PASS", flush=True)
 
             # Even a healthy container must fail and roll back for an incorrect revision.
-            output.write_text("")
-            run(steps["capture"], root, env)
-            fields = outputs(output)
+            fields = captured()
             assert fields["available"] == "true" and fields["image"] == healthy
             env["DEPLOY_SHA"] = "3" * 40
             build(fixture(root, "wrong-sha", True), service, "4" * 40, "wrong-sha")
@@ -185,9 +207,7 @@ def main(workflow, service):
             # Case 4: the deployment reaches container replacement, then
             # Compose fails because a host port is occupied. This is a real
             # docker compose up failure, not a simulated nonzero exit code.
-            output.write_text("")
-            run(steps["capture"], root, env)
-            fields = outputs(output)
+            fields = captured()
             assert fields["available"] == "true" and fields["image"] == healthy
             env["DEPLOY_SHA"] = "5" * 40
             build(fixture(root, "start-failure", True), service,
@@ -227,6 +247,8 @@ def main(workflow, service):
         finally:
             command(compose + ["down", "-v", "--remove-orphans"], cwd=root)
             command(["docker", "network", "rm", "dorks-and-dice-backend"])
+            for directory in snapshots:
+                command(["python3", str(helper), "cleanup", directory])
 
 
 if __name__ == "__main__":
