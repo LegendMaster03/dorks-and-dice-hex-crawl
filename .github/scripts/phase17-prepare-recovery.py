@@ -169,8 +169,8 @@ def prepare(sha, manifest):
     stopped = False
     succeeded = False
     try:
-        docker("stop", SERVICE)
         stopped = True
+        docker("stop", SERVICE)
         if inventory(POSTGRES) != before:
             raise RuntimeError("Database changed during writer cutover")
         dump = backup_dir / "hex-crawl-before-phase17.dump"
