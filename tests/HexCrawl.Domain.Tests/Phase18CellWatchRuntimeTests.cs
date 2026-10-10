@@ -64,6 +64,41 @@ public sealed class Phase18CellWatchRuntimeTests
     }
 
     [Fact]
+    public void DeliberateReverseAtTerminalBoundaryCompletesWithoutStrandedPause()
+    {
+        var (world, procedure, initial, plan) = Setup(
+            "<1:1,1,1:4,4>", calibrated: true);
+        var engine = new CrawlRuntimeEngine();
+        var paused = engine.AdvanceCellWatch(world, procedure, initial, plan, Inputs(2));
+        Assert.Equal(RuntimePauseReason.ConditionsReviewRequired, paused.PauseReason);
+        Assert.NotNull(paused.Expedition.Traversal.EntryInterfaceIndex);
+        Assert.Equal(initial.Traversal.CurrentCell,
+            paused.Expedition.Traversal.EnteredFrom);
+        var reverse = world.Resolve(initial.Traversal.CurrentCell.Address).Center
+            - paused.Expedition.Traversal.Position;
+        var reversePlan = plan with
+        {
+            IntendedHeading = reverse,
+            DeliberateDoubleBack = true
+        };
+        var back = engine.AdvanceCellWatch(
+            world, procedure, paused.Expedition, reversePlan, Inputs(1));
+        Assert.Null(back.PauseReason);
+        Assert.Null(back.Expedition.ActiveWatch);
+        Assert.Equal(1, back.Expedition.CompletedWatches);
+        Assert.Equal(initial.Traversal.CurrentCell, back.Expedition.Traversal.CurrentCell);
+        Assert.Equal(GenericProcedureRuntime.Bind(procedure).Time.IntervalDuration,
+            back.Expedition.ElapsedTravelTime);
+        Assert.Single(back.Events, e => e.Kind == CrawlRuntimeEventKind.WatchCompleted);
+        Assert.DoesNotContain(back.Events, e =>
+            e.Kind == CrawlRuntimeEventKind.ConditionsReviewRequired);
+        Assert.Equal(2, back.Expedition.History.Count(e =>
+            e.Kind == CrawlRuntimeEventKind.CellEntered));
+        Assert.Equal(back.Expedition.History.Count,
+            back.Expedition.History.Select(e => e.Sequence).Distinct().Count());
+    }
+
+    [Fact]
     public void BoundaryReviewPausePersistsAndResumesRemainingTime()
     {
         var (world, procedure, state, plan) = Setup("<1:1,1,1:4,4>", calibrated: true);

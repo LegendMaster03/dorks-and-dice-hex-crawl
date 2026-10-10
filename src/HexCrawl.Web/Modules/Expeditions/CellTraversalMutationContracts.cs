@@ -23,6 +23,8 @@ public sealed record StartCellExpeditionRequest(
         if (ProcedureId == Guid.Empty || ProcedureRevision <= 0)
             throw new InvalidOperationException(
                 "Cell starts require an explicitly pinned saved procedure revision.");
+        if (string.IsNullOrWhiteSpace(PresentationKey))
+            throw new InvalidOperationException("Cell starts require a valid presentation policy key.");
         var selection = new ProcedureStartSelection(
             ProcedureId: ProcedureId, ProcedureRevision: ProcedureRevision);
         selection.Validate();

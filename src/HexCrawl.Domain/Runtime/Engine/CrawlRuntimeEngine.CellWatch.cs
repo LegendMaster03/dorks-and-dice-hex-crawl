@@ -230,6 +230,16 @@ public sealed partial class CrawlRuntimeEngine
             Elapsed = ClampTime(active.Elapsed + spent, TimeSpan.Zero, active.TotalDuration),
             PendingDecision = stop
         };
+        // A review/backtrack checkpoint at the exact end of the interval is
+        // not a pending decision for a watch that has no time left. Legacy hex
+        // execution similarly completes at an exact terminal boundary.
+        if (active.Remaining == TimeSpan.Zero
+            && stop is RuntimePauseReason.BacktrackBoundaryReached
+                or RuntimePauseReason.ConditionsReviewRequired)
+        {
+            stop = null;
+            active = active with { PendingDecision = null };
+        }
         state = state with { ActiveWatch = active };
         if (movement.ConsumedPhysicalDistance is { Value: > 0 } traveled)
             AddCellEvent(events, active.WatchNumber, CrawlRuntimeEventKind.DistanceTraveled,
