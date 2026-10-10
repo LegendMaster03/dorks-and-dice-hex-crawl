@@ -23,7 +23,7 @@ def cleanup_expression():
 
 
 def evaluate_cleanup(*, available=True, deployed="skipped",
-                     verified="skipped", cancelled=False):
+                     verified="skipped", resumed="success", cancelled=False):
     expression = cleanup_expression()
     expression = expression.replace("always()", "True")
     expression = expression.replace("cancelled()", str(cancelled))
@@ -33,6 +33,7 @@ def evaluate_cleanup(*, available=True, deployed="skipped",
                                     repr("true" if available else "false"))
     expression = expression.replace("steps.deploy.outcome", repr(deployed))
     expression = expression.replace("steps.verify.outcome", repr(verified))
+    expression = expression.replace("steps.resume.outcome", repr(resumed))
     tree = ast.parse(expression.strip(), mode="eval")
     return bool(eval(compile(tree, "<GitHub cleanup condition>", "eval"),
                      {"__builtins__": {}}, {}))
@@ -54,6 +55,8 @@ class Phase17CutoverCleanupTests(unittest.TestCase):
         self.assertTrue(evaluate_cleanup(deployed="skipped", verified="skipped"))
         self.assertFalse(evaluate_cleanup(deployed="skipped", verified="cancelled"))
         self.assertFalse(evaluate_cleanup(deployed="failure", verified="failure"))
+        self.assertFalse(evaluate_cleanup(deployed="skipped", verified="skipped", resumed="failure"))
+        self.assertFalse(evaluate_cleanup(deployed="skipped", verified="skipped", resumed="skipped"))
 
     def test_cancelled_workflow_never_deletes_recovery_snapshot(self):
         self.assertFalse(evaluate_cleanup(deployed="success", verified="success", cancelled=True))
@@ -61,6 +64,16 @@ class Phase17CutoverCleanupTests(unittest.TestCase):
 
     def test_no_snapshot_means_no_cleanup(self):
         self.assertFalse(evaluate_cleanup(available=False, deployed="success", verified="success"))
+
+    def test_backup_preparation_precedes_deploy_and_follows_disposable_smoke(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        smoke = text.index("- name: Smoke test PostgreSQL-backed container")
+        cutover = text.index("- name: Prepare verified Phase 17 live-data recovery before cutover")
+        deploy = text.index("- name: Deploy\\n")
+        self.assertLess(smoke, cutover)
+        self.assertLess(cutover, deploy)
+        self.assertIn("python3 .github/scripts/phase17-prepare-recovery.py", text)
+        self.assertIn("- name: Resume original service if the cutover did not begin", text)
 
     def test_incompatible_image_only_auto_restore_stays_disabled(self):
         text = WORKFLOW.read_text(encoding="utf-8")
