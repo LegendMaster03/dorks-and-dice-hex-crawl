@@ -24,6 +24,50 @@ public sealed class Phase18CellDecisionEndpointsTests
     private static readonly ResolutionProvenance Manual = new(ResolutionSource.ManualRoll);
 
     [Fact]
+    public async Task SavedProcedureCellStartCreatesAuthoritativeCellSessionWithNoHexProjection()
+    {
+        await WithWorldAsync(async (database, store, world, procedure, cell) =>
+        {
+            await new CampaignProcedureService(store).CreateAsync("alice", procedure, null);
+            var path = $"/api/overworlds/{world.Id:D}/cell-expeditions";
+            var request = new StartCellExpeditionRequest(
+                "New generalized expedition", procedure.ProcedureId,
+                procedure.Revision, cell.Id.Address);
+            using var factory = TestWebHost.Create(database, "alice");
+            using var client = factory.CreateClient();
+            using (var unpinned = await client.PostAsJsonAsync(path,
+                request with { ProcedureRevision = 0 }, ApiJson))
+                Assert.Equal(HttpStatusCode.BadRequest, unpinned.StatusCode);
+            using (var otherFactory = TestWebHost.Create(database, "bob"))
+            using (var other = otherFactory.CreateClient())
+            using (var denied = await other.PostAsJsonAsync(path, request, ApiJson))
+                Assert.Equal(HttpStatusCode.NotFound, denied.StatusCode);
+
+            using var response = await client.PostAsJsonAsync(path, request, ApiJson);
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            var created = await response.Content.ReadFromJsonAsync<JsonElement>();
+            var id = created.GetProperty("id").GetGuid();
+            Assert.Equal(1, created.GetProperty("version").GetInt64());
+            Assert.Equal(cell.Id.TilingId,
+                created.GetProperty("expedition").GetProperty("currentCell")
+                    .GetProperty("tilingId").GetGuid());
+            Assert.Equal(JsonValueKind.Null,
+                created.GetProperty("expedition").GetProperty("currentHex").ValueKind);
+            Assert.Equal(0, created.GetProperty("knownHexes").GetArrayLength());
+            Assert.Equal(procedure.ProcedureId,
+                created.GetProperty("procedure").GetProperty("procedureId").GetGuid());
+
+            var saved = await new PostgresHexCrawlStore(database)
+                .GetExpeditionAsync(id, "alice");
+            Assert.NotNull(saved);
+            Assert.Equal(procedure.Revision, saved!.CampaignProcedure.Revision);
+            Assert.Equal(cell.Id,
+                Assert.IsType<CellExpeditionState>(saved.Runtime).Traversal.CurrentCell);
+            Assert.Null(((CellExpeditionState)saved.Runtime).DistanceTraveled);
+        });
+    }
+
+    [Fact]
     public async Task VertexPauseRequiresAuthorizedValidatedCourseAndThenResumesSameWatch()
     {
         await WithWorldAsync(async (database, store, world, procedure, cell) =>
