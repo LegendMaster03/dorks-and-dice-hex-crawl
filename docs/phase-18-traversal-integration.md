@@ -40,6 +40,20 @@
 
 CI, integration and release tests must still be evaluated on the exact final branch head before updating the verified status.
 
+## Phase 18 addendum — expedition deletion persistence
+
+The owner reported that deleting expeditions does not actually remove them from PostgreSQL. This is included in Phase 18 as a separate correctness and release-validation issue, not silently treated as resolved by earlier development tests.
+
+The existing service already executes an owner- and expected-version-scoped \`DELETE FROM expeditions\`, commits when exactly one row is affected, and relies on the schema-10 \`expedition_events.expedition_id\` foreign key with \`ON DELETE CASCADE\`. Existing world-bound HTTP tests assert zero expedition/event rows after deletion. Therefore the reported failure is **not reproduced or explained by that code path**. Possible runtime deployment/connection differences are hypotheses only, not confirmed diagnoses.
+
+Hardening in this branch:
+
+- The home-page delete UI now re-fetches the authoritative expedition list after HTTP DELETE. A local card is no longer hidden solely on a successful DELETE response; it is re-rendered from the returned server state and reports an error when the deleted ID still appears. Any uncertain outcome remains visible for refresh/review instead of being displayed as a confirmed removal.
+- Additional HTTP/PostgreSQL regression tests create both abstract-hex and nonspatial sessions, including dependent events and an unrelated control session. They verify physical rows before deletion, stale-version conflicts without data loss, successful deletion of the intended parent and dependent rows, idempotent not-found behavior on a repeated delete, and absence after a new host/database connection while control data remains. Existing world-bound deletion tests remain.
+- No schema migration, server-side workaround that bypasses owner/version checks, blanket cleanup script, or unauthorized deletion of tester data is introduced.
+
+**Live reproduction gate:** On the authorized development/test deployment, exercise a deliberately disposable expedition and record the exact request URL, HTTP status, the expedition ID, owner and version, and the result of an independently opened authoritative PostgreSQL connection after the delete. Check \`expeditions.id\` and \`expedition_events.expedition_id\` for that ID; verify the database endpoint being inspected matches the application configuration without disclosing credentials. If the server returns 204 yet rows remain in that same database, investigate the deployed revision and database routing before claiming this defect fixed. If the delete fails, capture its response and backend log. Do not delete unrelated existing records to reproduce the issue.
+
 ## Mandatory work remaining
 
 1. Refactor CrawlRuntimeEngine.AdvanceCore and watch lifecycle so its existing navigation, encounters, lost/veer/reorientation, deliberate double-back, environmental effects, survival resources, journey hooks, pause and event replay all consume a generalized spatial execution result. **Do not fork watch/gameplay mechanics into a second engine.**
