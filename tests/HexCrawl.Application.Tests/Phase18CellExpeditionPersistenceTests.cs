@@ -148,6 +148,86 @@ public sealed class Phase18CellExpeditionPersistenceTests
         Assert.Null(verifiedState.History[1].Hex);
     }
 
+    [Fact]
+    public async Task UncalibratedPendingEncounterAndWatchRestartWithoutFakeHexOrDistance()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var store = new PostgresHexCrawlStore(database.ConnectionString);
+        await store.InitializeAsync();
+        var generated = DelaneyDressHarmonicMetricRealization.Construct(
+            "<1:1,1,1:4,4>", 1, "world-unit");
+        Assert.Equal("realized", generated.Status);
+        var tiling = new PeriodicWorldTiling(
+            Guid.NewGuid(), generated.Topology!, generated.Realization!, new WorldPoint(0, 0));
+        tiling.Validate();
+        var world = new OverworldDefinition
+        {
+            Id = Guid.NewGuid(), Name = "Uncalibrated pending watch", Tiling = tiling
+        };
+        var now = DateTimeOffset.UtcNow;
+        await store.CreateOverworldAsync(new StoredOverworld(world, "owner", 1, now, now));
+        var cell = tiling.Resolve(new PeriodicCellAddress(
+            tiling.Topology.MotifCells[0].Id, new LatticeDisplacement(-2, 3)));
+        var heading = new WorldPoint(1, 0);
+        var cursor = new PeriodicCellTraversal
+        {
+            CurrentCell = cell.Id, Position = cell.Center, TravelHeading = heading
+        };
+        var occurrenceId = Guid.NewGuid();
+        var provenance = new ResolutionProvenance(ResolutionSource.DmOverride, "Explicit test encounter");
+        var eventRecord = new CrawlRuntimeEvent(
+            1, 1, CrawlRuntimeEventKind.EncounterTriggered,
+            TimeSpan.FromHours(1), null, "A pending custom encounter.",
+            EncounterOutcome: EncounterOutcomeKind.ManualCustom,
+            EncounterOccurrenceId: occurrenceId)
+        { Cell = cell.Id };
+        var pending = new PendingEncounterOccurrence(
+            occurrenceId, 1, 1, EncounterOutcomeKind.ManualCustom,
+            TimeSpan.FromHours(1), null, null, "Encounter pending", provenance)
+        { Cell = cell.Id };
+        var active = new CellActiveWatchState(
+            1, TimeSpan.FromHours(4), TimeSpan.FromHours(1),
+            new CellWatchTravelPlan(heading, false, false,
+                TravelModeSelection.Normal, NavigationAidSelection.None),
+            new ResolvedEncounter(EncounterOutcomeKind.ManualCustom,
+                TimeSpan.FromHours(1), null, "Encounter pending", provenance),
+            true, RuntimePauseReason.EncounterTriggered);
+        var state = new CellExpeditionState
+        {
+            Id = Guid.NewGuid(), Traversal = cursor, IntendedHeading = heading,
+            DistanceTraveled = null, ElapsedTravelTime = TimeSpan.FromHours(1),
+            ActiveWatch = active, PendingEncounter = pending, History = [eventRecord]
+        };
+        state.Validate(tiling);
+        var expedition = new StoredExpedition(
+            "Paused generalized", state, new WorldBoundCrawlSessionContext(world.Id),
+            null, CellProcedure(tiling), RuntimePauseReason.EncounterTriggered,
+            TimeSpan.FromHours(3), "owner", 1, now, now);
+        await store.CreateExpeditionAsync(expedition);
+
+        var restarted = new PostgresHexCrawlStore(database.ConnectionString);
+        await restarted.InitializeAsync();
+        var loaded = await restarted.GetExpeditionAsync(expedition.Id, "owner");
+        var spatial = Assert.IsType<CellExpeditionState>(loaded!.Runtime);
+        spatial.Validate(tiling);
+        Assert.Null(spatial.DistanceTraveled);
+        Assert.Null(spatial.PendingEncounter!.Hex);
+        Assert.Equal(cell.Id, spatial.PendingEncounter.Cell);
+        Assert.Equal(occurrenceId, spatial.PendingEncounter.Id);
+        Assert.Equal(RuntimePauseReason.EncounterTriggered, spatial.ActiveWatch!.PendingDecision);
+        Assert.Equal(TimeSpan.FromHours(3), spatial.ActiveWatch.Remaining);
+        Assert.Equal(cell.Id, Assert.Single(spatial.History).Cell);
+
+        var saved = await restarted.SaveExpeditionAsync(loaded, loaded.Version);
+        Assert.Equal(SaveOutcome.Saved, saved.Outcome);
+        await using var db = new NpgsqlConnection(database.ConnectionString);
+        await db.OpenAsync();
+        await using var count = db.CreateCommand();
+        count.CommandText = "SELECT COUNT(*) FROM expedition_events WHERE expedition_id = @id;";
+        count.Parameters.AddWithValue("id", expedition.Id);
+        Assert.Equal(1L, (long)(await count.ExecuteScalarAsync())!);
+    }
+
     private static CampaignProcedure CellProcedure(PeriodicWorldTiling world)
     {
         var original = SyntheticProcedureFixtures.MixedProcedure();
