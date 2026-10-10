@@ -287,6 +287,10 @@ export class MapSurface {
     }
 
     private async activateWorldCell(worldId: string, tilingId: string, point: WorldPoint): Promise<void> {
+        // Feature/location authoring consumes the exact clicked world point
+        // immediately. A shared cell boundary may be ambiguous for selection,
+        // but must not discard that valid geometry placement.
+        this.onWorldClick?.(point);
         if (!this.api) return;
         const generation = ++this.cellSelectionGeneration;
         const version = this.getWorld()?.version;
@@ -312,7 +316,6 @@ export class MapSurface {
             this.accessibilityStatus.textContent = "Selected a world cell.";
             this.cellSelectionHandler?.(geometry);
             this.requestRender();
-            this.onWorldClick?.(point);
         } catch {
             if (isCurrent()) this.accessibilityStatus.textContent =
                 "Cell selection failed. Retry after the map is available.";
