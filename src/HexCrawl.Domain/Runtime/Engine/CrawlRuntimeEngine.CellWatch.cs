@@ -129,7 +129,10 @@ public sealed partial class CrawlRuntimeEngine
                 state, dmOverrideNote);
 
         if (active.Remaining == TimeSpan.Zero)
-            return CompleteCellWatch(state, active, events);
+            return HasEncounterDueAtCurrentTime(active.Remaining, active.Elapsed,
+                active.TotalDuration, active.Encounter, active.EncounterHandled)
+                ? TriggerCellEncounter(state, active, events)
+                : CompleteCellWatch(state, active, events);
 
         AddCellEvent(events, active.WatchNumber, CrawlRuntimeEventKind.TravelResolved, state,
             runtime.Movement.TravelResolution == TravelResolutionMode.CellSteps

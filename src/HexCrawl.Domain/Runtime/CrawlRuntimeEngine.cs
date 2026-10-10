@@ -96,6 +96,9 @@ public sealed partial class CrawlRuntimeEngine
 
         if (active.Remaining <= TimeSpan.Zero)
         {
+            if (HasEncounterDueAtCurrentTime(active.Remaining, active.Elapsed,
+                    active.TotalDuration, active.Encounter, active.EncounterHandled))
+                return TriggerEncounter(state, active, events);
             return CompleteWatch(state, active, events);
         }
 

@@ -74,6 +74,7 @@ public sealed class ExpeditionStartService(
         if (!CampaignProcedureSchema.RequiresLegacyHexTiling(selected.Procedure.TilingDsSymbol))
             throw new NotSupportedException(
                 "The selected procedure requires a different tiling; this runtime supports hexagonal worlds only.");
+        RequireLegacyHexMovement(selected.Procedure);
 
         var expeditionId = Guid.NewGuid();
         var state = new ExpeditionState
@@ -231,6 +232,8 @@ public sealed class ExpeditionStartService(
             && !CampaignProcedureSchema.RequiresLegacyHexTiling(selected.Procedure.TilingDsSymbol))
             throw new NotSupportedException(
                 "This abstract hex runtime cannot execute a nonhex tiling until Phase 18.");
+        if (context is AbstractHexCrawlSessionContext)
+            RequireLegacyHexMovement(selected.Procedure);
 
         var now = DateTimeOffset.UtcNow;
         return await store.CreateExpeditionAsync(new StoredExpedition(
@@ -249,6 +252,14 @@ public sealed class ExpeditionStartService(
             CampaignId = selected.CampaignId,
             ProcedureOrigin = selected.ProcedureOrigin
         }, cancellationToken);
+    }
+
+    private static void RequireLegacyHexMovement(CampaignProcedure procedure)
+    {
+        if (GenericProcedureRuntime.Bind(procedure).Movement.MechanicVersion != 1)
+            throw new NotSupportedException(
+                "Legacy world-bound and abstract-hex expeditions require movement version 1. " +
+                "Use the explicit cell expedition start for movement version 2.");
     }
 
     private async Task<StoredCampaignProcedureRevision> ResolveProcedureAsync(

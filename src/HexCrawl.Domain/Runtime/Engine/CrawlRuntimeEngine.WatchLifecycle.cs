@@ -164,6 +164,20 @@ public sealed partial class CrawlRuntimeEngine
         return new WatchEncounterWindow(callRemaining, false, false);
     }
 
+    /// <summary>
+    /// The final watch tick remains authoritative for an encounter even when
+    /// an intervening navigation/boundary decision paused completion.
+    /// This test is shared by hex and generalized cell execution.
+    /// </summary>
+    private static bool HasEncounterDueAtCurrentTime(
+        TimeSpan remaining,
+        TimeSpan elapsed,
+        TimeSpan duration,
+        ResolvedEncounter encounter,
+        bool handled) =>
+        ResolveEncounterWindow(remaining, elapsed, duration, encounter, handled)
+            .EncounterImmediatelyDue;
+
     private static ResolvedEncounter ResolveEncounterForNewWatch(
         TimeSpan intervalDuration,
         bool encounterCheckDue,
