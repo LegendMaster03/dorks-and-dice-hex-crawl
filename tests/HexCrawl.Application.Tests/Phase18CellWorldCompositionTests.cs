@@ -12,6 +12,40 @@ public sealed class Phase18CellWorldCompositionTests
     private static readonly ResolutionProvenance Manual = new(ResolutionSource.ManualRoll);
 
     [Fact]
+    public void InitialCellKnowledgeRespectsVisibilityCategoriesWithoutRevealingHiddenLocations()
+    {
+        var (world, current, hidden, distant) = SetupWorld();
+        var obvious = new Location(Guid.NewGuid(), "Visible village", "village",
+            current.Center, LocationDiscoverability.Obvious, []);
+        world = world with { Locations = [hidden, distant, obvious] };
+        var policy = MapPresentationPolicy.ExplorationMap();
+        var baseline = new PlayerKnowledgeState
+        {
+            ScopeId = Guid.NewGuid(), OverworldId = world.Id,
+            PresentationPolicy = policy
+        };
+        var initialized = PresentationKnowledgeProjection.InitializeCells(
+            world, policy, baseline, current.Id);
+        Assert.Equal(current.Id, Assert.Single(initialized.KnownCells!));
+        Assert.Empty(initialized.KnownHexes);
+        Assert.Contains(obvious.Id, initialized.Entries.Keys);
+        Assert.DoesNotContain(hidden.Id, initialized.Entries.Keys);
+        Assert.DoesNotContain(distant.Id, initialized.Entries.Keys);
+
+        var traditional = PresentationKnowledgeProjection.InitializeCells(
+            world, MapPresentationPolicy.TraditionalHiddenHexcrawl(),
+            baseline, current.Id);
+        Assert.Null(traditional.KnownCells);
+        Assert.Empty(traditional.KnownHexes);
+
+        var dmControlled = PresentationKnowledgeProjection.InitializeCells(
+            world, MapPresentationPolicy.DmControlled(),
+            baseline, current.Id);
+        Assert.Empty(dmControlled.Entries);
+        Assert.Null(dmControlled.KnownCells);
+    }
+
+    [Fact]
     public void KeyedLocationUsesActualCellPolygonAndDoesNotCreateAxialKnowledge()
     {
         var (world, current, inside, outside) = SetupWorld();
