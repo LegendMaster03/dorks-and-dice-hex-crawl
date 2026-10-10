@@ -33,12 +33,12 @@ PostgreSQL schema increments from **9 to 10** (with existing verified 8→9 supp
 | `world_json.environmentAnnotations` | Existing world/hex/feature scopes preserved; additive qualified cell scope |
 | `expeditions.context_json/state_json` | Unchanged, including current hex, directional state and partial progress |
 | `expeditions.knowledge_json/party_json/environment_json/effects_json/resources_json/survival_json/journey_state_json/generated_resolutions_json` | Unchanged; the expedition snapshot is not rewritten |
-| `expeditions.procedure_json/procedure_origin_json` | Unchanged immutable pinned revision, source and tiling requirement |
-| `campaign_procedure_revisions` | Unchanged, including owners, revision IDs, pinned procedure JSON |
+| `expeditions.procedure_json/procedure_origin_json` | Only `procedure_json.schemaVersion` advances from 1.2 to 1.3; pinned revision, source, origin and D-symbol requirement are retained |
+| `campaign_procedure_revisions` | Only `procedure_json.schemaVersion` advances from 1.2 to 1.3; owners, revision IDs and all other procedure fields are retained |
 | `expedition_events` | Unchanged sequence and payloads; no event replay/renumbering |
 | External filesystem map assets | Untouched; asset storage and map IDs remain separate from PostgreSQL |
 
-**Upgrade strategy:** before accepting normal requests, the schema 9→10 migration locks the database, inspects every world, validates its prior grid, constructs its exact polygonal geometry, and writes both a format-2 marker and the periodic witness using JSONB updates that retain every unrelated field. A malformed world, unsupported snapshot version, mismatched existing topology, or unexpected pinned-procedure schema aborts **the entire transaction**, leaving all records on schema 9. The migration upgrades every stored procedure schemaVersion 1.2 to 1.3 in `campaign_procedure_revisions` and `expeditions`, with `tilingDsSymbol` unchanged. The transaction records schema 10 only after all conversions succeed. A repeat invocation is a no-op. Existing world and expedition aggregate versions, ownership, timestamps and event sequences do not change solely due to schema migration.
+**Upgrade strategy:** before accepting normal requests, the schema 9→10 migration locks the database, inspects every world, validates its prior grid, constructs its exact polygonal geometry, and writes both a format-2 marker and the periodic witness using JSONB updates that retain every unrelated field. A malformed world, world-snapshot/row ID mismatch, unsupported snapshot version, mismatched existing topology, or unexpected pinned-procedure schema aborts **the entire transaction**, leaving all records on schema 9. The migration upgrades every stored procedure schemaVersion 1.2 to 1.3 in `campaign_procedure_revisions` and `expeditions`, with `tilingDsSymbol` unchanged. The transaction records schema 10 only after all conversions succeed. A repeat invocation is a no-op. Existing world and expedition aggregate versions, ownership, timestamps and event sequences do not change solely due to schema migration.
 
 New hex worlds also serialize the generalized tiling plus legacy grid projection, and newly authored nonhex worlds serialize only the tiling. Format-2 snapshots with a legacy grid must pass cross-checks confirming identical physical cell locations and topology, so there is only one authoritative geometry.
 
@@ -78,7 +78,7 @@ The operator must actually restore the database and map assets into an isolated 
 
 The deployment checks the exact commit and both backup checksums. The attestation represents **operator evidence of a completed recovery rehearsal**, not a replacement for doing one. CI also runs an isolated `pg_dump` / `pg_restore` and map-archive extraction/diff against disposable smoke data; this is separate from and does not replace the live pre-cutover backup and recovery gate.
 
-The existing image-only rollback path is **not sufficient** for a schema-10 deployment: the prior app expects schema 9. If a schema-10 deployment fails after database upgrade, restore the verified schema-9 database and associated asset backup under controlled downtime before relaunching the previous image. Do not rely on auto-replacing the container alone.
+**Image-only rollback is disabled in the Phase 17 deploy workflow.** A failed cutover retains the previous image under the `pre-deploy` tag but does not restart it automatically, because the prior app expects schema 9. If a schema-10 deployment fails after database upgrade, stop writers, restore the verified schema-9 database and associated asset backup under controlled downtime, and only then relaunch the previous image. An operator must diagnose and perform the recovery; the workflow never automatically restores or deletes the actual tester database.
 
 ## Phase 18 integration
 
