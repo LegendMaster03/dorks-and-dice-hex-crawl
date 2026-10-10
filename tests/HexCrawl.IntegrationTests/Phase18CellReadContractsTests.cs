@@ -117,6 +117,7 @@ public sealed class Phase18CellReadContractsTests
                 Assert.Equal(PeriodicCellTraversal.CurrentFormatVersion, topology.GetProperty("formatVersion").GetInt32());
                 Assert.Equal(cell.Id.TilingId, topology.GetProperty("currentCell").GetProperty("tilingId").GetGuid());
                 Assert.False(topology.GetProperty("hasPhysicalCalibration").GetBoolean());
+                Assert.False(topology.TryGetProperty("physicalDistancePerWorldUnit", out _));
                 Assert.Equal(cell.Polygon.Count, topology.GetProperty("polygon").GetArrayLength());
                 var interfaces = topology.GetProperty("interfaces").EnumerateArray().ToArray();
                 Assert.Equal(tiling.Boundaries(cell.Id.Address).Count, interfaces.Length);
