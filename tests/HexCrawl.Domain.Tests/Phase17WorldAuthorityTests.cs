@@ -324,6 +324,126 @@ public sealed class Phase17WorldAuthorityTests
         Assert.True(provenSharedEdges >= 6, "Fixture did not exercise enough common boundaries.");
     }
 
+    [Theory]
+    [InlineData(0d)]
+    [InlineData(17d)]
+    [InlineData(37d)]
+    public void LargeWorldOriginRetainsAllLegacySharedEdgesAndVertices(double rotation)
+    {
+        var grid = new HexGridDefinition
+        {
+            Id = Guid.NewGuid(),
+            Origin = new WorldPoint(1e9, 1e9),
+            RotationDegrees = rotation,
+            HexRadiusWorldUnits = 1,
+            NeighborCenterDistance = new DistanceMeasure(12, DistanceUnit.Miles)
+        };
+        var tiling = LegacyHexTilingCompatibility.Create(grid);
+        foreach (var hex in new[]
+        {
+            new HexCoordinate(0, 0), new HexCoordinate(1, -1),
+            new HexCoordinate(-6, 5), new HexCoordinate(9, -7)
+        })
+        {
+            var address = LegacyHexTilingCompatibility.ToAddress(hex);
+            var cell = tiling.Resolve(address);
+            var centerLookup = tiling.Containing(cell.Center);
+            Assert.Equal(WorldCellLookupStatus.Unique, centerLookup.Status);
+            Assert.Equal(cell.Id, Assert.Single(centerLookup.Candidates));
+
+            foreach (var edge in tiling.Boundaries(address))
+            {
+                var neighbor = tiling.Resolve(edge.To.Address);
+                var reciprocal = tiling.Reciprocal(edge);
+                Assert.Equal(edge.Start, reciprocal.End);
+                Assert.Equal(edge.End, reciprocal.Start);
+
+                // Do not skip any edges whose polygon predicates disagree:
+                // the third independent review reproduced that failure.
+                var points = new[]
+                {
+                    new WorldPoint((edge.Start.X + edge.End.X) / 2,
+                        (edge.Start.Y + edge.End.Y) / 2),
+                    edge.Start, edge.End
+                };
+                foreach (var point in points)
+                {
+                    Assert.True(FeatureIntersection.PointInPolygon(point, cell.Polygon),
+                        $"Source polygon omitted the shared point at rotation {rotation}, hex {hex}.");
+                    Assert.True(FeatureIntersection.PointInPolygon(point, neighbor.Polygon),
+                        $"Neighbor polygon omitted the shared point at rotation {rotation}, hex {hex}.");
+                    var lookup = tiling.Containing(point);
+                    Assert.Equal(WorldCellLookupStatus.Ambiguous, lookup.Status);
+                    Assert.Contains(edge.From, lookup.Candidates);
+                    Assert.Contains(edge.To, lookup.Candidates);
+                }
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData(1000d, -1000d, 2e-6, 17d)]
+    [InlineData(1000d, -1000d, 2e-6, -23d)]
+    [InlineData(1000000d, 1000000d, 1d, 37d)]
+    public void GeneralizedSharedEdgeAndVertexLookupNeverDropsAnIncidentCell(
+        double originX, double originY, double scale, double degrees)
+    {
+        var generation = DelaneyDressHarmonicMetricRealization.Construct(
+            "<1:1,1,1:3,6>", scale, "unit");
+        Assert.Equal("realized", generation.Status);
+        double radians = degrees * Math.PI / 180;
+        double cosine = Math.Cos(radians), sine = Math.Sin(radians);
+        TilingWorldPoint Rotate(TilingWorldPoint point) => new(
+            cosine * point.X - sine * point.Y,
+            sine * point.X + cosine * point.Y);
+        var original = generation.Realization!;
+        var metric = original with
+        {
+            TranslationU = Rotate(original.TranslationU),
+            TranslationV = Rotate(original.TranslationV),
+            Polygons = original.Polygons.ToDictionary(
+                entry => entry.Key,
+                entry => (IReadOnlyList<TilingWorldPoint>)entry.Value.Select(Rotate).ToArray())
+        };
+        var tiling = new PeriodicWorldTiling(
+            Guid.NewGuid(), generation.Topology!, metric, new WorldPoint(originX, originY));
+        tiling.Validate();
+
+        foreach (var motif in tiling.Topology.MotifCells)
+        foreach (var translation in new[]
+        {
+            new LatticeDisplacement(0, 0),
+            new LatticeDisplacement(-3, 7),
+            new LatticeDisplacement(5, -9)
+        })
+        {
+            var address = new PeriodicCellAddress(motif.Id, translation);
+            var cell = tiling.Resolve(address);
+            var center = tiling.Containing(cell.Center);
+            Assert.Equal(WorldCellLookupStatus.Unique, center.Status);
+            Assert.Equal(cell.Id, Assert.Single(center.Candidates));
+
+            foreach (var edge in tiling.Boundaries(address))
+            {
+                var peer = tiling.Resolve(edge.To.Address);
+                foreach (var point in new[]
+                {
+                    new WorldPoint((edge.Start.X + edge.End.X) / 2,
+                        (edge.Start.Y + edge.End.Y) / 2),
+                    edge.Start, edge.End
+                })
+                {
+                    Assert.True(FeatureIntersection.PointInPolygon(point, cell.Polygon));
+                    Assert.True(FeatureIntersection.PointInPolygon(point, peer.Polygon));
+                    var found = tiling.Containing(point);
+                    Assert.Equal(WorldCellLookupStatus.Ambiguous, found.Status);
+                    Assert.Contains(edge.From, found.Candidates);
+                    Assert.Contains(edge.To, found.Candidates);
+                }
+            }
+        }
+    }
+
     [Fact]
     public void WorldAuthorityRejectsFabricatedTopologyAndMetric()
     {
