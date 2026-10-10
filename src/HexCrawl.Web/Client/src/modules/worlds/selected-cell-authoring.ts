@@ -36,8 +36,9 @@ export function sameHex(left: HexCoordinate | null, right: HexCoordinate | null)
 }
 
 export function locationsInCell(world: Overworld, cell: HexCoordinate): Location[] {
-    if (!world.grid) return [];
-    return world.locations.filter(location => sameHex(worldToHex(world.grid, location.position), cell));
+    const grid = world.grid;
+    if (!grid) return [];
+    return world.locations.filter(location => sameHex(worldToHex(grid, location.position), cell));
 }
 
 export function featuresIntersectingCell(world: Overworld, cell: HexCoordinate): SpatialFeature[] {

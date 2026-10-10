@@ -992,12 +992,13 @@ export async function renderExpedition(
             host.append(move);
         }
 
-        const subjects = currentWorld.grid ? [
+        const mapGrid = currentWorld.grid;
+        const subjects = mapGrid ? [
             ...currentWorld.locations
-                .filter(item => sameHexCell(worldToHex(currentWorld.grid, item.position), selectedHex!))
+                .filter(item => sameHexCell(worldToHex(mapGrid, item.position), selectedHex!))
                 .map(item => ({ id: item.id, name: item.name, type: "Location" as const })),
             ...currentWorld.features
-                .filter(item => item.kind === "Point" && item.position && sameHexCell(worldToHex(currentWorld.grid, item.position), selectedHex!))
+                .filter(item => item.kind === "Point" && item.position && sameHexCell(worldToHex(mapGrid, item.position), selectedHex!))
                 .map(item => ({ id: item.id, name: item.name, type: "Feature" as const }))
         ] : [];
         if (subjects.length > 0) {
