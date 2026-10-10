@@ -1,6 +1,7 @@
 """Unit tests for live-data cutover preparation; never call real Docker."""
 import importlib.util
 import json
+import re
 from pathlib import Path
 import subprocess
 import tempfile
@@ -30,6 +31,19 @@ def sample_docker(*args, **kwargs):
 
 
 class Phase17PrepareRecoveryTests(unittest.TestCase):
+    def test_docker_errors_identify_operation_without_disclosing_stderr(self):
+        for command, expected in (
+            (("exec", prepare.POSTGRES, "pg_dump", "-U", "hex_crawl"), "Docker exec/pg_dump failed (exit 5)"),
+            (("exec", "-i", "isolated", "pg_restore", "-U", "hex_crawl"), "Docker exec/pg_restore failed (exit 5)"),
+            (("cp", "service:/data/.", "/private/staging"), "Docker cp failed (exit 5)"),
+        ):
+            with self.subTest(command=command):
+                with mock.patch.object(prepare.subprocess, "run",
+                                       side_effect=subprocess.CalledProcessError(
+                                           5, ["docker", *command], stderr=b"private credential")):
+                    with self.assertRaisesRegex(RuntimeError, re.escape(expected)):
+                        prepare.docker(*command)
+
     def test_archive_restoration_matches_files_and_detects_symlinks(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
