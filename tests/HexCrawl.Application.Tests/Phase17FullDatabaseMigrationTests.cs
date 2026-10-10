@@ -108,6 +108,12 @@ public sealed class Phase17FullDatabaseMigrationTests
         Assert.Equal(grid, loaded!.World.Grid);
         Assert.Equal(world.Id, loaded.World.Id);
         Assert.Equal(grid.Id, loaded.World.SpatialTiling.Id);
+        Assert.Equal("world-unit", loaded.World.SpatialTiling.Realization.Units);
+        var zero = loaded.World.SpatialTiling.Resolve(LegacyHexTilingCompatibility.ToAddress(new(0, 0))).Center;
+        var east = loaded.World.SpatialTiling.Resolve(LegacyHexTilingCompatibility.ToAddress(new(1, 0))).Center;
+        var physical = loaded.World.SpatialTiling.MeasurePhysicalDistance(zero, east);
+        Assert.Equal(grid.NeighborCenterDistance.Unit, physical.Unit);
+        Assert.InRange(Math.Abs(physical.Value - grid.NeighborCenterDistance.Value), 0, 1e-9);
         var persistedMap = Assert.Single(loaded.World.SourceMaps);
         Assert.Equal(map.Id, persistedMap.Id);
         Assert.Equal(map.AssetKey, persistedMap.AssetKey);
