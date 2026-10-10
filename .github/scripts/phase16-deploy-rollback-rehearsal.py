@@ -105,8 +105,9 @@ def main(workflow, service):
     assert "$" + "{DEPLOY_ENV_FILE:-" in steps["preflight"]
     assert " config >/dev/null" in steps["preflight"]
     assert "phase16-deployment-config.py verify" in steps["preflight"]
-    assert "$" + "{DEPLOY_ENV_FILE:-" in steps["deploy"]
-    assert "$" + "{DEPLOY_ENV_FILE:-" in steps["restore"]
+    assert 'DEPLOY_SNAPSHOT_DIR/compose.env' in steps["deploy"]
+    assert 'DEPLOY_SNAPSHOT_DIR/compose.env' in steps["restore"]
+    assert "phase16-deployment-config.py snapshot" in steps["capture"]
 
     with tempfile.TemporaryDirectory(prefix="phase16-rollback-") as tmp:
         root = Path(tmp)
