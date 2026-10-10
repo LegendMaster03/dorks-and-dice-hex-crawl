@@ -44,7 +44,7 @@ public sealed record PeriodicCellTraversal
             throw new InvalidOperationException("Selected exit interface is not present on the current cell.");
         if (TravelHeading is { } heading
             && (!double.IsFinite(heading.X) || !double.IsFinite(heading.Y)
-                || Math.Hypot(heading.X, heading.Y) <= 0))
+                || Length(heading) <= 0))
             throw new InvalidOperationException("Travel heading must be finite and nonzero.");
     }
 }
@@ -95,7 +95,7 @@ public static class PeriodicCellTraversalGeometry
         if (traversal.TravelHeading is not { } heading)
             throw new InvalidOperationException("A heading or a DM-resolved course is required to find a boundary.");
 
-        var directionLength = Math.Hypot(heading.X, heading.Y);
+        var directionLength = Length(heading);
         var direction = new WorldPoint(heading.X / directionLength, heading.Y / directionLength);
         var boundaries = world.Boundaries(traversal.CurrentCell.Address);
         var polygon = world.Resolve(traversal.CurrentCell.Address).Polygon;
@@ -114,7 +114,7 @@ public static class PeriodicCellTraversalGeometry
         foreach (var boundary in boundaries)
         {
             var edge = boundary.End - boundary.Start;
-            var edgeLength = Math.Hypot(edge.X, edge.Y);
+            var edgeLength = Length(edge);
             if (!(edgeLength > 0) || !double.IsFinite(edgeLength))
                 throw new InvalidOperationException("Authoritative boundary has no usable geometric length.");
             var offset = boundary.Start - traversal.Position;
@@ -207,7 +207,7 @@ public static class PeriodicCellTraversalGeometry
             return new CellTraversalAdvance(traversal, 0, crossing);
 
         var heading = traversal.TravelHeading!.Value;
-        var length = Math.Hypot(heading.X, heading.Y);
+        var length = Length(heading);
         var unit = new WorldPoint(heading.X / length, heading.Y / length);
         var needed = crossing.DistanceWorldUnits ?? double.PositiveInfinity;
         if (availableWorldUnits < needed)
@@ -238,4 +238,13 @@ public static class PeriodicCellTraversalGeometry
     }
 
     private static double Cross(WorldPoint a, WorldPoint b) => a.X * b.Y - a.Y * b.X;
+
+    private static double Length(WorldPoint point)
+    {
+        var max = Math.Max(Math.Abs(point.X), Math.Abs(point.Y));
+        if (max == 0) return 0;
+        var x = point.X / max;
+        var y = point.Y / max;
+        return max * Math.Sqrt(x * x + y * y);
+    }
 }
