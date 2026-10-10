@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using HexCrawl.Domain.Spatial;
 using HexCrawl.Domain.World;
 
@@ -31,14 +32,17 @@ public sealed partial class PostgresHexCrawlStore
         };
     }
 
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
     private sealed record WorldSnapshot(
         Guid Id,
         string Name,
-        HexGridDefinition Grid,
+        HexGridDefinition? Grid,
         IReadOnlyList<FeatureSnapshot> Features,
         IReadOnlyList<Location> Locations,
         IReadOnlyList<SourceMapRepresentation> SourceMaps,
-        IReadOnlyList<EnvironmentAnnotation> EnvironmentAnnotations)
+        IReadOnlyList<EnvironmentAnnotation> EnvironmentAnnotations,
+        PeriodicWorldTiling? Tiling = null,
+        int FormatVersion = 1)
     {
         public static WorldSnapshot FromDomain(OverworldDefinition world)
         {
@@ -46,22 +50,35 @@ public sealed partial class PostgresHexCrawlStore
             return new WorldSnapshot(
                 world.Id,
                 world.Name,
-                world.Grid,
+                world.HasLegacyHexGrid ? world.Grid : null,
                 world.Features.Select(FeatureSnapshot.FromDomain).ToArray(),
                 world.Locations,
                 world.SourceMaps,
-                world.EnvironmentAnnotations);
+                world.EnvironmentAnnotations,
+                world.SpatialTiling,
+                2);
         }
 
-        public OverworldDefinition ToDomain() => new()
+        public OverworldDefinition ToDomain()
         {
-            Id = Id,
-            Name = Name,
-            Grid = Grid,
-            Features = Features.Select(item => item.ToDomain()).ToArray(),
-            Locations = Locations.ToArray(),
-            SourceMaps = SourceMaps.ToArray(),
-            EnvironmentAnnotations = EnvironmentAnnotations.ToArray()
-        };
+            if ((FormatVersion == 1 && (Grid is null || Tiling is not null))
+                || (FormatVersion == 2 && Tiling is null)
+                || FormatVersion is < 1 or > 2)
+                throw new InvalidDataException(
+                    "Unsupported or inconsistent persisted world format. The original record has been preserved.");
+            var world = new OverworldDefinition
+            {
+                Id = Id,
+                Name = Name,
+                Grid = Grid!,
+                Tiling = Tiling,
+                Features = Features.Select(item => item.ToDomain()).ToArray(),
+                Locations = Locations.ToArray(),
+                SourceMaps = SourceMaps.ToArray(),
+                EnvironmentAnnotations = EnvironmentAnnotations.ToArray()
+            };
+            world.ValidateEnvironmentAnnotations();
+            return world;
+        }
     }
 }

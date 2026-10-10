@@ -67,6 +67,18 @@ jobs:
             -f docker-compose.yml config >/dev/null
           python3 .github/scripts/phase16-deployment-config.py verify dorks-and-dice-hex-crawl "$ENV_FILE" "$DEPLOY_SNAPSHOT_DIR"
 
+      - name: Verify Phase 17 recovery and cutover authorization
+        # This deliberately blocks schema-10 deployment until an operator has
+        # restored BOTH backup artifacts in isolation and attested the exact SHA.
+        # Remove this temporary gate only after the migration/recovery review
+        # and signed-in smoke test of the deployed schema-10 service.
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/phase17-recovery-gate.py \
+            "${PHASE17_RECOVERY_MANIFEST:-/mnt/HDDs/www/dorks-and-dice-hex-crawl/phase17-recovery-attestation.json}" \
+            "$DEPLOY_SHA"
+
       - name: Build image
         timeout-minutes: 10
         run: |
@@ -198,52 +210,23 @@ jobs:
             exit 1
           fi
 
-      - name: Restore previous running image after failed deploy or verification
-        id: restore
+      - name: Require controlled recovery after failed schema-10 cutover
         if: ${{ failure() && steps.previous_image.outputs.available == 'true' && (steps.deploy.outcome == 'failure' || steps.verify.outcome == 'failure') }}
-        timeout-minutes: 5
-        env:
-          DEPLOY_SNAPSHOT_DIR: ${{ steps.previous_image.outputs.snapshot_dir }}
         run: |
-          set -euo pipefail
-          ENV_FILE="$DEPLOY_SNAPSHOT_DIR/compose.env"
-          if [ ! -f "$ENV_FILE" ]; then
-            echo "Rollback configuration is missing; previous image was retained as dorks-and-dice-hex-crawl:pre-deploy" >&2
-            exit 1
-          fi
-          docker image inspect dorks-and-dice-hex-crawl:pre-deploy >/dev/null
-          docker image tag dorks-and-dice-hex-crawl:pre-deploy dorks-and-dice-hex-crawl:latest
-          docker rm -f dorks-and-dice-hex-crawl 2>/dev/null || true
-          docker compose \
-            --project-name dorks-and-dice-hex-crawl \
-            --env-file "$ENV_FILE" \
-            -f "$DEPLOY_SNAPSHOT_DIR/rollback.compose.yml" up -d --force-recreate --remove-orphans
-          restored=false
-          for i in $(seq 1 "${DEPLOY_HEALTH_ATTEMPTS:-60}"); do
-            readiness=$(docker run --rm --network dorks-and-dice-backend curlimages/curl:8.12.1 \
-              -fsS http://dorks-and-dice-hex-crawl:8080/ready 2>/dev/null || true)
-            if echo "$readiness" | grep -q '"status":"ready"' \
-              && echo "$readiness" | grep -q '"persistence":"postgresql-ready"'; then
-              restored=true
-              break
-            fi
-            sleep 1
-          done
-          if [ "$restored" != true ]; then
-            echo "ALERT: previous image could not be verified; immediate operator intervention required" >&2
-            docker logs dorks-and-dice-hex-crawl || true
-            exit 1
-          fi
-          restored_image="$(docker inspect --type container --format '{{.Image}}' dorks-and-dice-hex-crawl 2>/dev/null || true)"
-          expected_previous_image="${{ steps.previous_image.outputs.image }}"
-          if [ "$restored_image" != "$expected_previous_image" ]; then
-            echo "Rollback started image $restored_image, expected $expected_previous_image" >&2
-            exit 1
-          fi
-          echo "Previous deployed image $restored_image has been restored and verified. This deployment remains FAILED."
+          # A schema-9 application cannot read a schema-10 database. Replacing
+          # only the image here would leave the site unusable and could obscure
+          # the migration failure. Retain both images and preserve the database.
+          echo 'CRITICAL: Automatic image-only rollback is deliberately disabled for Phase 17.' >&2
+          echo 'Stop writers; inspect the current schema and running image.' >&2
+          echo 'If returning to the previous image, first restore the verified pre-cutover PostgreSQL AND map-asset backups under controlled downtime.' >&2
+          echo 'The previous image remains tagged dorks-and-dice-hex-crawl:pre-deploy.' >&2
+          echo 'No automatic database or asset changes have been attempted by this recovery step.' >&2
 
       - name: Erase private known-good configuration after safe completion
-        if: ${{ always() && steps.previous_image.outputs.available == 'true' && (steps.verify.outcome == 'success' || steps.restore.outcome == 'success' || (steps.deploy.outcome == 'skipped' && steps.verify.outcome == 'skipped')) }}
+        # Keep the exact previous Compose/environment snapshot whenever cutover
+        # failed, was cancelled, or reached an uncertain state. Only discard it
+        # after proven readiness or a failure strictly before deployment.
+        if: ${{ always() && !cancelled() && steps.previous_image.outputs.available == 'true' && (steps.verify.outcome == 'success' || (steps.deploy.outcome == 'skipped' && steps.verify.outcome == 'skipped')) }}
         timeout-minutes: 1
         env:
           DEPLOY_SNAPSHOT_DIR: ${{ steps.previous_image.outputs.snapshot_dir }}

@@ -1,6 +1,6 @@
 # Tile Crawl transition — development plan
 
-**Status:** Phase 16 implementation in progress on feature branches; acceptance gates remain unmet  
+**Status:** Phase 16 merged; Phase 17 implementation under validation on feature/tile-crawl-phase-17. Release gates remain pending.  
 **Roadmap:** Phases 16–21 (the successor to the completed Hex Crawl / generic-procedure roadmap)  
 **Primary repository:** LegendMaster03/dorks-and-dice-hex-crawl  
 **Analysis-service repository:** LegendMaster03/dorks-and-dice-surveyor  
@@ -150,6 +150,8 @@ The existing detector already performs edge sampling, repeated line-family and p
 - Reject locally plausible but globally incorrect candidates using distant-region evidence. Evaluate ambiguity, false positives, residual drift, calibration, timeouts and resource limits against predeclared thresholds. Underconstrained images should return inconclusive rather than a confident wrong identity.
 - Validate **end-to-end compatibility** of the existing authenticated hex grid detection and image-import workflow and the coordinated new contract. No production user-facing exposure of nonhex worlds is required yet, and no existing tester workflow may become nonfunctional.
 - A completed research spike or an expanded fixed-shape catalog **does not satisfy** the Phase 16 Surveyor completion requirement. Any proven blocker must be reported with evidence and a proposed roadmap revision for explicit approval.
+
+**Phase 17 implementation note (10 October 2026):** The proposed full-database version transition is procedure schema 1.3 and PostgreSQL schema 10. Legacy world records are converted in a single transactional migration while retaining original hex grid parameters as a verified compatibility projection; schema 10 and all procedure updates commit atomically. This is not an authorization to deploy or merge. See `docs/phase-17-world-authority-and-persistence.md` for recovery and release gates.
 
 ## Phase 17 — Generalize world/cell authority and persistence
 

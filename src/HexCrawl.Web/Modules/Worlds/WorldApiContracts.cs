@@ -95,10 +95,11 @@ public sealed record OverworldContract(
     long Version,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
-    GridContract Grid,
+    GridContract? Grid,
     IReadOnlyList<FeatureContract> Features,
     IReadOnlyList<LocationContract> Locations,
-    IReadOnlyList<SourceMapContract> SourceMaps)
+    IReadOnlyList<SourceMapContract> SourceMaps,
+    PeriodicWorldTiling? Tiling = null)
 {
     public static OverworldContract From(StoredOverworld world) => new(
         world.World.Id,
@@ -106,10 +107,11 @@ public sealed record OverworldContract(
         world.Version,
         world.CreatedAt,
         world.UpdatedAt,
-        GridContract.From(world.World.Grid),
+        world.World.HasLegacyHexGrid ? GridContract.From(world.World.Grid) : null,
         world.World.Features.Select(FeatureContract.From).ToArray(),
         world.World.Locations.Select(LocationContract.From).ToArray(),
-        world.World.SourceMaps.Select(SourceMapContract.From).ToArray());
+        world.World.SourceMaps.Select(SourceMapContract.From).ToArray(),
+        world.World.Tiling);
 }
 
 public sealed record CreateOverworldRequest(

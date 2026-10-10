@@ -117,7 +117,8 @@ public enum EnvironmentAnnotationScopeKind
 {
     World,
     Hex,
-    SpatialFeature
+    SpatialFeature,
+    Cell
 }
 
 public sealed record EnvironmentAnnotationScope
@@ -125,25 +126,26 @@ public sealed record EnvironmentAnnotationScope
     public required EnvironmentAnnotationScopeKind Kind { get; init; }
     public HexCoordinate? Hex { get; init; }
     public Guid? FeatureId { get; init; }
+    public WorldCellId? Cell { get; init; }
 
     public void Validate(IReadOnlySet<Guid> featureIds)
     {
         switch (Kind)
         {
             case EnvironmentAnnotationScopeKind.World:
-                if (Hex is not null || FeatureId.HasValue)
+                if (Hex is not null || FeatureId.HasValue || Cell.HasValue)
                 {
                     throw new InvalidOperationException("A world environment scope can not reference a hex or spatial feature.");
                 }
                 break;
             case EnvironmentAnnotationScopeKind.Hex:
-                if (Hex is null || FeatureId.HasValue)
+                if (Hex is null || FeatureId.HasValue || Cell.HasValue)
                 {
                     throw new InvalidOperationException("A hex environment scope requires only a hex coordinate.");
                 }
                 break;
             case EnvironmentAnnotationScopeKind.SpatialFeature:
-                if (Hex is not null || !FeatureId.HasValue || FeatureId.Value == Guid.Empty)
+                if (Hex is not null || Cell.HasValue || !FeatureId.HasValue || FeatureId.Value == Guid.Empty)
                 {
                     throw new InvalidOperationException("A spatial-feature environment scope requires only a feature id.");
                 }
@@ -151,6 +153,12 @@ public sealed record EnvironmentAnnotationScope
                 {
                     throw new InvalidOperationException("Environment annotation references a spatial feature that does not exist.");
                 }
+                break;
+            case EnvironmentAnnotationScopeKind.Cell:
+                if (Hex is not null || FeatureId.HasValue || Cell is null
+                    || Cell.Value.TilingId == Guid.Empty || string.IsNullOrWhiteSpace(Cell.Value.Address.MotifCellId))
+                    throw new InvalidOperationException("A cell environment scope requires only a qualified cell address.");
+                Cell.Value.Address.Translation.ValidateWireRange();
                 break;
             default:
                 throw new InvalidOperationException("Environment annotation scope is not supported.");

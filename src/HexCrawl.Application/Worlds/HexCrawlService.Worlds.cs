@@ -56,6 +56,33 @@ public sealed partial class HexCrawlService
             now), cancellationToken);
     }
 
+
+    /// <summary>
+    /// Phase 17 internal authoring entry point. No public HTTP creation route is
+    /// exposed while the Phase 18 movement and Phase 19 rendering gates remain.
+    /// </summary>
+    public async Task<StoredOverworld> CreatePeriodicOverworldAsync(
+        string ownerUserId,
+        string name,
+        PeriodicWorldTiling tiling,
+        CancellationToken cancellationToken = default)
+    {
+        var owner = RequireUser(ownerUserId);
+        var title = RequiredText(name, "Overworld name");
+        ArgumentNullException.ThrowIfNull(tiling);
+        tiling.Validate();
+        var now = DateTimeOffset.UtcNow;
+        var world = new OverworldDefinition
+        {
+            Id = Guid.NewGuid(),
+            Name = title,
+            Tiling = tiling
+        };
+        world.ValidateEnvironmentAnnotations();
+        return await _store.CreateOverworldAsync(new StoredOverworld(
+            world, owner, 1, now, now), cancellationToken);
+    }
+
     public async Task<StoredOverworld> UpdateOverworldAsync(
         Guid overworldId,
         string ownerUserId,
@@ -77,7 +104,15 @@ public sealed partial class HexCrawlService
             throw new HexCrawlConflictException("Grid geometry can not be changed after an expedition has been created for this overworld.");
         }
 
-        var updated = current with { World = current.World with { Name = name, Grid = command.Grid } };
+        var newTiling = LegacyHexTilingCompatibility.Create(command.Grid) with
+        {
+            Revision = current.World.SpatialTiling.Revision +
+                (command.Grid == current.World.Grid ? 0 : 1)
+        };
+        var updated = current with
+        {
+            World = current.World with { Name = name, Grid = command.Grid, Tiling = newTiling }
+        };
         return await SaveWorldAsync(updated, command.ExpectedVersion, cancellationToken);
     }
 

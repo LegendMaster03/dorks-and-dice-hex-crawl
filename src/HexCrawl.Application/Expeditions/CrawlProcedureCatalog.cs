@@ -327,7 +327,7 @@ public static class CrawlProcedureCatalog
             presetKey,
             displayName,
             description,
-            1,
+            2,
             new GenericProcedurePresetRecipe(procedureKey, procedureName, modules.ToArray())
             {
                 TilingDsSymbol = CampaignProcedureSchema.CurrentHexTilingDsSymbol

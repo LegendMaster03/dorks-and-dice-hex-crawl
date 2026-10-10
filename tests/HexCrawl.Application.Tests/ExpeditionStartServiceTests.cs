@@ -1,3 +1,6 @@
+using HexCrawl.Application.Persistence;
+using HexCrawl.Domain.Spatial;
+using HexCrawl.Domain.World;
 using System.Globalization;
 using HexCrawl.Domain.Procedure;
 using HexCrawl.Domain.Runtime;
@@ -68,6 +71,56 @@ public sealed class ExpeditionStartServiceTests
                 module.Module.Key == GenericProcedureCatalog.TimeIntervalModule)
                 .Parameters["durationTicks"]);
         Assert.Equal(2, (await procedures.GetLatestAsync("alice", created.ProcedureId)).Revision);
+    }
+
+    [Fact]
+    public async Task HexWorldStartAcceptsCanonicalEquivalentSymbolButRejectsDifferentTiling()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var store = new PostgresHexCrawlStore(database.ConnectionString);
+        await store.InitializeAsync();
+        var procedures = new CampaignProcedureService(store);
+        var starter = new ExpeditionStartService(store, new HexCrawlService(store), procedures);
+        var grid = new HexGridDefinition
+        {
+            Id = Guid.NewGuid(), HexRadiusWorldUnits = 2,
+            NeighborCenterDistance = new DistanceMeasure(12, DistanceUnit.Miles)
+        };
+        var world = new OverworldDefinition
+        {
+            Id = Guid.NewGuid(), Name = "Canonical hex world", Grid = grid
+        };
+        var now = DateTimeOffset.UtcNow;
+        await store.CreateOverworldAsync(new StoredOverworld(world, "alice", 1, now, now));
+        var baseProcedure = CrawlProcedureCatalog.Resolve(CrawlProcedureCatalog.Dnd35PresetKey)
+            .MaterializeGeneric().Procedure;
+        var equivalent = baseProcedure with
+        {
+            ProcedureId = Guid.NewGuid(), TilingDsSymbol = "<1: 1,1,1:6,3>"
+        };
+        equivalent.Validate();
+        await store.CreateCampaignProcedureRevisionAsync(new StoredCampaignProcedureRevision(
+            equivalent, "alice", null, null, now));
+        var session = await starter.StartWorldBoundAsync(
+            world.Id, "alice", "Equivalent symbol",
+            new ProcedureStartSelection(ProcedureId: equivalent.ProcedureId,
+                ProcedureRevision: equivalent.Revision),
+            MapPresentationPolicyCatalog.All[1].Key, new HexCoordinate(0, 0));
+        Assert.Equal(equivalent.TilingDsSymbol, session.CampaignProcedure.TilingDsSymbol);
+        Assert.Equal(world.Id, ((WorldBoundCrawlSessionContext)session.Context).WorldId);
+
+        var incompatible = baseProcedure with
+        {
+            ProcedureId = Guid.NewGuid(), TilingDsSymbol = "<1:1,1,1:4,4>"
+        };
+        incompatible.Validate();
+        await store.CreateCampaignProcedureRevisionAsync(new StoredCampaignProcedureRevision(
+            incompatible, "alice", null, null, now));
+        await Assert.ThrowsAsync<NotSupportedException>(() => starter.StartWorldBoundAsync(
+            world.Id, "alice", "Wrong topology",
+            new ProcedureStartSelection(ProcedureId: incompatible.ProcedureId,
+                ProcedureRevision: incompatible.Revision),
+            MapPresentationPolicyCatalog.All[1].Key, new HexCoordinate(0, 0)));
     }
 
     [Fact]

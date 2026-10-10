@@ -1,3 +1,4 @@
+using HexCrawl.Domain.Procedure;
 using HexCrawl.Application.Persistence;
 using HexCrawl.Domain.Knowledge;
 using HexCrawl.Domain.Presentation;
@@ -41,7 +42,13 @@ public sealed partial class HexCrawlService
         CancellationToken cancellationToken = default)
     {
         var world = await GetOverworldAsync(overworldId, ownerUserId, cancellationToken);
+        if (!world.World.HasLegacyHexGrid)
+            throw new NotSupportedException(
+                "Generalized world traversal is gated until Phase 18.");
         var materialized = CrawlProcedureCatalog.Resolve(command.ProcedureKey).MaterializeGeneric();
+        if (!CampaignProcedureSchema.RequiresLegacyHexTiling(materialized.Procedure.TilingDsSymbol))
+            throw new NotSupportedException(
+                "The selected procedure is not compatible with hex-only movement.");
         var expeditionId = Guid.NewGuid();
         var state = new ExpeditionState
         {
@@ -257,9 +264,16 @@ public sealed partial class HexCrawlService
             case WorldBoundCrawlSessionContext worldContext:
             {
                 var world = await GetOverworldAsync(worldContext.WorldId, ownerUserId, cancellationToken);
+                if (!world.World.HasLegacyHexGrid
+                    || !CampaignProcedureSchema.RequiresLegacyHexTiling(expedition.CampaignProcedure.TilingDsSymbol))
+                    throw new NotSupportedException(
+                        "Spatial traversal requires a matching hex tiling until Phase 18.");
                 return (ExpeditionWorldComposition.RuntimeContext(world.World), world);
             }
             case AbstractHexCrawlSessionContext abstractContext:
+                if (!CampaignProcedureSchema.RequiresLegacyHexTiling(expedition.CampaignProcedure.TilingDsSymbol))
+                    throw new NotSupportedException(
+                        "Abstract hex traversal requires a hex procedure until Phase 18.");
                 abstractContext.Validate();
                 return (abstractContext.HexContext, null);
             case NonSpatialCrawlSessionContext:

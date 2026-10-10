@@ -84,6 +84,9 @@ jobs:
             exit 1
           fi
 
+      - name: Test Phase 17 recovery and failed-cutover outcome contracts
+        run: python3 -m unittest discover -s tests -p 'test_phase17_*.py'
+
       - name: Restore
         run: dotnet restore dorks-and-dice-hex-crawl.slnx
 
@@ -242,6 +245,42 @@ jobs:
           assert d["context"]["kind"] == "NonSpatial", d
           assert d["procedure"]["key"] == "simple-fixed-distance", d
           PY
+
+      - name: Rehearse isolated PostgreSQL and map-asset backup and restore
+        run: |
+          set -euo pipefail
+          backup_dir="$RUNNER_TEMP/hex-crawl-phase17-recovery"
+          mkdir -p "$backup_dir"
+          docker exec hex-crawl-ci-postgres pg_dump -U hex_crawl_test -d postgres \
+            --format=custom --schema=smoke_world > "$backup_dir/database.dump"
+          test -s "$backup_dir/database.dump"
+          asset_parent="$RUNNER_TEMP/hex-crawl-smoke-data"
+          test -d "$asset_parent/assets"
+          tar -czf "$backup_dir/assets.tar.gz" -C "$asset_parent" assets
+          test -s "$backup_dir/assets.tar.gz"
+
+          docker exec hex-crawl-ci-postgres createdb -U hex_crawl_test phase17_restore_check
+          docker exec -i hex-crawl-ci-postgres pg_restore -U hex_crawl_test \
+            --exit-on-error --no-owner --no-acl -d phase17_restore_check \
+            < "$backup_dir/database.dump"
+          original="$(docker exec hex-crawl-ci-postgres psql -v ON_ERROR_STOP=1 \
+            -U hex_crawl_test -d postgres -tAc \
+            "SELECT (SELECT count(*) FROM smoke_world.overworlds)::text || ':' || \
+                    (SELECT count(*) FROM smoke_world.expeditions)::text || ':' || \
+                    (SELECT count(*) FROM smoke_world.expedition_events)::text || ':' || \
+                    (SELECT max(version) FROM smoke_world.hex_crawl_schema_migrations)::text")"
+          restored="$(docker exec hex-crawl-ci-postgres psql -v ON_ERROR_STOP=1 \
+            -U hex_crawl_test -d phase17_restore_check -tAc \
+            "SELECT (SELECT count(*) FROM smoke_world.overworlds)::text || ':' || \
+                    (SELECT count(*) FROM smoke_world.expeditions)::text || ':' || \
+                    (SELECT count(*) FROM smoke_world.expedition_events)::text || ':' || \
+                    (SELECT max(version) FROM smoke_world.hex_crawl_schema_migrations)::text")"
+          test "$original" = "$restored"
+          test "$original" = "1:1:$(echo "$original" | cut -d: -f3):10"
+          mkdir -p "$backup_dir/asset-restore"
+          tar -xzf "$backup_dir/assets.tar.gz" -C "$backup_dir/asset-restore"
+          diff -qr "$asset_parent/assets" "$backup_dir/asset-restore/assets"
+          echo "Isolated database and map-asset restoration verified: $restored"
 
       - name: Cleanup PostgreSQL validation infrastructure
         if: always()

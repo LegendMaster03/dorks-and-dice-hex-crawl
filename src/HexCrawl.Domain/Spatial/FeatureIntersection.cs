@@ -14,6 +14,41 @@ public static class FeatureIntersection
         };
     }
 
+
+    /// <summary>The shortest Euclidean distance to a polygon (zero on or inside it).</summary>
+    public static double DistanceToPolygon(WorldPoint point, IReadOnlyList<WorldPoint> polygon)
+    {
+        if (polygon.Count < 3)
+            throw new ArgumentException("A polygon must have at least three vertices.", nameof(polygon));
+        if (PointInPolygon(point, polygon)) return 0;
+        double best = double.PositiveInfinity;
+        for (int i = 0; i < polygon.Count; i++)
+        {
+            var a = polygon[i];
+            var b = polygon[(i + 1) % polygon.Count];
+            double x = b.X - a.X, y = b.Y - a.Y;
+            double squared = x * x + y * y;
+            if (squared == 0) continue;
+            double t = Math.Clamp(((point.X - a.X) * x + (point.Y - a.Y) * y) / squared, 0, 1);
+            double dx = point.X - a.X - t * x, dy = point.Y - a.Y - t * y;
+            best = Math.Min(best, Math.Sqrt(dx * dx + dy * dy));
+        }
+        return best;
+    }
+
+    public static bool IntersectsPolygon(IReadOnlyList<WorldPoint> polygon, SpatialFeature feature)
+    {
+        if (polygon.Count < 3)
+            throw new ArgumentException("Cell polygon has fewer than three corners.", nameof(polygon));
+        return feature switch
+        {
+            PointFeature point => PointInPolygon(point.Position, polygon),
+            LinearFeature line => PolylineIntersectsPolygon(line.Path, polygon),
+            RegionFeature region => PolygonsIntersect(region.Boundary, polygon),
+            _ => false
+        };
+    }
+
     private static bool PolylineIntersectsPolygon(IReadOnlyList<WorldPoint> path, IReadOnlyList<WorldPoint> polygon)
     {
         if (path.Count == 0)
@@ -37,7 +72,7 @@ public static class FeatureIntersection
         return false;
     }
 
-    private static bool PolygonsIntersect(IReadOnlyList<WorldPoint> left, IReadOnlyList<WorldPoint> right)
+    public static bool PolygonsIntersect(IReadOnlyList<WorldPoint> left, IReadOnlyList<WorldPoint> right)
     {
         if (left.Count < 3 || right.Count < 3)
         {
@@ -80,7 +115,7 @@ public static class FeatureIntersection
         return false;
     }
 
-    private static bool PointInPolygon(WorldPoint point, IReadOnlyList<WorldPoint> polygon)
+    public static bool PointInPolygon(WorldPoint point, IReadOnlyList<WorldPoint> polygon)
     {
         if (polygon.Count < 3)
         {
@@ -112,15 +147,54 @@ public static class FeatureIntersection
         return inside;
     }
 
+    // Coordinates are rounded in their global world frame before they reach
+    // polygon queries. For example, at 1e9 the spacing of representable
+    // doubles is about 1.2e-7, even when the cell edge is only one unit.
+    // Take the larger adjacent spacing at powers of two, where consecutive
+    // representable values have different gaps. Never scale this uncertainty
+    // merely by a small local edge length.
+    private static double CoordinateSpacing(double value)
+    {
+        if (!double.IsFinite(value)) return double.PositiveInfinity;
+        double before = Math.Abs(value - Math.BitDecrement(value));
+        double after = Math.Abs(Math.BitIncrement(value) - value);
+        return double.IsFinite(after) ? Math.Max(before, after) : before;
+    }
+
     private static bool PointOnSegment(WorldPoint start, WorldPoint end, WorldPoint point)
     {
-        const double epsilon = 1e-9;
-        var cross = ((end.X - start.X) * (point.Y - start.Y)) - ((end.Y - start.Y) * (point.X - start.X));
-        return Math.Abs(cross) < epsilon
-            && point.X >= Math.Min(start.X, end.X) - epsilon
-            && point.X <= Math.Max(start.X, end.X) + epsilon
-            && point.Y >= Math.Min(start.Y, end.Y) - epsilon
-            && point.Y <= Math.Max(start.Y, end.Y) + epsilon;
+        double dx = end.X - start.X, dy = end.Y - start.Y;
+        double length = Math.Sqrt(dx * dx + dy * dy);
+        if (!double.IsFinite(length) || length == 0) return false;
+
+        // Keep a small, dimensionally correct tolerance in the edge's own
+        // coordinate system. A fixed area tolerance at microunit scales used
+        // to classify unrelated interiors as boundaries.
+        double localTolerance = Math.Max(1e-13, length * 1e-10);
+
+        // The three supplied points may each have incurred independent
+        // coordinate rounding. Bound those errors separately by axis so a
+        // large X origin does not artificially blur the Y classification.
+        // Eight representable spacings cover endpoint construction,
+        // midpoint rounding and difference/cross-product operations.
+        const double roundoffSpacings = 8;
+        double uncertaintyX = roundoffSpacings * Math.Max(
+            CoordinateSpacing(start.X), Math.Max(CoordinateSpacing(end.X), CoordinateSpacing(point.X)));
+        double uncertaintyY = roundoffSpacings * Math.Max(
+            CoordinateSpacing(start.Y), Math.Max(CoordinateSpacing(end.Y), CoordinateSpacing(point.Y)));
+        double toleranceX = localTolerance + uncertaintyX;
+        double toleranceY = localTolerance + uncertaintyY;
+        double cross = dx * (point.Y - start.Y) - dy * (point.X - start.X);
+
+        // The cross product has squared-length units. Its uncertainty comes
+        // from both the X and Y components, not an arbitrary fixed area.
+        double crossTolerance = localTolerance * length
+            + Math.Abs(dx) * uncertaintyY + Math.Abs(dy) * uncertaintyX;
+        return Math.Abs(cross) <= crossTolerance
+            && point.X >= Math.Min(start.X, end.X) - toleranceX
+            && point.X <= Math.Max(start.X, end.X) + toleranceX
+            && point.Y >= Math.Min(start.Y, end.Y) - toleranceY
+            && point.Y <= Math.Max(start.Y, end.Y) + toleranceY;
     }
 
     private static bool SegmentsIntersect(WorldPoint a, WorldPoint b, WorldPoint c, WorldPoint d)
@@ -139,10 +213,11 @@ public static class FeatureIntersection
             return true;
         }
 
-        const double epsilon = 1e-9;
-        return (Math.Abs(abC) < epsilon && PointOnSegment(a, b, c))
-            || (Math.Abs(abD) < epsilon && PointOnSegment(a, b, d))
-            || (Math.Abs(cdA) < epsilon && PointOnSegment(c, d, a))
-            || (Math.Abs(cdB) < epsilon && PointOnSegment(c, d, b));
+        // PointOnSegment already performs scale-aware collinearity testing;
+        // a fixed absolute area threshold must not be applied here.
+        return PointOnSegment(a, b, c)
+            || PointOnSegment(a, b, d)
+            || PointOnSegment(c, d, a)
+            || PointOnSegment(c, d, b);
     }
 }

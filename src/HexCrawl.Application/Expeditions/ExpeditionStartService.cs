@@ -1,3 +1,4 @@
+using HexCrawl.Domain.Procedure;
 using HexCrawl.Application.Persistence;
 using HexCrawl.Domain.Knowledge;
 using HexCrawl.Domain.Presentation;
@@ -64,7 +65,15 @@ public sealed class ExpeditionStartService(
         presentation.Validate();
 
         var world = await coreService.GetOverworldAsync(overworldId, owner, cancellationToken);
+        // Phase 18 is responsible for generalized boundary-based movement.
+        // Avoid creating a materialized procedure revision for an unsupported start.
+        if (!world.World.HasLegacyHexGrid)
+            throw new NotSupportedException(
+                "Generalized world movement is gated until Phase 18. This world was not changed.");
         var selected = await ResolveProcedureAsync(owner, selection, cancellationToken);
+        if (!CampaignProcedureSchema.RequiresLegacyHexTiling(selected.Procedure.TilingDsSymbol))
+            throw new NotSupportedException(
+                "The selected procedure requires a different tiling; this runtime supports hexagonal worlds only.");
 
         var expeditionId = Guid.NewGuid();
         var state = new ExpeditionState
@@ -129,6 +138,10 @@ public sealed class ExpeditionStartService(
             _ => throw new ArgumentException("Unsupported crawl session context.", nameof(context))
         };
         var selected = await ResolveProcedureAsync(owner, selection, cancellationToken);
+        if (context is AbstractHexCrawlSessionContext
+            && !CampaignProcedureSchema.RequiresLegacyHexTiling(selected.Procedure.TilingDsSymbol))
+            throw new NotSupportedException(
+                "This abstract hex runtime cannot execute a nonhex tiling until Phase 18.");
 
         var now = DateTimeOffset.UtcNow;
         return await store.CreateExpeditionAsync(new StoredExpedition(
