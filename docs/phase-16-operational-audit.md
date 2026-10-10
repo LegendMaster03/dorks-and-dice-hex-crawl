@@ -326,7 +326,8 @@ has established the exact container IDs currently running on the host.
 The Phase 16 deployment definitions now preserve the actual running image as
 `:pre-deploy` **before** overwriting `:latest`, retain a full-SHA-tagged
 candidate with its revision label, verify the running revision, disable
-mid-rollout cancellation, and attempt restoration on deploy/verification
+mid-rollout cancellation, fail before building if the running rollback
+image cannot be established, and attempt restoration on deploy/verification
 failure. These changes are on feature branches only. The
 [isolated deployment rehearsal](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38016975981)
 executed both workflows' capture, deploy, verify and restore blocks with
