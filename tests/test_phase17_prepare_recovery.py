@@ -1,6 +1,7 @@
 """Unit tests for live-data cutover preparation; never call real Docker."""
 import importlib.util
 import json
+import re
 from pathlib import Path
 import subprocess
 import tempfile
@@ -40,7 +41,7 @@ class Phase17PrepareRecoveryTests(unittest.TestCase):
                 with mock.patch.object(prepare.subprocess, "run",
                                        side_effect=subprocess.CalledProcessError(
                                            5, ["docker", *command], stderr=b"private credential")):
-                    with self.assertRaisesRegex(RuntimeError, expected):
+                    with self.assertRaisesRegex(RuntimeError, re.escape(expected)):
                         prepare.docker(*command)
 
     def test_archive_restoration_matches_files_and_detects_symlinks(self):
