@@ -184,7 +184,7 @@ public sealed class WorldModule : IHexCrawlModule
                 procedureId,
                 revision
             });
-        GenericProcedureRuntime? bound;
+        GenericProcedureRuntime bound;
         try
         {
             bound = GenericProcedureRuntime.Bind(procedure);

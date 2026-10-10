@@ -59,6 +59,13 @@ public sealed class Phase19WorldGeometryEndpointsTests
                     $"/api/overworlds/{worldId:D}/cell-procedures", new { });
                 createdProcedure.EnsureSuccessStatusCode();
                 var pinned = await createdProcedure.Content.ReadFromJsonAsync<JsonElement>();
+                using var compatible = await client.GetAsync(
+                    $"/api/overworlds/{worldId:D}/cell-procedures/compatibility?procedureId={pinned.GetProperty("procedureId").GetGuid()}&revision={pinned.GetProperty("revision").GetInt32()}");
+                compatible.EnsureSuccessStatusCode();
+                var assessedProcedure = await compatible.Content.ReadFromJsonAsync<JsonElement>();
+                Assert.Equal("ready", assessedProcedure.GetProperty("status").GetString());
+                Assert.Equal(world.GetProperty("version").GetInt64(),
+                    assessedProcedure.GetProperty("worldVersion").GetInt64());
                 using var start = await client.PostAsJsonAsync(
                     $"/api/overworlds/{worldId:D}/cell-expeditions", new
                     {
@@ -103,6 +110,9 @@ public sealed class Phase19WorldGeometryEndpointsTests
                 using var deniedProcedure = await other.PostAsJsonAsync(
                     $"/api/overworlds/{worldId:D}/cell-procedures", new { });
                 Assert.Equal(HttpStatusCode.NotFound, deniedProcedure.StatusCode);
+                using var deniedCompatibility = await other.GetAsync(
+                    $"/api/overworlds/{worldId:D}/cell-procedures/compatibility?procedureId={Guid.NewGuid():D}&revision=1");
+                Assert.Equal(HttpStatusCode.NotFound, deniedCompatibility.StatusCode);
             }
         }
         finally
