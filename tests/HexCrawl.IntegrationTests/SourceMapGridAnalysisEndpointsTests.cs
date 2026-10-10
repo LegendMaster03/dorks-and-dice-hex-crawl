@@ -148,9 +148,11 @@ public sealed class SourceMapGridAnalysisEndpointsTests
         var database = TestWebHost.NewDatabasePath();
         try
         {
+            var analysisStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var cancellationObserved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var fake = new RecordingMapAnalysisService(async (_, _, _, _, token) =>
             {
+                analysisStarted.TrySetResult();
                 try
                 {
                     await Task.Delay(Timeout.InfiniteTimeSpan, token);
@@ -166,12 +168,18 @@ public sealed class SourceMapGridAnalysisEndpointsTests
             using var client = factory.CreateClient();
             var (worldId, sourceMapId, version) = await CreateWorldAndMap(client);
 
-            using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => client.PostAsync(
+            // Ensure the request reached the analysis service before testing
+            // propagation. A fixed 100 ms timeout can cancel during database
+            // setup under CI load, without ever entering the mocked analysis.
+            using var cancellation = new CancellationTokenSource();
+            var request = client.PostAsync(
                 $"/api/overworlds/{worldId:D}/source-maps/{sourceMapId:D}/grid-analysis",
                 null,
-                cancellation.Token));
-            await cancellationObserved.Task.WaitAsync(TimeSpan.FromSeconds(2));
+                cancellation.Token);
+            await analysisStarted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            cancellation.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => request);
+            await cancellationObserved.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
             var reopened = await client.GetFromJsonAsync<JsonElement>($"/api/overworlds/{worldId:D}");
             Assert.Equal(version, reopened.GetProperty("version").GetInt64());
