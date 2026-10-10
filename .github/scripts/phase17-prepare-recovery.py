@@ -40,7 +40,7 @@ SELECT
 """
 
 
-def docker(*args, stdout=None, stdin=None):
+def docker(*args, stdout=None, stdin=None, stderr=None):
     # Never send Docker's raw stderr, database content, or environment to
     # public Actions logs. The *operation name* is safe to disclose and
     # identifies which phase of recovery preparation needs an operator fix.
@@ -52,7 +52,7 @@ def docker(*args, stdout=None, stdin=None):
     try:
         return subprocess.run(["docker", *args], check=True, stdin=stdin,
                               stdout=stdout if stdout is not None else subprocess.PIPE,
-                              stderr=subprocess.DEVNULL)
+                              stderr=stderr if stderr is not None else subprocess.DEVNULL)
     except subprocess.CalledProcessError as failure:
         raise RuntimeError(
             "Docker " + safe_action + ("/" + safe_command if safe_command else "")
@@ -130,10 +130,34 @@ def restore_and_verify_database(postgres_image, dump, expected_inventory):
             time.sleep(1)
         else:
             raise RuntimeError("Isolated PostgreSQL was not ready for restore")
-        with dump.open("rb") as stream:
-            docker("exec", "-i", name, "pg_restore", "--exit-on-error",
-                   "--no-owner", "--no-privileges", "-U", DB_USER,
-                   "-d", DATABASE, stdin=stream)
+        # The isolated instance's initialized database already contains its
+        # default public schema. A full pg_dump may also define that schema:
+        # clean only the *disposable* restore target before recreating objects.
+        # Never direct pg_restore at production or perform live DROP commands.
+        private_log = dump.parent / "isolated-postgres-restore.log"
+        with dump.open("rb") as stream, private_log.open("xb") as diagnostic:
+            try:
+                docker("exec", "-i", name, "pg_restore", "--exit-on-error",
+                       "--clean", "--if-exists", "--no-owner", "--no-privileges",
+                       "-U", DB_USER, "-d", DATABASE,
+                       stdin=stream, stderr=diagnostic)
+            except RuntimeError:
+                diagnostic.flush()
+                evidence = private_log.read_text(encoding="utf-8", errors="replace")
+                if "already exists" in evidence:
+                    reason = "duplicate object"
+                elif "permission denied" in evidence or "must be owner" in evidence:
+                    reason = "restore privilege"
+                elif "extension" in evidence:
+                    reason = "extension"
+                elif "role" in evidence and "does not exist" in evidence:
+                    reason = "missing database role"
+                else:
+                    reason = "unclassified PostgreSQL restore error"
+                raise RuntimeError(
+                    "Isolated pg_restore failed (" + reason
+                    + "); private diagnostic file is retained on the deployment host") from None
+        private_log.chmod(0o600)
         if inventory(name) != expected_inventory:
             raise RuntimeError("Isolated PostgreSQL restore inventory differs from source")
     finally:
