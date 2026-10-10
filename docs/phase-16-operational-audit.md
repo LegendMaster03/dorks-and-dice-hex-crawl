@@ -315,28 +315,59 @@ merge, production deployment, database reset, or asset migration is
 authorized by this isolated matrix.
 
 
-### Main-deployment evidence and feature-branch rollback hardening
+### Main-deployment evidence and post-review recovery hardening
 
-The baseline SHA pins also match the most recent successful
-[Surveyor production deployment](https://github.com/LegendMaster03/dorks-and-dice-surveyor/actions/runs/37877969080)
-and [Hex Crawl production deployment](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/37889199540).
-The deployment workflows completed live readiness verification, but no one
-has established the exact container IDs currently running on the host.
+The pinned old revisions match the latest successful main-branch deployment
+workflows at the original handoff: Surveyor
+[`e9ad1cc9`](https://github.com/LegendMaster03/dorks-and-dice-surveyor/actions/runs/37877969080)
+and Hex Crawl
+[`afb4760f`](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/37889199540).
+They do not establish actual running container IDs or authenticated tester-record
+readability. No production deploy was performed during this remediation.
 
-The Phase 16 deployment definitions now preserve the actual running image as
-`:pre-deploy` **before** overwriting `:latest`, retain a full-SHA-tagged
-candidate with its revision label, verify the running revision, disable
-mid-rollout cancellation, fail before building if the running rollback
-image cannot be established or the production Compose configuration fails
-preflight, and attempt restoration only after deploy/verification
-failure. These changes are on feature branches only. The
-[isolated deployment rehearsal](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38017893857)
-executed both workflows' capture, deploy, verify and restore blocks with
-real disposable Docker services, including healthy rollout, configuration preflight failure preserving the
-running container, failed-readiness recovery, mismatched revision, failed
-Compose startup after removing the previous container, and missing previous
-container abort before modifying any image tag. Persistent volume content was
-preserved. Both services passed all six cases. The production rollback branch has **not** been tested on live services. The
-[Phase 16 release runbook](phase-16-release-runbook.md) describes the
-signed-in read-only tester gate and the exact operator requirements.
-**These changes do not authorize deployment or merger.**
+Feature-branch deployment workflows retain the **actual running** image, and
+capture a **private, secret-bearing known-good configuration** (resolved env
+variables, networks, mounts and restart policy) into mode-0700/0600 local
+files. Preflight compares the proposed Compose configuration against that
+running configuration **before** any new image build; mismatches fail closed,
+notably syntactically valid but changed application credentials. Replacement
+and previous-image recovery use the captured configuration instead of a
+possibly edited host `.env`. Frozen settings are removed after successful
+completion/recovery, or retained privately for operator intervention if
+recovery fails. Missing running image also aborts before build/tag mutation.
+
+The [real-Docker isolated rollback rehearsal](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38020927282)
+passed for both services, including a host environment left **invalid during
+the complete restoration**, mismatched revision, failed Compose start, and
+persisted-volume checks. This is a disposable environment using actual workflow
+shell blocks, not live host configuration or real credentials. The full
+GitHub job cancellation/host failure path remains operationally unproved.
+
+The [Phase 16 release runbook](phase-16-release-runbook.md) details
+signed-in read-only tester checks, secret retention and operator limits.
+**These feature-branch changes do not authorize merge, deployment, reset or
+modification of tester data.**
+
+### October 10 independent-review findings and branch-only remediation
+
+The [independent review](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/tree/feature/tile-crawl-phase-16/docs)
+identified six material issues; their implementation remedies are
+tracked in [phase-16-review-remediation.md](phase-16-review-remediation.md).
+
+- F1: source-polygon corner contour uncertainty must be separate from rigid
+  period drift; new actual HTTP triangle/mixed/rotated mixed regressions.
+- F2: qualified v3 candidate requires successful independent metric
+  registration and unchanged-raster source projection; Hex validates and
+  retains both evidence objects.
+- F3: source-to-analysis scale is checked from dimensions unconditionally.
+- F4: .NET tiny-scale metric segment intersection uses consistent dimensions.
+- F5: previous-image rollback retains and uses known-good runtime settings,
+  not a possibly corrupted current configuration.
+- F6: v3 admission precedes decode, uses a bounded separate experimental
+  worker lane, and has a request-wide deadline with cancellation. Existing
+  v2 worker capacity remains separate.
+
+A **synthetic bounded** generalized detector remains the only qualified
+operating envelope. Candidate records remain non-authoritative; no Phase 16
+DB migration or world-authority switch was introduced. Production acceptance
+is still open, and the independent reviewer must reassess these fixes.
