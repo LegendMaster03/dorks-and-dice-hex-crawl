@@ -7,7 +7,7 @@ namespace HexCrawl.Web.Api;
 /// <summary>
 /// Explicit versioned API surface for existing cell expeditions. These
 /// contracts are intentionally separate from the legacy six-direction route.
-/// No generalized expedition creation or browser workbench is enabled here.
+/// An isolated cell-only start path is enabled; legacy browser workbench remains gated.
 /// </summary>
 public sealed record StartCellExpeditionRequest(
     string Name,
@@ -45,6 +45,8 @@ public sealed record AdvanceCellWatchRequest(
         ArgumentNullException.ThrowIfNull(Inputs);
         ArgumentNullException.ThrowIfNull(Inputs.Travel);
         ValidateClientProvenance(Inputs.Travel.Provenance);
+        if (Inputs.DmOverrideNote is { Length: > 2000 })
+            throw new InvalidOperationException("DM override note exceeds 2000 characters.");
         if (Inputs.Navigation is { } nav
             && !(nav.Outcome == NavigationCheckOutcome.NotRequired
                 && nav.Provenance.Source == ResolutionSource.ProcedureDefault))
@@ -72,6 +74,9 @@ public sealed record AdvanceCellWatchRequest(
             ResolutionSource.ManualRoll or ResolutionSource.ExternalSystem
             or ResolutionSource.DmOverride))
             throw new InvalidOperationException("Unknown client resolution provenance source.");
+        if (provenance.Note is { Length: > 2000 })
+            throw new InvalidOperationException(
+                "Resolution provenance note exceeds 2000 characters.");
     }
 }
 

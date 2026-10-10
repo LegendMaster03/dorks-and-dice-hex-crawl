@@ -176,6 +176,12 @@ public sealed class Phase18CellWatchRuntimeTests
             new CellCourseDecision(heading, boundary.InterfaceIndex, Manual));
         Assert.Null(decided.PauseReason);
         Assert.Equal(boundary.InterfaceIndex, decided.Expedition.Traversal.SelectedExitInterfaceIndex);
+        var audit = Assert.Single(decided.Events,
+            e => e.Kind == CrawlRuntimeEventKind.ResolutionProvenanceRecorded);
+        Assert.Equal(state.Traversal.CurrentCell, audit.Cell);
+        Assert.Null(audit.Hex);
+        Assert.Contains("ManualRoll", audit.Message);
+        Assert.Contains(boundary.InterfaceIndex.ToString(), audit.Message);
         var resumed = engine.AdvanceCellWatch(world, procedure,
             decided.Expedition, decided.Expedition.ActiveWatch!.Plan, Inputs(1));
         Assert.Null(resumed.PauseReason);

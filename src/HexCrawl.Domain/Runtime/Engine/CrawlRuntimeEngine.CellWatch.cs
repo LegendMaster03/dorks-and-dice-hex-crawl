@@ -320,9 +320,16 @@ public sealed partial class CrawlRuntimeEngine
         };
         next.Validate(world);
         var events = new EventCollector(expedition.History);
-        AddCellEvent(events, active?.WatchNumber ?? Math.Max(1, next.CompletedWatches + 1),
-            CrawlRuntimeEventKind.DirectionChanged, next,
-            $"DM confirmed atomic exit interface {decision.SelectedExitInterfaceIndex} for the current cell.");
+        var watchNumber = active?.WatchNumber ?? Math.Max(1, next.CompletedWatches + 1);
+        AddCellEvent(events, watchNumber, CrawlRuntimeEventKind.DirectionChanged, next,
+            $"Resolved atomic exit interface {decision.SelectedExitInterfaceIndex} for the current cell.");
+        if (decision.Provenance.Source == ResolutionSource.DmOverride)
+            AddCellEvent(events, watchNumber, CrawlRuntimeEventKind.DmOverrideApplied,
+                next, decision.Provenance.Note ?? "DM confirmed a cell course decision.");
+        AddCellEvent(events, watchNumber, CrawlRuntimeEventKind.ResolutionProvenanceRecorded,
+            next, $"Cell course resolved through {decision.Provenance.Source}; selected atomic interface {decision.SelectedExitInterfaceIndex}."
+                + (string.IsNullOrWhiteSpace(decision.Provenance.Note)
+                    ? "" : $" Note: {decision.Provenance.Note.Trim()}"));
         return FinishCell(next, null, active?.Remaining ?? TimeSpan.Zero, events);
     }
 
