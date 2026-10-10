@@ -203,6 +203,18 @@ public sealed class Phase18CellReadContractsTests
                     }, ApiJson);
                 Assert.Equal(HttpStatusCode.BadRequest, forged.StatusCode);
 
+                using var forgedDefault = await client.PostAsJsonAsync(
+                    $"/api/expeditions/{runtime.Id:D}/cells/advance",
+                    advanceRequest with
+                    {
+                        Inputs = resolvedInputs with
+                        {
+                            Travel = ResolvedTravelAmount.CellTransitions(1,
+                                ResolutionProvenance.ProcedureDefault)
+                        }
+                    }, ApiJson);
+                Assert.Equal(HttpStatusCode.BadRequest, forgedDefault.StatusCode);
+
                 using var advancedResponse = await client.PostAsJsonAsync(
                     $"/api/expeditions/{runtime.Id:D}/cells/advance", advanceRequest, ApiJson);
                 advancedResponse.EnsureSuccessStatusCode();
