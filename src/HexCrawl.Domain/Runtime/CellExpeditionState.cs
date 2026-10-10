@@ -43,6 +43,10 @@ public sealed record CellExpeditionState : CrawlSessionRuntimeState
                 || ActiveWatch.WatchNumber != pending.WatchNumber))
             throw new InvalidOperationException(
                 "A cell encounter must be bound to its authoritative current cell and paused watch.");
+        if (ActiveWatch?.PendingDecision == RuntimePauseReason.EncounterTriggered
+            && PendingEncounter is null)
+            throw new InvalidOperationException(
+                "An encounter-paused cell watch requires its authoritative pending encounter occurrence.");
         if (ActiveWatch is { } watch && watch.WatchNumber <= CompletedWatches)
             throw new InvalidOperationException("An active watch must follow the last completed watch.");
         ActiveWatch?.Validate();
