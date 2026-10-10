@@ -213,6 +213,8 @@ public sealed class Phase18CellWatchRuntimeTests
         };
         current.Validate(world);
         Assert.Throws<InvalidOperationException>(() =>
+            (current with { PendingEncounter = null }).Validate(world));
+        Assert.Throws<InvalidOperationException>(() =>
             (current with { PendingEncounter = encounter with { Cell = null } }).Validate(world));
         Assert.Throws<InvalidOperationException>(() =>
             (current with { PendingEncounter = encounter with { Hex = new HexCoordinate(0, 0) } }).Validate(world));
