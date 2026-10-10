@@ -11,6 +11,7 @@ public sealed record Phase19CompatibilityAssessment(
     long WorldVersion, IReadOnlyList<string> Blockers, bool CanCorrectInPlace)
 {
     public Phase19RasterRegistrationResult? Registration { get; init; }
+    public Phase19RasterRegistrationResult? Correction { get; init; }
 }
 
 /// <summary>
@@ -78,12 +79,26 @@ public static class Phase19TilingCompatibility
                 : $"The image appears structurally compatible with {worldName}."
                     + " Its measured geometry still requires independent checks of "
                     + "scale, rotation, phase, and existing registrations.";
+        // Empty uncalibrated worlds can replace their unused spatial
+        // identity in one guarded write. Pinned procedures that already
+        // describe the observed pattern require no new revision; incompatible
+        // selected procedures are never silently rewritten.
+        var compatibleProcedure = procedureComparison is null || procedureComparison.Status is
+            TilingComparisonStatus.ExactIdentity or TilingComparisonStatus.ChamberIsomorphic
+                or TilingComparisonStatus.ProvenEquivalent;
+        var replacement = mismatched && compatibleProcedure && blockers.Count == 0
+            ? Phase19RasterRegistration.ConstructReplacement(world, observed)
+            : null;
+        var correction = replacement is null ? null
+            : Phase19RasterRegistration.Assess(replacement, observed);
+        bool canCorrect = correction is { Status: "candidates", Candidates.Count: > 0 };
         return new Phase19CompatibilityAssessment(
             mismatched ? "mismatch" : uncertain ? "inconclusive" : "structure-match",
             worldName, observedName, procedureName, explanation,
             worldComparison.Status.ToString(), procedureComparison?.Status.ToString(),
-            worldVersion, blockers, false)
+            worldVersion, blockers, canCorrect)
         {
+            Correction = canCorrect ? correction : null,
             Registration = mismatched || uncertain || worldComparison.Status is not (
                     TilingComparisonStatus.ExactIdentity or TilingComparisonStatus.ChamberIsomorphic
                         or TilingComparisonStatus.ProvenEquivalent)
