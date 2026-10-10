@@ -103,6 +103,9 @@ public sealed class Phase18CellWatchRuntimeTests
         var paused = engine.AdvanceCellWatch(world, procedure, state,
             plan with { IntendedHeading = ambiguousHeading }, Inputs(1));
         Assert.Equal(RuntimePauseReason.CellCourseAdjudicationRequired, paused.PauseReason);
+        Assert.Throws<InvalidOperationException>(() =>
+            engine.AdvanceCellWatch(world, procedure, paused.Expedition,
+                plan with { IntendedHeading = ambiguousHeading }, Inputs(1)));
 
         var boundary = world.Boundaries(cell.Id.Address)[0];
         var midpoint = new WorldPoint(
@@ -125,6 +128,40 @@ public sealed class Phase18CellWatchRuntimeTests
         Assert.Equal(1, resumed.Expedition.CompletedWatches);
         Assert.Single(resumed.Expedition.History,
             e => e.Kind == CrawlRuntimeEventKind.CellEntered);
+    }
+
+    [Fact]
+    public void CannotSubmitAtomicExitDecisionWithoutAdjudicationPause()
+    {
+        var (world, _, state, plan) = Setup("<1:1,1,1:4,4>", calibrated: true);
+        var selected = state.Traversal.SelectedExitInterfaceIndex!.Value;
+        var decision = new CellCourseDecision(plan.IntendedHeading, selected, Manual);
+        Assert.Throws<InvalidOperationException>(() =>
+            new CrawlRuntimeEngine().ResolveCellCourse(world, state, decision));
+    }
+
+    [Fact]
+    public void CorruptPendingEncounterCellFailsValidation()
+    {
+        var (world, _, state, plan) = Setup("<1:1,1,1:4,4>", calibrated: true);
+        var encounter = new PendingEncounterOccurrence(Guid.NewGuid(), 1, 1,
+            EncounterOutcomeKind.WanderingEncounter,
+            TimeSpan.Zero, null, null, null, Manual)
+        { Cell = state.Traversal.CurrentCell };
+        var current = state with
+        {
+            IntendedHeading = plan.IntendedHeading,
+            ActiveWatch = new CellActiveWatchState(1, TimeSpan.FromHours(4), TimeSpan.Zero,
+                plan, ResolvedEncounter.None, true, RuntimePauseReason.EncounterTriggered),
+            PendingEncounter = encounter
+        };
+        current.Validate(world);
+        Assert.Throws<InvalidOperationException>(() =>
+            (current with { PendingEncounter = encounter with { Cell = null } }).Validate(world));
+        Assert.Throws<InvalidOperationException>(() =>
+            (current with { PendingEncounter = encounter with { Hex = new HexCoordinate(0, 0) } }).Validate(world));
+        Assert.Throws<InvalidOperationException>(() =>
+            (current with { ActiveWatch = current.ActiveWatch! with { PendingDecision = null } }).Validate(world));
     }
 
     [Fact]
