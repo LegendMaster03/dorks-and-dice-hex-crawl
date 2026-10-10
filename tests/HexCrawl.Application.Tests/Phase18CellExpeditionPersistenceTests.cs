@@ -336,7 +336,7 @@ public sealed class Phase18CellExpeditionPersistenceTests
                 new DiscoverSubjectCommand(saved.Version, landmark.Id,
                     KnowledgeSubjectType.Location, "stale")));
 
-        var provenance = new ExpeditionConsequenceProvenance(
+        var delayProvenance = new ExpeditionConsequenceProvenance(
             ExpeditionConsequenceSourceKind.Dm, "phase18-cell-delay");
         var delay = new ExpeditionConsequence
         {
@@ -344,10 +344,10 @@ public sealed class Phase18CellExpeditionPersistenceTests
             Category = ExpeditionConsequenceCategory.TimeDelay,
             Target = new ExpeditionEffectTarget(ExpeditionEffectScope.Expedition),
             Components = [new TimeDelayConsequenceComponent(2, TimeDelayUnit.Hours)],
-            Provenance = provenance
+            Provenance = delayProvenance
         };
         var delayedByJourney = ExpeditionConsequenceAggregateTransition.Apply(
-            discovered, delay, provenance);
+            discovered, delay, delayProvenance);
         Assert.Equal(ExpeditionConsequenceStatus.Applied, delayedByJourney.Status);
         Assert.Equal(moved.ElapsedTravelTime + TimeSpan.FromHours(2),
             ((CellExpeditionState)delayedByJourney.Expedition.Runtime).ElapsedTravelTime);
@@ -364,7 +364,7 @@ public sealed class Phase18CellExpeditionPersistenceTests
             }
         };
         var deferred = ExpeditionConsequenceAggregateTransition.Apply(
-            interrupted, delay, provenance);
+            interrupted, delay, delayProvenance);
         Assert.Equal(ExpeditionConsequenceStatus.Deferred, deferred.Status);
         Assert.Equal(moved.ElapsedTravelTime,
             ((CellExpeditionState)deferred.Expedition.Runtime).ElapsedTravelTime);
