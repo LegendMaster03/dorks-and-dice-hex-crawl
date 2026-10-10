@@ -90,7 +90,8 @@ public sealed class Phase18CellReadContractsTests
             using (var client = factory.CreateClient())
             {
                 using var response = await client.GetAsync($"/api/expeditions/{runtime.Id:D}");
-                response.EnsureSuccessStatusCode();
+                Assert.True(response.IsSuccessStatusCode,
+                    $"Cell expedition read returned {(int)response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
                 var body = await response.Content.ReadFromJsonAsync<JsonElement>();
                 var state = body.GetProperty("expedition");
                 Assert.True(state.GetProperty("isSpatial").GetBoolean());
