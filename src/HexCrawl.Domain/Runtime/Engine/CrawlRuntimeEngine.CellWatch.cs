@@ -84,20 +84,18 @@ public sealed partial class CrawlRuntimeEngine
 
         if (active is null)
         {
-            var checkDue = GenericProcedureRuntimeRequirements.IsEncounterCheckDue(runtime, state);
-            var encounter = ResolveEncounterForNewWatch(
-                runtime.Time.IntervalDuration, checkDue, inputs.Encounter);
+            var start = PrepareWatchStart(runtime, state, state.CompletedWatches, inputs.Encounter);
             active = new CellActiveWatchState(
-                state.CompletedWatches + 1, runtime.Time.IntervalDuration, TimeSpan.Zero,
-                plan, encounter, encounter.Kind == EncounterOutcomeKind.None, null);
+                start.WatchNumber, start.Duration, TimeSpan.Zero,
+                plan, start.Encounter, start.Encounter.Kind == EncounterOutcomeKind.None, null);
             state = state with { ActiveWatch = active, IntendedHeading = plan.IntendedHeading };
             AddCellEvent(events, active.WatchNumber, CrawlRuntimeEventKind.WatchStarted, state,
                 $"Watch {active.WatchNumber} started ({runtime.Name}); pace {plan.Mode.PaceKey}.");
             state = ResolveCellNavigation(runtime.Navigation, state, plan, inputs.Navigation,
                 active.WatchNumber, events);
-            if (checkDue)
+            if (start.EncounterCheckDue)
                 AddCellEvent(events, active.WatchNumber, CrawlRuntimeEventKind.EncounterCheckPerformed,
-                    state, $"Encounter check resolved as {encounter.Kind}.");
+                    state, $"Encounter check resolved as {start.Encounter.Kind}.");
         }
 
         active = active with { Plan = plan };

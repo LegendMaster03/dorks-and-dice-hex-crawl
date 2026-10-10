@@ -14,18 +14,14 @@ public sealed partial class CrawlRuntimeEngine
         WatchAdvanceInputs inputs,
         EventCollector events)
     {
-        var encounterCheckDue = GenericProcedureRuntimeRequirements.IsEncounterCheckDue(procedure, state);
-        var encounter = ResolveEncounterForNewWatch(
-            procedure.Time.IntervalDuration,
-            encounterCheckDue,
-            inputs.Encounter);
+        var start = PrepareWatchStart(procedure, state, state.CompletedWatches, inputs.Encounter);
         var active = new ActiveWatchState(
-            state.CompletedWatches + 1,
-            procedure.Time.IntervalDuration,
+            start.WatchNumber,
+            start.Duration,
             TimeSpan.Zero,
             plan,
-            encounter,
-            encounter.Kind == EncounterOutcomeKind.None,
+            start.Encounter,
+            start.Encounter.Kind == EncounterOutcomeKind.None,
             null);
         var assignments = plan.Mode.ActivityAssignments.Count == 0
             ? "none"
@@ -47,17 +43,43 @@ public sealed partial class CrawlRuntimeEngine
             events,
             active.WatchNumber);
 
-        if (encounterCheckDue)
+        if (start.EncounterCheckDue)
         {
             events.Add(
                 active.WatchNumber,
                 CrawlRuntimeEventKind.EncounterCheckPerformed,
                 state.ElapsedTravelTime,
                 state.CurrentHex,
-                $"Encounter check resolved as {encounter.Kind}.");
+                $"Encounter check resolved as {start.Encounter.Kind}.");
         }
 
         return (state, active);
+    }
+
+    // The procedure's watch duration, encounter cadence and outcome decision
+    // are one policy for both legacy hex and generalized cell expeditions.
+    // Geometry-specific plans and events remain adapters around this shared
+    // start boundary.
+    private readonly record struct WatchStartPolicy(
+        int WatchNumber,
+        TimeSpan Duration,
+        ResolvedEncounter Encounter,
+        bool EncounterCheckDue);
+
+    private static WatchStartPolicy PrepareWatchStart(
+        GenericProcedureRuntime procedure,
+        CrawlSessionRuntimeState state,
+        int completedWatches,
+        ResolvedEncounter? suppliedEncounter)
+    {
+        if (completedWatches < 0)
+            throw new InvalidOperationException("Completed watch count must be nonnegative.");
+        var checkDue = GenericProcedureRuntimeRequirements.IsEncounterCheckDue(procedure, state);
+        var encounter = ResolveEncounterForNewWatch(
+            procedure.Time.IntervalDuration, checkDue, suppliedEncounter);
+        return new WatchStartPolicy(
+            checked(completedWatches + 1), procedure.Time.IntervalDuration,
+            encounter, checkDue);
     }
 
     private static string DescribeAssignment(ParticipantActivityAssignment assignment)
