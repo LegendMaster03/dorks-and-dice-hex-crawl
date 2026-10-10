@@ -124,6 +124,42 @@ def mixed_image(seed=1907,rotation=0,scale=1):
     return polygon_raster(polygons,[(144,0),(0,96)],
                           rotation=rotation,scale=scale)
 
+def upscale_gray_png_2x(encoded):
+    """Source-resolution 1280px raster for the 640px analysis contract.
+
+    Decode only our own grayscale/filter-0 synthetic PNG and replicate ink.
+    Sharp performs the actual source-image downsample in Surveyor; no
+    correction/warp is supplied to the detector or analysis service.
+    """
+    assert encoded.startswith(b"\x89PNG\r\n\x1a\n")
+    cursor=8
+    compressed=[]
+    dimensions=None
+    while cursor<len(encoded):
+        size=struct.unpack_from(">I",encoded,cursor)[0]
+        kind=encoded[cursor+4:cursor+8]
+        payload=encoded[cursor+8:cursor+8+size]
+        cursor+=12+size
+        if kind==b"IHDR":
+            width,height,depth,color,_,_,_=struct.unpack(">IIBBBBB",payload)
+            assert depth==8 and color==0
+            dimensions=width,height
+        elif kind==b"IDAT":
+            compressed.append(payload)
+        elif kind==b"IEND": break
+    assert dimensions is not None
+    width,height=dimensions
+    decoded=zlib.decompress(b"".join(compressed))
+    assert len(decoded)==height*(width+1)
+    doubled=bytearray()
+    for y in range(height):
+        row=decoded[y*(width+1):(y+1)*(width+1)]
+        assert row[0]==0
+        stretched=bytearray(pixel for x in row[1:] for pixel in (x,x))
+        doubled.extend(stretched)
+        doubled.extend(stretched)
+    return png(doubled,width*2,height*2)
+
 def multipart(fields,name,image):
     boundary="phase16-"+uuid.uuid4().hex
     body=bytearray()
@@ -212,7 +248,8 @@ def main():
             for label,raster in [
                 ("triangle",triangle_image()),
                 ("mixed-seed-1907",mixed_image(1907)),
-                ("mixed-rotated-2911",mixed_image(2911,rotation=8,scale=1.1))
+                ("mixed-rotated-2911",mixed_image(2911,rotation=8,scale=1.1)),
+                ("mixed-downsampled-1907",upscale_gray_png_2x(mixed_image(1907)))
             ]:
                 motif_id,version=create_map(wid,version,"phase16-"+label,raster)
                 evidence=jcall(APP,
