@@ -135,7 +135,8 @@ public enum RuntimePauseReason
     ConditionsReviewRequired,
     LostRecognitionRequired,
     EncounterTriggered,
-    BacktrackBoundaryReached
+    BacktrackBoundaryReached,
+    CellCourseAdjudicationRequired
 }
 
 public sealed record ActiveWatchState(

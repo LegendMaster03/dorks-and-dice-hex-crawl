@@ -337,6 +337,7 @@ public static class GenericProcedureRuntimeRequirements
         return state switch
         {
             ExpeditionState spatial => IsEncounterCheckDue(procedure, spatial),
+            CellExpeditionState cells => IsEncounterCheckDue(procedure, cells),
             NonSpatialSessionState nonSpatial => IsEncounterCheckDue(procedure, nonSpatial),
             _ => throw new ArgumentOutOfRangeException(nameof(state))
         };
@@ -351,6 +352,17 @@ public static class GenericProcedureRuntimeRequirements
             return false;
         }
         return IsEncounterCheckDue(
+            procedure.Encounters.Cadence,
+            state.History,
+            Math.Max(1, state.CompletedWatches + 1),
+            state.ElapsedTravelTime);
+    }
+
+    public static bool IsEncounterCheckDue(GenericProcedureRuntime procedure, CellExpeditionState state)
+    {
+        ArgumentNullException.ThrowIfNull(procedure);
+        ArgumentNullException.ThrowIfNull(state);
+        return state.ActiveWatch is null && IsEncounterCheckDue(
             procedure.Encounters.Cadence,
             state.History,
             Math.Max(1, state.CompletedWatches + 1),

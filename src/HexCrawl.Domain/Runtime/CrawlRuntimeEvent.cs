@@ -32,7 +32,8 @@ public enum CrawlRuntimeEventKind
     ResolutionProvenanceRecorded,
     EncounterResolved,
     CellExited,
-    CellEntered
+    CellEntered,
+    CellCourseAdjudicationRequired
 }
 
 public sealed record CrawlRuntimeLinkedSceneSnapshot(

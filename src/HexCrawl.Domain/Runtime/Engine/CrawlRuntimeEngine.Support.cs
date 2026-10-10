@@ -56,7 +56,7 @@ public sealed partial class CrawlRuntimeEngine
             int watchNumber,
             CrawlRuntimeEventKind kind,
             TimeSpan elapsed,
-            HexCoordinate hex,
+            HexCoordinate? hex,
             string message,
             double? distanceValue = null,
             string? distanceUnit = null,
