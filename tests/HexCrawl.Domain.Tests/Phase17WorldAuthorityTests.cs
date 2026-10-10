@@ -154,5 +154,7 @@ public sealed class Phase17WorldAuthorityTests
         Assert.Equal(feature.Id, Assert.Single(world.FeaturesIntersecting(address)).Id);
         Assert.Contains(world.AnnotationsForCell(address), a => a.Id == annotation.Id);
         Assert.Throws<NotSupportedException>(() => _ = world.Grid);
+        Assert.Throws<NotSupportedException>(() =>
+            world.FeaturesIntersecting(new HexCoordinate(0, 0)));
     }
 }
