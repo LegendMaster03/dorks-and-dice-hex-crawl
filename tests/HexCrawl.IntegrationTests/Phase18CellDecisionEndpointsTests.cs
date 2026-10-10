@@ -368,6 +368,110 @@ public sealed class Phase18CellDecisionEndpointsTests
     }
 
     [Fact]
+    public async Task TerminalLostEncounterSurvivesPostgresRestartAndCompletesOnlyAfterResolution()
+    {
+        await WithWorldAsync(async (database, store, world, procedure, cell) =>
+        {
+            var heading = new WorldPoint(1, 0);
+            var plan = Plan(heading);
+            var duration = GenericProcedureRuntime.Bind(procedure).Time.IntervalDuration;
+            var scheduled = new ResolvedEncounter(
+                EncounterOutcomeKind.WanderingEncounter, duration, null,
+                "Encounter at terminal crossing", Manual);
+            var state = BaseState(cell) with
+            {
+                IntendedHeading = heading,
+                IsLost = true,
+                ResolvedVeerDegrees = 30,
+                ElapsedTravelTime = duration,
+                ActiveWatch = new CellActiveWatchState(
+                    1, duration, duration, plan, scheduled,
+                    false, RuntimePauseReason.LostRecognitionRequired)
+            };
+            state.Validate(world.Tiling!);
+            await SeedAsync(store, world, procedure, state);
+            var advanceRoute = $"/api/expeditions/{state.Id:D}/cells/advance";
+
+            // Open fresh server/database handles to establish durable restart
+            // of the zero-remaining lost-recognition checkpoint.
+            using (var factory = TestWebHost.Create(database, "alice"))
+            using (var client = factory.CreateClient())
+            {
+                var before = await client.GetFromJsonAsync<JsonElement>(
+                    $"/api/expeditions/{state.Id:D}");
+                Assert.Equal("LostRecognitionRequired",
+                    before.GetProperty("expedition")
+                        .GetProperty("activeWatchPendingDecision").GetString());
+
+                using var recognized = await client.PostAsJsonAsync(advanceRoute,
+                    new AdvanceCellWatchRequest(1, plan,
+                        Inputs(0) with
+                        {
+                            BoundaryDecision = new BoundaryNavigationDecision(
+                                true, true, Manual)
+                        }), ApiJson);
+                Assert.True(recognized.IsSuccessStatusCode,
+                    $"Recognition failed: {await recognized.Content.ReadAsStringAsync()}");
+                var paused = await recognized.Content.ReadFromJsonAsync<JsonElement>();
+                Assert.Equal(2L, paused.GetProperty("version").GetInt64());
+                Assert.Equal("EncounterTriggered",
+                    paused.GetProperty("expedition")
+                        .GetProperty("activeWatchPendingDecision").GetString());
+                var occurrence = paused.GetProperty("expedition")
+                    .GetProperty("pendingEncounter").GetProperty("id").GetGuid();
+                Assert.Equal(duration.TotalHours, paused.GetProperty("expedition")
+                    .GetProperty("elapsedTravelHours").GetDouble());
+                Assert.Single(paused.GetProperty("history").EnumerateArray(),
+                    e => e.GetProperty("kind").GetString() == "EncounterTriggered"
+                        && e.GetProperty("encounterOccurrenceId").GetGuid() == occurrence);
+                Assert.DoesNotContain(paused.GetProperty("history").EnumerateArray(),
+                    e => e.GetProperty("kind").GetString() == "WatchCompleted");
+
+                using var blocked = await client.PostAsJsonAsync(advanceRoute,
+                    new AdvanceCellWatchRequest(2, plan, Inputs(0)), ApiJson);
+                Assert.Equal(HttpStatusCode.BadRequest, blocked.StatusCode);
+            }
+
+            var restored = new PostgresHexCrawlStore(database);
+            await restored.InitializeAsync();
+            var saved = await restored.GetExpeditionAsync(state.Id, "alice");
+            var pending = Assert.IsType<CellExpeditionState>(saved!.Runtime).PendingEncounter;
+            Assert.NotNull(pending);
+            Assert.Equal(duration, pending!.ExpeditionElapsedTime);
+            var resolveRoute =
+                $"/api/expeditions/{state.Id:D}/cells/encounters/{pending.Id:D}/resolve";
+            using (var factory = TestWebHost.Create(database, "alice"))
+            using (var client = factory.CreateClient())
+            {
+                using var resolved = await client.PostAsJsonAsync(resolveRoute,
+                    new ResolveCellEncounterRequest(2, "Handled after server restart"), ApiJson);
+                resolved.EnsureSuccessStatusCode();
+
+                using var replay = await client.PostAsJsonAsync(resolveRoute,
+                    new ResolveCellEncounterRequest(2, "Handled after server restart"), ApiJson);
+                Assert.Equal(HttpStatusCode.Conflict, replay.StatusCode);
+
+                using var complete = await client.PostAsJsonAsync(advanceRoute,
+                    new AdvanceCellWatchRequest(3, plan, Inputs(0)), ApiJson);
+                complete.EnsureSuccessStatusCode();
+                var finished = await complete.Content.ReadFromJsonAsync<JsonElement>();
+                Assert.Equal(4L, finished.GetProperty("version").GetInt64());
+                Assert.Equal(1, finished.GetProperty("expedition")
+                    .GetProperty("completedWatches").GetInt32());
+                Assert.Single(finished.GetProperty("history").EnumerateArray(),
+                    e => e.GetProperty("kind").GetString() == "EncounterTriggered");
+                Assert.Single(finished.GetProperty("history").EnumerateArray(),
+                    e => e.GetProperty("kind").GetString() == "EncounterResolved");
+                Assert.Single(finished.GetProperty("history").EnumerateArray(),
+                    e => e.GetProperty("kind").GetString() == "WatchCompleted");
+                Assert.Equal(duration.TotalHours,
+                    finished.GetProperty("expedition")
+                        .GetProperty("elapsedTravelHours").GetDouble());
+            }
+        });
+    }
+
+    [Fact]
     public async Task EncounterOccurrenceResolvesOnceAndResumesRemainingWatchTime()
     {
         await WithWorldAsync(async (database, store, world, procedure, cell) =>
