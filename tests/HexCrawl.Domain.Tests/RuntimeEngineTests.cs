@@ -133,6 +133,31 @@ public sealed class RuntimeEngineTests
         Assert.Contains(resumed.Events, item => item.Kind == CrawlRuntimeEventKind.ExpeditionReoriented);
     }
 
+    [Fact]
+    public void LostHexWatchRejectsReorientationWithoutRecognizingNavigationError()
+    {
+        var setup = CreateSetup();
+        var first = Advance(
+            setup, TestProcedureProfiles.AdvancedContinuous(), 6,
+            navigation: NavigationCheckOutcome.Failed, veerSteps: 1,
+            encounter: ResolvedEncounter.None,
+            continueAcrossBoundaries: true);
+        Assert.Equal(RuntimePauseReason.LostRecognitionRequired, first.PauseReason);
+        var decision = new BoundaryNavigationDecision(
+            false, true, new ResolutionProvenance(ResolutionSource.ManualRoll));
+        Assert.Throws<InvalidOperationException>(() =>
+            _engine.ResolveBoundaryDecision(first.Expedition, decision));
+        Assert.Throws<InvalidOperationException>(() =>
+            _engine.Advance(
+                setup.Context, TestProcedureProfiles.AdvancedContinuous(),
+                first.Expedition, Plan(0, true),
+                new WatchAdvanceInputs(
+                    TravelDistanceResolver.Fixed(Miles(0)),
+                    BoundaryDecision: decision)));
+        Assert.Equal(RuntimePauseReason.LostRecognitionRequired,
+            first.Expedition.ActiveWatch!.PendingDecision);
+    }
+
     [Theory]
     [InlineData(0, 12)]
     [InlineData(1, 12)]

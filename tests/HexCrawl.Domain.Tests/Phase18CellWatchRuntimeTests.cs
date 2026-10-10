@@ -131,6 +131,62 @@ public sealed class Phase18CellWatchRuntimeTests
     }
 
     [Fact]
+    public void LostCellWatchRejectsReorientationWithoutRecognizingNavigationError()
+    {
+        var (world, procedure, state, plan) = Setup(
+            "<1:1,1,1:4,4>", calibrated: true, advanced: true);
+        var frozen = state with
+        {
+            IsLost = true,
+            ResolvedVeerDegrees = 15,
+            IntendedHeading = plan.IntendedHeading,
+            ActiveWatch = new CellActiveWatchState(
+                1, TimeSpan.FromHours(4), TimeSpan.FromHours(1),
+                plan, ResolvedEncounter.None, true,
+                RuntimePauseReason.LostRecognitionRequired)
+        };
+        frozen.Validate(world);
+        var inputs = Inputs(1) with
+        {
+            BoundaryDecision = new BoundaryNavigationDecision(false, true, Manual)
+        };
+        Assert.Throws<InvalidOperationException>(() =>
+            new CrawlRuntimeEngine().AdvanceCellWatch(
+                world, procedure, frozen, plan, inputs));
+        Assert.Equal(RuntimePauseReason.LostRecognitionRequired,
+            frozen.ActiveWatch!.PendingDecision);
+    }
+
+    [Fact]
+    public void MidWatchCourseChangeIsAuditedWithQualifiedCellAndNoAxialSubstitution()
+    {
+        var (world, procedure, state, plan) = Setup("<1:1,1,1:4,4>", calibrated: true);
+        var engine = new CrawlRuntimeEngine();
+        var paused = engine.AdvanceCellWatch(world, procedure, state, plan, Inputs(3));
+        Assert.Equal(RuntimePauseReason.ConditionsReviewRequired, paused.PauseReason);
+        var current = world.Resolve(paused.Expedition.Traversal.CurrentCell.Address);
+        var otherExit = world.Boundaries(current.Id.Address)
+            .First(edge => edge.To != paused.Expedition.Traversal.EnteredFrom);
+        var midpoint = new WorldPoint(
+            (otherExit.Start.X + otherExit.End.X) / 2,
+            (otherExit.Start.Y + otherExit.End.Y) / 2);
+        var newHeading = midpoint - paused.Expedition.Traversal.Position;
+        var changed = engine.AdvanceCellWatch(
+            world, procedure, paused.Expedition,
+            plan with { IntendedHeading = newHeading, ContinueAcrossBoundaries = true },
+            Inputs(1));
+        var decision = Assert.Single(changed.Events,
+            e => e.Kind == CrawlRuntimeEventKind.DirectionChanged);
+        Assert.Equal(paused.Expedition.Traversal.CurrentCell, decision.Cell);
+        Assert.Null(decision.Hex);
+        Assert.True(decision.ExpeditionElapsedTime >= paused.Expedition.ElapsedTravelTime);
+        Assert.DoesNotContain(changed.Events, e => e.Kind is
+            CrawlRuntimeEventKind.HexEntered or CrawlRuntimeEventKind.HexExited);
+        Assert.Equal(changed.Expedition.History.Count,
+            changed.Expedition.History.Select(e => e.Sequence).Distinct().Count());
+    }
+
+    [Fact]
     public void CannotSubmitAtomicExitDecisionWithoutAdjudicationPause()
     {
         var (world, _, state, plan) = Setup("<1:1,1,1:4,4>", calibrated: true);
