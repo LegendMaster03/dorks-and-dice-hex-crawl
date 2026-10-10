@@ -125,6 +125,46 @@ public sealed class PostgresSchemaTests
     }
 
     [Fact]
+    public async Task UnsupportedSchemaVersionFailsWithoutDiscardingTesterRecords()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var store = new PostgresHexCrawlStore(database.ConnectionString);
+        await store.InitializeAsync();
+        var procedureId = Guid.NewGuid();
+
+        await using var connection = new NpgsqlConnection(database.ConnectionString);
+        await connection.OpenAsync();
+        await using (var seed = connection.CreateCommand())
+        {
+            seed.CommandText = """
+                UPDATE hex_crawl_schema_migrations SET version = 7 WHERE version = 9;
+                INSERT INTO campaign_procedure_revisions
+                    (procedure_id, revision, owner_user_id, procedure_json, created_at)
+                VALUES (@id, 1, 'preservation-test',
+                    '{"schemaVersion":"1.2","tilingDsSymbol":"<1:1,1,1:6,3>"}'::jsonb, now());
+                """;
+            seed.Parameters.AddWithValue("id", procedureId);
+            await seed.ExecuteNonQueryAsync();
+        }
+
+        var migrator = new PostgresSchemaMigrator(database.ConnectionString);
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => migrator.MigrateAsync());
+        Assert.Contains("existing database has been preserved", failure.Message, StringComparison.OrdinalIgnoreCase);
+
+        await using var check = connection.CreateCommand();
+        check.CommandText = """
+            SELECT (SELECT MAX(version) FROM hex_crawl_schema_migrations),
+                   (SELECT count(*) FROM campaign_procedure_revisions
+                    WHERE procedure_id = @id AND revision = 1);
+            """;
+        check.Parameters.AddWithValue("id", procedureId);
+        await using var reader = await check.ExecuteReaderAsync();
+        Assert.True(await reader.ReadAsync());
+        Assert.Equal(7, reader.GetInt64(0));
+        Assert.Equal(1, reader.GetInt64(1));
+    }
+
+    [Fact]
     public async Task LargeWorldSnapshotRoundTripsWithoutChangingAggregateVersion()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();

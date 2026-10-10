@@ -1,0 +1,172 @@
+name: Phase 16 isolated old/new compatibility
+
+on:
+  push:
+    branches: [ 'feature/tile-crawl-phase-16' ]
+  workflow_dispatch:
+
+concurrency:
+  group: phase16-cross-service-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  http-compatibility:
+    name: ${{ matrix.client }} Hex Crawl / ${{ matrix.surveyor }} Surveyor
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        client: [old, new]
+        surveyor: [old, new]
+    steps:
+      - name: Checkout current Hex Crawl harness
+        uses: actions/checkout@v4
+        with:
+          path: hex-current
+
+      - name: Checkout pinned baseline Hex Crawl
+        if: matrix.client == 'old' || (matrix.client == 'new' && matrix.surveyor == 'new')
+        uses: actions/checkout@v4
+        with:
+          repository: LegendMaster03/dorks-and-dice-hex-crawl
+          ref: afb4760f4ea30366f3516e307e6335a1b6edd12c
+          path: hex-baseline
+
+      - name: Checkout pinned old or new Surveyor
+        uses: actions/checkout@v4
+        with:
+          repository: LegendMaster03/dorks-and-dice-surveyor
+          ref: ${{ matrix.surveyor == 'old' && 'e9ad1cc9f04ce375fa1baf241894357abc116e09' || 'ebeb56ee85a6a567c0d595235b889061fc017e03' }}
+          path: surveyor
+
+      - name: Build isolated service images
+        shell: bash
+        run: |
+          set -euo pipefail
+          app_dir=hex-current
+          if [[ '${{ matrix.client }}' == 'old' ]]; then app_dir=hex-baseline; fi
+          docker build -t phase16-hex:active -f "$app_dir/src/HexCrawl.Web/Dockerfile" "$app_dir"
+          docker build --build-arg NODE_BASE_IMAGE=mirror.gcr.io/library/node:24-bookworm-slim \
+            -t phase16-surveyor:active surveyor
+          if [[ '${{ matrix.client }}' == 'new' && '${{ matrix.surveyor }}' == 'new' ]]; then
+            docker build -t phase16-hex:rollback \
+              -f hex-baseline/src/HexCrawl.Web/Dockerfile hex-baseline
+          fi
+
+      - name: Start disposable PostgreSQL and HTTP containers
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker network create phase16-isolated
+          docker volume create phase16-map-assets >/dev/null
+          docker run -d --name phase16-postgres --network phase16-isolated \
+            -e POSTGRES_USER=phase16_test -e POSTGRES_PASSWORD=phase16_test \
+            -e POSTGRES_DB=phase16_test postgres:18 >/dev/null
+          # PostgreSQL init briefly starts a socket-only bootstrap server, then
+          # shuts it down and starts the final TCP listener. pg_isready without
+          # -h can return success during that shutdown race.
+          postgres_ready=false
+          for i in {1..90}; do
+            result="$(docker exec phase16-postgres psql -v ON_ERROR_STOP=1 \
+              -h 127.0.0.1 -U phase16_test -d phase16_test -tAc 'SELECT 1' 2>/dev/null || true)"
+            if [ "$(echo "$result" | tr -d '[:space:]')" = "1" ]; then
+              postgres_ready=true
+              break
+            fi
+            sleep 1
+          done
+          if [ "$postgres_ready" != true ]; then
+            docker logs phase16-postgres || true
+            echo "Disposable PostgreSQL never reached final TCP readiness" >&2
+            exit 1
+          fi
+          docker run -d --name phase16-surveyor --network phase16-isolated \
+            -p 127.0.0.1:18094:8080 \
+            -e SURVEYOR_SERVICE_TOKEN=phase16-ci-isolated-surveyor-token \
+            -e SURVEYOR_WORKER_COUNT=2 -e SURVEYOR_QUEUE_LIMIT=2 \
+            -e SURVEYOR_ANALYSIS_MAX_DIMENSION=640 \
+            phase16-surveyor:active >/dev/null
+          docker run -d --name phase16-hex --network phase16-isolated \
+            -p 127.0.0.1:18092:8080 \
+            -v phase16-map-assets:/data \
+            -e 'ConnectionStrings__HexCrawl=Host=phase16-postgres;Port=5432;Database=phase16_test;Username=phase16_test;Password=phase16_test' \
+            -e MapAssets__RootPath=/data/assets \
+            -e ToolHost__StandaloneIdentity__Enabled=true \
+            -e ToolHost__StandaloneIdentity__UserId=phase16-ci-dm \
+            -e Surveyor__BaseUrl=http://phase16-surveyor:8080 \
+            -e Surveyor__ServiceToken=phase16-ci-isolated-surveyor-token \
+            -e Surveyor__RequestTimeoutMilliseconds=55000 \
+            phase16-hex:active >/dev/null
+          for i in {1..90}; do
+            if curl -fsS http://127.0.0.1:18092/ready | grep -q '"status":"ready"' \
+              && curl -fsS http://127.0.0.1:18094/health/ready | grep -q '"status":"ready"'; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs phase16-hex || true
+          docker logs phase16-surveyor || true
+          exit 1
+
+      - name: Verify actual v2/v3 and persisted HTTP behavior
+        env:
+          PHASE16_CLIENT: ${{ matrix.client }}
+          PHASE16_PROVIDER: ${{ matrix.surveyor }}
+        run: python3 hex-current/.github/scripts/phase16-compatibility.py
+
+      - name: Reopen new-client records using baseline Hex Crawl rollback
+        if: matrix.client == 'new' && matrix.surveyor == 'new'
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker rm -f phase16-hex >/dev/null
+          docker run -d --name phase16-hex --network phase16-isolated \
+            -p 127.0.0.1:18092:8080 \
+            -v phase16-map-assets:/data \
+            -e 'ConnectionStrings__HexCrawl=Host=phase16-postgres;Port=5432;Database=phase16_test;Username=phase16_test;Password=phase16_test' \
+            -e MapAssets__RootPath=/data/assets \
+            -e ToolHost__StandaloneIdentity__Enabled=true \
+            -e ToolHost__StandaloneIdentity__UserId=phase16-ci-dm \
+            -e Surveyor__BaseUrl=http://phase16-surveyor:8080 \
+            -e Surveyor__ServiceToken=phase16-ci-isolated-surveyor-token \
+            phase16-hex:rollback >/dev/null
+          ready=false
+          for i in {1..90}; do
+            if curl -fsS http://127.0.0.1:18092/ready | grep -q '"status":"ready"'; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          if [[ "$ready" != true ]]; then exit 1; fi
+          python3 - <<'PY'
+          import json, urllib.request
+          data=json.load(open('/tmp/phase16-ci-state.json'))
+          base='http://127.0.0.1:18092'
+          def get(path):
+              with urllib.request.urlopen(base+path,timeout=30) as response: return response.read()
+          world=json.loads(get('/api/overworlds/'+data['world_id']))
+          assert world['version']==data['world_version'],world
+          assert all(m['alignment'] is None for m in world['sourceMaps']),world
+          saved=get('/api/overworlds/'+data['world_id']+'/source-maps/'+data['map_id']+'/asset')
+          assert saved==open('/tmp/phase16-ci-hex.png','rb').read()
+          expedition=json.loads(get('/api/expeditions/'+data['expedition_id']))
+          assert expedition['procedure']['key']=='simple-fixed-distance'
+          assert expedition['expedition']['activeWatchNumber']==1
+          print('PHASE16_MATRIX PASS baseline rollback reopened same IDs, assets, expedition')
+          PY
+
+      - name: Print isolated diagnostics on failure
+        if: failure()
+        run: |
+          docker logs phase16-hex 2>&1 | tail -100 || true
+          docker logs phase16-surveyor 2>&1 | tail -100 || true
+          docker logs phase16-postgres 2>&1 | tail -100 || true
+
+      - name: Destroy all disposable resources
+        if: always()
+        run: |
+          docker rm -f phase16-hex phase16-surveyor phase16-postgres 2>/dev/null || true
+          docker volume rm -f phase16-map-assets 2>/dev/null || true
+          docker network rm phase16-isolated 2>/dev/null || true

@@ -91,6 +91,16 @@ builder.Services
         AllowAutoRedirect = false,
         UseCookies = false
     });
+builder.Services
+    .AddHttpClient<IPeriodicMotifInvestigationService, SurveyorPeriodicMotifInvestigationClient>(client =>
+    {
+        client.Timeout = Timeout.InfiniteTimeSpan;
+    })
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+    {
+        AllowAutoRedirect = false,
+        UseCookies = false
+    });
 builder.Services.AddTransient<ITravelEnvironmentProvider>(services =>
     services.GetRequiredService<RulesCoreTravelEnvironmentProvider>());
 builder.Services.AddHealthChecks();

@@ -18,6 +18,7 @@ public static partial class SourceMapApiEndpoints
         api.MapPut("/{sourceMapId:guid}", UpdateMetadataAsync);
         api.MapPut("/{sourceMapId:guid}/registration", RegisterAsync);
         api.MapPost("/{sourceMapId:guid}/grid-analysis", AnalyzeGridAsync);
+        api.MapPost("/{sourceMapId:guid}/motif-investigation", InvestigateMotifAsync);
         api.MapPut("/{sourceMapId:guid}/grid-alignment", ApplyGridAlignmentAsync);
         api.MapGet("/{sourceMapId:guid}/asset", GetAssetAsync);
         api.MapGet("/{sourceMapId:guid}/source-archive", GetSourceArchiveAsync);
