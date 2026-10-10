@@ -735,8 +735,7 @@ export async function renderWorldEditor(
         const terrainInput = input(terrainForm, "terrain");
         if (terrainFacts.length === 1 && terrainFacts[0].valueKind === "Tag")
             terrainInput.value = terrainFacts[0].tag ?? "";
-        const replaceTerrain = (value: string | null): void => {
-            void run(terrainForm, async () => {
+        const replaceTerrain = async (value: string | null): Promise<void> => {
                 let next = worldEnvironment.annotations.map(annotation =>
                     annotation.scope.kind === "Cell" && sameQualifiedCell(annotation.scope.cell, cell.id)
                         ? { ...annotation, facts: annotation.facts.filter(fact =>
@@ -746,14 +745,13 @@ export async function renderWorldEditor(
                     { kind: "Cell", cell: cell.id, hex: null, featureId: null },
                     tagFact("terrain", value.trim(), "world-editor:selected-cell", null));
                 await saveWorldEnvironment(next);
-            });
         };
         terrainForm.addEventListener("submit", event => {
             event.preventDefault();
-            replaceTerrain(terrainInput.value);
+            void run(terrainForm, () => replaceTerrain(terrainInput.value));
         });
         required<HTMLButtonElement>(terrainForm, "[data-clear-terrain]")
-            .addEventListener("click", () => replaceTerrain(null));
+            .addEventListener("click", () => void run(terrainForm, () => replaceTerrain(null)));
         panel.append(terrainForm);
 
         const facts = document.createElement("div");
@@ -795,7 +793,7 @@ export async function renderWorldEditor(
                 const value = input(localForm, "value").value.trim();
                 if (!dimension || !value) throw new Error("An environment dimension and value are required.");
                 if (dimension.toLowerCase() === "terrain") {
-                    replaceTerrain(value);
+                    await replaceTerrain(value);
                     return;
                 }
                 await saveWorldEnvironment(addEnvironmentFact(
