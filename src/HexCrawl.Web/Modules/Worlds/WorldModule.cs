@@ -24,6 +24,7 @@ public sealed class WorldModule : IHexCrawlModule
         api.MapGet("/overworlds/{overworldId:guid}", GetOverworldAsync);
         api.MapGet("/overworlds/{overworldId:guid}/cells/viewport", GetVisibleCellsAsync);
         api.MapGet("/overworlds/{overworldId:guid}/cells/containing", GetContainingCellsAsync);
+        api.MapGet("/overworlds/{overworldId:guid}/cells/resolve", ResolveCellAsync);
         api.MapPut("/overworlds/{overworldId:guid}", UpdateOverworldAsync);
         api.MapDelete("/overworlds/{overworldId:guid}", DeleteOverworldAsync);
 
@@ -96,6 +97,21 @@ public sealed class WorldModule : IHexCrawlModule
         var world = await service.GetOverworldAsync(overworldId, UserId(context), cancellationToken);
         return Results.Ok(world.World.SpatialTiling.Containing(
             new HexCrawl.Domain.Spatial.WorldPoint(x, y), limit: 2500));
+    }
+
+    private static async Task<IResult> ResolveCellAsync(
+        Guid overworldId,
+        string motifCellId,
+        long u,
+        long v,
+        HttpContext context,
+        HexCrawlService service,
+        CancellationToken cancellationToken)
+    {
+        var world = await service.GetOverworldAsync(overworldId, UserId(context), cancellationToken);
+        var address = new HexCrawl.Domain.Spatial.PeriodicCellAddress(
+            motifCellId, new HexCrawl.Domain.Spatial.LatticeDisplacement(u, v));
+        return Results.Ok(world.World.SpatialTiling.Resolve(address));
     }
 
     private static async Task<IResult> UpdateOverworldAsync(

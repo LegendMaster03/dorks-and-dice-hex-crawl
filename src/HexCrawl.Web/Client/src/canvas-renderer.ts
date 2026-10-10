@@ -1,7 +1,7 @@
 import { sourceMapAssetUrl } from "./api";
 import { hexCorners, hexToWorld, visibleHexBounds } from "./hex-math";
 import { RasterImageCache } from "./raster-image-cache";
-import type { DemoWorld, GridDefinition, HexCoordinate, MapRegistrationTransform, SpatialFeature, WorldPoint } from "./types";
+import type { DemoWorld, GridDefinition, HexCoordinate, MapRegistrationTransform, SpatialFeature, WorldPoint, WorldCellGeometry } from "./types";
 
 export type MapReviewGeometry = {
     id: string;
@@ -18,6 +18,9 @@ import { Viewport } from "./viewport";
 
 export class CanvasMapRenderer {
     public selectedHex: HexCoordinate | null = null;
+    public selectedWorldCell: WorldCellGeometry | null = null;
+    public visibleWorldCells: WorldCellGeometry[] = [];
+    public expeditionPosition: WorldPoint | null = null;
     public expeditionHex: HexCoordinate | null = null;
     public discoveredSubjectIds = new Set<string>();
     public hiddenSourceMapIds = new Set<string>();
@@ -225,7 +228,26 @@ export class CanvasMapRenderer {
     }
 
     private drawGrid(ctx: CanvasRenderingContext2D, world: DemoWorld, width: number, height: number): void {
+        if (!this.gridPreview && world.tiling) {
+            ctx.save();
+            ctx.strokeStyle = "rgba(52, 67, 55, .38)";
+            ctx.lineWidth = 1;
+            for (const cell of this.visibleWorldCells) {
+                // The polygons and qualified identities were enumerated by the
+                // server's bounded PeriodicWorldTiling.Intersecting operation.
+                if (cell.polygon.length < 3) continue;
+                const vertices = cell.polygon.map(point => this.toScreen(point, width, height));
+                ctx.beginPath();
+                vertices.forEach((point, index) =>
+                    index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
+                ctx.closePath();
+                ctx.stroke();
+            }
+            ctx.restore();
+            return;
+        }
         const grid = this.gridPreview ?? world.grid;
+        if (!grid) return;
         const corners = [
             this.viewport.screenToWorld(0, 0, width, height),
             this.viewport.screenToWorld(width, 0, width, height),
@@ -326,8 +348,24 @@ export class CanvasMapRenderer {
     }
 
     private drawSelection(ctx: CanvasRenderingContext2D, world: DemoWorld, width: number, height: number): void {
+        if (this.selectedWorldCell && world.tiling) {
+            const cell = this.selectedWorldCell;
+            if (cell.id.tilingId !== world.tiling.id || cell.polygon.length < 3) return;
+            const points = cell.polygon.map(point => this.toScreen(point, width, height));
+            ctx.beginPath();
+            points.forEach((point, index) =>
+                index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
+            ctx.closePath();
+            ctx.fillStyle = "rgba(210, 139, 39, .24)";
+            ctx.fill();
+            ctx.strokeStyle = "#9b5f12";
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            return;
+        }
         if (!this.selectedHex) return;
         const grid = this.gridPreview ?? world.grid;
+        if (!grid) return;
         const points = hexCorners(grid, this.selectedHex).map(point => this.toScreen(point, width, height));
         ctx.beginPath();
         points.forEach((point, index) => index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
@@ -340,8 +378,9 @@ export class CanvasMapRenderer {
     }
 
     private drawExpedition(ctx: CanvasRenderingContext2D, world: DemoWorld, width: number, height: number): void {
-        if (!this.expeditionHex) return;
-        const point = this.toScreen(hexToWorld(world.grid, this.expeditionHex), width, height);
+        if (!this.expeditionPosition && (!this.expeditionHex || !world.grid)) return;
+        const position = this.expeditionPosition ?? hexToWorld(world.grid!, this.expeditionHex!);
+        const point = this.toScreen(position, width, height);
         ctx.beginPath();
         ctx.arc(point.x, point.y, 10, 0, Math.PI * 2);
         ctx.fillStyle = "#b22626";

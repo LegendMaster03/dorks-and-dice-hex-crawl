@@ -3,6 +3,7 @@ import type { CreateEncounterHandoffRequest, HexCrawlEncounterHandoffV2 } from "
 import type {
     CellTraversalContext,
     WorldCellGeometry,
+    WorldCellId,
     WorldCellLookup,
     ExpeditionDetail,
     ExpeditionSummary,
@@ -178,6 +179,17 @@ export class HexCrawlApi {
         return this.getJson(
             `/api/overworlds/${encodeURIComponent(worldId)}/cells/viewport?${params}`,
             "Visible world cells");
+    }
+
+    public resolveWorldCell(worldId: string, cell: WorldCellId): Promise<WorldCellGeometry> {
+        const params = new URLSearchParams({
+            motifCellId: cell.address.motifCellId,
+            u: String(cell.address.translation.u),
+            v: String(cell.address.translation.v)
+        });
+        return this.getJson(
+            `/api/overworlds/${encodeURIComponent(worldId)}/cells/resolve?${params}`,
+            "Selected world cell");
     }
 
     public lookupWorldCell(worldId: string, point: WorldPoint): Promise<WorldCellLookup> {

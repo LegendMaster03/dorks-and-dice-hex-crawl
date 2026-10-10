@@ -152,7 +152,9 @@ export type Overworld = {
     version: number;
     createdAt: string;
     updatedAt: string;
-    grid: GridDefinition;
+    grid: GridDefinition | null;
+    /** Authoritative world topology/metric witness remains on the server. */
+    tiling: { id: string; revision: number; origin: WorldPoint } | null;
     features: SpatialFeature[];
     locations: Location[];
     sourceMaps: SourceMapRepresentation[];
