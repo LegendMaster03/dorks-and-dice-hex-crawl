@@ -107,6 +107,7 @@ def main(workflow, service):
     assert "phase16-deployment-config.py verify" in steps["preflight"]
     assert 'DEPLOY_SNAPSHOT_DIR/compose.env' in steps["deploy"]
     assert 'DEPLOY_SNAPSHOT_DIR/compose.env' in steps["restore"]
+    assert 'DEPLOY_SNAPSHOT_DIR/rollback.compose.yml' in steps["restore"]
     assert "phase16-deployment-config.py snapshot" in steps["capture"]
 
     with tempfile.TemporaryDirectory(prefix="phase16-rollback-") as tmp:
@@ -135,6 +136,8 @@ def main(workflow, service):
             if "snapshot_dir" in fields:
                 env["DEPLOY_SNAPSHOT_DIR"] = fields["snapshot_dir"]
                 snapshots.append(fields["snapshot_dir"])
+                run(steps["preflight"], root, env)
+                assert (Path(fields["snapshot_dir"]) / "rollback.compose.yml").exists()
             return fields
         compose = ["docker", "compose", "--project-name", service,
                    "--env-file", str(env_file), "-f", "docker-compose.yml"]
@@ -226,12 +229,53 @@ def main(workflow, service):
                     "    restart: unless-stopped\n"
                     + f'    ports:\n      - "127.0.0.1:{port}:8080"\n'))
                 try:
+                    # The host port stays occupied and the attacker-controlled
+                    # candidate Compose remains broken during recovery.
                     run(steps["deploy"], root, env, expected_success=False)
+                    run(steps["restore"], root, env, previous=healthy)
+                    preserved(service, healthy)
+                    assert f'127.0.0.1:{port}:8080' in compose_file.read_text()
                 finally:
                     compose_file.write_text(base_compose)
-            run(steps["restore"], root, env, previous=healthy)
-            preserved(service, healthy)
-            print(f"{service}: failed container replacement rollback PASS", flush=True)
+            print(f"{service}: persistent bad port Compose rollback PASS", flush=True)
+
+            # A candidate-only shell command can start and immediately exit.
+            # Recreate the prior image from the frozen known-good definition,
+            # leaving that broken command in the checkout through verification.
+            fields = captured()
+            assert fields["available"] == "true" and fields["image"] == healthy
+            compose_file.write_text(base_compose.replace(
+                "    restart: unless-stopped\n",
+                '    restart: unless-stopped\n    command: ["sh", "-c", "exit 1"]\n'))
+            try:
+                run(steps["deploy"], root, env)
+                run(steps["verify"], root, env, expected_success=False)
+                run(steps["restore"], root, env, previous=healthy)
+                preserved(service, healthy)
+                assert "exit 1" in compose_file.read_text()
+            finally:
+                compose_file.write_text(base_compose)
+            print(f"{service}: persistent bad command Compose rollback PASS", flush=True)
+
+            fields = captured()
+            assert fields["available"] == "true" and fields["image"] == healthy
+            compose_file.write_text(base_compose.replace(
+                "      - data:/data",
+                "      - type: volume\n        source: data\n        target: /data\n        read_only: true"))
+            try:
+                run(steps["deploy"], root, env)
+                # Mount access differs from the verified original: restore
+                # immediately without allowing an asset mutation to proceed.
+                run(steps["restore"], root, env, previous=healthy)
+                preserved(service, healthy)
+                assert "read_only: true" in compose_file.read_text()
+                inspector = command(["docker", "inspect", "--type", "container",
+                    "--format", "{{json .Mounts}}", service])
+                import json
+                assert all(m["RW"] for m in json.loads(inspector))
+            finally:
+                compose_file.write_text(base_compose)
+            print(f"{service}: persistent read-only volume Compose rollback PASS", flush=True)
 
             # Case 5: never overwrite the current image when there is no
             # running service to establish a verified rollback baseline.
