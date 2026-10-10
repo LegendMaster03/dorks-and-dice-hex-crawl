@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using HexCrawl.Web.Api;
 using HexCrawl.Domain.Knowledge;
 using HexCrawl.Domain.Presentation;
@@ -16,6 +17,11 @@ namespace HexCrawl.IntegrationTests;
 
 public sealed class Phase18CellReadContractsTests
 {
+    private static readonly JsonSerializerOptions ApiJson = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter(allowIntegerValues: false) }
+    };
+
     [Fact]
     public async Task ExistingExpeditionGetExposesQualifiedCellWithoutFakeHexOrScale()
     {
@@ -194,11 +200,11 @@ public sealed class Phase18CellReadContractsTests
                             Travel = ResolvedTravelAmount.CellTransitions(1,
                                 new ResolutionProvenance(ResolutionSource.AutomaticRoll))
                         }
-                    });
+                    }, ApiJson);
                 Assert.Equal(HttpStatusCode.BadRequest, forged.StatusCode);
 
                 using var advancedResponse = await client.PostAsJsonAsync(
-                    $"/api/expeditions/{runtime.Id:D}/cells/advance", advanceRequest);
+                    $"/api/expeditions/{runtime.Id:D}/cells/advance", advanceRequest, ApiJson);
                 advancedResponse.EnsureSuccessStatusCode();
                 var advanced = await advancedResponse.Content.ReadFromJsonAsync<JsonElement>();
                 Assert.Equal(1, advanced.GetProperty("expedition").GetProperty("completedWatches").GetInt32());
@@ -208,7 +214,7 @@ public sealed class Phase18CellReadContractsTests
                 Assert.Contains(advanced.GetProperty("history").EnumerateArray(),
                     e => e.GetProperty("kind").GetString() == "CellEntered");
                 using var stale = await client.PostAsJsonAsync(
-                    $"/api/expeditions/{runtime.Id:D}/cells/advance", advanceRequest);
+                    $"/api/expeditions/{runtime.Id:D}/cells/advance", advanceRequest, ApiJson);
                 Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
             }
 
