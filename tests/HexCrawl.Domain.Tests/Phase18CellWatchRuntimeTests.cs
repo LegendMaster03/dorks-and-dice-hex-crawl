@@ -139,6 +139,51 @@ public sealed class Phase18CellWatchRuntimeTests
     }
 
     [Fact]
+    public void CalibratedContinuousCellWatchKeepsExactWithinCellPositionAndElapsedTime()
+    {
+        var (world, procedure, state, plan) = Setup(
+            "<1:1,1,1:4,4>", calibrated: true,
+            mode: TravelResolutionMode.ContinuousDistance);
+        var exit = PeriodicCellTraversalGeometry.NextCrossing(world, state.Traversal);
+        Assert.Equal(CellCrossingStatus.Crosses, exit.Status);
+        var distance = new DistanceMeasure(
+            exit.DistanceWorldUnits!.Value * world.PhysicalDistancePerWorldUnit!.Value.Value / 3,
+            DistanceUnit.Miles);
+        var result = new CrawlRuntimeEngine().AdvanceCellWatch(
+            world, procedure, state, plan,
+            new CellWatchAdvanceInputs(
+                ResolvedTravelAmount.Distance(distance, distance, Manual),
+                Encounter: ResolvedEncounter.None));
+
+        Assert.Null(result.PauseReason);
+        Assert.Empty(result.Events.Where(e => e.Kind == CrawlRuntimeEventKind.CellEntered));
+        Assert.Equal(state.Traversal.CurrentCell, result.Expedition.Traversal.CurrentCell);
+        Assert.Equal(1, result.Expedition.CompletedWatches);
+        Assert.Equal(GenericProcedureRuntime.Bind(procedure).Time.IntervalDuration,
+            result.Expedition.ElapsedTravelTime);
+        Assert.InRange(result.Expedition.DistanceTraveled!.Value.Value,
+            distance.Value - 1e-8, distance.Value + 1e-8);
+        Assert.True(state.Traversal.Position.DistanceTo(result.Expedition.Traversal.Position) > 0);
+    }
+
+    [Fact]
+    public void UncalibratedContinuousWatchFailsWithoutAlteringCellState()
+    {
+        var (world, procedure, state, plan) = Setup(
+            "<1:1,1,1:4,4>", calibrated: false,
+            mode: TravelResolutionMode.ContinuousDistance);
+        var amount = new DistanceMeasure(1, DistanceUnit.Miles);
+        Assert.Throws<NotSupportedException>(() =>
+            new CrawlRuntimeEngine().AdvanceCellWatch(
+                world, procedure, state, plan,
+                new CellWatchAdvanceInputs(
+                    ResolvedTravelAmount.Distance(amount, amount, Manual),
+                    Encounter: ResolvedEncounter.None)));
+        Assert.Empty(state.History);
+        Assert.Equal(TimeSpan.Zero, state.ElapsedTravelTime);
+    }
+
+    [Fact]
     public void NavigationUsesAngularVeerWithoutHexDirectionAndDoesNotAutomaticallyRecoverLost()
     {
         var (world, procedure, state, plan) = Setup("<1:1,1,1:4,4>", calibrated: true, advanced: true);
@@ -206,7 +251,8 @@ public sealed class Phase18CellWatchRuntimeTests
         ResolvedEncounter.None);
 
     private static (PeriodicWorldTiling World, CampaignProcedure Procedure, CellExpeditionState State,
-        CellWatchTravelPlan Plan) Setup(string symbol, bool calibrated, bool advanced = false)
+        CellWatchTravelPlan Plan) Setup(string symbol, bool calibrated, bool advanced = false,
+        TravelResolutionMode mode = TravelResolutionMode.CellSteps)
     {
         var generated = DelaneyDressHarmonicMetricRealization.Construct(symbol, 1.5, "world-unit");
         Assert.Equal("realized", generated.Status);
@@ -224,7 +270,7 @@ public sealed class Phase18CellWatchRuntimeTests
                 if (m.Mechanic.ExecutionHandler != GenericProcedureExecutionHandlers.MovementResolutionPolicy)
                     return m;
                 var parameters = m.Parameters.ToDictionary(x => x.Key, x => x.Value);
-                parameters["travelResolution"] = TravelResolutionMode.CellSteps.ToString();
+                parameters["travelResolution"] = mode.ToString();
                 parameters["actualDistanceResolution"] = ActualDistanceResolutionMode.Fixed.ToString();
                 parameters["tracksIntraHexProgress"] = "false";
                 return m with { Mechanic = m.Mechanic with { Version = 2 }, Parameters = parameters };
