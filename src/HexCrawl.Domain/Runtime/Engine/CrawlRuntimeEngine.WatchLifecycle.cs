@@ -91,6 +91,23 @@ public sealed partial class CrawlRuntimeEngine
         return string.IsNullOrWhiteSpace(details) ? target : $"{target}:{details}";
     }
 
+    /// <summary>
+    /// A shared recognition rule for legacy hex and qualified cell watches.
+    /// Refusing reorientation is valid; reorienting without first recognizing
+    /// the navigation error is not.
+    /// </summary>
+    private static bool ValidateLostRecognitionDecision(
+        BoundaryNavigationDecision? decision)
+    {
+        if (decision is null)
+            throw new InvalidOperationException(
+                "A lost-recognition boundary decision is required before travel can continue.");
+        if (decision.Reorient && !decision.RecognizedLost)
+            throw new InvalidOperationException(
+                "Reorientation requires recognizing that the expedition is lost.");
+        return decision.RecognizedLost && decision.Reorient;
+    }
+
     private static (ExpeditionState State, ActiveWatchState Active) ResumePendingDecision(
         ExpeditionState state,
         ActiveWatchState active,
@@ -99,9 +116,7 @@ public sealed partial class CrawlRuntimeEngine
     {
         if (active.PendingDecision == RuntimePauseReason.LostRecognitionRequired)
         {
-            var decision = boundaryDecision
-                ?? throw new InvalidOperationException("A lost-recognition boundary decision is required before travel can continue.");
-            if (decision.RecognizedLost && decision.Reorient)
+            if (ValidateLostRecognitionDecision(boundaryDecision))
             {
                 state = state with { Navigation = new NavigationRuntimeState(false, 0) };
                 events.Add(

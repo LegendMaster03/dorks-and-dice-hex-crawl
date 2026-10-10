@@ -67,11 +67,7 @@ public sealed partial class CrawlRuntimeEngine
                     "Resolve the ambiguous atomic exit with ResolveCellCourse before resuming travel.");
             if (pause == RuntimePauseReason.LostRecognitionRequired)
             {
-                var decision = inputs.BoundaryDecision
-                    ?? throw new InvalidOperationException("Resolve lost recognition before continuing.");
-                if (decision.Reorient && !decision.RecognizedLost)
-                    throw new InvalidOperationException("Reorientation requires recognizing that the party is lost.");
-                if (decision.RecognizedLost && decision.Reorient)
+                if (ValidateLostRecognitionDecision(inputs.BoundaryDecision))
                 {
                     state = state with { IsLost = false, ResolvedVeerDegrees = null };
                     AddCellEvent(events, active.WatchNumber, CrawlRuntimeEventKind.ExpeditionReoriented,
