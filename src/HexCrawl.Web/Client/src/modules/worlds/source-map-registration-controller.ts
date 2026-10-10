@@ -1,5 +1,10 @@
 import type { HexCrawlApi } from "../../api";
-import { solveAffine } from "../../affine-registration";
+import {
+    affineRegistrationSaveAllowed,
+    evaluateAffineRegistrationHoldout,
+    maxAffineHoldoutErrorSourcePixels,
+    solveAffine
+} from "../../affine-registration";
 import type { MapSurface } from "../../map-surface";
 import type {
     Overworld,
@@ -14,6 +19,7 @@ type RegistrationState = {
     map: SourceMapDetail;
     pairs: RegistrationControlPoint[];
     pendingSource: WorldPoint | null;
+    holdoutErrorSourcePixels: number | null;
 };
 
 export class SourceMapRegistrationController {
@@ -52,7 +58,9 @@ export class SourceMapRegistrationController {
             throw new Error("This map image has no usable image dimensions and must be re-imported before manual placement.");
         }
 
-        this.registration = { map: sourceMap, pairs: [], pendingSource: null };
+        this.registration = {
+            map: sourceMap, pairs: [], pendingSource: null, holdoutErrorSourcePixels: null
+        };
         this.panel.hidden = false;
         this.image.src = this.api.sourceMapAssetUrl(this.getWorld().id, sourceMap.id);
         this.map.renderer.hiddenSourceMapIds.delete(sourceMap.id);
@@ -78,7 +86,8 @@ export class SourceMapRegistrationController {
     }
 
     private captureSourcePoint(event: MouseEvent): void {
-        if (!this.registration || this.registration.pairs.length >= 3) return;
+        if (!this.registration || this.registration.pairs.length >= 4) return;
+        if (this.registration.pairs.length === 3 && !this.map.renderer.registrationPreview) return;
         const rect = this.image.getBoundingClientRect();
         if (rect.width <= 0 || rect.height <= 0 || this.image.naturalWidth <= 0 || this.image.naturalHeight <= 0) {
             return;
@@ -89,8 +98,9 @@ export class SourceMapRegistrationController {
             y: (event.clientY - rect.top) * this.image.naturalHeight / rect.height
         };
         this.registration.pendingSource = sourcePixel;
-        this.mapHint.textContent =
-            `Manual placement: image point ${this.registration.pairs.length + 1} selected at ${sourcePixel.x.toFixed(1)}, ${sourcePixel.y.toFixed(1)}. Click the corresponding world-map point.`;
+        this.mapHint.textContent = this.registration.pairs.length === 3
+            ? "Independent check: select the matching world-map position for this fourth image landmark."
+            : `Manual placement: image point ${this.registration.pairs.length + 1} selected at ${sourcePixel.x.toFixed(1)}, ${sourcePixel.y.toFixed(1)}. Click the corresponding world-map point.`;
         this.renderStatus();
     }
 
@@ -116,10 +126,29 @@ export class SourceMapRegistrationController {
                     transform
                 };
                 this.mapHint.textContent =
-                    "Placement preview is active. Inspect the map overlay, then save the placement or clear the points.";
+                    "Placement preview is active. Save using three landmarks, or click a fourth image/world landmark pair for an independent accuracy check. The check does not change the preview.";
                 this.map.requestRender();
             } catch (value) {
                 this.map.renderer.registrationPreview = null;
+                showUiError(this.errorHost, value);
+            }
+        } else if (this.registration.pairs.length === 4) {
+            // Keep the exact three-point fit unchanged. The fourth pair is
+            // validation-only; never send it to the existing three-point API.
+            const preview = this.map.renderer.registrationPreview;
+            try {
+                if (!preview || preview.sourceMapId !== this.registration.map.id) {
+                    throw new Error("No registration preview is available for validation.");
+                }
+                const result = evaluateAffineRegistrationHoldout(
+                    preview.transform, this.registration.pairs[3], this.registration.pairs.slice(0, 3));
+                this.registration.holdoutErrorSourcePixels = result.errorSourcePixels;
+                this.mapHint.textContent = result.errorSourcePixels <= maxAffineHoldoutErrorSourcePixels
+                    ? `Independent fourth landmark is within ${result.errorSourcePixels.toFixed(1)} source pixels. You may save this placement.`
+                    : `Independent fourth landmark differs by ${result.errorSourcePixels.toFixed(1)} source pixels (limit ${maxAffineHoldoutErrorSourcePixels}). Clear the points and realign before saving.`;
+            } catch (value) {
+                this.registration.holdoutErrorSourcePixels = null;
+                this.mapHint.textContent = "Independent landmark could not be verified. Clear the points and retry.";
                 showUiError(this.errorHost, value);
             }
         } else {
@@ -135,6 +164,7 @@ export class SourceMapRegistrationController {
         if (!this.registration) return;
         this.registration.pairs = [];
         this.registration.pendingSource = null;
+        this.registration.holdoutErrorSourcePixels = null;
         this.map.renderer.registrationPreview = null;
         this.mapHint.textContent =
             "Placement points cleared. Choose an image point to begin again.";
@@ -153,11 +183,13 @@ export class SourceMapRegistrationController {
     }
 
     private async save(): Promise<void> {
-        if (!this.registration
-            || this.registration.pairs.length !== 3
-            || !this.map.renderer.registrationPreview) {
+        if (!this.registration || !affineRegistrationSaveAllowed(
+            this.registration.pairs.length,
+            !!this.map.renderer.registrationPreview,
+            !!this.registration.pendingSource,
+            this.registration.holdoutErrorSourcePixels)) {
             throw new Error(
-                "Three valid image/world landmark pairs are required before placement can be saved.");
+                "Choose three valid landmark pairs. If a fourth validation point was provided, correct any discrepancy before saving.");
         }
 
         const world = this.getWorld();
@@ -165,7 +197,7 @@ export class SourceMapRegistrationController {
         const updated = await this.api.registerSourceMap(
             world.id,
             sourceMapId,
-            this.registration.pairs,
+            this.registration.pairs.slice(0, 3),
             world.version);
         this.applyWorld(updated);
         this.cancel();
@@ -174,12 +206,22 @@ export class SourceMapRegistrationController {
 
     private renderStatus(): void {
         if (!this.registration) return;
-        const pending = this.registration.pendingSource
-            ? ` Pending image point: ${this.registration.pendingSource.x.toFixed(1)}, ${this.registration.pendingSource.y.toFixed(1)}.`
+        const state = this.registration;
+        const pending = state.pendingSource
+            ? ` Pending image point: ${state.pendingSource.x.toFixed(1)}, ${state.pendingSource.y.toFixed(1)}.`
             : "";
+        const extra = state.pairs.length === 3
+            ? " Fourth landmark is optional and checks placement independently; it is not stored."
+            : state.pairs.length === 4
+                ? state.holdoutErrorSourcePixels === null
+                    ? " Independent landmark check was not valid."
+                    : ` Independent fourth-landmark error: ${state.holdoutErrorSourcePixels.toFixed(1)} source pixels.`
+                : "";
         this.status.textContent =
-            `${this.registration.pairs.length}/3 landmark pairs captured.${pending}`;
+            `${Math.min(state.pairs.length, 3)}/3 fitting landmarks captured.${extra}${pending}`;
         required<HTMLButtonElement>(this.host, "[data-save-registration]").disabled =
-            this.registration.pairs.length !== 3 || !this.map.renderer.registrationPreview;
+            !affineRegistrationSaveAllowed(state.pairs.length,
+                !!this.map.renderer.registrationPreview, !!state.pendingSource,
+                state.holdoutErrorSourcePixels);
     }
 }
