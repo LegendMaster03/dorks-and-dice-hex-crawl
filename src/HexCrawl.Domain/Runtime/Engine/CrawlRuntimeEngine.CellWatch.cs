@@ -118,13 +118,15 @@ public sealed partial class CrawlRuntimeEngine
         var degrees = state.IsLost ? state.ResolvedVeerDegrees ?? 0d : 0d;
         var heading = RotateCellHeading(plan.IntendedHeading, degrees);
         state = state with { Traversal = state.Traversal with { TravelHeading = heading } };
-        if (inputs.Travel.Provenance.Source == ResolutionSource.DmOverride
-            || inputs.Navigation?.Provenance.Source == ResolutionSource.DmOverride
-            || inputs.Encounter?.Provenance.Source == ResolutionSource.DmOverride
-            || inputs.BoundaryDecision?.Provenance.Source == ResolutionSource.DmOverride
-            || !string.IsNullOrWhiteSpace(inputs.DmOverrideNote))
+        var dmOverrideNote = ResolveDmOverrideNote(
+            inputs.Travel.Provenance,
+            inputs.Navigation?.Provenance,
+            inputs.Encounter?.Provenance,
+            inputs.BoundaryDecision?.Provenance,
+            inputs.DmOverrideNote);
+        if (dmOverrideNote is not null)
             AddCellEvent(events, active.WatchNumber, CrawlRuntimeEventKind.DmOverrideApplied,
-                state, inputs.DmOverrideNote ?? inputs.Travel.Provenance.Note ?? "DM resolved an override.");
+                state, dmOverrideNote);
 
         if (active.Remaining == TimeSpan.Zero)
             return CompleteCellWatch(state, active, events);

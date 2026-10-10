@@ -250,28 +250,46 @@ public sealed partial class CrawlRuntimeEngine
         return Finish(state, null, TimeSpan.Zero, events);
     }
 
+    /// <summary>
+    /// Shared DM-override detection and note precedence. A cell/hex adapter
+    /// supplies only its authoritative position to the event collector.
+    /// </summary>
+    private static string? ResolveDmOverrideNote(
+        ResolutionProvenance travel,
+        ResolutionProvenance? navigation,
+        ResolutionProvenance? encounter,
+        ResolutionProvenance? boundary,
+        string? overrideNote)
+    {
+        if (travel.Source != ResolutionSource.DmOverride
+            && navigation?.Source != ResolutionSource.DmOverride
+            && encounter?.Source != ResolutionSource.DmOverride
+            && boundary?.Source != ResolutionSource.DmOverride
+            && string.IsNullOrWhiteSpace(overrideNote))
+            return null;
+
+        return overrideNote
+            ?? travel.Note
+            ?? navigation?.Note
+            ?? encounter?.Note
+            ?? boundary?.Note
+            ?? "DM supplied an authoritative override.";
+    }
+
     private static void EmitDmOverrideIfNeeded(
         ExpeditionState state,
         int watchNumber,
         WatchAdvanceInputs inputs,
         EventCollector events)
     {
-        var overrideApplied = inputs.Travel.Provenance.Source == ResolutionSource.DmOverride
-            || inputs.Navigation?.Provenance.Source == ResolutionSource.DmOverride
-            || inputs.Encounter?.Provenance.Source == ResolutionSource.DmOverride
-            || inputs.BoundaryDecision?.Provenance.Source == ResolutionSource.DmOverride
-            || !string.IsNullOrWhiteSpace(inputs.DmOverrideNote);
-        if (!overrideApplied)
-        {
+        var note = ResolveDmOverrideNote(
+            inputs.Travel.Provenance,
+            inputs.Navigation?.Provenance,
+            inputs.Encounter?.Provenance,
+            inputs.BoundaryDecision?.Provenance,
+            inputs.DmOverrideNote);
+        if (note is null)
             return;
-        }
-
-        var note = inputs.DmOverrideNote
-            ?? inputs.Travel.Provenance.Note
-            ?? inputs.Navigation?.Provenance.Note
-            ?? inputs.Encounter?.Provenance.Note
-            ?? inputs.BoundaryDecision?.Provenance.Note
-            ?? "DM supplied an authoritative override.";
         events.Add(
             watchNumber,
             CrawlRuntimeEventKind.DmOverrideApplied,
