@@ -194,26 +194,53 @@ public sealed partial class CrawlRuntimeEngine
         return encounter;
     }
 
+    /// <summary>
+    /// Both spatial runtimes use the same occurrence identity and typed
+    /// encounter-trigger metadata; only their authoritative coordinate differs.
+    /// </summary>
+    private static CrawlRuntimeEvent RecordEncounterTrigger(
+        Guid expeditionId,
+        int watchNumber,
+        TimeSpan elapsed,
+        HexCoordinate? hex,
+        WorldCellId? cell,
+        ResolvedEncounter encounter,
+        EventCollector events,
+        string message)
+    {
+        if (hex.HasValue == cell.HasValue)
+            throw new InvalidOperationException(
+                "An encounter trigger requires exactly one authoritative spatial identity.");
+        var occurrenceId = EncounterOccurrenceIdentity.Create(
+            expeditionId, events.NextSequence);
+        var recorded = events.Add(
+            watchNumber, CrawlRuntimeEventKind.EncounterTriggered,
+            elapsed, hex, message,
+            subjectId: encounter.LocationId,
+            encounterOutcome: encounter.Kind,
+            encounterNote: encounter.Note,
+            encounterProvenance: encounter.Provenance,
+            encounterOccurrenceId: occurrenceId);
+        if (cell is null)
+            return recorded;
+        var qualified = recorded with { Cell = cell };
+        events.NewEvents[^1] = qualified;
+        return qualified;
+    }
+
     private static WatchAdvanceResult TriggerEncounter(
         ExpeditionState state,
         ActiveWatchState active,
         EventCollector events)
     {
         var encounter = active.Encounter;
-        var occurrenceId = EncounterOccurrenceIdentity.Create(state.Id, events.NextSequence);
-        var triggered = events.Add(
-            active.WatchNumber,
-            CrawlRuntimeEventKind.EncounterTriggered,
-            state.ElapsedTravelTime,
-            state.CurrentHex,
+        var triggered = RecordEncounterTrigger(
+            state.Id, active.WatchNumber, state.ElapsedTravelTime,
+            state.CurrentHex, null, encounter, events,
             string.IsNullOrWhiteSpace(encounter.Note)
                 ? $"{encounter.Kind} triggered."
-                : $"{encounter.Kind}: {encounter.Note}",
-            subjectId: encounter.LocationId,
-            encounterOutcome: encounter.Kind,
-            encounterNote: encounter.Note,
-            encounterProvenance: encounter.Provenance,
-            encounterOccurrenceId: occurrenceId);
+                : $"{encounter.Kind}: {encounter.Note}");
+        var occurrenceId = triggered.EncounterOccurrenceId!.Value;
 
         active = active with
         {

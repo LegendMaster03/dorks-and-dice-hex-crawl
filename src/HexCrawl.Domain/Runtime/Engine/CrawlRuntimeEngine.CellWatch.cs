@@ -439,13 +439,11 @@ public sealed partial class CrawlRuntimeEngine
         CellExpeditionState state, CellActiveWatchState active, EventCollector events)
     {
         var encounter = active.Encounter;
-        var occurrenceId = EncounterOccurrenceIdentity.Create(state.Id, events.NextSequence);
-        var emitted = events.Add(active.WatchNumber, CrawlRuntimeEventKind.EncounterTriggered,
-            state.ElapsedTravelTime, null, encounter.Note ?? $"{encounter.Kind} triggered.",
-            subjectId: encounter.LocationId, encounterOutcome: encounter.Kind,
-            encounterNote: encounter.Note, encounterProvenance: encounter.Provenance,
-            encounterOccurrenceId: occurrenceId);
-        events.NewEvents[^1] = emitted with { Cell = state.Traversal.CurrentCell };
+        var emitted = RecordEncounterTrigger(
+            state.Id, active.WatchNumber, state.ElapsedTravelTime,
+            null, state.Traversal.CurrentCell, encounter, events,
+            encounter.Note ?? $"{encounter.Kind} triggered.");
+        var occurrenceId = emitted.EncounterOccurrenceId!.Value;
         active = active with { EncounterHandled = true, PendingDecision = RuntimePauseReason.EncounterTriggered };
         state = state with
         {
