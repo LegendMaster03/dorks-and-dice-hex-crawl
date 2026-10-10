@@ -463,6 +463,21 @@ export class HexCrawlApi {
         return this.sendJson("POST", "/api/expeditions", input, "Start expedition");
     }
 
+    public assessCellProcedure(
+        worldId: string, procedureId: string, revision: number
+    ): Promise<{
+        status: "ready" | "unsupported" | "needs-calibration" | "review" | "incompatible";
+        explanation: string;
+        worldVersion: number;
+        procedureId: string;
+        revision: number;
+    }> {
+        const query = new URLSearchParams({ procedureId, revision: String(revision) });
+        return this.getJson(
+            `/api/overworlds/${encodeURIComponent(worldId)}/cell-procedures/compatibility?${query}`,
+            "Saved ruleset compatibility");
+    }
+
     public createCellTravelProcedure(worldId: string): Promise<{
         procedureId: string; revision: number; name: string;
     }> {
