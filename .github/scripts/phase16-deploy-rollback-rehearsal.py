@@ -196,12 +196,20 @@ def main(workflow, service):
             preserved(service, healthy)
             print(f"{service}: failed container replacement rollback PASS", flush=True)
 
-            # Case 5: first deployment has no running previous image.
+            # Case 5: never overwrite the current image when there is no
+            # running service to establish a verified rollback baseline.
             command(["docker", "rm", "-f", service])
+            latest_before = command(
+                ["docker", "image", "inspect", "--format", "{{.Id}}",
+                 f"{service}:latest"]).strip()
             output.write_text("")
-            run(steps["capture"], root, env)
+            run(steps["capture"], root, env, expected_success=False)
             assert outputs(output)["available"] == "false"
-            print(f"{service}: no-previous-image fails closed PASS", flush=True)
+            latest_after = command(
+                ["docker", "image", "inspect", "--format", "{{.Id}}",
+                 f"{service}:latest"]).strip()
+            assert latest_after == latest_before == healthy
+            print(f"{service}: absent running image aborts before tag mutation PASS", flush=True)
         finally:
             command(compose + ["down", "-v", "--remove-orphans"], cwd=root)
             command(["docker", "network", "rm", "dorks-and-dice-backend"])
