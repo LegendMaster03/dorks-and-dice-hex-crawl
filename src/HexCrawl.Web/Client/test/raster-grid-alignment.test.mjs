@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import "./phase19-affine-holdout.test.mjs";
 import {
     buildRasterGridAlignmentProposal,
     physicalDistancePerDetectedHex,

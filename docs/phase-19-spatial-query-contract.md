@@ -20,6 +20,10 @@ The compatibility response currently sets `canCorrectInPlace=false` deliberately
 
 Additional Phase 19 gates remain: independently registered Surveyor-driven metric/phase alignment; approved safe correction for unblocked defaults; a true mixed/rhombille visual and browser-workflow matrix; broader names/geometry-qualified catalog entries and guided unfamiliar-pattern parameter editing; complete generalized route/coverage/knowledge/overlay parity; mobile, keyboard, dark mode, embedded and signed-in tester verification; and explicit test deployment checks. Keep these open rather than marking Phase 19 complete.
 
+## Targeted Phase 19 regression matrix
+
+A PostgreSQL-backed HTTP integration matrix now covers image-free authoring of the mixed triangle/square, rhombille and subdivided non-edge-to-edge fixtures, authenticated polygon selection, pinned procedure creation, two expedition starts and reciprocal atomic interface traversal context. These are API/persistence checks, **not** visual browser acceptance. The frontend `npm test` command explicitly runs generalized-cell hit testing and the optional independent affine-landmark checks. Manual browser verification and Surveyor-driven image registration remain separate release gates.
+
 ## Test and release guidance
 
 Existing CI exercises frontend compilation/unit tests, .NET domain/application/HTTP integration tests, container build and PostgreSQL workflows. Phase 19 adds image-free creation, owner isolation, pinned cell-step expedition start, polygon selection, qualified environment scopes and mismatch preview tests. Verify the **exact feature-branch head** passes before handing off. No production deployment, tester-data reset, merge or branch cutover is authorized by this document.
