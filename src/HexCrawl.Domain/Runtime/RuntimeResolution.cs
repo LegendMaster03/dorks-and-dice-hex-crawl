@@ -43,6 +43,7 @@ public sealed record ResolvedTravelAmount
     public DistanceMeasure? ExpectedDistance { get; init; }
     public DistanceMeasure? ActualDistance { get; init; }
     public int? HexSteps { get; init; }
+    public int? CellSteps { get; init; }
     public required ResolutionProvenance Provenance { get; init; }
 
     public static ResolvedTravelAmount Distance(
@@ -54,6 +55,12 @@ public sealed record ResolvedTravelAmount
         ActualDistance = actual,
         Provenance = provenance
     };
+
+    public static ResolvedTravelAmount CellTransitions(int steps, ResolutionProvenance provenance)
+    {
+        if (steps < 0) throw new ArgumentOutOfRangeException(nameof(steps));
+        return new ResolvedTravelAmount { CellSteps = steps, Provenance = provenance };
+    }
 
     public static ResolvedTravelAmount Steps(int steps, ResolutionProvenance provenance)
     {

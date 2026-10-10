@@ -13,14 +13,14 @@ public sealed partial class CrawlRuntimeEngine
     {
         if (movementPolicy.TravelResolution == TravelResolutionMode.ContinuousDistance)
         {
-            if (travel.ExpectedDistance is null || travel.ActualDistance is null || travel.HexSteps is not null)
+            if (travel.ExpectedDistance is null || travel.ActualDistance is null || travel.HexSteps is not null || travel.CellSteps is not null)
             {
                 throw new InvalidOperationException("Continuous-distance travel requires expected and actual distance values only.");
             }
             return;
         }
 
-        if (travel.HexSteps is null || travel.HexSteps < 0 || travel.ExpectedDistance is not null || travel.ActualDistance is not null)
+        if (travel.HexSteps is null || travel.HexSteps < 0 || travel.CellSteps is not null || travel.ExpectedDistance is not null || travel.ActualDistance is not null)
         {
             throw new InvalidOperationException("Hex-step travel requires a non-negative resolved step count only.");
         }
@@ -36,7 +36,7 @@ public sealed partial class CrawlRuntimeEngine
             return;
         }
 
-        if (travel.HexSteps is not null)
+        if (travel.HexSteps is not null || travel.CellSteps is not null)
         {
             throw new InvalidOperationException("Continuous-distance travel does not accept a resolved hex-step count.");
         }

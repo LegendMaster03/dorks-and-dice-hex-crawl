@@ -21,7 +21,7 @@ public static class GenericProcedureExecutionHandlers
         new Dictionary<string, IReadOnlySet<int>>(StringComparer.Ordinal)
         {
             [FixedIntervalDuration] = new HashSet<int> { 1 },
-            [MovementResolutionPolicy] = new HashSet<int> { 1 },
+            [MovementResolutionPolicy] = new HashSet<int> { 1, 2 },
             [HexProgressPolicy] = new HashSet<int> { 1 },
             [NavigationCheckPolicy] = new HashSet<int> { 1 },
             [EncounterCheckCadence] = new HashSet<int> { 1 },
@@ -74,7 +74,10 @@ public sealed record ProcedureTimeRuntime(TimeSpan IntervalDuration);
 public sealed record ProcedureMovementRuntime(
     TravelResolutionMode TravelResolution,
     ActualDistanceResolutionMode ActualDistanceResolution,
-    bool TracksIntraHexProgress);
+    bool TracksIntraHexProgress)
+{
+    public int MechanicVersion { get; init; } = 1;
+}
 
 public sealed record ProcedureHexProgressRuntime(
     double StartingExitProgressFactor,
@@ -100,7 +103,7 @@ public sealed class GenericProcedureRuntime
         string name,
         ProcedureTimeRuntime time,
         ProcedureMovementRuntime movement,
-        ProcedureHexProgressRuntime hexProgress,
+        ProcedureHexProgressRuntime? hexProgress,
         ProcedureNavigationRuntime navigation,
         ProcedureEncounterRuntime encounters,
         ProcedureResolutionHelperProfile? resolutionHelpers)
@@ -108,7 +111,7 @@ public sealed class GenericProcedureRuntime
         Name = name;
         Time = time;
         Movement = movement;
-        HexProgress = hexProgress;
+        _hexProgress = hexProgress;
         Navigation = navigation;
         Encounters = encounters;
         ResolutionHelpers = resolutionHelpers;
@@ -118,7 +121,9 @@ public sealed class GenericProcedureRuntime
     public string Name { get; }
     public ProcedureTimeRuntime Time { get; }
     public ProcedureMovementRuntime Movement { get; }
-    public ProcedureHexProgressRuntime HexProgress { get; }
+    private readonly ProcedureHexProgressRuntime? _hexProgress;
+    public ProcedureHexProgressRuntime HexProgress => _hexProgress
+        ?? throw new InvalidOperationException("A cell movement procedure has no legacy hex progress contract.");
     public ProcedureNavigationRuntime Navigation { get; }
     public ProcedureEncounterRuntime Encounters { get; }
     public ProcedureResolutionHelperProfile? ResolutionHelpers { get; }
@@ -142,7 +147,9 @@ public sealed class GenericProcedureRuntime
 
         var time = Required(procedure, GenericProcedureExecutionHandlers.FixedIntervalDuration);
         var movement = Required(procedure, GenericProcedureExecutionHandlers.MovementResolutionPolicy);
-        var progress = Required(procedure, GenericProcedureExecutionHandlers.HexProgressPolicy);
+        var progress = Optional(procedure, GenericProcedureExecutionHandlers.HexProgressPolicy);
+        if (movement.Mechanic.Version == 1 && progress is null)
+            throw new InvalidOperationException("Legacy hex movement requires its pinned hex progress contract.");
         var navigation = Required(procedure, GenericProcedureExecutionHandlers.NavigationCheckPolicy);
         var encounters = Required(procedure, GenericProcedureExecutionHandlers.EncounterCheckCadence);
         var helpers = Optional(procedure, GenericProcedureExecutionHandlers.DeterministicResolutionHelpers);
@@ -153,8 +160,11 @@ public sealed class GenericProcedureRuntime
             new ProcedureMovementRuntime(
                 EnumValue<TravelResolutionMode>(movement, "travelResolution"),
                 EnumValue<ActualDistanceResolutionMode>(movement, "actualDistanceResolution"),
-                Boolean(movement, "tracksIntraHexProgress")),
-            new ProcedureHexProgressRuntime(
+                Boolean(movement, "tracksIntraHexProgress"))
+            {
+                MechanicVersion = movement.Mechanic.Version
+            },
+            progress is null ? null : new ProcedureHexProgressRuntime(
                 Double(progress, "startingExitProgressFactor"),
                 Double(progress, "nearExitProgressFactor"),
                 Double(progress, "farExitProgressFactor"),
@@ -180,30 +190,46 @@ public sealed class GenericProcedureRuntime
             throw new InvalidOperationException("Procedure interval duration must be positive.");
         }
 
-        ValidateFactor(HexProgress.StartingExitProgressFactor, nameof(HexProgress.StartingExitProgressFactor));
-        ValidateFactor(HexProgress.NearExitProgressFactor, nameof(HexProgress.NearExitProgressFactor));
-        ValidateFactor(HexProgress.FarExitProgressFactor, nameof(HexProgress.FarExitProgressFactor));
-        ValidateFactor(HexProgress.BackExitProgressFactor, nameof(HexProgress.BackExitProgressFactor));
-        ValidateFactor(HexProgress.DirectionChangeProgressCostFactor, nameof(HexProgress.DirectionChangeProgressCostFactor), allowZero: true);
         ResolutionHelpers?.Validate();
 
-        if (Movement.TravelResolution == TravelResolutionMode.HexSteps && Movement.TracksIntraHexProgress)
+        if (Movement.MechanicVersion == 2)
         {
-            throw new InvalidOperationException("Hex-step travel can not simultaneously use intra-hex progress.");
+            // Version 2 makes the distinction explicit: a cell-step is one
+            // authoritative boundary crossing; continuous distance follows
+            // calibrated world geometry. It does not adopt v1 hex factors.
+            if (_hexProgress is not null || Movement.TracksIntraHexProgress)
+                throw new InvalidOperationException(
+                    "Generalized movement version 2 must not include legacy hex progress factors.");
+            if (Movement.TravelResolution is not (TravelResolutionMode.CellSteps
+                or TravelResolutionMode.ContinuousDistance))
+                throw new InvalidOperationException(
+                    "Generalized movement version 2 supports cell steps or continuous distance.");
+            if (Movement.TravelResolution == TravelResolutionMode.CellSteps
+                && Movement.ActualDistanceResolution != ActualDistanceResolutionMode.Fixed)
+                throw new InvalidOperationException("Cell-step travel does not have a resolved distance variance.");
+            return;
         }
+
+        if (Movement.MechanicVersion != 1 || _hexProgress is null
+            || Movement.TravelResolution == TravelResolutionMode.CellSteps)
+            throw new InvalidOperationException("Unsupported legacy hex movement contract.");
+
+        var hexProgress = _hexProgress;
+        ValidateFactor(hexProgress.StartingExitProgressFactor, nameof(hexProgress.StartingExitProgressFactor));
+        ValidateFactor(hexProgress.NearExitProgressFactor, nameof(hexProgress.NearExitProgressFactor));
+        ValidateFactor(hexProgress.FarExitProgressFactor, nameof(hexProgress.FarExitProgressFactor));
+        ValidateFactor(hexProgress.BackExitProgressFactor, nameof(hexProgress.BackExitProgressFactor));
+        ValidateFactor(hexProgress.DirectionChangeProgressCostFactor, nameof(hexProgress.DirectionChangeProgressCostFactor), allowZero: true);
+
+        if (Movement.TravelResolution == TravelResolutionMode.HexSteps && Movement.TracksIntraHexProgress)
+            throw new InvalidOperationException("Hex-step travel can not simultaneously use intra-hex progress.");
         if (Movement.TravelResolution == TravelResolutionMode.HexSteps
             && Movement.ActualDistanceResolution != ActualDistanceResolutionMode.Fixed)
-        {
             throw new InvalidOperationException("Hex-step travel does not use variable resolved physical distance.");
-        }
         if (Movement.TravelResolution == TravelResolutionMode.ContinuousDistance && !Movement.TracksIntraHexProgress)
-        {
-            throw new InvalidOperationException("Continuous-distance travel currently requires intra-hex progress tracking.");
-        }
-        if (HexProgress.DirectionChangesCostProgress && !Movement.TracksIntraHexProgress)
-        {
+            throw new InvalidOperationException("Continuous-distance legacy hex travel requires intra-hex progress.");
+        if (hexProgress.DirectionChangesCostProgress && !Movement.TracksIntraHexProgress)
             throw new InvalidOperationException("Direction-change progress costs require intra-hex progress tracking.");
-        }
     }
 
     private static MaterializedProcedureModule Required(CampaignProcedure procedure, string handler)
