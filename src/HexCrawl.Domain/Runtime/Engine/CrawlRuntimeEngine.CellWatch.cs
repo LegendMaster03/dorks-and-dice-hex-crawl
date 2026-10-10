@@ -9,6 +9,11 @@ public sealed record ResolvedCellNavigation(
     double? VeerDegreesOnFailure,
     ResolutionProvenance Provenance);
 
+public sealed record CellCourseDecision(
+    WorldPoint IntendedHeading,
+    int SelectedExitInterfaceIndex,
+    ResolutionProvenance Provenance);
+
 public sealed record CellWatchAdvanceInputs(
     ResolvedTravelAmount Travel,
     ResolvedCellNavigation? Navigation = null,
@@ -249,6 +254,62 @@ public sealed partial class CrawlRuntimeEngine
         return active.Remaining == TimeSpan.Zero
             ? CompleteCellWatch(state, active, events)
             : FinishCell(state, null, active.Remaining, events);
+    }
+
+    /// <summary>
+    /// Accept an explicit atomic-interface decision when the course is
+    /// ambiguous. Merely naming a boundary does not authorize a phantom
+    /// vertex crossing: the actual ray must leave through that boundary.
+    /// </summary>
+    public CellWatchAdvanceResult ResolveCellCourse(
+        PeriodicWorldTiling world, CellExpeditionState expedition,
+        CellCourseDecision decision)
+    {
+        ArgumentNullException.ThrowIfNull(world);
+        ArgumentNullException.ThrowIfNull(expedition);
+        ArgumentNullException.ThrowIfNull(decision);
+        expedition.Validate(world);
+        if (expedition.PendingEncounter is not null)
+            throw new InvalidOperationException("Resolve the pending encounter before changing course.");
+        if (expedition.ActiveWatch?.PendingDecision == RuntimePauseReason.LostRecognitionRequired)
+            throw new InvalidOperationException("Resolve lost recognition before changing course.");
+        if (!double.IsFinite(decision.IntendedHeading.X)
+            || !double.IsFinite(decision.IntendedHeading.Y)
+            || decision.IntendedHeading.X == 0 && decision.IntendedHeading.Y == 0)
+            throw new InvalidOperationException("The resolved course requires a finite, nonzero heading.");
+
+        var actual = RotateCellHeading(decision.IntendedHeading,
+            expedition.IsLost ? expedition.ResolvedVeerDegrees ?? 0d : 0d);
+        var traversal = expedition.Traversal with
+        {
+            TravelHeading = actual,
+            SelectedExitInterfaceIndex = decision.SelectedExitInterfaceIndex
+        };
+        traversal.Validate(world);
+        var crossing = PeriodicCellTraversalGeometry.NextCrossing(world, traversal);
+        if (crossing.Status != CellCrossingStatus.Crosses)
+            throw new InvalidOperationException(crossing.Reason
+                ?? "This course has no uniquely adjudicated atomic exit interface.");
+
+        var active = expedition.ActiveWatch;
+        if (active is not null)
+            active = active with
+            {
+                Plan = active.Plan with { IntendedHeading = decision.IntendedHeading },
+                PendingDecision = null
+            };
+        var next = expedition with
+        {
+            Traversal = traversal,
+            IntendedHeading = decision.IntendedHeading,
+            ActiveWatch = active
+        };
+        next.Validate(world);
+        var events = new EventCollector(expedition.History);
+        AddCellEvent(events, active?.WatchNumber ?? Math.Max(1, next.CompletedWatches + 1),
+            CrawlRuntimeEventKind.DirectionChanged, next,
+            $"DM confirmed atomic exit interface {decision.SelectedExitInterfaceIndex} for the current cell.");
+        return FinishCell(next, null, active?.Remaining ?? TimeSpan.Zero, events);
     }
 
     public CellWatchAdvanceResult ResolveCellEncounter(
