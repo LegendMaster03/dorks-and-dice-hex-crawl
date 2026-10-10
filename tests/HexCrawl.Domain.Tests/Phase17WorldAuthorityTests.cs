@@ -152,6 +152,36 @@ public sealed class Phase17WorldAuthorityTests
         };
         localShift.Validate();
         Assert.False(LegacyHexTilingCompatibility.Matches(localShift, grid));
+        static TilingWorldPoint QuarterTurn(TilingWorldPoint p) => new(-p.Y, p.X);
+        var rotatedBasis = original with
+        {
+            Realization = original.Realization with
+            {
+                TranslationU = QuarterTurn(original.Realization.TranslationU),
+                TranslationV = QuarterTurn(original.Realization.TranslationV),
+                Polygons = original.Realization.Polygons.ToDictionary(
+                    x => x.Key,
+                    x => (IReadOnlyList<TilingWorldPoint>)x.Value.Select(QuarterTurn).ToArray())
+            }
+        };
+        rotatedBasis.Validate();
+        Assert.False(LegacyHexTilingCompatibility.Matches(rotatedBasis, grid));
+        var scaledBasis = original with
+        {
+            Realization = original.Realization with
+            {
+                TranslationU = new TilingWorldPoint(original.Realization.TranslationU.X * 1.25,
+                    original.Realization.TranslationU.Y * 1.25),
+                TranslationV = new TilingWorldPoint(original.Realization.TranslationV.X * 1.25,
+                    original.Realization.TranslationV.Y * 1.25),
+                Polygons = original.Realization.Polygons.ToDictionary(
+                    x => x.Key,
+                    x => (IReadOnlyList<TilingWorldPoint>)x.Value.Select(p =>
+                        new TilingWorldPoint(p.X * 1.25, p.Y * 1.25)).ToArray())
+            }
+        };
+        scaledBasis.Validate();
+        Assert.False(LegacyHexTilingCompatibility.Matches(scaledBasis, grid));
         var alteredScale = original with
         {
             PhysicalDistancePerWorldUnit = new DistanceMeasure(7, DistanceUnit.Miles)
