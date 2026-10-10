@@ -26,11 +26,18 @@ public sealed class Phase18CellReadContractsTests
                 Guid.NewGuid(), generated.Topology!, generated.Realization!,
                 new WorldPoint(0, 0));
             tiling.Validate();
+            var landmark = new Location(
+                Guid.NewGuid(), "Sealed archive", "landmark",
+                tiling.Resolve(new PeriodicCellAddress(
+                    tiling.Topology.MotifCells[0].Id,
+                    new LatticeDisplacement(2, -1))).Center,
+                LocationDiscoverability.Hidden, []);
             var world = new OverworldDefinition
             {
                 Id = Guid.NewGuid(),
                 Name = "Read-only cell contract",
-                Tiling = tiling
+                Tiling = tiling,
+                Locations = [landmark]
             };
             var store = new PostgresHexCrawlStore(database);
             var now = DateTimeOffset.UtcNow;
@@ -134,6 +141,27 @@ public sealed class Phase18CellReadContractsTests
                     first.GetProperty("reciprocalInterfaceIndex").GetInt32());
                 Assert.Equal(boundary.To.TilingId,
                     first.GetProperty("neighborCell").GetProperty("tilingId").GetGuid());
+
+                using var discover = await client.PostAsJsonAsync(
+                    $"/api/expeditions/{runtime.Id:D}/discover",
+                    new
+                    {
+                        expectedVersion = body.GetProperty("version").GetInt64(),
+                        subjectId = landmark.Id,
+                        subjectType = "Location",
+                        source = "dm:cell-http-test"
+                    });
+                discover.EnsureSuccessStatusCode();
+                var discovered = await discover.Content.ReadFromJsonAsync<JsonElement>();
+                var entry = Assert.Single(discovered.GetProperty("knowledge").EnumerateArray());
+                Assert.Equal(landmark.Id, entry.GetProperty("subjectId").GetGuid());
+                Assert.Equal("Discovered", entry.GetProperty("state").GetString());
+                var discoveredEvent = discovered.GetProperty("history").EnumerateArray()
+                    .Single(item => item.GetProperty("kind").GetString() == "LocationDiscovered");
+                Assert.Equal(cell.Id.TilingId,
+                    discoveredEvent.GetProperty("cell").GetProperty("tilingId").GetGuid());
+                Assert.Equal(JsonValueKind.Null, discoveredEvent.GetProperty("hex").ValueKind);
+                Assert.Equal(0, discovered.GetProperty("knownHexes").GetArrayLength());
             }
 
             using (var otherFactory = TestWebHost.Create(database, "bob"))
