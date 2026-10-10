@@ -1,6 +1,8 @@
 using System.Security.Claims;
 using HexCrawl.Application;
 using HexCrawl.Application.Assets;
+using HexCrawl.Domain.Procedure;
+using HexCrawl.Domain.Runtime;
 using HexCrawl.Web.Api;
 using HexCrawl.Web.Framework;
 using Microsoft.AspNetCore.Routing;
@@ -22,6 +24,7 @@ public sealed class WorldModule : IHexCrawlModule
         api.MapGet("/overworlds", ListOverworldsAsync);
         api.MapPost("/overworlds", CreateOverworldAsync);
         api.MapPost("/overworlds/periodic", CreatePeriodicOverworldAsync);
+        api.MapPost("/overworlds/{overworldId:guid}/cell-procedures", CreateCellTravelProcedureAsync);
         api.MapGet("/overworlds/{overworldId:guid}", GetOverworldAsync);
         api.MapGet("/overworlds/{overworldId:guid}/cells/viewport", GetVisibleCellsAsync);
         api.MapGet("/overworlds/{overworldId:guid}/cells/containing", GetContainingCellsAsync);
@@ -90,6 +93,59 @@ public sealed class WorldModule : IHexCrawlModule
         var stored = await service.CreatePeriodicOverworldAsync(
             UserId(context), request.Name, worldTiling, cancellationToken);
         return Results.Created($"/api/overworlds/{stored.World.Id:D}", OverworldContract.From(stored));
+    }
+
+    // Generate a normal editable, pinned campaign revision using existing
+    // movement-v2 capabilities. Preset templates and past revisions are not
+    // edited. No image or manually authored notation is required.
+    private static async Task<IResult> CreateCellTravelProcedureAsync(
+        Guid overworldId,
+        HttpContext context,
+        HexCrawlService service,
+        CampaignProcedureService procedures,
+        CancellationToken cancellationToken)
+    {
+        var owner = UserId(context);
+        var stored = await service.GetOverworldAsync(overworldId, owner, cancellationToken);
+        if (stored.World.HasLegacyHexGrid || stored.World.Tiling is null)
+            throw new NotSupportedException("This world already uses legacy hex procedures.");
+        var template = CrawlProcedureCatalog.Resolve("simple-fixed-distance")
+            .MaterializeGeneric().Procedure;
+        var modules = template.Modules
+            .Where(module => module.Mechanic.ExecutionHandler !=
+                GenericProcedureExecutionHandlers.HexProgressPolicy)
+            .Select(module =>
+            {
+                if (module.Mechanic.ExecutionHandler !=
+                    GenericProcedureExecutionHandlers.MovementResolutionPolicy)
+                    return module;
+                var parameters = module.Parameters.ToDictionary(item => item.Key, item => item.Value);
+                parameters["travelResolution"] = TravelResolutionMode.CellSteps.ToString();
+                parameters["actualDistanceResolution"] = ActualDistanceResolutionMode.Fixed.ToString();
+                parameters["tracksIntraHexProgress"] = "false";
+                return module with
+                {
+                    Mechanic = module.Mechanic with { Version = 2 },
+                    Parameters = parameters
+                };
+            }).ToArray();
+        var edition = template with
+        {
+            ProcedureId = Guid.NewGuid(),
+            Name = "Cell-step exploration for " + stored.World.Name,
+            TilingDsSymbol = stored.World.Tiling.Topology.QuotientDsSymbol,
+            Modules = modules
+        };
+        edition.Validate();
+        var bound = GenericProcedureRuntime.Bind(edition);
+        if (bound.Movement.MechanicVersion != 2
+            || bound.Movement.TravelResolution != TravelResolutionMode.CellSteps)
+            throw new InvalidOperationException("The generated cell ruleset is not executable.");
+        var saved = await procedures.CreateAsync(owner, edition, null,
+            cancellationToken: cancellationToken);
+        return Results.Created($"/api/procedures/{saved.ProcedureId:D}",
+            new { procedureId = saved.ProcedureId, revision = saved.Revision,
+                name = saved.Procedure.Name });
     }
 
     private static async Task<IResult> GetOverworldAsync(
