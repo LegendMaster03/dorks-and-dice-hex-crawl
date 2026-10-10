@@ -1,3 +1,4 @@
+using HexCrawl.Web.Api;
 using HexCrawl.Domain.Knowledge;
 using HexCrawl.Domain.Presentation;
 using System.Net;
@@ -71,7 +72,7 @@ public sealed class Phase18CellReadContractsTests
             var boundary = tiling.Boundaries(cell.Id.Address)[0];
             var record = new CrawlRuntimeEvent(
                 1, 1, CrawlRuntimeEventKind.CellEntered,
-                TimeSpan.FromHours(1), null, "Qualified cell transition")
+                TimeSpan.Zero, null, "Qualified cell transition")
             {
                 Cell = cell.Id,
                 BoundaryInterfaceIndex = boundary.InterfaceIndex,
@@ -83,7 +84,8 @@ public sealed class Phase18CellReadContractsTests
                 Traversal = new PeriodicCellTraversal
                 {
                     CurrentCell = cell.Id,
-                    Position = cell.Center
+                    Position = cell.Center,
+                    SelectedExitInterfaceIndex = boundary.InterfaceIndex
                 },
                 History = [record]
             };
@@ -169,6 +171,45 @@ public sealed class Phase18CellReadContractsTests
                     discoveredEvent.GetProperty("cell").GetProperty("tilingId").GetGuid());
                 Assert.Equal(JsonValueKind.Null, discoveredEvent.GetProperty("hex").ValueKind);
                 Assert.Equal(0, discovered.GetProperty("knownHexes").GetArrayLength());
+
+                var heading = new WorldPoint(
+                    (boundary.Start.X + boundary.End.X) / 2 - cell.Center.X,
+                    (boundary.Start.Y + boundary.End.Y) / 2 - cell.Center.Y);
+                var plan = new CellWatchTravelPlan(
+                    heading, false, false,
+                    TravelModeSelection.Normal, NavigationAidSelection.None);
+                var provenance = new ResolutionProvenance(ResolutionSource.ManualRoll);
+                var resolvedInputs = new CellWatchAdvanceInputs(
+                    ResolvedTravelAmount.CellTransitions(1, provenance),
+                    new ResolvedCellNavigation(NavigationCheckOutcome.Succeeded, null, provenance),
+                    ResolvedEncounter.None);
+                var advanceRequest = new AdvanceCellWatchRequest(
+                    discovered.GetProperty("version").GetInt64(), plan, resolvedInputs);
+                using var forged = await client.PostAsJsonAsync(
+                    $"/api/expeditions/{runtime.Id:D}/cells/advance",
+                    advanceRequest with
+                    {
+                        Inputs = resolvedInputs with
+                        {
+                            Travel = ResolvedTravelAmount.CellTransitions(1,
+                                new ResolutionProvenance(ResolutionSource.AutomaticRoll))
+                        }
+                    });
+                Assert.Equal(HttpStatusCode.BadRequest, forged.StatusCode);
+
+                using var advancedResponse = await client.PostAsJsonAsync(
+                    $"/api/expeditions/{runtime.Id:D}/cells/advance", advanceRequest);
+                advancedResponse.EnsureSuccessStatusCode();
+                var advanced = await advancedResponse.Content.ReadFromJsonAsync<JsonElement>();
+                Assert.Equal(1, advanced.GetProperty("expedition").GetProperty("completedWatches").GetInt32());
+                Assert.Equal(0, advanced.GetProperty("knownHexes").GetArrayLength());
+                Assert.Equal(boundary.To.TilingId,
+                    advanced.GetProperty("expedition").GetProperty("currentCell").GetProperty("tilingId").GetGuid());
+                Assert.Contains(advanced.GetProperty("history").EnumerateArray(),
+                    e => e.GetProperty("kind").GetString() == "CellEntered");
+                using var stale = await client.PostAsJsonAsync(
+                    $"/api/expeditions/{runtime.Id:D}/cells/advance", advanceRequest);
+                Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
             }
 
             using (var otherFactory = TestWebHost.Create(database, "bob"))
