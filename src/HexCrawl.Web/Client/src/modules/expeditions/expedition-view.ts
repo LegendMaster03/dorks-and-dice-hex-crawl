@@ -114,6 +114,7 @@ export async function renderExpedition(
     const currentAdjacency = () => {
         if (!runtime.expedition.isSpatial) return null;
         const cell = runtime.expedition.currentHex;
+        if (!cell) return null;
         const grid = world?.grid ?? null;
         const key = [
             cell.q,
@@ -991,14 +992,14 @@ export async function renderExpedition(
             host.append(move);
         }
 
-        const subjects = [
+        const subjects = currentWorld.grid ? [
             ...currentWorld.locations
                 .filter(item => sameHexCell(worldToHex(currentWorld.grid, item.position), selectedHex!))
                 .map(item => ({ id: item.id, name: item.name, type: "Location" as const })),
             ...currentWorld.features
                 .filter(item => item.kind === "Point" && item.position && sameHexCell(worldToHex(currentWorld.grid, item.position), selectedHex!))
                 .map(item => ({ id: item.id, name: item.name, type: "Feature" as const }))
-        ];
+        ] : [];
         if (subjects.length > 0) {
             const discovered = discoveredSubjectIds(runtime);
             const list = document.createElement("div");
@@ -1030,7 +1031,7 @@ export async function renderExpedition(
         if (map) {
             map.attach(host);
         } else {
-            map = new MapSurface(host, () => world);
+            map = new MapSurface(host, () => world, undefined, api);
             map.setHexSelectionHandler(hex => {
                 if (hex) {
                     const adjacency = currentAdjacency();

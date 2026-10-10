@@ -37,6 +37,7 @@ export class SourceMapGridAlignmentController {
         this.analysisAbortController = abortController;
         this.selectedMapId = sourceMap.id;
         const world = this.getWorld();
+        if (!world.grid) throw new Error("This world uses generalized cells. Automatic hex alignment is unavailable; use manual placement.");
 
         try {
             onProgress("detecting");

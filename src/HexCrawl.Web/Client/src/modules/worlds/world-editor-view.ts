@@ -211,7 +211,7 @@ export async function renderWorldEditor(
     const error = required<HTMLElement>(root, "[data-error]");
     const title = required<HTMLElement>(root, "[data-title]");
     const mapHint = required<HTMLElement>(root, "[data-map-hint]");
-    const mapSurface = new MapSurface(required(root, "[data-map]"), () => world, point => onMapClick(point));
+    const mapSurface = new MapSurface(required(root, "[data-map]"), () => world, point => onMapClick(point), api);
     const gridForm = required<HTMLFormElement>(root, "[data-grid-form]");
     const locationForm = required<HTMLFormElement>(root, "[data-location-form]");
     const featureForm = required<HTMLFormElement>(root, "[data-feature-form]");
@@ -288,6 +288,7 @@ export async function renderWorldEditor(
             worldEnvironment = { ...worldEnvironment, version: next.version };
         }
         title.textContent = next.name;
+        if (!next.grid) selectedCell = null;
         fillGrid();
         renderLocations();
         renderFeatures();
@@ -310,6 +311,13 @@ export async function renderWorldEditor(
 
     const fillGrid = (): void => {
         input(gridForm, "name").value = world.name;
+        if (!world.grid) {
+            gridForm.querySelectorAll<HTMLInputElement | HTMLSelectElement>("input, select").forEach(control => {
+                if (control.name !== "name") control.disabled = true;
+            });
+            return;
+        }
+        gridForm.querySelectorAll<HTMLInputElement | HTMLSelectElement>("input, select").forEach(control => control.disabled = false);
         select(gridForm, "orientation").value = world.grid.orientation;
         input(gridForm, "scale").value = String(world.grid.neighborCenterDistance.value);
         unitKindSelect.value = world.grid.neighborCenterDistance.unit.kind;
@@ -392,6 +400,12 @@ export async function renderWorldEditor(
 
     const renderSelectedCell = (): void => {
         const cell = selectedCell;
+        if (!world.grid) {
+            selectedCellEmpty.hidden = false;
+            selectedCellContent.hidden = true;
+            mapSurface.renderer.selectedHex = null;
+            return;
+        }
         selectedCellEmpty.hidden = cell !== null;
         selectedCellContent.hidden = cell === null;
         mapSurface.renderer.selectedHex = cell;
@@ -579,6 +593,7 @@ export async function renderWorldEditor(
     const onMapClick = (point: WorldPoint): void => {
         if (placement === "cell-location") {
             if (!selectedCell) return;
+            if (!world.grid) return;
             const clickedCell = worldToHex(world.grid, point);
             if (!sameHex(clickedCell, selectedCell)) {
                 mapHint.textContent = `Choose an exact position inside Hex ${selectedCell.q},${selectedCell.r}.`;
@@ -619,6 +634,46 @@ export async function renderWorldEditor(
         }
     };
 
+    // A generalized cell is identified by the server, never a surrogate axial address.
+    mapSurface.setCellSelectionHandler(cell => {
+        const panel = required<HTMLElement>(root, "[data-selected-cell-empty]");
+        if (!world.tiling || world.grid) return;
+        selectedCell = null;
+        selectedCellContent.hidden = true;
+        panel.hidden = false;
+        panel.replaceChildren();
+        const info = document.createElement("p");
+        info.className = "hc-hint";
+        info.textContent = cell
+            ? "Selected polygonal cell. Map selection does not move the party or reveal hidden content."
+            : "Select a cell to inspect its geometry and authored locations.";
+        panel.append(info);
+        if (cell) {
+            const summary = document.createElement("p");
+            summary.textContent = `Cell center: ${formatPoint(cell.center)} · ${cell.polygon.length} sides`;
+            panel.append(summary);
+            const nearby = world.locations.filter(location =>
+                Math.hypot(location.position.x - cell.center.x, location.position.y - cell.center.y) < 1e-9);
+            if (nearby.length) {
+                const locationList = document.createElement("p");
+                locationList.textContent = nearby.map(location => location.name).join(", ");
+                panel.append(locationList);
+            }
+            const addLocation = document.createElement("button");
+            addLocation.type = "button";
+            addLocation.textContent = "Add location at cell center";
+            addLocation.addEventListener("click", () => {
+                input(locationForm, "x").value = String(cell.center.x);
+                input(locationForm, "y").value = String(cell.center.y);
+                advancedWorldObjects.open = true;
+                const section = locationForm.closest("details");
+                if (section) section.open = true;
+                input(locationForm, "name").focus();
+            });
+            panel.append(addLocation);
+        }
+    });
+
     mapSurface.setHexSelectionHandler(hex => {
         if (placement !== null) {
             mapSurface.renderer.selectedHex = selectedCell;
@@ -635,7 +690,7 @@ export async function renderWorldEditor(
         if (hex) mapHint.textContent = `Selected Hex ${hex.q},${hex.r} for world authoring.`;
         else mapHint.textContent = "Select a map cell to author its contents.";
     });
-    if (selectedCell) mapSurface.renderer.selectedHex = selectedCell;
+    if (world.grid && selectedCell) mapSurface.renderer.selectedHex = selectedCell;
 
     required<HTMLButtonElement>(root, "[data-worlds]").addEventListener("click", () => navigate("/worlds"));
     required<HTMLButtonElement>(root, "[data-reset-view]").addEventListener("click", () => mapSurface.resetView());
@@ -670,6 +725,7 @@ export async function renderWorldEditor(
         event.preventDefault();
         void run(cellLocationForm, async () => {
             if (!selectedCell) throw new Error("Select a map cell before adding a location.");
+            if (!world.grid) throw new Error("Hex-scoped authoring requires a legacy hex world.");
             const position = cellLocationPoint ?? hexToWorld(world.grid, selectedCell);
             applyWorld(await api.createLocation(world.id, {
                 name: input(cellLocationForm, "name").value.trim(),
@@ -850,6 +906,7 @@ export async function renderWorldEditor(
     gridForm.addEventListener("submit", event => {
         event.preventDefault();
         void run(gridForm, async () => {
+            if (!world.grid) throw new Error("This world uses generalized geometry. Hex-only grid controls can not change its topology.");
             const kind = unitKindSelect.value as DistanceUnitKind;
             const centerDistance = numeric(input(gridForm, "scale"));
             let nextGrid = gridWithSelectedUnit(

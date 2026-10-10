@@ -36,6 +36,7 @@ export function sameHex(left: HexCoordinate | null, right: HexCoordinate | null)
 }
 
 export function locationsInCell(world: Overworld, cell: HexCoordinate): Location[] {
+    if (!world.grid) return [];
     return world.locations.filter(location => sameHex(worldToHex(world.grid, location.position), cell));
 }
 
@@ -47,6 +48,7 @@ export function featureIntersectsCell(
     world: Pick<Overworld, "grid">,
     cell: HexCoordinate,
     feature: SpatialFeature): boolean {
+    if (!world.grid) return false;
     return featureIntersectsPolygon(feature, hexCorners(world.grid, cell));
 }
 
