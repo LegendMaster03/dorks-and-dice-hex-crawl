@@ -327,8 +327,12 @@ The Phase 16 deployment definitions now preserve the actual running image as
 `:pre-deploy` **before** overwriting `:latest`, retain a full-SHA-tagged
 candidate with its revision label, verify the running revision, disable
 mid-rollout cancellation, and attempt restoration on deploy/verification
-failure. These changes are on feature branches only; the production rollback
-branch has not been tested on live services. The
+failure. These changes are on feature branches only. The
+[isolated deployment rehearsal](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38016975981)
+executed both workflows' capture, deploy, verify and restore blocks with
+real disposable Docker services, including healthy rollout, failed-readiness
+recovery, mismatched revision and preserved volume file checks. Both services
+passed. The production rollback branch has **not** been tested on live services. The
 [Phase 16 release runbook](phase-16-release-runbook.md) describes the
 signed-in read-only tester gate and the exact operator requirements.
 **These changes do not authorize deployment or merger.**
