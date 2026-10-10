@@ -84,6 +84,9 @@ jobs:
             exit 1
           fi
 
+      - name: Test Phase 17 recovery cutover gate
+        run: python3 -m unittest discover -s tests -p 'test_phase17_recovery_gate.py'
+
       - name: Restore
         run: dotnet restore dorks-and-dice-hex-crawl.slnx
 
