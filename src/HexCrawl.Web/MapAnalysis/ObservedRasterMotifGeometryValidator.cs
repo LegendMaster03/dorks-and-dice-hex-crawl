@@ -66,9 +66,19 @@ internal static class ObservedRasterMotifGeometryValidator
         // source-pixel coordinates. A fixed source-pixel ceiling would
         // reject legitimate strongly downsampled, but correctly registered,
         // Surveyor observations.
+        var registered = evidence.MetricRegistration
+            ?? throw new MapAnalysisProtocolException(
+                "Observed metric registration is required for a qualified candidate.");
+        // A rigid translation residual is a different physical quantity from
+        // white-interior contour displacement at an ink corner. Surveyor fits
+        // *one* shared vertex to all source raster observations. Two observed
+        // opposing endpoints can therefore each differ from that jointly
+        // registered vertex by the independently bounded contour residual.
+        // Preserve the separate 5px rigid-drift gate in the response parser.
         double contourTolerance = Math.Clamp(
-            4 + 2 * evidence.MaximumRigidVertexResidualSourcePixels * analysis.Scale,
-            4, 24) / analysis.Scale;
+            Math.Max(4 + 2 * evidence.MaximumRigidVertexResidualSourcePixels * analysis.Scale,
+                1 + 2 * registered.MaximumContourResidualSourcePixels * analysis.Scale),
+            4, 25) / analysis.Scale;
         double totalArea = 0;
         double totalPerimeter = 0;
         foreach (var cell in candidate.MotifCells)
