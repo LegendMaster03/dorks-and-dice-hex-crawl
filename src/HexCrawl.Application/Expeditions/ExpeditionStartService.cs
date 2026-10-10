@@ -256,7 +256,13 @@ public sealed class ExpeditionStartService(
 
     private static void RequireLegacyHexMovement(CampaignProcedure procedure)
     {
-        if (GenericProcedureRuntime.Bind(procedure).Movement.MechanicVersion != 1)
+        // Existing legacy starts can select symbolic/non-native procedures.
+        // Preserve that established contract; only a concrete generalized
+        // movement handler must be rejected before constructing ExpeditionState.
+        var movement = procedure.Modules.SingleOrDefault(module =>
+            module.Mechanic.ExecutionHandler ==
+                GenericProcedureExecutionHandlers.MovementResolutionPolicy);
+        if (movement is not null && movement.Mechanic.Version != 1)
             throw new NotSupportedException(
                 "Legacy world-bound and abstract-hex expeditions require movement version 1. " +
                 "Use the explicit cell expedition start for movement version 2.");
