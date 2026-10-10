@@ -491,4 +491,6 @@ test("expedition deletion reconciles against a fresh server list rather than hid
     assert.match(handler, /renderExpeditions\(host, remaining, worlds, api, error, count, navigate\)/);
     assert.doesNotMatch(handler, /card\.remove\(\)/);
     assert.match(handler, /showUiError\(error, value\)/);
+    const api = read("api.ts");
+    assert.match(api, /this\.getJson\("\/api\/expeditions", "Expedition list", "no-store"\)/);
 });
