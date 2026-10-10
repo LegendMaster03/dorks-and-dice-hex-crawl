@@ -199,6 +199,7 @@ public sealed class ExpeditionEffectService(
         var hasActiveInterval = expedition.Runtime switch
         {
             ExpeditionState spatial => spatial.ActiveWatch is not null,
+            CellExpeditionState cells => cells.ActiveWatch is not null,
             NonSpatialSessionState nonSpatial => nonSpatial.ActiveWatch is not null,
             _ => true
         };
@@ -253,6 +254,7 @@ public sealed class ExpeditionEffectService(
             runtime = expedition.Runtime switch
             {
                 ExpeditionState spatial => spatial with { ElapsedTravelTime = spatial.ElapsedTravelTime + delay },
+                CellExpeditionState cells => cells with { ElapsedTravelTime = cells.ElapsedTravelTime + delay },
                 NonSpatialSessionState nonSpatial => nonSpatial with { ElapsedTime = nonSpatial.ElapsedTime + delay },
                 _ => throw new InvalidOperationException("Unsupported crawl runtime state for time-delay application.")
             };
