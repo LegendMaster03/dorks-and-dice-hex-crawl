@@ -45,9 +45,8 @@ def docker(*args, stdout=None, stdin=None):
     # public Actions logs. The *operation name* is safe to disclose and
     # identifies which phase of recovery preparation needs an operator fix.
     action = args[0] if args else "unknown"
-    command = args[2] if action == "exec" and len(args) > 2 else ""
-    if action == "exec" and len(args) > 3 and args[2] == "-i":
-        command = args[3]
+    command = (args[3] if len(args) > 3 and args[1] == "-i"
+               else args[2] if len(args) > 2 else "") if action == "exec" else ""
     safe_action = action if action in ("inspect", "stop", "start", "cp", "run", "rm") else "other"
     safe_command = command if command in ("psql", "pg_dump", "pg_restore", "pg_isready") else ""
     try:
