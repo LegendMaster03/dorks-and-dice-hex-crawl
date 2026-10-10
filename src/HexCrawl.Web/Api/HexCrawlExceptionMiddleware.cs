@@ -37,6 +37,14 @@ public sealed class HexCrawlExceptionMiddleware(
         {
             await WriteAsync(context, StatusCodes.Status401Unauthorized, exception.Message);
         }
+        catch (BadHttpRequestException exception)
+        {
+            // Invalid or unparseable JSON belongs to the client, not an
+            // unexpected server error. Do not expose serializer internals.
+            var status = exception.StatusCode is >= 400 and <= 499
+                ? exception.StatusCode : StatusCodes.Status400BadRequest;
+            await WriteAsync(context, status, "The request body is malformed or invalid.");
+        }
         catch (ArgumentException exception)
         {
             await WriteAsync(context, StatusCodes.Status400BadRequest, exception.Message);
