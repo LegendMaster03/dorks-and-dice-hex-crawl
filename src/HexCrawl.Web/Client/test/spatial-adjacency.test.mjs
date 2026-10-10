@@ -93,14 +93,18 @@ test("mapless geometry is resolved before the navigator consumes it", () => {
     assert.ok(current.adjacencies.every(value => value.boundarySegment.length === 2));
 });
 
-test("current runtime adapter rejects an unsupported tiling outside the generic navigator", () => {
+test("hex-only adapter rejects other patterns without exposing technical notation", () => {
     assert.throws(() => currentRuntimeCellAdjacency({
         currentCell: { q: 0, r: 0 },
-        tilingDsSymbol: "future/tiling",
+        tilingDsSymbol: "<1:1,1,1:4,4>",
         selectedDirection: null,
         worldGrid: null,
         abstractOrientation: "PointyTop"
-    }), /does not yet support tiling/);
+    }), error => {
+        assert.match(error.message, /Open a generalized cell expedition/);
+        assert.doesNotMatch(error.message, /<1:|tiling '\\w/);
+        return true;
+    });
 });
 
 test("map target and navigator intent resolve to the same adjacency interface", () => {

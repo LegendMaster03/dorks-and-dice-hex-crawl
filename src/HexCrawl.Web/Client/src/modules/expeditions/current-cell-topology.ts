@@ -44,7 +44,7 @@ export function currentRuntimeCellAdjacency(
     input: CurrentRuntimeCellTopologyInput): CurrentCellAdjacency<HexCoordinate, number> {
     if (input.tilingDsSymbol !== CURRENT_HEX_DS_SYMBOL) {
         throw new Error(
-            `The current runtime adapter does not yet support tiling '${input.tilingDsSymbol}'.`);
+            "This view supports hexagonal cells only. Open a generalized cell expedition for other shapes.");
     }
 
     const boundary = input.worldGrid
