@@ -498,8 +498,21 @@ export class SourceMapWorkspace {
         status.textContent = "Checking the image against the saved world geometry…";
         button.disabled = true;
         try {
+            // A world may exist before any ruleset. Only a currently selected
+            // pinned saved revision adds a procedural constraint to this preview.
+            const selectedProcedure = this.host.closest(".hc-world-editor")
+                ?.querySelector<HTMLSelectElement>('[data-expedition-form] select[name="procedure"]')?.value;
+            let pinned: { id: string; revision: number } | undefined;
+            if (selectedProcedure?.startsWith("saved:")) {
+                const encoded = selectedProcedure.slice("saved:".length);
+                const separator = encoded.lastIndexOf(":");
+                const revision = Number(encoded.slice(separator + 1));
+                if (separator > 0 && Number.isSafeInteger(revision) && revision > 0) {
+                    pinned = { id: encoded.slice(0, separator), revision };
+                }
+            }
             const assessment = await this.api.assessSourceMapCompatibility(
-                selectedWorld.id, sourceMap.id);
+                selectedWorld.id, sourceMap.id, pinned);
             if (this.disposed || generation !== this.compatibilityGeneration
                 || this.selected?.id !== sourceMap.id) return;
             if (this.getWorld().version !== assessment.worldVersion) {
@@ -510,6 +523,12 @@ export class SourceMapWorkspace {
             const result = document.createElement("p");
             result.textContent = assessment.explanation;
             status.append(result);
+            if (pinned) {
+                const rule = document.createElement("p");
+                rule.className = "hc-hint";
+                rule.textContent = `Checked against saved exploration ruleset revision ${pinned.revision}.`;
+                status.append(rule);
+            }
             if (assessment.blockers.length) {
                 const warning = document.createElement("p");
                 warning.textContent = "Changing world geometry would also affect:";
