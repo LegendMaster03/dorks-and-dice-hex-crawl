@@ -4,6 +4,7 @@ import argparse
 import os
 from pathlib import Path
 import re
+import socket
 import subprocess
 import tempfile
 
@@ -167,7 +168,35 @@ def main(workflow, service):
             preserved(service, healthy)
             print(f"{service}: revision mismatch rollback PASS", flush=True)
 
-            # First deployment has no running previous image: cannot claim safe rollback.
+            # Case 4: the deployment reaches container replacement, then
+            # Compose fails because a host port is occupied. This is a real
+            # docker compose up failure, not a simulated nonzero exit code.
+            output.write_text("")
+            run(steps["capture"], root, env)
+            fields = outputs(output)
+            assert fields["available"] == "true" and fields["image"] == healthy
+            env["DEPLOY_SHA"] = "5" * 40
+            build(fixture(root, "start-failure", True), service,
+                  env["DEPLOY_SHA"], "start-failure")
+            compose_file = root / "docker-compose.yml"
+            base_compose = compose_file.read_text()
+            with socket.socket() as occupied_port:
+                occupied_port.bind(("127.0.0.1", 0))
+                occupied_port.listen(1)
+                port = occupied_port.getsockname()[1]
+                compose_file.write_text(base_compose.replace(
+                    "    restart: unless-stopped\\n",
+                    "    restart: unless-stopped\\n"
+                    + f'    ports:\\n      - "127.0.0.1:{port}:8080"\\n'))
+                try:
+                    run(steps["deploy"], root, env, expected_success=False)
+                finally:
+                    compose_file.write_text(base_compose)
+            run(steps["restore"], root, env, previous=healthy)
+            preserved(service, healthy)
+            print(f"{service}: failed container replacement rollback PASS", flush=True)
+
+            # Case 5: first deployment has no running previous image.
             command(["docker", "rm", "-f", service])
             output.write_text("")
             run(steps["capture"], root, env)
