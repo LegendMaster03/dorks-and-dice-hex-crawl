@@ -1,0 +1,44 @@
+name: Phase 16 isolated deployment rollback rehearsal
+
+on:
+  push:
+    branches: [ "feature/tile-crawl-phase-16" ]
+  workflow_dispatch:
+
+concurrency:
+  group: phase16-deployment-rehearsal-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deployment-rehearsal:
+    name: Isolated rollback — ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: dorks-and-dice-hex-crawl
+            workflow_path: hex-current/.github/workflows/deploy.yml
+          - service: dorks-and-dice-surveyor
+            workflow_path: surveyor/.github/workflows/deploy.yml
+    steps:
+      - name: Checkout Hex Crawl feature workflow and rehearsal
+        uses: actions/checkout@v4
+        with:
+          path: hex-current
+
+      - name: Checkout Surveyor feature workflow
+        if: matrix.service == 'dorks-and-dice-surveyor'
+        uses: actions/checkout@v4
+        with:
+          repository: LegendMaster03/dorks-and-dice-surveyor
+          ref: feature/tile-crawl-phase-16
+          path: surveyor
+
+      - name: Rehearse exact production shell steps against disposable Compose services
+        run: |
+          set -euo pipefail
+          python3 hex-current/.github/scripts/phase16-deploy-rollback-rehearsal.py \
+            --workflow "${{ matrix.workflow_path }}" \
+            --service "${{ matrix.service }}"
