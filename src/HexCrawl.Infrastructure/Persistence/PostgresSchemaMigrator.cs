@@ -11,6 +11,11 @@ public sealed class PostgresSchemaMigrator(string connectionString)
     public const int CurrentVersion = 10;
     private const int ProcedureTilingVersion = 9;
     private const long MigrationLockKey = 0x484558435241574C;
+    private static readonly HashSet<string> SupportedWorldSnapshotFields = new(StringComparer.Ordinal)
+    {
+        "id", "name", "grid", "features", "locations", "sourceMaps",
+        "environmentAnnotations", "formatVersion", "tiling"
+    };
 
     public async Task MigrateAsync(CancellationToken cancellationToken = default)
     {
@@ -160,6 +165,13 @@ public sealed class PostgresSchemaMigrator(string connectionString)
                 {
                     using var document = JsonDocument.Parse(reader.GetString(1));
                     var root = document.RootElement;
+                    // The format-2 reader rejects unknown top-level fields. Do not
+                    // report a successful upgrade that strands a formerly readable
+                    // record. Keep the original schema intact for a targeted upgrade.
+                    foreach (var property in root.EnumerateObject())
+                        if (!SupportedWorldSnapshotFields.Contains(property.Name))
+                            throw new InvalidDataException(
+                                $"Unsupported world snapshot field '{property.Name}' requires explicit migration.");
                     if (!root.TryGetProperty("id", out var worldId)
                         || worldId.ValueKind != JsonValueKind.String
                         || !worldId.TryGetGuid(out var snapshotId)
