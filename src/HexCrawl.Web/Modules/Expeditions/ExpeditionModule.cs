@@ -38,6 +38,7 @@ public sealed class ExpeditionModule : IHexCrawlModule
         api.MapPost("/expeditions", StartStandaloneSessionAsync);
         api.MapGet("/overworlds/{overworldId:guid}/expeditions", ListExpeditionsAsync);
         api.MapPost("/overworlds/{overworldId:guid}/expeditions", StartExpeditionAsync);
+        api.MapPost("/overworlds/{overworldId:guid}/cell-expeditions", StartCellExpeditionAsync);
         api.MapGet("/expeditions/{expeditionId:guid}", GetExpeditionAsync);
         api.MapGet("/expeditions/{expeditionId:guid}/cell-topology", GetCellTopologyAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/cells/advance", AdvanceCellWatchAsync);
@@ -98,6 +99,24 @@ public sealed class ExpeditionModule : IHexCrawlModule
             request.Context.ToDomain(),
             request.StartHex,
             cancellationToken);
+        return Results.Created(
+            $"/api/expeditions/{expedition.Id:D}",
+            await ContractAsync(expedition, owner, service, cancellationToken));
+    }
+
+    private static async Task<IResult> StartCellExpeditionAsync(
+        Guid overworldId,
+        StartCellExpeditionRequest request,
+        HttpContext context,
+        ExpeditionStartService starter,
+        HexCrawlService service,
+        CancellationToken cancellationToken)
+    {
+        var selection = request.Selection();
+        var owner = UserId(context);
+        var expedition = await starter.StartWorldBoundCellsAsync(
+            overworldId, owner, request.Name, selection,
+            request.StartCell, cancellationToken);
         return Results.Created(
             $"/api/expeditions/{expedition.Id:D}",
             await ContractAsync(expedition, owner, service, cancellationToken));
