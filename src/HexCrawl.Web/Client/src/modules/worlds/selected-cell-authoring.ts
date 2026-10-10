@@ -252,7 +252,9 @@ function normalizeDimension(value: string): string {
     return value.trim().toLowerCase();
 }
 
-function featureIntersectsPolygon(feature: SpatialFeature, polygon: readonly WorldPoint[]): boolean {
+// Presentation-only intersection against a polygon returned by authoritative
+// world geometry. This must never choose a unique cell or execute traversal.
+export function featureIntersectsPolygon(feature: SpatialFeature, polygon: readonly WorldPoint[]): boolean {
     if (feature.kind === "Point") {
         return feature.position !== null && pointInPolygon(feature.position, polygon);
     }
@@ -300,7 +302,7 @@ function segmentIntersectsPolygon(
     return false;
 }
 
-function pointInPolygon(point: WorldPoint, polygon: readonly WorldPoint[]): boolean {
+export function pointInPolygon(point: WorldPoint, polygon: readonly WorldPoint[]): boolean {
     if (polygon.length < 3) return false;
     for (let index = 0; index < polygon.length; index++) {
         if (pointOnSegment(polygon[index], polygon[(index + 1) % polygon.length], point)) return true;

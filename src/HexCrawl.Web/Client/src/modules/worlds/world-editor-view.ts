@@ -17,6 +17,8 @@ import {
     featureHasEnvironmentRules,
     featureIntersectsCell,
     featuresIntersectingCell,
+    featureIntersectsPolygon,
+    pointInPolygon,
     hexEnvironmentFacts,
     locationsInCell,
     measurementFact,
@@ -665,6 +667,59 @@ export async function renderWorldEditor(
         const summary = document.createElement("p");
         summary.textContent = `Center: ${formatPoint(cell.center)} · ${cell.polygon.length} sides`;
         panel.append(intro, summary);
+
+        const locations = world.locations.filter(location =>
+            pointInPolygon(location.position, cell.polygon));
+        const features = world.features.filter(feature =>
+            featureIntersectsPolygon(feature, cell.polygon));
+        const objects = document.createElement("div");
+        objects.className = "hc-stack";
+        const label = document.createElement("h4");
+        label.textContent = "Locations and features intersecting this cell";
+        objects.append(label);
+        if (locations.length + features.length === 0) {
+            const empty = document.createElement("p");
+            empty.className = "hc-hint";
+            empty.textContent = "No authored map objects touch this cell.";
+            objects.append(empty);
+        }
+        for (const location of locations) {
+            const row = document.createElement("div");
+            row.className = "hc-discovery-row";
+            const description = document.createElement("span");
+            description.textContent = `${location.name} · ${location.category}`;
+            const edit = document.createElement("button");
+            edit.type = "button";
+            edit.textContent = "Edit location";
+            edit.addEventListener("click", () => {
+                loadLocation(location);
+                advancedWorldObjects.open = true;
+                const section = locationForm.closest("details");
+                if (section) section.open = true;
+                input(locationForm, "name").focus();
+            });
+            row.append(description, edit);
+            objects.append(row);
+        }
+        for (const feature of features) {
+            const row = document.createElement("div");
+            row.className = "hc-discovery-row";
+            const description = document.createElement("span");
+            description.textContent = `${feature.name} · ${feature.category}`;
+            const edit = document.createElement("button");
+            edit.type = "button";
+            edit.textContent = "Edit feature";
+            edit.addEventListener("click", () => {
+                loadFeature(feature);
+                advancedWorldObjects.open = true;
+                const section = featureForm.closest("details");
+                if (section) section.open = true;
+                input(featureForm, "name").focus();
+            });
+            row.append(description, edit);
+            objects.append(row);
+        }
+        panel.append(objects);
 
         const annotations = worldEnvironment.annotations.filter(annotation =>
             annotation.scope.kind === "Cell" && sameQualifiedCell(annotation.scope.cell, cell.id));
