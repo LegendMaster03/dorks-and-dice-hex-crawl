@@ -36,6 +36,29 @@ public sealed partial class HexCrawlService
         return await SaveExpeditionAsync(updated, expectedVersion, cancellationToken);
     }
 
+    public async Task<StoredExpedition> ResolveCellExpeditionCourseAsync(
+        Guid expeditionId,
+        string ownerUserId,
+        long expectedVersion,
+        CellCourseDecision decision,
+        CancellationToken cancellationToken = default)
+    {
+        var expedition = await GetExpeditionAsync(expeditionId, ownerUserId, cancellationToken);
+        RequireVersion(expectedVersion, expedition.Version);
+        var state = expedition.Runtime as CellExpeditionState
+            ?? throw new InvalidOperationException("This expedition has no generalized cell traversal state.");
+        var context = expedition.Context as WorldBoundCrawlSessionContext
+            ?? throw new InvalidOperationException("Generalized cell travel requires an authoritative world.");
+        var world = await GetOverworldAsync(context.WorldId, ownerUserId, cancellationToken);
+        var result = _runtime.ResolveCellCourse(world.World.SpatialTiling, state, decision);
+        return await SaveExpeditionAsync(expedition with
+        {
+            Runtime = result.Expedition,
+            PauseReason = result.PauseReason,
+            RemainingWatchTime = result.RemainingWatchTime
+        }, expectedVersion, cancellationToken);
+    }
+
     public async Task<StoredExpedition> ResolveCellExpeditionEncounterAsync(
         Guid expeditionId,
         string ownerUserId,
