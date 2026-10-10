@@ -136,6 +136,50 @@ public sealed class Phase17FullDatabaseMigrationTests
     }
 
     [Fact]
+    public async Task ConcurrentSchemaNineStartupsSerializeAndUpgradeExactlyOnce()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var store = new PostgresHexCrawlStore(database.ConnectionString);
+        await store.InitializeAsync();
+        var grid = new HexGridDefinition
+        {
+            Id = Guid.NewGuid(), HexRadiusWorldUnits = 1,
+            NeighborCenterDistance = new DistanceMeasure(12, DistanceUnit.Miles)
+        };
+        var world = new OverworldDefinition
+        {
+            Id = Guid.NewGuid(), Name = "Concurrent migration", Grid = grid
+        };
+        var now = DateTimeOffset.UtcNow;
+        await store.CreateOverworldAsync(new StoredOverworld(world, "owner", 1, now, now));
+        await using (var connection = new NpgsqlConnection(database.ConnectionString))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                UPDATE overworlds SET world_json = world_json - 'formatVersion' - 'tiling';
+                UPDATE hex_crawl_schema_migrations SET version = 9 WHERE version = 10;
+                """;
+            await command.ExecuteNonQueryAsync();
+        }
+
+        await Task.WhenAll(Enumerable.Range(0, 5).Select(_ =>
+            new PostgresSchemaMigrator(database.ConnectionString).MigrateAsync()));
+        var loaded = await store.GetOverworldAsync(world.Id, "owner");
+        Assert.NotNull(loaded);
+        Assert.Equal(grid.Id, loaded!.World.SpatialTiling.Id);
+        Assert.Equal(grid, loaded.World.Grid);
+
+        await using var checkConnection = new NpgsqlConnection(database.ConnectionString);
+        await checkConnection.OpenAsync();
+        await using var check = checkConnection.CreateCommand();
+        check.CommandText = """
+            SELECT count(*) FROM hex_crawl_schema_migrations WHERE version = 10;
+            """;
+        Assert.Equal(1L, Convert.ToInt64(await check.ExecuteScalarAsync()));
+    }
+
+    [Fact]
     public async Task FailedWorldConversionRollsBackAllWorldsAndProcedureUpgrades()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
