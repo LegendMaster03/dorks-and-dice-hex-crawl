@@ -41,7 +41,8 @@ public sealed record PeriodicWorldTiling(
     PeriodicTopologyWitness Topology,
     PeriodicMetricRealization Realization,
     WorldPoint Origin,
-    int Revision = 1)
+    int Revision = 1,
+    DistanceMeasure? PhysicalDistancePerWorldUnit = null)
 {
     public void Validate()
     {
@@ -52,6 +53,29 @@ public sealed record PeriodicWorldTiling(
         ArgumentNullException.ThrowIfNull(Realization);
         Topology.ValidateAdjacency();
         PeriodicMetricWitnessValidator.Validate(Topology, Realization);
+        if (PhysicalDistancePerWorldUnit is { } physical)
+        {
+            if (!double.IsFinite(physical.Value) || physical.Value <= 0
+                || string.IsNullOrWhiteSpace(physical.Unit.Symbol)
+                || physical.Unit.MetersPerUnit is { } meters && (!double.IsFinite(meters) || meters <= 0))
+                throw new InvalidOperationException("Physical distance conversion must be finite, positive, and identify its physical unit.");
+        }
+    }
+
+    /// <summary>
+    /// Convert the distance between two points in the authoritative world/map
+    /// coordinate system into the declared physical unit. A world may omit
+    /// this optional physical calibration; in that case no physical distance
+    /// can be inferred from the topology or the geometric unit label.
+    /// </summary>
+    public DistanceMeasure MeasurePhysicalDistance(WorldPoint from, WorldPoint to)
+    {
+        var calibration = PhysicalDistancePerWorldUnit ?? throw new NotSupportedException(
+            "This world has no physical-distance calibration.");
+        var distance = from.DistanceTo(to) * calibration.Value;
+        if (!double.IsFinite(distance))
+            throw new ArgumentOutOfRangeException(nameof(to), "Physical distance exceeds the finite range.");
+        return new DistanceMeasure(distance, calibration.Unit);
     }
 
     private PeriodicMotifCell RequireCell(PeriodicCellAddress address)
