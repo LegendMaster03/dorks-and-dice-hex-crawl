@@ -136,7 +136,20 @@ def main(workflow, service):
             if "snapshot_dir" in fields:
                 env["DEPLOY_SNAPSHOT_DIR"] = fields["snapshot_dir"]
                 snapshots.append(fields["snapshot_dir"])
-                run(steps["preflight"], root, env)
+                try:
+                    run(steps["preflight"], root, env)
+                except AssertionError:
+                    # CI uses only an isolated disposable test service and
+                    # harmless sentinel strings. Do not log runtime secrets.
+                    import importlib.util
+                    spec = importlib.util.spec_from_file_location("phase16_helper", helper)
+                    module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(module)
+                    try:
+                        module.verify(service, str(env_file), fields["snapshot_dir"])
+                    except Exception as error:
+                        print(f"{service}: isolated preflight diagnostic {type(error).__name__}: {error}", flush=True)
+                    raise
                 assert (Path(fields["snapshot_dir"]) / "rollback.compose.yml").exists()
             return fields
         compose = ["docker", "compose", "--project-name", service,
