@@ -150,18 +150,6 @@ jobs:
           docker rm -f dorks-and-dice-hex-crawl-test-postgres 2>/dev/null || true
           docker network rm dorks-and-dice-hex-crawl-test 2>/dev/null || true
 
-      - name: Prepare verified Phase 17 live-data recovery before cutover
-        # The live database and map volume are backed up and restored in
-        # disposable isolation only after image build and smoke checks pass.
-        # The old Hex Crawl writer is quiesced for the brief cutover window.
-        # Unsupported schemas, incomplete backups or failed restores abort
-        # before deploy, with the original container restarted.
-        id: cutover
-        timeout-minutes: 12
-        run: |
-          set -euo pipefail
-          python3 .github/scripts/phase17-prepare-recovery.py "$DEPLOY_SHA"
-
       - name: Deploy
         id: deploy
         timeout-minutes: 5
@@ -210,18 +198,7 @@ jobs:
             exit 1
           fi
 
-      - name: Remove Phase 17 temporary recovery files after verified cutover
-        # A verified schema-9 PostgreSQL dump and matching map-asset archive
-        # are RECOVERY artifacts and are retained. Only scratch copies,
-        # isolated restore diagnostics and stale failed-attempt directories
-        # are deleted, after the new application has proven schema-10 ready.
-        if: ${{ steps.verify.outcome == 'success' }}
-        timeout-minutes: 3
-        run: |
-          set -euo pipefail
-          python3 .github/scripts/phase17-prepare-recovery.py cleanup "$DEPLOY_SHA"
-
-      - name: Resume original service if the cutover did not begin
+      - name: Ensure previous service runs when deployment is skipped
         id: resume
         if: ${{ always() && steps.previous_image.outputs.available == 'true' && steps.deploy.outcome == 'skipped' }}
         timeout-minutes: 2
@@ -235,22 +212,21 @@ jobs:
             exit 1
           fi
 
-      - name: Require controlled recovery after failed schema-10 cutover
+      - name: Preserve recovery evidence after failed deployment
         if: ${{ failure() && steps.previous_image.outputs.available == 'true' && (steps.deploy.outcome == 'failure' || steps.verify.outcome == 'failure') }}
         run: |
-          # A schema-9 application cannot read a schema-10 database. Replacing
-          # only the image here would leave the site unusable and could obscure
-          # the migration failure. Retain both images and preserve the database.
-          echo 'CRITICAL: Automatic image-only rollback is deliberately disabled for Phase 17.' >&2
-          echo 'Stop writers; inspect the current schema and running image.' >&2
-          echo 'If returning to the previous image, first restore the verified pre-cutover PostgreSQL AND map-asset backups under controlled downtime.' >&2
-          echo 'The previous image remains tagged dorks-and-dice-hex-crawl:pre-deploy.' >&2
-          echo 'No automatic database or asset changes have been attempted by this recovery step.' >&2
+          # Keep the previous image and the private known-good runtime
+          # configuration, but never assume an image-only rollback is safe
+          # for future schema changes.
+          echo 'Deployment failed or verification did not complete.' >&2
+          echo 'Retained the previous image as dorks-and-dice-hex-crawl:pre-deploy.' >&2
+          echo 'Inspect the running schema and application state before recovering.' >&2
+          echo 'No database or map-asset modifications were attempted by this recovery step.' >&2
 
       - name: Erase private known-good configuration after safe completion
-        # Keep the exact previous Compose/environment snapshot whenever cutover
-        # failed, was cancelled, or reached an uncertain state. Only discard it
-        # after proven readiness or a failure strictly before deployment.
+        # Keep the previous runtime configuration after a failed, cancelled,
+        # or uncertain deployment. Only discard it after proven readiness
+        # or confirmed safe resumption before container replacement.
         if: ${{ always() && !cancelled() && steps.previous_image.outputs.available == 'true' && (steps.verify.outcome == 'success' || (steps.deploy.outcome == 'skipped' && steps.verify.outcome == 'skipped' && steps.resume.outcome == 'success')) }}
         timeout-minutes: 1
         env:
