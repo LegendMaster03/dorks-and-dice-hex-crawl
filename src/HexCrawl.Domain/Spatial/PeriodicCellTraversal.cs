@@ -110,6 +110,7 @@ public static class PeriodicCellTraversalGeometry
         var edgeTolerance = RelativeTolerance * 16;
         var hits = new List<Hit>();
         var collinear = new List<WorldCellBoundary>();
+        var immediateOutward = new List<WorldCellBoundary>();
 
         foreach (var boundary in boundaries)
         {
@@ -137,7 +138,14 @@ public static class PeriodicCellTraversalGeometry
             // Ignore the boundary the traveler is already standing on, unless
             // a particular interface was explicitly selected (e.g. double-back).
             if (distance <= positionTolerance && traversal.SelectedExitInterfaceIndex != boundary.InterfaceIndex)
+            {
+                // The current position may be exactly on the previous entry
+                // boundary. Do not skip an outward crossing and then choose a
+                // more distant, unrelated exit on the same heading.
+                if (Cross(edge, direction) < -edgeLength * edgeTolerance)
+                    immediateOutward.Add(boundary);
                 continue;
+            }
 
             var atEndpoint = fraction <= edgeTolerance || fraction >= 1 - edgeTolerance;
             var point = traversal.Position + direction * Math.Max(0d, distance);
@@ -151,10 +159,13 @@ public static class PeriodicCellTraversalGeometry
         if (collinear.Count > 0)
             return ResolveAdjudication(collinear,
                 "The selected heading follows an atomic boundary; resolve the course explicitly.");
+        if (immediateOutward.Count > 0)
+            return ResolveAdjudication(immediateOutward,
+                "Travel begins by leaving the cell at an unselected boundary; resolve the exit interface.");
 
         if (hits.Count == 0)
-            return new CellCrossingResolution(
-                CellCrossingStatus.None, null, null, null, null, [], null);
+            return ResolveAdjudication(boundaries,
+                "No trustworthy boundary crossing could be determined for this course.");
 
         var closest = hits.Min(h => h.Distance);
         var nearest = hits.Where(h => Math.Abs(h.Distance - closest) <= positionTolerance)
@@ -184,6 +195,23 @@ public static class PeriodicCellTraversalGeometry
         if (reciprocal.To != traversal.CurrentCell
             || reciprocal.From != chosen.Boundary.To)
             throw new InvalidOperationException("Crossing does not have a reciprocal authoritative interface.");
+
+        if (chosen.Endpoint)
+        {
+            // A selected interface at a vertex is not sufficient by itself:
+            // the course must actually enter the selected adjacent polygon.
+            // Otherwise a point contact could become a phantom transition.
+            var target = world.Resolve(chosen.Boundary.To.Address);
+            var targetSpan = Math.Max(
+                target.Polygon.Max(p => p.X) - target.Polygon.Min(p => p.X),
+                target.Polygon.Max(p => p.Y) - target.Polygon.Min(p => p.Y));
+            var sampleDistance = Math.Min(cellScale, targetSpan) * 1e-4;
+            if (sampleDistance <= positionTolerance * 2
+                || !FeatureIntersection.PointInPolygon(
+                    chosen.Point + direction * sampleDistance, target.Polygon))
+                return ResolveAdjudication([chosen.Boundary],
+                    "The chosen vertex interface is not confirmed by the outgoing geometry.");
+        }
 
         return new CellCrossingResolution(
             CellCrossingStatus.Crosses, chosen.Boundary, reciprocal,
