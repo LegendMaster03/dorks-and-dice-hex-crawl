@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using HexCrawl.Domain.Runtime;
 using HexCrawl.Domain.Spatial;
 
@@ -37,6 +38,9 @@ public sealed record CellTraversalContextContract(
     bool HasPhysicalCalibration,
     IReadOnlyList<CellInterfaceContract> Interfaces)
 {
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DistanceContract? PhysicalDistancePerWorldUnit { get; init; }
+
     public static CellTraversalContextContract From(
         PeriodicWorldTiling world,
         CellExpeditionState expedition)
@@ -69,6 +73,10 @@ public sealed record CellTraversalContextContract(
             cursor.EntryInterfaceIndex,
             cursor.SelectedExitInterfaceIndex,
             world.PhysicalDistancePerWorldUnit is not null,
-            exits.Select(CellInterfaceContract.From).ToArray());
+            exits.Select(CellInterfaceContract.From).ToArray())
+        {
+            PhysicalDistancePerWorldUnit = world.PhysicalDistancePerWorldUnit is { } calibration
+                ? DistanceContract.From(calibration) : null
+        };
     }
 }
