@@ -20,7 +20,8 @@ export async function enhanceExpeditionSetup(
     if (!previous) return () => {};
 
     const composerApi = await ProcedureComposerApi.create(root);
-    const [presets, presentations, savedProcedures] = await Promise.all([
+    const [world, presets, presentations, savedProcedures] = await Promise.all([
+        api.getOverworld(worldId),
         api.getProcedurePresets(),
         api.getPresentationProfiles(),
         composerApi.listProcedures()
@@ -41,7 +42,21 @@ export async function enhanceExpeditionSetup(
     previous.replaceWith(form);
 
     const procedure = select(form, "procedure");
-    populateProcedureStartChoices(procedure, savedProcedures, presets);
+    populateProcedureStartChoices(procedure, savedProcedures, world.grid ? presets : []);
+    if (!world.grid) {
+        const start = form.querySelector<HTMLElement>(".hc-inline");
+        const cells = world.tiling?.topology.motifCells ?? [];
+        if (!start || cells.length === 0) throw new Error("The accepted world has no selectable cells.");
+        start.innerHTML = `
+            <label>Starting cell type <select name="motifCellId"></select></label>
+            <label>East/west repeat <input name="u" type="number" step="1" value="0" required></label>
+            <label>North/south repeat <input name="v" type="number" step="1" value="0" required></label>`;
+        const selectCell = select(start, "motifCellId");
+        cells.forEach((cell, index) => selectCell.append(option(cell.id, `Cell shape ${index + 1}`)));
+        const info = form.querySelector<HTMLElement>(".hc-hint:last-of-type");
+        if (info) info.textContent =
+            "Generalized expeditions require a saved, executable ruleset revision compatible with this world. Starting cells are identified by their repeating position, not axial hex coordinates.";
+    }
     const presentation = select(form, "presentation");
     for (const policy of presentations) presentation.append(option(policy.key, policy.name));
     if (presentations.some(policy => policy.key === "exploration-map")) presentation.value = "exploration-map";
@@ -94,11 +109,27 @@ export async function enhanceExpeditionSetup(
         void (async () => {
             try {
                 const choice = readProcedureStartChoice(procedure.value);
-                const expedition = await api.startConfiguredExpedition(worldId, applyWorldProcedureChoice({
-                    name: input(form, "name").value.trim(),
-                    presentationKey: presentation.value,
-                    startHex: { q: integer(numberInput(form, "q")), r: integer(numberInput(form, "r")) }
-                }, choice));
+                const expedition = world.grid
+                    ? await api.startConfiguredExpedition(worldId, applyWorldProcedureChoice({
+                        name: input(form, "name").value.trim(),
+                        presentationKey: presentation.value,
+                        startHex: { q: integer(numberInput(form, "q")), r: integer(numberInput(form, "r")) }
+                    }, choice))
+                    : choice.kind === "saved"
+                        ? await api.startCellExpedition(worldId, {
+                            name: input(form, "name").value.trim(),
+                            presentationKey: presentation.value,
+                            procedureId: choice.procedureId,
+                            procedureRevision: choice.revision,
+                            startCell: {
+                                motifCellId: select(form, "motifCellId").value,
+                                translation: {
+                                    u: integer(numberInput(form, "u")),
+                                    v: integer(numberInput(form, "v"))
+                                }
+                            }
+                        })
+                        : (() => { throw new Error("Choose a saved ruleset for this world."); })();
                 navigate(`/worlds/${worldId}/expeditions/${expedition.id}`);
             } catch (value) {
                 if (error) showUiError(error, value);

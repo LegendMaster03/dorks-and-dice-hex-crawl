@@ -2,6 +2,9 @@ import type { SourceMapGridAnalysis } from "./hex-grid-analysis";
 import type { CreateEncounterHandoffRequest, HexCrawlEncounterHandoffV2 } from "./encounter-handoff";
 import type {
     CellTraversalContext,
+    StartCellExpeditionInput,
+    CellWatchRequest,
+    CellCourseRequest,
     WorldCellGeometry,
     WorldCellId,
     WorldCellLookup,
@@ -415,6 +418,32 @@ export class HexCrawlApi {
 
     public startStandaloneSession(input: StartStandaloneCrawlSessionInput): Promise<ExpeditionDetail> {
         return this.sendJson("POST", "/api/expeditions", input, "Start expedition");
+    }
+
+    public startCellExpedition(worldId: string, input: StartCellExpeditionInput): Promise<ExpeditionDetail> {
+        return this.sendJson("POST",
+            `/api/overworlds/${encodeURIComponent(worldId)}/cell-expeditions`,
+            input, "Start generalized expedition");
+    }
+
+    public advanceCellWatch(expeditionId: string, input: CellWatchRequest): Promise<ExpeditionDetail> {
+        return this.sendJson("POST",
+            `/api/expeditions/${encodeURIComponent(expeditionId)}/cells/advance`,
+            input, "Advance cell expedition");
+    }
+
+    public resolveCellCourse(expeditionId: string, input: CellCourseRequest): Promise<ExpeditionDetail> {
+        return this.sendJson("POST",
+            `/api/expeditions/${encodeURIComponent(expeditionId)}/cells/course`,
+            input, "Resolve cell course");
+    }
+
+    public resolveCellEncounter(
+        expeditionId: string, occurrenceId: string, expectedVersion: number, resultNote?: string
+    ): Promise<ExpeditionDetail> {
+        return this.sendJson("POST",
+            `/api/expeditions/${encodeURIComponent(expeditionId)}/cells/encounters/${encodeURIComponent(occurrenceId)}/resolve`,
+            { expectedVersion, resultNote }, "Resolve cell encounter");
     }
 
     public getCellTopology(expeditionId: string): Promise<CellTraversalContext> {

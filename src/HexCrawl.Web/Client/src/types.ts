@@ -154,7 +154,7 @@ export type Overworld = {
     updatedAt: string;
     grid: GridDefinition | null;
     /** Authoritative world topology/metric witness remains on the server. */
-    tiling: { id: string; revision: number; origin: WorldPoint } | null;
+    tiling: { id: string; revision: number; origin: WorldPoint; topology: { motifCells: { id: string }[] } } | null;
     features: SpatialFeature[];
     locations: Location[];
     sourceMaps: SourceMapRepresentation[];
@@ -163,7 +163,7 @@ export type Overworld = {
 export type DemoWorld = Overworld;
 
 export type EncounterCadence = "None" | "PerWatch" | "PerDay";
-export type TravelResolutionMode = "ContinuousDistance" | "HexSteps";
+export type TravelResolutionMode = "ContinuousDistance" | "HexSteps" | "CellSteps";
 export type ActualDistanceResolutionMode = "Fixed" | "VariableResolved";
 export type ResolutionSource = "ProcedureDefault" | "AutomaticRoll" | "ManualRoll" | "ExternalSystem" | "DmOverride";
 
@@ -290,7 +290,7 @@ export type ParticipantActivityPolicy = {
     unsupportedReason: string | null;
 };
 
-export type RuntimePauseReason = "ConditionsReviewRequired" | "LostRecognitionRequired" | "EncounterTriggered" | "BacktrackBoundaryReached";
+export type RuntimePauseReason = "ConditionsReviewRequired" | "LostRecognitionRequired" | "EncounterTriggered" | "BacktrackBoundaryReached" | "CellCourseAdjudicationRequired";
 
 export type PendingEncounter = {
     id: string;
@@ -338,6 +338,18 @@ export type SpatialRuntimeExpedition = {
     activeEncounterHour: number | null;
     activeEncounterHandled: boolean | null;
     pendingEncounter: PendingEncounter | null;
+    /** Present only in Phase 18 generalized cell state, with currentHex null on the wire. */
+    currentCell?: WorldCellId | null;
+    cellTraversal?: {
+        currentCell: WorldCellId;
+        position: WorldPoint;
+        enteredFrom: WorldCellId | null;
+        entryInterfaceIndex: number | null;
+        travelHeading: WorldPoint | null;
+        selectedExitInterfaceIndex: number | null;
+    } | null;
+    intendedHeading?: WorldPoint | null;
+    actualHeading?: WorldPoint | null;
 };
 
 export type NonSpatialRuntimeExpedition = {
@@ -610,6 +622,64 @@ export type ProcedureStartSelectionInput =
         procedureId: string;
         procedureRevision: number;
     };
+
+export type StartCellExpeditionInput = {
+    name: string;
+    procedureId: string;
+    procedureRevision: number;
+    startCell: PeriodicCellAddress;
+    presentationKey: string;
+};
+
+export type CellWatchRequest = {
+    expectedVersion: number;
+    plan: {
+        intendedHeading: WorldPoint;
+        deliberateDoubleBack: boolean;
+        continueAcrossBoundaries: boolean;
+        mode: { paceKey: string; activityAssignments: ParticipantActivityAssignment[] };
+        navigationAid: {
+            key: string;
+            suppressesNavigationCheck: boolean;
+            resetsVeerAtBoundary: boolean;
+        };
+    };
+    inputs: {
+        travel: {
+            expectedDistance?: DistanceValue;
+            actualDistance?: DistanceValue;
+            cellSteps?: number;
+            provenance: { source: ResolutionSource; note?: string };
+        };
+        navigation?: {
+            outcome: "Succeeded" | "Failed" | "NotRequired";
+            veerDegreesOnFailure: number | null;
+            provenance: { source: ResolutionSource; note?: string };
+        };
+        encounter?: {
+            kind: "None" | "WanderingEncounter" | "KeyedLocationDiscovery" | "ManualCustom";
+            occursAt: string | null;
+            locationId: string | null;
+            note: string | null;
+            provenance: { source: ResolutionSource; note?: string };
+        };
+        boundaryDecision?: {
+            recognizedLost: boolean;
+            reorient: boolean;
+            provenance: { source: ResolutionSource; note?: string };
+        };
+        dmOverrideNote?: string;
+    };
+};
+
+export type CellCourseRequest = {
+    expectedVersion: number;
+    decision: {
+        intendedHeading: WorldPoint;
+        selectedExitInterfaceIndex: number;
+        provenance: { source: ResolutionSource; note?: string };
+    };
+};
 
 export type StartExpeditionInput = {
     name: string;
