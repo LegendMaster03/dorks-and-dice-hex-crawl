@@ -18,8 +18,9 @@
 
 - Legacy movement handler version 1 and HexProgressPolicy remain intact for saved hex expeditions and abstract-hex sessions; original six-direction veering and partial-progress factors have not been reinterpreted.
 - Movement handler version 2 explicitly separates ContinuousDistance from CellSteps and prohibits legacy hex-progress factors. It binds through GenericProcedureRuntime.Bind from the pinned CampaignProcedure, not a preset key.
-- CrawlRuntimeEngine.ResolveCellTravel invokes the same domain geometry executor and requires a version-2 procedure whose canonical D-symbol matches the world's accepted quotient. This is a geometry/movement segment entry point, **not** a full generalized watch advance.
-- Existing CrawlRuntimeEngine.Advance remains the legacy watch path and explicitly rejects the new movement version until watch orchestration is generalized. This preserves old behavior while preventing accidental partial rollout.
+- CrawlRuntimeEngine.ResolveCellTravel invokes the same domain geometry executor and requires a version-2 procedure whose canonical D-symbol matches the world's accepted quotient.
+- CrawlRuntimeEngine.AdvanceCellWatch now integrates version-2 cell travel with the pinned procedure's interval duration and encounter cadence, qualified event/history sequencing, angular navigation outcomes, resolved veer, lost recognition, double-back boundary stopping, encounter occurrence/resolve, boundary review, deterministic watch completion, and physical-distance accounting. Ambiguous courses pause rather than fabricating a neighbor; ResolveCellCourse validates an explicit atomic exit and the actual outgoing ray before saving the decision.
+- The generalized entry points are currently a **typed watch adapter inside the same partial CrawlRuntimeEngine**, not yet an extracted common AdvanceCore. Shared encounter scheduling, time helpers, event collector, and geometry kernel are reused. A follow-up consolidation must remove duplicated orchestration before release; legacy CrawlRuntimeEngine.Advance still explicitly rejects version-2 movement.
 
 ### Runtime state and persistence
 
@@ -28,7 +29,8 @@
 - RuntimeStateSnapshot gains the additive CellSpatial discriminator and cell-state fields. Existing Spatial and NonSpatial read/write representations are retained. New optional fields are omitted when null to avoid rewriting older legacy JSON structure.
 - Pending encounters and runtime events can carry a qualified WorldCellId, and generalized movement events can carry reciprocal atomic interface identities. Historical hex event values and fields are unchanged.
 - EnvironmentContextResolver uses the authoritative current cell for feature intersections and cell-scoped annotations, while preserving legacy hex-scoped annotations for hex worlds. No semantic environment state is inferred from D-symbol identity.
-- No relational schema change or live tester-data migration is introduced. The current backend remains gated against creating ordinary generalized expeditions, because watch mechanics and user interfaces are not complete.
+- No relational schema change or live tester-data migration is introduced.
+- ExpeditionStartService.StartWorldBoundCellsAsync starts generalized world-bound sessions at an authoritative cell center using an owner-authorized pinned procedure selection. HexCrawlService.AdvanceCellExpeditionAsync, ResolveCellExpeditionCourseAsync and ResolveCellExpeditionEncounterAsync enforce owner and expected-version checks and commit through the existing transactional PostgreSQL store. The current HTTP start/workbench routes remain gated for nonhex travel because their projections, associated gameplay services, and user interfaces are not complete; direct application capabilities are not a release-ready end-to-end path.
 
 ## Tests added
 
@@ -36,15 +38,16 @@
 2. Execution: multi-cell continuous distance, cell-step budgets, physical calibration, no-calibration rejection for physical movement, pause/review and restart of the geometric cursor, ambiguity without phantom transition.
 3. Runtime policy: pinned version-2 continuous-distance and cell-step execution for multiple tilings, rejection of legacy hex-step reinterpretation and mismatched D-symbols, refusal of v2 hex-progress semantics.
 4. PostgreSQL: schema-10 generalized runtime serialization, mid-cell save/restart/cross/save, qualified event history, ownership isolation, optimistic concurrency, uncalibrated pending encounter and active-watch restart, duplicate-event protection.
-5. Application: generalized cell and feature environment facts, and coexistence of legacy hex and qualified-cell annotation scopes.
+5. Application: generalized cell and feature environment facts, coexistence of legacy hex and qualified-cell annotation scopes, and owner-scoped versioned movement persistence across a fresh PostgreSQL connection.
+6. Watch runtime: triangular, square, hexagonal, and mixed-motif cell watches; time and qualified crossing events; boundary review/resume; vertex adjudication and explicit interface selection; uncalibrated cell steps; angular lost state; encounter pause/resolve with occurrence identity and deterministic restart.
 
 CI, integration and release tests must still be evaluated on the exact final branch head before updating the verified status.
 
 ## Mandatory work remaining
 
-1. Refactor CrawlRuntimeEngine.AdvanceCore and watch lifecycle so its existing navigation, encounters, lost/veer/reorientation, deliberate double-back, environmental effects, survival resources, journey hooks, pause and event replay all consume a generalized spatial execution result. **Do not fork watch/gameplay mechanics into a second engine.**
-2. Define fully generalized navigation/adjudication intent, heading-deviation and selected-interface contracts, including explicit decisions at vertices, unknown paths and navigation failure. Preserve v1 60-degree veer for existing hex sessions.
-3. Connect CellExpeditionState and periodic world authority through application services, ownership checks, progression/pause workflows, discovery and journey integration. Materialized procedure version-2 authoring must be available without preset-specific dispatch.
+1. Consolidate the initial generalized cell-watch adapter with CrawlRuntimeEngine.AdvanceCore so its core lifecycle is shared, rather than maintaining duplicated orchestration. Complete the still-missing environment effects, survival resource accounting, journey hooks, discovery, and encounter handoff for cell-based sessions. **Do not fork watch/gameplay mechanics into a second engine.**
+2. Harden generalized angular navigation and selected-interface handling, including mid-watch course changes, unknown paths, deliberate reverse, direction validity after veer and explicit decisions at vertices. The initial typed domain interface decision has no versioned HTTP contract yet. Preserve v1 60-degree veer for existing hex sessions.
+3. Finish connecting CellExpeditionState and periodic world authority through the remaining application surfaces: procedure-version-2 authoring and revision selection, world discovery and knowledge projection, downstream journey/survival/effects services, activity assignments and encounter handoff. The new direct application entry points are not yet exposed by the supported HTTP workflows.
 4. Provide additive/versioned generalized API contracts for course selection, adjacency, current cell, events and resume. Preserve hex API payloads unchanged. Ordinary nonhex expedition entry points must remain disabled until Phase 19 presentation and full mechanics are ready.
 5. Validate representative existing schema-10 saved tester-like expeditions, active/paused watches, navigation and pending encounters, pinned revisions, retry/duplicate delivery, effects and discoveries, concurrent writes, and abstract/nonspatial parity. Perform a full independent self-review and applicable Docker/PostgreSQL/frontend tests.
 6. After explicitly authorized merge/deploy, independently verify authenticated development/testing workflows against existing saved tester data, maps and source assets. Do not reset or migrate the live database from the feature branch.
