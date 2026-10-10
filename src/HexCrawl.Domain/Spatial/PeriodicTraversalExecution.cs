@@ -87,7 +87,7 @@ public static class PeriodicTraversalExecution
         var review = false;
         int steps = 0;
 
-        while ((remaining is > 0 || stepBudget is { } requested && steps < requested)
+        while ((remaining is > 0 || stepBudget is { } requestedTotal && steps < requestedTotal)
             && transitions.Count < MaxTransitionsPerCall)
         {
             var crossing = PeriodicCellTraversalGeometry.NextCrossing(world, cursor);
@@ -127,7 +127,7 @@ public static class PeriodicTraversalExecution
         }
 
         if (transitions.Count >= MaxTransitionsPerCall
-            && (remaining is > 0 || stepBudget is { } requested && steps < requested))
+            && (remaining is > 0 || stepBudget is { } requestedAtLimit && steps < requestedAtLimit))
             throw new InvalidOperationException(
                 "Travel exceeded the bounded number of cell crossings; resolve a shorter segment.");
 
