@@ -210,6 +210,17 @@ jobs:
             exit 1
           fi
 
+      - name: Remove Phase 17 temporary recovery files after verified cutover
+        # A verified schema-9 PostgreSQL dump and matching map-asset archive
+        # are RECOVERY artifacts and are retained. Only scratch copies,
+        # isolated restore diagnostics and stale failed-attempt directories
+        # are deleted, after the new application has proven schema-10 ready.
+        if: ${{ steps.verify.outcome == 'success' }}
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/phase17-prepare-recovery.py cleanup "$DEPLOY_SHA"
+
       - name: Resume original service if the cutover did not begin
         id: resume
         if: ${{ always() && steps.previous_image.outputs.available == 'true' && steps.deploy.outcome == 'skipped' }}
