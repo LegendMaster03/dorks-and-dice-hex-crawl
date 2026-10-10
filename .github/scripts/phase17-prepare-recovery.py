@@ -122,10 +122,15 @@ def restore_and_verify_database(postgres_image, dump, expected_inventory):
            postgres_image)
     try:
         for _ in range(60):
-            ready = subprocess.run(["docker", "exec", name, "pg_isready",
-                                    "-U", DB_USER, "-d", DATABASE],
-                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            if ready.returncode == 0:
+            # pg_isready only verifies that the server accepts connections;
+            # it can return success even when the requested database does
+            # not exist. Require an actual SQL connection to the restored DB.
+            ready = subprocess.run(
+                ["docker", "exec", name, "psql", "-X", "-At",
+                 "-v", "ON_ERROR_STOP=1", "-U", DB_USER, "-d", DATABASE,
+                 "-c", "SELECT 1"],
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+            if ready.returncode == 0 and ready.stdout.strip() == b"1":
                 break
             time.sleep(1)
         else:
@@ -226,8 +231,19 @@ def prepare(sha, manifest):
         restored_before = inventory(POSTGRES)
         if restored_before != before:
             raise RuntimeError("Database changed while taking the backup")
-        postgres_image = postgres_record["Config"]["Image"]
-        restore_and_verify_database(postgres_image, dump, before)
+        # The production deployment may use a customized PostgreSQL image
+        # whose environment does not initialize POSTGRES_USER/POSTGRES_DB in
+        # a fresh container. Use the standard upstream image of the same
+        # *server major* for a predictable isolated database, and require
+        # SELECT 1 there before attempting pg_restore.
+        version_text = docker(
+            "exec", POSTGRES, "psql", "-X", "-At", "-v", "ON_ERROR_STOP=1",
+            "-U", DB_USER, "-d", DATABASE, "-c", "SHOW server_version_num"
+        ).stdout.decode("ascii").strip()
+        server_major = int(version_text) // 10000
+        if server_major < 12 or server_major > 20:
+            raise RuntimeError("Unsupported live PostgreSQL major version for isolated restore")
+        restore_and_verify_database(f"postgres:{server_major}", dump, before)
 
         record = {
             "migration": "hex-crawl-9-to-10",
@@ -255,6 +271,14 @@ def prepare(sha, manifest):
                         str(Path(__file__).with_name("phase17-recovery-gate.py")),
                         str(manifest), sha],
                        check=True, stdout=subprocess.DEVNULL)
+        # These two directories are disposable comparison copies, not the
+        # verified recovery artifacts. Retain only the custom-format dump
+        # and map archive needed for a possible schema-9 recovery.
+        shutil.rmtree(source)
+        shutil.rmtree(backup_dir / "map-volume-restored")
+        private_log = backup_dir / "isolated-postgres-restore.log"
+        if private_log.is_file() and not private_log.is_symlink():
+            private_log.unlink()
         succeeded = True
         print("Phase 17 pre-cutover backups and isolated restores verified; "
               "old writer stopped for schema migration.")
@@ -265,13 +289,82 @@ def prepare(sha, manifest):
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
+def cleanup_after_verified_deployment(sha, manifest):
+    """Retain one verified pre-upgrade recovery pair, remove only scratch data.
+
+    This is invoked ONLY after the deployed application's schema-10 readiness
+    check succeeds. It cannot remove the live database, map volume or either
+    artifact referenced by the current cryptographically verified manifest.
+    """
+    import re
+    manifest = manifest.absolute()
+    if not manifest.is_file() or manifest.is_symlink():
+        print("No matching Phase 17 recovery manifest; no private backups deleted.")
+        return
+    record = json.loads(manifest.read_text(encoding="utf-8"))
+    if record.get("deploymentSha") != sha:
+        print("Recovery manifest belongs to another deployment; no backups deleted.")
+        return
+    subprocess.run(
+        [sys.executable, str(Path(__file__).with_name("phase17-recovery-gate.py")),
+         str(manifest), sha],
+        check=True, stdout=subprocess.DEVNULL)
+    root = manifest.parent / "phase17-private-backups"
+    if not root.is_dir() or root.is_symlink():
+        raise RuntimeError("Private backup root is missing or unsafe")
+    dump = Path(record["postgresBackupPath"])
+    archive = Path(record["mapAssetsBackupPath"])
+    retained = dump.parent
+    if (retained.parent.resolve() != root.resolve() or retained.is_symlink()
+            or archive.parent != retained or
+            dump.name != "hex-crawl-before-phase17.dump"
+            or archive.name != "map-assets-before-phase17.tar.gz"):
+        raise RuntimeError("Backup manifest contains paths outside the verified recovery layout")
+    # Confirm the actual application has crossed to the new schema before
+    # removing anything. Do not alter production database or schema here.
+    current = inventory(POSTGRES)
+    if int(current.split("|", 1)[0]) != 10:
+        raise RuntimeError("Database is not at schema 10; retain all recovery files")
+    removed = 0
+    for folder in root.iterdir():
+        if folder.is_symlink() or not folder.is_dir():
+            continue
+        if not re.fullmatch(r"[0-9a-f]{12}-[0-9]{13,}", folder.name):
+            continue
+        if folder.resolve() == retained.resolve():
+            # A completed backup contains only the two retained artifacts.
+            for name in ("map-volume-source", "map-volume-restored"):
+                scratch = folder / name
+                if scratch.is_dir() and not scratch.is_symlink():
+                    shutil.rmtree(scratch)
+                    removed += 1
+            log = folder / "isolated-postgres-restore.log"
+            if log.is_file() and not log.is_symlink():
+                log.unlink()
+                removed += 1
+        else:
+            shutil.rmtree(folder)
+            removed += 1
+    for scratch in manifest.parent.glob(manifest.name + ".tmp-*"):
+        if scratch.is_file() and not scratch.is_symlink():
+            scratch.unlink()
+            removed += 1
+    print("Phase 17 cleanup completed: " + str(removed)
+          + " temporary recovery items removed; verified backup pair retained.")
+
+
 def main():
     os.umask(0o077)
-    if len(sys.argv) != 2:
-        raise ValueError("Usage: phase17-prepare-recovery.py DEPLOY_SHA")
+    if len(sys.argv) not in (2, 3):
+        raise ValueError("Usage: phase17-prepare-recovery.py [cleanup] DEPLOY_SHA")
     signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
     manifest = Path(os.environ.get("PHASE17_RECOVERY_MANIFEST", DEFAULT_MANIFEST))
-    prepare(sys.argv[1], manifest)
+    if len(sys.argv) == 3 and sys.argv[1] == "cleanup":
+        cleanup_after_verified_deployment(sys.argv[2], manifest)
+    elif len(sys.argv) == 2:
+        prepare(sys.argv[1], manifest)
+    else:
+        raise ValueError("Unexpected recovery preparation command")
 
 
 if __name__ == "__main__":
