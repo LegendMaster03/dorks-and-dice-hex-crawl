@@ -105,7 +105,11 @@ The feature-branch deployment workflows now capture the **currently running**
 production container image **before** overwriting `:latest`, tag it
 `dorks-and-dice-{service}:pre-deploy`, and build the new image under
 both `:latest` and its immutable full Git commit SHA. Production deploys are
-serialized rather than cancelled mid-recreation.
+serialized rather than cancelled mid-recreation. For these established
+services, **failure to capture the currently running image aborts the deployment
+before any build or image-tag mutation**. The missing-service state requires
+an operator to investigate and authorize a specific recovery procedure; it is
+not interpreted as a routine first deployment.
 
 If deploy or post-deploy verification fails, the workflows attempt to
 recreate the previous image using the same Compose project, environment,
