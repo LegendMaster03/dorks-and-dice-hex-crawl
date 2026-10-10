@@ -360,8 +360,8 @@ export class HexCrawlApi {
 
     public listExpeditions(worldId?: string): Promise<ExpeditionSummary[]> {
         return worldId
-            ? this.getJson(`/api/overworlds/${encodeURIComponent(worldId)}/expeditions`, "Expedition list", "no-store")
-            : this.getJson("/api/expeditions", "Expedition list", "no-store");
+            ? this.getJson(`/api/overworlds/${encodeURIComponent(worldId)}/expeditions`, "Expedition list")
+            : this.getJson("/api/expeditions", "Expedition list");
     }
 
     public startExpedition(worldId: string, name: string, procedureKey: string, startHex: HexCoordinate): Promise<ExpeditionDetail> {
@@ -496,8 +496,8 @@ export class HexCrawlApi {
         return this.sendJson("POST", `/api/expeditions/${encodeURIComponent(expeditionId)}/assistants/encounters`, input, "Encounter cadence assistant");
     }
 
-    private async getJson<T>(path: string, label: string, cache: RequestCache = "default"): Promise<T> {
-        const response = await fetch(`${this.backendBaseUrl}${path}`, { headers: { Accept: "application/json" }, cache });
+    private async getJson<T>(path: string, label: string): Promise<T> {
+        const response = await fetch(`${this.backendBaseUrl}${path}`, { headers: { Accept: "application/json" } });
         if (!response.ok) throw await apiError(response, label);
         return await response.json() as T;
     }

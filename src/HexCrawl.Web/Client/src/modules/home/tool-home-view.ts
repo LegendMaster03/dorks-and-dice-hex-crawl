@@ -437,15 +437,10 @@ function renderExpeditions(
                 deleteButton.textContent = "Deleting…";
                 try {
                     await api.deleteExpedition(expedition.id, expedition.version);
-                    // Never treat removal of a local card as proof that the
-                    // expedition was deleted. Reconcile with an authoritative
-                    // server list after the DELETE transaction has committed.
-                    const remaining = await api.listExpeditions();
-                    if (remaining.some(item => item.id === expedition.id)) {
-                        throw new Error("The server still lists this expedition after deletion. Reload and retry; the expedition has not been confirmed deleted.");
-                    }
-                    syncExpeditionCount(count, remaining.length);
-                    renderExpeditions(host, remaining, worlds, api, error, count, navigate);
+                    card.remove();
+                    const remaining = host.querySelectorAll(".hc-expedition-card").length;
+                    syncExpeditionCount(count, remaining);
+                    if (remaining === 0) renderEmptyExpeditions(host);
                 } catch (value) {
                     showUiError(error, value);
                     deleteButton.disabled = false;

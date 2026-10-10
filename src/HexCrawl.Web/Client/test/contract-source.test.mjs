@@ -482,15 +482,3 @@ test("running sheet requires explicit provenance and navigation-helper inputs", 
     assert.match(controller, /readResolutionSource\("boundarySource", "boundary", false\)/);
     assert.doesNotMatch(controller, /control\.value = "ManualRoll"/);
 });
-test("expedition deletion reconciles against a fresh server list rather than hiding a card optimistically", () => {
-    const home = read("modules/home/tool-home-view.ts");
-    const handler = home.slice(home.indexOf("deleteButton.addEventListener"), home.indexOf("actions.append(deleteButton)"));
-    assert.match(handler, /await api\.deleteExpedition\(expedition\.id, expedition\.version\)/);
-    assert.match(handler, /const remaining = await api\.listExpeditions\(\)/);
-    assert.match(handler, /remaining\.some\(item => item\.id === expedition\.id\)/);
-    assert.match(handler, /renderExpeditions\(host, remaining, worlds, api, error, count, navigate\)/);
-    assert.doesNotMatch(handler, /card\.remove\(\)/);
-    assert.match(handler, /showUiError\(error, value\)/);
-    const api = read("api.ts");
-    assert.match(api, /this\.getJson\("\/api\/expeditions", "Expedition list", "no-store"\)/);
-});
