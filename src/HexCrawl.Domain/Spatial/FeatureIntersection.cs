@@ -36,6 +36,19 @@ public static class FeatureIntersection
         return best;
     }
 
+    public static bool IntersectsPolygon(IReadOnlyList<WorldPoint> polygon, SpatialFeature feature)
+    {
+        if (polygon.Count < 3)
+            throw new ArgumentException("Cell polygon has fewer than three corners.", nameof(polygon));
+        return feature switch
+        {
+            PointFeature point => PointInPolygon(point.Position, polygon),
+            LinearFeature line => PolylineIntersectsPolygon(line.Path, polygon),
+            RegionFeature region => PolygonsIntersect(region.Boundary, polygon),
+            _ => false
+        };
+    }
+
     private static bool PolylineIntersectsPolygon(IReadOnlyList<WorldPoint> path, IReadOnlyList<WorldPoint> polygon)
     {
         if (path.Count == 0)
