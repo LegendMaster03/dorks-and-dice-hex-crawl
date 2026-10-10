@@ -1,5 +1,6 @@
 using HexCrawl.Application;
 using HexCrawl.Application.Assets;
+using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace HexCrawl.Web.Api;
 
@@ -10,6 +11,47 @@ public static partial class SourceMapApiEndpoints
     /// registration, world conversion, or procedure compatibility decision.
     /// The existing grid-analysis endpoint continues to use Surveyor v2.
     /// </summary>
+    private static async Task<IResult> AssessMotifCompatibilityAsync(
+        Guid overworldId, Guid sourceMapId,
+        Guid? procedureId, int? procedureRevision,
+        HttpContext context,
+        SourceMapApplicationService sourceMaps,
+        IMapAssetStore assets,
+        IPeriodicMotifInvestigationService surveyor,
+        HexCrawlService crawls,
+        CampaignProcedureService procedures,
+        CancellationToken cancellationToken)
+    {
+        if (procedureId.HasValue != procedureRevision.HasValue
+            || procedureRevision is <= 0 || procedureId == Guid.Empty)
+            throw new ArgumentException("Choose both a saved procedure and a revision, or neither.");
+        var result = await InvestigateMotifAsync(overworldId, sourceMapId, context,
+            sourceMaps, assets, surveyor, cancellationToken);
+        if (result is not Ok<PeriodicMotifInvestigation> analyzed || analyzed.Value is null)
+            return result;
+
+        var owner = UserId(context);
+        var stored = await crawls.GetOverworldAsync(overworldId, owner, cancellationToken);
+        var procedure = procedureId is { } selected && procedureRevision is { } revision
+            ? (await procedures.GetAsync(owner, selected, revision, cancellationToken)).Procedure
+            : null;
+        var expeditions = await crawls.ListExpeditionsAsync(overworldId, owner, cancellationToken);
+        var blockers = new List<string>();
+        if (expeditions.Count > 0)
+            blockers.Add($"{expeditions.Count} saved expeditions, including "
+                + string.Join(", ", expeditions.Take(3).Select(item => item.Name)) + ".");
+        var registrations = stored.World.SourceMaps.Count(map => map.Alignment is not null);
+        if (registrations > 0)
+            blockers.Add($"{registrations} existing source-map registrations.");
+        if (stored.World.Features.Count > 0 || stored.World.Locations.Count > 0)
+            blockers.Add($"{stored.World.Features.Count} features and "
+                + $"{stored.World.Locations.Count} locations with world-space positions.");
+        if (stored.World.EnvironmentAnnotations.Count > 0)
+            blockers.Add($"{stored.World.EnvironmentAnnotations.Count} environment annotations.");
+        return Results.Ok(Phase19TilingCompatibility.Assess(
+            stored.World.SpatialTiling, analyzed.Value, procedure, blockers, stored.Version));
+    }
+
     private static async Task<IResult> InvestigateMotifAsync(
         Guid overworldId,
         Guid sourceMapId,
