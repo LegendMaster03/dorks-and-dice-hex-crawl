@@ -188,16 +188,11 @@ public sealed partial class CrawlRuntimeEngine
         else if (movement.BoundaryReviewRequired)
             stop = RuntimePauseReason.ConditionsReviewRequired;
 
-        // At a boundary the aid can neutralize the accumulated veer, but
-        // recognizing that the party is lost is still an explicit decision.
-        if (movement.Transitions.Count > 0 && state.IsLost
+        // Defer the event until the new elapsed time is recorded; events
+        // following a boundary crossing must not jump backwards in time.
+        var resetVeerAtBoundary = movement.Transitions.Count > 0 && state.IsLost
             && plan.NavigationAid.ResetsVeerAtBoundary
-            && state.ResolvedVeerDegrees is not null)
-        {
-            state = state with { ResolvedVeerDegrees = null };
-            AddCellEvent(events, active.WatchNumber, CrawlRuntimeEventKind.VeerReset,
-                state, $"{plan.NavigationAid.Key} reset the veer at the boundary.");
-        }
+            && state.ResolvedVeerDegrees is not null;
 
         var spent = stop is null ? segmentDuration
             : runtime.Movement.TravelResolution == TravelResolutionMode.CellSteps
@@ -218,6 +213,12 @@ public sealed partial class CrawlRuntimeEngine
                 ? state.DistanceTraveled is { } previous ? Add(previous, measured) : measured
                 : state.DistanceTraveled
         };
+        if (resetVeerAtBoundary)
+        {
+            state = state with { ResolvedVeerDegrees = null };
+            AddCellEvent(events, active.WatchNumber, CrawlRuntimeEventKind.VeerReset,
+                state, $"{plan.NavigationAid.Key} reset the veer at the boundary.");
+        }
         active = active with
         {
             Elapsed = ClampTime(active.Elapsed + spent, TimeSpan.Zero, active.TotalDuration),
