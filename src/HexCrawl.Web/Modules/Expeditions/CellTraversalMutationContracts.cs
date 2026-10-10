@@ -45,8 +45,17 @@ public sealed record AdvanceCellWatchRequest(
         ArgumentNullException.ThrowIfNull(Inputs);
         ArgumentNullException.ThrowIfNull(Inputs.Travel);
         ValidateClientProvenance(Inputs.Travel.Provenance);
-        if (Inputs.Navigation is { } nav) ValidateClientProvenance(nav.Provenance);
-        if (Inputs.Encounter is { } encounter) ValidateClientProvenance(encounter.Provenance);
+        if (Inputs.Navigation is { } nav
+            && !(nav.Outcome == NavigationCheckOutcome.NotRequired
+                && nav.Provenance.Source == ResolutionSource.ProcedureDefault))
+            ValidateClientProvenance(nav.Provenance);
+        // ResolvedEncounter.None is an inert procedure sentinel, not a
+        // client assertion that an automatic roll or default check occurred.
+        // All triggered outcomes still require human/external provenance.
+        if (Inputs.Encounter is { } encounter
+            && !(encounter.Kind == EncounterOutcomeKind.None
+                && encounter.Provenance.Source == ResolutionSource.ProcedureDefault))
+            ValidateClientProvenance(encounter.Provenance);
         if (Inputs.BoundaryDecision is { } boundary) ValidateClientProvenance(boundary.Provenance);
     }
 
