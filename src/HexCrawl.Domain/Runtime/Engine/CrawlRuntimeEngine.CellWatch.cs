@@ -94,6 +94,14 @@ public sealed partial class CrawlRuntimeEngine
                     state, $"Encounter check resolved as {start.Encounter.Kind}.");
         }
 
+        // A course adjustment during an active watch is a material DM decision.
+        // Retain its old and new intents in history; the geometry kernel still
+        // rejects a stale explicitly selected exit that no longer matches.
+        if (state.IntendedHeading is { } previousHeading
+            && previousHeading != plan.IntendedHeading)
+            AddCellEvent(events, active.WatchNumber, CrawlRuntimeEventKind.DirectionChanged,
+                state, $"Cell watch heading changed from ({Format(previousHeading.X)}, {Format(previousHeading.Y)}) to ({Format(plan.IntendedHeading.X)}, {Format(plan.IntendedHeading.Y)}).");
+
         active = active with { Plan = plan };
         state = state with { ActiveWatch = active, IntendedHeading = plan.IntendedHeading };
         if (plan.DeliberateDoubleBack)
