@@ -180,6 +180,56 @@ public sealed class Phase17FullDatabaseMigrationTests
     }
 
     [Fact]
+    public async Task SchemaNineRejectsSnapshotIdentityMismatchAtomically()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var store = new PostgresHexCrawlStore(database.ConnectionString);
+        await store.InitializeAsync();
+        var grid = new HexGridDefinition
+        {
+            Id = Guid.NewGuid(), HexRadiusWorldUnits = 1,
+            NeighborCenterDistance = new DistanceMeasure(12, DistanceUnit.Miles)
+        };
+        var now = DateTimeOffset.UtcNow;
+        var world = new OverworldDefinition
+        {
+            Id = Guid.NewGuid(), Name = "Mismatched legacy snapshot", Grid = grid
+        };
+        await store.CreateOverworldAsync(new StoredOverworld(world, "owner", 3, now, now));
+        var wrongId = Guid.NewGuid();
+        await using var connection = new NpgsqlConnection(database.ConnectionString);
+        await connection.OpenAsync();
+        await using (var downgrade = connection.CreateCommand())
+        {
+            downgrade.CommandText = """
+                UPDATE overworlds SET world_json = jsonb_set(
+                    world_json - 'formatVersion' - 'tiling', '{id}', to_jsonb(@wrongId::text))
+                WHERE id = @id;
+                UPDATE hex_crawl_schema_migrations SET version = 9 WHERE version = 10;
+                """;
+            downgrade.Parameters.AddWithValue("id", world.Id);
+            downgrade.Parameters.AddWithValue("wrongId", wrongId.ToString());
+            await downgrade.ExecuteNonQueryAsync();
+        }
+        var failure = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            new PostgresSchemaMigrator(database.ConnectionString).MigrateAsync());
+        Assert.Contains(world.Id.ToString(), failure.Message, StringComparison.OrdinalIgnoreCase);
+        await using var verify = connection.CreateCommand();
+        verify.CommandText = """
+            SELECT (SELECT MAX(version) FROM hex_crawl_schema_migrations),
+                   world_json->>'id', world_json ? 'tiling', version
+            FROM overworlds WHERE id = @id;
+            """;
+        verify.Parameters.AddWithValue("id", world.Id);
+        await using var reader = await verify.ExecuteReaderAsync();
+        Assert.True(await reader.ReadAsync());
+        Assert.Equal(9L, reader.GetInt64(0));
+        Assert.Equal(wrongId.ToString(), reader.GetString(1));
+        Assert.False(reader.GetBoolean(2));
+        Assert.Equal(3L, reader.GetInt64(3));
+    }
+
+    [Fact]
     public async Task FailedWorldConversionRollsBackAllWorldsAndProcedureUpgrades()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
