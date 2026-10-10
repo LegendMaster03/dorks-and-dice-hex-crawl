@@ -136,6 +136,64 @@ public sealed class Phase18CellDecisionEndpointsTests
     }
 
     [Fact]
+    public async Task CellExpeditionResourceMutationPersistsWithoutChangingQualifiedPosition()
+    {
+        await WithWorldAsync(async (database, store, world, procedure, cell) =>
+        {
+            var initial = BaseState(cell);
+            await SeedAsync(store, world, procedure, initial);
+            var resourceId = Guid.NewGuid();
+            var route = $"/api/expeditions/{initial.Id:D}/survival/resources/{resourceId:D}";
+            var request = new
+            {
+                expectedVersion = 1,
+                resourceKey = "food",
+                target = new { scope = "Party", targetId = (Guid?)null },
+                inventoryModel = "Counted",
+                quantity = 5.0,
+                unit = "ration",
+                symbolicState = (string?)null,
+                supplyDieSides = (int?)null,
+                note = (string?)null,
+                provenance = new
+                {
+                    sourceKind = "Dm",
+                    sourceKey = "cell-survival-resource-test",
+                    sourceReference = (string?)null,
+                    providerName = (string?)null,
+                    note = (string?)null
+                }
+            };
+            using (var factory = TestWebHost.Create(database, "alice"))
+            using (var client = factory.CreateClient())
+            {
+                using var updated = await client.PutAsJsonAsync(route, request);
+                Assert.True(updated.IsSuccessStatusCode,
+                    $"Resource update failed: {await updated.Content.ReadAsStringAsync()}");
+                var result = await updated.Content.ReadFromJsonAsync<JsonElement>();
+                Assert.Equal(2L, result.GetProperty("expeditionVersion").GetInt64());
+                var resource = Assert.Single(
+                    result.GetProperty("state").GetProperty("resources").EnumerateArray());
+                Assert.Equal(resourceId, resource.GetProperty("id").GetGuid());
+                Assert.Equal(5, resource.GetProperty("quantity").GetDouble());
+                using var replay = await client.PutAsJsonAsync(route, request);
+                Assert.Equal(HttpStatusCode.Conflict, replay.StatusCode);
+            }
+            var reopened = new PostgresHexCrawlStore(database);
+            await reopened.InitializeAsync();
+            var stored = await reopened.GetExpeditionAsync(initial.Id, "alice");
+            Assert.Equal(2, stored!.Version);
+            Assert.Single(stored.Resources.Resources);
+            var runtime = Assert.IsType<CellExpeditionState>(stored.Runtime);
+            Assert.Equal(cell.Id, runtime.Traversal.CurrentCell);
+            Assert.Null(runtime.DistanceTraveled);
+            Assert.Null(runtime.ActiveWatch);
+            Assert.Empty(runtime.History);
+            Assert.Null(await reopened.GetExpeditionAsync(initial.Id, "bob"));
+        });
+    }
+
+    [Fact]
     public async Task SavedProcedureCellStartCreatesAuthoritativeCellSessionWithNoHexProjection()
     {
         await WithWorldAsync(async (database, store, world, procedure, cell) =>
