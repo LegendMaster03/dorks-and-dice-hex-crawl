@@ -93,6 +93,12 @@ public sealed class Phase18CellReadContractsTests
                 Assert.True(response.IsSuccessStatusCode,
                     $"Cell expedition read returned {(int)response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
                 var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+                var materialized = body.GetProperty("procedure");
+                Assert.True(materialized.GetProperty("isExecutable").GetBoolean());
+                var procedureRuntime = materialized.GetProperty("runtime");
+                Assert.Equal(2, procedureRuntime.GetProperty("movementMechanicVersion").GetInt32());
+                if (procedureRuntime.TryGetProperty("farExitProgressFactor", out var factor))
+                    Assert.Equal(JsonValueKind.Null, factor.ValueKind);
                 var state = body.GetProperty("expedition");
                 Assert.True(state.GetProperty("isSpatial").GetBoolean());
                 Assert.Equal(JsonValueKind.Null, state.GetProperty("currentHex").ValueKind);
