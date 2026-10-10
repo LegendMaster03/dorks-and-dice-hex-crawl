@@ -38,18 +38,21 @@ public sealed partial class HexCrawlService
         var world = await GetOverworldAsync(context.WorldId, ownerUserId, cancellationToken);
         var result = _runtime.AdvanceCellWatch(
             world.World.SpatialTiling, expedition.CampaignProcedure, state, plan, inputs);
+        var worldProjection = ExpeditionCellWorldComposition.Apply(
+            world.World, result, expedition.RequireKnowledge(), applyAutomaticKnowledge: true);
         var forcedTravel = ForcedTravelAccounting.AccountTravelMutation(
-            expedition, state, result.Expedition, expectedVersion,
+            expedition, state, worldProjection.State, expectedVersion,
             "cell-watch-travel",
             new ExpeditionConsequenceProvenance(
                 ExpeditionConsequenceSourceKind.Procedure,
                 "cell-watch-travel",
                 Note: inputs.DmOverrideNote ?? inputs.Travel.Provenance.Note));
         var journey = JourneyRuntimeIntegration.ObserveCompletedWatches(
-            expedition, state, result.Expedition, expedition.Journey);
+            expedition, state, worldProjection.State, expedition.Journey);
         var updated = expedition with
         {
-            Runtime = result.Expedition,
+            Runtime = worldProjection.State,
+            Knowledge = worldProjection.Knowledge,
             PauseReason = result.PauseReason,
             RemainingWatchTime = result.RemainingWatchTime,
             Survival = forcedTravel.Survival,
