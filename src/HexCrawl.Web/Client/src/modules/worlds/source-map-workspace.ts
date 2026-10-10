@@ -554,6 +554,89 @@ export class SourceMapWorkspace {
                     ? "Keep this world configuration and use a different map, or create a separate world. Automatic conversion is not available until its dependencies can be migrated safely."
                     : "Use manual placement or a different image. No world, procedure, or map registration was changed.";
             status.append(next);
+            if (assessment.status === "mismatch" && assessment.canCorrectInPlace
+                && assessment.correction?.status === "candidates"
+                && assessment.correction.candidates.length) {
+                const correction = assessment.correction;
+                const heading = document.createElement("p");
+                heading.textContent =
+                    `This unused world can safely use the observed ${assessment.observedShape ?? "cell pattern"} instead. The original map images and saved world identity will be preserved. Cell identities will change.`;
+                const controls = document.createElement("div");
+                controls.className = "hc-form";
+                const selector = document.createElement("select");
+                selector.setAttribute("aria-label", "Choose the detected replacement placement");
+                for (const candidate of correction.candidates) {
+                    const option = document.createElement("option");
+                    option.value = String(candidate.index);
+                    option.textContent = `Placement ${candidate.index + 1} — ${candidate.maximumResidualSourcePixels.toFixed(1)} image-pixel maximum error`;
+                    selector.append(option);
+                }
+                const hint = document.createElement("p");
+                hint.className = "hc-hint";
+                hint.textContent =
+                    "The map preview still shows the OLD cell boundaries. The detected replacement cells will appear after acceptance. Multiple placements can be geometrically equivalent; choose the orientation by the map image and its geography.";
+                const preview = document.createElement("button");
+                preview.type = "button";
+                preview.textContent = "Preview replacement image placement";
+                const apply = document.createElement("button");
+                apply.type = "button";
+                apply.className = "hc-primary-action";
+                apply.textContent = `Use ${assessment.observedShape ?? "these cells"} for this unused world`;
+                apply.disabled = true;
+                let previewedIndex: number | null = null;
+                selector.addEventListener("change", () => {
+                    previewedIndex = null;
+                    apply.disabled = true;
+                    if (this.map.renderer.registrationPreview?.sourceMapId === sourceMap.id) {
+                        this.map.renderer.registrationPreview = null;
+                        this.map.requestRender();
+                    }
+                });
+                preview.addEventListener("click", () => {
+                    if (this.disposed || generation !== this.compatibilityGeneration
+                        || this.selected?.id !== sourceMap.id
+                        || this.getWorld().version !== assessment.worldVersion) return;
+                    const chosen = correction.candidates.find(item =>
+                        item.index === Number(selector.value));
+                    if (!chosen) return;
+                    this.registrationController.cancelActive();
+                    this.ensureVisibleForEditing(sourceMap);
+                    this.map.renderer.registrationPreview = {
+                        sourceMapId: sourceMap.id, transform: chosen.alignment
+                    };
+                    this.map.requestRender();
+                    previewedIndex = chosen.index;
+                    apply.disabled = false;
+                });
+                apply.addEventListener("click", () => {
+                    if (previewedIndex === null) return;
+                    const chosen = correction.candidates.find(item => item.index === previewedIndex);
+                    if (!chosen) return;
+                    const confirmed = window.confirm(
+                        `Use ${assessment.observedShape ?? "the observed pattern"} as this world's cells?\n\nThis is only available for an unused world. The existing cell tiling will be replaced with a new verified identity, and the selected image placement will be saved. Original image assets are preserved.\n\nThe current cell outlines shown in the preview are the old geometry.`);
+                    if (!confirmed) return;
+                    apply.disabled = true;
+                    void this.run(null, async () => {
+                        if (this.disposed || generation !== this.compatibilityGeneration
+                            || this.selected?.id !== sourceMap.id
+                            || this.getWorld().version !== assessment.worldVersion)
+                            throw new Error("The world changed. Check the image again before correcting its cells.");
+                        const corrected = await this.api.applyMotifCorrection(
+                            selectedWorld.id, sourceMap.id, chosen.index,
+                            chosen.alignment, assessment.worldVersion, pinned);
+                        this.map.renderer.registrationPreview = null;
+                        this.applyWorld(corrected);
+                        status.textContent =
+                            "Unused world cells were replaced with the verified observed pattern. Existing map assets remain intact.";
+                        this.mapHint.textContent =
+                            "New world cells are now active; inspect the map and choose your starting cell.";
+                        await this.refresh();
+                        this.map.requestRender();
+                    });
+                });
+                controls.append(heading, selector, preview, apply, hint);
+                status.append(controls);
+            }
             if (assessment.status === "structure-match" && assessment.registration) {
                 const registration = assessment.registration;
                 const detail = document.createElement("p");

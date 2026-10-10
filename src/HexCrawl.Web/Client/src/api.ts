@@ -70,6 +70,15 @@ export type SourceMapCompatibilityAssessment = {
     worldVersion: number;
     blockers: string[];
     canCorrectInPlace: boolean;
+    correction: {
+        status: "unavailable" | "candidates";
+        explanation: string;
+        candidates: Array<{
+            index: number;
+            alignment: MapRegistrationTransform;
+            maximumResidualSourcePixels: number;
+        }>;
+    } | null;
     registration: {
         status: "unavailable" | "candidates";
         explanation: string;
@@ -425,6 +434,20 @@ export class HexCrawlApi {
         return this.sendJson("POST",
             `/api/overworlds/${encodeURIComponent(worldId)}/source-maps/${encodeURIComponent(sourceMapId)}/motif-compatibility${query}`,
             {}, "Map pattern compatibility");
+    }
+
+    public applyMotifCorrection(
+        worldId: string, sourceMapId: string, candidateIndex: number,
+        alignment: MapRegistrationTransform, expectedVersion: number,
+        procedure?: { id: string; revision: number }
+    ): Promise<Overworld> {
+        return this.sendJson("PUT",
+            `/api/overworlds/${encodeURIComponent(worldId)}/source-maps/${encodeURIComponent(sourceMapId)}/motif-correction`,
+            {
+                candidateIndex, alignment, expectedVersion,
+                procedureId: procedure?.id ?? null,
+                procedureRevision: procedure?.revision ?? null
+            }, "Replace unused world cells from checked image");
     }
 
     public applyMotifRegistration(
