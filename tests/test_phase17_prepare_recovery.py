@@ -44,6 +44,39 @@ class Phase17PrepareRecoveryTests(unittest.TestCase):
                     with self.assertRaisesRegex(RuntimeError, re.escape(expected)):
                         prepare.docker(*command)
 
+    def test_restore_cleans_only_isolated_instance_and_retains_private_failure_detail(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            dump = Path(temporary) / "backup.dump"
+            dump.write_bytes(b"mock archive")
+            operations = []
+
+            def fake_docker(*args, **kwargs):
+                operations.append(args)
+                if "pg_restore" in args:
+                    self.assertIn("--clean", args)
+                    self.assertIn("--if-exists", args)
+                    self.assertTrue(args[2].startswith("hex-crawl-phase17-restore-isolated-"))
+                    kwargs["stderr"].write(b'pg_restore: error: schema "public" already exists')
+                    raise RuntimeError("Docker exec/pg_restore failed (exit 1)")
+                return subprocess.CompletedProcess(args, 0, b"")
+
+            # A disposable target is never the actual shared PostgreSQL host.
+            with mock.patch.dict(prepare.os.environ, {
+                "GITHUB_RUN_ID": "isolated", "GITHUB_RUN_ATTEMPT": "1"
+            }):
+                with mock.patch.object(prepare, "docker", side_effect=fake_docker):
+                    with mock.patch.object(prepare.subprocess, "run",
+                                           return_value=subprocess.CompletedProcess([], 0)) as subprocess_run:
+                        with self.assertRaisesRegex(RuntimeError, "duplicate object"):
+                            prepare.restore_and_verify_database(
+                                "postgres:18", dump, "9|1|id|2|id|2|4")
+            self.assertTrue(any(op[0] == "run" and "--network" in op for op in operations))
+            self.assertTrue(any(call.args[0][:3] == ["docker", "rm", "-f"]
+                                for call in subprocess_run.call_args_list))
+            self.assertTrue((Path(temporary) / "isolated-postgres-restore.log").exists())
+            self.assertFalse(any(op[0] == "exec" and op[1] == prepare.POSTGRES
+                                 for op in operations))
+
     def test_archive_restoration_matches_files_and_detects_symlinks(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
