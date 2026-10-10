@@ -417,22 +417,18 @@ public sealed partial class CrawlRuntimeEngine
         CellExpeditionState state, string message, double? distance = null,
         string? unit = null, Guid? encounterId = null)
     {
-        var recorded = events.Add(watch, kind, state.ElapsedTravelTime, null, message,
-            distance, unit, encounterOccurrenceId: encounterId);
-        events.NewEvents[^1] = recorded with { Cell = state.Traversal.CurrentCell };
+        events.Add(watch, kind, state.ElapsedTravelTime, null, message,
+            distance, unit, encounterOccurrenceId: encounterId,
+            cell: state.Traversal.CurrentCell);
     }
 
     private static void AddCellCrossingEvent(
         EventCollector events, int watch, CrawlRuntimeEventKind kind,
         TimeSpan elapsed, WorldCellId cell, int interfaceIndex, int reciprocalIndex)
     {
-        var recorded = events.Add(watch, kind, elapsed, null, $"Cell {cell} boundary crossed.");
-        events.NewEvents[^1] = recorded with
-        {
-            Cell = cell,
-            BoundaryInterfaceIndex = interfaceIndex,
-            ReciprocalInterfaceIndex = reciprocalIndex
-        };
+        events.Add(watch, kind, elapsed, null, $"Cell {cell} boundary crossed.",
+            cell: cell, boundaryInterfaceIndex: interfaceIndex,
+            reciprocalInterfaceIndex: reciprocalIndex);
     }
 
     private static CellWatchAdvanceResult TriggerCellEncounter(

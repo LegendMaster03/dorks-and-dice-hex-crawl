@@ -220,12 +220,9 @@ public sealed partial class CrawlRuntimeEngine
             encounterOutcome: encounter.Kind,
             encounterNote: encounter.Note,
             encounterProvenance: encounter.Provenance,
-            encounterOccurrenceId: occurrenceId);
-        if (cell is null)
-            return recorded;
-        var qualified = recorded with { Cell = cell };
-        events.NewEvents[^1] = qualified;
-        return qualified;
+            encounterOccurrenceId: occurrenceId,
+            cell: cell);
+        return recorded;
     }
 
     private static WatchAdvanceResult TriggerEncounter(
