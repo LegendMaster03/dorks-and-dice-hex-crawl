@@ -330,12 +330,13 @@ mid-rollout cancellation, fail before building if the running rollback
 image cannot be established or the production Compose configuration fails
 preflight, and attempt restoration only after deploy/verification
 failure. These changes are on feature branches only. The
-[isolated deployment rehearsal](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38016975981)
+[isolated deployment rehearsal](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38017893857)
 executed both workflows' capture, deploy, verify and restore blocks with
-real disposable Docker services, including healthy rollout, failed-readiness
-recovery, mismatched revision, failed Compose startup after removing the
-previous container, and preserved volume file checks. Both services passed
-all five cases. The production rollback branch has **not** been tested on live services. The
+real disposable Docker services, including healthy rollout, configuration preflight failure preserving the
+running container, failed-readiness recovery, mismatched revision, failed
+Compose startup after removing the previous container, and missing previous
+container abort before modifying any image tag. Persistent volume content was
+preserved. Both services passed all six cases. The production rollback branch has **not** been tested on live services. The
 [Phase 16 release runbook](phase-16-release-runbook.md) describes the
 signed-in read-only tester gate and the exact operator requirements.
 **These changes do not authorize deployment or merger.**
