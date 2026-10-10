@@ -331,8 +331,9 @@ failure. These changes are on feature branches only. The
 [isolated deployment rehearsal](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38016975981)
 executed both workflows' capture, deploy, verify and restore blocks with
 real disposable Docker services, including healthy rollout, failed-readiness
-recovery, mismatched revision and preserved volume file checks. Both services
-passed. The production rollback branch has **not** been tested on live services. The
+recovery, mismatched revision, failed Compose startup after removing the
+previous container, and preserved volume file checks. Both services passed
+all five cases. The production rollback branch has **not** been tested on live services. The
 [Phase 16 release runbook](phase-16-release-runbook.md) describes the
 signed-in read-only tester gate and the exact operator requirements.
 **These changes do not authorize deployment or merger.**
