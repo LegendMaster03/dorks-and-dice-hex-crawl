@@ -64,7 +64,15 @@ public sealed class ExpeditionStartService(
         presentation.Validate();
 
         var world = await coreService.GetOverworldAsync(overworldId, owner, cancellationToken);
+        // Phase 18 is responsible for generalized boundary-based movement.
+        // Avoid creating a materialized procedure revision for an unsupported start.
+        if (!world.World.HasLegacyHexGrid)
+            throw new NotSupportedException(
+                "Generalized world movement is gated until Phase 18. This world was not changed.");
         var selected = await ResolveProcedureAsync(owner, selection, cancellationToken);
+        if (selected.Procedure.TilingDsSymbol != LegacyHexTilingCompatibility.HexQuotient)
+            throw new NotSupportedException(
+                "The selected procedure requires a different tiling; this runtime supports hexagonal worlds only.");
 
         var expeditionId = Guid.NewGuid();
         var state = new ExpeditionState

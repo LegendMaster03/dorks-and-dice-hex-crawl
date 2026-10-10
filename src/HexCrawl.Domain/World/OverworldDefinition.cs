@@ -20,7 +20,7 @@ public sealed record OverworldDefinition
     public PeriodicWorldTiling? Tiling { get; init; }
 
     public PeriodicWorldTiling SpatialTiling =>
-        Tiling ?? LegacyHexTilingCompatibility.Create(Grid);
+        Tiling ?? LegacyHexTilingCompatibility.FromGrid(Grid);
 
     public void ValidateSpatialAuthority()
     {

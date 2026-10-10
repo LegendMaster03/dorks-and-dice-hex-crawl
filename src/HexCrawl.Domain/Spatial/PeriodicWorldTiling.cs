@@ -78,18 +78,9 @@ public sealed record PeriodicWorldTiling(
         var points = Realization.Polygons[address.MotifCellId]
             .Select(p => Transform(p, address.Translation)).ToArray();
         double twiceArea = 0, centroidX = 0, centroidY = 0;
-        for (int i = 0; i < points.Length; i++)
-        {
-            var a = points[i]; var b = points[(i + 1) % points.Length];
-            double cross = a.X * b.Y - b.X * a.Y;
-            twiceArea += cross;
-            centroidX += (a.X + b.X) * cross;
-            centroidY += (a.Y + b.Y) * cross;
-        }
         // Translate the calculation to a local origin to avoid catastrophic
         // cancellation when a small polygon is very far from world zero.
         var zero = points[0];
-        twiceArea = 0; centroidX = 0; centroidY = 0;
         foreach (var (a, b) in points.Select((p, i) => (p, points[(i + 1) % points.Length])))
         {
             double ax = a.X - zero.X, ay = a.Y - zero.Y;

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 namespace HexCrawl.Domain.Spatial;
 
@@ -12,6 +13,10 @@ namespace HexCrawl.Domain.Spatial;
 /// </summary>
 public static class LegacyHexTilingCompatibility
 {
+    private static readonly ConditionalWeakTable<HexGridDefinition, PeriodicWorldTiling> Cached = new();
+    public static PeriodicWorldTiling FromGrid(HexGridDefinition grid) =>
+        Cached.GetValue(grid, Create);
+
     public const string MotifId = "hex";
     public const string HexQuotient = "<1:1,1,1:6,3>";
 
@@ -69,7 +74,7 @@ public static class LegacyHexTilingCompatibility
         var corners = HexGeometry.Corners(grid, new HexCoordinate(0, 0))
             .Select(p => new TilingWorldPoint(p.X - zero.X, p.Y - zero.Y)).ToArray();
         var metric = new PeriodicMetricRealization(
-            grid.NeighborCenterDistance.Unit.ToString(),
+            grid.NeighborCenterDistance.Unit.Symbol,
             new TilingWorldPoint(translationU.X, translationU.Y),
             new TilingWorldPoint(translationV.X, translationV.Y),
             new Dictionary<string, IReadOnlyList<TilingWorldPoint>>(StringComparer.Ordinal)
