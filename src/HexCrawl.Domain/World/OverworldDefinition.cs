@@ -62,7 +62,7 @@ public sealed record OverworldDefinition
     public IReadOnlyList<EnvironmentAnnotation> EnvironmentAnnotations { get; init; } = [];
 
     public IReadOnlyList<SpatialFeature> FeaturesIntersecting(HexCoordinate coordinate) =>
-        Features.Where(feature => FeatureIntersection.IntersectsHex(Grid, coordinate, feature)).ToArray();
+        FeaturesIntersecting(LegacyHexTilingCompatibility.ToAddress(coordinate));
 
     public void ValidateEnvironmentAnnotations()
     {
