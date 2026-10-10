@@ -24,6 +24,72 @@ public sealed class Phase18CellDecisionEndpointsTests
     private static readonly ResolutionProvenance Manual = new(ResolutionSource.ManualRoll);
 
     [Fact]
+    public async Task MixedMotifHttpTravelUsesExactReciprocalAtomicInterfacesAndPersists()
+    {
+        const string mixedSymbol = "<10:2 5 4 6 7 8 10,1 4 6 5 9 10,3 5 7 8 9 10:3 3 4,5 5>";
+        await WithWorldAsync(async (db, store, world, procedure, cell) =>
+        {
+            var tiling = world.Tiling!;
+            var boundary = tiling.Boundaries(cell.Id.Address).First(x =>
+                x.To.Address.MotifCellId != cell.Id.Address.MotifCellId);
+            var midpoint = Midpoint(boundary);
+            var heading = midpoint - cell.Center;
+            var start = BaseState(cell) with
+            {
+                Traversal = BaseState(cell).Traversal with
+                {
+                    SelectedExitInterfaceIndex = boundary.InterfaceIndex
+                }
+            };
+            await SeedAsync(store, world, procedure, start);
+            using (var factory = TestWebHost.Create(db, "alice"))
+            using (var client = factory.CreateClient())
+            {
+                using var advanced = await client.PostAsJsonAsync(
+                    $"/api/expeditions/{start.Id:D}/cells/advance",
+                    new AdvanceCellWatchRequest(1, Plan(heading), Inputs(1)), ApiJson);
+                Assert.True(advanced.IsSuccessStatusCode,
+                    $"Mixed-motif crossing rejected: {await advanced.Content.ReadAsStringAsync()}");
+                var result = await advanced.Content.ReadFromJsonAsync<JsonElement>();
+                var runtime = result.GetProperty("expedition");
+                Assert.Equal(1, runtime.GetProperty("completedWatches").GetInt32());
+                Assert.Equal(boundary.To, JsonSerializer.Deserialize<WorldCellId>(
+                    runtime.GetProperty("currentCell").GetRawText(), ApiJson));
+                Assert.Equal(JsonValueKind.Null, runtime.GetProperty("currentHex").ValueKind);
+                Assert.Equal(JsonValueKind.Null, runtime.GetProperty("distanceTraveled").ValueKind);
+                Assert.Empty(result.GetProperty("knownHexes").EnumerateArray());
+                var exit = Assert.Single(result.GetProperty("history").EnumerateArray(),
+                    e => e.GetProperty("kind").GetString() == "CellExited");
+                var entered = Assert.Single(result.GetProperty("history").EnumerateArray(),
+                    e => e.GetProperty("kind").GetString() == "CellEntered");
+                Assert.Equal(boundary.InterfaceIndex,
+                    exit.GetProperty("boundaryInterfaceIndex").GetInt32());
+                Assert.Equal(boundary.ReciprocalInterfaceIndex,
+                    exit.GetProperty("reciprocalInterfaceIndex").GetInt32());
+                Assert.Equal(boundary.ReciprocalInterfaceIndex,
+                    entered.GetProperty("boundaryInterfaceIndex").GetInt32());
+                Assert.Equal(boundary.InterfaceIndex,
+                    entered.GetProperty("reciprocalInterfaceIndex").GetInt32());
+                Assert.Equal(cell.Id, JsonSerializer.Deserialize<WorldCellId>(
+                    exit.GetProperty("cell").GetRawText(), ApiJson));
+                Assert.Equal(boundary.To, JsonSerializer.Deserialize<WorldCellId>(
+                    entered.GetProperty("cell").GetRawText(), ApiJson));
+            }
+
+            var reopened = new PostgresHexCrawlStore(db);
+            await reopened.InitializeAsync();
+            var saved = await reopened.GetExpeditionAsync(start.Id, "alice");
+            var persisted = Assert.IsType<CellExpeditionState>(saved!.Runtime);
+            Assert.Equal(boundary.To, persisted.Traversal.CurrentCell);
+            Assert.Equal(cell.Id, persisted.Traversal.EnteredFrom);
+            Assert.Equal(boundary.ReciprocalInterfaceIndex,
+                persisted.Traversal.EntryInterfaceIndex);
+            Assert.Null(persisted.DistanceTraveled);
+            Assert.Null(await reopened.GetExpeditionAsync(start.Id, "bob"));
+        }, mixedSymbol);
+    }
+
+    [Fact]
     public async Task SavedProcedureCellStartCreatesAuthoritativeCellSessionWithNoHexProjection()
     {
         await WithWorldAsync(async (database, store, world, procedure, cell) =>
@@ -269,13 +335,14 @@ public sealed class Phase18CellDecisionEndpointsTests
 
     private static async Task WithWorldAsync(
         Func<string, PostgresHexCrawlStore, OverworldDefinition,
-            CampaignProcedure, WorldCellGeometry, Task> action)
+            CampaignProcedure, WorldCellGeometry, Task> action,
+        string dsSymbol = "<1:1,1,1:4,4>")
     {
         var database = TestWebHost.NewDatabasePath();
         try
         {
             var generated = DelaneyDressHarmonicMetricRealization.Construct(
-                "<1:1,1,1:4,4>", 1.5, "world-unit");
+                dsSymbol, 1.5, "world-unit");
             Assert.Equal("realized", generated.Status);
             var tiling = new PeriodicWorldTiling(
                 Guid.NewGuid(), generated.Topology!, generated.Realization!,
