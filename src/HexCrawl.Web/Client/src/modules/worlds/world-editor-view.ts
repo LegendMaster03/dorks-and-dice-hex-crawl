@@ -824,6 +824,8 @@ export async function renderWorldEditor(
     mapSurface.setCellSelectionHandler(cell => {
         selectedPeriodicCell = cell;
         renderPeriodicCell();
+        if (cell) root.dispatchEvent(
+            new CustomEvent("hex-crawl:world-cell-selected", { detail: cell.id }));
     });
 
     mapSurface.setHexSelectionHandler(hex => {

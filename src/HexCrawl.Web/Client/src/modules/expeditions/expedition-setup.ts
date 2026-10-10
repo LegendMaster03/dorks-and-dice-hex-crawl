@@ -1,7 +1,7 @@
 import type { HexCrawlApi } from "../../api";
 import { ProcedureComposerApi } from "../../procedure-composer-api";
 import type { SavedProcedureSummary } from "../../procedure-composer-types";
-import type { PresentationProfile, ProcedurePreset } from "../../types";
+import type { PresentationProfile, ProcedurePreset, WorldCellId } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
 import { campaignProcedureSummary, renderProcedureMechanicList } from "../../campaign-procedure-view";
 import {
@@ -64,10 +64,26 @@ export async function enhanceExpeditionSetup(
             <label>North/south repeat <input name="v" type="number" step="1" value="0" required></label>`;
         const selectCell = select(start, "motifCellId");
         cells.forEach((cell, index) => selectCell.append(option(cell.id, `Cell shape ${index + 1}`)));
+        const selectionHint = document.createElement("p");
+        selectionHint.className = "hc-hint";
+        selectionHint.textContent =
+            "Click a cell on the map to choose the expedition start, or enter the repeating cell position directly.";
+        start.after(selectionHint);
         const info = form.querySelector<HTMLElement>(".hc-hint:last-of-type");
         if (info) info.textContent =
             "Generalized expeditions require a saved, executable ruleset revision compatible with this world. Starting cells are identified by their repeating position, not axial hex coordinates.";
     }
+    const acceptMapCell = (event: Event): void => {
+        if (world.grid || !world.tiling) return;
+        const cell = (event as CustomEvent<WorldCellId>).detail;
+        if (!cell || cell.tilingId !== world.tiling.id) return;
+        const selectCell = select(form, "motifCellId");
+        if (![...selectCell.options].some(item => item.value === cell.address.motifCellId)) return;
+        selectCell.value = cell.address.motifCellId;
+        input(form, "u").value = String(cell.address.translation.u);
+        input(form, "v").value = String(cell.address.translation.v);
+    };
+    if (!world.grid) root.addEventListener("hex-crawl:world-cell-selected", acceptMapCell);
     const presentation = select(form, "presentation");
     for (const policy of presentations) presentation.append(option(policy.key, policy.name));
     if (presentations.some(policy => policy.key === "exploration-map")) presentation.value = "exploration-map";
@@ -180,7 +196,10 @@ export async function enhanceExpeditionSetup(
         })();
     });
 
-    return () => form.remove();
+    return () => {
+        root.removeEventListener("hex-crawl:world-cell-selected", acceptMapCell);
+        form.remove();
+    };
 }
 
 function selectedPreset(presets: ProcedurePreset[], key: string): ProcedurePreset {
