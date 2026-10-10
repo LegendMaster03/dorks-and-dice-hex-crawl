@@ -142,6 +142,80 @@ public sealed class Phase17FullDatabaseMigrationTests
     }
 
     [Fact]
+    public async Task SchemaNineConvertsMultipleRotatedLargeOriginWorldsAtomically()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var store = new PostgresHexCrawlStore(database.ConnectionString);
+        await store.InitializeAsync();
+        var now = DateTimeOffset.UtcNow;
+        var originalWorlds = new List<OverworldDefinition>();
+        foreach (var (orientation, degrees) in new[] {
+            (HexOrientation.PointyTop, 17d),
+            (HexOrientation.FlatTop, 37d),
+            (HexOrientation.PointyTop, -49d)
+        })
+        {
+            var grid = new HexGridDefinition
+            {
+                Id = Guid.NewGuid(), Orientation = orientation,
+                Origin = new WorldPoint(1e9, -1e9), RotationDegrees = degrees,
+                HexRadiusWorldUnits = 1,
+                NeighborCenterDistance = new DistanceMeasure(12, DistanceUnit.Miles)
+            };
+            var map = new SourceMapRepresentation(Guid.NewGuid(), "legacy", "Map",
+                SourceMapRole.Gm, "existing-map-asset-key", false,
+                MapRegistrationTransform.Affine(1, 0, 0, 1, 10, -10),
+                [new WorldPoint(1e9, -1e9), new WorldPoint(1e9 + 5, -1e9),
+                    new WorldPoint(1e9 + 5, -1e9 + 5)]);
+            var world = new OverworldDefinition
+            {
+                Id = Guid.NewGuid(), Name = $"Legacy rotated {degrees}",
+                Grid = grid, SourceMaps = [map]
+            };
+            originalWorlds.Add(world);
+            await store.CreateOverworldAsync(new StoredOverworld(world, "owner", 4, now, now));
+        }
+        await using var connection = new NpgsqlConnection(database.ConnectionString);
+        await connection.OpenAsync();
+        await using (var downgrade = connection.CreateCommand())
+        {
+            downgrade.CommandText = """
+                UPDATE overworlds SET world_json = world_json - 'tiling' - 'formatVersion';
+                UPDATE hex_crawl_schema_migrations SET version = 9 WHERE version = 10;
+                """;
+            await downgrade.ExecuteNonQueryAsync();
+        }
+        var migrator = new PostgresSchemaMigrator(database.ConnectionString);
+        await migrator.MigrateAsync();
+        await migrator.MigrateAsync();
+        foreach (var original in originalWorlds)
+        {
+            var saved = await store.GetOverworldAsync(original.Id, "owner");
+            Assert.NotNull(saved);
+            Assert.Equal(4, saved!.Version);
+            Assert.Equal(original.Grid, saved.World.Grid);
+            Assert.True(LegacyHexTilingCompatibility.Matches(saved.World.SpatialTiling, original.Grid));
+            Assert.Equal(original.SourceMaps[0], Assert.Single(saved.World.SourceMaps));
+            var distant = new HexCoordinate(250000, -70000);
+            var reconstructed = saved.World.SpatialTiling.Resolve(
+                LegacyHexTilingCompatibility.ToAddress(distant));
+            var legacy = HexGeometry.Corners(original.Grid, distant);
+            for (var i = 0; i < legacy.Count; i++)
+                Assert.InRange(reconstructed.Polygon[i].DistanceTo(legacy[i]), 0, 2e-6);
+        }
+        await using var verify = connection.CreateCommand();
+        verify.CommandText = """
+            SELECT (SELECT MAX(version) FROM hex_crawl_schema_migrations),
+                   count(*) FROM overworlds
+                   WHERE world_json->>'formatVersion' = '2' AND world_json ? 'tiling';
+            """;
+        await using var reader = await verify.ExecuteReaderAsync();
+        Assert.True(await reader.ReadAsync());
+        Assert.Equal(10L, reader.GetInt64(0));
+        Assert.Equal(3L, reader.GetInt64(1));
+    }
+
+    [Fact]
     public async Task ConcurrentSchemaNineStartupsSerializeAndUpgradeExactlyOnce()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
