@@ -80,6 +80,14 @@ public sealed class Phase18CellTraversalGeometryTests
         var advanced = PeriodicCellTraversalGeometry.Advance(world, state, 100);
         Assert.Equal(CellCrossingStatus.Crosses, advanced.Crossing.Status);
 
+        var invalidCourse = advanced.Traversal with
+        {
+            TravelHeading = world.Resolve(edge.To.Address).Center - advanced.Traversal.Position,
+            SelectedExitInterfaceIndex = edge.ReciprocalInterfaceIndex
+        };
+        Assert.Equal(CellCrossingStatus.RequiresAdjudication,
+            PeriodicCellTraversalGeometry.NextCrossing(world, invalidCourse).Status);
+
         var returnCourse = advanced.Traversal with
         {
             TravelHeading = cell.Center - advanced.Traversal.Position,
