@@ -336,6 +336,53 @@ public sealed class Phase18CellExpeditionPersistenceTests
                 new DiscoverSubjectCommand(saved.Version, landmark.Id,
                     KnowledgeSubjectType.Location, "stale")));
 
+        var provenance = new ExpeditionConsequenceProvenance(
+            ExpeditionConsequenceSourceKind.Dm, "phase18-cell-delay");
+        var delay = new ExpeditionConsequence
+        {
+            Id = Guid.NewGuid(), ConsequenceKey = "cell-delay",
+            Category = ExpeditionConsequenceCategory.TimeDelay,
+            Target = new ExpeditionEffectTarget(ExpeditionEffectScope.Expedition),
+            Components = [new TimeDelayConsequenceComponent(2, TimeDelayUnit.Hours)],
+            Provenance = provenance
+        };
+        var delayedByJourney = ExpeditionConsequenceAggregateTransition.Apply(
+            discovered, delay, provenance);
+        Assert.Equal(ExpeditionConsequenceStatus.Applied, delayedByJourney.Status);
+        Assert.Equal(moved.ElapsedTravelTime + TimeSpan.FromHours(2),
+            ((CellExpeditionState)delayedByJourney.Expedition.Runtime).ElapsedTravelTime);
+        Assert.Equal(moved.DistanceTraveled,
+            ((CellExpeditionState)delayedByJourney.Expedition.Runtime).DistanceTraveled);
+
+        var interrupted = discovered with
+        {
+            Runtime = ((CellExpeditionState)discovered.Runtime) with
+            {
+                IntendedHeading = plan.IntendedHeading,
+                ActiveWatch = new CellActiveWatchState(2, TimeSpan.FromHours(4),
+                    TimeSpan.Zero, plan, ResolvedEncounter.None, true, null)
+            }
+        };
+        var deferred = ExpeditionConsequenceAggregateTransition.Apply(
+            interrupted, delay, provenance);
+        Assert.Equal(ExpeditionConsequenceStatus.Deferred, deferred.Status);
+        Assert.Equal(moved.ElapsedTravelTime,
+            ((CellExpeditionState)deferred.Expedition.Runtime).ElapsedTravelTime);
+
+        var effects = new ExpeditionEffectService(store, service);
+        var applied = await effects.ApplyConsequenceAsync(initial.Id, "alice",
+            new ApplyExpeditionConsequenceCommand(discovered.Version, delay));
+        Assert.Equal(ExpeditionConsequenceStatus.Applied, applied.Processing.Status);
+        var delayedRuntime = Assert.IsType<CellExpeditionState>(applied.Expedition.Runtime);
+        Assert.Equal(moved.ElapsedTravelTime + TimeSpan.FromHours(2),
+            delayedRuntime.ElapsedTravelTime);
+        Assert.Equal(moved.DistanceTraveled, delayedRuntime.DistanceTraveled);
+        Assert.Equal(moved.CompletedWatches, delayedRuntime.CompletedWatches);
+        var repeat = await effects.ApplyConsequenceAsync(initial.Id, "alice",
+            new ApplyExpeditionConsequenceCommand(applied.Expedition.Version, delay));
+        Assert.Equal(ExpeditionConsequenceStatus.AlreadyApplied, repeat.Processing.Status);
+        Assert.Equal(applied.Expedition.Version, repeat.Expedition.Version);
+
         var reopened = new PostgresHexCrawlStore(database.ConnectionString);
         await reopened.InitializeAsync();
         var loaded = await reopened.GetExpeditionAsync(initial.Id, "alice");
@@ -343,8 +390,9 @@ public sealed class Phase18CellExpeditionPersistenceTests
         var restored = Assert.IsType<CellExpeditionState>(loaded!.Runtime);
         restored.Validate(tiling);
         Assert.Equal(moved.Traversal.CurrentCell, restored.Traversal.CurrentCell);
-        Assert.Equal(moved.ElapsedTravelTime, restored.ElapsedTravelTime);
-        Assert.Equal(discovered.Version, loaded.Version);
+        Assert.Equal(moved.ElapsedTravelTime + TimeSpan.FromHours(2), restored.ElapsedTravelTime);
+        Assert.Equal(applied.Expedition.Version, loaded.Version);
+        Assert.Contains(loaded.Effects.AppliedConsequences, e => e.ConsequenceId == delay.Id);
         Assert.Equal(KnowledgeState.Discovered, loaded.Knowledge!.Entries[landmark.Id].State);
         Assert.Equal(exit.To, Assert.Single(loaded.Knowledge.KnownCells!));
         Assert.Empty(loaded.Knowledge.KnownHexes);
