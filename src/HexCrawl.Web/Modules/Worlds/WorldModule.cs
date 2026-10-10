@@ -25,6 +25,7 @@ public sealed class WorldModule : IHexCrawlModule
         api.MapPost("/overworlds", CreateOverworldAsync);
         api.MapPost("/overworlds/periodic", CreatePeriodicOverworldAsync);
         api.MapPost("/overworlds/{overworldId:guid}/cell-procedures", CreateCellTravelProcedureAsync);
+        api.MapGet("/overworlds/{overworldId:guid}/cell-procedures/compatibility", AssessCellProcedureAsync);
         api.MapGet("/overworlds/{overworldId:guid}", GetOverworldAsync);
         api.MapGet("/overworlds/{overworldId:guid}/cells/viewport", GetVisibleCellsAsync);
         api.MapGet("/overworlds/{overworldId:guid}/cells/containing", GetContainingCellsAsync);
@@ -148,6 +149,85 @@ public sealed class WorldModule : IHexCrawlModule
         return Results.Created($"/api/procedures/{saved.ProcedureId:D}",
             new { procedureId = saved.ProcedureId, revision = saved.Revision,
                 name = saved.Procedure.Name });
+    }
+
+    private static async Task<IResult> AssessCellProcedureAsync(
+        Guid overworldId, Guid procedureId, int revision,
+        HttpContext context, HexCrawlService service,
+        CampaignProcedureService procedures, CancellationToken cancellationToken)
+    {
+        if (procedureId == Guid.Empty || revision <= 0)
+            throw new ArgumentException("A saved ruleset id and pinned revision are required.");
+        var owner = UserId(context);
+        var stored = await service.GetOverworldAsync(overworldId, owner, cancellationToken);
+        if (stored.World.HasLegacyHexGrid || stored.World.Tiling is null)
+            throw new NotSupportedException(
+                "This compatibility check applies to generalized cell worlds.");
+        var procedure = (await procedures.GetAsync(
+            owner, procedureId, revision, cancellationToken)).Procedure;
+        var comparison = HexCrawl.Domain.Spatial.DelaneyDressTopology.Compare(
+            procedure.TilingDsSymbol,
+            stored.World.Tiling.Topology.QuotientDsSymbol,
+            stored.World.Tiling.Topology.TranslationDsSymbol);
+        if (comparison.Status is not (
+            HexCrawl.Domain.Spatial.TilingComparisonStatus.ExactIdentity
+            or HexCrawl.Domain.Spatial.TilingComparisonStatus.ChamberIsomorphic
+            or HexCrawl.Domain.Spatial.TilingComparisonStatus.ProvenEquivalent))
+            return Results.Ok(new
+            {
+                status = comparison.Status == HexCrawl.Domain.Spatial.TilingComparisonStatus.Inconclusive
+                    ? "review" : "incompatible",
+                explanation = comparison.Status == HexCrawl.Domain.Spatial.TilingComparisonStatus.Inconclusive
+                    ? "Equivalence with this world's cell pattern has not been established."
+                    : "The selected ruleset describes a different cell pattern from this world.",
+                worldVersion = stored.Version,
+                procedureId,
+                revision
+            });
+        GenericProcedureRuntime? bound;
+        try
+        {
+            bound = GenericProcedureRuntime.Bind(procedure);
+        }
+        catch (Exception error) when (
+            error is InvalidOperationException or NotSupportedException)
+        {
+            return Results.Ok(new
+            {
+                status = "unsupported",
+                explanation = "This saved ruleset does not currently provide executable generalized travel.",
+                worldVersion = stored.Version,
+                procedureId,
+                revision
+            });
+        }
+        if (bound.Movement.MechanicVersion != 2)
+            return Results.Ok(new
+            {
+                status = "unsupported",
+                explanation = "This saved ruleset uses legacy hex movement. Create or select a cell-travel ruleset.",
+                worldVersion = stored.Version,
+                procedureId,
+                revision
+            });
+        if (bound.Movement.TravelResolution == TravelResolutionMode.ContinuousDistance
+            && stored.World.Tiling.PhysicalDistancePerWorldUnit is null)
+            return Results.Ok(new
+            {
+                status = "needs-calibration",
+                explanation = "Physical-distance travel needs a calibrated world. Cell-step travel works without physical scale.",
+                worldVersion = stored.Version,
+                procedureId,
+                revision
+            });
+        return Results.Ok(new
+        {
+            status = "ready",
+            explanation = "This saved ruleset supports the selected world geometry and travel mode.",
+            worldVersion = stored.Version,
+            procedureId,
+            revision
+        });
     }
 
     private static async Task<IResult> GetOverworldAsync(
