@@ -145,10 +145,14 @@ def main(workflow, service):
                     spec = importlib.util.spec_from_file_location("phase16_helper", helper)
                     module = importlib.util.module_from_spec(spec)
                     spec.loader.exec_module(module)
+                    cwd = Path.cwd()
                     try:
+                        os.chdir(root)
                         module.verify(service, str(env_file), fields["snapshot_dir"])
                     except Exception as error:
                         print(f"{service}: isolated preflight diagnostic {type(error).__name__}: {error}", flush=True)
+                    finally:
+                        os.chdir(cwd)
                     raise
                 assert (Path(fields["snapshot_dir"]) / "rollback.compose.yml").exists()
             return fields
