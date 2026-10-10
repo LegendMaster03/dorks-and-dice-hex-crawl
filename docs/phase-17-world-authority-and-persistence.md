@@ -56,6 +56,30 @@ New hex worlds also serialize the generalized tiling plus legacy grid projection
 
 **Unverified here:** current live tester database inventory, backup/asset recovery, real deployment smoke tests and release authorization. Do not mark those gates complete based only on CI tests.
 
+## One-time schema-10 deployment attestation
+
+The main-branch deploy workflow deliberately fails **before touching the running service** unless an operator has created a private recovery attestation at `/mnt/HDDs/www/dorks-and-dice-hex-crawl/phase17-recovery-attestation.json` (or has configured `PHASE17_RECOVERY_MANIFEST` on the runner). No backup files or credentials belong in Git. This is a **cutover-specific fail-closed gate**, to be removed after authorized schema-10 deployment and live regression acceptance.
+
+The operator must actually restore the database and map assets into an isolated environment, verify sample retained IDs/versions, procedure and event counts, and compare restored map-asset hashes. Only then record the following fields in the private manifest, using absolute backup artifact paths and their verified SHA-256 hashes:
+
+```json
+{
+  "migration": "hex-crawl-9-to-10",
+  "deploymentSha": "exact-main-commit-sha-to-deploy",
+  "postgresBackupPath": "/secure/backups/hex-crawl-pre-phase17.dump",
+  "postgresBackupSha256": "64-hex-digit-sha256",
+  "mapAssetsBackupPath": "/secure/backups/hex-crawl-map-assets.tar.gz",
+  "mapAssetsBackupSha256": "64-hex-digit-sha256",
+  "isolatedPostgresRestoreVerified": true,
+  "isolatedMapAssetRestoreVerified": true,
+  "authorizedForCutover": true
+}
+```
+
+The deployment checks the exact commit and both backup checksums. The attestation represents **operator evidence of a completed recovery rehearsal**, not a replacement for doing one. CI also runs an isolated `pg_dump` / `pg_restore` and map-archive extraction/diff against disposable smoke data; this is separate from and does not replace the live pre-cutover backup and recovery gate.
+
+The existing image-only rollback path is **not sufficient** for a schema-10 deployment: the prior app expects schema 9. If a schema-10 deployment fails after database upgrade, restore the verified schema-9 database and associated asset backup under controlled downtime before relaunching the previous image. Do not rely on auto-replacing the container alone.
+
 ## Phase 18 integration
 
 Consume `WorldCellId`, `PeriodicCellAddress`, polygon geometry, and reciprocal `WorldCellBoundary` from `PeriodicWorldTiling`. Introduce cell-based runtime state **additively** with preserved historical axial state during cutover. Define movement distances from actual boundary/route geometry and explicit ambiguous-vertex handling. Prove that old hex traversal, progress, navigation and event history replay unchanged before retiring the hex adapter. Phase 19 should replace legacy hex-only canvas geometry using bounded generalized world polygon enumeration.
