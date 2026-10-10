@@ -268,3 +268,48 @@ must be recentered by exact periodic translations before validation. These
 bounds are computational limits, not statements that the underlying
 Euclidean tiling is invalid. Neither capability creates or modifies saved
 expeditions, worlds, maps, assets, or PostgreSQL schema.
+
+## Isolated four-way old/new HTTP and rollback qualification — October 9, 2026
+
+**PASS in isolated CI; deployed existing-tester verification remains OPEN.**
+The [Phase 16 compatibility workflow (run 38015153101)](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38015153101)
+passed all four independent Docker-container HTTP pairings. The actual
+working application revision was Hex Crawl `2bfb4c6a43647a7c8b289dad21e1a329fcd6d93c`
+and the generalized Surveyor revision was `83c1c2ca0db930285e036a91f97af3927b221bdc`.
+The reference old revisions were pinned to Hex Crawl
+`afb4760f4ea30366f3516e307e6335a1b6edd12c` and Surveyor
+`e9ad1cc9f04ce375fa1baf241894357abc116e09`.
+These are **pinned main-branch baseline revisions**, not independently
+verified current production deployment hashes.
+
+| Hex Crawl container | Surveyor container | Actual isolated HTTP outcome |
+| --- | --- | --- |
+| Old baseline | Old baseline | PASS: authenticated v2 detection recognizes the hex source map |
+| Old baseline | New feature | PASS: v2 detection and original client remain compatible |
+| New feature | Old baseline | PASS: v2 detection; v3 opt-in returns explicit `unsupported` |
+| New feature | New feature | PASS: v2 detection; v3 opt-in derives a non-authoritative `consistent-candidate` from a separate repeated square raster |
+
+Every pairing starts disposable PostgreSQL and map binaries on an isolated
+Docker network. It creates a world, imports a real PNG, exercises authenticated
+Surveyor v2 through Hex Crawl, advances an expedition, and verifies that
+analysis does not change the stored world version or map registration.
+Surveyor v2 additionally proves positive detection of the independent hex
+fixture and rejects unauthenticated requests. New v3 remains opt-in and
+read-only. The new/new job also stops the new Hex Crawl container and starts
+the old baseline against **the same retained CI database and map-asset volume**;
+the old application successfully reloads the unchanged world/version, map
+binary, and saved advanced expedition. This is a rollback **rehearsal**, not
+permission for an actual production rollback.
+
+The matrix runs through
+`.github/workflows/phase16-compatibility.yml` and
+`.github/scripts/phase16-compatibility.py`, using fixed test credentials and
+ephemeral resources only. It never accesses a tester account or existing
+production data. No Phase 16 schema migration is required.
+
+**Still OPEN / release NO-GO:** verify the actual installed service versions,
+perform signed-in read-only smoke checks against representative existing
+tester worlds, source-map binaries, procedures and persisted expeditions, and
+confirm operational rollback readiness against those existing records. No
+merge, production deployment, database reset, or asset migration is
+authorized by this isolated matrix.
