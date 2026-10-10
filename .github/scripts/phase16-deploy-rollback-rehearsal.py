@@ -172,6 +172,39 @@ def main(workflow, service):
             initial = captured()
             assert initial["available"] == "true" and initial["image"] == original
             run(steps["preflight"], root, env)
+            # Real Compose normalization must reject each override while the
+            # healthy prior container and exact rollback artifact stay intact.
+            candidate = root / "docker-compose.yml"
+            original_definition = candidate.read_text()
+            variants = {
+                "read-only-volume": original_definition.replace(
+                    "      - data:/data",
+                    "      - type: volume\n        source: data\n        target: /data\n        read_only: true"),
+                "command": original_definition.replace(
+                    "    restart: unless-stopped\n",
+                    '    restart: unless-stopped\n    command: ["sh", "-c", "exit 1"]\n'),
+                "entrypoint": original_definition.replace(
+                    "    restart: unless-stopped\n",
+                    '    restart: unless-stopped\n    entrypoint: ["/bin/false"]\n'),
+                "published-port": original_definition.replace(
+                    "    restart: unless-stopped\n",
+                    '    restart: unless-stopped\n    ports:\n      - "127.0.0.1:49150:8080"\n'),
+                "privileged": original_definition.replace(
+                    "    restart: unless-stopped\n",
+                    "    restart: unless-stopped\n    privileged: true\n"),
+                "network-alias": original_definition.replace(
+                    "    networks:\n      - dorks-and-dice-backend\n",
+                    "    networks:\n      dorks-and-dice-backend:\n        aliases: [unreviewed-host]\n")
+            }
+            for label, altered in variants.items():
+                assert altered != original_definition, label
+                candidate.write_text(altered)
+                try:
+                    run(steps["preflight"], root, env, expected_success=False)
+                    preserved(service, original)
+                finally:
+                    candidate.write_text(original_definition)
+                print(f"{service}: rejected {label} before replacement PASS", flush=True)
             missing_env = dict(env, DEPLOY_ENV_FILE=str(root / "missing.env"))
             run(steps["preflight"], root, missing_env, expected_success=False)
             env_file.write_text("PHASE16_SENTINEL=invalid\n")
