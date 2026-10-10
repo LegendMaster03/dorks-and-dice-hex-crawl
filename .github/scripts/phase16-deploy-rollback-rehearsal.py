@@ -186,6 +186,12 @@ def main(workflow, service):
                 "entrypoint": original_definition.replace(
                     "    restart: unless-stopped\n",
                     '    restart: unless-stopped\n    entrypoint: ["/bin/false"]\n'),
+                "empty-command": original_definition.replace(
+                    "    restart: unless-stopped\n",
+                    "    restart: unless-stopped\n    command: []\n"),
+                "empty-entrypoint": original_definition.replace(
+                    "    restart: unless-stopped\n",
+                    "    restart: unless-stopped\n    entrypoint: []\n"),
                 "published-port": original_definition.replace(
                     "    restart: unless-stopped\n",
                     '    restart: unless-stopped\n    ports:\n      - "127.0.0.1:49150:8080"\n'),
