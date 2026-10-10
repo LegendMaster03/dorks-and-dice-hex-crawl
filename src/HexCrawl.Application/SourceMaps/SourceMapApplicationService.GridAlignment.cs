@@ -73,6 +73,35 @@ public sealed partial class SourceMapApplicationService
         return await SaveAsync(updated, command.ExpectedVersion, cancellationToken);
     }
 
+    /// <summary>
+    /// Save an independently rechecked detected alignment in a single
+    /// optimistic-versioned world aggregate write. Geometry and pinned
+    /// procedure revisions remain untouched.
+    /// </summary>
+    public async Task<StoredOverworld> RegisterComputedAffineAsync(
+        Guid overworldId, Guid sourceMapId, string ownerUserId,
+        MapRegistrationTransform alignment, long expectedVersion,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(alignment);
+        var current = await GetOverworldAsync(overworldId, ownerUserId, cancellationToken);
+        RequireVersion(expectedVersion, current.Version);
+        if (current.World.HasLegacyHexGrid)
+            throw new NotSupportedException(
+                "Detected motif placement is not the legacy hex-grid alignment workflow.");
+        var existing = Find(current, sourceMapId);
+        if (existing.PixelWidth <= 0 || existing.PixelHeight <= 0)
+            throw new InvalidOperationException("This map must have valid raster dimensions.");
+        ValidateAffine(alignment);
+        var updated = existing with
+        {
+            Alignment = alignment,
+            WorldCoverageBoundary = AffineRegistrationSolver.Coverage(
+                alignment, existing.PixelWidth, existing.PixelHeight)
+        };
+        return await ReplaceAsync(current, sourceMapId, updated, expectedVersion, cancellationToken);
+    }
+
     private static void ValidateAffine(MapRegistrationTransform transform)
     {
         if (transform.Kind != MapRegistrationTransformKind.Affine

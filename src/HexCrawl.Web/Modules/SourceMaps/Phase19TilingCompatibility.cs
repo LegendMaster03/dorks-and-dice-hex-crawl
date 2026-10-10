@@ -8,7 +8,10 @@ namespace HexCrawl.Web.Api;
 public sealed record Phase19CompatibilityAssessment(
     string Status, string WorldShape, string? ObservedShape, string? ProcedureShape,
     string Explanation, string? WorldComparison, string? ProcedureComparison,
-    long WorldVersion, IReadOnlyList<string> Blockers, bool CanCorrectInPlace);
+    long WorldVersion, IReadOnlyList<string> Blockers, bool CanCorrectInPlace)
+{
+    public Phase19RasterRegistrationResult? Registration { get; init; }
+}
 
 /// <summary>
 /// Advisory, read-only comparison. Candidate raster observations are never an
@@ -75,10 +78,17 @@ public static class Phase19TilingCompatibility
                 : $"The image appears structurally compatible with {worldName}."
                     + " Its measured geometry still requires independent checks of "
                     + "scale, rotation, phase, and existing registrations.";
-        return new(mismatched ? "mismatch" : uncertain ? "inconclusive" : "structure-match",
+        return new Phase19CompatibilityAssessment(
+            mismatched ? "mismatch" : uncertain ? "inconclusive" : "structure-match",
             worldName, observedName, procedureName, explanation,
             worldComparison.Status.ToString(), procedureComparison?.Status.ToString(),
-            worldVersion, blockers, false);
+            worldVersion, blockers, false)
+        {
+            Registration = mismatched || uncertain || worldComparison.Status is not (
+                    TilingComparisonStatus.ExactIdentity or TilingComparisonStatus.ChamberIsomorphic
+                        or TilingComparisonStatus.ProvenEquivalent)
+                ? null : Phase19RasterRegistration.Assess(world, observed)
+        };
     }
 
     private static bool Incompatible(TilingComparisonStatus value) =>

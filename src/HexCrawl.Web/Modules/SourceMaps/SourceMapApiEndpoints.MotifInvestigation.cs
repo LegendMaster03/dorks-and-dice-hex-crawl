@@ -48,8 +48,59 @@ public static partial class SourceMapApiEndpoints
                 + $"{stored.World.Locations.Count} locations with world-space positions.");
         if (stored.World.EnvironmentAnnotations.Count > 0)
             blockers.Add($"{stored.World.EnvironmentAnnotations.Count} environment annotations.");
-        return Results.Ok(Phase19TilingCompatibility.Assess(
-            stored.World.SpatialTiling, analyzed.Value, procedure, blockers, stored.Version));
+        var assessment = Phase19TilingCompatibility.Assess(
+            stored.World.SpatialTiling, analyzed.Value, procedure, blockers, stored.Version);
+        return Results.Ok(stored.World.HasLegacyHexGrid
+            ? assessment with { Registration = null } : assessment);
+    }
+
+    private sealed record ApplyMotifRegistrationRequest(
+        int CandidateIndex, HexCrawl.Domain.World.MapRegistrationTransform Alignment,
+        long ExpectedVersion);
+
+    /// <summary>
+    /// Re-run the same independent image checks at the save boundary. A client
+    /// can select a preview, but can not submit an arbitrary affine transform.
+    /// Only source-map alignment changes; world topology and procedures do not.
+    /// </summary>
+    private static async Task<IResult> ApplyMotifRegistrationAsync(
+        Guid overworldId, Guid sourceMapId,
+        ApplyMotifRegistrationRequest request,
+        HttpContext context,
+        SourceMapApplicationService sourceMaps,
+        IMapAssetStore assets,
+        IPeriodicMotifInvestigationService surveyor,
+        HexCrawlService crawls,
+        CancellationToken cancellationToken)
+    {
+        var owner = UserId(context);
+        var world = await crawls.GetOverworldAsync(overworldId, owner, cancellationToken);
+        if (request.ExpectedVersion != world.Version)
+            throw new HexCrawlConcurrencyException(
+                "The world changed while the detected map placement was being reviewed. Reload and check it again.");
+        if (world.World.HasLegacyHexGrid)
+            throw new NotSupportedException(
+                "Use the existing hex-grid alignment or manual placement for this world.");
+        if (request.Alignment is null)
+            throw new ArgumentException("A selected verified map placement is required.");
+
+        var analyzed = await InvestigateMotifAsync(overworldId, sourceMapId,
+            context, sourceMaps, assets, surveyor, cancellationToken);
+        if (analyzed is not Ok<PeriodicMotifInvestigation> observation
+            || observation.Value is null)
+            return analyzed;
+        var options = Phase19RasterRegistration.Assess(
+            world.World.SpatialTiling, observation.Value);
+        if (options.Status != "candidates"
+            || !options.Candidates.Any(candidate => candidate.Index == request.CandidateIndex
+                && Phase19RasterRegistration.Equivalent(candidate.Alignment, request.Alignment)))
+            throw new HexCrawlConflictException(
+                "The detected placement could not be verified against the saved world and current image. Check the map again before saving.");
+
+        var result = await sourceMaps.RegisterComputedAffineAsync(
+            overworldId, sourceMapId, owner, request.Alignment, request.ExpectedVersion,
+            cancellationToken);
+        return Results.Ok(OverworldContract.From(result));
     }
 
     private static async Task<IResult> InvestigateMotifAsync(
