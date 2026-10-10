@@ -67,8 +67,12 @@ public sealed partial class PostgresHexCrawlStore
         {
             return null;
         }
+        var world = Deserialize<WorldSnapshot>(reader.GetString(0)).ToDomain();
+        if (world.Id != overworldId)
+            throw new InvalidDataException(
+                "Persisted overworld identity disagrees with the requested database row.");
         return new StoredOverworld(
-            Deserialize<WorldSnapshot>(reader.GetString(0)).ToDomain(),
+            world,
             ownerUserId,
             reader.GetInt64(1),
             ReadTimestamp(reader, 2),
