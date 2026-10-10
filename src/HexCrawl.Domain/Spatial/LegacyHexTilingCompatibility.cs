@@ -51,7 +51,7 @@ public static class LegacyHexTilingCompatibility
         // oriented face and its opposite boundary pairings. It is not a
         // separate hex geometry validator: Phase 16 validates both witnesses.
         const string translationFaceIncidence =
-            "<12:2 4 6 8 10 12,12 3 5 7 9 11,8 7 10 9 12 11:6,3>";
+            "<12:2 4 6 8 10 12,12 3 5 7 9 11,8 7 10 9 12 11:6,3 3>";
         var inspected = DelaneyDressTopology.Inspect(translationFaceIncidence);
         if (inspected.Status != DelaneyDressStatus.Euclidean)
             throw new InvalidOperationException("Legacy hex translation cover is invalid.");
