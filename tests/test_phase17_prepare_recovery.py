@@ -28,7 +28,7 @@ def sample_docker(*args, **kwargs):
             "Config": {"Image": "custom-postgres-with-no-POSTGRES_DB-init"}
         }]).encode())
     if "SHOW server_version_num" in args:
-        return subprocess.CompletedProcess(args, 0, b"180005\\n")
+        return subprocess.CompletedProcess(args, 0, b"180005")
     return subprocess.CompletedProcess(args, 0, b"")
 
 
