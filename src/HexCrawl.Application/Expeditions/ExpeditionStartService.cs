@@ -112,6 +112,82 @@ public sealed class ExpeditionStartService(
         }, cancellationToken);
     }
 
+    /// <summary>
+    /// Begin a generalized world-bound expedition at an authoritative motif
+    /// cell. No hex coordinate, fake center distance or hex presentation
+    /// projection is created. This is an application capability; the existing
+    /// hex-only HTTP start route stays gated until its cell contracts are ready.
+    /// </summary>
+    public async Task<StoredExpedition> StartWorldBoundCellsAsync(
+        Guid overworldId,
+        string ownerUserId,
+        string name,
+        ProcedureStartSelection selection,
+        PeriodicCellAddress startCell,
+        CancellationToken cancellationToken = default)
+    {
+        var owner = RequiredText(ownerUserId, "Owner user id");
+        var expeditionName = RequiredText(name, "Expedition name");
+        var world = await coreService.GetOverworldAsync(overworldId, owner, cancellationToken);
+        var tiling = world.World.Tiling
+            ?? throw new NotSupportedException("This world has no explicit generalized tiling.");
+
+        // Check the cell address before materializing or loading a procedure.
+        var cell = tiling.Resolve(startCell);
+        var selected = await ResolveProcedureAsync(owner, selection, cancellationToken);
+        var bound = GenericProcedureRuntime.Bind(selected.Procedure);
+        if (bound.Movement.MechanicVersion != 2)
+            throw new NotSupportedException("Generalized world traversal requires movement version 2.");
+
+        var required = DelaneyDressTopology.Inspect(selected.Procedure.TilingDsSymbol, 2048);
+        var actual = DelaneyDressTopology.Inspect(tiling.Topology.QuotientDsSymbol, 2048);
+        if (required.Status != DelaneyDressStatus.Euclidean
+            || actual.Status != DelaneyDressStatus.Euclidean
+            || !string.Equals(required.Symbol?.Canonical, actual.Symbol?.Canonical, StringComparison.Ordinal))
+            throw new InvalidOperationException("The selected procedure does not match this world's topology.");
+
+        var state = new CellExpeditionState
+        {
+            Id = Guid.NewGuid(),
+            Traversal = new PeriodicCellTraversal
+            {
+                CurrentCell = cell.Id,
+                Position = cell.Center
+            },
+            DistanceTraveled = tiling.PhysicalDistancePerWorldUnit is { } calibration
+                ? new DistanceMeasure(0, calibration.Unit)
+                : null
+        };
+        state.Validate(tiling);
+
+        // Existing hex-only knowledge initialization deliberately does not run
+        // for a generalized cell. Discovery policy will be composed from
+        // qualified cell events by the subsequent application integration.
+        var knowledge = new PlayerKnowledgeState
+        {
+            ScopeId = Guid.NewGuid(),
+            OverworldId = world.World.Id,
+            PresentationPolicy = MapPresentationPolicy.DmControlled()
+        };
+        var now = DateTimeOffset.UtcNow;
+        return await store.CreateExpeditionAsync(new StoredExpedition(
+            expeditionName,
+            state,
+            new WorldBoundCrawlSessionContext(world.World.Id),
+            knowledge,
+            CampaignProcedureSnapshot.Copy(selected.Procedure),
+            null,
+            TimeSpan.Zero,
+            owner,
+            1,
+            now,
+            now)
+        {
+            CampaignId = selected.CampaignId,
+            ProcedureOrigin = selected.ProcedureOrigin
+        }, cancellationToken);
+    }
+
     public async Task<StoredExpedition> StartStandaloneAsync(
         string ownerUserId,
         string name,
