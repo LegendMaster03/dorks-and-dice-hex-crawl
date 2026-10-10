@@ -153,12 +153,21 @@ public sealed class ExpeditionStartService(
         if (bound.Movement.MechanicVersion != 2)
             throw new NotSupportedException("Generalized world traversal requires movement version 2.");
 
-        var required = DelaneyDressTopology.Inspect(selected.Procedure.TilingDsSymbol, 2048);
-        var actual = DelaneyDressTopology.Inspect(tiling.Topology.QuotientDsSymbol, 2048);
-        if (required.Status != DelaneyDressStatus.Euclidean
-            || actual.Status != DelaneyDressStatus.Euclidean
-            || !string.Equals(required.Symbol?.Canonical, actual.Symbol?.Canonical, StringComparison.Ordinal))
-            throw new InvalidOperationException("The selected procedure does not match this world's topology.");
+        // Alternative legitimate symmetry quotients must not be rejected only
+        // because their canonical strings differ. The world's independently
+        // validated translation cover can prove structural equivalence.
+        var comparison = DelaneyDressTopology.Compare(
+            selected.Procedure.TilingDsSymbol,
+            tiling.Topology.QuotientDsSymbol,
+            tiling.Topology.TranslationDsSymbol);
+        if (comparison.Status is not (
+            TilingComparisonStatus.ExactIdentity
+            or TilingComparisonStatus.ChamberIsomorphic
+            or TilingComparisonStatus.ProvenEquivalent))
+            throw new InvalidOperationException(
+                comparison.Status == TilingComparisonStatus.Inconclusive
+                    ? "Equivalence between this world and the selected ruleset has not been proven. Review the ruleset before starting."
+                    : "The selected ruleset is incompatible with this world's topology.");
 
         var state = new CellExpeditionState
         {

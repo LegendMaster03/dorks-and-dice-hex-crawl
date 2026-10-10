@@ -56,9 +56,11 @@ public static class Phase19TilingCompatibility
 
         var observedName = DescribeObserved(candidate);
         var worldComparison = DelaneyDressTopology.Compare(
-            world.Topology.QuotientDsSymbol, candidate.DsSymbol);
+            world.Topology.QuotientDsSymbol, candidate.DsSymbol,
+            world.Topology.TranslationDsSymbol);
         var procedureComparison = procedure is null ? null
-            : DelaneyDressTopology.Compare(procedure.TilingDsSymbol, candidate.DsSymbol);
+            : DelaneyDressTopology.Compare(procedure.TilingDsSymbol, candidate.DsSymbol,
+                world.Topology.TranslationDsSymbol);
         var mismatched = Incompatible(worldComparison.Status)
             || procedureComparison is { Status: var s1 } && Incompatible(s1);
         var uncertain = Uncertain(worldComparison.Status)
