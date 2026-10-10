@@ -47,7 +47,7 @@ def docker(*args, stdout=None, stdin=None):
     action = args[0] if args else "unknown"
     command = (args[3] if len(args) > 3 and args[1] == "-i"
                else args[2] if len(args) > 2 else "") if action == "exec" else ""
-    safe_action = action if action in ("inspect", "stop", "start", "cp", "run", "rm") else "other"
+    safe_action = action if action in ("inspect", "stop", "start", "cp", "run", "rm", "exec") else "other"
     safe_command = command if command in ("psql", "pg_dump", "pg_restore", "pg_isready") else ""
     try:
         return subprocess.run(["docker", *args], check=True, stdin=stdin,
