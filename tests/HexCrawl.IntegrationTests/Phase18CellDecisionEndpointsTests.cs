@@ -90,6 +90,52 @@ public sealed class Phase18CellDecisionEndpointsTests
     }
 
     [Fact]
+    public async Task GeneralizedStartAppliesSelectedPresentationPolicyToActualStartingAndEnteredCells()
+    {
+        await WithWorldAsync(async (database, store, world, procedure, cell) =>
+        {
+            await new CampaignProcedureService(store).CreateAsync("alice", procedure, null);
+            var req = new StartCellExpeditionRequest(
+                "Exploration knowledge at the actual cell", procedure.ProcedureId,
+                procedure.Revision, cell.Id.Address, "exploration-map");
+            using var factory = TestWebHost.Create(database, "alice");
+            using var client = factory.CreateClient();
+
+            using (var rejected = await client.PostAsJsonAsync(
+                $"/api/overworlds/{world.Id:D}/cell-expeditions",
+                req with { PresentationKey = "nonexistent-presentation" }, ApiJson))
+                Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
+
+            using var started = await client.PostAsJsonAsync(
+                $"/api/overworlds/{world.Id:D}/cell-expeditions", req, ApiJson);
+            started.EnsureSuccessStatusCode();
+            var initial = await started.Content.ReadFromJsonAsync<JsonElement>();
+            var id = initial.GetProperty("id").GetGuid();
+            var known = Assert.Single(initial.GetProperty("knownCells").EnumerateArray());
+            Assert.Equal(cell.Id, JsonSerializer.Deserialize<WorldCellId>(
+                known.GetRawText(), ApiJson));
+            Assert.Empty(initial.GetProperty("knownHexes").EnumerateArray());
+
+            var boundary = world.Tiling!.Boundaries(cell.Id.Address)[0];
+            var heading = Midpoint(boundary) - cell.Center;
+            using var advanced = await client.PostAsJsonAsync(
+                $"/api/expeditions/{id:D}/cells/advance",
+                new AdvanceCellWatchRequest(1, Plan(heading), Inputs(1)), ApiJson);
+            advanced.EnsureSuccessStatusCode();
+            var after = await advanced.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(2, after.GetProperty("knownCells").GetArrayLength());
+            Assert.Contains(after.GetProperty("knownCells").EnumerateArray(),
+                entry => JsonSerializer.Deserialize<WorldCellId>(entry.GetRawText(), ApiJson)
+                    == boundary.To);
+            Assert.Empty(after.GetProperty("knownHexes").EnumerateArray());
+            var persisted = await new PostgresHexCrawlStore(database)
+                .GetExpeditionAsync(id, "alice");
+            Assert.Equal(2, persisted!.Knowledge!.KnownCells!.Count);
+            Assert.Equal("exploration-map", persisted.Knowledge.PresentationPolicy!.Key);
+        });
+    }
+
+    [Fact]
     public async Task SavedProcedureCellStartCreatesAuthoritativeCellSessionWithNoHexProjection()
     {
         await WithWorldAsync(async (database, store, world, procedure, cell) =>
