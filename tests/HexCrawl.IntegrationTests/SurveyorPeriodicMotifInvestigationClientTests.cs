@@ -68,6 +68,8 @@ public sealed class SurveyorPeriodicMotifInvestigationClientTests
         Assert.Single(result.Candidate!.MotifCells);
         Assert.Equal(4, result.Candidate.MotifCells[0].Boundaries.Count);
         Assert.Equal(1, result.Evidence!.MatchedHypotheses);
+        Assert.Equal("registered", result.Evidence.MetricRegistration?.Status);
+        Assert.Equal("supported", result.Evidence.MetricRegistration?.SourceProjection.Status);
     }
 
     [Fact]
@@ -272,7 +274,8 @@ public sealed class SurveyorPeriodicMotifInvestigationClientTests
                 rejectedHypotheses = 1, minimumEdgeObservations = 6,
                 originalRasterEdgeSupport = 0.98,
                 maximumRigidVertexResidualSourcePixels = 0.5,
-                translationRefinementResidualSourcePixels = (double?)null
+                translationRefinementResidualSourcePixels = (double?)null,
+                metricRegistration = VerifiedMetricEvidence()
             },
             source = new { width, height, mediaType = "image/png" },
             analysis = new
@@ -397,12 +400,52 @@ public sealed class SurveyorPeriodicMotifInvestigationClientTests
             matchedHypotheses = 1, checkedHypotheses = 2, rejectedHypotheses = 1,
             minimumEdgeObservations = 5, originalRasterEdgeSupport = 0.95,
             maximumRigidVertexResidualSourcePixels = 1.2,
-            translationRefinementResidualSourcePixels = (double?)null
+            translationRefinementResidualSourcePixels = (double?)null,
+            metricRegistration = VerifiedMetricEvidence()
         },
         source = new { width = 128, height = 128, mediaType = "image/png" },
         analysis = new { width = 128, height = 128, scale = 1,
             sourceResolutionVerified = true }
     }, new JsonSerializerOptions { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
+
+    private static object VerifiedMetricEvidence() => new
+    {
+        status = "registered",
+        reason = (string?)null,
+        maximumContourResidualSourcePixels = 1.5,
+        rmsContourResidualSourcePixels = 0.8,
+        originalRasterEdgeSupport = 0.95,
+        mathematicalMetricSymmetries = (int?)null,
+        rasterSymmetriesChecked = 0,
+        rasterSymmetriesSupported = 0,
+        sourceProjection = new
+        {
+            status = "supported", reason = (string?)null,
+            edgeSupport = 0.95, interiorSupport = 0.97,
+            checkedRegions = 9, supportedRegions = 9
+        }
+    };
+
+    [Fact]
+    public async Task MissingOrUnprovenMetricAndRasterProjectionAreNotQualifiedCandidates()
+    {
+        var missing = JsonNode.Parse(Candidate())!;
+        ((JsonObject)missing["evidence"]!).Remove("metricRegistration");
+        var incompleteMetric = JsonNode.Parse(Candidate())!;
+        incompleteMetric["evidence"]!["metricRegistration"]!["status"] = "inconclusive";
+        var incompleteProjection = JsonNode.Parse(Candidate())!;
+        incompleteProjection["evidence"]!["metricRegistration"]!["sourceProjection"]!["status"] = "inconclusive";
+        var exaggeratedContour = JsonNode.Parse(Candidate())!;
+        exaggeratedContour["evidence"]!["metricRegistration"]!["maximumContourResidualSourcePixels"] = 90;
+        foreach (var forged in new[] { missing, incompleteMetric, incompleteProjection, exaggeratedContour })
+        {
+            var client = Client(new DelegateHandler((request, _) =>
+                Task.FromResult(Json(request.Method == HttpMethod.Get
+                    ? Discovery() : forged.ToJsonString()))));
+            await Assert.ThrowsAsync<MapAnalysisProtocolException>(() =>
+                client.InvestigateAsync(new MemoryStream([1]), "image/png"));
+        }
+    }
 
     private sealed class DelegateHandler(
         Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> action) : HttpMessageHandler
