@@ -96,6 +96,98 @@ public sealed class Phase17WorldAuthorityTests
             tiling.Intersecting(new WorldBounds(-100000, -100000, 100000, 100000), 100));
     }
 
+    [Theory]
+    [InlineData(HexOrientation.PointyTop, 0)]
+    [InlineData(HexOrientation.FlatTop, 37)]
+    public void LegacyPhysicalCalibrationRetainsWorldCoordinatesAndNeighborDistance(
+        HexOrientation orientation, double rotation)
+    {
+        var grid = new HexGridDefinition
+        {
+            Id = Guid.NewGuid(), Orientation = orientation,
+            Origin = new WorldPoint(17, -23), RotationDegrees = rotation,
+            HexRadiusWorldUnits = 2.7,
+            NeighborCenterDistance = new DistanceMeasure(12, DistanceUnit.Custom("leagues", 4000))
+        };
+        var tiling = LegacyHexTilingCompatibility.Create(grid);
+        Assert.Equal("world-unit", tiling.Realization.Units);
+        Assert.Equal(grid.NeighborCenterDistance.Unit,
+            tiling.PhysicalDistancePerWorldUnit!.Value.Unit);
+        var start = tiling.Resolve(LegacyHexTilingCompatibility.ToAddress(new(0, 0))).Center;
+        var next = tiling.Resolve(LegacyHexTilingCompatibility.ToAddress(new(1, 0))).Center;
+        Assert.InRange(start.DistanceTo(next), 4.67653717, 4.67653719);
+        var physical = tiling.MeasurePhysicalDistance(start, next);
+        Assert.Equal(grid.NeighborCenterDistance.Unit, physical.Unit);
+        Assert.InRange(Math.Abs(physical.Value - 12), 0, 1e-9);
+        Assert.Equal(grid.Origin, tiling.Origin);
+        Assert.True(LegacyHexTilingCompatibility.Matches(tiling, grid));
+    }
+
+    [Fact]
+    public void LargeWorldOriginDoesNotHideAuthorityMismatch()
+    {
+        var grid = new HexGridDefinition
+        {
+            Id = Guid.NewGuid(), Origin = new WorldPoint(1e9, 1e9),
+            HexRadiusWorldUnits = 1,
+            NeighborCenterDistance = new DistanceMeasure(12, DistanceUnit.Miles)
+        };
+        var original = LegacyHexTilingCompatibility.Create(grid);
+        var shifted = original with { Origin = new WorldPoint(original.Origin.X + 0.5, original.Origin.Y) };
+        shifted.Validate();
+        Assert.False(LegacyHexTilingCompatibility.Matches(shifted, grid));
+        Assert.Throws<InvalidOperationException>(() => new OverworldDefinition
+        {
+            Id = Guid.NewGuid(), Name = "Mismatched", Grid = grid, Tiling = shifted
+        }.ValidateSpatialAuthority());
+        var localShift = original with
+        {
+            Realization = original.Realization with
+            {
+                Polygons = original.Realization.Polygons.ToDictionary(
+                    x => x.Key,
+                    x => (IReadOnlyList<TilingWorldPoint>)x.Value
+                        .Select(p => new TilingWorldPoint(p.X + 0.5, p.Y)).ToArray())
+            }
+        };
+        localShift.Validate();
+        Assert.False(LegacyHexTilingCompatibility.Matches(localShift, grid));
+        var alteredScale = original with
+        {
+            PhysicalDistancePerWorldUnit = new DistanceMeasure(7, DistanceUnit.Miles)
+        };
+        Assert.False(LegacyHexTilingCompatibility.Matches(alteredScale, grid));
+    }
+
+    [Theory]
+    [InlineData("<1:1,1,1:3,6>", 2e-6)]
+    [InlineData("<1:1,1,1:3,6>", 1)]
+    [InlineData("<10:2 5 4 6 7 8 10,1 4 6 5 9 10,3 5 7 8 9 10:3 3 4,5 5>", 2e-6)]
+    public void SmallAndOrdinaryCellCentersAreUniqueButSharedEdgesAreAmbiguous(
+        string symbol, double scale)
+    {
+        var generated = DelaneyDressHarmonicMetricRealization.Construct(symbol, scale, "world-unit");
+        Assert.Equal("realized", generated.Status);
+        var tiling = new PeriodicWorldTiling(Guid.NewGuid(), generated.Topology!,
+            generated.Realization!, new WorldPoint(12, -7));
+        tiling.Validate();
+        foreach (var cell in tiling.Topology.MotifCells)
+        {
+            var address = new PeriodicCellAddress(cell.Id, new(0, 0));
+            var geometry = tiling.Resolve(address);
+            var lookup = tiling.Containing(geometry.Center);
+            Assert.Equal(WorldCellLookupStatus.Unique, lookup.Status);
+            Assert.Equal(geometry.Id, Assert.Single(lookup.Candidates));
+            var edge = tiling.Boundaries(address)[0];
+            var midpoint = new WorldPoint(
+                (edge.Start.X + edge.End.X) / 2, (edge.Start.Y + edge.End.Y) / 2);
+            var edgeLookup = tiling.Containing(midpoint);
+            Assert.Equal(WorldCellLookupStatus.Ambiguous, edgeLookup.Status);
+            Assert.Contains(edge.From, edgeLookup.Candidates);
+            Assert.Contains(edge.To, edgeLookup.Candidates);
+        }
+    }
+
     [Fact]
     public void WorldAuthorityRejectsFabricatedTopologyAndMetric()
     {
