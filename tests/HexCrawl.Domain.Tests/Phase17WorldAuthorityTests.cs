@@ -232,6 +232,98 @@ public sealed class Phase17WorldAuthorityTests
             }
     }
 
+    [Theory]
+    [InlineData(HexOrientation.PointyTop, 17)]
+    [InlineData(HexOrientation.FlatTop, 37)]
+    [InlineData(HexOrientation.PointyTop, -49)]
+    public void LegacyLargeOriginRotatedMetricBuildsWithoutCancellation(
+        HexOrientation orientation, double rotation)
+    {
+        var grid = new HexGridDefinition
+        {
+            Id = Guid.NewGuid(), Orientation = orientation,
+            Origin = new WorldPoint(1e9, 1e9), RotationDegrees = rotation,
+            HexRadiusWorldUnits = 1,
+            NeighborCenterDistance = new DistanceMeasure(12, DistanceUnit.Miles)
+        };
+        var tiling = LegacyHexTilingCompatibility.Create(grid);
+        tiling.Validate();
+        Assert.True(LegacyHexTilingCompatibility.Matches(tiling, grid));
+        foreach (var hex in new[] {
+            new HexCoordinate(0, 0), new HexCoordinate(1, -1),
+            new HexCoordinate(375, -214), new HexCoordinate(100000, -77777)
+        })
+        {
+            var actual = tiling.Resolve(LegacyHexTilingCompatibility.ToAddress(hex));
+            var original = HexGeometry.Corners(grid, hex);
+            for (int corner = 0; corner < original.Count; corner++)
+                Assert.InRange(original[corner].DistanceTo(actual.Polygon[corner]), 0, 2e-6);
+            Assert.InRange(HexGeometry.HexToWorld(grid, hex).DistanceTo(actual.Center), 0, 2e-6);
+        }
+        var start = tiling.Resolve(LegacyHexTilingCompatibility.ToAddress(new(0, 0))).Center;
+        var adjacent = tiling.Resolve(LegacyHexTilingCompatibility.ToAddress(new(1, 0))).Center;
+        Assert.InRange(Math.Abs(tiling.MeasurePhysicalDistance(start, adjacent).Value - 12), 0, 2e-6);
+    }
+
+    [Theory]
+    [InlineData(1000d, -1000d, 2e-6, 17d)]
+    [InlineData(1000000d, 1000000d, 1d, 37d)]
+    [InlineData(0d, 0d, 2e-6, -23d)]
+    public void CandidateEnumerationRetainsEveryDirectlyContainedSharedEdge(
+        double originX, double originY, double scale, double degrees)
+    {
+        var generation = DelaneyDressHarmonicMetricRealization.Construct(
+            "<1:1,1,1:3,6>", scale, "unit");
+        Assert.Equal("realized", generation.Status);
+        var angle = degrees * Math.PI / 180;
+        var cosine = Math.Cos(angle);
+        var sine = Math.Sin(angle);
+        TilingWorldPoint Rotate(TilingWorldPoint value) => new(
+            cosine * value.X - sine * value.Y,
+            sine * value.X + cosine * value.Y);
+        var metric = generation.Realization!;
+        var rotated = metric with
+        {
+            TranslationU = Rotate(metric.TranslationU),
+            TranslationV = Rotate(metric.TranslationV),
+            Polygons = metric.Polygons.ToDictionary(
+                item => item.Key,
+                item => (IReadOnlyList<TilingWorldPoint>)item.Value.Select(Rotate).ToArray())
+        };
+        var tiling = new PeriodicWorldTiling(
+            Guid.NewGuid(), generation.Topology!, rotated, new WorldPoint(originX, originY));
+        tiling.Validate();
+        int provenSharedEdges = 0;
+        foreach (var motif in tiling.Topology.MotifCells)
+            foreach (var translation in new[] {
+                new LatticeDisplacement(0, 0), new LatticeDisplacement(-3, 7),
+                new LatticeDisplacement(5, -9)
+            })
+            {
+                var address = new PeriodicCellAddress(motif.Id, translation);
+                foreach (var boundary in tiling.Boundaries(address))
+                {
+                    var middle = new WorldPoint(
+                        (boundary.Start.X + boundary.End.X) / 2,
+                        (boundary.Start.Y + boundary.End.Y) / 2);
+                    // Test the exact property R2 violated: the final polygon
+                    // predicate agrees that both polygons contain this point,
+                    // but the inverse-lattice prefilter excluded one of them.
+                    var fromPolygon = tiling.Resolve(boundary.From.Address).Polygon;
+                    var toPolygon = tiling.Resolve(boundary.To.Address).Polygon;
+                    if (!FeatureIntersection.PointInPolygon(middle, fromPolygon)
+                        || !FeatureIntersection.PointInPolygon(middle, toPolygon))
+                        continue;
+                    provenSharedEdges++;
+                    var lookup = tiling.Containing(middle);
+                    Assert.Equal(WorldCellLookupStatus.Ambiguous, lookup.Status);
+                    Assert.Contains(boundary.From, lookup.Candidates);
+                    Assert.Contains(boundary.To, lookup.Candidates);
+                }
+            }
+        Assert.True(provenSharedEdges >= 6, "Fixture did not exercise enough common boundaries.");
+    }
+
     [Fact]
     public void WorldAuthorityRejectsFabricatedTopologyAndMetric()
     {
