@@ -59,6 +59,11 @@ public sealed partial class SourceMapApplicationService
             World = current.World with
             {
                 Grid = command.Grid,
+                Tiling = LegacyHexTilingCompatibility.Create(command.Grid) with
+                {
+                    Revision = current.World.SpatialTiling.Revision +
+                        (command.Grid == current.World.Grid ? 0 : 1)
+                },
                 SourceMaps = current.World.SourceMaps
                     .Select(item => item.Id == sourceMapId ? replacement : item)
                     .ToArray()
