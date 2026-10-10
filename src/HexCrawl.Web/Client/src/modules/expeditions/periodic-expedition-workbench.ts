@@ -212,7 +212,8 @@ export async function renderPeriodicExpeditionWorkbench(
             const state = currentState();
             const mode = choice("pace").value;
             if (!mode) throw new Error("Choose a valid movement pace.");
-            const resolution = runtime.procedure.runtime.travelResolution;
+            const resolution = runtime.procedure.runtime?.travelResolution;
+            if (!resolution) throw new Error("This expedition has no executable movement rules.");
             const unit = runtime.movementComposition.suggestedExpectedDistance?.unit
                 ?? runtime.movementComposition.effectiveDistanceUnit;
             const travel: CellWatchRequest["inputs"]["travel"] = {
@@ -335,7 +336,7 @@ export async function renderPeriodicExpeditionWorkbench(
                 input("headingY").value = String(state.intendedHeading.y);
             } else if (selectedExit !== null) selectHeading(selectedExit);
         }
-        const resolutions = runtime.procedure.runtime.travelResolution;
+        const resolutions = runtime.procedure.runtime?.travelResolution;
         const isSteps = resolutions === "CellSteps";
         required<HTMLElement>("[data-cell-step-field]").hidden = !isSteps;
         required<HTMLElement>("[data-distance-fields]").hidden = isSteps;
@@ -363,7 +364,7 @@ export async function renderPeriodicExpeditionWorkbench(
         text("[data-encounter-description]", pendingEncounter
             ? `Encounter at watch ${pendingEncounter.watchNumber}. Resolve it before continuing.` : "");
         required<HTMLButtonElement>("[data-advance]").disabled =
-            busy || pausedForCourse || !!pendingEncounter || modes.length === 0;
+            busy || pausedForCourse || !!pendingEncounter || !resolutions || modes.length === 0;
         const mapPoint = topology.position;
         map.renderer.expeditionPosition = { ...mapPoint };
         if (world?.grid) map.renderer.expeditionHex = null;
