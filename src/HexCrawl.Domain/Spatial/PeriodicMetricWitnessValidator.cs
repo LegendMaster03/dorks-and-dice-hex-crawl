@@ -53,9 +53,14 @@ public static class PeriodicMetricWitnessValidator
     {
         var ab = Sub(b, a);
         var ap = Sub(p, a);
-        return Math.Abs(Cross(ab, ap)) <= tolerance * Math.Max(1, Length(ab))
-            && Dot(ap, ab) >= -tolerance
-            && Dot(ap, ab) <= Dot(ab, ab) + tolerance;
+        // Cross and dot products have units of length squared. Convert
+        // the linear endpoint/collinearity tolerance into those units using
+        // the actual segment length, never a unit-sized lower bound.
+        double segmentLength = Length(ab);
+        return segmentLength > 0
+            && Math.Abs(Cross(ab, ap)) <= tolerance * segmentLength
+            && Dot(ap, ab) >= -tolerance * segmentLength
+            && Dot(ap, ab) <= Dot(ab, ab) + tolerance * segmentLength;
     }
 
     private static bool ProperIntersection(TilingWorldPoint a, TilingWorldPoint b,
@@ -64,11 +69,12 @@ public static class PeriodicMetricWitnessValidator
         var ab = Sub(b, a); var cd = Sub(d, c);
         double x = Cross(ab, Sub(c, a)), y = Cross(ab, Sub(d, a));
         double z = Cross(cd, Sub(a, c)), w = Cross(cd, Sub(b, c));
-        double threshold = tolerance * Math.Max(1, Length(ab) * Length(cd));
-        return x > threshold && y < -threshold && z > threshold && w < -threshold
-            || x < -threshold && y > threshold && z < -threshold && w > threshold
-            || x > threshold && y < -threshold && z < -threshold && w > threshold
-            || x < -threshold && y > threshold && z > threshold && w < -threshold;
+        double abThreshold = tolerance * Length(ab);
+        double cdThreshold = tolerance * Length(cd);
+        return ((x > abThreshold && y < -abThreshold)
+                || (x < -abThreshold && y > abThreshold))
+            && ((z > cdThreshold && w < -cdThreshold)
+                || (z < -cdThreshold && w > cdThreshold));
     }
 
     private static bool SelfIntersection(IReadOnlyList<TilingWorldPoint> polygon, double tolerance)
@@ -237,7 +243,7 @@ public static class PeriodicMetricWitnessValidator
             }
             areaSum += area;
         }
-        Require(Math.Abs(areaSum - det) <= Math.Max(1e-8, 1e-7 * Math.Abs(det)),
+        Require(Math.Abs(areaSum - det) <= Math.Max(tolerance * tolerance, 1e-7 * Math.Abs(det)),
             "The polygon motif does not cover exactly one lattice fundamental-domain area.");
 
         foreach (var (id, cell) in byId)
