@@ -1,3 +1,5 @@
+using HexCrawl.Domain.Knowledge;
+using HexCrawl.Domain.Presentation;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -90,7 +92,12 @@ public sealed class Phase18CellReadContractsTests
                 "Qualified cell expedition",
                 runtime,
                 new WorldBoundCrawlSessionContext(world.Id),
-                null, procedure, null, TimeSpan.Zero,
+                new PlayerKnowledgeState
+                {
+                    ScopeId = Guid.NewGuid(), OverworldId = world.Id,
+                    PresentationPolicy = MapPresentationPolicy.DmControlled()
+                },
+                procedure, null, TimeSpan.Zero,
                 "alice", 1, now, now));
 
             using (var factory = TestWebHost.Create(database, "alice"))
