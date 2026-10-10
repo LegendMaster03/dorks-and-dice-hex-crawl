@@ -61,8 +61,13 @@ public sealed record OverworldDefinition
     public IReadOnlyList<SourceMapRepresentation> SourceMaps { get; init; } = [];
     public IReadOnlyList<EnvironmentAnnotation> EnvironmentAnnotations { get; init; } = [];
 
-    public IReadOnlyList<SpatialFeature> FeaturesIntersecting(HexCoordinate coordinate) =>
-        FeaturesIntersecting(LegacyHexTilingCompatibility.ToAddress(coordinate));
+    public IReadOnlyList<SpatialFeature> FeaturesIntersecting(HexCoordinate coordinate)
+    {
+        if (!HasLegacyHexGrid)
+            throw new NotSupportedException(
+                "Axial hex feature lookup is not valid for a generalized world. Use a periodic cell address.");
+        return FeaturesIntersecting(LegacyHexTilingCompatibility.ToAddress(coordinate));
+    }
 
     public void ValidateEnvironmentAnnotations()
     {
