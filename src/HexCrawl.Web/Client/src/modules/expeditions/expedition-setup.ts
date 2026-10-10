@@ -125,7 +125,54 @@ export async function enhanceExpeditionSetup(
 
     const error = root.querySelector<HTMLElement>("[data-error]");
     const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
-    submit.disabled = !procedure.value;
+    let readySavedSelection: string | null = world.grid ? procedure.value : null;
+    let compatibilityGeneration = 0;
+    const compatibilityStatus = document.createElement("p");
+    compatibilityStatus.className = "hc-hint";
+    compatibilityStatus.setAttribute("role", "status");
+    if (!world.grid) {
+        required<HTMLElement>(form, "[data-procedure-summary]").after(compatibilityStatus);
+    }
+    const canStart = (): boolean => !!procedure.value
+        && (world.grid || procedure.value === readySavedSelection);
+    const checkCompatibility = async (): Promise<void> => {
+        if (world.grid) return;
+        const generation = ++compatibilityGeneration;
+        const value = procedure.value;
+        readySavedSelection = null;
+        submit.disabled = true;
+        if (!value) {
+            compatibilityStatus.textContent = "Create or select a compatible saved ruleset.";
+            return;
+        }
+        const selected = readProcedureStartChoice(value);
+        if (selected.kind !== "saved") {
+            compatibilityStatus.textContent =
+                "Generalized worlds require a pinned saved ruleset. Create a compatible cell-travel ruleset.";
+            return;
+        }
+        compatibilityStatus.textContent = "Checking ruleset compatibility…";
+        try {
+            const assessment = await api.assessCellProcedure(
+                worldId, selected.procedureId, selected.revision);
+            if (generation !== compatibilityGeneration || procedure.value !== value) return;
+            compatibilityStatus.textContent = assessment.explanation;
+            if (assessment.status === "ready") readySavedSelection = value;
+        } catch (failure) {
+            if (generation !== compatibilityGeneration || procedure.value !== value) return;
+            compatibilityStatus.textContent =
+                "Unable to verify this saved ruleset. Reload the world and retry.";
+            if (error) showUiError(error, failure);
+        } finally {
+            if (generation === compatibilityGeneration && procedure.value === value)
+                submit.disabled = !canStart();
+        }
+    };
+    if (!world.grid) {
+        procedure.addEventListener("change", () => void checkCompatibility());
+        void checkCompatibility();
+    }
+    submit.disabled = !canStart();
     createCellRulesetButton?.addEventListener("click", () => {
         if (!createCellRulesetButton || createCellRulesetButton.disabled) return;
         createCellRulesetButton.disabled = true;
@@ -142,8 +189,8 @@ export async function enhanceExpeditionSetup(
                     throw new Error("The ruleset was created, but the saved-ruleset list is stale. Reload the world.");
                 }
                 procedure.value = value;
-                submit.disabled = false;
                 await renderProcedureSummary();
+                await checkCompatibility();
             } catch (failure) {
                 if (error) showUiError(error, failure);
             } finally {
@@ -157,6 +204,11 @@ export async function enhanceExpeditionSetup(
     form.addEventListener("submit", event => {
         event.preventDefault();
         if (form.dataset.pending === "true") return;
+        if (!canStart()) {
+            if (error) showUiError(error, new Error(
+                "Select a saved ruleset confirmed compatible with the current world."));
+            return;
+        }
         form.dataset.pending = "true";
         submit.disabled = true;
         submit.textContent = "Starting…";
@@ -190,13 +242,14 @@ export async function enhanceExpeditionSetup(
                 if (error) showUiError(error, value);
             } finally {
                 form.dataset.pending = "false";
-                submit.disabled = !procedure.value;
+                submit.disabled = !canStart();
                 submit.textContent = "Start expedition";
             }
         })();
     });
 
     return () => {
+        compatibilityGeneration++;
         root.removeEventListener("hex-crawl:world-cell-selected", acceptMapCell);
         form.remove();
     };
