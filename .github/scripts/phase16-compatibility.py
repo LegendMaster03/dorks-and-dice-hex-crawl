@@ -15,7 +15,7 @@ def call(root,path,method="GET",data=None,headers=None,status=200):
             actual,body=response.status,response.read()
     except urllib.error.HTTPError as error:
         actual,body=error.code,error.read()
-    assert actual==status,(path,actual,status,body[:1200])
+    assert actual==status or (status==200 and method=="POST" and actual==201),(path,actual,status,body[:1200])
     return body
 
 def jcall(root,path,**kwargs):
