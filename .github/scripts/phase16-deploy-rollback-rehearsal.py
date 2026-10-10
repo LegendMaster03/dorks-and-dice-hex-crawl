@@ -90,6 +90,7 @@ def preserved(service, image):
 def main(workflow, service):
     yaml = workflow.read_text()
     names = {"capture": "Retain the actual running image before overwriting latest",
+             "preflight": "Validate production deployment configuration",
              "build": "Build image", "deploy": "Deploy",
              "verify": "Verify deployed service",
              "restore": "Restore previous running image after failed deploy or verification"}
@@ -100,6 +101,8 @@ def main(workflow, service):
     assert "steps.verify.outcome == 'failure'" in yaml
     assert "steps.deploy.outcome == 'failure'" in yaml
     assert "steps.previous_image.outputs.available == 'true'" in yaml
+    assert "$" + "{DEPLOY_ENV_FILE:-" in steps["preflight"]
+    assert " config >/dev/null" in steps["preflight"]
     assert "$" + "{DEPLOY_ENV_FILE:-" in steps["deploy"]
     assert "$" + "{DEPLOY_ENV_FILE:-" in steps["restore"]
 
@@ -127,6 +130,17 @@ def main(workflow, service):
                      "printf unchanged-tester-fixture > /data/phase16-record"])
             original = image_id(service)
             preserved(service, original)
+
+            # A missing/invalid configuration must fail before image build
+            # and must not trigger the restore step or disturb a healthy service.
+            run(steps["preflight"], root, env)
+            missing_env = dict(env, DEPLOY_ENV_FILE=str(root / "missing.env"))
+            run(steps["preflight"], root, missing_env, expected_success=False)
+            preserved(service, original)
+            assert command(
+                ["docker", "image", "inspect", "--format", "{{.Id}}",
+                 f"{service}:latest"]).strip() == original
+            print(f"{service}: failed Compose preflight preserves running service PASS", flush=True)
 
             # Successful deployment uses the unmodified capture/deploy/verify steps.
             output.write_text("")
