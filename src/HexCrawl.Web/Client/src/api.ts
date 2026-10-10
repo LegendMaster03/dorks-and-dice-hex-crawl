@@ -458,6 +458,14 @@ export class HexCrawlApi {
         return this.sendJson("POST", "/api/expeditions", input, "Start expedition");
     }
 
+    public createCellTravelProcedure(worldId: string): Promise<{
+        procedureId: string; revision: number; name: string;
+    }> {
+        return this.sendJson("POST",
+            `/api/overworlds/${encodeURIComponent(worldId)}/cell-procedures`,
+            {}, "Create compatible exploration ruleset");
+    }
+
     public startCellExpedition(worldId: string, input: StartCellExpeditionInput): Promise<ExpeditionDetail> {
         return this.sendJson("POST",
             `/api/overworlds/${encodeURIComponent(worldId)}/cell-expeditions`,
