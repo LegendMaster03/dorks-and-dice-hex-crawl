@@ -110,6 +110,21 @@ public sealed class SurveyorPeriodicMotifInvestigationClientTests
     }
 
     [Fact]
+    public async Task ForgedAnalysisScaleCannotRelaxSourcePixelGeometryChecks()
+    {
+        var forged = JsonNode.Parse(Candidate())!;
+        forged["analysis"]!["sourceResolutionVerified"] = false;
+        forged["analysis"]!["scale"] = 1e-9;
+        forged["candidate"]!["translationBasisSourcePixels"]![0]!["x"] = 128;
+        forged["candidate"]!["translationBasisSourcePixels"]![1]!["y"] = 128;
+        var client = Client(new DelegateHandler((request, _) =>
+            Task.FromResult(Json(request.Method == HttpMethod.Get
+                ? Discovery() : forged.ToJsonString()))));
+        await Assert.ThrowsAsync<MapAnalysisProtocolException>(() =>
+            client.InvestigateAsync(new MemoryStream([1]), "image/png"));
+    }
+
+    [Fact]
     public async Task StructurallyCorrectButGeometricallyForgedMotifsAreRejected()
     {
         // These mutations leave the canonical D-symbol and the periodic
