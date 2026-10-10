@@ -187,8 +187,9 @@ export async function renderPeriodicExpeditionWorkbench(
             }
         } finally {
             busy = false;
-            if (!disposed) form.querySelectorAll<HTMLButtonElement>("button")
-                .forEach(button => button.disabled = false);
+            // Reapply the authoritative pause and encounter gates instead of
+            // unconditionally enabling an advance button after completion.
+            if (!disposed) render();
         }
     };
     const refresh = async (): Promise<void> => {
@@ -365,6 +366,10 @@ export async function renderPeriodicExpeditionWorkbench(
             ? `Encounter at watch ${pendingEncounter.watchNumber}. Resolve it before continuing.` : "");
         required<HTMLButtonElement>("[data-advance]").disabled =
             busy || pausedForCourse || !!pendingEncounter || !resolutions || modes.length === 0;
+        required<HTMLButtonElement>("[data-confirm-course]").disabled =
+            busy || !pausedForCourse || selectedExit === null;
+        required<HTMLButtonElement>("[data-resolve-encounter]").disabled =
+            busy || !pendingEncounter;
         const mapPoint = topology.position;
         map.renderer.currentWorldCell = {
             id: topology.currentCell,
