@@ -124,6 +124,20 @@ public sealed class SurveyorPeriodicMotifInvestigationClientTests
                 ? Discovery() : forged.ToJsonString()))));
         await Assert.ThrowsAsync<MapAnalysisProtocolException>(() =>
             client.InvestigateAsync(new MemoryStream([1]), "image/png"));
+
+        // Both dimensions *round* to one pixel at the forged scale, so
+        // dimension consistency alone is insufficient. A fully verified
+        // source projection cannot exist on a 1x1 analysis raster.
+        var tiny = JsonNode.Parse(Candidate())!;
+        tiny["analysis"]!["sourceResolutionVerified"] = false;
+        tiny["analysis"]!["width"] = 1;
+        tiny["analysis"]!["height"] = 1;
+        tiny["analysis"]!["scale"] = 0.009;
+        var tinyClient = Client(new DelegateHandler((request, _) =>
+            Task.FromResult(Json(request.Method == HttpMethod.Get
+                ? Discovery() : tiny.ToJsonString()))));
+        await Assert.ThrowsAsync<MapAnalysisProtocolException>(() =>
+            tinyClient.InvestigateAsync(new MemoryStream([1]), "image/png"));
     }
 
     [Fact]
