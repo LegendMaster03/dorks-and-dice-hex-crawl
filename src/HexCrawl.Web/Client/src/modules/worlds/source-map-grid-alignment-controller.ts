@@ -57,8 +57,8 @@ export class SourceMapGridAlignmentController {
             if (!this.isCurrent(generation, sourceMap.id, abortController)) return false;
             if (analyzed.status === "detected" && analyzed.tilingDsSymbol !== "<1:1,1,1:6,3>") {
                 throw new Error(
-                    "Surveyor detected a different tiling (" + (analyzed.tilingDsSymbol ?? "unknown")
-                    + "). This world currently supports hexagonal navigation only; no grid was changed.");
+                    "This map does not match the saved hexagonal geometry. No change was made. "
+                    + "Use Check cell pattern or manual placement to resolve the difference.");
             }
             if (!analyzed.fit || analyzed.status === "gridless") {
                 throw new Error(
