@@ -66,12 +66,13 @@ class Phase17PrepareRecoveryTests(unittest.TestCase):
             }):
                 with mock.patch.object(prepare, "docker", side_effect=fake_docker):
                     with mock.patch.object(prepare.subprocess, "run",
-                                           return_value=subprocess.CompletedProcess([], 0)):
+                                           return_value=subprocess.CompletedProcess([], 0)) as subprocess_run:
                         with self.assertRaisesRegex(RuntimeError, "duplicate object"):
                             prepare.restore_and_verify_database(
                                 "postgres:18", dump, "9|1|id|2|id|2|4")
             self.assertTrue(any(op[0] == "run" and "--network" in op for op in operations))
-            self.assertTrue(any(op[0] == "rm" and "-f" in op for op in operations))
+            self.assertTrue(any(call.args[0][:3] == ["docker", "rm", "-f"]
+                                for call in subprocess_run.call_args_list))
             self.assertTrue((Path(temporary) / "isolated-postgres-restore.log").exists())
             self.assertFalse(any(op[0] == "exec" and op[1] == prepare.POSTGRES
                                  for op in operations))
