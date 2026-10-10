@@ -277,7 +277,7 @@ public sealed class Phase18CellExpeditionPersistenceTests
             new PlayerKnowledgeState
             {
                 ScopeId = Guid.NewGuid(), OverworldId = world.Id,
-                PresentationPolicy = MapPresentationPolicy.DmControlled()
+                PresentationPolicy = MapPresentationPolicy.ExplorationMap()
             },
             CellProcedure(tiling, TravelResolutionMode.CellSteps),
             null, TimeSpan.Zero, "alice", 1, now, now);
@@ -313,6 +313,8 @@ public sealed class Phase18CellExpeditionPersistenceTests
         Assert.Equal(1, moved.History.Count(e => e.Kind == CrawlRuntimeEventKind.CellEntered));
         Assert.DoesNotContain(moved.History, e => e.Hex is not null);
         Assert.True(saved.Version > initial.Version);
+        Assert.Empty(saved.Knowledge!.KnownHexes);
+        Assert.Equal(exit.To, Assert.Single(saved.Knowledge.KnownCells!));
 
         await Assert.ThrowsAsync<HexCrawlConcurrencyException>(() =>
             service.AdvanceCellExpeditionAsync(initial.Id, "alice", 1, plan, inputs));
@@ -344,6 +346,8 @@ public sealed class Phase18CellExpeditionPersistenceTests
         Assert.Equal(moved.ElapsedTravelTime, restored.ElapsedTravelTime);
         Assert.Equal(discovered.Version, loaded.Version);
         Assert.Equal(KnowledgeState.Discovered, loaded.Knowledge!.Entries[landmark.Id].State);
+        Assert.Equal(exit.To, Assert.Single(loaded.Knowledge.KnownCells!));
+        Assert.Empty(loaded.Knowledge.KnownHexes);
         Assert.Single(restored.History, e => e.Kind == CrawlRuntimeEventKind.CellEntered);
         Assert.Single(restored.History, e => e.Kind == CrawlRuntimeEventKind.LocationDiscovered);
     }
