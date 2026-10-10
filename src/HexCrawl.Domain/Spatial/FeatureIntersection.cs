@@ -149,13 +149,20 @@ public static class FeatureIntersection
 
     private static bool PointOnSegment(WorldPoint start, WorldPoint end, WorldPoint point)
     {
-        const double epsilon = 1e-9;
-        var cross = ((end.X - start.X) * (point.Y - start.Y)) - ((end.Y - start.Y) * (point.X - start.X));
-        return Math.Abs(cross) < epsilon
-            && point.X >= Math.Min(start.X, end.X) - epsilon
-            && point.X <= Math.Max(start.X, end.X) + epsilon
-            && point.Y >= Math.Min(start.Y, end.Y) - epsilon
-            && point.Y <= Math.Max(start.Y, end.Y) + epsilon;
+        double dx = end.X - start.X, dy = end.Y - start.Y;
+        double length = Math.Sqrt(dx * dx + dy * dy);
+        if (!double.IsFinite(length) || length == 0) return false;
+        // The cross product is an area, not a distance. Use a tolerance
+        // in world-coordinate length units scaled by the actual edge length.
+        // The previous fixed 1e-9 area tolerance made interior points of
+        // valid microunit-scale cells appear to lie on every nearby edge.
+        double tolerance = Math.Max(1e-13, length * 1e-10);
+        double cross = dx * (point.Y - start.Y) - dy * (point.X - start.X);
+        return Math.Abs(cross) <= tolerance * length
+            && point.X >= Math.Min(start.X, end.X) - tolerance
+            && point.X <= Math.Max(start.X, end.X) + tolerance
+            && point.Y >= Math.Min(start.Y, end.Y) - tolerance
+            && point.Y <= Math.Max(start.Y, end.Y) + tolerance;
     }
 
     private static bool SegmentsIntersect(WorldPoint a, WorldPoint b, WorldPoint c, WorldPoint d)
@@ -174,10 +181,11 @@ public static class FeatureIntersection
             return true;
         }
 
-        const double epsilon = 1e-9;
-        return (Math.Abs(abC) < epsilon && PointOnSegment(a, b, c))
-            || (Math.Abs(abD) < epsilon && PointOnSegment(a, b, d))
-            || (Math.Abs(cdA) < epsilon && PointOnSegment(c, d, a))
-            || (Math.Abs(cdB) < epsilon && PointOnSegment(c, d, b));
+        // PointOnSegment already performs scale-aware collinearity testing;
+        // a fixed absolute area threshold must not be applied here.
+        return PointOnSegment(a, b, c)
+            || PointOnSegment(a, b, d)
+            || PointOnSegment(c, d, a)
+            || PointOnSegment(c, d, b);
     }
 }
