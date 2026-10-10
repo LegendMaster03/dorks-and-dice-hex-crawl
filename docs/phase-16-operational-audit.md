@@ -313,3 +313,22 @@ tester worlds, source-map binaries, procedures and persisted expeditions, and
 confirm operational rollback readiness against those existing records. No
 merge, production deployment, database reset, or asset migration is
 authorized by this isolated matrix.
+
+
+### Main-deployment evidence and feature-branch rollback hardening
+
+The baseline SHA pins also match the most recent successful
+[Surveyor production deployment](https://github.com/LegendMaster03/dorks-and-dice-surveyor/actions/runs/37877969080)
+and [Hex Crawl production deployment](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/37889199540).
+The deployment workflows completed live readiness verification, but no one
+has established the exact container IDs currently running on the host.
+
+The Phase 16 deployment definitions now preserve the actual running image as
+`:pre-deploy` **before** overwriting `:latest`, retain a full-SHA-tagged
+candidate with its revision label, verify the running revision, disable
+mid-rollout cancellation, and attempt restoration on deploy/verification
+failure. These changes are on feature branches only; the production rollback
+branch has not been tested on live services. The
+[Phase 16 release runbook](phase-16-release-runbook.md) describes the
+signed-in read-only tester gate and the exact operator requirements.
+**These changes do not authorize deployment or merger.**
