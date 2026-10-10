@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using HexCrawl.Domain.Runtime;
 using HexCrawl.Domain.Spatial;
 
@@ -8,7 +9,8 @@ public sealed partial class PostgresHexCrawlStore
     private enum RuntimeStateKind
     {
         Spatial,
-        NonSpatial
+        NonSpatial,
+        CellSpatial
     }
 
     private sealed record RuntimeStateSnapshot
@@ -32,6 +34,16 @@ public sealed partial class PostgresHexCrawlStore
         public ActiveWatchSnapshot? ActiveWatch { get; init; }
         public NonSpatialActiveWatchSnapshot? NonSpatialActiveWatch { get; init; }
         public PendingEncounterSnapshot? PendingEncounter { get; init; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public PeriodicCellTraversal? CellTraversal { get; init; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public WorldPoint? CellIntendedHeading { get; init; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public bool? CellIsLost { get; init; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public double? CellVeerDegrees { get; init; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public CellActiveWatchSnapshot? CellActiveWatch { get; init; }
 
         public static RuntimeStateSnapshot FromDomain(CrawlSessionRuntimeState runtime) => runtime switch
         {
@@ -56,6 +68,20 @@ public sealed partial class PostgresHexCrawlStore
                 ActiveWatch = state.ActiveWatch is null ? null : ActiveWatchSnapshot.FromDomain(state.ActiveWatch),
                 PendingEncounter = state.PendingEncounter is null ? null : PendingEncounterSnapshot.FromDomain(state.PendingEncounter)
             },
+            CellExpeditionState state => new RuntimeStateSnapshot
+            {
+                Kind = RuntimeStateKind.CellSpatial,
+                Id = state.Id,
+                CellTraversal = state.Traversal,
+                CellIntendedHeading = state.IntendedHeading,
+                CellIsLost = state.IsLost,
+                CellVeerDegrees = state.ResolvedVeerDegrees,
+                DistanceTraveled = state.DistanceTraveled,
+                ElapsedTravelTicks = state.ElapsedTravelTime.Ticks,
+                CompletedWatches = state.CompletedWatches,
+                CellActiveWatch = state.ActiveWatch is null ? null : CellActiveWatchSnapshot.FromDomain(state.ActiveWatch),
+                PendingEncounter = state.PendingEncounter is null ? null : PendingEncounterSnapshot.FromDomain(state.PendingEncounter)
+            },
             NonSpatialSessionState state => new RuntimeStateSnapshot
             {
                 Kind = RuntimeStateKind.NonSpatial,
@@ -73,6 +99,7 @@ public sealed partial class PostgresHexCrawlStore
         public CrawlSessionRuntimeState ToDomain() => Kind switch
         {
             RuntimeStateKind.Spatial => ToSpatial(),
+            RuntimeStateKind.CellSpatial => ToCellSpatial(),
             RuntimeStateKind.NonSpatial => new NonSpatialSessionState
             {
                 Id = Id,
@@ -84,6 +111,36 @@ public sealed partial class PostgresHexCrawlStore
             },
             _ => throw new InvalidDataException("Persisted crawl session runtime kind is not supported.")
         };
+
+        private CellExpeditionState ToCellSpatial()
+        {
+            if (CurrentHex is not null || EntryDirection is not null || LastTravelDirection is not null
+                || Progress is not null || IntendedDirection is not null || ActualDirection is not null)
+                throw new InvalidDataException("Generalized cell snapshots must not include axial runtime authority.");
+            var cursor = CellTraversal
+                ?? throw new InvalidDataException("Persisted generalized expedition has no traversal cursor.");
+            if (cursor.FormatVersion != PeriodicCellTraversal.CurrentFormatVersion)
+                throw new InvalidDataException("Unsupported generalized traversal cursor format.");
+            var distance = DistanceTraveled
+                ?? throw new InvalidDataException("Persisted generalized expedition has no distance accounting.");
+            var result = new CellExpeditionState
+            {
+                Id = Id,
+                Traversal = cursor,
+                IntendedHeading = CellIntendedHeading,
+                IsLost = CellIsLost ?? false,
+                ResolvedVeerDegrees = CellVeerDegrees,
+                DistanceTraveled = distance,
+                ElapsedTravelTime = TimeSpan.FromTicks(ElapsedTravelTicks),
+                CompletedWatches = CompletedWatches,
+                ActiveWatch = CellActiveWatch?.ToDomain(),
+                PendingEncounter = PendingEncounter?.ToDomain(),
+                History = []
+            };
+            if (result.ActiveWatch is not null && result.ActiveWatch.WatchNumber <= result.CompletedWatches)
+                throw new InvalidDataException("Active generalized watch number must follow completed watches.");
+            return result;
+        }
 
         private ExpeditionState ToSpatial()
         {
@@ -119,19 +176,48 @@ public sealed partial class PostgresHexCrawlStore
         }
     }
 
+    private sealed record CellActiveWatchSnapshot(
+        int WatchNumber,
+        long TotalDurationTicks,
+        long ElapsedTicks,
+        CellWatchTravelPlan Plan,
+        ResolvedEncounterSnapshot Encounter,
+        bool EncounterHandled,
+        RuntimePauseReason? PendingDecision)
+    {
+        public static CellActiveWatchSnapshot FromDomain(CellActiveWatchState active) => new(
+            active.WatchNumber, active.TotalDuration.Ticks, active.Elapsed.Ticks, active.Plan,
+            ResolvedEncounterSnapshot.FromDomain(active.Encounter), active.EncounterHandled,
+            active.PendingDecision);
+
+        public CellActiveWatchState ToDomain()
+        {
+            var state = new CellActiveWatchState(
+                WatchNumber, TimeSpan.FromTicks(TotalDurationTicks), TimeSpan.FromTicks(ElapsedTicks),
+                Plan, Encounter.ToDomain(), EncounterHandled, PendingDecision);
+            state.Validate();
+            return state;
+        }
+    }
+
     private sealed record PendingEncounterSnapshot(
         Guid Id, long TriggerSequence, int WatchNumber, EncounterOutcomeKind Outcome,
         long ExpeditionElapsedTicks, HexCoordinate? Hex, Guid? LocationId, string? Note,
         ResolutionSource Source, string? ProvenanceNote)
     {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public WorldCellId? Cell { get; init; }
+
         public static PendingEncounterSnapshot FromDomain(PendingEncounterOccurrence encounter) => new(
             encounter.Id, encounter.TriggerSequence, encounter.WatchNumber, encounter.Outcome,
             encounter.ExpeditionElapsedTime.Ticks, encounter.Hex, encounter.LocationId,
-            encounter.Note, encounter.Provenance.Source, encounter.Provenance.Note);
+            encounter.Note, encounter.Provenance.Source, encounter.Provenance.Note)
+            { Cell = encounter.Cell };
 
         public PendingEncounterOccurrence ToDomain() => new(
             Id, TriggerSequence, WatchNumber, Outcome, TimeSpan.FromTicks(ExpeditionElapsedTicks),
-            Hex, LocationId, Note, new ResolutionProvenance(Source, ProvenanceNote));
+            Hex, LocationId, Note, new ResolutionProvenance(Source, ProvenanceNote))
+            { Cell = Cell };
     }
 
     private sealed record NonSpatialActiveWatchSnapshot(

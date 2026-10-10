@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using HexCrawl.Domain.Knowledge;
 using HexCrawl.Domain.Spatial;
 
@@ -29,7 +30,9 @@ public enum CrawlRuntimeEventKind
     ProcedureResolutionHelperGenerated,
     ProcedureResolutionHelperConsumed,
     ResolutionProvenanceRecorded,
-    EncounterResolved
+    EncounterResolved,
+    CellExited,
+    CellEntered
 }
 
 public sealed record CrawlRuntimeLinkedSceneSnapshot(
@@ -58,7 +61,15 @@ public sealed record CrawlRuntimeEvent(
     string? EncounterNote = null,
     ResolutionProvenance? EncounterProvenance = null,
     CrawlRuntimeLocationSnapshot? EncounterLocation = null,
-    Guid? EncounterOccurrenceId = null);
+    Guid? EncounterOccurrenceId = null)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorldCellId? Cell { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? BoundaryInterfaceIndex { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? ReciprocalInterfaceIndex { get; init; }
+}
 
 public sealed record WatchAdvanceResult(
     ExpeditionState Expedition,

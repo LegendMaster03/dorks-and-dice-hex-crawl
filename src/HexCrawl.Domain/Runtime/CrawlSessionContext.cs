@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
+using System.Text.Json.Serialization;
 using HexCrawl.Domain.Spatial;
 
 namespace HexCrawl.Domain.Runtime;
@@ -81,7 +82,11 @@ public sealed record PendingEncounterOccurrence(
     HexCoordinate? Hex,
     Guid? LocationId,
     string? Note,
-    ResolutionProvenance Provenance);
+    ResolutionProvenance Provenance)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorldCellId? Cell { get; init; }
+}
 
 public abstract record CrawlSessionRuntimeState
 {
