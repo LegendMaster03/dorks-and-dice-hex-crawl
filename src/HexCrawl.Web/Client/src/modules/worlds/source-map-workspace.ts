@@ -436,7 +436,9 @@ export class SourceMapWorkspace {
                     this.renderSelected();
                     this.registrationController.begin(this.selected);
                 });
-                controls.append(visibleLabel, selectButton, alignButton, registerButton);
+                controls.append(visibleLabel, selectButton);
+                if (this.getWorld().grid) controls.append(alignButton);
+                controls.append(registerButton);
 
                 const hasRetainedWonderdraft =
                     (sourceMap.importedContentCount ?? 0) > 0
@@ -548,6 +550,14 @@ export class SourceMapWorkspace {
                     ? "Keep this world configuration and use a different map, or create a separate world. Automatic conversion is not available until its dependencies can be migrated safely."
                     : "Use manual placement or a different image. No world, procedure, or map registration was changed.";
             status.append(next);
+        } catch (failure) {
+            if (!this.disposed && generation === this.compatibilityGeneration
+                && this.selected?.id === sourceMap.id) {
+                status.textContent =
+                    "Automatic pattern analysis failed. Existing world geometry was not changed. "
+                    + "Use manual placement or retry.";
+            }
+            throw failure;
         } finally {
             if (!this.disposed && generation === this.compatibilityGeneration)
                 button.disabled = false;
