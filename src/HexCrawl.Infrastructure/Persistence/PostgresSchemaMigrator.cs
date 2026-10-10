@@ -217,26 +217,32 @@ public sealed class PostgresSchemaMigrator(string connectionString)
                 throw new InvalidDataException($"World {id} disappeared during locked migration.");
         }
 
+        await using (var validateProcedures = connection.CreateCommand())
+        {
+            validateProcedures.Transaction = transaction;
+            validateProcedures.CommandText = """
+                SELECT (
+                    SELECT count(*) FROM campaign_procedure_revisions
+                    WHERE COALESCE(procedure_json->>'schemaVersion', '') NOT IN ('1.2', '1.3')
+                       OR (procedure_json->>'schemaVersion' = '1.2'
+                           AND procedure_json->>'tilingDsSymbol' IS DISTINCT FROM '<1:1,1,1:6,3>')
+                ) + (
+                    SELECT count(*) FROM expeditions
+                    WHERE COALESCE(procedure_json->>'schemaVersion', '') NOT IN ('1.2', '1.3')
+                       OR (procedure_json->>'schemaVersion' = '1.2'
+                           AND procedure_json->>'tilingDsSymbol' IS DISTINCT FROM '<1:1,1,1:6,3>')
+                );
+                """;
+            long invalid = Convert.ToInt64(
+                await validateProcedures.ExecuteScalarAsync(cancellationToken));
+            if (invalid != 0)
+                throw new InvalidDataException(
+                    "Pinned procedures include unrecognized schemas or incompatible tiling data. Nothing was migrated.");
+        }
+
         await using var procedure = connection.CreateCommand();
         procedure.Transaction = transaction;
         procedure.CommandText = """
-            DO $
-            BEGIN
-                IF EXISTS (
-                    SELECT 1 FROM campaign_procedure_revisions
-                    WHERE COALESCE(procedure_json->>'schemaVersion', '') NOT IN ('1.2', '1.3')
-                      OR (procedure_json->>'schemaVersion' = '1.2'
-                          AND procedure_json->>'tilingDsSymbol' IS DISTINCT FROM '<1:1,1,1:6,3>')
-                ) OR EXISTS (
-                    SELECT 1 FROM expeditions
-                    WHERE COALESCE(procedure_json->>'schemaVersion', '') NOT IN ('1.2', '1.3')
-                      OR (procedure_json->>'schemaVersion' = '1.2'
-                          AND procedure_json->>'tilingDsSymbol' IS DISTINCT FROM '<1:1,1,1:6,3>')
-                ) THEN
-                    RAISE EXCEPTION 'Unrecognized pinned procedure schema/tiling; refusing destructive conversion';
-                END IF;
-            END $;
-
             UPDATE campaign_procedure_revisions
             SET procedure_json = jsonb_set(procedure_json,
                 '{schemaVersion}', to_jsonb('1.3'::text), true)
