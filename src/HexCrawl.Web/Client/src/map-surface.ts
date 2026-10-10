@@ -24,6 +24,7 @@ export class MapSurface {
     private pendingCellsKey: string | null = null;
     private requestedCellsKey: string | null = null;
     private cellRequestGeneration = 0;
+    private cellSelectionGeneration = 0;
 
     public constructor(
         host: HTMLElement,
@@ -189,6 +190,13 @@ export class MapSurface {
         };
         const worldKey = `${world.id}:${world.version}:${world.tiling.id}:${world.tiling.revision}`;
         const cached = this.loadedCells;
+        if (cached && cached.worldKey !== worldKey) {
+            this.loadedCells = null;
+            this.renderer.visibleWorldCells = [];
+            this.renderer.selectedWorldCell = null;
+            this.cellSelectionGeneration++;
+            this.cellSelectionHandler?.(null);
+        }
         if (cached?.worldKey === worldKey
             && extent.minX >= cached.bounds.minX && extent.maxX <= cached.bounds.maxX
             && extent.minY >= cached.bounds.minY && extent.maxY <= cached.bounds.maxY) return;
@@ -201,6 +209,7 @@ export class MapSurface {
         if (Object.values(bounds).some(value => !Number.isFinite(value))) return;
         const queryKey = `${worldKey}:${Object.values(bounds).join(":")}`;
         if (queryKey === this.pendingCellsKey || queryKey === this.requestedCellsKey) return;
+        this.renderer.visibleWorldCells = [];
         this.pendingCellsKey = queryKey;
         const generation = ++this.cellRequestGeneration;
         void this.api.listVisibleCells(world.id, bounds).then(cells => {
@@ -228,7 +237,9 @@ export class MapSurface {
     }
 
     public resetView(): void {
-        this.viewport.center = { x: 0, y: 0 };
+        const world = this.getWorld();
+        this.viewport.center = world?.tiling && !world.grid
+            ? { ...world.tiling.origin } : { x: 0, y: 0 };
         this.viewport.zoom = 56;
         this.announceView("Map view reset");
         this.requestRender();
@@ -241,6 +252,7 @@ export class MapSurface {
         this.hexSelectionHandler = null;
         this.cellSelectionHandler = null;
         this.cellRequestGeneration++;
+        this.cellSelectionGeneration++;
         this.resizeObserver.disconnect();
         this.renderer.dispose();
     }
@@ -276,10 +288,17 @@ export class MapSurface {
 
     private async activateWorldCell(worldId: string, tilingId: string, point: WorldPoint): Promise<void> {
         if (!this.api) return;
+        const generation = ++this.cellSelectionGeneration;
+        const version = this.getWorld()?.version;
+        const revision = this.getWorld()?.tiling?.revision;
+        const isCurrent = () => !this.disposed && generation === this.cellSelectionGeneration
+            && this.getWorld()?.id === worldId
+            && this.getWorld()?.tiling?.id === tilingId
+            && this.getWorld()?.tiling?.revision === revision
+            && this.getWorld()?.version === version;
         try {
             const result = await this.api.lookupWorldCell(worldId, point);
-            if (this.disposed || this.getWorld()?.id !== worldId
-                || this.getWorld()?.tiling?.id !== tilingId) return;
+            if (!isCurrent()) return;
             if (result.status !== "Unique" || result.candidates.length !== 1) {
                 this.accessibilityStatus.textContent = result.status === "Ambiguous"
                     ? "Multiple cells meet here. Select a point inside the desired cell."
@@ -295,7 +314,7 @@ export class MapSurface {
             this.requestRender();
             this.onWorldClick?.(point);
         } catch {
-            if (!this.disposed) this.accessibilityStatus.textContent =
+            if (isCurrent()) this.accessibilityStatus.textContent =
                 "Cell selection failed. Retry after the map is available.";
         }
     }
@@ -314,6 +333,7 @@ export class MapSurface {
         } else if (event.key === "Escape") {
             this.renderer.selectedHex = null;
             this.renderer.selectedWorldCell = null;
+            this.cellSelectionGeneration++;
             this.accessibilityStatus.textContent = "Selected cell cleared.";
             this.hexSelectionHandler?.(null);
             this.cellSelectionHandler?.(null);
