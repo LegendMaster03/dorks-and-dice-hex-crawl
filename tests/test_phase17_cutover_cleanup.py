@@ -69,7 +69,7 @@ class Phase17CutoverCleanupTests(unittest.TestCase):
         text = WORKFLOW.read_text(encoding="utf-8")
         smoke = text.index("- name: Smoke test PostgreSQL-backed container")
         cutover = text.index("- name: Prepare verified Phase 17 live-data recovery before cutover")
-        deploy = text.index("- name: Deploy\\n")
+        deploy = text.index("      - name: Deploy")
         self.assertLess(smoke, cutover)
         self.assertLess(cutover, deploy)
         self.assertIn("python3 .github/scripts/phase17-prepare-recovery.py", text)
