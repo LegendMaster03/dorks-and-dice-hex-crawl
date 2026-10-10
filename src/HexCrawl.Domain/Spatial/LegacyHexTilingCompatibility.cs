@@ -44,6 +44,41 @@ public static class LegacyHexTilingCompatibility
     public static HexId ToHexId(WorldCellId cell) =>
         new(cell.TilingId, ToHex(cell.Address));
 
+    /// <summary>Legacy grid is a verified compatibility projection, never a second editable authority.</summary>
+    public static bool Matches(PeriodicWorldTiling authoritative, HexGridDefinition grid)
+    {
+        if (authoritative.Id != grid.Id || authoritative.Revision < 1)
+            return false;
+        var projection = FromGrid(grid);
+        if (authoritative.Topology.QuotientDsSymbol != projection.Topology.QuotientDsSymbol
+            || authoritative.Topology.TranslationDsSymbol != projection.Topology.TranslationDsSymbol
+            || authoritative.Topology.MotifCells.Count != projection.Topology.MotifCells.Count
+            || authoritative.Realization.Units != projection.Realization.Units)
+            return false;
+        var source = projection.Topology.MotifCells[0];
+        var actual = authoritative.Topology.MotifCells[0];
+        if (source.Id != actual.Id || source.Boundary.Count != actual.Boundary.Count
+            || source.Boundary.Where((edge, index) => edge != actual.Boundary[index]).Any())
+            return false;
+        // All polygon vertices and both basis translations must retain their
+        // original world-space meaning, not merely an equivalent D-symbol.
+        foreach (var hex in new[] { new HexCoordinate(0, 0), new HexCoordinate(1, 0), new HexCoordinate(0, 1) })
+        {
+            var address = ToAddress(hex);
+            var left = projection.Resolve(address).Polygon;
+            var right = authoritative.Resolve(address).Polygon;
+            if (left.Count != right.Count)
+                return false;
+            for (int i = 0; i < left.Count; i++)
+            {
+                double scale = Math.Max(1, Math.Max(Math.Abs(left[i].X), Math.Abs(left[i].Y)));
+                if (left[i].DistanceTo(right[i]) > scale * 1e-9)
+                    return false;
+            }
+        }
+        return true;
+    }
+
     public static PeriodicWorldTiling Create(HexGridDefinition grid)
     {
         ArgumentNullException.ThrowIfNull(grid);

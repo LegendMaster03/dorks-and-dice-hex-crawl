@@ -104,7 +104,15 @@ public sealed partial class HexCrawlService
             throw new HexCrawlConflictException("Grid geometry can not be changed after an expedition has been created for this overworld.");
         }
 
-        var updated = current with { World = current.World with { Name = name, Grid = command.Grid } };
+        var newTiling = LegacyHexTilingCompatibility.Create(command.Grid) with
+        {
+            Revision = current.World.SpatialTiling.Revision +
+                (command.Grid == current.World.Grid ? 0 : 1)
+        };
+        var updated = current with
+        {
+            World = current.World with { Name = name, Grid = command.Grid, Tiling = newTiling }
+        };
         return await SaveWorldAsync(updated, command.ExpectedVersion, cancellationToken);
     }
 

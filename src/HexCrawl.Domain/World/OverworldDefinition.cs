@@ -26,9 +26,13 @@ public sealed record OverworldDefinition
     {
         if (Tiling is null && _legacyGrid is null)
             throw new InvalidOperationException("An overworld requires spatial authority.");
-        if (Tiling is not null && _legacyGrid is not null)
-            throw new InvalidOperationException("World geometry cannot have two competing authorities.");
-        if (Tiling is not null) Tiling.Validate();
+        if (Tiling is not null)
+        {
+            Tiling.Validate();
+            if (_legacyGrid is not null && !LegacyHexTilingCompatibility.Matches(Tiling, _legacyGrid))
+                throw new InvalidOperationException(
+                    "Legacy grid projection does not match authoritative periodic geometry.");
+        }
         else _legacyGrid!.Validate();
     }
 
