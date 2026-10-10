@@ -32,6 +32,7 @@ export class SourceMapWorkspace {
     private coordinatedRasterView: CoordinatedRasterView = "manual";
     private manualHiddenSourceMapIds: Set<string> | null = null;
     private gridAlignmentBusy = false;
+    private compatibilityGeneration = 0;
     private disposed = false;
 
     public constructor(
@@ -86,13 +87,15 @@ export class SourceMapWorkspace {
                     <option value="Neutral">Shared / neutral reference</option>
                     <option value="Other">Auxiliary / reference only</option>
                 </select></label>
-                <label><input name="bakedGrid" type="checkbox"> Image includes a visible hex grid</label>
+                <label><input name="bakedGrid" type="checkbox"> Image includes visible tile boundaries</label>
                 <div class="hc-button-row">
                     <button type="submit" class="hc-primary-action">Save metadata</button>
                     <button type="button" data-align-grid>Detect / repair hex grid</button>
+                    <button type="button" data-check-pattern title="Read-only experimental image comparison">Check cell pattern</button>
                     <button type="button" data-register>Manual placement</button>
                     <button type="button" class="hc-danger-action" data-delete>Delete reference map</button>
                 </div>
+                <section class="hc-status-section" data-pattern-assessment hidden aria-live="polite"></section>
             </form>
             <section data-registration-panel hidden>
                 <p class="hc-subsection-title">Manual map placement</p>
@@ -163,6 +166,9 @@ export class SourceMapWorkspace {
                 }
             });
 
+        required<HTMLButtonElement>(this.host, "[data-check-pattern]")
+            .addEventListener("click", () =>
+                void this.run(null, () => this.assessPattern(this.selected)));
         const selectedAlignButton = required<HTMLButtonElement>(this.host, "[data-align-grid]");
         selectedAlignButton.addEventListener("click", () =>
             void this.run(null, () => this.detectGrid(this.selected, selectedAlignButton)));
@@ -197,6 +203,7 @@ export class SourceMapWorkspace {
     public dispose(): void {
         this.disposed = true;
         this.gridAlignmentController.dispose();
+        this.compatibilityGeneration++;
         this.registrationController.dispose();
         this.wonderdraftController.dispose();
     }
@@ -274,7 +281,7 @@ export class SourceMapWorkspace {
             const bakedGrid = document.createElement("input");
             bakedGrid.type = "checkbox";
             bakedGrid.name = "mapBakedGrid";
-            gridLabel.append(bakedGrid, document.createTextNode(" Image includes a visible hex grid"));
+            gridLabel.append(bakedGrid, document.createTextNode(" Image includes printed tile boundaries"));
 
             row.append(heading, nameLabel, roleLabelElement, gridLabel);
             this.uploadFilesHost.append(row);
@@ -461,12 +468,71 @@ export class SourceMapWorkspace {
     private renderSelected(): void {
         this.editForm.hidden = !this.selected;
         if (!this.selected) return;
+        const assessment = required<HTMLElement>(this.editForm, "[data-pattern-assessment]");
+        if (assessment.dataset.sourceMapId !== this.selected.id) {
+            assessment.hidden = true;
+            assessment.replaceChildren();
+            assessment.dataset.sourceMapId = this.selected.id;
+        }
+        const hexOnly = !!this.getWorld().grid;
+        const align = required<HTMLButtonElement>(this.editForm, "[data-align-grid]");
+        align.hidden = !hexOnly;
+        align.disabled = !hexOnly || this.gridAlignmentBusy;
         input(this.editForm, "name").value = this.selected.name;
         this.editGeographySelect.value = this.selected.geographyKey;
         select(this.editForm, "role").value = this.selected.role;
         input(this.editForm, "bakedGrid").checked = this.selected.containsBakedGrid;
         required<HTMLElement>(this.editForm, "[data-source-map-selected-meta]").textContent =
             `${this.selected.pixelWidth}×${this.selected.pixelHeight} ${this.selected.mediaType}; ${this.selected.originalFileName ?? "original filename unavailable"}; ${this.selected.alignment ? "aligned" : "shown with temporary placement until aligned"}; ${this.selected.importedContentCount ?? 0} imported source records.`;
+    }
+
+    private async assessPattern(sourceMap: SourceMapDetail | null): Promise<void> {
+        if (!sourceMap) throw new Error("Select a reference map first.");
+        if (this.gridAlignmentBusy) throw new Error("Finish the current map analysis first.");
+        const generation = ++this.compatibilityGeneration;
+        const button = required<HTMLButtonElement>(this.editForm, "[data-check-pattern]");
+        const status = required<HTMLElement>(this.editForm, "[data-pattern-assessment]");
+        const selectedWorld = this.getWorld();
+        status.hidden = false;
+        status.dataset.sourceMapId = sourceMap.id;
+        status.textContent = "Checking the image against the saved world geometry…";
+        button.disabled = true;
+        try {
+            const assessment = await this.api.assessSourceMapCompatibility(
+                selectedWorld.id, sourceMap.id);
+            if (this.disposed || generation !== this.compatibilityGeneration
+                || this.selected?.id !== sourceMap.id) return;
+            if (this.getWorld().version !== assessment.worldVersion) {
+                status.textContent = "The world changed during analysis. Reload and check again.";
+                return;
+            }
+            status.replaceChildren();
+            const result = document.createElement("p");
+            result.textContent = assessment.explanation;
+            status.append(result);
+            if (assessment.blockers.length) {
+                const warning = document.createElement("p");
+                warning.textContent = "Changing world geometry would also affect:";
+                const list = document.createElement("ul");
+                for (const blocker of assessment.blockers) {
+                    const item = document.createElement("li");
+                    item.textContent = blocker;
+                    list.append(item);
+                }
+                status.append(warning, list);
+            }
+            const next = document.createElement("p");
+            next.className = "hc-hint";
+            next.textContent = assessment.status === "structure-match"
+                ? "Existing world geometry is unchanged. Review registration or use manual placement before accepting map alignment."
+                : assessment.status === "mismatch"
+                    ? "Keep this world configuration and use a different map, or create a separate world. Automatic conversion is not available until its dependencies can be migrated safely."
+                    : "Use manual placement or a different image. No world, procedure, or map registration was changed.";
+            status.append(next);
+        } finally {
+            if (!this.disposed && generation === this.compatibilityGeneration)
+                button.disabled = false;
+        }
     }
 
     private async detectGrid(sourceMap: SourceMapDetail | null, button: HTMLButtonElement): Promise<void> {
@@ -493,7 +559,7 @@ export class SourceMapWorkspace {
 
     private setGridAlignmentBusy(busy: boolean): void {
         this.gridAlignmentBusy = busy;
-        for (const button of this.host.querySelectorAll<HTMLButtonElement>("[data-align-grid], [data-register]")) {
+        for (const button of this.host.querySelectorAll<HTMLButtonElement>("[data-align-grid], [data-register], [data-check-pattern]")) {
             button.disabled = busy;
         }
     }
