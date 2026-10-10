@@ -53,29 +53,32 @@ public static class LegacyHexTilingCompatibility
         if (authoritative.Topology.QuotientDsSymbol != projection.Topology.QuotientDsSymbol
             || authoritative.Topology.TranslationDsSymbol != projection.Topology.TranslationDsSymbol
             || authoritative.Topology.MotifCells.Count != projection.Topology.MotifCells.Count
-            || authoritative.Realization.Units != projection.Realization.Units)
+            || authoritative.Realization.Units != projection.Realization.Units
+            || authoritative.PhysicalDistancePerWorldUnit != projection.PhysicalDistancePerWorldUnit)
             return false;
         var source = projection.Topology.MotifCells[0];
         var actual = authoritative.Topology.MotifCells[0];
         if (source.Id != actual.Id || source.Boundary.Count != actual.Boundary.Count
             || source.Boundary.Where((edge, index) => edge != actual.Boundary[index]).Any())
             return false;
-        // All polygon vertices and both basis translations must retain their
-        // original world-space meaning, not merely an equivalent D-symbol.
-        foreach (var hex in new[] { new HexCoordinate(0, 0), new HexCoordinate(1, 0), new HexCoordinate(0, 1) })
-        {
-            var address = ToAddress(hex);
-            var left = projection.Resolve(address).Polygon;
-            var right = authoritative.Resolve(address).Polygon;
-            if (left.Count != right.Count)
+
+        // Compare pose, lattice basis and local corners independently.
+        // A relative tolerance based on absolute world position would allow
+        // substantial geometry drift at large map origins.
+        double tolerance = Math.Max(1e-12, grid.HexRadiusWorldUnits * 1e-10);
+        static bool Close(TilingWorldPoint a, TilingWorldPoint b, double epsilon) =>
+            Math.Abs(a.X - b.X) <= epsilon && Math.Abs(a.Y - b.Y) <= epsilon;
+        if (authoritative.Origin != projection.Origin
+            || !Close(authoritative.Realization.TranslationU, projection.Realization.TranslationU, tolerance)
+            || !Close(authoritative.Realization.TranslationV, projection.Realization.TranslationV, tolerance))
+            return false;
+        if (!authoritative.Realization.Polygons.TryGetValue(MotifId, out var polygon)
+            || !projection.Realization.Polygons.TryGetValue(MotifId, out var expected)
+            || polygon.Count != expected.Count)
+            return false;
+        for (int i = 0; i < polygon.Count; i++)
+            if (!Close(polygon[i], expected[i], tolerance))
                 return false;
-            for (int i = 0; i < left.Count; i++)
-            {
-                double scale = Math.Max(1, Math.Max(Math.Abs(left[i].X), Math.Abs(left[i].Y)));
-                if (left[i].DistanceTo(right[i]) > scale * 1e-9)
-                    return false;
-            }
-        }
         return true;
     }
 
@@ -108,14 +111,22 @@ public static class LegacyHexTilingCompatibility
         var translationV = HexGeometry.HexToWorld(grid, new HexCoordinate(0, 1)) - zero;
         var corners = HexGeometry.Corners(grid, new HexCoordinate(0, 0))
             .Select(p => new TilingWorldPoint(p.X - zero.X, p.Y - zero.Y)).ToArray();
+        // Coordinates must remain in the original world/map space. The
+        // neighbor-center distance is an independent physical calibration;
+        // labeling these unscaled polygon coordinates as miles or kilometers
+        // would silently corrupt Phase 18 movement distances.
+        var physicalPerWorldUnit = new DistanceMeasure(
+            grid.NeighborCenterDistance.Value / (Math.Sqrt(3) * grid.HexRadiusWorldUnits),
+            grid.NeighborCenterDistance.Unit);
         var metric = new PeriodicMetricRealization(
-            grid.NeighborCenterDistance.Unit.Symbol,
+            "world-unit",
             new TilingWorldPoint(translationU.X, translationU.Y),
             new TilingWorldPoint(translationV.X, translationV.Y),
             new Dictionary<string, IReadOnlyList<TilingWorldPoint>>(StringComparer.Ordinal)
             { [MotifId] = corners },
             []);
-        var world = new PeriodicWorldTiling(grid.Id, topology, metric, grid.Origin);
+        var world = new PeriodicWorldTiling(grid.Id, topology, metric, grid.Origin,
+            PhysicalDistancePerWorldUnit: physicalPerWorldUnit);
         world.Validate();
         return world;
     }
