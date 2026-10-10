@@ -117,26 +117,47 @@ source control, or shared with testers. The deployment preflight compares the
 proposed Compose configuration and host environment against the actual
 running configuration; **even syntactically valid setting changes fail
 closed**, so separately authorized configuration changes need a dedicated
-operator procedure. The new image and previous image are both recreated
-using the frozen known-good environment rather than a mutable host `.env`.
+operator procedure. The new image is started only after preflight validates the
+bounded production Compose model: it rejects changed commands, entrypoints,
+host ports, mount access modes, explicit network aliases and unmodeled runtime
+options. Preflight also saves the verified Compose definition to
+`rollback.compose.yml` in the restricted snapshot directory. Recovery
+uses **this independently preserved definition**, not the potentially
+changed `docker-compose.yml` from the candidate checkout. Both deployment
+and restoration use the frozen environment instead of a mutable host `.env`.
+Changing the production runtime model requires separate operator approval;
+this fail-closed process intentionally does not configure new services.
 
 If deployment/verification fails, the workflow attempts to restore the
 retained image with the captured environment, volumes and network
 configuration, checks readiness and verifies the exact restored image ID.
-The workflow remains failed even if recovery succeeds. The private snapshot
-is erased after a healthy deployment or verified rollback. If recovery fails,
-the snapshot is retained for an authorized operator's intervention; protect
-the runner and do not publish the secret-bearing directory.
+The workflow remains failed even if recovery succeeds. Snapshot cleanup
+occurs **only** after an explicitly verified deployment, an explicitly
+verified restoration, or when both deployment and verification steps were
+skipped (replacement never began). A cancelled or unverified replacement
+**retains** the snapshot; GitHub's `always()` alone is insufficient to
+authorize deletion. A cancelled job may not execute restoration, so an
+operator must inspect the running image and use the retained configuration
+before attempting recovery. Runner death, storage loss and manual cancellation
+cannot be certified safe by CI. Protect the private directory and never
+publish its secrets.
 
-The [isolated recovery rehearsal](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38020927282)
-exercised the real workflow shell steps on disposable Docker containers
-for **both services**, including a valid rollout, altered configuration
-rejected before replacement, failed-readiness restoration with the **host
-environment deliberately left invalid**, revision mismatch, failed Compose
-container replacement, no-prior-image refusal, and retention of a persisted
-volume record. All observed cases passed. The rehearsal is **not** proof of
-host-level rollback, application credential correctness, GitHub job cancellation
-recovery, or compatibility of arbitrary future schema changes.
+The [expanded isolated recovery rehearsal](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38024042740)
+exercised the actual workflow shell blocks on disposable Docker containers
+for **both services**. It rejected unverified command, entrypoint, published
+port, read-only volume, privileged and network alias configurations before
+replacement. It then independently recovered the old image and persisted
+volume record while leaving hostile port, command and read-only volume
+settings **in the checkout throughout rollback**. It also verified
+restoration while the host environment remained invalid, wrong-revision
+recovery and no-prior-image refusal.
+
+The same CI job evaluates **the actual workflow restore and cleanup
+expressions** for success, failure, skipped and cancelled combinations.
+This is a semantic test of the expressions, not an induced live GitHub
+cancellation or proof of recovery after runner loss. Production host access,
+credential correctness and arbitrary future schema compatibility remain
+unverified.
 
 Manual rollback requires an operator to verify that `:pre-deploy` still
 references the appropriate healthy image, that the former runtime
