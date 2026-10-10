@@ -53,6 +53,30 @@ public sealed class Phase19WorldGeometryEndpointsTests
                     cell.GetProperty("id").GetProperty("tilingId").GetGuid(),
                     result.GetProperty("id").GetProperty("tilingId").GetGuid());
                 Assert.True(result.GetProperty("polygon").GetArrayLength() >= 3);
+                // Complete the image-free workflow without a custom procedure
+                // JSON editor or a reconfigured preset template.
+                using var createdProcedure = await client.PostAsJsonAsync(
+                    $"/api/overworlds/{worldId:D}/cell-procedures", new { });
+                createdProcedure.EnsureSuccessStatusCode();
+                var pinned = await createdProcedure.Content.ReadFromJsonAsync<JsonElement>();
+                using var start = await client.PostAsJsonAsync(
+                    $"/api/overworlds/{worldId:D}/cell-expeditions", new
+                    {
+                        name = "First cell journey",
+                        procedureId = pinned.GetProperty("procedureId").GetGuid(),
+                        procedureRevision = pinned.GetProperty("revision").GetInt32(),
+                        presentationKey = "dm-controlled",
+                        startCell = address
+                    });
+                start.EnsureSuccessStatusCode();
+                var started = await start.Content.ReadFromJsonAsync<JsonElement>();
+                Assert.Equal(JsonValueKind.Null, started.GetProperty("expedition")
+                    .GetProperty("currentHex").ValueKind);
+                Assert.Equal("CellSteps", started.GetProperty("procedure")
+                    .GetProperty("runtime").GetProperty("travelResolution").GetString());
+                Assert.Equal(cell.GetProperty("id").GetProperty("tilingId").GetGuid(),
+                    started.GetProperty("expedition").GetProperty("currentCell")
+                        .GetProperty("tilingId").GetGuid());
             }
 
             using (var otherHost = TestWebHost.Create(database, "bob"))
@@ -62,6 +86,9 @@ public sealed class Phase19WorldGeometryEndpointsTests
                     (await other.GetAsync($"/api/overworlds/{worldId:D}/cells/viewport?minX=0&minY=0&maxX=1&maxY=1")).StatusCode);
                 Assert.Equal(HttpStatusCode.NotFound,
                     (await other.GetAsync($"/api/overworlds/{worldId:D}/cells/containing?x=0&y=0")).StatusCode);
+                using var deniedProcedure = await other.PostAsJsonAsync(
+                    $"/api/overworlds/{worldId:D}/cell-procedures", new { });
+                Assert.Equal(HttpStatusCode.NotFound, deniedProcedure.StatusCode);
             }
         }
         finally
