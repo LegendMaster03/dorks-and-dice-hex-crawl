@@ -67,18 +67,6 @@ jobs:
             -f docker-compose.yml config >/dev/null
           python3 .github/scripts/phase16-deployment-config.py verify dorks-and-dice-hex-crawl "$ENV_FILE" "$DEPLOY_SNAPSHOT_DIR"
 
-      - name: Verify Phase 17 recovery and cutover authorization
-        # This deliberately blocks schema-10 deployment until an operator has
-        # restored BOTH backup artifacts in isolation and attested the exact SHA.
-        # Remove this temporary gate only after the migration/recovery review
-        # and signed-in smoke test of the deployed schema-10 service.
-        timeout-minutes: 5
-        run: |
-          set -euo pipefail
-          python3 .github/scripts/phase17-recovery-gate.py \
-            "${PHASE17_RECOVERY_MANIFEST:-/mnt/HDDs/www/dorks-and-dice-hex-crawl/phase17-recovery-attestation.json}" \
-            "$DEPLOY_SHA"
-
       - name: Build image
         timeout-minutes: 10
         run: |
@@ -162,6 +150,18 @@ jobs:
           docker rm -f dorks-and-dice-hex-crawl-test-postgres 2>/dev/null || true
           docker network rm dorks-and-dice-hex-crawl-test 2>/dev/null || true
 
+      - name: Prepare verified Phase 17 live-data recovery before cutover
+        # The live database and map volume are backed up and restored in
+        # disposable isolation only after image build and smoke checks pass.
+        # The old Hex Crawl writer is quiesced for the brief cutover window.
+        # Unsupported schemas, incomplete backups or failed restores abort
+        # before deploy, with the original container restarted.
+        id: cutover
+        timeout-minutes: 12
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/phase17-prepare-recovery.py "$DEPLOY_SHA"
+
       - name: Deploy
         id: deploy
         timeout-minutes: 5
@@ -210,6 +210,20 @@ jobs:
             exit 1
           fi
 
+      - name: Resume original service if the cutover did not begin
+        id: resume
+        if: ${{ always() && steps.previous_image.outputs.available == 'true' && steps.deploy.outcome == 'skipped' }}
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          state="$(docker inspect --type container --format '{{.State.Running}}' dorks-and-dice-hex-crawl 2>/dev/null || true)"
+          if [ "$state" = "false" ]; then
+            docker start dorks-and-dice-hex-crawl
+          elif [ "$state" != "true" ]; then
+            echo 'The original application container is missing; operator recovery is required.' >&2
+            exit 1
+          fi
+
       - name: Require controlled recovery after failed schema-10 cutover
         if: ${{ failure() && steps.previous_image.outputs.available == 'true' && (steps.deploy.outcome == 'failure' || steps.verify.outcome == 'failure') }}
         run: |
@@ -226,7 +240,7 @@ jobs:
         # Keep the exact previous Compose/environment snapshot whenever cutover
         # failed, was cancelled, or reached an uncertain state. Only discard it
         # after proven readiness or a failure strictly before deployment.
-        if: ${{ always() && !cancelled() && steps.previous_image.outputs.available == 'true' && (steps.verify.outcome == 'success' || (steps.deploy.outcome == 'skipped' && steps.verify.outcome == 'skipped')) }}
+        if: ${{ always() && !cancelled() && steps.previous_image.outputs.available == 'true' && (steps.verify.outcome == 'success' || (steps.deploy.outcome == 'skipped' && steps.verify.outcome == 'skipped' && steps.resume.outcome == 'success')) }}
         timeout-minutes: 1
         env:
           DEPLOY_SNAPSHOT_DIR: ${{ steps.previous_image.outputs.snapshot_dir }}
