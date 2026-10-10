@@ -11,7 +11,7 @@ public sealed class Phase19RasterRegistrationTests
     [InlineData("<1:1,1,1:3,6>")]
     [InlineData("<20:2 7 6 10 12 13 15 17 20 19,3 5 9 12 10 13 16 18 19 20,4 6 8 11 12 14 15 17 19 20:3 3 4,5 5>")]
     [InlineData("<24:2 7 6 10 14 16 18 20 17 19 24 23,3 5 9 12 13 15 17 19 21 22 24 23,4 6 8 11 14 15 18 21 22 19 23 24:4 4 4,3 6 3>")]
-    [InlineData("<28:2 7 6 10 13 15 17 18 20 22 25 23 27 28,3 5 9 12 11 14 16 19 21 24 23 26 27:6 4 4,3 4 4 3>")]
+    [InlineData("<28:2 7 6 10 13 15 17 18 20 22 25 23 27 28,3 5 9 12 11 14 16 19 21 24 23 26 27 28,4 6 8 11 13 14 17 19 20 23 25 22 28 27:6 4 4,3 4 4 3>")]
     public void IndependentlyValidatesMetricPhaseAndReciprocalInterfaces(string symbol)
     {
         var (world, evidence) = Fixture(symbol);
