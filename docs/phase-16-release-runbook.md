@@ -112,8 +112,12 @@ recreate the previous image using the same Compose project, environment,
 external network and persistent volumes; they then check readiness and
 the restored container's exact image ID. The GitHub run remains failed even
 when restore succeeds. A failed rollback requires immediate human intervention
-and must not be described as safe recovery. These automatic branches have
-not been exercised against production.
+and must not be described as safe recovery. The [isolated deployment rehearsal](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38016975981)
+executed the workflow's actual capture, deploy, verify and restore shell blocks
+against disposable Compose containers for both services. Healthy rollout,
+failed-readiness restoration, wrong-revision restoration, missing-prior-image
+handling and retained-volume file checks passed. These automatic branches
+have **not** been exercised against production.
 
 For a **manual** rollback, an operator must first establish that
 `:pre-deploy` points to the correct previously healthy image and that
