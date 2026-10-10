@@ -23,6 +23,25 @@ public sealed class RuntimeEngineTests
     }
 
     [Fact]
+    public void NavigationDmOverrideNoteIsRecordedWhenTravelUsesManualResolution()
+    {
+        var setup = CreateSetup();
+        var result = _engine.Advance(
+            setup.Context, TestProcedureProfiles.FixedDistance(),
+            setup.Expedition, Plan(0, true),
+            new WatchAdvanceInputs(
+                TravelDistanceResolver.Fixed(Miles(0)),
+                Navigation: new ResolvedNavigation(
+                    NavigationCheckOutcome.Succeeded, null,
+                    new ResolutionProvenance(ResolutionSource.DmOverride,
+                        "Navigator used a DM-resolved course."))));
+        var audit = Assert.Single(result.Events,
+            e => e.Kind == CrawlRuntimeEventKind.DmOverrideApplied);
+        Assert.Equal("Navigator used a DM-resolved course.", audit.Message);
+        Assert.Equal(setup.Expedition.CurrentHex, audit.Hex);
+    }
+
+    [Fact]
     public void NavigationSuccessKeepsIntendedCourse()
     {
         var setup = CreateSetup();

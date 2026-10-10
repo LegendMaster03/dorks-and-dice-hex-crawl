@@ -44,6 +44,26 @@ public sealed class Phase18CellWatchRuntimeTests
     }
 
     [Fact]
+    public void NavigationDmOverrideNoteIsRecordedWhenTravelUsesManualResolution()
+    {
+        var (world, procedure, state, plan) = Setup("<1:1,1,1:4,4>", calibrated: true);
+        var result = new CrawlRuntimeEngine().AdvanceCellWatch(
+            world, procedure, state, plan,
+            Inputs(0) with
+            {
+                Navigation = new ResolvedCellNavigation(
+                    NavigationCheckOutcome.Succeeded, null,
+                    new ResolutionProvenance(ResolutionSource.DmOverride,
+                        "Navigator used a DM-resolved course."))
+            });
+        var audit = Assert.Single(result.Events,
+            e => e.Kind == CrawlRuntimeEventKind.DmOverrideApplied);
+        Assert.Equal("Navigator used a DM-resolved course.", audit.Message);
+        Assert.Equal(state.Traversal.CurrentCell, audit.Cell);
+        Assert.Null(audit.Hex);
+    }
+
+    [Fact]
     public void BoundaryReviewPausePersistsAndResumesRemainingTime()
     {
         var (world, procedure, state, plan) = Setup("<1:1,1,1:4,4>", calibrated: true);
