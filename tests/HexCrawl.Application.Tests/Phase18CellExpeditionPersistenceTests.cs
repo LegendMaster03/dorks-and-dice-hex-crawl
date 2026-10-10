@@ -228,7 +228,86 @@ public sealed class Phase18CellExpeditionPersistenceTests
         Assert.Equal(1L, (long)(await count.ExecuteScalarAsync())!);
     }
 
-    private static CampaignProcedure CellProcedure(PeriodicWorldTiling world)
+    [Fact]
+    public async Task OwnerCanCommitCellWatchThroughApplicationWithVersionAndRestartProtection()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var store = new PostgresHexCrawlStore(database.ConnectionString);
+        await store.InitializeAsync();
+        var generated = DelaneyDressHarmonicMetricRealization.Construct(
+            "<1:1,1,1:4,4>", 1.5, "world-unit");
+        Assert.Equal("realized", generated.Status);
+        var tiling = new PeriodicWorldTiling(
+            Guid.NewGuid(), generated.Topology!, generated.Realization!,
+            new WorldPoint(0, 0));
+        tiling.Validate();
+        var now = DateTimeOffset.UtcNow;
+        var world = new OverworldDefinition
+        {
+            Id = Guid.NewGuid(), Name = "Cell watch application world", Tiling = tiling
+        };
+        await store.CreateOverworldAsync(new StoredOverworld(world, "alice", 1, now, now));
+
+        var startingCell = tiling.Resolve(new PeriodicCellAddress(
+            tiling.Topology.MotifCells[0].Id, new LatticeDisplacement(0, 0)));
+        var exit = tiling.Boundaries(startingCell.Id.Address)[0];
+        var midpoint = new WorldPoint(
+            (exit.Start.X + exit.End.X) / 2, (exit.Start.Y + exit.End.Y) / 2);
+        var heading = midpoint - startingCell.Center;
+        var state = new CellExpeditionState
+        {
+            Id = Guid.NewGuid(),
+            Traversal = new PeriodicCellTraversal
+            {
+                CurrentCell = startingCell.Id,
+                Position = startingCell.Center,
+                SelectedExitInterfaceIndex = exit.InterfaceIndex
+            }
+        };
+        var initial = new StoredExpedition(
+            "Cell steps through app", state,
+            new WorldBoundCrawlSessionContext(world.Id),
+            null, CellProcedure(tiling, TravelResolutionMode.CellSteps),
+            null, TimeSpan.Zero, "alice", 1, now, now);
+        await store.CreateExpeditionAsync(initial);
+
+        var plan = new CellWatchTravelPlan(
+            heading, false, false, TravelModeSelection.Normal, NavigationAidSelection.None);
+        var provenance = new ResolutionProvenance(ResolutionSource.ManualRoll);
+        var inputs = new CellWatchAdvanceInputs(
+            ResolvedTravelAmount.CellTransitions(1, provenance),
+            new ResolvedCellNavigation(NavigationCheckOutcome.Succeeded, null, provenance),
+            ResolvedEncounter.None);
+        var service = new HexCrawlService(store);
+
+        await Assert.ThrowsAsync<HexCrawlNotFoundException>(() =>
+            service.AdvanceCellExpeditionAsync(initial.Id, "bob", 1, plan, inputs));
+
+        var saved = await service.AdvanceCellExpeditionAsync(initial.Id, "alice", 1, plan, inputs);
+        var moved = Assert.IsType<CellExpeditionState>(saved.Runtime);
+        Assert.Equal(exit.To, moved.Traversal.CurrentCell);
+        Assert.Null(moved.DistanceTraveled);
+        Assert.Equal(1, moved.CompletedWatches);
+        Assert.Equal(1, moved.History.Count(e => e.Kind == CrawlRuntimeEventKind.CellEntered));
+        Assert.DoesNotContain(moved.History, e => e.Hex is not null);
+        Assert.True(saved.Version > initial.Version);
+
+        await Assert.ThrowsAsync<HexCrawlConcurrencyException>(() =>
+            service.AdvanceCellExpeditionAsync(initial.Id, "alice", 1, plan, inputs));
+
+        var reopened = new PostgresHexCrawlStore(database.ConnectionString);
+        await reopened.InitializeAsync();
+        var loaded = await reopened.GetExpeditionAsync(initial.Id, "alice");
+        Assert.NotNull(loaded);
+        var restored = Assert.IsType<CellExpeditionState>(loaded!.Runtime);
+        restored.Validate(tiling);
+        Assert.Equal(moved.Traversal.CurrentCell, restored.Traversal.CurrentCell);
+        Assert.Equal(moved.ElapsedTravelTime, restored.ElapsedTravelTime);
+        Assert.Equal(saved.Version, loaded.Version);
+        Assert.Single(restored.History, e => e.Kind == CrawlRuntimeEventKind.CellEntered);
+    }
+
+    private static CampaignProcedure CellProcedure(PeriodicWorldTiling world, TravelResolutionMode mode = TravelResolutionMode.ContinuousDistance)
     {
         var original = SyntheticProcedureFixtures.MixedProcedure();
         var modules = original.Modules
@@ -238,7 +317,7 @@ public sealed class Phase18CellExpeditionPersistenceTests
                 if (m.Mechanic.ExecutionHandler != GenericProcedureExecutionHandlers.MovementResolutionPolicy)
                     return m;
                 var parameters = m.Parameters.ToDictionary(x => x.Key, x => x.Value);
-                parameters["travelResolution"] = TravelResolutionMode.ContinuousDistance.ToString();
+                parameters["travelResolution"] = mode.ToString();
                 parameters["tracksIntraHexProgress"] = "false";
                 parameters["actualDistanceResolution"] = ActualDistanceResolutionMode.Fixed.ToString();
                 return m with { Mechanic = m.Mechanic with { Version = 2 }, Parameters = parameters };
