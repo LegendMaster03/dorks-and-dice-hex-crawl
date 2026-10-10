@@ -1,3 +1,4 @@
+using HexCrawl.Domain.Spatial;
 namespace HexCrawl.Domain.Procedure;
 
 public enum ProcedureAutomationLevel
@@ -324,23 +325,25 @@ public static class CampaignProcedureSchema
 {
     public const string LegacyVersion = "1";
     public const string PreviousVersion = "1.1";
-    public const string CurrentVersion = "1.2";
+    public const string PriorTilingVersion = "1.2";
+    public const string CurrentVersion = "1.3";
     public const string CurrentHexTilingDsSymbol = "<1:1,1,1:6,3>";
 
     public static CampaignProcedure Upgrade(CampaignProcedure procedure)
     {
         ArgumentNullException.ThrowIfNull(procedure);
-        if (!string.Equals(procedure.SchemaVersion, LegacyVersion, StringComparison.Ordinal)
-            && !string.Equals(procedure.SchemaVersion, PreviousVersion, StringComparison.Ordinal))
-        {
+        if (string.Equals(procedure.SchemaVersion, CurrentVersion, StringComparison.Ordinal))
             return procedure;
-        }
-
-        return procedure with
-        {
-            SchemaVersion = CurrentVersion,
-            TilingDsSymbol = CurrentHexTilingDsSymbol
-        };
+        if (string.Equals(procedure.SchemaVersion, PriorTilingVersion, StringComparison.Ordinal))
+            return procedure with { SchemaVersion = CurrentVersion };
+        if (string.Equals(procedure.SchemaVersion, LegacyVersion, StringComparison.Ordinal)
+            || string.Equals(procedure.SchemaVersion, PreviousVersion, StringComparison.Ordinal))
+            return procedure with
+            {
+                SchemaVersion = CurrentVersion,
+                TilingDsSymbol = CurrentHexTilingDsSymbol
+            };
+        return procedure;
     }
 }
 
@@ -398,14 +401,11 @@ public sealed record CampaignProcedure
                 $"Campaign procedure schema version '{SchemaVersion}' is not supported. Expected {CampaignProcedureSchema.CurrentVersion}.");
         }
         MechanicDefinition.Require(TilingDsSymbol, "Campaign procedure Delaney-Dress tiling notation");
-        if (!string.Equals(
-                TilingDsSymbol,
-                CampaignProcedureSchema.CurrentHexTilingDsSymbol,
-                StringComparison.Ordinal))
+        var inspection = DelaneyDressTopology.Inspect(TilingDsSymbol, 2048);
+        if (inspection.Status != DelaneyDressStatus.Euclidean)
         {
             throw new InvalidOperationException(
-                $"Campaign procedure tiling '{TilingDsSymbol}' is not supported by schema {CampaignProcedureSchema.CurrentVersion}. "
-                + $"The current schema supports only '{CampaignProcedureSchema.CurrentHexTilingDsSymbol}'.");
+                "Campaign procedure tiling must be a structurally valid supported Euclidean Delaney-Dress symbol.");
         }
         if (Modules.Count == 0)
         {
