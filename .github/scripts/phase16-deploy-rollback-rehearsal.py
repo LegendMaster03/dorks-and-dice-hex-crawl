@@ -129,7 +129,9 @@ def main(workflow, service):
         env = dict(os.environ, DEPLOY_ENV_FILE=str(env_file),
                    DEPLOY_HEALTH_ATTEMPTS="3", GITHUB_OUTPUT=str(output))
         def captured():
-            fields = captured()
+            output.write_text("")
+            run(steps["capture"], root, env)
+            fields = outputs(output)
             if "snapshot_dir" in fields:
                 env["DEPLOY_SNAPSHOT_DIR"] = fields["snapshot_dir"]
                 snapshots.append(fields["snapshot_dir"])
