@@ -24,6 +24,17 @@ public static class KnowledgeDiscovery
         return knowledge with { Entries = entries };
     }
 
+    public static PlayerKnowledgeState KnowCell(PlayerKnowledgeState knowledge, WorldCellId cell)
+    {
+        ArgumentNullException.ThrowIfNull(knowledge);
+        if (cell.TilingId == Guid.Empty)
+            throw new InvalidOperationException("Known cell requires a real tiling identity.");
+        var known = knowledge.KnownCells ?? [];
+        return known.Contains(cell)
+            ? knowledge
+            : knowledge with { KnownCells = [.. known, cell] };
+    }
+
     public static PlayerKnowledgeState KnowHex(PlayerKnowledgeState knowledge, HexCoordinate hex)
     {
         if (knowledge.KnownHexes.Contains(hex))

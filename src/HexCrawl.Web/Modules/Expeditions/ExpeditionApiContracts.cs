@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization;
 using HexCrawl.Application;
 using HexCrawl.Application.Persistence;
 using HexCrawl.Domain.Knowledge;
@@ -293,6 +294,9 @@ public sealed record ExpeditionWorkbenchContract(
     IReadOnlyList<KnowledgeEntryContract> Knowledge,
     IReadOnlyList<RuntimeEventContract> History)
 {
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<WorldCellId>? KnownCells { get; init; }
+
     public static ExpeditionWorkbenchContract From(StoredExpedition expedition, OverworldDefinition? world = null)
     {
         var presentation = expedition.Knowledge?.PresentationPolicy;
@@ -325,7 +329,12 @@ public sealed record ExpeditionWorkbenchContract(
                 .ThenBy(item => item.SubjectId)
                 .Select(KnowledgeEntryContract.From)
                 .ToArray() ?? [],
-            expedition.Runtime.History.Select(RuntimeEventContract.From).ToArray());
+            expedition.Runtime.History.Select(RuntimeEventContract.From).ToArray())
+        {
+            KnownCells = expedition.Runtime is CellExpeditionState
+                ? expedition.Knowledge?.KnownCells ?? []
+                : null
+        };
     }
 }
 

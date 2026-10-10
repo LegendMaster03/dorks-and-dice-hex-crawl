@@ -47,6 +47,27 @@ public static class PresentationKnowledgeProjection
         return result;
     }
 
+    /// <summary>
+    /// Preserve the existing presentation policy's discovery-on-entry semantics
+    /// without fabricating axial coordinates. A generalized world records only
+    /// actual qualified cells; DM-controlled presentation stays manual.
+    /// </summary>
+    public static PlayerKnowledgeState ApplyEnteredCells(
+        MapPresentationPolicy policy,
+        PlayerKnowledgeState knowledge,
+        IEnumerable<WorldCellId> enteredCells)
+    {
+        policy.Validate();
+        if (policy.AutomationMode == PresentationAutomationMode.DmControlled
+            || !policy.MarkEnteredHexKnown)
+            return knowledge;
+
+        var result = knowledge;
+        foreach (var cell in enteredCells.Distinct())
+            result = KnowledgeDiscovery.KnowCell(result, cell);
+        return result;
+    }
+
     public static PlayerKnowledgeState ApplyEnteredHexes(
         MapPresentationPolicy policy,
         PlayerKnowledgeState knowledge,
