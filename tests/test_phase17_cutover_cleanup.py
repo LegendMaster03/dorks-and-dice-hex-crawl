@@ -33,7 +33,7 @@ def evaluate_cleanup(*, available=True, deployed="skipped",
                                     repr("true" if available else "false"))
     expression = expression.replace("steps.deploy.outcome", repr(deployed))
     expression = expression.replace("steps.verify.outcome", repr(verified))
-    tree = ast.parse(expression, mode="eval")
+    tree = ast.parse(expression.strip(), mode="eval")
     return bool(eval(compile(tree, "<GitHub cleanup condition>", "eval"),
                      {"__builtins__": {}}, {}))
 
