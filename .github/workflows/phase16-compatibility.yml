@@ -37,7 +37,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: LegendMaster03/dorks-and-dice-surveyor
-          ref: ${{ matrix.surveyor == 'old' && 'e9ad1cc9f04ce375fa1baf241894357abc116e09' || '83c1c2ca0db930285e036a91f97af3927b221bdc' }}
+          ref: ${{ matrix.surveyor == 'old' && 'e9ad1cc9f04ce375fa1baf241894357abc116e09' || 'fa9be3460ab7a42d75162cfa132b465d4f7eb5da' }}
           path: surveyor
 
       - name: Build isolated service images
