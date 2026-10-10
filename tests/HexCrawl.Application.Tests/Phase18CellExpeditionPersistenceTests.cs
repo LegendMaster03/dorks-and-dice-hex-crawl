@@ -282,6 +282,16 @@ public sealed class Phase18CellExpeditionPersistenceTests
 
         await Assert.ThrowsAsync<HexCrawlNotFoundException>(() =>
             service.AdvanceCellExpeditionAsync(initial.Id, "bob", 1, plan, inputs));
+        var forgedAssignment = new ParticipantActivityAssignment(
+            Guid.NewGuid(), ParticipantActivityAssignmentScope.Party,
+            null, "scouting", null);
+        var forgedPlan = plan with
+        {
+            Mode = new TravelModeSelection("normal", [forgedAssignment])
+        };
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.AdvanceCellExpeditionAsync(initial.Id, "alice", 1, forgedPlan, inputs));
+        Assert.Equal(1, (await store.GetExpeditionAsync(initial.Id, "alice"))!.Version);
 
         var saved = await service.AdvanceCellExpeditionAsync(initial.Id, "alice", 1, plan, inputs);
         var moved = Assert.IsType<CellExpeditionState>(saved.Runtime);
