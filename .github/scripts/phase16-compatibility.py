@@ -120,7 +120,7 @@ def main():
     mid,version=create_map(wid,world["version"],"phase16-hex",image)
     v2=jcall(APP,f"/api/overworlds/{wid}/source-maps/{mid}/grid-analysis",method="POST")
     assert v2["apiVersion"]=="v2" and v2["capability"]=="map.periodic-tiling.detect",v2
-    assert v2["status"]=="detected" and v2["tiling"]["dsSymbol"]=="<1:1,1,1:6,3>",v2
+    assert v2["status"]=="detected" and v2["tilingDsSymbol"]=="<1:1,1,1:6,3>",v2
     assert jcall(APP,f"/api/overworlds/{wid}")["version"]==version
 
     session=jcall(APP,f"/api/overworlds/{wid}/expeditions",method="POST",
