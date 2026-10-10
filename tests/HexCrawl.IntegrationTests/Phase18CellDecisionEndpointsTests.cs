@@ -194,6 +194,57 @@ public sealed class Phase18CellDecisionEndpointsTests
     }
 
     [Fact]
+    public async Task CanonicalVersionTwoProcedureCanBeAuthoredAndPinnedThroughHttpForCellStart()
+    {
+        await WithWorldAsync(async (database, _, world, procedure, cell) =>
+        {
+            using var factory = TestWebHost.Create(database, "alice");
+            using var client = factory.CreateClient();
+            var canonicalJson = JsonSerializer.Serialize(procedure, ApiJson);
+            using (var validated = await client.PostAsJsonAsync(
+                "/api/procedures/composer/canonical/validate",
+                new { canonicalJson }))
+            {
+                validated.EnsureSuccessStatusCode();
+                var diagnostics = await validated.Content.ReadFromJsonAsync<JsonElement>();
+                Assert.True(diagnostics.GetProperty("isValid").GetBoolean(),
+                    diagnostics.GetProperty("error").ToString());
+            }
+
+            using var created = await client.PostAsJsonAsync(
+                "/api/procedures/canonical",
+                new
+                {
+                    canonicalJson,
+                    presetKey = (string?)null,
+                    campaignId = (Guid?)null
+                });
+            Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+            var saved = await created.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(procedure.ProcedureId, saved.GetProperty("procedureId").GetGuid());
+            Assert.Equal(1, saved.GetProperty("revision").GetInt32());
+
+            using var started = await client.PostAsJsonAsync(
+                $"/api/overworlds/{world.Id:D}/cell-expeditions",
+                new StartCellExpeditionRequest(
+                    "Procedure authored through HTTP", procedure.ProcedureId,
+                    1, cell.Id.Address), ApiJson);
+            Assert.True(started.IsSuccessStatusCode,
+                $"Pinned v2 start failed: {await started.Content.ReadAsStringAsync()}");
+            var runtime = await started.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(2,
+                runtime.GetProperty("procedure").GetProperty("runtime")
+                    .GetProperty("movementMechanicVersion").GetInt32());
+            Assert.Equal(cell.Id,
+                JsonSerializer.Deserialize<WorldCellId>(
+                    runtime.GetProperty("expedition").GetProperty("currentCell")
+                        .GetRawText(), ApiJson));
+            Assert.Null(await new PostgresHexCrawlStore(database)
+                .GetExpeditionAsync(runtime.GetProperty("id").GetGuid(), "bob"));
+        });
+    }
+
+    [Fact]
     public async Task SavedProcedureCellStartCreatesAuthoritativeCellSessionWithNoHexProjection()
     {
         await WithWorldAsync(async (database, store, world, procedure, cell) =>
