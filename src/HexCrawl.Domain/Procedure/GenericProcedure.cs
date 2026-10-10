@@ -329,6 +329,16 @@ public static class CampaignProcedureSchema
     public const string CurrentVersion = "1.3";
     public const string CurrentHexTilingDsSymbol = "<1:1,1,1:6,3>";
 
+    /// <summary>Compare the validated geometric requirement, not its textual formatting.</summary>
+    public static bool RequiresLegacyHexTiling(string? dsSymbol)
+    {
+        if (string.IsNullOrWhiteSpace(dsSymbol)) return false;
+        var inspection = DelaneyDressTopology.Inspect(dsSymbol, 2048);
+        return inspection.Status == DelaneyDressStatus.Euclidean
+            && string.Equals(inspection.Symbol?.Canonical, CurrentHexTilingDsSymbol,
+                StringComparison.Ordinal);
+    }
+
     public static CampaignProcedure Upgrade(CampaignProcedure procedure)
     {
         ArgumentNullException.ThrowIfNull(procedure);
