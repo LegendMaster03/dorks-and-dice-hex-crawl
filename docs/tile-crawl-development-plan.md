@@ -1,6 +1,6 @@
 # Tile Crawl transition — development plan
 
-**Status:** Phase 16 merged; Phase 17 implementation under validation on feature/tile-crawl-phase-17. Release gates remain pending.  
+**Status:** Phases 16 and 17 merged and deployed to development/testing. Phase 18 traversal generalization is in progress on feature/tile-crawl-phase-18; generalized runtime integration, persistence, and release gates remain pending.  
 **Roadmap:** Phases 16–21 (the successor to the completed Hex Crawl / generic-procedure roadmap)  
 **Primary repository:** LegendMaster03/dorks-and-dice-hex-crawl  
 **Analysis-service repository:** LegendMaster03/dorks-and-dice-surveyor  
