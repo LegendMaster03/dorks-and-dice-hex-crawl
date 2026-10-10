@@ -85,6 +85,7 @@ jobs:
             -p 127.0.0.1:18094:8080 \
             -e SURVEYOR_SERVICE_TOKEN=phase16-ci-isolated-surveyor-token \
             -e SURVEYOR_WORKER_COUNT=2 -e SURVEYOR_QUEUE_LIMIT=2 \
+            -e SURVEYOR_ANALYSIS_MAX_DIMENSION=640 \
             phase16-surveyor:active >/dev/null
           docker run -d --name phase16-hex --network phase16-isolated \
             -p 127.0.0.1:18092:8080 \
