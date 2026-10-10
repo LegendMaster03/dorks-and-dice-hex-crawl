@@ -40,7 +40,27 @@ public sealed record PeriodicMotifEvidence(
     int MinimumEdgeObservations,
     double OriginalRasterEdgeSupport,
     double MaximumRigidVertexResidualSourcePixels,
-    double? TranslationRefinementResidualSourcePixels);
+    double? TranslationRefinementResidualSourcePixels,
+    PeriodicMotifMetricEvidence? MetricRegistration = null);
+
+// Only a separately registered metric AND supported held-out projection
+// qualify a "consistent-candidate"; these are observations, not authority.
+public sealed record PeriodicMotifMetricEvidence(
+    string Status,
+    double MaximumContourResidualSourcePixels,
+    double RmsContourResidualSourcePixels,
+    double OriginalRasterEdgeSupport,
+    int RasterSymmetriesChecked,
+    int RasterSymmetriesSupported,
+    int? MathematicalMetricSymmetries,
+    PeriodicMotifSourceProjectionEvidence SourceProjection);
+
+public sealed record PeriodicMotifSourceProjectionEvidence(
+    string Status,
+    double EdgeSupport,
+    double InteriorSupport,
+    int CheckedRegions,
+    int SupportedRegions);
 
 /// <summary>Opt-in investigation: existing hex analysis remains on v2.</summary>
 public interface IPeriodicMotifInvestigationService
