@@ -148,6 +148,24 @@ public sealed class Phase16HarmonicMetricRealizationTests
         }
     }
 
+    [Theory]
+    [InlineData(0.000002, 0)]
+    [InlineData(0.000002, 37)]
+    [InlineData(0.0001, -22)]
+    [InlineData(0.01, 90)]
+    [InlineData(1, 0)]
+    [InlineData(10000, 37)]
+    [InlineData(1000000, 0)]
+    public void ValidEuclideanSquareSurvivesScaleAndRotation(double scale, double rotation)
+    {
+        var result = DelaneyDressHarmonicMetricRealization.Construct(
+            "<1:1,1,1:4,4>", scale, "unit", rotationDegrees: rotation);
+        Assert.True(result.Status == "realized",
+            $"scale {scale}, rotation {rotation}: {result.Status}: {result.Reason}");
+        Assert.True(PeriodicMetricWitnessValidator.Validate(
+            result.Topology!, result.Realization!));
+    }
+
     [Fact]
     public void InvalidConstraintsAndOutOfCapacityDoNotFabricateWorldGeometry()
     {
