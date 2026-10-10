@@ -67,6 +67,18 @@ jobs:
             -f docker-compose.yml config >/dev/null
           python3 .github/scripts/phase16-deployment-config.py verify dorks-and-dice-hex-crawl "$ENV_FILE" "$DEPLOY_SNAPSHOT_DIR"
 
+      - name: Verify Phase 17 recovery and cutover authorization
+        # This deliberately blocks schema-10 deployment until an operator has
+        # restored BOTH backup artifacts in isolation and attested the exact SHA.
+        # Remove this temporary gate only after the migration/recovery review
+        # and signed-in smoke test of the deployed schema-10 service.
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/phase17-recovery-gate.py \
+            "${PHASE17_RECOVERY_MANIFEST:-/mnt/HDDs/www/dorks-and-dice-hex-crawl/phase17-recovery-attestation.json}" \
+            "$DEPLOY_SHA"
+
       - name: Build image
         timeout-minutes: 10
         run: |
