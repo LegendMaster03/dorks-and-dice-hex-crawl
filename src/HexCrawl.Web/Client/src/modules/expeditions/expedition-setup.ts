@@ -134,7 +134,7 @@ export async function enhanceExpeditionSetup(
         required<HTMLElement>(form, "[data-procedure-summary]").after(compatibilityStatus);
     }
     const canStart = (): boolean => !!procedure.value
-        && (world.grid || procedure.value === readySavedSelection);
+        && (!!world.grid || procedure.value === readySavedSelection);
     const checkCompatibility = async (): Promise<void> => {
         if (world.grid) return;
         const generation = ++compatibilityGeneration;
