@@ -464,17 +464,43 @@ public sealed class PersistenceApplicationTests
         await using var database = await TestDatabase.CreateAsync();
         var service = await database.ServiceAsync();
         var world = await service.CreateOverworldAsync("alice", WorldCommand());
-        var expedition = await service.StartExpeditionAsync(world.World.Id, "alice", new StartExpeditionCommand(
-            "Survey", "simple-fixed-distance", new HexCoordinate(0, 0)));
-        expedition = await service.AdvanceExpeditionAsync(expedition.State.Id, "alice", FixedAdvance(expedition.Version, 12, false));
-        Assert.Equal(RuntimePauseReason.ConditionsReviewRequired, expedition.PauseReason);
+        var created = await StartCellAsync(
+            database, service, world.World.Id, "Paused watch",
+            "simple-fixed-distance", new HexCoordinate(0, 0));
+        var original = Assert.IsType<CellExpeditionState>(created.Runtime);
+        var heading = SpatialCourseSelection.FromLegacyHexDirection(
+            world.World.SpatialTiling, new HexCoordinate(0, 0), new HexDirection(0));
+        var plan = new CellWatchTravelPlan(
+            heading, false, false, TravelModeSelection.Normal, NavigationAidSelection.None);
+        // A paused watch can have elapsed time without spending any physical
+        // distance. Never invent a partial geometric position from V1 progress.
+        var partiallyElapsed = original with
+        {
+            IntendedHeading = heading,
+            ElapsedTravelTime = TimeSpan.FromHours(2),
+            ActiveWatch = new CellActiveWatchState(
+                1, TimeSpan.FromHours(4), TimeSpan.FromHours(2),
+                plan, ResolvedEncounter.None, true, RuntimePauseReason.ConditionsReviewRequired)
+        };
+        partiallyElapsed.Validate(world.World.SpatialTiling);
+        var store = new PostgresHexCrawlStore(database.ConnectionString);
+        var stored = await store.SaveExpeditionAsync(
+            created with
+            {
+                Runtime = partiallyElapsed,
+                PauseReason = RuntimePauseReason.ConditionsReviewRequired,
+                RemainingWatchTime = TimeSpan.FromHours(2)
+            }, created.Version);
+        Assert.Equal(SaveOutcome.Saved, stored.Outcome);
 
         var restarted = await database.ServiceAsync();
-        var loaded = await restarted.GetExpeditionAsync(expedition.State.Id, "alice");
-        Assert.NotNull(loaded.State.ActiveWatch);
+        var loaded = await restarted.GetExpeditionAsync(created.Id, "alice");
+        var actual = Assert.IsType<CellExpeditionState>(loaded.Runtime);
+        Assert.NotNull(actual.ActiveWatch);
+        Assert.Equal(TimeSpan.FromHours(2), actual.ActiveWatch!.Elapsed);
         Assert.Equal(TimeSpan.FromHours(2), loaded.RemainingWatchTime);
-        Assert.Equal(6, loaded.State.DistanceTraveled.Value);
-        Assert.Equal(new HexCoordinate(1, 0), loaded.State.CurrentHex);
+        Assert.Equal(partiallyElapsed.Traversal, actual.Traversal);
+        Assert.Equal(0, actual.DistanceTraveled!.Value.Value);
     }
 
     [Fact]
@@ -483,15 +509,32 @@ public sealed class PersistenceApplicationTests
         await using var database = await TestDatabase.CreateAsync();
         var service = await database.ServiceAsync();
         var world = await service.CreateOverworldAsync("alice", WorldCommand());
-        var expedition = await service.StartExpeditionAsync(world.World.Id, "alice", new StartExpeditionCommand(
-            "History", "simple-fixed-distance", new HexCoordinate(0, 0)));
-        expedition = await service.AdvanceExpeditionAsync(expedition.State.Id, "alice", FixedAdvance(expedition.Version, 1, true));
-        expedition = await service.AdvanceExpeditionAsync(expedition.State.Id, "alice", FixedAdvance(expedition.Version, 1, true));
+        var start = new HexCoordinate(0, 0);
+        var expedition = await StartCellAsync(
+            database, service, world.World.Id, "History", "simple-fixed-distance", start);
+        var heading = SpatialCourseSelection.FromLegacyHexDirection(
+            world.World.SpatialTiling, start, new HexDirection(0));
+        var plan = new CellWatchTravelPlan(
+            heading, false, true, TravelModeSelection.Normal, NavigationAidSelection.None);
+        var source = new ResolutionProvenance(ResolutionSource.ManualRoll);
+        var inputs = new CellWatchAdvanceInputs(
+            ResolvedTravelAmount.Distance(
+                new DistanceMeasure(1, DistanceUnit.Miles),
+                new DistanceMeasure(1, DistanceUnit.Miles), source),
+            new ResolvedCellNavigation(NavigationCheckOutcome.Succeeded, null, source),
+            ResolvedEncounter.None);
+        expedition = await service.AdvanceCellExpeditionAsync(
+            expedition.Id, "alice", expedition.Version, plan, inputs);
+        expedition = await service.AdvanceCellExpeditionAsync(
+            expedition.Id, "alice", expedition.Version, plan, inputs);
 
         var restarted = await database.ServiceAsync();
-        var loaded = await restarted.GetExpeditionAsync(expedition.State.Id, "alice");
-        Assert.NotEmpty(loaded.State.History);
-        Assert.Equal(loaded.State.History.Count, loaded.State.History.Select(item => item.Sequence).Distinct().Count());
+        var loaded = await restarted.GetExpeditionAsync(expedition.Id, "alice");
+        var cell = Assert.IsType<CellExpeditionState>(loaded.Runtime);
+        Assert.Equal(2, cell.CompletedWatches);
+        Assert.NotEmpty(cell.History);
+        Assert.All(cell.History, item => Assert.Null(item.Hex));
+        Assert.Equal(cell.History.Count, cell.History.Select(item => item.Sequence).Distinct().Count());
     }
 
     [Fact]
@@ -524,18 +567,29 @@ public sealed class PersistenceApplicationTests
         await using var database = await TestDatabase.CreateAsync();
         var service = await database.ServiceAsync();
         var world = await service.CreateOverworldAsync("alice", WorldCommand());
-        var expedition = await service.StartExpeditionAsync(world.World.Id, "alice", new StartExpeditionCommand(
-            "Replay", "simple-fixed-distance", new HexCoordinate(0, 0)));
+        var start = new HexCoordinate(0, 0);
+        var expedition = await StartCellAsync(
+            database, service, world.World.Id, "Replay", "simple-fixed-distance", start);
         var restarted = await database.ServiceAsync();
-        var loaded = await restarted.GetExpeditionAsync(expedition.State.Id, "alice");
+        var loaded = await restarted.GetExpeditionAsync(expedition.Id, "alice");
         var loadedWorld = await restarted.GetOverworldAsync(world.World.Id, "alice");
+        var cell = Assert.IsType<CellExpeditionState>(loaded.Runtime);
+        var heading = SpatialCourseSelection.FromLegacyHexDirection(
+            loadedWorld.World.SpatialTiling, start, new HexDirection(0));
+        var plan = new CellWatchTravelPlan(
+            heading, false, true, TravelModeSelection.Normal, NavigationAidSelection.None);
+        var source = new ResolutionProvenance(ResolutionSource.ManualRoll);
+        var inputs = new CellWatchAdvanceInputs(
+            ResolvedTravelAmount.Distance(
+                new DistanceMeasure(3, DistanceUnit.Miles),
+                new DistanceMeasure(3, DistanceUnit.Miles), source),
+            new ResolvedCellNavigation(NavigationCheckOutcome.Succeeded, null, source),
+            ResolvedEncounter.None);
         var engine = new CrawlRuntimeEngine();
-        var plan = new WatchTravelPlan(new HexDirection(0), TravelModeSelection.Normal, NavigationAidSelection.None, false, true);
-        var inputs = new WatchAdvanceInputs(TravelDistanceResolver.Fixed(new DistanceMeasure(3, DistanceUnit.Miles)));
-
-        var context = ExpeditionWorldComposition.RuntimeContext(loadedWorld.World);
-        var first = engine.Advance(context, loaded.CampaignProcedure, loaded.State, plan, inputs);
-        var second = engine.Advance(context, loaded.CampaignProcedure, loaded.State, plan, inputs);
+        var first = engine.AdvanceCellWatch(
+            loadedWorld.World.SpatialTiling, loaded.CampaignProcedure, cell, plan, inputs);
+        var second = engine.AdvanceCellWatch(
+            loadedWorld.World.SpatialTiling, loaded.CampaignProcedure, cell, plan, inputs);
         var sharedEmptyHistory = Array.Empty<CrawlRuntimeEvent>();
         Assert.Equal(
             first.Expedition with { History = sharedEmptyHistory },
