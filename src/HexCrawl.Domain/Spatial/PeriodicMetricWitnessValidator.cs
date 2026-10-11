@@ -168,6 +168,7 @@ public static class PeriodicMetricWitnessValidator
             bool fractionConstraint = PeriodicStraightEdgeGeometry.TryParseConstraint(
                 constraint.Key, out string fractionCell, out int fractionVertex);
             double[] values;
+            double fractionTolerance = 0;
             if (fractionConstraint)
             {
                 Require(polygons.TryGetValue(fractionCell, out var polygon)
@@ -183,6 +184,9 @@ public static class PeriodicMetricWitnessValidator
                 var end = polygon[(fractionVertex + 1) % size];
                 var span = Sub(end, start);
                 values = [Dot(Sub(middle, start), span) / Dot(span, span)];
+                // A ratio is dimensionless. The global length tolerance must
+                // not become an oversized ratio allowance for large periods.
+                fractionTolerance = Math.Max(1e-9, tolerance / Length(span));
             }
             else values = constraint.Key switch
             {
@@ -207,7 +211,8 @@ public static class PeriodicMetricWitnessValidator
                     ? "degrees" : realization.Units),
                 "A metric constraint's unit does not match its measurement.");
             foreach (double value in values)
-                Require(value >= constraint.Min - tolerance && value <= constraint.Max + tolerance,
+                Require(value >= constraint.Min - (fractionConstraint ? fractionTolerance : tolerance)
+                    && value <= constraint.Max + (fractionConstraint ? fractionTolerance : tolerance),
                     "The supplied embedding violates a requested metric constraint.");
         }
     }

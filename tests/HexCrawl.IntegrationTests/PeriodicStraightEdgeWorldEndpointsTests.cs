@@ -88,7 +88,8 @@ public sealed class PeriodicStraightEdgeWorldEndpointsTests
                         startCell = first.GetProperty("id").GetProperty("address")
                     });
                 Assert.True(started.IsSuccessStatusCode, await started.Content.ReadAsStringAsync());
-                var expeditionId = (await started.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+                var startedBody = await started.Content.ReadFromJsonAsync<JsonElement>();
+                var expeditionId = startedBody.GetProperty("id").GetGuid();
                 using var navigation = await client.GetAsync(
                     $"/api/expeditions/{expeditionId:D}/cell-topology");
                 navigation.EnsureSuccessStatusCode();
@@ -99,7 +100,7 @@ public sealed class PeriodicStraightEdgeWorldEndpointsTests
                     interfaces.Select(e => e.GetProperty("boundarySideIndex").GetInt32()));
                 Assert.Equal(6, interfaces.Select(e => e.GetProperty("interfaceIndex").GetInt32())
                     .Distinct().Count());
-                Assert.Equal("CellSteps", (await started.Content.ReadFromJsonAsync<JsonElement>())
+                Assert.Equal("CellSteps", startedBody
                     .GetProperty("procedure").GetProperty("runtime").GetProperty("travelResolution").GetString());
             }
 
