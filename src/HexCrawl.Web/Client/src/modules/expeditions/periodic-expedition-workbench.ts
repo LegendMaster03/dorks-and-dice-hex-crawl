@@ -87,6 +87,7 @@ export async function renderPeriodicExpeditionWorkbench(
                                         <option value="KeyedLocationDiscovery">Keyed location</option>
                                         <option value="ManualCustom">Custom encounter</option>
                                     </select></label>
+                                <p data-encounter-cadence class="hc-hint" aria-live="polite"></p>
                                 <label data-keyed-location-row hidden>Keyed world location
                                     <select name="keyedLocation" aria-label="Saved keyed world location"></select>
                                     <span class="hc-hint">Choose an existing world location. Add new locations in the world editor first.</span>
@@ -438,6 +439,17 @@ export async function renderPeriodicExpeditionWorkbench(
         // The backend accepts keyed discoveries only inside the currently
         // authoritative cell. Do not offer an arbitrary distant map location.
         updateKeyedLocations();
+        const cadence = runtime.procedure.runtime?.encounterCadence ?? "None";
+        const encounterControl = choice("encounter");
+        if (cadence === "None") encounterControl.value = "";
+        encounterControl.disabled = busy || cadence === "None"
+            || state.activeWatchNumber !== null;
+        text("[data-encounter-cadence]", cadence === "None"
+            ? "This pinned ruleset does not schedule encounter checks. Resolve travel without an encounter result."
+            : state.activeWatchNumber !== null
+                ? "The encounter decision was captured when the watch started. Complete or resolve the current watch first."
+                : "An encounter result is used only when the pinned ruleset calls for a check in this watch.");
+        showKeyedLocation();
         const modes = runtime.movementComposition.policy.travelModeKeys;
         const pace = choice("pace");
         const previous = pace.value;

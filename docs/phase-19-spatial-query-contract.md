@@ -25,6 +25,10 @@ A candidate whose translation motif cannot be matched one-to-one, whose scale/ph
 
 Guided world creation now accepts optional repeating-direction lengths and angle, passed as general metric constraints to the same harmonic construction/validation path. Invalid or unsatisfiable geometry fails without creating a world. The human-readable catalog also includes qualified rhombille and descriptive mixed-cell entries, without becoming a pattern implementation allowlist.
 
+## First independent-review remediation
+
+The review at `c4e0be178372a7d5d13c25a62dd2dd9f2e0287b5` found P2 omissions in generalized gameplay editors, keyed discovery location IDs and asynchronous selection, plus a P3 accidental coupling between image registration and optional procedure compatibility. Each now has a corrective implementation and targeted automated regression. The generalized view reuses all five existing gameplay controllers; keyed discovery offers only saved current-cell locations and shows whether the pinned procedure schedules checks; two asynchronous selection stages share the same versioned last-click-wins guard; independently verified image registration remains available even when a separately selected procedure is incompatible. The full browser and existing-data acceptance gates below remain open until WorkChat executes them.
+
 ## Independent-review gates
 
 WorkChat must verify exact-head CI, signed-in visual workflows on existing tester data (including mobile/keyboard/Guided/Compact/dark/embedded), Surveyor v2/v3 compatibility, full-raster/map preview alignment, polygon/route/coverage/knowledge overlays, safe correction/stale conflicts, and restart/asset preservation. Existing image-free mixed-cell HTTP suites and unit tests are necessary, but they do **not** certify visual browser behavior or a live deployment. See `docs/phase-19-workchat-review-handoff.md` for specific scenarios. Full Phase 19 acceptance and merge depend on that independent review and any remediation.

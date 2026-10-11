@@ -46,4 +46,7 @@ test("keyed encounter UI supplies a saved in-cell location and retains the backe
     assert.match(periodic, /encounterLocationId\([\s\S]*?encounterChoice, keyedChoices\.value, keyedLocations\)/);
     assert.match(periodic, /locationId: encounterLocationId/);
     assert.match(periodic, /api\.resolveCellEncounter/);
+    assert.match(periodic, /cadence === "None"/);
+    assert.match(periodic, /encounterControl\.disabled = busy/);
+    assert.match(periodic, /data-encounter-cadence/);
 });

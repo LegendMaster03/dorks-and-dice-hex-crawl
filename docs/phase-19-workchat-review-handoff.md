@@ -36,6 +36,19 @@ Run the exact feature-branch head's normal GitHub Actions workflow (frontend uni
 - A single successful unused-world correction has no bespoke one-click undo; the operation is atomic and limited to worlds without spatial dependents. Verify this limitation is acceptable and that rollback/backup guidance is clear.
 - This handoff does not attest to live browser/deployment testing. WorkChat must perform it and report results before this phase can be accepted.
 
+## Remediation of first independent review (F1–F4)
+
+The review at `c4e0be178372a7d5d13c25a62dd2dd9f2e0287b5` identified three P2 blockers and one P3 workflow defect. This branch now contains these corrections for **independent re-review**:
+
+- **F1 (P2):** The generalized workbench mounts the existing interactive party sheet, world/current-cell environment editor, journey process panel, effects panel, and survival/resources panel with the same owner-scoped APIs and mutation lifecycle used by hex and nonspatial expeditions. It forwards Tool Host context, updates runtime after shared mutations, re-queries world and topology, and disposes the panels on navigation. Test the **rendered panels** including editing, conflicts and reload; source-wiring tests alone are insufficient.
+- **F2 (P2):** A keyed encounter must select a saved world location lying inside the current authoritative polygon; the selected ID is preserved in the watch input. The UI displays the encounter cadence explicitly and disables input for procedures with no encounter checks. A PostgreSQL HTTP test uses a pinned per-watch encounter procedure, rejects a distant location when the check triggers, verifies persisted pending identity, resolves once, rejects replay and reloads. This is not a placeholder or an unconditional encounter trigger.
+- **F3 (P2):** The same selection-currency predicate (generation, world ID, version, tiling ID and revision, disposal) is applied after *both* lookup and geometry resolution. Controllable promises test older A resolving after newer B, stale world versions/revisions, mismatched tilings and late ambiguous responses.
+- **F4 (P3):** Registration eligibility and UI visibility depend on proof of **image/world** geometric compatibility alone. An optional incompatible selected procedure still reports a ruleset mismatch and blocks unsafe correction/expedition start, but does not suppress a valid image registration. A metric-witness integration test covers this distinction.
+
+### Remaining acceptance required from WorkChat
+
+The corrections have automated unit/source and PostgreSQL integration coverage, but no authenticated browser run, real Surveyor raster, live deployment or existing tester-data restart has been performed in this remediation. WorkChat must exercise the full signed-in and operational matrix above before treating Phase 19 as merge-ready. Do not infer that passing CI proves these requirements.
+
 ## Review output
 
 Return a pass/fail verdict with exact SHA, CI URL, tests performed, signed-in screenshots/observations, security and concurrency analysis, source-image registration correctness, UX/accessibility findings, data preservation and deployment/recovery readiness. List defects by severity, provide concrete reproduction, and keep the phase unmerged until the owner approves.
