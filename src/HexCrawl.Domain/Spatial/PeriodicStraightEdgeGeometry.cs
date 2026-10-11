@@ -45,6 +45,9 @@ public static class PeriodicStraightEdgeGeometry
     public static PeriodicTopologyWitness Apply(
         PeriodicTopologyWitness topology, IReadOnlyList<PeriodicStraightEdgeSubdivision> splits)
     {
+        // A provided, already-grouped topology is authoritative. An absent
+        // subdivision request must never discard its geometric-side labels.
+        if (splits.Count == 0) return topology;
         var revised = topology.MotifCells.Select(cell =>
         {
             int size = cell.Boundary.Count;
@@ -53,6 +56,13 @@ public static class PeriodicStraightEdgeGeometry
             {
                 while (parent[i] != i) { parent[i] = parent[parent[i]]; i = parent[i]; }
                 return i;
+            }
+            for (int edge = 0; edge < size; edge++)
+            {
+                int next = (edge + 1) % size;
+                if (cell.Boundary[edge].BoundarySideIndex
+                    == cell.Boundary[next].BoundarySideIndex)
+                    parent[Root(edge)] = Root(next);
             }
             foreach (var split in splits.Where(s => s.MotifCellId == cell.Id))
                 parent[Root((split.BoundaryVertexIndex + size - 1) % size)] =

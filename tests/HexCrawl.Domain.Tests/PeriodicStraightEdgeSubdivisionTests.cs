@@ -204,6 +204,28 @@ public sealed class PeriodicStraightEdgeSubdivisionTests
     }
 
     [Fact]
+    public void ExistingSideGroupsArePreservedAndWrappedGroupsStayCyclic()
+    {
+        var world = ReferenceWorld();
+        var grouped = world.Topology;
+        var unchanged = PeriodicStraightEdgeGeometry.Apply(
+            grouped, Array.Empty<PeriodicStraightEdgeSubdivision>());
+        Assert.Equal(JsonSerializer.Serialize(grouped), JsonSerializer.Serialize(unchanged));
+
+        var wrapped = PeriodicStraightEdgeGeometry.Apply(
+            grouped, [new("square", 0, .5)]);
+        var sides = wrapped.MotifCells[0].Boundary
+            .Select(edge => edge.BoundarySideIndex).ToArray();
+        Assert.Equal(sides[0], sides[5]);
+        Assert.Equal(sides[0], sides[1]);
+        Assert.Equal(3, sides.Distinct().Count());
+        // Those extra requested joins are topologically well-formed but do
+        // not certify the supplied square metric: one corner is not straight.
+        Assert.Throws<InvalidOperationException>(() =>
+            PeriodicMetricWitnessValidator.Validate(wrapped, world.Realization));
+    }
+
+    [Fact]
     public void SerializationRetainsAtomicIdsGroupingRatiosAndUncalibratedTravel()
     {
         var world = ReferenceWorld();
@@ -230,17 +252,12 @@ public sealed class PeriodicStraightEdgeSubdivisionTests
             [
                 new(motif.Id, 1, .5), new(motif.Id, 4, .5)
             ]);
-        if (result.Status == "realized")
-        {
-            Assert.True(PeriodicMetricWitnessValidator.Validate(result.Topology!, result.Realization!));
-            Assert.Equal(4, result.Topology!.MotifCells[0].Boundary
-                .Select(e => e.BoundarySideIndex).Distinct().Count());
-        }
-        else
-        {
-            Assert.Equal("unresolved-geometry", result.Status);
-            Assert.Null(result.Realization);
-            Assert.False(string.IsNullOrWhiteSpace(result.Reason));
-        }
+        Assert.True(result.Status == "realized",
+            $"Constrained harmonic reconstruction failed: {result.Status}: {result.Reason}");
+        Assert.True(PeriodicMetricWitnessValidator.Validate(result.Topology!, result.Realization!));
+        Assert.Equal(4, result.Topology!.MotifCells[0].Boundary
+            .Select(e => e.BoundarySideIndex).Distinct().Count());
+        Assert.Equal(2, result.Realization!.Constraints.Count(c =>
+            c.Key.StartsWith("straight-edge-fraction:", StringComparison.Ordinal)));
     }
 }
