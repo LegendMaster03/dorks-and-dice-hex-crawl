@@ -15,15 +15,14 @@ public sealed class MovementGeneratedResolutionPersistenceTests
         await store.InitializeAsync();
 
         var now = DateTimeOffset.UtcNow;
-        var procedure = CrawlProcedureCatalog.Resolve("simple-fixed-distance")
-            .MaterializeGeneric()
-            .Procedure;
-        var state = new ExpeditionState
-        {
-            Id = Guid.NewGuid(),
-            Traversal = HexTraversalState.StartingIn(new HexCoordinate(0, 0), DistanceUnit.Miles),
-            DistanceTraveled = new DistanceMeasure(0, DistanceUnit.Miles)
-        };
+        var procedure = GeometricNativeProcedureMaterializer
+            .Materialize("simple-fixed-distance").Procedure;
+        var context = new AbstractHexCrawlSessionContext(
+            "Movement history",
+            HexOrientation.PointyTop,
+            new CrawlRuntimeContext(new DistanceMeasure(12, DistanceUnit.Miles)));
+        var state = AbstractCellSessionGeometry.CreateNewHexSession(
+            Guid.NewGuid(), context, new HexCoordinate(0, 0)).Expedition;
         var generatedId = Guid.NewGuid();
         var generated = new GeneratedProcedureResolution(
             generatedId,
@@ -47,10 +46,7 @@ public sealed class MovementGeneratedResolutionPersistenceTests
         var expedition = new StoredExpedition(
             "Movement history",
             state,
-            new AbstractHexCrawlSessionContext(
-                "Movement history",
-                HexOrientation.PointyTop,
-                new CrawlRuntimeContext(new DistanceMeasure(12, DistanceUnit.Miles))),
+            context,
             null,
             procedure,
             null,

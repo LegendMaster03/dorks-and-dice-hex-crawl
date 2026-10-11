@@ -486,9 +486,15 @@ public sealed class MovementCapabilityCompositionTests
             2.75,
             scope: MovementCapabilityScope.Party,
             provenance: "manual test");
-        var expedition = Expedition(
+        var legacyFixture = Expedition(
             Procedure("simple-fixed-distance"),
             new CrawlPartySheet { MovementContributors = [contributor] });
+        // Contributor persistence is independent of spatial execution.
+        var expedition = legacyFixture with
+        {
+            Runtime = new NonSpatialSessionState { Id = legacyFixture.Id },
+            Context = new NonSpatialCrawlSessionContext("Movement contributor persistence")
+        };
 
         await store.CreateExpeditionAsync(expedition);
         var loaded = await store.GetExpeditionAsync(expedition.Id, expedition.OwnerUserId);

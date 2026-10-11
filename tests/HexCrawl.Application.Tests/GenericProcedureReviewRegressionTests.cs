@@ -164,10 +164,12 @@ public sealed class GenericProcedureReviewRegressionTests
 
         var core = new HexCrawlService(store);
         var world = await core.CreateOverworldAsync("alice", WorldCommand());
-        var worldBound = await core.StartExpeditionAsync(
-            world.World.Id,
-            "alice",
-            new StartExpeditionCommand("World-bound", "simple-fixed-distance", new HexCoordinate(0, 0)));
+        var worldBound = await new ExpeditionStartService(
+            store, core, new CampaignProcedureService(store))
+            .StartWorldBoundCellsAsync(
+                world.World.Id, "alice", "World-bound",
+                new ProcedureStartSelection(PresetKey: "simple-fixed-distance"),
+                LegacyHexTilingCompatibility.ToAddress(new HexCoordinate(0, 0)));
 
         AssertPinned(standalone, "simple-fixed-distance");
         AssertPinned(worldBound, "simple-fixed-distance");
