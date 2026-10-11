@@ -11,7 +11,6 @@ import { renderCurrentCellNavigator } from "./cell-navigator";
 import { adjacencyForIntent } from "./spatial-adjacency";
 import { guidancePreferenceButton } from "../../ui/guidance";
 import { encounterLocationId } from "./keyed-location-encounter";
-import { pointInPolygon } from "../worlds/selected-cell-authoring";
 import { mountPeriodicGameplayPanels } from "./periodic-gameplay-panels";
 import { publishExpeditionRuntimeChanged } from "./expedition-runtime-events";
 
@@ -90,7 +89,7 @@ export async function renderPeriodicExpeditionWorkbench(
                                 <p data-encounter-cadence class="hc-hint" aria-live="polite"></p>
                                 <label data-keyed-location-row hidden>Keyed world location
                                     <select name="keyedLocation" aria-label="Saved keyed world location"></select>
-                                    <span class="hc-hint">Choose an existing world location. Add new locations in the world editor first.</span>
+                                    <span class="hc-hint">Choose any saved location in this world, including a destination cell. The server verifies that the party reaches the selected location's cell before its encounter triggers. Add new locations in the world editor first.</span>
                                 </label>
                                 <label>Encounter time within watch (hours) <input name="encounterHours" type="number" min="0" step="any" value="0"></label>
                                 <label>Encounter note <input name="encounterNote"></label>
@@ -138,26 +137,25 @@ export async function renderPeriodicExpeditionWorkbench(
         return element;
     };
     const keyedChoices = choice("keyedLocation");
-    let keyedLocations = world.locations.filter(location =>
-        pointInPolygon(location.position, topology.polygon));
     const updateKeyedLocations = (): void => {
-        keyedLocations = world.locations.filter(location =>
-            pointInPolygon(location.position, topology.polygon));
+        // A watch can cross multiple cells before its scheduled encounter.
+        // Present all saved world locations; the server validates membership
+        // against the authoritative cell at the actual encounter trigger.
         const selected = keyedChoices.value;
         keyedChoices.replaceChildren();
         const placeholder = document.createElement("option");
         placeholder.value = "";
-        placeholder.textContent = keyedLocations.length
-            ? "Choose a location in the current cell"
-            : "No locations in this cell — add one on the world map";
+        placeholder.textContent = world.locations.length
+            ? "Choose a saved world location"
+            : "No saved locations — add one in the world editor";
         keyedChoices.append(placeholder);
-        for (const location of keyedLocations) {
+        for (const location of world.locations) {
             const option = document.createElement("option");
             option.value = location.id;
             option.textContent = `${location.name} · ${location.category}`;
             keyedChoices.append(option);
         }
-        if (keyedLocations.some(location => location.id === selected))
+        if (world.locations.some(location => location.id === selected))
             keyedChoices.value = selected;
     };
     updateKeyedLocations();
@@ -335,7 +333,7 @@ export async function renderPeriodicExpeditionWorkbench(
                     occursAt: encounterChoice === "None"
                         ? null : timespanFromHours(readNumber("encounterHours")),
                     locationId: encounterLocationId(
-                        encounterChoice, keyedChoices.value, keyedLocations),
+                        encounterChoice, keyedChoices.value, world.locations),
                     note: input("encounterNote").value.trim() || null,
                     provenance: { source: "DmOverride" as const, note: "DM-resolved encounter" }
                 }
@@ -436,8 +434,7 @@ export async function renderPeriodicExpeditionWorkbench(
         text("[data-distance-unit]", isSteps ? "Cell transitions are resolved by the server."
             : units ? `Distance is entered in ${units.symbol}; the server resolves actual movement.`
                 : "This procedure requires a calibrated distance unit before travel can be resolved.");
-        // The backend accepts keyed discoveries only inside the currently
-        // authoritative cell. Do not offer an arbitrary distant map location.
+        // Reload the saved-world selection list when the world metadata changes.
         updateKeyedLocations();
         const cadence = runtime.procedure.runtime?.encounterCadence ?? "None";
         const encounterControl = choice("encounter");

@@ -39,11 +39,13 @@ test("generalized environment fact editing uses qualified Cell rather than fake 
     assert.match(panel, /selectedScope === "Cell" && !currentCell/);
 });
 
-test("keyed encounter UI supplies a saved in-cell location and retains the backend contract", () => {
+test("keyed encounter UI offers saved destination locations without pre-watch filtering", () => {
     const periodic = source("modules","expeditions","periodic-expedition-workbench.ts");
     assert.match(periodic, /name="keyedLocation"/);
-    assert.match(periodic, /world\.locations\.filter\(location =>[\s\S]*?pointInPolygon\(location\.position, topology\.polygon\)/);
-    assert.match(periodic, /encounterLocationId\([\s\S]*?encounterChoice, keyedChoices\.value, keyedLocations\)/);
+    assert.match(periodic, /for \(const location of world\.locations\)/);
+    assert.doesNotMatch(periodic, /world\.locations\.filter\(location =>/);
+    assert.match(periodic, /encounterLocationId\([\s\S]*?encounterChoice, keyedChoices\.value, world\.locations\)/);
+    assert.match(periodic, /the actual encounter trigger/);
     assert.match(periodic, /locationId: encounterLocationId/);
     assert.match(periodic, /api\.resolveCellEncounter/);
     assert.match(periodic, /cadence === "None"/);
