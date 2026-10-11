@@ -268,8 +268,12 @@ public static class PeriodicMetricWitnessValidator
                     continue;
                 var before = Sub(polygon[i], polygon[prev]);
                 var after = Sub(polygon[(i + 1) % polygon.Count], polygon[i]);
+                // Collinearity is angular, not a world-distance measurement.
+                // The period-wide coordinate tolerance would otherwise certify
+                // substantial bends on a short segment next to a long segment.
+                double beforeLength = Length(before), afterLength = Length(after);
                 Require(Math.Abs(Cross(before, after))
-                        <= tolerance * Math.Max(Length(before), Length(after))
+                        <= 1e-8 * beforeLength * afterLength
                     && Dot(before, after) > 0,
                     "Grouped atomic interfaces must form one straight geometric side without reversing.");
             }

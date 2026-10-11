@@ -216,6 +216,30 @@ public sealed class PeriodicStraightEdgeSubdivisionTests
     }
 
     [Fact]
+    public void PeriodScaleCanNotHideSignificantBendsInShortAtomicSegments()
+    {
+        var world = ReferenceWorld();
+        var distorted = world.Realization with
+        {
+            TranslationU = new(1_000_000, 0),
+            TranslationV = new(999_999.8, 1_000_000),
+            Polygons = new Dictionary<string, IReadOnlyList<TilingWorldPoint>>
+            {
+                ["square"] =
+                [
+                    new(0, 0), new(.2, .08), new(1_000_000, 0),
+                    new(1_000_000, 1_000_000.08), new(999_999.8, 1_000_000),
+                    new(0, 1_000_000.08)
+                ]
+            },
+            Constraints = []
+        };
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            PeriodicMetricWitnessValidator.Validate(world.Topology, distorted));
+        Assert.Contains("straight geometric side", error.Message);
+    }
+
+    [Fact]
     public void ExistingSideGroupsArePreservedAndWrappedGroupsStayCyclic()
     {
         var world = ReferenceWorld();
