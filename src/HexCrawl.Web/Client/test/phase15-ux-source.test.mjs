@@ -438,7 +438,7 @@ test("Phase 15 workspace rerenders preserve the existing map surface and viewpor
     assert.doesNotMatch(view.slice(renderStart, presentationStart), /map\?\.dispose\(\)/);
 
     assert.match(view, /if \(map\) \{\s*map\.attach\(host\)/);
-    assert.match(view, /map = new MapSurface\(host, \(\) => world\)/);
+    assert.match(view, /map = new MapSurface\(host, \(\) => world, undefined, api\)/);
     assert.match(view, /map\.renderer\.selectedHex = selectedHex/);
     assert.match(map, /public attach\(host: HTMLElement\): void/);
     assert.match(map, /this\.resizeObserver\.disconnect\(\)/);

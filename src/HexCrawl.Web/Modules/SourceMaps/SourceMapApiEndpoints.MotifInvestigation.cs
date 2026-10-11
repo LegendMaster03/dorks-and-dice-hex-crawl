@@ -1,5 +1,7 @@
 using HexCrawl.Application;
+using HexCrawl.Application.Persistence;
 using HexCrawl.Application.Assets;
+using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace HexCrawl.Web.Api;
 
@@ -10,6 +12,171 @@ public static partial class SourceMapApiEndpoints
     /// registration, world conversion, or procedure compatibility decision.
     /// The existing grid-analysis endpoint continues to use Surveyor v2.
     /// </summary>
+    private static async Task<IResult> AssessMotifCompatibilityAsync(
+        Guid overworldId, Guid sourceMapId,
+        Guid? procedureId, int? procedureRevision,
+        HttpContext context,
+        SourceMapApplicationService sourceMaps,
+        IMapAssetStore assets,
+        IPeriodicMotifInvestigationService surveyor,
+        HexCrawlService crawls,
+        CampaignProcedureService procedures,
+        CancellationToken cancellationToken)
+    {
+        if (procedureId.HasValue != procedureRevision.HasValue
+            || procedureRevision is <= 0 || procedureId == Guid.Empty)
+            throw new ArgumentException("Choose both a saved procedure and a revision, or neither.");
+        var result = await InvestigateMotifAsync(overworldId, sourceMapId, context,
+            sourceMaps, assets, surveyor, cancellationToken);
+        if (result is not Ok<PeriodicMotifInvestigation> analyzed || analyzed.Value is null)
+            return result;
+
+        var owner = UserId(context);
+        var stored = await crawls.GetOverworldAsync(overworldId, owner, cancellationToken);
+        var procedure = procedureId is { } selected && procedureRevision is { } revision
+            ? (await procedures.GetAsync(owner, selected, revision, cancellationToken)).Procedure
+            : null;
+        var expeditions = await crawls.ListExpeditionsAsync(overworldId, owner, cancellationToken);
+        var blockers = CorrectionBlockers(stored, expeditions);
+        var assessment = Phase19TilingCompatibility.Assess(
+            stored.World.SpatialTiling, analyzed.Value, procedure, blockers, stored.Version);
+        return Results.Ok(stored.World.HasLegacyHexGrid
+            ? assessment with {
+                Registration = null, Correction = null, CanCorrectInPlace = false
+              } : assessment);
+    }
+
+    private static IReadOnlyList<string> CorrectionBlockers(
+        StoredOverworld world, IReadOnlyList<ExpeditionSummary> expeditions)
+    {
+        var blockers = new List<string>();
+        if (expeditions.Count > 0)
+            blockers.Add($"{expeditions.Count} saved expeditions, including "
+                + string.Join(", ", expeditions.Take(3).Select(item => item.Name)) + ".");
+        var registrations = world.World.SourceMaps.Count(map => map.Alignment is not null);
+        if (registrations > 0)
+            blockers.Add($"{registrations} existing source-map registrations.");
+        if (world.World.Features.Count > 0 || world.World.Locations.Count > 0)
+            blockers.Add($"{world.World.Features.Count} features and "
+                + $"{world.World.Locations.Count} locations with world-space positions.");
+        if (world.World.EnvironmentAnnotations.Count > 0)
+            blockers.Add($"{world.World.EnvironmentAnnotations.Count} environment annotations.");
+        if (world.World.SpatialTiling.PhysicalDistancePerWorldUnit is not null)
+            blockers.Add("an existing physical-distance calibration.");
+        return blockers;
+    }
+
+    private sealed record ApplyMotifCorrectionRequest(
+        int CandidateIndex, HexCrawl.Domain.World.MapRegistrationTransform Alignment,
+        long ExpectedVersion, Guid? ProcedureId = null, int? ProcedureRevision = null);
+
+    /// <summary>
+    /// An explicit opt-in correction for an unused uncalibrated world only.
+    /// The candidate is reconstructed independently of Surveyor's measured
+    /// polygons; exact image correspondence is rechecked at this boundary.
+    /// A single guarded database transaction changes the world and image
+    /// alignment, with no procedure or expedition mutation.
+    /// </summary>
+    private static async Task<IResult> ApplyMotifCorrectionAsync(
+        Guid overworldId, Guid sourceMapId,
+        ApplyMotifCorrectionRequest request,
+        HttpContext context,
+        SourceMapApplicationService sourceMaps,
+        IMapAssetStore assets,
+        IPeriodicMotifInvestigationService surveyor,
+        HexCrawlService crawls,
+        CampaignProcedureService procedures,
+        CancellationToken cancellationToken)
+    {
+        if (request.ProcedureId.HasValue != request.ProcedureRevision.HasValue
+            || request.ProcedureRevision is <= 0 || request.ProcedureId == Guid.Empty)
+            throw new ArgumentException("Choose a saved procedure and revision together, or neither.");
+        var owner = UserId(context);
+        var world = await crawls.GetOverworldAsync(overworldId, owner, cancellationToken);
+        if (world.Version != request.ExpectedVersion)
+            throw new HexCrawlConcurrencyException(
+                "The world changed while its replacement cells were being reviewed. Reload and check the image again.");
+        if (world.World.HasLegacyHexGrid)
+            throw new NotSupportedException(
+                "The legacy hex world uses its existing image-alignment workflow.");
+        var observed = await InvestigateMotifAsync(overworldId, sourceMapId,
+            context, sourceMaps, assets, surveyor, cancellationToken);
+        if (observed is not Ok<PeriodicMotifInvestigation> analyzed
+            || analyzed.Value is null) return observed;
+
+        var applicable = request.ProcedureId is { } id && request.ProcedureRevision is { } rev
+            ? (await procedures.GetAsync(owner, id, rev, cancellationToken)).Procedure
+            : null;
+        var expeditions = await crawls.ListExpeditionsAsync(
+            overworldId, owner, cancellationToken);
+        var assessment = Phase19TilingCompatibility.Assess(
+            world.World.SpatialTiling, analyzed.Value, applicable,
+            CorrectionBlockers(world, expeditions), world.Version);
+        if (!assessment.CanCorrectInPlace || assessment.Correction is not
+            { Status: "candidates" } options
+            || !options.Candidates.Any(candidate => candidate.Index == request.CandidateIndex
+                && Phase19RasterRegistration.Equivalent(candidate.Alignment, request.Alignment)))
+            throw new HexCrawlConflictException(
+                "The observed pattern can not safely replace this world's current cells. No changes were made.");
+        var replacement = Phase19RasterRegistration.ConstructReplacement(
+            world.World.SpatialTiling, analyzed.Value)
+            ?? throw new HexCrawlConflictException(
+                "The observed cell pattern no longer has a verified world geometry.");
+        var updated = await sourceMaps.ReplaceUnusedPeriodicWorldAsync(
+            overworldId, sourceMapId, owner, replacement,
+            request.Alignment, request.ExpectedVersion, cancellationToken);
+        return Results.Ok(OverworldContract.From(updated));
+    }
+
+    private sealed record ApplyMotifRegistrationRequest(
+        int CandidateIndex, HexCrawl.Domain.World.MapRegistrationTransform Alignment,
+        long ExpectedVersion);
+
+    /// <summary>
+    /// Re-run the same independent image checks at the save boundary. A client
+    /// can select a preview, but can not submit an arbitrary affine transform.
+    /// Only source-map alignment changes; world topology and procedures do not.
+    /// </summary>
+    private static async Task<IResult> ApplyMotifRegistrationAsync(
+        Guid overworldId, Guid sourceMapId,
+        ApplyMotifRegistrationRequest request,
+        HttpContext context,
+        SourceMapApplicationService sourceMaps,
+        IMapAssetStore assets,
+        IPeriodicMotifInvestigationService surveyor,
+        HexCrawlService crawls,
+        CancellationToken cancellationToken)
+    {
+        var owner = UserId(context);
+        var world = await crawls.GetOverworldAsync(overworldId, owner, cancellationToken);
+        if (request.ExpectedVersion != world.Version)
+            throw new HexCrawlConcurrencyException(
+                "The world changed while the detected map placement was being reviewed. Reload and check it again.");
+        if (world.World.HasLegacyHexGrid)
+            throw new NotSupportedException(
+                "Use the existing hex-grid alignment or manual placement for this world.");
+        if (request.Alignment is null)
+            throw new ArgumentException("A selected verified map placement is required.");
+
+        var analyzed = await InvestigateMotifAsync(overworldId, sourceMapId,
+            context, sourceMaps, assets, surveyor, cancellationToken);
+        if (analyzed is not Ok<PeriodicMotifInvestigation> observation
+            || observation.Value is null)
+            return analyzed;
+        var options = Phase19RasterRegistration.Assess(
+            world.World.SpatialTiling, observation.Value);
+        if (options.Status != "candidates"
+            || !options.Candidates.Any(candidate => candidate.Index == request.CandidateIndex
+                && Phase19RasterRegistration.Equivalent(candidate.Alignment, request.Alignment)))
+            throw new HexCrawlConflictException(
+                "The detected placement could not be verified against the saved world and current image. Check the map again before saving.");
+
+        var result = await sourceMaps.RegisterComputedAffineAsync(
+            overworldId, sourceMapId, owner, request.Alignment, request.ExpectedVersion,
+            cancellationToken);
+        return Results.Ok(OverworldContract.From(result));
+    }
+
     private static async Task<IResult> InvestigateMotifAsync(
         Guid overworldId,
         Guid sourceMapId,

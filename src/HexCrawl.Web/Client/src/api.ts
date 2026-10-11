@@ -1,8 +1,16 @@
 import type { SourceMapGridAnalysis } from "./hex-grid-analysis";
 import type { CreateEncounterHandoffRequest, HexCrawlEncounterHandoffV2 } from "./encounter-handoff";
 import type {
+    CellTraversalContext,
+    StartCellExpeditionInput,
+    CellWatchRequest,
+    CellCourseRequest,
+    WorldCellGeometry,
+    WorldCellId,
+    WorldCellLookup,
     ExpeditionDetail,
     ExpeditionSummary,
+    DistanceUnit,
     GridDefinition,
     HexCoordinate,
     HexOrientation,
@@ -13,6 +21,7 @@ import type {
     ProcedurePreset,
     ProcedureResolutionHelperRequest,
     ProcedureResolutionHelperResult,
+    MapRegistrationTransform,
     RegistrationControlPoint,
     RuntimeAdvanceRequest,
     ResolveBoundaryDecisionRequest,
@@ -49,6 +58,37 @@ export function backendBaseFromContext(apiBaseUrl?: string | null): string {
 export function sourceMapAssetUrl(worldId: string, sourceMapId: string): string {
     return `${activeBackendBaseUrl}/api/overworlds/${encodeURIComponent(worldId)}/source-maps/${encodeURIComponent(sourceMapId)}/asset`;
 }
+
+export type SourceMapCompatibilityAssessment = {
+    status: "unsupported" | "inconclusive" | "mismatch" | "structure-match";
+    worldShape: string;
+    observedShape: string | null;
+    procedureShape: string | null;
+    explanation: string;
+    worldComparison: string | null;
+    procedureComparison: string | null;
+    worldVersion: number;
+    blockers: string[];
+    canCorrectInPlace: boolean;
+    correction: {
+        status: "unavailable" | "candidates";
+        explanation: string;
+        candidates: Array<{
+            index: number;
+            alignment: MapRegistrationTransform;
+            maximumResidualSourcePixels: number;
+        }>;
+    } | null;
+    registration: {
+        status: "unavailable" | "candidates";
+        explanation: string;
+        candidates: Array<{
+            index: number;
+            alignment: MapRegistrationTransform;
+            maximumResidualSourcePixels: number;
+        }>;
+    } | null;
+};
 
 export type CreateOverworldInput = {
     name: string;
@@ -163,8 +203,59 @@ export class HexCrawlApi {
         return this.getJson(`/api/overworlds/${encodeURIComponent(id)}`, "Overworld");
     }
 
+    public listVisibleCells(
+        worldId: string,
+        bounds: { minX: number; minY: number; maxX: number; maxY: number }): Promise<WorldCellGeometry[]> {
+        const params = new URLSearchParams({
+            minX: String(bounds.minX),
+            minY: String(bounds.minY),
+            maxX: String(bounds.maxX),
+            maxY: String(bounds.maxY)
+        });
+        return this.getJson(
+            `/api/overworlds/${encodeURIComponent(worldId)}/cells/viewport?${params}`,
+            "Visible world cells");
+    }
+
+    public resolveWorldCell(worldId: string, cell: WorldCellId): Promise<WorldCellGeometry> {
+        const params = new URLSearchParams({
+            motifCellId: cell.address.motifCellId,
+            u: String(cell.address.translation.u),
+            v: String(cell.address.translation.v)
+        });
+        return this.getJson(
+            `/api/overworlds/${encodeURIComponent(worldId)}/cells/resolve?${params}`,
+            "Selected world cell");
+    }
+
+    public lookupWorldCell(worldId: string, point: WorldPoint): Promise<WorldCellLookup> {
+        const params = new URLSearchParams({ x: String(point.x), y: String(point.y) });
+        return this.getJson(
+            `/api/overworlds/${encodeURIComponent(worldId)}/cells/containing?${params}`,
+            "World cell selection");
+    }
+
+    public createPeriodicOverworld(input: {
+        name: string;
+        tilingDsSymbol: string;
+        worldUnitsPerAbstractPeriod: number;
+        origin: WorldPoint;
+        rotationDegrees: number;
+        physicalDistancePerWorldUnit?: { value: number; unit: DistanceUnit };
+        periodULengthWorldUnits?: number;
+        periodVLengthWorldUnits?: number;
+        periodAngleDegrees?: number;
+    }): Promise<Overworld> {
+        return this.sendJson("POST", "/api/overworlds/periodic", input, "Create periodic world");
+    }
+
     public createOverworld(input: CreateOverworldInput): Promise<Overworld> {
         return this.sendJson("POST", "/api/overworlds", input, "Create overworld");
+    }
+
+    public renameOverworld(id: string, name: string, expectedVersion: number): Promise<Overworld> {
+        return this.sendJson("PUT", `/api/overworlds/${encodeURIComponent(id)}/name`,
+            { name, expectedVersion }, "Rename overworld");
     }
 
     public updateOverworld(id: string, name: string, grid: GridDefinition, expectedVersion: number): Promise<Overworld> {
@@ -335,6 +426,42 @@ export class HexCrawlApi {
         return this.deleteJson(`/api/overworlds/${encodeURIComponent(worldId)}/source-maps/${encodeURIComponent(sourceMapId)}?expectedVersion=${expectedVersion}`, "Delete source map");
     }
 
+    public assessSourceMapCompatibility(
+        worldId: string, sourceMapId: string,
+        procedure?: { id: string; revision: number }
+    ): Promise<SourceMapCompatibilityAssessment> {
+        const query = procedure
+            ? "?" + new URLSearchParams({
+                procedureId: procedure.id, procedureRevision: String(procedure.revision)
+            }).toString() : "";
+        return this.sendJson("POST",
+            `/api/overworlds/${encodeURIComponent(worldId)}/source-maps/${encodeURIComponent(sourceMapId)}/motif-compatibility${query}`,
+            {}, "Map pattern compatibility");
+    }
+
+    public applyMotifCorrection(
+        worldId: string, sourceMapId: string, candidateIndex: number,
+        alignment: MapRegistrationTransform, expectedVersion: number,
+        procedure?: { id: string; revision: number }
+    ): Promise<Overworld> {
+        return this.sendJson("PUT",
+            `/api/overworlds/${encodeURIComponent(worldId)}/source-maps/${encodeURIComponent(sourceMapId)}/motif-correction`,
+            {
+                candidateIndex, alignment, expectedVersion,
+                procedureId: procedure?.id ?? null,
+                procedureRevision: procedure?.revision ?? null
+            }, "Replace unused world cells from checked image");
+    }
+
+    public applyMotifRegistration(
+        worldId: string, sourceMapId: string, candidateIndex: number,
+        alignment: MapRegistrationTransform, expectedVersion: number
+    ): Promise<Overworld> {
+        return this.sendJson("PUT",
+            `/api/overworlds/${encodeURIComponent(worldId)}/source-maps/${encodeURIComponent(sourceMapId)}/motif-registration`,
+            { candidateIndex, alignment, expectedVersion }, "Accept checked image placement");
+    }
+
     public sourceMapAssetUrl(worldId: string, sourceMapId: string): string {
         return `${this.backendBaseUrl}/api/overworlds/${encodeURIComponent(worldId)}/source-maps/${encodeURIComponent(sourceMapId)}/asset`;
     }
@@ -379,6 +506,61 @@ export class HexCrawlApi {
 
     public startStandaloneSession(input: StartStandaloneCrawlSessionInput): Promise<ExpeditionDetail> {
         return this.sendJson("POST", "/api/expeditions", input, "Start expedition");
+    }
+
+    public assessCellProcedure(
+        worldId: string, procedureId: string, revision: number
+    ): Promise<{
+        status: "ready" | "unsupported" | "needs-calibration" | "review" | "incompatible";
+        explanation: string;
+        worldVersion: number;
+        procedureId: string;
+        revision: number;
+    }> {
+        const query = new URLSearchParams({ procedureId, revision: String(revision) });
+        return this.getJson(
+            `/api/overworlds/${encodeURIComponent(worldId)}/cell-procedures/compatibility?${query}`,
+            "Saved ruleset compatibility");
+    }
+
+    public createCellTravelProcedure(worldId: string): Promise<{
+        procedureId: string; revision: number; name: string;
+    }> {
+        return this.sendJson("POST",
+            `/api/overworlds/${encodeURIComponent(worldId)}/cell-procedures`,
+            {}, "Create compatible exploration ruleset");
+    }
+
+    public startCellExpedition(worldId: string, input: StartCellExpeditionInput): Promise<ExpeditionDetail> {
+        return this.sendJson("POST",
+            `/api/overworlds/${encodeURIComponent(worldId)}/cell-expeditions`,
+            input, "Start generalized expedition");
+    }
+
+    public advanceCellWatch(expeditionId: string, input: CellWatchRequest): Promise<ExpeditionDetail> {
+        return this.sendJson("POST",
+            `/api/expeditions/${encodeURIComponent(expeditionId)}/cells/advance`,
+            input, "Advance cell expedition");
+    }
+
+    public resolveCellCourse(expeditionId: string, input: CellCourseRequest): Promise<ExpeditionDetail> {
+        return this.sendJson("POST",
+            `/api/expeditions/${encodeURIComponent(expeditionId)}/cells/course`,
+            input, "Resolve cell course");
+    }
+
+    public resolveCellEncounter(
+        expeditionId: string, occurrenceId: string, expectedVersion: number, resultNote?: string
+    ): Promise<ExpeditionDetail> {
+        return this.sendJson("POST",
+            `/api/expeditions/${encodeURIComponent(expeditionId)}/cells/encounters/${encodeURIComponent(occurrenceId)}/resolve`,
+            { expectedVersion, resultNote }, "Resolve cell encounter");
+    }
+
+    public getCellTopology(expeditionId: string): Promise<CellTraversalContext> {
+        return this.getJson(
+            `/api/expeditions/${encodeURIComponent(expeditionId)}/cell-topology`,
+            "Current cell topology");
     }
 
     public getExpedition(expeditionId: string): Promise<ExpeditionDetail> {

@@ -3,7 +3,7 @@ import type { EnvironmentAnnotation, EnvironmentFact, WorldEnvironment } from ".
 import { hexToWorld, worldToHex } from "../../hex-math";
 import { MapSurface } from "../../map-surface";
 import { SourceMapWorkspace } from "./source-map-workspace";
-import type { HexCoordinate, Location, Overworld, SpatialFeature, WorldPoint } from "../../types";
+import type { HexCoordinate, Location, Overworld, SpatialFeature, WorldPoint, WorldCellGeometry, WorldCellId } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
 import { customUnitFieldsVisible, gridWithSelectedUnit } from "./world-form";
 import type { DistanceUnitKind } from "./world-form";
@@ -17,6 +17,8 @@ import {
     featureHasEnvironmentRules,
     featureIntersectsCell,
     featuresIntersectingCell,
+    featureIntersectsPolygon,
+    pointInPolygon,
     hexEnvironmentFacts,
     locationsInCell,
     measurementFact,
@@ -43,6 +45,7 @@ export async function renderWorldEditor(
     let worldEnvironment = initialWorldEnvironment;
     let selectedCell = restoreSelectedCell(worldId);
     let selectedLocation: Location | null = null;
+    let selectedPeriodicCell: WorldCellGeometry | null = null;
     let selectedFeature: SpatialFeature | null = null;
     let placement: "location" | "point" | "line" | "region" | "cell-location" | "cell-route" | null = null;
     let draft: WorldPoint[] = [];
@@ -211,7 +214,7 @@ export async function renderWorldEditor(
     const error = required<HTMLElement>(root, "[data-error]");
     const title = required<HTMLElement>(root, "[data-title]");
     const mapHint = required<HTMLElement>(root, "[data-map-hint]");
-    const mapSurface = new MapSurface(required(root, "[data-map]"), () => world, point => onMapClick(point));
+    const mapSurface = new MapSurface(required(root, "[data-map]"), () => world, point => onMapClick(point), api);
     const gridForm = required<HTMLFormElement>(root, "[data-grid-form]");
     const locationForm = required<HTMLFormElement>(root, "[data-location-form]");
     const featureForm = required<HTMLFormElement>(root, "[data-feature-form]");
@@ -288,10 +291,12 @@ export async function renderWorldEditor(
             worldEnvironment = { ...worldEnvironment, version: next.version };
         }
         title.textContent = next.name;
+        if (!next.grid) selectedCell = null;
         fillGrid();
         renderLocations();
         renderFeatures();
         renderSelectedCell();
+        if (!world.grid) renderPeriodicCell();
         mapSurface.requestRender();
     };
 
@@ -299,6 +304,8 @@ export async function renderWorldEditor(
         worldEnvironment = next;
         if (world.version !== next.version) world = { ...world, version: next.version };
         renderSelectedCell();
+        if (!world.grid) renderPeriodicCell();
+        mapSurface.requestRender();
     };
 
     const saveWorldEnvironment = async (annotations: EnvironmentAnnotation[]): Promise<void> => {
@@ -310,6 +317,21 @@ export async function renderWorldEditor(
 
     const fillGrid = (): void => {
         input(gridForm, "name").value = world.name;
+        const nameLabel = input(gridForm, "name").closest("label");
+        const saveButton = gridForm.querySelector<HTMLButtonElement>('button[type="submit"]');
+        if (saveButton) saveButton.textContent =
+            world.grid ? "Save world and grid" : "Save world name";
+        for (const child of Array.from(gridForm.children)) {
+            if (child === nameLabel || child === saveButton) continue;
+            (child as HTMLElement).hidden = !world.grid;
+        }
+        if (!world.grid) {
+            gridForm.querySelectorAll<HTMLInputElement | HTMLSelectElement>("input, select").forEach(control => {
+                if (control.name !== "name") control.disabled = true;
+            });
+            return;
+        }
+        gridForm.querySelectorAll<HTMLInputElement | HTMLSelectElement>("input, select").forEach(control => control.disabled = false);
         select(gridForm, "orientation").value = world.grid.orientation;
         input(gridForm, "scale").value = String(world.grid.neighborCenterDistance.value);
         unitKindSelect.value = world.grid.neighborCenterDistance.unit.kind;
@@ -392,6 +414,12 @@ export async function renderWorldEditor(
 
     const renderSelectedCell = (): void => {
         const cell = selectedCell;
+        if (!world.grid) {
+            selectedCellEmpty.hidden = false;
+            selectedCellContent.hidden = true;
+            mapSurface.renderer.selectedHex = null;
+            return;
+        }
         selectedCellEmpty.hidden = cell !== null;
         selectedCellContent.hidden = cell === null;
         mapSurface.renderer.selectedHex = cell;
@@ -579,6 +607,7 @@ export async function renderWorldEditor(
     const onMapClick = (point: WorldPoint): void => {
         if (placement === "cell-location") {
             if (!selectedCell) return;
+            if (!world.grid) return;
             const clickedCell = worldToHex(world.grid, point);
             if (!sameHex(clickedCell, selectedCell)) {
                 mapHint.textContent = `Choose an exact position inside Hex ${selectedCell.q},${selectedCell.r}.`;
@@ -619,6 +648,195 @@ export async function renderWorldEditor(
         }
     };
 
+    const sameQualifiedCell = (left: WorldCellId | null | undefined, right: WorldCellId): boolean =>
+        !!left && left.tilingId === right.tilingId
+        && left.address.motifCellId === right.address.motifCellId
+        && left.address.translation.u === right.address.translation.u
+        && left.address.translation.v === right.address.translation.v;
+
+    function renderPeriodicCell(): void {
+        if (!world.tiling || world.grid) return;
+        const panel = selectedCellEmpty;
+        selectedCell = null;
+        selectedCellContent.hidden = true;
+        panel.hidden = false;
+        panel.replaceChildren();
+        const cell = selectedPeriodicCell;
+        if (!cell) {
+            const empty = document.createElement("p");
+            empty.className = "hc-hint";
+            empty.textContent = "Select a polygonal cell to author its contents.";
+            panel.append(empty);
+            return;
+        }
+        const intro = document.createElement("p");
+        intro.className = "hc-hint";
+        intro.textContent =
+            "Selected world cell. Editing local facts does not move the party or reveal hidden content.";
+        const summary = document.createElement("p");
+        summary.textContent = `Center: ${formatPoint(cell.center)} · ${cell.polygon.length} sides`;
+        panel.append(intro, summary);
+
+        const locations = world.locations.filter(location =>
+            pointInPolygon(location.position, cell.polygon));
+        const features = world.features.filter(feature =>
+            featureIntersectsPolygon(feature, cell.polygon));
+        const objects = document.createElement("div");
+        objects.className = "hc-stack";
+        const label = document.createElement("h4");
+        label.textContent = "Locations and features intersecting this cell";
+        objects.append(label);
+        if (locations.length + features.length === 0) {
+            const empty = document.createElement("p");
+            empty.className = "hc-hint";
+            empty.textContent = "No authored map objects touch this cell.";
+            objects.append(empty);
+        }
+        for (const location of locations) {
+            const row = document.createElement("div");
+            row.className = "hc-discovery-row";
+            const description = document.createElement("span");
+            description.textContent = `${location.name} · ${location.category}`;
+            const edit = document.createElement("button");
+            edit.type = "button";
+            edit.textContent = "Edit location";
+            edit.addEventListener("click", () => {
+                loadLocation(location);
+                advancedWorldObjects.open = true;
+                const section = locationForm.closest("details");
+                if (section) section.open = true;
+                input(locationForm, "name").focus();
+            });
+            row.append(description, edit);
+            objects.append(row);
+        }
+        for (const feature of features) {
+            const row = document.createElement("div");
+            row.className = "hc-discovery-row";
+            const description = document.createElement("span");
+            description.textContent = `${feature.name} · ${feature.category}`;
+            const edit = document.createElement("button");
+            edit.type = "button";
+            edit.textContent = "Edit feature";
+            edit.addEventListener("click", () => {
+                loadFeature(feature);
+                advancedWorldObjects.open = true;
+                const section = featureForm.closest("details");
+                if (section) section.open = true;
+                input(featureForm, "name").focus();
+            });
+            row.append(description, edit);
+            objects.append(row);
+        }
+        panel.append(objects);
+
+        const annotations = worldEnvironment.annotations.filter(annotation =>
+            annotation.scope.kind === "Cell" && sameQualifiedCell(annotation.scope.cell, cell.id));
+        const terrainFacts = annotations.flatMap(annotation =>
+            annotation.facts.filter(fact => fact.dimension.trim().toLowerCase() === "terrain"));
+        const terrainForm = document.createElement("form");
+        terrainForm.className = "hc-form";
+        terrainForm.innerHTML = `
+            <label>Terrain / biome <input name="terrain" list="hc-periodic-terrain" placeholder="Forest, plains, custom" required></label>
+            <datalist id="hc-periodic-terrain"><option value="forest"><option value="swamp"><option value="grassland"><option value="desert"><option value="mountain"></datalist>
+            <button type="submit" class="hc-primary-action">Save cell terrain</button>
+            <button type="button" data-clear-terrain>Clear terrain</button>`;
+        const terrainInput = input(terrainForm, "terrain");
+        if (terrainFacts.length === 1 && terrainFacts[0].valueKind === "Tag")
+            terrainInput.value = terrainFacts[0].tag ?? "";
+        const replaceTerrain = async (value: string | null): Promise<void> => {
+                let next = worldEnvironment.annotations.map(annotation =>
+                    annotation.scope.kind === "Cell" && sameQualifiedCell(annotation.scope.cell, cell.id)
+                        ? { ...annotation, facts: annotation.facts.filter(fact =>
+                            fact.dimension.trim().toLowerCase() !== "terrain") }
+                        : annotation).filter(annotation => annotation.facts.length > 0);
+                if (value?.trim()) next = addEnvironmentFact(next,
+                    { kind: "Cell", cell: cell.id, hex: null, featureId: null },
+                    tagFact("terrain", value.trim(), "world-editor:selected-cell", null));
+                await saveWorldEnvironment(next);
+        };
+        terrainForm.addEventListener("submit", event => {
+            event.preventDefault();
+            void run(terrainForm, () => replaceTerrain(terrainInput.value));
+        });
+        required<HTMLButtonElement>(terrainForm, "[data-clear-terrain]")
+            .addEventListener("click", () => void run(terrainForm, () => replaceTerrain(null)));
+        panel.append(terrainForm);
+
+        const facts = document.createElement("div");
+        facts.className = "hc-stack";
+        for (const annotation of annotations) {
+            for (const fact of annotation.facts) {
+                const line = document.createElement("div");
+                line.className = "hc-discovery-row";
+                const description = document.createElement("span");
+                description.textContent = `${fact.dimension}: ${formatEnvironmentFact(fact)}`;
+                const remove = document.createElement("button");
+                remove.type = "button";
+                remove.textContent = "Remove";
+                remove.addEventListener("click", () => void run(null, async () =>
+                    saveWorldEnvironment(removeEnvironmentFact(
+                        worldEnvironment.annotations, annotation.id, fact.id))));
+                line.append(description, remove);
+                facts.append(line);
+            }
+        }
+        if (facts.childElementCount === 0) {
+            const empty = document.createElement("p");
+            empty.className = "hc-hint";
+            empty.textContent = "No explicit local environment facts are defined.";
+            facts.append(empty);
+        }
+        panel.append(facts);
+
+        const localForm = document.createElement("form");
+        localForm.className = "hc-form";
+        localForm.innerHTML = `
+            <label>Environmental detail <input name="dimension" list="hc-cell-environment-dimensions" required></label>
+            <label>Value <input name="value" required></label>
+            <button type="submit">Add local environment fact</button>`;
+        localForm.addEventListener("submit", event => {
+            event.preventDefault();
+            void run(localForm, async () => {
+                const dimension = input(localForm, "dimension").value.trim();
+                const value = input(localForm, "value").value.trim();
+                if (!dimension || !value) throw new Error("An environment dimension and value are required.");
+                if (dimension.toLowerCase() === "terrain") {
+                    await replaceTerrain(value);
+                    return;
+                }
+                await saveWorldEnvironment(addEnvironmentFact(
+                    worldEnvironment.annotations,
+                    { kind: "Cell", cell: cell.id, hex: null, featureId: null },
+                    tagFact(dimension, value, "world-editor:selected-cell", null)));
+            });
+        });
+        panel.append(localForm);
+
+        const addLocation = document.createElement("button");
+        addLocation.type = "button";
+        addLocation.textContent = "Add location at this cell's center";
+        addLocation.addEventListener("click", () => {
+            newLocation();
+            input(locationForm, "x").value = String(cell.center.x);
+            input(locationForm, "y").value = String(cell.center.y);
+            advancedWorldObjects.open = true;
+            const section = locationForm.closest("details");
+            if (section) section.open = true;
+            input(locationForm, "name").focus();
+        });
+        panel.append(addLocation);
+    }
+
+    // A generalized cell is selected by server-qualified identity, not a fake
+    // q/r address. Shared-boundary ambiguities stay in MapSurface.
+    mapSurface.setCellSelectionHandler(cell => {
+        selectedPeriodicCell = cell;
+        renderPeriodicCell();
+        if (cell) root.dispatchEvent(
+            new CustomEvent("hex-crawl:world-cell-selected", { detail: cell.id }));
+    });
+
     mapSurface.setHexSelectionHandler(hex => {
         if (placement !== null) {
             mapSurface.renderer.selectedHex = selectedCell;
@@ -635,7 +853,7 @@ export async function renderWorldEditor(
         if (hex) mapHint.textContent = `Selected Hex ${hex.q},${hex.r} for world authoring.`;
         else mapHint.textContent = "Select a map cell to author its contents.";
     });
-    if (selectedCell) mapSurface.renderer.selectedHex = selectedCell;
+    if (world.grid && selectedCell) mapSurface.renderer.selectedHex = selectedCell;
 
     required<HTMLButtonElement>(root, "[data-worlds]").addEventListener("click", () => navigate("/worlds"));
     required<HTMLButtonElement>(root, "[data-reset-view]").addEventListener("click", () => mapSurface.resetView());
@@ -670,6 +888,7 @@ export async function renderWorldEditor(
         event.preventDefault();
         void run(cellLocationForm, async () => {
             if (!selectedCell) throw new Error("Select a map cell before adding a location.");
+            if (!world.grid) throw new Error("Hex-scoped authoring requires a legacy hex world.");
             const position = cellLocationPoint ?? hexToWorld(world.grid, selectedCell);
             applyWorld(await api.createLocation(world.id, {
                 name: input(cellLocationForm, "name").value.trim(),
@@ -850,6 +1069,11 @@ export async function renderWorldEditor(
     gridForm.addEventListener("submit", event => {
         event.preventDefault();
         void run(gridForm, async () => {
+            if (!world.grid) {
+                applyWorld(await api.renameOverworld(
+                    world.id, input(gridForm, "name").value.trim(), world.version));
+                return;
+            }
             const kind = unitKindSelect.value as DistanceUnitKind;
             const centerDistance = numeric(input(gridForm, "scale"));
             let nextGrid = gridWithSelectedUnit(

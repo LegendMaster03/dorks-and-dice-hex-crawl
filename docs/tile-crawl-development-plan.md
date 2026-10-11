@@ -1,7 +1,7 @@
 # Tile Crawl transition — development plan
 
-**Status:** Phases 16 and 17 merged and deployed to development/testing. Phase 18 traversal generalization is in progress on feature/tile-crawl-phase-18; generalized runtime integration, persistence, and release gates remain pending.  
-**Roadmap:** Phases 16–21 (the successor to the completed Hex Crawl / generic-procedure roadmap)  
+**Status:** Phases 16–18 merged to main. Generalized Phase 19 integration is in progress on feature/tile-crawl-phase-19; rendered-browser, migration, and independent-review gates remain open. Deployment of Phase 18 must be independently verified.  
+**Roadmap:** Phases 16–20 (the successor to the completed Hex Crawl / generic-procedure roadmap)  
 **Primary repository:** LegendMaster03/dorks-and-dice-hex-crawl  
 **Analysis-service repository:** LegendMaster03/dorks-and-dice-surveyor  
 **Planning baseline:** Hex Crawl main at 70629398cf1b30c43addef5299ce1ad23efbfd7a; Surveyor main at e9ad1cc9f04ce375fa1baf241894357abc116e09 (9 October 2026)
@@ -198,11 +198,11 @@ The existing detector already performs edge sampling, repeated line-family and p
 - Movement cannot enter nonadjacent cells, cross a blocked interface, create phantom neighbors at a T-junction, or duplicate travel/discovery events.
 - Explicit tests exercise lost course, deliberate double-back, veer, interrupted travel, fractional distance at a boundary, encounter pause and nonspatial journeys.
 
-## Phase 19 — Generalize spatial presentation and map registration
+## Phase 19 — Generalized spatial presentation, map registration, and ruleset compatibility
 
-**Owner:** Tile Crawl frontend, application and source-map modules.  
+**Owner:** Tile Crawl frontend, world, application, expedition, source-map and procedure modules.  
 **Depends on:** Phases 17–18; consumes Phase 16 geometry contracts.  
-**Goal:** display and manipulate actual cell geometry rather than rendered hexagons while retaining the current Guided/Compact UX.
+**Goal:** display and manipulate authoritative polygonal cells; reconcile imported maps with world and applicable procedure authorities safely while retaining Guided/Compact and all legacy workflows.
 
 ### Implementation
 
@@ -220,13 +220,11 @@ The existing detector already performs edge sampling, repeated line-family and p
 - Mobile/tablet/desktop, embedded, light/dark, keyboard and pointer review covers no map, unrecognized map, geometry mismatch, current cell, travel, encounter and nonspatial states. Normal selectors, map dialogs, navigation, error recovery, and Advanced screens contain no raw D-symbols; the JSON editor is tested as the explicit code-editing exception.
 - Existing hex and Wonderdraft alignment tests remain green, including interaction with previously saved tester maps and expeditions after deployment; no interim phase removes the working map UI.
 
-## Phase 20 — Ruleset/map mismatch reconciliation
+### Ruleset/map compatibility and safe correction implementation
 
-**Owner:** Tile Crawl; Surveyor only supplies observations.  
-**Depends on:** Phases 16–19, including completed generalized Surveyor detection in Phase 16.  
-**Goal:** resolve imported-map/ruleset mismatches directly where safe, without settings-menu detours or silent destructive changes.
+Surveyor supplies experimental observations, not authoritative geometry. Validate candidate evidence independently; incomplete, inconclusive, or unsupported observations must remain advisory. Existing v2 hex detection remains available. No new image-detection algorithm or tiling-definition system is part of this phase.
 
-### Implementation
+Do not silently revise rulesets or change world topology. Preserve source image assets, existing registrations, physical calibrations, pinned revisions, histories and tester data. For multi-aggregate correction, revalidate dependencies and expected versions inside a transactional mutation; if consistency cannot be guaranteed, do not expose direct correction.
 
 - Retrieve the expected canonical D-symbol and any geometry restrictions from the **applicable selected materialized ruleset/procedure when one exists**, and the observed canonical D-symbol plus measured realization from Surveyor. World/source-map authoring may occur **before** expedition creation or procedure selection, so absence of a ruleset is a first-class state: compare the observed pattern with established world geometry, not an invented procedure requirement. Perform structural equivalence, metric compatibility, and authoritative-world contradiction checks inside Tile Crawl. Avoid false mismatches caused only by alternative legitimate symmetry representations, and do not treat equal structural identity as automatic proof that metric requirements match. Do not require Surveyor to know which ruleset is being used.
 - Resolve human-readable names through Tile Crawl's **optional data-driven tiling nomenclature catalog** where the canonical identity and any required geometric qualifiers match. Otherwise derive descriptions from actual topology and measured geometry. Use "hexagons", "squares", "triangles", a familiar named tiling, or "a repeating mix of shapes" only when justified by evidence; a four-sided cell is not necessarily a square. No names or aliases participate in authoritative identity comparison. The absence of a familiar name must not send the user to the JSON editor or force them to handle a D-symbol.
@@ -242,7 +240,7 @@ The existing detector already performs edge sampling, repeated line-family and p
 - Offer appropriate alternatives, such as keeping the current configuration and using another map, adjusting an unsaved draft, or starting a separate world. Never offer a one-click conversion if runtime/geometry realization is not actually implemented.
 - Distinguish low-confidence, unsupported, gridless and technically failed analyses. They should offer manual placement/retry where safe, not a false ruleset switch.
 
-### Acceptance gate
+### Compatibility acceptance gate
 
 - Matching image/ruleset (including provably equivalent symmetry representations): proceed normally after metric checks. Inconclusive equivalence: request review, not a false mismatch. Genuine mismatch on unused default: show one-click option and persist correct new revision/world geometry without requiring settings navigation. **No procedure selected:** retain/use observed world topology without inventing a revision, then check future procedure selection for compatibility.
 - Mismatch on established expedition: block with an explanation citing the expedition and preserved position. Map already accepted with incompatible registration: block or require an explicit safe migration.
@@ -250,10 +248,10 @@ The existing detector already performs edge sampling, repeated line-family and p
 - All UI messages use ordinary shape vocabulary or a well-supported catalog name. Catalog misses and geometrically ambiguous names fall back to derived descriptions, and adding a catalog name changes no detection or traversal behavior. **Assert that the only UI surfaces containing raw D-symbols are the explicitly selected JSON editor and an error for a supported but unnamed pattern**; all other flows use ordinary descriptions, including Advanced editing, empty states, map mismatches, and routine successful detection. The special unnamed-pattern error explains the problem first and provides code only as a secondary labeled identifier. Accessibility and narrow-screen interaction are reviewed.
 - The same reconciliation path handles a held-out unfamiliar polygon mix with no pattern-specific conditional branches.
 
-## Phase 21 — Tile Crawl cutover, cleanup, and stabilization
+## Phase 20 — Tile Crawl cutover, cleanup, and stabilization
 
 **Owners:** Tile Crawl and Surveyor.  
-**Depends on:** completed Phases 16–20 and their accepted migrations.  
+**Depends on:** completed Phases 16–19 and their accepted migrations.  
 **Goal:** make the generalized system the sole supported path and complete the product transition.
 
 ### Implementation
@@ -300,7 +298,7 @@ For any applicable visual and numerical acceptance check, specify expected geome
 2. Before coding each phase, inventory affected APIs/types/schema and write the change/migration plan **against actual tester data and currently deployed versions**, including backup, recovery, version overlap and the effect of a failed upgrade. Treat both the phase's acceptance gate and the mandatory continuous-usability/data-preservation gate as the implementation contract. Update this roadmap's status only when evidence exists.
 3. Preserve **all live tester workflows**, with existing hex functionality as an automated regression oracle until the general runtime proves parity. Any phase that changes an authority must still deploy as a complete working increment. Do **not** expand an interim catalog of known patterns as a shortcut toward the target.
 4. Keep API contract changes coordinated. Prefer expand/migrate/cutover/contract in an explicitly versioned API and schema, with old/new conformance and rollback tests. Avoid depending on a live deployment containing half of an incompatible change. Maintain and test the old operational hex path until the new client/server/runtime path is verified; intermediate phases may merge behind **non-user-exposed capability gates**, never leaving testers with an unusable tool or advertising unsupported tilings.
-5. Run complete appropriate suites (Surveyor parser/raster/worker/API/container; Tile Crawl domain/application/integration/PostgreSQL/client/embedded/container), **realistic pre-upgrade snapshot migration and recovery tests**, security/ownership/concurrency tests and representative rendered visual checks. Continue internal tester feedback and bounded user-facing stabilization **during every phase**; use post-deployment signed-in existing-data smoke checks rather than deferring all repairs until Phase 21.
+5. Run complete appropriate suites (Surveyor parser/raster/worker/API/container; Tile Crawl domain/application/integration/PostgreSQL/client/embedded/container), **realistic pre-upgrade snapshot migration and recovery tests**, security/ownership/concurrency tests and representative rendered visual checks. Continue internal tester feedback and bounded user-facing stabilization **during every phase**; use post-deployment signed-in existing-data smoke checks rather than deferring all repairs until Phase 20.
 6. Conduct a self-review for hidden hex assumptions, pattern-specific branching, incorrect identity claims, unstable IDs, geometry drift, performance blow-ups, regression in nonspatial flows and overly technical UI language.
 7. Report exact repository heads, test failures, live compatibility and migration/backups/recovery evidence. **Do not merge without explicit authorization.** After authorization merge coordinated branches as close together as practical, verify both main heads, post-merge validation, compatible deployment and signed-in tester-data workflows. A pair of GitHub merges is coordinated but not mathematically atomic: define rollback/compatibility strategy before breaking changes. **Merge authorization never implies authorization for database reset or data deletion**.
 8. No phase is complete while its acceptance gates are red, while deployed tester workflows are broken, while data migrations or recovery remain unverified, while user data can be silently corrupted, or while a claim of arbitrary-tiling support rests only on three familiar examples. A genuinely unavoidable destructive reset requires separate explicit owner approval and tester communication; it is never the default exit from a failed migration.

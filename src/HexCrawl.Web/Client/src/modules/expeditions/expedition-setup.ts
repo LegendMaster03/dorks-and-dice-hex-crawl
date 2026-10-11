@@ -1,7 +1,7 @@
 import type { HexCrawlApi } from "../../api";
 import { ProcedureComposerApi } from "../../procedure-composer-api";
 import type { SavedProcedureSummary } from "../../procedure-composer-types";
-import type { PresentationProfile, ProcedurePreset } from "../../types";
+import type { PresentationProfile, ProcedurePreset, WorldCellId } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
 import { campaignProcedureSummary, renderProcedureMechanicList } from "../../campaign-procedure-view";
 import {
@@ -20,7 +20,8 @@ export async function enhanceExpeditionSetup(
     if (!previous) return () => {};
 
     const composerApi = await ProcedureComposerApi.create(root);
-    const [presets, presentations, savedProcedures] = await Promise.all([
+    const [world, presets, presentations, savedProcedures] = await Promise.all([
+        api.getOverworld(worldId),
         api.getProcedurePresets(),
         api.getPresentationProfiles(),
         composerApi.listProcedures()
@@ -41,7 +42,48 @@ export async function enhanceExpeditionSetup(
     previous.replaceWith(form);
 
     const procedure = select(form, "procedure");
-    populateProcedureStartChoices(procedure, savedProcedures, presets);
+    populateProcedureStartChoices(procedure, savedProcedures, world.grid ? presets : []);
+    let createCellRulesetButton: HTMLButtonElement | null = null;
+    if (!world.grid) {
+        createCellRulesetButton = document.createElement("button");
+        createCellRulesetButton.type = "button";
+        createCellRulesetButton.textContent = "Create a compatible cell-travel ruleset";
+        createCellRulesetButton.className = "hc-secondary-action";
+        createCellRulesetButton.title =
+            "Creates an editable saved campaign ruleset using existing cell-step movement. Existing procedures are not changed.";
+        required<HTMLElement>(form, "[data-procedure-summary]").after(createCellRulesetButton);
+    }
+
+    if (!world.grid) {
+        const start = form.querySelector<HTMLElement>(".hc-inline");
+        const cells = world.tiling?.topology.motifCells ?? [];
+        if (!start || cells.length === 0) throw new Error("The accepted world has no selectable cells.");
+        start.innerHTML = `
+            <label>Starting cell type <select name="motifCellId"></select></label>
+            <label>East/west repeat <input name="u" type="number" step="1" value="0" required></label>
+            <label>North/south repeat <input name="v" type="number" step="1" value="0" required></label>`;
+        const selectCell = select(start, "motifCellId");
+        cells.forEach((cell, index) => selectCell.append(option(cell.id, `Cell shape ${index + 1}`)));
+        const selectionHint = document.createElement("p");
+        selectionHint.className = "hc-hint";
+        selectionHint.textContent =
+            "Click a cell on the map to choose the expedition start, or enter the repeating cell position directly.";
+        start.after(selectionHint);
+        const info = form.querySelector<HTMLElement>(".hc-hint:last-of-type");
+        if (info) info.textContent =
+            "Generalized expeditions require a saved, executable ruleset revision compatible with this world. Starting cells are identified by their repeating position, not axial hex coordinates.";
+    }
+    const acceptMapCell = (event: Event): void => {
+        if (world.grid || !world.tiling) return;
+        const cell = (event as CustomEvent<WorldCellId>).detail;
+        if (!cell || cell.tilingId !== world.tiling.id) return;
+        const selectCell = select(form, "motifCellId");
+        if (![...selectCell.options].some(item => item.value === cell.address.motifCellId)) return;
+        selectCell.value = cell.address.motifCellId;
+        input(form, "u").value = String(cell.address.translation.u);
+        input(form, "v").value = String(cell.address.translation.v);
+    };
+    if (!world.grid) root.addEventListener("hex-crawl:world-cell-selected", acceptMapCell);
     const presentation = select(form, "presentation");
     for (const policy of presentations) presentation.append(option(policy.key, policy.name));
     if (presentations.some(policy => policy.key === "exploration-map")) presentation.value = "exploration-map";
@@ -83,10 +125,90 @@ export async function enhanceExpeditionSetup(
 
     const error = root.querySelector<HTMLElement>("[data-error]");
     const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
-    submit.disabled = !procedure.value;
+    let readySavedSelection: string | null = world.grid ? procedure.value : null;
+    let compatibilityGeneration = 0;
+    const compatibilityStatus = document.createElement("p");
+    compatibilityStatus.className = "hc-hint";
+    compatibilityStatus.setAttribute("role", "status");
+    if (!world.grid) {
+        required<HTMLElement>(form, "[data-procedure-summary]").after(compatibilityStatus);
+    }
+    const canStart = (): boolean => !!procedure.value
+        && (!!world.grid || procedure.value === readySavedSelection);
+    const checkCompatibility = async (): Promise<void> => {
+        if (world.grid) return;
+        const generation = ++compatibilityGeneration;
+        const value = procedure.value;
+        readySavedSelection = null;
+        submit.disabled = true;
+        if (!value) {
+            compatibilityStatus.textContent = "Create or select a compatible saved ruleset.";
+            return;
+        }
+        const selected = readProcedureStartChoice(value);
+        if (selected.kind !== "saved") {
+            compatibilityStatus.textContent =
+                "Generalized worlds require a pinned saved ruleset. Create a compatible cell-travel ruleset.";
+            return;
+        }
+        compatibilityStatus.textContent = "Checking ruleset compatibility…";
+        try {
+            const assessment = await api.assessCellProcedure(
+                worldId, selected.procedureId, selected.revision);
+            if (generation !== compatibilityGeneration || procedure.value !== value) return;
+            compatibilityStatus.textContent = assessment.explanation;
+            if (assessment.status === "ready") readySavedSelection = value;
+        } catch (failure) {
+            if (generation !== compatibilityGeneration || procedure.value !== value) return;
+            compatibilityStatus.textContent =
+                "Unable to verify this saved ruleset. Reload the world and retry.";
+            if (error) showUiError(error, failure);
+        } finally {
+            if (generation === compatibilityGeneration && procedure.value === value)
+                submit.disabled = !canStart();
+        }
+    };
+    if (!world.grid) {
+        procedure.addEventListener("change", () => void checkCompatibility());
+        void checkCompatibility();
+    }
+    submit.disabled = !canStart();
+    createCellRulesetButton?.addEventListener("click", () => {
+        if (!createCellRulesetButton || createCellRulesetButton.disabled) return;
+        createCellRulesetButton.disabled = true;
+        createCellRulesetButton.textContent = "Creating ruleset…";
+        if (error) clearUiError(error);
+        void (async () => {
+            try {
+                const created = await api.createCellTravelProcedure(worldId);
+                const fresh = await composerApi.listProcedures();
+                savedProcedures.splice(0, savedProcedures.length, ...fresh);
+                populateProcedureStartChoices(procedure, savedProcedures, []);
+                const value = `saved:${created.procedureId}:${created.revision}`;
+                if (![...procedure.options].some(item => item.value === value)) {
+                    throw new Error("The ruleset was created, but the saved-ruleset list is stale. Reload the world.");
+                }
+                procedure.value = value;
+                await renderProcedureSummary();
+                await checkCompatibility();
+            } catch (failure) {
+                if (error) showUiError(error, failure);
+            } finally {
+                if (createCellRulesetButton) {
+                    createCellRulesetButton.disabled = false;
+                    createCellRulesetButton.textContent = "Create a compatible cell-travel ruleset";
+                }
+            }
+        })();
+    });
     form.addEventListener("submit", event => {
         event.preventDefault();
         if (form.dataset.pending === "true") return;
+        if (!canStart()) {
+            if (error) showUiError(error, new Error(
+                "Select a saved ruleset confirmed compatible with the current world."));
+            return;
+        }
         form.dataset.pending = "true";
         submit.disabled = true;
         submit.textContent = "Starting…";
@@ -94,23 +216,43 @@ export async function enhanceExpeditionSetup(
         void (async () => {
             try {
                 const choice = readProcedureStartChoice(procedure.value);
-                const expedition = await api.startConfiguredExpedition(worldId, applyWorldProcedureChoice({
-                    name: input(form, "name").value.trim(),
-                    presentationKey: presentation.value,
-                    startHex: { q: integer(numberInput(form, "q")), r: integer(numberInput(form, "r")) }
-                }, choice));
+                const expedition = world.grid
+                    ? await api.startConfiguredExpedition(worldId, applyWorldProcedureChoice({
+                        name: input(form, "name").value.trim(),
+                        presentationKey: presentation.value,
+                        startHex: { q: integer(numberInput(form, "q")), r: integer(numberInput(form, "r")) }
+                    }, choice))
+                    : choice.kind === "saved"
+                        ? await api.startCellExpedition(worldId, {
+                            name: input(form, "name").value.trim(),
+                            presentationKey: presentation.value,
+                            procedureId: choice.procedureId,
+                            procedureRevision: choice.revision,
+                            startCell: {
+                                motifCellId: select(form, "motifCellId").value,
+                                translation: {
+                                    u: integer(numberInput(form, "u")),
+                                    v: integer(numberInput(form, "v"))
+                                }
+                            }
+                        })
+                        : (() => { throw new Error("Choose a saved ruleset for this world."); })();
                 navigate(`/worlds/${worldId}/expeditions/${expedition.id}`);
             } catch (value) {
                 if (error) showUiError(error, value);
             } finally {
                 form.dataset.pending = "false";
-                submit.disabled = !procedure.value;
+                submit.disabled = !canStart();
                 submit.textContent = "Start expedition";
             }
         })();
     });
 
-    return () => form.remove();
+    return () => {
+        compatibilityGeneration++;
+        root.removeEventListener("hex-crawl:world-cell-selected", acceptMapCell);
+        form.remove();
+    };
 }
 
 function selectedPreset(presets: ProcedurePreset[], key: string): ProcedurePreset {

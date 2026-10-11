@@ -1,6 +1,6 @@
 # Phase 18 — traversal integration and release gates
 
-**Status:** Backend integration review candidate. The independent WorkChat review and release decision have not occurred; this branch is not authorized for merge or deployment.
+**Status:** Independently reviewed, corrected, and merged to main through PR #74 at 134147fa42302f2fcd6bda76508bd6ad326ce1e5. The original review-candidate notes below describe the implementation baseline; deployment and signed-in tester smoke status are not established by this document.
 
 **Baseline:** main at c3c16e9e4ab09c2006162fc69079aef0ca2aa86e; PostgreSQL schema 10 and campaign procedure schema 1.3. Only the Hex Crawl repository has changed.
 

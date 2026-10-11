@@ -37,6 +37,7 @@ export class SourceMapGridAlignmentController {
         this.analysisAbortController = abortController;
         this.selectedMapId = sourceMap.id;
         const world = this.getWorld();
+        if (!world.grid) throw new Error("This world uses generalized cells. Automatic hex alignment is unavailable; use manual placement.");
 
         try {
             onProgress("detecting");
@@ -56,8 +57,8 @@ export class SourceMapGridAlignmentController {
             if (!this.isCurrent(generation, sourceMap.id, abortController)) return false;
             if (analyzed.status === "detected" && analyzed.tilingDsSymbol !== "<1:1,1,1:6,3>") {
                 throw new Error(
-                    "Surveyor detected a different tiling (" + (analyzed.tilingDsSymbol ?? "unknown")
-                    + "). This world currently supports hexagonal navigation only; no grid was changed.");
+                    "This map does not match the saved hexagonal geometry. No change was made. "
+                    + "Use Check cell pattern or manual placement to resolve the difference.");
             }
             if (!analyzed.fit || analyzed.status === "gridless") {
                 throw new Error(

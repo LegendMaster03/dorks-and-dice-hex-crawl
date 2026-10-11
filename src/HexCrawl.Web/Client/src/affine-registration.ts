@@ -2,6 +2,73 @@ import type { MapRegistrationTransform, RegistrationControlPoint, WorldPoint } f
 
 const epsilon = 1e-10;
 
+export type AffineRegistrationHoldout = {
+    /** Predicted world location of the independent image landmark. */
+    predictedWorldPoint: WorldPoint;
+    /** Discrepancy measured in original image pixels, regardless of world scale. */
+    errorSourcePixels: number;
+};
+
+export const maxAffineHoldoutErrorSourcePixels = 12;
+
+/**
+ * Checks a landmark NOT used by the exact three-point registration fit.
+ * Reports discrepancy back in original source pixels by inverting only the
+ * affine linear part; world-space distance alone changes with map calibration.
+ * This is an independent spot check, not a certificate for the full raster.
+ */
+export function evaluateAffineRegistrationHoldout(
+    transform: MapRegistrationTransform,
+    holdout: RegistrationControlPoint,
+    fittedPoints: readonly RegistrationControlPoint[]): AffineRegistrationHoldout {
+    if (fittedPoints.length !== 3 || fittedPoints.some(point =>
+        !Number.isFinite(point.sourcePixel.x) || !Number.isFinite(point.sourcePixel.y)
+        || Math.hypot(point.sourcePixel.x - holdout.sourcePixel.x,
+            point.sourcePixel.y - holdout.sourcePixel.y) < 1)) {
+        throw new Error("Independent landmark must differ from the three fitted image landmarks.");
+    }
+    if (transform.kind !== "Affine" || transform.m31 !== 0 || transform.m32 !== 0) {
+        throw new Error("Independent landmark validation requires an affine registration.");
+    }
+    const coefficients = [transform.m11, transform.m12, transform.m13,
+        transform.m21, transform.m22, transform.m23,
+        holdout.sourcePixel.x, holdout.sourcePixel.y,
+        holdout.worldPoint.x, holdout.worldPoint.y];
+    if (!coefficients.every(Number.isFinite)) {
+        throw new Error("Independent landmark coordinates and registration must be finite.");
+    }
+    const determinant = transform.m11 * transform.m22 - transform.m12 * transform.m21;
+    if (!Number.isFinite(determinant) || Math.abs(determinant) <= 1e-10) {
+        throw new Error("Independent landmark validation requires a nondegenerate registration.");
+    }
+    const predictedWorldPoint = {
+        x: transform.m11 * holdout.sourcePixel.x + transform.m12 * holdout.sourcePixel.y + transform.m13,
+        y: transform.m21 * holdout.sourcePixel.x + transform.m22 * holdout.sourcePixel.y + transform.m23
+    };
+    const errorX = holdout.worldPoint.x - predictedWorldPoint.x;
+    const errorY = holdout.worldPoint.y - predictedWorldPoint.y;
+    const pixelErrorX = (transform.m22 * errorX - transform.m12 * errorY) / determinant;
+    const pixelErrorY = (transform.m11 * errorY - transform.m21 * errorX) / determinant;
+    const errorSourcePixels = Math.hypot(pixelErrorX, pixelErrorY);
+    if (!Number.isFinite(errorSourcePixels)) {
+        throw new Error("Independent landmark discrepancy is outside the finite range.");
+    }
+    return { predictedWorldPoint, errorSourcePixels };
+}
+
+export function affineRegistrationSaveAllowed(
+    pairCount: number,
+    hasPreview: boolean,
+    pendingSource: boolean,
+    holdoutErrorSourcePixels: number | null): boolean {
+    if (!hasPreview || pendingSource) return false;
+    if (pairCount === 3) return true;
+    return pairCount === 4 && holdoutErrorSourcePixels !== null
+        && Number.isFinite(holdoutErrorSourcePixels)
+        && holdoutErrorSourcePixels >= 0
+        && holdoutErrorSourcePixels <= maxAffineHoldoutErrorSourcePixels;
+}
+
 export function solveAffine(controlPoints: RegistrationControlPoint[]): MapRegistrationTransform {
     if (controlPoints.length !== 3) throw new Error("Affine registration requires exactly three control-point pairs.");
     for (const pair of controlPoints) {

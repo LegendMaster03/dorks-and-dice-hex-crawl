@@ -1,6 +1,8 @@
 using System.Security.Claims;
 using HexCrawl.Application;
 using HexCrawl.Application.Assets;
+using HexCrawl.Domain.Procedure;
+using HexCrawl.Domain.Runtime;
 using HexCrawl.Web.Api;
 using HexCrawl.Web.Framework;
 using Microsoft.AspNetCore.Routing;
@@ -21,8 +23,15 @@ public sealed class WorldModule : IHexCrawlModule
     {
         api.MapGet("/overworlds", ListOverworldsAsync);
         api.MapPost("/overworlds", CreateOverworldAsync);
+        api.MapPost("/overworlds/periodic", CreatePeriodicOverworldAsync);
+        api.MapPost("/overworlds/{overworldId:guid}/cell-procedures", CreateCellTravelProcedureAsync);
+        api.MapGet("/overworlds/{overworldId:guid}/cell-procedures/compatibility", AssessCellProcedureAsync);
         api.MapGet("/overworlds/{overworldId:guid}", GetOverworldAsync);
+        api.MapGet("/overworlds/{overworldId:guid}/cells/viewport", GetVisibleCellsAsync);
+        api.MapGet("/overworlds/{overworldId:guid}/cells/containing", GetContainingCellsAsync);
+        api.MapGet("/overworlds/{overworldId:guid}/cells/resolve", ResolveCellAsync);
         api.MapPut("/overworlds/{overworldId:guid}", UpdateOverworldAsync);
+        api.MapPut("/overworlds/{overworldId:guid}/name", RenameOverworldAsync);
         api.MapDelete("/overworlds/{overworldId:guid}", DeleteOverworldAsync);
 
         api.MapPost("/overworlds/{overworldId:guid}/locations", CreateLocationAsync);
@@ -52,6 +61,207 @@ public sealed class WorldModule : IHexCrawlModule
                 request.ToCommand(),
                 cancellationToken)));
 
+    // An image-independent, general authoring route. Unresolved harmonic
+    // realizations fail closed rather than producing a fabricated grid.
+    private sealed record CreatePeriodicOverworldRequest(
+        string Name,
+        string TilingDsSymbol,
+        double WorldUnitsPerAbstractPeriod,
+        HexCrawl.Domain.Spatial.WorldPoint Origin,
+        double RotationDegrees = 0,
+        HexCrawl.Domain.Spatial.DistanceMeasure? PhysicalDistancePerWorldUnit = null,
+        double? PeriodULengthWorldUnits = null,
+        double? PeriodVLengthWorldUnits = null,
+        double? PeriodAngleDegrees = null);
+
+    private static async Task<IResult> CreatePeriodicOverworldAsync(
+        CreatePeriodicOverworldRequest request,
+        HttpContext context,
+        HexCrawlService service,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name)
+            || request.TilingDsSymbol is null or { Length: > 131072 }
+            || !double.IsFinite(request.Origin.X) || !double.IsFinite(request.Origin.Y))
+            throw new ArgumentException("A world name, supported pattern and finite origin are required.");
+        // Optional metric fitting works for every realizable D-symbol, not a
+        // branch per familiar polygon shape. Invalid measurements fail closed.
+        var constraints = new List<HexCrawl.Domain.Spatial.TilingMetricConstraint>();
+        static double RequireLength(double value, string label)
+        {
+            if (!double.IsFinite(value) || value <= 0)
+                throw new ArgumentOutOfRangeException(label,
+                    "The repeating distance must be finite and positive.");
+            return value;
+        }
+        if (request.PeriodULengthWorldUnits is { } u)
+        {
+            u = RequireLength(u, nameof(request.PeriodULengthWorldUnits));
+            constraints.Add(new("period-u-length", "world-unit", u, u));
+        }
+        if (request.PeriodVLengthWorldUnits is { } v)
+        {
+            v = RequireLength(v, nameof(request.PeriodVLengthWorldUnits));
+            constraints.Add(new("period-v-length", "world-unit", v, v));
+        }
+        if (request.PeriodAngleDegrees is { } angle)
+        {
+            if (!double.IsFinite(angle) || angle <= 0 || angle >= 180)
+                throw new ArgumentOutOfRangeException(
+                    nameof(request.PeriodAngleDegrees),
+                    "The angle between repeating directions must be between 0 and 180 degrees.");
+            constraints.Add(new("period-angle-degrees", "degrees", angle, angle));
+        }
+        var realization = HexCrawl.Domain.Spatial.DelaneyDressHarmonicMetricRealization.Construct(
+            request.TilingDsSymbol, request.WorldUnitsPerAbstractPeriod, "world-unit",
+            request.RotationDegrees,
+            constraints: constraints.Count == 0 ? null : constraints);
+        if (realization.Status != "realized" || realization.Topology is null || realization.Realization is null)
+            throw new NotSupportedException(
+                "This repeating tile pattern needs a different or more complete geometric realization. "
+                + (realization.Reason ?? "No valid periodic geometry was constructed."));
+        var worldTiling = new HexCrawl.Domain.Spatial.PeriodicWorldTiling(
+            Guid.NewGuid(), realization.Topology, realization.Realization, request.Origin,
+            PhysicalDistancePerWorldUnit: request.PhysicalDistancePerWorldUnit);
+        worldTiling.Validate();
+        var stored = await service.CreatePeriodicOverworldAsync(
+            UserId(context), request.Name, worldTiling, cancellationToken);
+        return Results.Created($"/api/overworlds/{stored.World.Id:D}", OverworldContract.From(stored));
+    }
+
+    // Generate a normal editable, pinned campaign revision using existing
+    // movement-v2 capabilities. Preset templates and past revisions are not
+    // edited. No image or manually authored notation is required.
+    private static async Task<IResult> CreateCellTravelProcedureAsync(
+        Guid overworldId,
+        HttpContext context,
+        HexCrawlService service,
+        CampaignProcedureService procedures,
+        CancellationToken cancellationToken)
+    {
+        var owner = UserId(context);
+        var stored = await service.GetOverworldAsync(overworldId, owner, cancellationToken);
+        if (stored.World.HasLegacyHexGrid || stored.World.Tiling is null)
+            throw new NotSupportedException("This world already uses legacy hex procedures.");
+        var materialized = CrawlProcedureCatalog.Resolve("simple-fixed-distance")
+            .MaterializeGeneric();
+        var template = materialized.Procedure;
+        var modules = template.Modules
+            .Where(module => module.Mechanic.ExecutionHandler !=
+                GenericProcedureExecutionHandlers.HexProgressPolicy)
+            .Select(module =>
+            {
+                if (module.Mechanic.ExecutionHandler !=
+                    GenericProcedureExecutionHandlers.MovementResolutionPolicy)
+                    return module;
+                var parameters = module.Parameters.ToDictionary(item => item.Key, item => item.Value);
+                parameters["travelResolution"] = TravelResolutionMode.CellSteps.ToString();
+                parameters["actualDistanceResolution"] = ActualDistanceResolutionMode.Fixed.ToString();
+                parameters["tracksIntraHexProgress"] = "false";
+                return module with
+                {
+                    Mechanic = module.Mechanic with { Version = 2 },
+                    Parameters = parameters
+                };
+            }).ToArray();
+        var edition = template with
+        {
+            ProcedureId = Guid.NewGuid(),
+            Name = "Cell-step exploration for " + stored.World.Name,
+            TilingDsSymbol = stored.World.Tiling.Topology.QuotientDsSymbol,
+            Modules = modules
+        };
+        edition.Validate();
+        var bound = GenericProcedureRuntime.Bind(edition);
+        if (bound.Movement.MechanicVersion != 2
+            || bound.Movement.TravelResolution != TravelResolutionMode.CellSteps)
+            throw new InvalidOperationException("The generated cell ruleset is not executable.");
+        var saved = await procedures.CreateAsync(owner, edition, materialized.Origin,
+            cancellationToken: cancellationToken);
+        return Results.Created($"/api/procedures/{saved.ProcedureId:D}",
+            new { procedureId = saved.ProcedureId, revision = saved.Revision,
+                name = saved.Procedure.Name });
+    }
+
+    private static async Task<IResult> AssessCellProcedureAsync(
+        Guid overworldId, Guid procedureId, int revision,
+        HttpContext context, HexCrawlService service,
+        CampaignProcedureService procedures, CancellationToken cancellationToken)
+    {
+        if (procedureId == Guid.Empty || revision <= 0)
+            throw new ArgumentException("A saved ruleset id and pinned revision are required.");
+        var owner = UserId(context);
+        var stored = await service.GetOverworldAsync(overworldId, owner, cancellationToken);
+        if (stored.World.HasLegacyHexGrid || stored.World.Tiling is null)
+            throw new NotSupportedException(
+                "This compatibility check applies to generalized cell worlds.");
+        var procedure = (await procedures.GetAsync(
+            owner, procedureId, revision, cancellationToken)).Procedure;
+        var comparison = HexCrawl.Domain.Spatial.DelaneyDressTopology.Compare(
+            procedure.TilingDsSymbol,
+            stored.World.Tiling.Topology.QuotientDsSymbol,
+            stored.World.Tiling.Topology.TranslationDsSymbol);
+        if (comparison.Status is not (
+            HexCrawl.Domain.Spatial.TilingComparisonStatus.ExactIdentity
+            or HexCrawl.Domain.Spatial.TilingComparisonStatus.ChamberIsomorphic
+            or HexCrawl.Domain.Spatial.TilingComparisonStatus.ProvenEquivalent))
+            return Results.Ok(new
+            {
+                status = comparison.Status == HexCrawl.Domain.Spatial.TilingComparisonStatus.Inconclusive
+                    ? "review" : "incompatible",
+                explanation = comparison.Status == HexCrawl.Domain.Spatial.TilingComparisonStatus.Inconclusive
+                    ? "Equivalence with this world's cell pattern has not been established."
+                    : "The selected ruleset describes a different cell pattern from this world.",
+                worldVersion = stored.Version,
+                procedureId,
+                revision
+            });
+        GenericProcedureRuntime bound;
+        try
+        {
+            bound = GenericProcedureRuntime.Bind(procedure);
+        }
+        catch (Exception error) when (
+            error is InvalidOperationException or NotSupportedException)
+        {
+            return Results.Ok(new
+            {
+                status = "unsupported",
+                explanation = "This saved ruleset does not currently provide executable generalized travel.",
+                worldVersion = stored.Version,
+                procedureId,
+                revision
+            });
+        }
+        if (bound.Movement.MechanicVersion != 2)
+            return Results.Ok(new
+            {
+                status = "unsupported",
+                explanation = "This saved ruleset uses legacy hex movement. Create or select a cell-travel ruleset.",
+                worldVersion = stored.Version,
+                procedureId,
+                revision
+            });
+        if (bound.Movement.TravelResolution == TravelResolutionMode.ContinuousDistance
+            && stored.World.Tiling.PhysicalDistancePerWorldUnit is null)
+            return Results.Ok(new
+            {
+                status = "needs-calibration",
+                explanation = "Physical-distance travel needs a calibrated world. Cell-step travel works without physical scale.",
+                worldVersion = stored.Version,
+                procedureId,
+                revision
+            });
+        return Results.Ok(new
+        {
+            status = "ready",
+            explanation = "This saved ruleset supports the selected world geometry and travel mode.",
+            worldVersion = stored.Version,
+            procedureId,
+            revision
+        });
+    }
+
     private static async Task<IResult> GetOverworldAsync(
         Guid overworldId,
         HttpContext context,
@@ -60,6 +270,64 @@ public sealed class WorldModule : IHexCrawlModule
         Results.Ok(OverworldContract.From(await service.GetOverworldAsync(
             overworldId,
             UserId(context),
+            cancellationToken)));
+
+    // Geometry is calculated only by the authoritative domain world, and only after
+    // the existing owner-scoped world lookup. Never derive tiles in the browser.
+    private static async Task<IResult> GetVisibleCellsAsync(
+        Guid overworldId,
+        double minX,
+        double minY,
+        double maxX,
+        double maxY,
+        HttpContext context,
+        HexCrawlService service,
+        CancellationToken cancellationToken)
+    {
+        var bounds = new HexCrawl.Domain.Spatial.WorldBounds(minX, minY, maxX, maxY);
+        bounds.Validate();
+        var world = await service.GetOverworldAsync(overworldId, UserId(context), cancellationToken);
+        // Hard cap on candidate enumeration, not merely on response length.
+        return Results.Ok(world.World.SpatialTiling.Intersecting(bounds, limit: 2500));
+    }
+
+    private static async Task<IResult> GetContainingCellsAsync(
+        Guid overworldId,
+        double x,
+        double y,
+        HttpContext context,
+        HexCrawlService service,
+        CancellationToken cancellationToken)
+    {
+        if (!double.IsFinite(x) || !double.IsFinite(y))
+            throw new ArgumentOutOfRangeException(nameof(x), "Point coordinates must be finite.");
+        var world = await service.GetOverworldAsync(overworldId, UserId(context), cancellationToken);
+        return Results.Ok(world.World.SpatialTiling.Containing(
+            new HexCrawl.Domain.Spatial.WorldPoint(x, y), limit: 2500));
+    }
+
+    private static async Task<IResult> ResolveCellAsync(
+        Guid overworldId,
+        string motifCellId,
+        long u,
+        long v,
+        HttpContext context,
+        HexCrawlService service,
+        CancellationToken cancellationToken)
+    {
+        var world = await service.GetOverworldAsync(overworldId, UserId(context), cancellationToken);
+        var address = new HexCrawl.Domain.Spatial.PeriodicCellAddress(
+            motifCellId, new HexCrawl.Domain.Spatial.LatticeDisplacement(u, v));
+        return Results.Ok(world.World.SpatialTiling.Resolve(address));
+    }
+
+    private sealed record RenameOverworldRequest(string Name, long ExpectedVersion);
+
+    private static async Task<IResult> RenameOverworldAsync(
+        Guid overworldId, RenameOverworldRequest request,
+        HttpContext context, HexCrawlService service, CancellationToken cancellationToken) =>
+        Results.Ok(OverworldContract.From(await service.RenameOverworldAsync(
+            overworldId, UserId(context), request.Name, request.ExpectedVersion,
             cancellationToken)));
 
     private static async Task<IResult> UpdateOverworldAsync(

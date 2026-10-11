@@ -117,6 +117,86 @@ public sealed partial class PostgresHexCrawlStore
         return new SaveResult<StoredOverworld>(exists ? SaveOutcome.Conflict : SaveOutcome.NotFound, null);
     }
 
+    public async Task<SaveResult<StoredOverworld>> ReplaceUnusedPeriodicWorldAsync(
+        StoredOverworld candidate,
+        long expectedVersion,
+        CancellationToken cancellationToken = default)
+    {
+        candidate.World.ValidateEnvironmentAnnotations();
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var tx = await connection.BeginTransactionAsync(cancellationToken);
+
+        await using (var locked = connection.CreateCommand())
+        {
+            locked.Transaction = tx;
+            locked.CommandText = """
+                SELECT version, world_json::text FROM overworlds
+                WHERE id = @world AND owner_user_id = @owner FOR UPDATE;
+                """;
+            locked.Parameters.AddWithValue("world", NpgsqlDbType.Uuid, candidate.World.Id);
+            locked.Parameters.AddWithValue("owner", NpgsqlDbType.Text, candidate.OwnerUserId);
+            await using var reader = await locked.ExecuteReaderAsync(cancellationToken);
+            if (!await reader.ReadAsync(cancellationToken))
+                return new SaveResult<StoredOverworld>(SaveOutcome.NotFound, null);
+            var version = reader.GetInt64(0);
+            var previous = Deserialize<WorldSnapshot>(reader.GetString(1)).ToDomain();
+            if (version != expectedVersion || previous.HasLegacyHexGrid
+                || previous.Tiling is null || candidate.World.HasLegacyHexGrid
+                || candidate.World.Tiling is null
+                || previous.Tiling.Id == candidate.World.Tiling.Id
+                || candidate.World.Tiling.Revision <= previous.Tiling.Revision
+                || previous.Locations.Count != 0 || previous.Features.Count != 0
+                || previous.EnvironmentAnnotations.Count != 0
+                || previous.Tiling.PhysicalDistancePerWorldUnit is not null
+                || previous.SourceMaps.Any(map => map.Alignment is not null)
+                || previous.SourceMaps.Count != candidate.World.SourceMaps.Count
+                || previous.SourceMaps.Where((map, i) =>
+                    map.Id != candidate.World.SourceMaps[i].Id
+                    || map.AssetKey != candidate.World.SourceMaps[i].AssetKey
+                    || map.SourceArchive != candidate.World.SourceMaps[i].SourceArchive).Any())
+                return new SaveResult<StoredOverworld>(SaveOutcome.Conflict, null);
+        }
+
+        await using (var references = connection.CreateCommand())
+        {
+            references.Transaction = tx;
+            references.CommandText = """
+                SELECT EXISTS (
+                    SELECT 1 FROM expeditions WHERE overworld_id = @world AND owner_user_id = @owner
+                );
+                """;
+            references.Parameters.AddWithValue("world", NpgsqlDbType.Uuid, candidate.World.Id);
+            references.Parameters.AddWithValue("owner", NpgsqlDbType.Text, candidate.OwnerUserId);
+            if ((bool)(await references.ExecuteScalarAsync(cancellationToken) ?? false))
+                return new SaveResult<StoredOverworld>(SaveOutcome.Conflict, null);
+        }
+
+        var updated = candidate with
+        {
+            Version = expectedVersion + 1,
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+        await using var save = connection.CreateCommand();
+        save.Transaction = tx;
+        save.CommandText = """
+            UPDATE overworlds
+            SET name = @name, world_json = @worldJson, version = @version,
+                updated_at = @updated
+            WHERE id = @world AND owner_user_id = @owner AND version = @expected;
+            """;
+        save.Parameters.AddWithValue("world", NpgsqlDbType.Uuid, updated.World.Id);
+        save.Parameters.AddWithValue("owner", NpgsqlDbType.Text, updated.OwnerUserId);
+        save.Parameters.AddWithValue("name", NpgsqlDbType.Text, updated.World.Name);
+        AddJsonb(save, "worldJson", Serialize(WorldSnapshot.FromDomain(updated.World)));
+        save.Parameters.AddWithValue("version", NpgsqlDbType.Bigint, updated.Version);
+        AddTimestamp(save, "updated", updated.UpdatedAt);
+        save.Parameters.AddWithValue("expected", NpgsqlDbType.Bigint, expectedVersion);
+        if (await save.ExecuteNonQueryAsync(cancellationToken) != 1)
+            return new SaveResult<StoredOverworld>(SaveOutcome.Conflict, null);
+        await tx.CommitAsync(cancellationToken);
+        return new SaveResult<StoredOverworld>(SaveOutcome.Saved, updated);
+    }
+
     public async Task<DeleteOverworldOutcome> DeleteOverworldAsync(
         Guid overworldId,
         string ownerUserId,

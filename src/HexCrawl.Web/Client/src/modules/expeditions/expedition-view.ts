@@ -22,6 +22,7 @@ import { ExpeditionPartySheetController } from "./expedition-party-sheet";
 import { adjacencyForCell, adjacencyForIntent } from "./spatial-adjacency";
 import { renderCurrentCellNavigator } from "./cell-navigator";
 import { currentRuntimeCellAdjacency, sameHexCell } from "./current-cell-topology";
+import { renderPeriodicExpeditionWorkbench } from "./periodic-expedition-workbench";
 import { publishExpeditionRuntimeChanged } from "./expedition-runtime-events";
 import { ExpeditionSurvivalResourcesPanel } from "./survival-resources-panel";
 import { ExpeditionWatchController } from "./expedition-watch-controller";
@@ -62,6 +63,11 @@ export async function renderExpedition(
     }
 
     let world: Overworld | null = runtime.overworldId ? await api.getOverworld(runtime.overworldId) : null;
+    // Phase 18 cell expeditions retain their qualified identity and use the same
+    // expedition route, map and cell navigator. Do not enter the hex adapter.
+    if (runtime.expedition.isSpatial && runtime.expedition.currentCell)
+        return renderPeriodicExpeditionWorkbench(root, api, runtime, world, navigate, toolContext);
+
     const survivalApi = new SurvivalResourcesApi(toolContext);
     const effectsApi = new ExpeditionEffectsApi(toolContext);
     const journeyApi = new JourneyApi(toolContext);
@@ -114,6 +120,7 @@ export async function renderExpedition(
     const currentAdjacency = () => {
         if (!runtime.expedition.isSpatial) return null;
         const cell = runtime.expedition.currentHex;
+        if (!cell) return null;
         const grid = world?.grid ?? null;
         const key = [
             cell.q,
@@ -991,14 +998,15 @@ export async function renderExpedition(
             host.append(move);
         }
 
-        const subjects = [
+        const mapGrid = currentWorld.grid;
+        const subjects = mapGrid ? [
             ...currentWorld.locations
-                .filter(item => sameHexCell(worldToHex(currentWorld.grid, item.position), selectedHex!))
+                .filter(item => sameHexCell(worldToHex(mapGrid, item.position), selectedHex!))
                 .map(item => ({ id: item.id, name: item.name, type: "Location" as const })),
             ...currentWorld.features
-                .filter(item => item.kind === "Point" && item.position && sameHexCell(worldToHex(currentWorld.grid, item.position), selectedHex!))
+                .filter(item => item.kind === "Point" && item.position && sameHexCell(worldToHex(mapGrid, item.position), selectedHex!))
                 .map(item => ({ id: item.id, name: item.name, type: "Feature" as const }))
-        ];
+        ] : [];
         if (subjects.length > 0) {
             const discovered = discoveredSubjectIds(runtime);
             const list = document.createElement("div");
@@ -1030,7 +1038,7 @@ export async function renderExpedition(
         if (map) {
             map.attach(host);
         } else {
-            map = new MapSurface(host, () => world);
+            map = new MapSurface(host, () => world, undefined, api);
             map.setHexSelectionHandler(hex => {
                 if (hex) {
                     const adjacency = currentAdjacency();

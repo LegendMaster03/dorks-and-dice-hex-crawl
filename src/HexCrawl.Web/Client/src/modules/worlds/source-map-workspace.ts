@@ -32,6 +32,7 @@ export class SourceMapWorkspace {
     private coordinatedRasterView: CoordinatedRasterView = "manual";
     private manualHiddenSourceMapIds: Set<string> | null = null;
     private gridAlignmentBusy = false;
+    private compatibilityGeneration = 0;
     private disposed = false;
 
     public constructor(
@@ -86,13 +87,15 @@ export class SourceMapWorkspace {
                     <option value="Neutral">Shared / neutral reference</option>
                     <option value="Other">Auxiliary / reference only</option>
                 </select></label>
-                <label><input name="bakedGrid" type="checkbox"> Image includes a visible hex grid</label>
+                <label><input name="bakedGrid" type="checkbox"> Image includes visible tile boundaries</label>
                 <div class="hc-button-row">
                     <button type="submit" class="hc-primary-action">Save metadata</button>
                     <button type="button" data-align-grid>Detect / repair hex grid</button>
+                    <button type="button" data-check-pattern title="Read-only experimental image comparison">Check cell pattern</button>
                     <button type="button" data-register>Manual placement</button>
                     <button type="button" class="hc-danger-action" data-delete>Delete reference map</button>
                 </div>
+                <section class="hc-status-section" data-pattern-assessment hidden aria-live="polite"></section>
             </form>
             <section data-registration-panel hidden>
                 <p class="hc-subsection-title">Manual map placement</p>
@@ -163,6 +166,9 @@ export class SourceMapWorkspace {
                 }
             });
 
+        required<HTMLButtonElement>(this.host, "[data-check-pattern]")
+            .addEventListener("click", () =>
+                void this.run(null, () => this.assessPattern(this.selected)));
         const selectedAlignButton = required<HTMLButtonElement>(this.host, "[data-align-grid]");
         selectedAlignButton.addEventListener("click", () =>
             void this.run(null, () => this.detectGrid(this.selected, selectedAlignButton)));
@@ -197,6 +203,7 @@ export class SourceMapWorkspace {
     public dispose(): void {
         this.disposed = true;
         this.gridAlignmentController.dispose();
+        this.compatibilityGeneration++;
         this.registrationController.dispose();
         this.wonderdraftController.dispose();
     }
@@ -274,7 +281,7 @@ export class SourceMapWorkspace {
             const bakedGrid = document.createElement("input");
             bakedGrid.type = "checkbox";
             bakedGrid.name = "mapBakedGrid";
-            gridLabel.append(bakedGrid, document.createTextNode(" Image includes a visible hex grid"));
+            gridLabel.append(bakedGrid, document.createTextNode(" Image includes printed tile boundaries"));
 
             row.append(heading, nameLabel, roleLabelElement, gridLabel);
             this.uploadFilesHost.append(row);
@@ -429,7 +436,9 @@ export class SourceMapWorkspace {
                     this.renderSelected();
                     this.registrationController.begin(this.selected);
                 });
-                controls.append(visibleLabel, selectButton, alignButton, registerButton);
+                controls.append(visibleLabel, selectButton);
+                if (this.getWorld().grid) controls.append(alignButton);
+                controls.append(registerButton);
 
                 const hasRetainedWonderdraft =
                     (sourceMap.importedContentCount ?? 0) > 0
@@ -461,12 +470,276 @@ export class SourceMapWorkspace {
     private renderSelected(): void {
         this.editForm.hidden = !this.selected;
         if (!this.selected) return;
+        const assessment = required<HTMLElement>(this.editForm, "[data-pattern-assessment]");
+        if (assessment.dataset.sourceMapId !== this.selected.id) {
+            if (this.map.renderer.registrationPreview?.sourceMapId === assessment.dataset.sourceMapId) {
+                this.map.renderer.registrationPreview = null;
+                this.map.requestRender();
+            }
+            assessment.hidden = true;
+            assessment.replaceChildren();
+            assessment.dataset.sourceMapId = this.selected.id;
+        }
+        const hexOnly = !!this.getWorld().grid;
+        const align = required<HTMLButtonElement>(this.editForm, "[data-align-grid]");
+        align.hidden = !hexOnly;
+        align.disabled = !hexOnly || this.gridAlignmentBusy;
         input(this.editForm, "name").value = this.selected.name;
         this.editGeographySelect.value = this.selected.geographyKey;
         select(this.editForm, "role").value = this.selected.role;
         input(this.editForm, "bakedGrid").checked = this.selected.containsBakedGrid;
         required<HTMLElement>(this.editForm, "[data-source-map-selected-meta]").textContent =
             `${this.selected.pixelWidth}×${this.selected.pixelHeight} ${this.selected.mediaType}; ${this.selected.originalFileName ?? "original filename unavailable"}; ${this.selected.alignment ? "aligned" : "shown with temporary placement until aligned"}; ${this.selected.importedContentCount ?? 0} imported source records.`;
+    }
+
+    private async assessPattern(sourceMap: SourceMapDetail | null): Promise<void> {
+        if (!sourceMap) throw new Error("Select a reference map first.");
+        if (this.gridAlignmentBusy) throw new Error("Finish the current map analysis first.");
+        const generation = ++this.compatibilityGeneration;
+        const button = required<HTMLButtonElement>(this.editForm, "[data-check-pattern]");
+        const status = required<HTMLElement>(this.editForm, "[data-pattern-assessment]");
+        const selectedWorld = this.getWorld();
+        status.hidden = false;
+        status.dataset.sourceMapId = sourceMap.id;
+        status.textContent = "Checking the image against the saved world geometry…";
+        button.disabled = true;
+        try {
+            // A world may exist before any ruleset. Only a currently selected
+            // pinned saved revision adds a procedural constraint to this preview.
+            const selectedProcedure = this.host.closest(".hc-world-editor")
+                ?.querySelector<HTMLSelectElement>('[data-expedition-form] select[name="procedure"]')?.value;
+            let pinned: { id: string; revision: number } | undefined;
+            if (selectedProcedure?.startsWith("saved:")) {
+                const encoded = selectedProcedure.slice("saved:".length);
+                const separator = encoded.lastIndexOf(":");
+                const revision = Number(encoded.slice(separator + 1));
+                if (separator > 0 && Number.isSafeInteger(revision) && revision > 0) {
+                    pinned = { id: encoded.slice(0, separator), revision };
+                }
+            }
+            const assessment = await this.api.assessSourceMapCompatibility(
+                selectedWorld.id, sourceMap.id, pinned);
+            if (this.disposed || generation !== this.compatibilityGeneration
+                || this.selected?.id !== sourceMap.id) return;
+            if (this.getWorld().version !== assessment.worldVersion) {
+                status.textContent = "The world changed during analysis. Reload and check again.";
+                return;
+            }
+            status.replaceChildren();
+            const result = document.createElement("p");
+            result.textContent = assessment.explanation;
+            status.append(result);
+            if (pinned) {
+                const rule = document.createElement("p");
+                rule.className = "hc-hint";
+                rule.textContent = `Checked against saved exploration ruleset revision ${pinned.revision}.`;
+                status.append(rule);
+            }
+            if (assessment.blockers.length) {
+                const warning = document.createElement("p");
+                warning.textContent = "Changing world geometry would also affect:";
+                const list = document.createElement("ul");
+                for (const blocker of assessment.blockers) {
+                    const item = document.createElement("li");
+                    item.textContent = blocker;
+                    list.append(item);
+                }
+                status.append(warning, list);
+            }
+            const next = document.createElement("p");
+            next.className = "hc-hint";
+            next.textContent = assessment.registration?.status === "candidates"
+                ? assessment.status === "structure-match"
+                    ? "The image matches the saved world pattern. Preview the verified placement before saving it."
+                    : "The image can be registered to the unchanged world below. The selected exploration ruleset remains incompatible or unverified and must be resolved separately before starting an expedition."
+                : assessment.status === "structure-match"
+                    ? "Existing world geometry is unchanged. Review registration or use manual placement before accepting map alignment."
+                : assessment.status === "mismatch"
+                    ? assessment.canCorrectInPlace
+                        ? "This world has no conflicting spatial data, so you may use the verified correction option below."
+                        : "Keep this world configuration and use another map, or create a separate world. Existing spatial data and rulesets will not be converted automatically."
+                    : "Use manual placement or a different image. No world, procedure, or map registration was changed.";
+            status.append(next);
+            if (assessment.status === "mismatch" && assessment.canCorrectInPlace
+                && assessment.correction?.status === "candidates"
+                && assessment.correction.candidates.length) {
+                const correction = assessment.correction;
+                const heading = document.createElement("p");
+                heading.textContent =
+                    `This unused world can safely use the observed ${assessment.observedShape ?? "cell pattern"} instead. The original map images and saved world identity will be preserved. Cell identities will change.`;
+                const controls = document.createElement("div");
+                controls.className = "hc-form";
+                const selector = document.createElement("select");
+                selector.setAttribute("aria-label", "Choose the detected replacement placement");
+                for (const candidate of correction.candidates) {
+                    const option = document.createElement("option");
+                    option.value = String(candidate.index);
+                    option.textContent = `Placement ${candidate.index + 1} — ${candidate.maximumResidualSourcePixels.toFixed(1)} image-pixel maximum error`;
+                    selector.append(option);
+                }
+                const hint = document.createElement("p");
+                hint.className = "hc-hint";
+                hint.textContent =
+                    "The map preview still shows the OLD cell boundaries. The detected replacement cells will appear after acceptance. Multiple placements can be geometrically equivalent; choose the orientation by the map image and its geography.";
+                const preview = document.createElement("button");
+                preview.type = "button";
+                preview.textContent = "Preview replacement image placement";
+                const apply = document.createElement("button");
+                apply.type = "button";
+                apply.className = "hc-primary-action";
+                apply.textContent = `Use ${assessment.observedShape ?? "these cells"} for this unused world`;
+                apply.disabled = true;
+                let previewedIndex: number | null = null;
+                selector.addEventListener("change", () => {
+                    previewedIndex = null;
+                    apply.disabled = true;
+                    if (this.map.renderer.registrationPreview?.sourceMapId === sourceMap.id) {
+                        this.map.renderer.registrationPreview = null;
+                        this.map.requestRender();
+                    }
+                });
+                preview.addEventListener("click", () => {
+                    if (this.disposed || generation !== this.compatibilityGeneration
+                        || this.selected?.id !== sourceMap.id
+                        || this.getWorld().version !== assessment.worldVersion) return;
+                    const chosen = correction.candidates.find(item =>
+                        item.index === Number(selector.value));
+                    if (!chosen) return;
+                    this.registrationController.cancelActive();
+                    this.ensureVisibleForEditing(sourceMap);
+                    this.map.renderer.registrationPreview = {
+                        sourceMapId: sourceMap.id, transform: chosen.alignment
+                    };
+                    this.map.requestRender();
+                    previewedIndex = chosen.index;
+                    apply.disabled = false;
+                });
+                apply.addEventListener("click", () => {
+                    if (previewedIndex === null) return;
+                    const chosen = correction.candidates.find(item => item.index === previewedIndex);
+                    if (!chosen) return;
+                    const confirmed = window.confirm(
+                        `Use ${assessment.observedShape ?? "the observed pattern"} as this world's cells?\n\nThis is only available for an unused world. The existing cell tiling will be replaced with a new verified identity, and the selected image placement will be saved. Original image assets are preserved.\n\nThe current cell outlines shown in the preview are the old geometry.`);
+                    if (!confirmed) return;
+                    apply.disabled = true;
+                    void this.run(null, async () => {
+                        if (this.disposed || generation !== this.compatibilityGeneration
+                            || this.selected?.id !== sourceMap.id
+                            || this.getWorld().version !== assessment.worldVersion)
+                            throw new Error("The world changed. Check the image again before correcting its cells.");
+                        const corrected = await this.api.applyMotifCorrection(
+                            selectedWorld.id, sourceMap.id, chosen.index,
+                            chosen.alignment, assessment.worldVersion, pinned);
+                        this.map.renderer.registrationPreview = null;
+                        this.applyWorld(corrected);
+                        status.textContent =
+                            "Unused world cells were replaced with the verified observed pattern. Existing map assets remain intact.";
+                        this.mapHint.textContent =
+                            "New world cells are now active; inspect the map and choose your starting cell.";
+                        await this.refresh();
+                        this.map.requestRender();
+                    });
+                });
+                controls.append(heading, selector, preview, apply, hint);
+                status.append(controls);
+            }
+            // Registration to unchanged world geometry is independent of
+            // whether an optional selected ruleset may run there.
+            if (assessment.registration?.status === "candidates") {
+                const registration = assessment.registration;
+                const detail = document.createElement("p");
+                detail.className = "hc-hint";
+                detail.textContent = registration.explanation;
+                status.append(detail);
+                if (registration.status === "candidates" && registration.candidates.length) {
+                    const controls = document.createElement("div");
+                    controls.className = "hc-form";
+                    const selector = document.createElement("select");
+                    selector.setAttribute("aria-label", "Choose verified image placement");
+                    for (const candidate of registration.candidates) {
+                        const option = document.createElement("option");
+                        option.value = String(candidate.index);
+                        option.textContent = `Placement ${candidate.index + 1} — maximum motif disagreement ${candidate.maximumResidualSourcePixels.toFixed(1)} image pixels`;
+                        selector.append(option);
+                    }
+                    const preview = document.createElement("button");
+                    preview.type = "button";
+                    preview.textContent = "Preview placement";
+                    const accept = document.createElement("button");
+                    accept.type = "button";
+                    accept.className = "hc-primary-action";
+                    accept.textContent = "Use this placement";
+                    accept.disabled = true;
+                    const previewHint = document.createElement("p");
+                    previewHint.className = "hc-hint";
+                    previewHint.textContent =
+                        "Preview a candidate against the reference image. Acceptance changes this image's placement only, not the world, its cells, or any saved ruleset.";
+                    let previewedIndex: number | null = null;
+                    const clearPreview = (): void => {
+                        previewedIndex = null;
+                        accept.disabled = true;
+                        if (this.map.renderer.registrationPreview?.sourceMapId === sourceMap.id) {
+                            this.map.renderer.registrationPreview = null;
+                            this.map.requestRender();
+                        }
+                    };
+                    selector.addEventListener("change", clearPreview);
+                    preview.addEventListener("click", () => {
+                        if (this.disposed || generation !== this.compatibilityGeneration
+                            || this.selected?.id !== sourceMap.id
+                            || this.getWorld().version !== assessment.worldVersion) return;
+                        const chosen = registration.candidates.find(item =>
+                            item.index === Number(selector.value));
+                        if (!chosen) return;
+                        this.registrationController.cancelActive();
+                        this.ensureVisibleForEditing(sourceMap);
+                        this.map.renderer.registrationPreview = {
+                            sourceMapId: sourceMap.id, transform: chosen.alignment
+                        };
+                        this.map.requestRender();
+                        previewedIndex = chosen.index;
+                        accept.disabled = false;
+                        previewHint.textContent =
+                            "Check the entire overlay, especially distant features and cell boundaries. Choose Use this placement only if it matches.";
+                    });
+                    accept.addEventListener("click", () => {
+                        if (previewedIndex === null) return;
+                        const chosen = registration.candidates.find(item => item.index === previewedIndex);
+                        if (!chosen) return;
+                        accept.disabled = true;
+                        void this.run(null, async () => {
+                            if (this.disposed || generation !== this.compatibilityGeneration
+                                || this.selected?.id !== sourceMap.id
+                                || this.getWorld().version !== assessment.worldVersion)
+                                throw new Error("The map or world changed. Check the image again before accepting placement.");
+                            const saved = await this.api.applyMotifRegistration(
+                                selectedWorld.id, sourceMap.id, chosen.index, chosen.alignment,
+                                assessment.worldVersion);
+                            clearPreview();
+                            this.applyWorld(saved);
+                            status.textContent =
+                                "The selected image placement was saved. The existing world geometry and rulesets were preserved.";
+                            this.mapHint.textContent =
+                                "Detected image alignment saved. You can still repair it using manual placement.";
+                            await this.refresh();
+                        });
+                    });
+                    controls.append(selector, preview, accept, previewHint);
+                    status.append(controls);
+                }
+            }
+        } catch (failure) {
+            if (!this.disposed && generation === this.compatibilityGeneration
+                && this.selected?.id === sourceMap.id) {
+                status.textContent =
+                    "Automatic pattern analysis failed. Existing world geometry was not changed. "
+                    + "Use manual placement or retry.";
+            }
+            throw failure;
+        } finally {
+            if (!this.disposed && generation === this.compatibilityGeneration)
+                button.disabled = false;
+        }
     }
 
     private async detectGrid(sourceMap: SourceMapDetail | null, button: HTMLButtonElement): Promise<void> {
@@ -493,7 +766,7 @@ export class SourceMapWorkspace {
 
     private setGridAlignmentBusy(busy: boolean): void {
         this.gridAlignmentBusy = busy;
-        for (const button of this.host.querySelectorAll<HTMLButtonElement>("[data-align-grid], [data-register]")) {
+        for (const button of this.host.querySelectorAll<HTMLButtonElement>("[data-align-grid], [data-register], [data-check-pattern]")) {
             button.disabled = busy;
         }
     }

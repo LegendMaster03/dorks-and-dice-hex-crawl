@@ -11,6 +11,8 @@ import {
 import {
     CURRENT_HEX_DS_SYMBOL,
     currentRuntimeCellAdjacency,
+    currentPeriodicCellAdjacency,
+    sameWorldCell,
     sameHexCell
 } from "../.test-dist/modules/expeditions/current-cell-topology.js";
 
@@ -91,14 +93,18 @@ test("mapless geometry is resolved before the navigator consumes it", () => {
     assert.ok(current.adjacencies.every(value => value.boundarySegment.length === 2));
 });
 
-test("current runtime adapter rejects an unsupported tiling outside the generic navigator", () => {
+test("hex-only adapter rejects other patterns without exposing technical notation", () => {
     assert.throws(() => currentRuntimeCellAdjacency({
         currentCell: { q: 0, r: 0 },
-        tilingDsSymbol: "future/tiling",
+        tilingDsSymbol: "<1:1,1,1:4,4>",
         selectedDirection: null,
         worldGrid: null,
         abstractOrientation: "PointyTop"
-    }), /does not yet support tiling/);
+    }), error => {
+        assert.match(error.message, /Open a generalized cell expedition/);
+        assert.doesNotMatch(error.message, /<1:|tiling '\\w/);
+        return true;
+    });
 });
 
 test("map target and navigator intent resolve to the same adjacency interface", () => {
@@ -113,4 +119,57 @@ test("map target and navigator intent resolve to the same adjacency interface", 
     assert.ok(byIntent);
     const byCell = adjacencyForCell(current, byIntent.targetCell, sameHexCell);
     assert.equal(byCell?.id, byIntent.id);
+});
+
+test("generalized adapter preserves actual atomic interface identity and polygon shape", () => {
+    const currentCell = {
+        tilingId: "world-tiling",
+        address: { motifCellId: "quad-a", translation: { u: 5, v: -3 } }
+    };
+    const neighbor = {
+        tilingId: "world-tiling",
+        address: { motifCellId: "triangle-b", translation: { u: 5, v: -3 } }
+    };
+    const context = {
+        formatVersion: 1,
+        currentCell,
+        polygon: [{ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 2, y: 1 }, { x: 0, y: 1 }],
+        selectedExitInterfaceIndex: 7,
+        interfaces: [
+            { interfaceIndex: 3, boundarySideIndex: 1, neighborCell: neighbor,
+                start: { x: 2, y: 0 }, end: { x: 2, y: 0.4 } },
+            { interfaceIndex: 7, boundarySideIndex: 1, neighborCell: neighbor,
+                start: { x: 2, y: 0.4 }, end: { x: 2, y: 1 } }
+        ]
+    };
+    const value = currentPeriodicCellAdjacency(context);
+    assert.equal(value.boundary.length, 4);
+    assert.equal(value.adjacencies.length, 2);
+    assert.equal(value.selectedAdjacencyId, value.adjacencies[1].id);
+    assert.notEqual(value.adjacencies[0].id, value.adjacencies[1].id);
+    assert.equal(adjacencyForIntent(value, 7)?.targetCell, neighbor);
+    assert.ok(sameWorldCell(value.currentCell, currentCell));
+    assert.ok(!sameWorldCell(value.currentCell, neighbor));
+    assert.equal(value.adjacencies[0].outwardVector.x, 1);
+    assert.equal(value.adjacencies[1].outwardVector.x, 1);
+    assert.ok(value.adjacencies.every(edge => edge.anchor.x > .5));
+});
+
+test("generalized adapter rejects malformed interface geometry without fabricating neighbors", () => {
+    const base = {
+        formatVersion: 1,
+        currentCell: { tilingId: "tiling", address: { motifCellId: "a", translation: { u: 0, v: 0 } } },
+        polygon: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }],
+        selectedExitInterfaceIndex: null
+    };
+    const edge = { interfaceIndex: 0, boundarySideIndex: 0, neighborCell: base.currentCell,
+        start: { x: 0, y: 0 }, end: { x: 1, y: 0 } };
+    assert.throws(() => currentPeriodicCellAdjacency({ ...base, interfaces: [edge, edge] }),
+        /invalid atomic cell interface/);
+    assert.throws(() => currentPeriodicCellAdjacency({
+        ...base,
+        interfaces: [{ ...edge, start: { x: 0, y: 0 }, end: { x: 0, y: 0 } }]
+    }), /degenerate/);
+    assert.throws(() => currentPeriodicCellAdjacency({ ...base, formatVersion: 2, interfaces: [] }),
+        /Unsupported current-cell topology/);
 });

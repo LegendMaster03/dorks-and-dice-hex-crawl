@@ -173,7 +173,7 @@ export class ExpeditionEnvironmentPanel {
         const section = document.createElement("section");
         const heading = document.createElement("h4");
         heading.textContent = "Static world environment";
-        section.append(heading, hint("Persistent world truth is normally authored in the World Editor. This at-table path remains available for deliberate world corrections at world, current-hex, or existing spatial-feature scope."));
+        section.append(heading, hint("Persistent world truth is normally authored in the World Editor. This at-table path supports deliberate corrections at world, current-cell, or existing spatial-feature scope."));
 
         const facts = this.worldEnvironment!.annotations.flatMap(annotation =>
             annotation.facts.map(fact => ({ annotation, fact })));
@@ -199,9 +199,12 @@ export class ExpeditionEnvironmentPanel {
         const scope = form.elements.namedItem("scope") as HTMLSelectElement;
         const feature = form.elements.namedItem("featureId") as HTMLSelectElement;
         const runtime = this.getRuntime();
-        if (!runtime.expedition.isSpatial) {
-            for (const option of [...scope.options]) if (option.value === "Hex") option.disabled = true;
+        const inGeneralizedCell = runtime.expedition.isSpatial && !!runtime.expedition.currentCell;
+        for (const option of [...scope.options]) {
+            if (option.value === "Hex") option.disabled = !runtime.expedition.isSpatial || inGeneralizedCell;
+            if (option.value === "Cell") option.disabled = !inGeneralizedCell;
         }
+        if (inGeneralizedCell) scope.value = "Cell";
         feature.innerHTML = '<option value="">Select spatial feature</option>';
         for (const item of this.world?.features ?? []) {
             const option = document.createElement("option");
@@ -217,15 +220,18 @@ export class ExpeditionEnvironmentPanel {
             event.preventDefault();
             const fact = readFactForm(form);
             if (!fact) return;
-            const selectedScope = scope.value as "World" | "Hex" | "SpatialFeature";
+            const selectedScope = scope.value as "World" | "Hex" | "Cell" | "SpatialFeature";
             const currentHex = runtime.expedition.isSpatial ? runtime.expedition.currentHex : null;
+            const currentCell = runtime.expedition.isSpatial ? runtime.expedition.currentCell : null;
             if (selectedScope === "Hex" && !currentHex) return;
+            if (selectedScope === "Cell" && !currentCell) return;
             if (selectedScope === "SpatialFeature" && !feature.value) return;
             const annotation: EnvironmentAnnotation = {
                 id: crypto.randomUUID(),
                 scope: {
                     kind: selectedScope,
                     hex: selectedScope === "Hex" ? currentHex : null,
+                    cell: selectedScope === "Cell" ? currentCell : null,
                     featureId: selectedScope === "SpatialFeature" ? feature.value : null
                 },
                 facts: [fact]
@@ -308,7 +314,7 @@ function factForm(buttonText: string, includeScope: boolean): HTMLFormElement {
     form.className = "hc-form hc-environment-fact-form";
     const dimensions = knownDimensions.map(value => `<option value="${value}">${value}</option>`).join("");
     form.innerHTML = `
-        ${includeScope ? `<label>Scope <select name="scope"><option value="World">World</option><option value="Hex">Current hex</option><option value="SpatialFeature">Spatial feature</option></select></label><label>Feature <select name="featureId"></select></label>` : ""}
+        ${includeScope ? `<label>Scope <select name="scope"><option value="World">World</option><option value="Hex">Current hex</option><option value="Cell">Current cell</option><option value="SpatialFeature">Spatial feature</option></select></label><label>Feature <select name="featureId"></select></label>` : ""}
         <label>Dimension <input name="dimension" list="hc-environment-dimensions" required><datalist id="hc-environment-dimensions">${dimensions}</datalist></label>
         <label>Value type <select name="valueKind"><option value="Tag">Tag/value</option><option value="Measurement">Measurement</option></select></label>
         <label data-tag-row>Value <input name="tag"></label>
@@ -368,11 +374,14 @@ function sourceLabel(kind: string, featureName: string | null): string {
     if (kind === "SpatialFeature") return featureName ? `feature ${featureName}` : "spatial feature";
     if (kind === "ExpeditionCurrent") return "current session";
     if (kind === "DmOverride") return "DM override";
+    if (kind === "Cell") return "current cell";
     return kind.toLowerCase();
 }
 
 function scopeLabel(annotation: EnvironmentAnnotation): string {
     if (annotation.scope.kind === "Hex" && annotation.scope.hex) return `hex ${annotation.scope.hex.q},${annotation.scope.hex.r}`;
+    if (annotation.scope.kind === "Cell" && annotation.scope.cell)
+        return `cell at ${annotation.scope.cell.address.translation.u},${annotation.scope.cell.address.translation.v}`;
     if (annotation.scope.kind === "SpatialFeature") return `feature ${annotation.scope.featureId ?? "unknown"}`;
     return "world";
 }

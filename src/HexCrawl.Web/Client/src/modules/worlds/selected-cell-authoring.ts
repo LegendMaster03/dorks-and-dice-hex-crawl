@@ -36,7 +36,9 @@ export function sameHex(left: HexCoordinate | null, right: HexCoordinate | null)
 }
 
 export function locationsInCell(world: Overworld, cell: HexCoordinate): Location[] {
-    return world.locations.filter(location => sameHex(worldToHex(world.grid, location.position), cell));
+    const grid = world.grid;
+    if (!grid) return [];
+    return world.locations.filter(location => sameHex(worldToHex(grid, location.position), cell));
 }
 
 export function featuresIntersectingCell(world: Overworld, cell: HexCoordinate): SpatialFeature[] {
@@ -47,6 +49,7 @@ export function featureIntersectsCell(
     world: Pick<Overworld, "grid">,
     cell: HexCoordinate,
     feature: SpatialFeature): boolean {
+    if (!world.grid) return false;
     return featureIntersectsPolygon(feature, hexCorners(world.grid, cell));
 }
 
@@ -249,7 +252,9 @@ function normalizeDimension(value: string): string {
     return value.trim().toLowerCase();
 }
 
-function featureIntersectsPolygon(feature: SpatialFeature, polygon: readonly WorldPoint[]): boolean {
+// Presentation-only intersection against a polygon returned by authoritative
+// world geometry. This must never choose a unique cell or execute traversal.
+export function featureIntersectsPolygon(feature: SpatialFeature, polygon: readonly WorldPoint[]): boolean {
     if (feature.kind === "Point") {
         return feature.position !== null && pointInPolygon(feature.position, polygon);
     }
@@ -297,7 +302,7 @@ function segmentIntersectsPolygon(
     return false;
 }
 
-function pointInPolygon(point: WorldPoint, polygon: readonly WorldPoint[]): boolean {
+export function pointInPolygon(point: WorldPoint, polygon: readonly WorldPoint[]): boolean {
     if (polygon.length < 3) return false;
     for (let index = 0; index < polygon.length; index++) {
         if (pointOnSegment(polygon[index], polygon[(index + 1) % polygon.length], point)) return true;
