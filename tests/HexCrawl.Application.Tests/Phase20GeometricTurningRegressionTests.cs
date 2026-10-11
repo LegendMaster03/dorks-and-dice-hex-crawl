@@ -415,6 +415,31 @@ public sealed class Phase20GeometricTurningRegressionTests
     }
 
     [Fact]
+    public void InvalidDoubleBackIsRejectedBeforeImmediateEncounterCanPause()
+    {
+        var session = Session();
+        var world = session.World;
+        var procedure = GeometricNativeProcedureMaterializer.Materialize(
+            "alexandrian-advanced").Procedure;
+        var heading = SpatialCourseSelection.FromLegacyHexDirection(
+            world, new HexCoordinate(0, 0), new HexDirection(0));
+        var backtrack = Plan(heading) with { DeliberateDoubleBack = true };
+        var immediate = new ResolvedEncounter(
+            EncounterOutcomeKind.WanderingEncounter, TimeSpan.Zero,
+            null, "Should never enter the watch", Manual);
+
+        // An unentered first cell has no reciprocal entry interface to
+        // backtrack through; the request must fail before encounter mutation.
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            new CrawlRuntimeEngine().AdvanceCellWatch(
+                world, procedure, session.Expedition, backtrack,
+                Inputs(1) with { Encounter = immediate }));
+        Assert.Contains("Double-back requires a known entry interface", error.Message);
+        Assert.Null(session.Expedition.ActiveWatch);
+        Assert.Null(session.Expedition.PendingEncounter);
+    }
+
+    [Fact]
     public void GeometricExitIsNotGovernedByTheHistoricalFarExitFactor()
     {
         var session = Session();

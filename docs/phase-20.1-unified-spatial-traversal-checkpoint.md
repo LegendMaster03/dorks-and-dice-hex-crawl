@@ -113,3 +113,24 @@ The broader UI and additional square/other tiling presets belong to a later
 reviewed phase, after personal verification; historical V1 retirement and
 regression cleanup belong to Phase 20.4. The repository's `main` branch,
 deployment, and production data are untouched by this checkpoint.
+
+## Post-validation self-review fixes (2026-10-11)
+
+An independent review of the live branch found and corrected early
+turning-effort mutations that the original geometric tests did not cover:
+
+- Preflight for an ambiguous boundary happens **before** any turn debit,
+  including when the new cost would consume the entire budget. No rejected
+  interface can consume nongeometric effort.
+- A zero-time encounter preserves the previous accepted heading so a
+  proposed deliberate turn is charged after the encounter resolves.
+- The first proposed heading is not marked geometrically accepted at a
+  zero-time encounter. Changing this untraveled proposal does not produce
+  a fictitious first turn or movement.
+- Deliberate double-back is validated before any encounter can pause the
+  operation, but its lost-state reset and interface selection occur only
+  when the watch actually proceeds to travel.
+
+`Phase20GeometricTurningRegressionTests` covers each case, including
+JSON replay. Existing V1 movement/presets remain unchanged. The application
+and persistence cutover remains explicitly assigned to Phase 20.2.

@@ -108,6 +108,17 @@ public sealed partial class CrawlRuntimeEngine
 
         active = active with { Plan = plan };
         state = state with { ActiveWatch = active, IntendedHeading = plan.IntendedHeading };
+        // Reject invalid backtrack requests before any zero-time encounter
+        // can commit a pending watch. Only the geometry/state mutation waits
+        // until the watch actually travels.
+        if (plan.DeliberateDoubleBack)
+        {
+            if (runtime.TurnPolicy is { SupportsDeliberateDoubleBack: false })
+                throw new InvalidOperationException(
+                    "The pinned procedure does not permit deliberate double-back movement.");
+            if (state.Traversal.EntryInterfaceIndex is null)
+                throw new InvalidOperationException("Double-back requires a known entry interface.");
+        }
         var dmOverrideNote = ResolveDmOverrideNote(
             inputs.Travel.Provenance,
             inputs.Navigation?.Provenance,
@@ -149,15 +160,14 @@ public sealed partial class CrawlRuntimeEngine
         // accepted course, nor reorient a lost expedition without movement.
         if (plan.DeliberateDoubleBack)
         {
-            if (runtime.TurnPolicy is { SupportsDeliberateDoubleBack: false })
-                throw new InvalidOperationException(
-                    "The pinned procedure does not permit deliberate double-back movement.");
-            var entry = state.Traversal.EntryInterfaceIndex
-                ?? throw new InvalidOperationException("Double-back requires a known entry interface.");
+            // Prevalidated before an encounter could interrupt the watch.
             state = state with
             {
                 IsLost = false, ResolvedVeerDegrees = null,
-                Traversal = state.Traversal with { SelectedExitInterfaceIndex = entry }
+                Traversal = state.Traversal with
+                {
+                    SelectedExitInterfaceIndex = state.Traversal.EntryInterfaceIndex!.Value
+                }
             };
         }
         var degrees = state.IsLost ? state.ResolvedVeerDegrees ?? 0d : 0d;
