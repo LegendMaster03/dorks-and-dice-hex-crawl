@@ -66,7 +66,7 @@ export async function renderExpedition(
     // Phase 18 cell expeditions retain their qualified identity and use the same
     // expedition route, map and cell navigator. Do not enter the hex adapter.
     if (runtime.expedition.isSpatial && runtime.expedition.currentCell)
-        return renderPeriodicExpeditionWorkbench(root, api, runtime, world, navigate);
+        return renderPeriodicExpeditionWorkbench(root, api, runtime, world, navigate, toolContext);
 
     const survivalApi = new SurvivalResourcesApi(toolContext);
     const effectsApi = new ExpeditionEffectsApi(toolContext);

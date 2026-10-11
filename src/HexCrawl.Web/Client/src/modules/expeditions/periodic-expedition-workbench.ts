@@ -3,7 +3,7 @@ import type { HexCrawlApi } from "../../api";
 import { MapSurface } from "../../map-surface";
 import type {
     CellTraversalContext, CellWatchRequest, ExpeditionDetail, Overworld,
-    WorldCellId, WorldPoint
+    WorldCellId, WorldPoint, ToolHostContext
 } from "../../types";
 import { showUiError, clearUiError } from "../../ui-error";
 import { currentPeriodicCellAdjacency } from "./current-cell-topology";
@@ -11,6 +11,8 @@ import { renderCurrentCellNavigator } from "./cell-navigator";
 import { adjacencyForIntent } from "./spatial-adjacency";
 import { guidancePreferenceButton } from "../../ui/guidance";
 import { encounterLocationId } from "./keyed-location-encounter";
+import { mountPeriodicGameplayPanels } from "./periodic-gameplay-panels";
+import { publishExpeditionRuntimeChanged } from "./expedition-runtime-events";
 
 /**
  * Generalized view of the same expedition entity and authoritative watch runtime.
@@ -19,7 +21,8 @@ import { encounterLocationId } from "./keyed-location-encounter";
  */
 export async function renderPeriodicExpeditionWorkbench(
     root: HTMLElement, api: HexCrawlApi, initial: ExpeditionDetail,
-    world: Overworld | null, navigate: (route: string, replace?: boolean) => void
+    world: Overworld | null, navigate: (route: string, replace?: boolean) => void,
+    toolContext: ToolHostContext | null = null
 ): Promise<() => void> {
     if (!world || !initial.expedition.isSpatial || !initial.expedition.currentCell)
         throw new Error("A generalized expedition requires an authoritative world and current cell.");
@@ -101,7 +104,12 @@ export async function renderPeriodicExpeditionWorkbench(
                             <label>Resolution note <input data-encounter-result></label>
                             <button type="button" data-resolve-encounter>Resolve pending encounter</button></div>
                     </section>
-                    <details><summary>Party and movement</summary><div data-party></div><div data-movement></div></details>
+                    <details><summary>Party and movement summary</summary><div data-party></div><div data-movement></div></details>
+                    <section class="hc-stack hc-page hc-gameplay-controls" data-gameplay-panels
+                        aria-label="Shared party and gameplay editors">
+                        <h2>Party and gameplay</h2>
+                        <p class="hc-hint">These are the same party, environment, journey, effects and survival editors used by other expeditions.</p>
+                    </section>
                     <details><summary>Journey events</summary><ol data-history></ol></details>
                 </aside>
             </div>
@@ -192,6 +200,42 @@ export async function renderPeriodicExpeditionWorkbench(
             throw new Error("The expedition no longer has generalized cell state.");
         return runtime.expedition;
     };
+    const gameplay = mountPeriodicGameplayPanels(
+        required<HTMLElement>("[data-gameplay-panels]"), api, initial.id,
+        toolContext,
+        () => runtime,
+        next => {
+            if (disposed) return;
+            runtime = next;
+            publishExpeditionRuntimeChanged(root, runtime);
+        },
+        async (control, action) => {
+            if (busy || disposed) return;
+            busy = true;
+            if (control) control.disabled = true;
+            clearUiError(error);
+            try {
+                await action();
+                if (!disposed) await refresh();
+            } catch (failure) {
+                if (!disposed) {
+                    showUiError(error, failure);
+                    if (failure instanceof Error && /version|conflict|stale/i.test(failure.message))
+                        await refresh();
+                }
+            } finally {
+                busy = false;
+                if (!disposed) {
+                    if (control) control.disabled = false;
+                    render();
+                }
+            }
+        },
+        failure => {
+            if (!disposed) showUiError(error, failure);
+        }
+    );
+
     const progress = async (action: () => Promise<ExpeditionDetail>): Promise<void> => {
         if (busy || disposed) return;
         busy = true;
@@ -204,6 +248,8 @@ export async function renderPeriodicExpeditionWorkbench(
             topology = await api.getCellTopology(runtime.id);
             selectedExit = topology.selectedExitInterfaceIndex;
             render();
+            gameplay.sync();
+            publishExpeditionRuntimeChanged(root, runtime);
         } catch (failure) {
             if (disposed) return;
             showUiError(error, failure);
@@ -227,6 +273,8 @@ export async function renderPeriodicExpeditionWorkbench(
             topology = nextTopology;
             selectedExit = topology.selectedExitInterfaceIndex;
             render();
+            gameplay.sync();
+            publishExpeditionRuntimeChanged(root, runtime);
         } catch (failure) {
             if (!disposed) showUiError(error, failure);
         }
@@ -426,8 +474,10 @@ export async function renderPeriodicExpeditionWorkbench(
             inspectedCell = null;
     }
     render();
+    gameplay.sync();
     return () => {
         disposed = true;
+        gameplay.dispose();
         map.dispose();
         root.classList.remove("hc-phase15");
     };
