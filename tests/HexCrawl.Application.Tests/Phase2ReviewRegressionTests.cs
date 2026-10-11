@@ -11,158 +11,82 @@ public sealed class Phase2ReviewRegressionTests
 {
     private const string Owner = "phase2-review";
 
-    [Fact]
-    public async Task FixedContinuousDistanceThroughWorkbenchUsesOneEffectiveDistance()
+    // Phase 20.2: the two V1 hex/watch entry points were replaced by one
+    // geometric cell service. The fixed/variable distance invariants below
+    // exercise the persisted V2 runtime instead of running retired V1 starts.
+    [Theory]
+    [InlineData("simple-fixed-distance", 2d, 2d)]
+    [InlineData("alexandrian-advanced", 3d, 2d)]
+    public async Task GeometricTravelHonorsPinnedFixedAndVariableDistances(
+        string preset, double expected, double actual)
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = await StoreAsync(database.ConnectionString);
-        var core = new HexCrawlService(store);
-        var workbench = new ExpeditionWorkbenchService(store, core, new CrawlSessionContextResolver(core));
-        var world = await core.CreateOverworldAsync(Owner, WorldCommand());
-        var started = await workbench.StartAsync(
-            world.World.Id,
-            Owner,
-            new StartExpeditionWorkbenchCommand(
-                "Fixed workbench",
-                "simple-fixed-distance",
-                "exploration-map",
-                new HexCoordinate(0, 0)));
+        var service = new HexCrawlService(store);
+        var start = new HexCoordinate(0, 0);
+        var context = new AbstractHexCrawlSessionContext(
+            "Geometric travel test", HexOrientation.PointyTop,
+            new CrawlRuntimeContext(new DistanceMeasure(12, DistanceUnit.Miles)));
+        var created = await new ExpeditionStartService(
+            store, service, new CampaignProcedureService(store))
+            .StartStandaloneCellsAsync(
+                Owner, "Distance resolution", new ProcedureStartSelection(PresetKey: preset),
+                context, start);
+        var geometry = (await service.ResolveCellGeometryAsync(created, Owner)).Tiling;
+        var heading = SpatialCourseSelection.FromLegacyHexDirection(
+            geometry, start, new HexDirection(0));
+        var source = new ResolutionProvenance(ResolutionSource.ManualRoll);
+        var plan = new CellWatchTravelPlan(
+            heading, false, true, TravelModeSelection.Normal, NavigationAidSelection.None);
+        var inputs = new CellWatchAdvanceInputs(
+            ResolvedTravelAmount.Distance(
+                new DistanceMeasure(expected, DistanceUnit.Miles),
+                new DistanceMeasure(actual, DistanceUnit.Miles),
+                source),
+            new ResolvedCellNavigation(NavigationCheckOutcome.Succeeded, null, source),
+            ResolvedEncounter.None);
 
-        var advanced = await workbench.AdvanceAsync(
-            started.Id,
-            Owner,
-            new AdvanceExpeditionWorkbenchCommand
-            {
-                ExpectedVersion = started.Version,
-                IntendedDirection = 0,
-                EffectiveDistance = 2,
-                ContinueAcrossBoundaries = true,
-                TravelResolutionSource = ResolutionSource.ProcedureDefault
-            });
-
-        var state = Assert.IsType<ExpeditionState>(advanced.Runtime);
-        Assert.Equal(2, state.DistanceTraveled.Value, 6);
-        Assert.Equal(1, state.CompletedWatches);
+        var advanced = await service.AdvanceCellExpeditionAsync(
+            created.Id, Owner, created.Version, plan, inputs);
+        var spatial = Assert.IsType<CellExpeditionState>(advanced.Runtime);
+        Assert.Equal(actual, spatial.DistanceTraveled!.Value.Value, 6);
+        Assert.Equal(1, spatial.CompletedWatches);
+        Assert.Equal(2, GenericProcedureRuntime.Bind(advanced.CampaignProcedure).Movement.MechanicVersion);
     }
 
     [Fact]
-    public async Task FixedContinuousDistanceThroughManualServiceAcceptsOneExistingDistanceField()
+    public async Task FixedGeometricDistanceRejectsContradictionWithoutPersisting()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = await StoreAsync(database.ConnectionString);
-        var core = new HexCrawlService(store);
-        var world = await core.CreateOverworldAsync(Owner, WorldCommand());
-        var started = await core.StartExpeditionAsync(
-            world.World.Id,
-            Owner,
-            new StartExpeditionCommand("Fixed manual", "simple-fixed-distance", new HexCoordinate(0, 0)));
-
-        var advanced = await core.AdvanceExpeditionAsync(
-            started.Id,
-            Owner,
-            new AdvanceExpeditionCommand
-            {
-                ExpectedVersion = started.Version,
-                IntendedDirection = 0,
-                ActualDistance = 2,
-                ContinueAcrossBoundaries = true,
-                ResolutionSource = ResolutionSource.ProcedureDefault
-            });
-
-        var state = Assert.IsType<ExpeditionState>(advanced.Runtime);
-        Assert.Equal(2, state.DistanceTraveled.Value, 6);
-        Assert.Equal(1, state.CompletedWatches);
-    }
-
-    [Fact]
-    public async Task VariableContinuousDistanceThroughWorkbenchUsesExpectedAndActualIndependently()
-    {
-        await using var database = await PostgresTestDatabase.CreateAsync();
-        var store = await StoreAsync(database.ConnectionString);
-        var core = new HexCrawlService(store);
-        var workbench = new ExpeditionWorkbenchService(store, core, new CrawlSessionContextResolver(core));
-        var world = await core.CreateOverworldAsync(Owner, WorldCommand());
-        var started = await workbench.StartAsync(
-            world.World.Id,
-            Owner,
-            new StartExpeditionWorkbenchCommand(
-                "Variable workbench",
-                "alexandrian-advanced",
-                "exploration-map",
-                new HexCoordinate(0, 0)));
-
-        var advanced = await workbench.AdvanceAsync(
-            started.Id,
-            Owner,
-            VariableWorkbenchAdvance(started.Version, 3, 2));
-
-        var state = Assert.IsType<ExpeditionState>(advanced.Runtime);
-        Assert.Equal(2, state.DistanceTraveled.Value, 6);
-        Assert.Equal(1, state.CompletedWatches);
-    }
-
-    [Fact]
-    public async Task VariableContinuousDistanceThroughManualServiceUsesExpectedAndActualIndependently()
-    {
-        await using var database = await PostgresTestDatabase.CreateAsync();
-        var store = await StoreAsync(database.ConnectionString);
-        var core = new HexCrawlService(store);
-        var world = await core.CreateOverworldAsync(Owner, WorldCommand());
-        var started = await core.StartExpeditionAsync(
-            world.World.Id,
-            Owner,
-            new StartExpeditionCommand("Variable manual", "alexandrian-advanced", new HexCoordinate(0, 0)));
-
-        var advanced = await core.AdvanceExpeditionAsync(
-            started.Id,
-            Owner,
-            new AdvanceExpeditionCommand
-            {
-                ExpectedVersion = started.Version,
-                IntendedDirection = 0,
-                ExpectedDistance = 3,
-                ActualDistance = 2,
-                NavigationOutcome = NavigationCheckOutcome.Succeeded,
-                EncounterOutcome = EncounterOutcomeKind.None,
-                ContinueAcrossBoundaries = true,
-                ResolutionSource = ResolutionSource.ManualRoll
-            });
-
-        var state = Assert.IsType<ExpeditionState>(advanced.Runtime);
-        Assert.Equal(2, state.DistanceTraveled.Value, 6);
-        Assert.Equal(1, state.CompletedWatches);
-    }
-
-    [Fact]
-    public async Task WorkbenchFixedDistanceRejectsContradictorySuppliedValues()
-    {
-        await using var database = await PostgresTestDatabase.CreateAsync();
-        var store = await StoreAsync(database.ConnectionString);
-        var core = new HexCrawlService(store);
-        var workbench = new ExpeditionWorkbenchService(store, core, new CrawlSessionContextResolver(core));
-        var world = await core.CreateOverworldAsync(Owner, WorldCommand());
-        var started = await workbench.StartAsync(
-            world.World.Id,
-            Owner,
-            new StartExpeditionWorkbenchCommand(
-                "Fixed contradiction",
-                "simple-fixed-distance",
-                "exploration-map",
-                new HexCoordinate(0, 0)));
-
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => workbench.AdvanceAsync(
-            started.Id,
-            Owner,
-            new AdvanceExpeditionWorkbenchCommand
-            {
-                ExpectedVersion = started.Version,
-                IntendedDirection = 0,
-                ExpectedDistance = 2,
-                ActualDistance = 3,
-                ContinueAcrossBoundaries = true
-            }));
-
-        Assert.Contains("same effective travel distance", exception.Message, StringComparison.Ordinal);
+        var service = new HexCrawlService(store);
+        var start = new HexCoordinate(0, 0);
+        var context = new AbstractHexCrawlSessionContext(
+            "Fixed distance", HexOrientation.PointyTop,
+            new CrawlRuntimeContext(new DistanceMeasure(12, DistanceUnit.Miles)));
+        var created = await new ExpeditionStartService(
+            store, service, new CampaignProcedureService(store))
+            .StartStandaloneCellsAsync(
+                Owner, "Fixed travel", new ProcedureStartSelection(PresetKey: "simple-fixed-distance"),
+                context, start);
+        var geometry = (await service.ResolveCellGeometryAsync(created, Owner)).Tiling;
+        var heading = SpatialCourseSelection.FromLegacyHexDirection(
+            geometry, start, new HexDirection(0));
+        var plan = new CellWatchTravelPlan(
+            heading, false, true, TravelModeSelection.Normal, NavigationAidSelection.None);
+        var source = new ResolutionProvenance(ResolutionSource.ManualRoll);
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.AdvanceCellExpeditionAsync(
+                created.Id, Owner, created.Version, plan,
+                new CellWatchAdvanceInputs(
+                    ResolvedTravelAmount.Distance(
+                        new DistanceMeasure(2, DistanceUnit.Miles),
+                        new DistanceMeasure(3, DistanceUnit.Miles), source),
+                    new ResolvedCellNavigation(NavigationCheckOutcome.Succeeded, null, source),
+                    ResolvedEncounter.None)));
+        var saved = await store.GetExpeditionAsync(created.Id, Owner);
+        Assert.Equal(created.Version, saved!.Version);
+        Assert.Empty(saved.Runtime.History);
     }
 
     [Fact]
