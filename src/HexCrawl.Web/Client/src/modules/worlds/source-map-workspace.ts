@@ -639,7 +639,9 @@ export class SourceMapWorkspace {
                 controls.append(heading, selector, preview, apply, hint);
                 status.append(controls);
             }
-            if (assessment.status === "structure-match" && assessment.registration) {
+            // Registration to unchanged world geometry is independent of
+            // whether an optional selected ruleset may run there.
+            if (assessment.registration?.status === "candidates") {
                 const registration = assessment.registration;
                 const detail = document.createElement("p");
                 detail.className = "hc-hint";

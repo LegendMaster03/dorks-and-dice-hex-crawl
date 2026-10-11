@@ -313,8 +313,9 @@ export class MapSurface {
                 return;
             }
             const geometry = await this.api.resolveWorldCell(worldId, result.candidates[0]);
-            if (this.disposed || this.getWorld()?.id !== worldId
-                || this.getWorld()?.tiling?.id !== tilingId) return;
+            // A newer click or world edit may complete while geometry resolves.
+            // Only the latest request may publish a selected cell or callback.
+            if (!isCurrent() || geometry.id.tilingId !== tilingId) return;
             this.renderer.selectedWorldCell = geometry;
             this.accessibilityStatus.textContent = "Selected a world cell.";
             this.cellSelectionHandler?.(geometry);
