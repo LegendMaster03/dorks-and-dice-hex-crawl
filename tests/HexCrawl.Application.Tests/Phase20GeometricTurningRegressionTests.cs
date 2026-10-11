@@ -373,6 +373,48 @@ public sealed class Phase20GeometricTurningRegressionTests
     }
 
     [Fact]
+    public void ZeroTimeEncounterBeforeAnyTravelDoesNotCreateAFictitiousCourseTurn()
+    {
+        var session = Session();
+        var world = session.World;
+        var procedure = GeometricNativeProcedureMaterializer.Materialize(
+            "alexandrian-advanced").Procedure;
+        var east = SpatialCourseSelection.FromLegacyHexDirection(
+            world, new HexCoordinate(0, 0), new HexDirection(0));
+        var northEast = SpatialCourseSelection.FromLegacyHexDirection(
+            world, new HexCoordinate(0, 0), new HexDirection(1));
+        var engine = new CrawlRuntimeEngine();
+
+        // A heading requested at an encounter occurring at the first instant
+        // is not a traveled, accepted course.
+        var encounter = new ResolvedEncounter(
+            EncounterOutcomeKind.WanderingEncounter, TimeSpan.Zero,
+            null, "Encounter before first movement", Manual);
+        var paused = engine.AdvanceCellWatch(
+            world, procedure, session.Expedition, Plan(east),
+            Inputs(2) with { Encounter = encounter });
+        Assert.Equal(RuntimePauseReason.EncounterTriggered, paused.PauseReason);
+        Assert.Null(paused.Expedition.Traversal.TravelHeading);
+        Assert.Null(paused.Expedition.ActiveWatch!.PendingTurnFromHeading);
+        Assert.Null(paused.Expedition.PendingTravelBudgetCharge);
+        Assert.Equal(session.Expedition.Traversal.Position, paused.Expedition.Traversal.Position);
+
+        var restored = JsonSerializer.Deserialize<CellExpeditionState>(
+            JsonSerializer.Serialize(paused.Expedition))!;
+        restored.Validate(world);
+        var pending = Assert.IsType<PendingEncounterOccurrence>(restored.PendingEncounter);
+        var resolved = engine.ResolveCellEncounter(restored, pending.Id, "No time elapsed");
+        var resumed = engine.AdvanceCellWatch(
+            world, procedure, resolved.Expedition, Plan(northEast), Inputs(2));
+        Assert.Null(resumed.PauseReason);
+        Assert.Equal(1, resumed.Expedition.CompletedWatches);
+        Assert.Null(resumed.Expedition.PendingTravelBudgetCharge);
+        Assert.InRange(resumed.Expedition.DistanceTraveled!.Value.Value, 1.9999999, 2.0000001);
+        Assert.DoesNotContain(resumed.Expedition.History, e =>
+            e.Message.Contains("turn debited", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void GeometricExitIsNotGovernedByTheHistoricalFarExitFactor()
     {
         var session = Session();

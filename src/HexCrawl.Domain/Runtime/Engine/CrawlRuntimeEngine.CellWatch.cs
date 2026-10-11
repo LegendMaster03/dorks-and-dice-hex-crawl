@@ -108,23 +108,6 @@ public sealed partial class CrawlRuntimeEngine
 
         active = active with { Plan = plan };
         state = state with { ActiveWatch = active, IntendedHeading = plan.IntendedHeading };
-        if (plan.DeliberateDoubleBack)
-        {
-            if (runtime.TurnPolicy is { SupportsDeliberateDoubleBack: false })
-                throw new InvalidOperationException(
-                    "The pinned procedure does not permit deliberate double-back movement.");
-            var entry = state.Traversal.EntryInterfaceIndex
-                ?? throw new InvalidOperationException("Double-back requires a known entry interface.");
-            state = state with
-            {
-                IsLost = false, ResolvedVeerDegrees = null,
-                Traversal = state.Traversal with { SelectedExitInterfaceIndex = entry }
-            };
-        }
-
-        var degrees = state.IsLost ? state.ResolvedVeerDegrees ?? 0d : 0d;
-        var heading = RotateCellHeading(plan.IntendedHeading, degrees);
-        state = state with { Traversal = state.Traversal with { TravelHeading = heading } };
         var dmOverrideNote = ResolveDmOverrideNote(
             inputs.Travel.Provenance,
             inputs.Navigation?.Provenance,
@@ -159,6 +142,28 @@ public sealed partial class CrawlRuntimeEngine
             state = state with { ActiveWatch = active };
             return TriggerCellEncounter(state, active, events);
         }
+
+        // Only a watch segment that can actually expend travel budget
+        // establishes a geometric heading or performs a double-back. A
+        // zero-time encounter must not turn an untraveled *proposal* into an
+        // accepted course, nor reorient a lost expedition without movement.
+        if (plan.DeliberateDoubleBack)
+        {
+            if (runtime.TurnPolicy is { SupportsDeliberateDoubleBack: false })
+                throw new InvalidOperationException(
+                    "The pinned procedure does not permit deliberate double-back movement.");
+            var entry = state.Traversal.EntryInterfaceIndex
+                ?? throw new InvalidOperationException("Double-back requires a known entry interface.");
+            state = state with
+            {
+                IsLost = false, ResolvedVeerDegrees = null,
+                Traversal = state.Traversal with { SelectedExitInterfaceIndex = entry }
+            };
+        }
+        var degrees = state.IsLost ? state.ResolvedVeerDegrees ?? 0d : 0d;
+        var heading = RotateCellHeading(plan.IntendedHeading, degrees);
+        state = state with { Traversal = state.Traversal with { TravelHeading = heading } };
+
         var segmentDuration = window.Duration;
         var encounterAtEnd = window.EncounterAtEnd;
 
