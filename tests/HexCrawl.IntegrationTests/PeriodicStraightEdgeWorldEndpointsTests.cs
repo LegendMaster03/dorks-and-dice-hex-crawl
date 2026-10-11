@@ -1,12 +1,19 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using HexCrawl.Domain.Runtime;
 using HexCrawl.Domain.Spatial;
+using HexCrawl.Web.Api;
 using HexCrawl.Infrastructure.Persistence;
 
 namespace HexCrawl.IntegrationTests;
 
 public sealed class PeriodicStraightEdgeWorldEndpointsTests
 {
+    private static readonly JsonSerializerOptions ApiJson = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter(allowIntegerValues: false) }
+    };
     private const string Pattern =
         "<12:2 4 6 8 10 12,12 3 5 7 9 11,8 7 10 9 12 11:6,3 3>";
 
@@ -47,7 +54,7 @@ public sealed class PeriodicStraightEdgeWorldEndpointsTests
         var database = TestWebHost.NewDatabasePath();
         try
         {
-            Guid worldId;
+            Guid worldId, expeditionId;
             using (var host = TestWebHost.Create(database, "alice"))
             using (var client = host.CreateClient())
             {
@@ -89,7 +96,7 @@ public sealed class PeriodicStraightEdgeWorldEndpointsTests
                     });
                 Assert.True(started.IsSuccessStatusCode, await started.Content.ReadAsStringAsync());
                 var startedBody = await started.Content.ReadFromJsonAsync<JsonElement>();
-                var expeditionId = startedBody.GetProperty("id").GetGuid();
+                expeditionId = startedBody.GetProperty("id").GetGuid();
                 using var navigation = await client.GetAsync(
                     $"/api/expeditions/{expeditionId:D}/cell-topology");
                 navigation.EnsureSuccessStatusCode();
@@ -102,6 +109,60 @@ public sealed class PeriodicStraightEdgeWorldEndpointsTests
                     .Distinct().Count());
                 Assert.Equal("CellSteps", startedBody
                     .GetProperty("procedure").GetProperty("runtime").GetProperty("travelResolution").GetString());
+
+                // Start a watch toward the T-junction. With no unique
+                // destination interior, the watch pauses instead of guessing.
+                var startPosition = navigator.GetProperty("position");
+                var vertex = navigator.GetProperty("polygon")[1];
+                var center = new WorldPoint(
+                    startPosition.GetProperty("x").GetDouble(),
+                    startPosition.GetProperty("y").GetDouble());
+                var junction = new WorldPoint(
+                    vertex.GetProperty("x").GetDouble(),
+                    vertex.GetProperty("y").GetDouble());
+                var ambiguousPlan = new CellWatchTravelPlan(junction - center,
+                    false, false, TravelModeSelection.Normal, NavigationAidSelection.None);
+                var inputs = new CellWatchAdvanceInputs(
+                    ResolvedTravelAmount.CellTransitions(1,
+                        new ResolutionProvenance(ResolutionSource.DmOverride,
+                            "DM-confirmed uncalibrated cell step")));
+                var advanceRoute = $"/api/expeditions/{expeditionId:D}/cells/advance";
+                using var paused = await client.PostAsJsonAsync(advanceRoute,
+                    new AdvanceCellWatchRequest(
+                        startedBody.GetProperty("version").GetInt64(), ambiguousPlan, inputs),
+                    ApiJson);
+                Assert.True(paused.IsSuccessStatusCode, await paused.Content.ReadAsStringAsync());
+                var pausedState = await paused.Content.ReadFromJsonAsync<JsonElement>();
+                Assert.Equal("CellCourseAdjudicationRequired", pausedState.GetProperty("expedition")
+                    .GetProperty("activeWatchPendingDecision").GetString());
+
+                // Resume that same watch using the second atomic half of the
+                // split edge, not a fabricated geometric-side destination.
+                var chosen = interfaces.Single(i => i.GetProperty("interfaceIndex").GetInt32() == 1);
+                var begin = chosen.GetProperty("start");
+                var end = chosen.GetProperty("end");
+                var heading = new WorldPoint(
+                    (begin.GetProperty("x").GetDouble() + end.GetProperty("x").GetDouble()) / 2 - center.X,
+                    (begin.GetProperty("y").GetDouble() + end.GetProperty("y").GetDouble()) / 2 - center.Y);
+                var choice = new ResolveCellCourseRequest(
+                    pausedState.GetProperty("version").GetInt64(),
+                    new CellCourseDecision(heading, 1,
+                        new ResolutionProvenance(ResolutionSource.DmOverride, "DM selected split interface")));
+                using var resolved = await client.PostAsJsonAsync(
+                    $"/api/expeditions/{expeditionId:D}/cells/course", choice, ApiJson);
+                Assert.True(resolved.IsSuccessStatusCode, await resolved.Content.ReadAsStringAsync());
+                var resolvedState = await resolved.Content.ReadFromJsonAsync<JsonElement>();
+
+                using var resumed = await client.PostAsJsonAsync(advanceRoute,
+                    new AdvanceCellWatchRequest(resolvedState.GetProperty("version").GetInt64(),
+                        new CellWatchTravelPlan(heading, false, false,
+                            TravelModeSelection.Normal, NavigationAidSelection.None),
+                        inputs), ApiJson);
+                Assert.True(resumed.IsSuccessStatusCode, await resumed.Content.ReadAsStringAsync());
+                var completed = await resumed.Content.ReadFromJsonAsync<JsonElement>();
+                Assert.Equal(1, completed.GetProperty("expedition").GetProperty("completedWatches").GetInt32());
+                Assert.Equal(chosen.GetProperty("neighborCell").GetRawText(),
+                    completed.GetProperty("expedition").GetProperty("currentCell").GetRawText());
             }
 
             var persisted = await new PostgresHexCrawlStore(database).GetOverworldAsync(worldId, "alice");
@@ -114,6 +175,12 @@ public sealed class PeriodicStraightEdgeWorldEndpointsTests
             Assert.Null(tiling.PhysicalDistancePerWorldUnit);
             Assert.All(tiling.Boundaries(new("square", new(0, 0))), edge =>
                 Assert.Equal(edge.InterfaceIndex, tiling.Reciprocal(edge).ReciprocalInterfaceIndex));
+            var savedExpedition = await new PostgresHexCrawlStore(database)
+                .GetExpeditionAsync(expeditionId, "alice");
+            Assert.NotNull(savedExpedition);
+            var savedRuntime = Assert.IsType<CellExpeditionState>(savedExpedition!.Runtime);
+            Assert.Equal(1, savedRuntime.CompletedWatches);
+            Assert.Equal(4, savedRuntime.Traversal.EntryInterfaceIndex);
         }
         finally { TestWebHost.DeleteDatabase(database); }
     }
