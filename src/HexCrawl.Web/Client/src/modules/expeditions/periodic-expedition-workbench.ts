@@ -11,6 +11,7 @@ import { renderCurrentCellNavigator } from "./cell-navigator";
 import { adjacencyForIntent } from "./spatial-adjacency";
 import { guidancePreferenceButton } from "../../ui/guidance";
 import { encounterLocationId } from "./keyed-location-encounter";
+import { pointInPolygon } from "../worlds/selected-cell-authoring";
 import { mountPeriodicGameplayPanels } from "./periodic-gameplay-panels";
 import { publishExpeditionRuntimeChanged } from "./expedition-runtime-events";
 
@@ -135,18 +136,29 @@ export async function renderPeriodicExpeditionWorkbench(
         return element;
     };
     const keyedChoices = choice("keyedLocation");
-    const placeholder = document.createElement("option");
-    placeholder.value = "";
-    placeholder.textContent = world.locations.length
-        ? "Choose an existing world location"
-        : "No saved locations — add one on the world map";
-    keyedChoices.append(placeholder);
-    for (const location of world.locations) {
-        const option = document.createElement("option");
-        option.value = location.id;
-        option.textContent = `${location.name} · ${location.category}`;
-        keyedChoices.append(option);
-    }
+    let keyedLocations = world.locations.filter(location =>
+        pointInPolygon(location.position, topology.polygon));
+    const updateKeyedLocations = (): void => {
+        keyedLocations = world.locations.filter(location =>
+            pointInPolygon(location.position, topology.polygon));
+        const selected = keyedChoices.value;
+        keyedChoices.replaceChildren();
+        const placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = keyedLocations.length
+            ? "Choose a location in the current cell"
+            : "No locations in this cell — add one on the world map";
+        keyedChoices.append(placeholder);
+        for (const location of keyedLocations) {
+            const option = document.createElement("option");
+            option.value = location.id;
+            option.textContent = `${location.name} · ${location.category}`;
+            keyedChoices.append(option);
+        }
+        if (keyedLocations.some(location => location.id === selected))
+            keyedChoices.value = selected;
+    };
+    updateKeyedLocations();
     const showKeyedLocation = (): void => {
         required<HTMLElement>("[data-keyed-location-row]").hidden =
             choice("encounter").value !== "KeyedLocationDiscovery";
@@ -319,7 +331,7 @@ export async function renderPeriodicExpeditionWorkbench(
                     occursAt: encounterChoice === "None"
                         ? null : timespanFromHours(readNumber("encounterHours")),
                     locationId: encounterLocationId(
-                        encounterChoice, keyedChoices.value, world.locations),
+                        encounterChoice, keyedChoices.value, keyedLocations),
                     note: input("encounterNote").value.trim() || null,
                     provenance: { source: "DmOverride" as const, note: "DM-resolved encounter" }
                 }
@@ -420,6 +432,9 @@ export async function renderPeriodicExpeditionWorkbench(
         text("[data-distance-unit]", isSteps ? "Cell transitions are resolved by the server."
             : units ? `Distance is entered in ${units.symbol}; the server resolves actual movement.`
                 : "This procedure requires a calibrated distance unit before travel can be resolved.");
+        // The backend accepts keyed discoveries only inside the currently
+        // authoritative cell. Do not offer an arbitrary distant map location.
+        updateKeyedLocations();
         const modes = runtime.movementComposition.policy.travelModeKeys;
         const pace = choice("pace");
         const previous = pace.value;
