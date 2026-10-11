@@ -91,12 +91,16 @@ public static class PeriodicTraversalExecution
             && transitions.Count < MaxTransitionsPerCall)
         {
             var crossing = PeriodicCellTraversalGeometry.NextCrossing(world, cursor);
-            if (crossing.Status == CellCrossingStatus.RequiresAdjudication)
+            if (crossing.Status == CellCrossingStatus.RequiresAdjudication
+                && (remaining is null || crossing.DistanceWorldUnits is null))
             {
+                // Logical steps need an authorized transition, not an invented
+                // fractional step toward a decision point.
                 pending = crossing;
                 break;
             }
-            if (crossing.Status != CellCrossingStatus.Crosses
+            if (crossing.Status is not (CellCrossingStatus.Crosses
+                or CellCrossingStatus.RequiresAdjudication)
                 || crossing.DistanceWorldUnits is not { } needed
                 || !double.IsFinite(needed))
                 throw new InvalidOperationException("Unable to establish a finite authoritative cell crossing.");
@@ -108,6 +112,11 @@ public static class PeriodicTraversalExecution
             if (remaining.HasValue)
                 remaining = Math.Max(0d, remaining.Value - step.ConsumedWorldUnits);
 
+            if (step.Crossing.Status == CellCrossingStatus.RequiresAdjudication)
+            {
+                pending = step.Crossing;
+                break;
+            }
             if (step.Crossing.Status != CellCrossingStatus.Crosses)
                 break;
 

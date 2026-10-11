@@ -12,6 +12,7 @@ public static class GenericProcedureExecutionHandlers
     public const string FixedIntervalDuration = "procedure.time.fixed-interval";
     public const string MovementResolutionPolicy = "procedure.movement.resolution";
     public const string HexProgressPolicy = "procedure.movement.hex-progress";
+    public const string SpatialTurnCostPolicy = "procedure.movement.turn-cost";
     public const string NavigationCheckPolicy = "procedure.navigation.check-policy";
     public const string EncounterCheckCadence = "procedure.encounter.cadence";
     public const string DeterministicResolutionHelpers = "procedure.resolution-helpers";
@@ -23,6 +24,7 @@ public static class GenericProcedureExecutionHandlers
             [FixedIntervalDuration] = new HashSet<int> { 1 },
             [MovementResolutionPolicy] = new HashSet<int> { 1, 2 },
             [HexProgressPolicy] = new HashSet<int> { 1 },
+            [SpatialTurnCostPolicy] = new HashSet<int> { 1 },
             [NavigationCheckPolicy] = new HashSet<int> { 1 },
             [EncounterCheckCadence] = new HashSet<int> { 1 },
             [DeterministicResolutionHelpers] = new HashSet<int> { 1 },
@@ -34,6 +36,7 @@ public static class GenericProcedureExecutionHandlers
         FixedIntervalDuration,
         MovementResolutionPolicy,
         HexProgressPolicy,
+        SpatialTurnCostPolicy,
         NavigationCheckPolicy,
         EncounterCheckCadence,
         DeterministicResolutionHelpers
@@ -88,6 +91,17 @@ public sealed record ProcedureHexProgressRuntime(
     double DirectionChangeProgressCostFactor,
     bool SupportsDeliberateDoubleBack);
 
+/// <summary>
+/// Nongeometric budget charges are distinct from cursor displacement.
+/// A pinned version-2 procedure may explicitly enable/disable double-back.
+/// </summary>
+public sealed record ProcedureSpatialTurnRuntime(
+    double NeighborCenterDistanceFactor,
+    bool SupportsDeliberateDoubleBack)
+{
+    public SpatialTurnBudgetPolicy CreateBudgetPolicy() => new(NeighborCenterDistanceFactor);
+}
+
 public sealed record ProcedureNavigationRuntime(
     bool UsesNavigationChecks,
     bool UsesPersistentVeer);
@@ -104,6 +118,7 @@ public sealed class GenericProcedureRuntime
         ProcedureTimeRuntime time,
         ProcedureMovementRuntime movement,
         ProcedureHexProgressRuntime? hexProgress,
+        ProcedureSpatialTurnRuntime? turnPolicy,
         ProcedureNavigationRuntime navigation,
         ProcedureEncounterRuntime encounters,
         ProcedureResolutionHelperProfile? resolutionHelpers)
@@ -112,6 +127,7 @@ public sealed class GenericProcedureRuntime
         Time = time;
         Movement = movement;
         _hexProgress = hexProgress;
+        TurnPolicy = turnPolicy;
         Navigation = navigation;
         Encounters = encounters;
         ResolutionHelpers = resolutionHelpers;
@@ -124,6 +140,7 @@ public sealed class GenericProcedureRuntime
     private readonly ProcedureHexProgressRuntime? _hexProgress;
     public ProcedureHexProgressRuntime HexProgress => _hexProgress
         ?? throw new InvalidOperationException("A cell movement procedure has no legacy hex progress contract.");
+    public ProcedureSpatialTurnRuntime? TurnPolicy { get; }
     public ProcedureNavigationRuntime Navigation { get; }
     public ProcedureEncounterRuntime Encounters { get; }
     public ProcedureResolutionHelperProfile? ResolutionHelpers { get; }
@@ -148,6 +165,7 @@ public sealed class GenericProcedureRuntime
         var time = Required(procedure, GenericProcedureExecutionHandlers.FixedIntervalDuration);
         var movement = Required(procedure, GenericProcedureExecutionHandlers.MovementResolutionPolicy);
         var progress = Optional(procedure, GenericProcedureExecutionHandlers.HexProgressPolicy);
+        var turning = Optional(procedure, GenericProcedureExecutionHandlers.SpatialTurnCostPolicy);
         if (movement.Mechanic.Version == 1 && progress is null)
             throw new InvalidOperationException("Legacy hex movement requires its pinned hex progress contract.");
         var navigation = Required(procedure, GenericProcedureExecutionHandlers.NavigationCheckPolicy);
@@ -172,6 +190,9 @@ public sealed class GenericProcedureRuntime
                 Boolean(progress, "directionChangesCostProgress"),
                 Double(progress, "directionChangeProgressCostFactor"),
                 Boolean(progress, "supportsDeliberateDoubleBack")),
+            turning is null ? null : new ProcedureSpatialTurnRuntime(
+                Double(turning, "neighborCenterDistanceFactor"),
+                Boolean(turning, "supportsDeliberateDoubleBack")),
             new ProcedureNavigationRuntime(
                 Boolean(navigation, "usesNavigationChecks"),
                 Boolean(navigation, "usesPersistentVeer")),
@@ -191,6 +212,14 @@ public sealed class GenericProcedureRuntime
         }
 
         ResolutionHelpers?.Validate();
+        TurnPolicy?.CreateBudgetPolicy().Validate();
+        if (TurnPolicy is not null && Movement.MechanicVersion != 2)
+            throw new InvalidOperationException(
+                "The geometric turning policy requires version-2 spatial movement.");
+        if (TurnPolicy is { NeighborCenterDistanceFactor: > 0d }
+            && Movement.TravelResolution != TravelResolutionMode.ContinuousDistance)
+            throw new InvalidOperationException(
+                "A distance-denominated turning charge is not valid for discrete cell steps without an explicit step-budget rule.");
 
         if (Movement.MechanicVersion == 2)
         {

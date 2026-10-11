@@ -63,6 +63,7 @@ const labels: Record<string, string> = {
     backExitProgressFactor: "Back exit progress",
     directionChangesCostProgress: "Direction changes cost progress",
     directionChangeProgressCostFactor: "Direction-change cost",
+    neighborCenterDistanceFactor: "Turning effort as a fraction of the neighboring cell-center distance",
     supportsDeliberateDoubleBack: "Allow deliberate double-back",
     usesNavigationChecks: "Checks required",
     usesPersistentVeer: "Persistent off-course state",

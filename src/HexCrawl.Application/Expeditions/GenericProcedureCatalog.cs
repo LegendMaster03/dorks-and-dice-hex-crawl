@@ -8,6 +8,7 @@ public static class GenericProcedureCatalog
     public const string TimeIntervalModule = "time.interval";
     public const string MovementResolutionModule = "movement.resolution";
     public const string HexProgressModule = "movement.hex-progress";
+    public const string SpatialTurnCostModule = "movement.turn-cost";
     public const string NavigationModule = "navigation.check";
     public const string EncounterCadenceModule = "encounters.cadence";
     public const string ResolutionHelpersModule = "procedure.helpers";
@@ -28,6 +29,7 @@ public static class GenericProcedureCatalog
     public const string FixedIntervalDurationMechanic = "fixed-interval-duration";
     public const string MovementResolutionPolicyMechanic = "movement-resolution-policy";
     public const string HexProgressPolicyMechanic = "hex-progress-policy";
+    public const string SpatialTurnCostPolicyMechanic = "spatial-turn-cost-policy";
     public const string NavigationCheckPolicyMechanic = "navigation-check-policy";
     public const string EncounterCheckCadenceMechanic = "encounter-check-cadence";
     public const string DeterministicResolutionHelpersMechanic = "deterministic-resolution-helpers";
@@ -99,6 +101,20 @@ public static class GenericProcedureCatalog
                 ("directionChangesCostProgress", "boolean", "Whether changing direction costs progress."),
                 ("directionChangeProgressCostFactor", "number", "Direction-change progress cost factor."),
                 ("supportsDeliberateDoubleBack", "boolean", "Whether deliberate double-back movement is supported."))),
+        Module(
+            SpatialTurnCostModule,
+            "Movement",
+            "Spatial turning cost",
+            "Defines a nongeometric charge against a geometric travel budget and deliberate backtracking permission.",
+            "movement",
+            ["movement.resolution-mode"],
+            ["movement.turn-cost"],
+            [MovementResolutionModule],
+            [],
+            [SpatialTurnCostPolicyMechanic],
+            RequiredMany(
+                ("neighborCenterDistanceFactor", "number", "Cost fraction of an explicitly calibrated neighboring center distance."),
+                ("supportsDeliberateDoubleBack", "boolean", "Whether this procedure permits an intentional immediate reverse course."))),
         Module(
             NavigationModule,
             "Navigation",
@@ -369,6 +385,30 @@ public static class GenericProcedureCatalog
                 ("actualDistanceResolution", "enum", "Actual-distance resolution mode."),
                 ("tracksIntraHexProgress", "boolean", "Track progress within a hex.")),
             GenericProcedureExecutionHandlers.MovementResolutionPolicy,
+            ProcedureAutomationLevel.Automatic),
+        Mechanic(
+            MovementResolutionPolicyMechanic,
+            "Geometric movement resolution policy",
+            "Uses actual periodic-cell crossings with calibrated distance or logical boundary-transition counts.",
+            ["time.interval-duration"],
+            ["movement.resolution-mode"],
+            RequiredMany(
+                ("travelResolution", "enum", "ContinuousDistance or CellSteps."),
+                ("actualDistanceResolution", "enum", "Actual-distance resolution mode."),
+                ("tracksIntraHexProgress", "boolean", "Must be false for geometric movement.")),
+            GenericProcedureExecutionHandlers.MovementResolutionPolicy,
+            ProcedureAutomationLevel.Automatic,
+            version: 2),
+        Mechanic(
+            SpatialTurnCostPolicyMechanic,
+            "Spatial turning-cost policy",
+            "Charges an explicit budget cost without fabricating movement or time, and controls intentional double-back.",
+            ["movement.resolution-mode"],
+            ["movement.turn-cost"],
+            RequiredMany(
+                ("neighborCenterDistanceFactor", "number", "Nongeometric travel-budget cost relative to a declared neighbor-center reference."),
+                ("supportsDeliberateDoubleBack", "boolean", "Whether deliberate double-back is allowed.")),
+            GenericProcedureExecutionHandlers.SpatialTurnCostPolicy,
             ProcedureAutomationLevel.Automatic),
         Mechanic(
             HexProgressPolicyMechanic,

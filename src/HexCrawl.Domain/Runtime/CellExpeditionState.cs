@@ -16,6 +16,8 @@ public sealed record CellExpeditionState : CrawlSessionRuntimeState
     // Null explicitly means that an uncalibrated world has no known physical distance.
     public DistanceMeasure? DistanceTraveled { get; init; }
     public TimeSpan ElapsedTravelTime { get; init; }
+    // Budget debt, not traveled distance or location; snapshot migration in Phase 20.2.
+    public DistanceMeasure? PendingTravelBudgetCharge { get; init; }
     public int CompletedWatches { get; init; }
     public CellActiveWatchState? ActiveWatch { get; init; }
 
@@ -26,6 +28,9 @@ public sealed record CellExpeditionState : CrawlSessionRuntimeState
             && (!double.IsFinite(direction.X) || !double.IsFinite(direction.Y)
                 || direction.X == 0 && direction.Y == 0))
             throw new InvalidOperationException("Intended heading must be finite and nonzero.");
+        if (PendingTravelBudgetCharge is { } due
+            && (!double.IsFinite(due.Value) || due.Value < 0))
+            throw new InvalidOperationException("Outstanding travel effort charge must be finite and nonnegative.");
         if (ResolvedVeerDegrees is { } veer && !double.IsFinite(veer))
             throw new InvalidOperationException("Resolved veer angle must be finite.");
         if (!IsLost && ResolvedVeerDegrees is not null)
@@ -75,6 +80,11 @@ public sealed record CellActiveWatchState(
     bool EncounterHandled,
     RuntimePauseReason? PendingDecision)
 {
+    // Deferred nongeometric charge pending explicit course adjudication.
+    public WorldPoint? PendingTurnFromHeading { get; init; }
+    // True only while an initially proposed course awaits adjudication.
+    public bool TurnPreflightWasDeferred { get; init; }
+
     public TimeSpan Remaining => TotalDuration > Elapsed ? TotalDuration - Elapsed : TimeSpan.Zero;
 
     public void Validate()
@@ -88,5 +98,12 @@ public sealed record CellActiveWatchState(
             throw new InvalidOperationException("A generalized travel course requires a nonzero finite heading.");
         ArgumentNullException.ThrowIfNull(Plan.Mode);
         ArgumentNullException.ThrowIfNull(Plan.NavigationAid);
+        if (PendingTurnFromHeading is { } previous
+            && (!double.IsFinite(previous.X) || !double.IsFinite(previous.Y)
+                || previous.X == 0d && previous.Y == 0d))
+            throw new InvalidOperationException("Pending deliberate turn origin must be a finite nonzero heading.");
+        if (TurnPreflightWasDeferred
+            && PendingDecision != RuntimePauseReason.CellCourseAdjudicationRequired)
+            throw new InvalidOperationException("Deferred turn preflight requires an unresolved cell course decision.");
     }
 }
