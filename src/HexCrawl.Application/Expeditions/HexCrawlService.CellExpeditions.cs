@@ -58,12 +58,10 @@ public sealed partial class HexCrawlService
             { Cell = state.Traversal.CurrentCell });
         }
         Add("Cell travel", inputs.Travel.Provenance);
-        if (inputs.Navigation is { } navigation
-            && navigation.Provenance?.Source != ResolutionSource.ProcedureDefault)
-            Add("Cell navigation", navigation.Provenance);
-        if (inputs.Encounter is { } encounter
-            && encounter.Provenance?.Source != ResolutionSource.ProcedureDefault)
-            Add("Cell encounter", encounter.Provenance);
+        if (inputs.Navigation?.Provenance is { Source: not ResolutionSource.ProcedureDefault } navigationSource)
+            Add("Cell navigation", navigationSource);
+        if (inputs.Encounter?.Provenance is { Source: not ResolutionSource.ProcedureDefault } encounterSource)
+            Add("Cell encounter", encounterSource);
         if (inputs.BoundaryDecision is { } boundary)
             Add("Cell boundary decision", boundary.Provenance);
         return state with { History = [.. state.History, .. added] };
