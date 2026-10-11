@@ -591,6 +591,14 @@ public sealed class Phase18CellDecisionEndpointsTests
             using (var host = TestWebHost.Create(database, "alice"))
             using (var client = host.CreateClient())
             {
+                // The selected preset schedules an encounter check each watch.
+                // A location outside the actual cell is therefore rejected
+                // when the encounter becomes due, before any state is saved.
+                using var invalid = await client.PostAsJsonAsync(route,
+                    new AdvanceCellWatchRequest(1, plan, WithKeyed(distant)), ApiJson);
+                Assert.False(invalid.IsSuccessStatusCode);
+                Assert.Equal(1, (await store.GetExpeditionAsync(state.Id, "alice"))!.Version);
+
                 using var advanced = await client.PostAsJsonAsync(route,
                     new AdvanceCellWatchRequest(1, plan, WithKeyed(valid)), ApiJson);
                 Assert.True(advanced.IsSuccessStatusCode,
@@ -625,7 +633,7 @@ public sealed class Phase18CellDecisionEndpointsTests
                     && evt.SubjectId == valid);
             Assert.Single(cellState.History,
                 evt => evt.Kind == CrawlRuntimeEventKind.EncounterResolved);
-        });
+        }, procedureKey: "alexandrian-advanced");
     }
 
     private static CellWatchAdvanceInputs Inputs(int steps) => new(
@@ -671,7 +679,8 @@ public sealed class Phase18CellDecisionEndpointsTests
     private static async Task WithWorldAsync(
         Func<string, PostgresHexCrawlStore, OverworldDefinition,
             CampaignProcedure, WorldCellGeometry, Task> action,
-        string dsSymbol = "<1:1,1,1:4,4>")
+        string dsSymbol = "<1:1,1,1:4,4>",
+        string procedureKey = "simple-fixed-distance")
     {
         var database = TestWebHost.NewDatabasePath();
         try
@@ -692,7 +701,7 @@ public sealed class Phase18CellDecisionEndpointsTests
             await store.CreateOverworldAsync(new StoredOverworld(
                 world, "alice", 1, now, now));
             var original = CrawlProcedureCatalog.Resolve(
-                "simple-fixed-distance").MaterializeGeneric().Procedure;
+                procedureKey).MaterializeGeneric().Procedure;
             var modules = original.Modules
                 .Where(m => m.Mechanic.ExecutionHandler !=
                     GenericProcedureExecutionHandlers.HexProgressPolicy)
