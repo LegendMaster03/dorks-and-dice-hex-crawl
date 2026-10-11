@@ -231,8 +231,8 @@ public static class PeriodicCellTraversalGeometry
                     var delta = sample - start;
                     double fraction = Math.Clamp(
                         (delta.X * segment.X + delta.Y * segment.Y) / squared, 0, 1);
-                    var closest = start + segment * fraction;
-                    if (sample.DistanceTo(closest) <= positionTolerance * 2)
+                    var projectedPoint = start + segment * fraction;
+                    if (sample.DistanceTo(projectedPoint) <= positionTolerance * 2)
                     {
                         strictlyInside = false;
                         break;
