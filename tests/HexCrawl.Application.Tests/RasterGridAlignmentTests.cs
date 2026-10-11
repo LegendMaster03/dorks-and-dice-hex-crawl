@@ -261,10 +261,12 @@ public sealed class RasterGridAlignmentTests
                     world.Version));
             var map = Assert.Single(world.World.SourceMaps);
             var versionBeforeExpedition = world.Version;
-            _ = await worlds.StartExpeditionAsync(
-                world.World.Id,
-                "alice",
-                new StartExpeditionCommand("Test crawl", "simple-fixed-distance", new HexCoordinate(0, 0)));
+            _ = await new ExpeditionStartService(
+                store, worlds, new CampaignProcedureService(store))
+                .StartWorldBoundCellsAsync(
+                    world.World.Id, "alice", "Test crawl",
+                    new ProcedureStartSelection(PresetKey: "simple-fixed-distance"),
+                    LegacyHexTilingCompatibility.ToAddress(new HexCoordinate(0, 0)));
 
             var proposedGrid = world.World.Grid with
             {

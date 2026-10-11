@@ -380,7 +380,14 @@ public sealed class ProcedureResolutionProviderEnricherTests
         var store = new PostgresHexCrawlStore(database.ConnectionString);
         await store.InitializeAsync();
         var campaignId = Guid.NewGuid();
-        var expedition = Expedition(campaignId);
+        // Campaign pinning is context-independent. Use a supported runtime
+        // rather than inserting a retired V1 spatial snapshot.
+        var original = Expedition(campaignId);
+        var expedition = original with
+        {
+            Runtime = new NonSpatialSessionState { Id = original.Id },
+            Context = new NonSpatialCrawlSessionContext("Campaign pinning")
+        };
 
         await store.CreateExpeditionAsync(expedition);
         var loaded = await store.GetExpeditionAsync(expedition.Id, expedition.OwnerUserId);

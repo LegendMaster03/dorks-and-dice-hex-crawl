@@ -108,20 +108,23 @@ public sealed class Phase17PostgresWorldTests
             await command.ExecuteNonQueryAsync();
         }
         var current = new HexCoordinate(-91, 47);
+        var cell = world.SpatialTiling.Resolve(LegacyHexTilingCompatibility.ToAddress(current));
         var evt = new CrawlRuntimeEvent(1, 1, CrawlRuntimeEventKind.WatchStarted,
-            TimeSpan.Zero, current, "An event must survive.");
+            TimeSpan.Zero, null, "An event must survive.") { Cell = cell.Id };
         var expedition = new StoredExpedition(
-            "Resumable", new ExpeditionState
+            "Resumable", new CellExpeditionState
             {
-                Id = Guid.NewGuid(), Position = HexGeometry.HexToWorld(grid, current),
-                PositionPrecision = WorldPositionPrecision.HexAnchor,
-                Traversal = HexTraversalState.StartingIn(current, DistanceUnit.Miles),
-                Navigation = new NavigationRuntimeState(false, 0),
+                Id = Guid.NewGuid(),
+                Traversal = new PeriodicCellTraversal
+                {
+                    CurrentCell = cell.Id,
+                    Position = cell.Center
+                },
                 DistanceTraveled = new DistanceMeasure(0, DistanceUnit.Miles),
                 History = [evt]
             },
             new WorldBoundCrawlSessionContext(world.Id), null,
-            CrawlProcedureCatalog.Resolve(CrawlProcedureCatalog.Dnd35PresetKey).MaterializeGeneric().Procedure,
+            GeometricNativeProcedureMaterializer.Materialize("simple-fixed-distance").Procedure,
             null, TimeSpan.Zero, "owner", 1, now, now);
         await store.CreateExpeditionAsync(expedition);
 
@@ -141,9 +144,14 @@ public sealed class Phase17PostgresWorldTests
             HexGeometry.HexToWorld(grid, current)), 0, 1e-8);
         var savedExpedition = await restarted.GetExpeditionAsync(expedition.Id, "owner");
         Assert.NotNull(savedExpedition);
-        Assert.Equal(current, savedExpedition!.State.CurrentHex);
+        var cells = Assert.IsType<CellExpeditionState>(savedExpedition!.Runtime);
+        Assert.Equal(cell.Id, cells.Traversal.CurrentCell);
+        Assert.Equal(cell.Center, cells.Traversal.Position);
         Assert.Equal(expedition.CampaignProcedure.Revision, savedExpedition.CampaignProcedure.Revision);
-        Assert.Equal(evt.Message, Assert.Single(savedExpedition.State.History).Message);
+        var savedEvent = Assert.Single(cells.History);
+        Assert.Equal(evt.Message, savedEvent.Message);
+        Assert.Equal(cell.Id, savedEvent.Cell);
+        Assert.Null(savedEvent.Hex);
         Assert.Equal(expedition.Id, savedExpedition.Id);
     }
 
