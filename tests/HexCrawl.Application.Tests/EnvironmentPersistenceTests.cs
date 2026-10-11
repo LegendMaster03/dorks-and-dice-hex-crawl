@@ -29,7 +29,7 @@ public sealed class EnvironmentPersistenceTests
         var now = DateTimeOffset.UtcNow;
         await firstStore.CreateOverworldAsync(new StoredOverworld(
             world with { EnvironmentAnnotations = [annotation] }, "owner", 1, now, now));
-        var expedition = Expedition(world.Id) with
+        var expedition = Expedition(world) with
         {
             Environment = new ExpeditionEnvironmentState
             {
@@ -64,7 +64,7 @@ public sealed class EnvironmentPersistenceTests
         var world = World();
         var now = DateTimeOffset.UtcNow;
         await store.CreateOverworldAsync(new StoredOverworld(world, "owner", 1, now, now));
-        var expedition = Expedition(world.Id);
+        var expedition = Expedition(world);
         await store.CreateExpeditionAsync(expedition);
 
         var updatedWorld = await service.ReplaceWorldEnvironmentAsync(
@@ -149,20 +149,26 @@ public sealed class EnvironmentPersistenceTests
         }
     };
 
-    private static StoredExpedition Expedition(Guid worldId)
+    private static StoredExpedition Expedition(OverworldDefinition world)
     {
         var now = DateTimeOffset.UtcNow;
+        var cell = world.SpatialTiling.Resolve(
+            LegacyHexTilingCompatibility.ToAddress(new HexCoordinate(0, 0)));
         return new StoredExpedition(
             "Environment persistence expedition",
-            new ExpeditionState
+            new CellExpeditionState
             {
                 Id = Guid.NewGuid(),
-                Traversal = HexTraversalState.StartingIn(new HexCoordinate(0, 0), DistanceUnit.Miles),
+                Traversal = new PeriodicCellTraversal
+                {
+                    CurrentCell = cell.Id,
+                    Position = cell.Center
+                },
                 DistanceTraveled = new DistanceMeasure(0, DistanceUnit.Miles)
             },
-            new WorldBoundCrawlSessionContext(worldId),
+            new WorldBoundCrawlSessionContext(world.Id),
             null,
-            CrawlProcedureCatalog.Resolve(CrawlProcedureCatalog.Dnd35PresetKey).MaterializeGeneric().Procedure,
+            GeometricNativeProcedureMaterializer.Materialize("simple-fixed-distance").Procedure,
             null,
             TimeSpan.FromHours(1),
             "owner",

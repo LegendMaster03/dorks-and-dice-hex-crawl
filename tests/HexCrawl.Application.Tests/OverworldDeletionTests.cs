@@ -49,10 +49,7 @@ public sealed class OverworldDeletionTests
         await using var database = await TestDatabase.CreateAsync();
         var service = await database.ServiceAsync();
         var world = await service.CreateOverworldAsync("alice", WorldCommand());
-        _ = await service.StartExpeditionAsync(
-            world.World.Id,
-            "alice",
-            new StartExpeditionCommand("Active", "simple-fixed-distance", new HexCoordinate(0, 0)));
+        await database.StartCellAsync(world.World.Id, "Active");
 
         await Assert.ThrowsAsync<HexCrawlConflictException>(() =>
             service.DeleteOverworldAsync(world.World.Id, "alice", world.Version));
@@ -92,6 +89,17 @@ public sealed class OverworldDeletionTests
             var store = new PostgresHexCrawlStore(ConnectionString);
             await store.InitializeAsync();
             return new HexCrawlService(store);
+        }
+
+        public async Task StartCellAsync(Guid worldId, string name)
+        {
+            var store = new PostgresHexCrawlStore(ConnectionString);
+            var service = new HexCrawlService(store);
+            await new ExpeditionStartService(store, service, new CampaignProcedureService(store))
+                .StartWorldBoundCellsAsync(
+                    worldId, "alice", name,
+                    new ProcedureStartSelection(PresetKey: "simple-fixed-distance"),
+                    LegacyHexTilingCompatibility.ToAddress(new HexCoordinate(0, 0)));
         }
 
         public ValueTask DisposeAsync() => _database.DisposeAsync();

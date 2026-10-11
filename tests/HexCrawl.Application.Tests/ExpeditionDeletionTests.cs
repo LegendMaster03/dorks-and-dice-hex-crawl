@@ -15,14 +15,8 @@ public sealed class ExpeditionDeletionTests
         var magnostephis = await service.CreateOverworldAsync("alice", WorldCommand("Magnostephis"));
         var sessionReady = await service.CreateOverworldAsync("alice", WorldCommand("Magnostephis — Session Ready"));
         var qaWorld = await service.CreateOverworldAsync("alice", WorldCommand("QA Magnostephis PR17 2026-09-27"));
-        var realSession = await service.StartExpeditionAsync(
-            magnostephis.World.Id,
-            "alice",
-            new StartExpeditionCommand("Original Magnostephis expedition", "simple-fixed-distance", new HexCoordinate(0, 0)));
-        var qaSession = await service.StartExpeditionAsync(
-            qaWorld.World.Id,
-            "alice",
-            new StartExpeditionCommand("Disposable QA expedition", "simple-fixed-distance", new HexCoordinate(0, 0)));
+        var realSession = await StartCellAsync(database, magnostephis.World.Id, "Original Magnostephis expedition");
+        var qaSession = await StartCellAsync(database, qaWorld.World.Id, "Disposable QA expedition");
 
         await Assert.ThrowsAsync<HexCrawlConflictException>(() =>
             service.DeleteOverworldAsync(qaWorld.World.Id, "alice", qaWorld.Version));
@@ -55,10 +49,7 @@ public sealed class ExpeditionDeletionTests
         await using var database = await TestDatabase.CreateAsync();
         var service = database.Service;
         var world = await service.CreateOverworldAsync("alice", WorldCommand());
-        var expedition = await service.StartExpeditionAsync(
-            world.World.Id,
-            "alice",
-            new StartExpeditionCommand("Alice session", "simple-fixed-distance", new HexCoordinate(0, 0)));
+        var expedition = await StartCellAsync(database, world.World.Id, "Alice session");
 
         await Assert.ThrowsAsync<HexCrawlNotFoundException>(() =>
             service.DeleteExpeditionAsync(expedition.Id, "bob", expedition.Version));
@@ -72,10 +63,7 @@ public sealed class ExpeditionDeletionTests
         await using var database = await TestDatabase.CreateAsync();
         var service = database.Service;
         var world = await service.CreateOverworldAsync("alice", WorldCommand());
-        var expedition = await service.StartExpeditionAsync(
-            world.World.Id,
-            "alice",
-            new StartExpeditionCommand("Versioned session", "simple-fixed-distance", new HexCoordinate(0, 0)));
+        var expedition = await StartCellAsync(database, world.World.Id, "Versioned session");
         var saved = await database.Store.SaveExpeditionAsync(
             expedition with { Name = "Updated version" },
             expedition.Version);
@@ -89,6 +77,15 @@ public sealed class ExpeditionDeletionTests
         Assert.Equal(saved.Value!.Version, reloaded.Version);
         Assert.Equal("Updated version", reloaded.Name);
     }
+
+    private static Task<StoredExpedition> StartCellAsync(
+        TestDatabase database, Guid worldId, string name) =>
+        new ExpeditionStartService(
+            database.Store, database.Service, new CampaignProcedureService(database.Store))
+        .StartWorldBoundCellsAsync(
+            worldId, "alice", name,
+            new ProcedureStartSelection(PresetKey: "simple-fixed-distance"),
+            LegacyHexTilingCompatibility.ToAddress(new HexCoordinate(0, 0)));
 
     private static CreateOverworldCommand WorldCommand(string name = "World") => new(
         name,
