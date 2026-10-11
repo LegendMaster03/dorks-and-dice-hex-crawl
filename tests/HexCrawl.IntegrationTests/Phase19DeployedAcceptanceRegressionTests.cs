@@ -79,8 +79,13 @@ public sealed class Phase19DeployedAcceptanceRegressionTests
                     .GetProperty("travelResolution").GetString());
                 Assert.Empty(state.GetProperty("movementComposition")
                     .GetProperty("policy").GetProperty("travelModeKeys").EnumerateArray());
-                Assert.Equal(JsonValueKind.Null,
-                    state.GetProperty("expedition").GetProperty("distanceTraveled").ValueKind);
+                var initialDistance = state.GetProperty("expedition")
+                    .GetProperty("distanceTraveled");
+                Assert.Equal(calibrated ? JsonValueKind.Object : JsonValueKind.Null,
+                    initialDistance.ValueKind);
+                if (calibrated)
+                    Assert.Equal("Mile", initialDistance.GetProperty("unit")
+                        .GetProperty("kind").GetString());
                 Assert.Equal(JsonValueKind.Null,
                     state.GetProperty("party").GetProperty("baseMovement").ValueKind);
 
@@ -117,7 +122,7 @@ public sealed class Phase19DeployedAcceptanceRegressionTests
                     .GetProperty("completedWatches").GetInt32());
                 Assert.Equal(neighbor, JsonSerializer.Deserialize<WorldCellId>(
                     result.GetProperty("expedition").GetProperty("currentCell").GetRawText(), ApiJson));
-                Assert.Equal(JsonValueKind.Null,
+                Assert.Equal(calibrated ? JsonValueKind.Object : JsonValueKind.Null,
                     result.GetProperty("expedition").GetProperty("distanceTraveled").ValueKind);
             }
 
@@ -129,7 +134,8 @@ public sealed class Phase19DeployedAcceptanceRegressionTests
             var cellRuntime = Assert.IsType<CellExpeditionState>(persisted.Runtime);
             Assert.Equal(neighbor, cellRuntime.Traversal.CurrentCell);
             Assert.Equal(1, cellRuntime.CompletedWatches);
-            Assert.Null(cellRuntime.DistanceTraveled);
+            if (calibrated) Assert.NotNull(cellRuntime.DistanceTraveled);
+            else Assert.Null(cellRuntime.DistanceTraveled);
         }
         finally
         {
