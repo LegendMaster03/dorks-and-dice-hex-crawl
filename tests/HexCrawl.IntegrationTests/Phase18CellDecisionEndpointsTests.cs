@@ -636,6 +636,132 @@ public sealed class Phase18CellDecisionEndpointsTests
         }, procedureKey: "alexandrian-advanced");
     }
 
+    [Fact]
+    public async Task DestinationKeyedDiscoveryCrossesCellBeforeEncounterAndRejectsStartingCellLocation()
+    {
+        await WithWorldAsync(async (database, store, world, procedure, startCell) =>
+        {
+            // One whole cell step crosses the recorded atomic interface before
+            // this procedure's scheduled end-of-watch encounter. The keyed
+            // destination is not within the cell where the watch starts.
+            var boundary = world.Tiling!.Boundaries(startCell.Id.Address)[0];
+            var destinationCell = world.Tiling.Resolve(boundary.To.Address);
+            Assert.NotEqual(startCell.Id, destinationCell.Id);
+            var startLocationId = Guid.NewGuid();
+            var destinationLocationId = Guid.NewGuid();
+            var worldWithLocations = world with
+            {
+                Locations =
+                [
+                    new Location(startLocationId, "Starting camp", "camp",
+                        startCell.Center, LocationDiscoverability.Obvious, []),
+                    new Location(destinationLocationId, "Cairn beyond the crossing", "landmark",
+                        destinationCell.Center, LocationDiscoverability.Hidden, [])
+                ]
+            };
+            var storedWorld = await store.GetOverworldAsync(world.Id, "alice");
+            Assert.NotNull(storedWorld);
+            Assert.Equal(SaveOutcome.Saved, (await store.SaveOverworldAsync(
+                storedWorld! with { World = worldWithLocations }, 1)).Outcome);
+            var start = BaseState(startCell) with
+            {
+                Traversal = BaseState(startCell).Traversal with
+                {
+                    SelectedExitInterfaceIndex = boundary.InterfaceIndex
+                }
+            };
+            // Preserve the same generated state identity and set its exit
+            // intentionally; no hex coordinates or guessed motif cell IDs.
+            start = start with
+            {
+                Traversal = start.Traversal with
+                {
+                    CurrentCell = startCell.Id,
+                    Position = startCell.Center,
+                    SelectedExitInterfaceIndex = boundary.InterfaceIndex
+                }
+            };
+            await SeedAsync(store, worldWithLocations, procedure, start);
+            var duration = GenericProcedureRuntime.Bind(procedure).Time.IntervalDuration;
+            var heading = Midpoint(boundary) - startCell.Center;
+            var plan = Plan(heading);
+            var route = $"/api/expeditions/{start.Id:D}/cells/advance";
+            CellWatchAdvanceInputs Request(Guid locationId) => Inputs(1) with
+            {
+                Encounter = new ResolvedEncounter(
+                    EncounterOutcomeKind.KeyedLocationDiscovery, duration,
+                    locationId, "Destination reached at end of watch", Manual)
+            };
+
+            using (var factory = TestWebHost.Create(database, "alice"))
+            using (var client = factory.CreateClient())
+            {
+                // The starting-cell location is real, but wrong at encounter
+                // time. The rejected attempt must not commit the crossing.
+                using (var invalid = await client.PostAsJsonAsync(route,
+                    new AdvanceCellWatchRequest(1, plan, Request(startLocationId)), ApiJson))
+                {
+                    Assert.False(invalid.IsSuccessStatusCode);
+                    Assert.Equal(1, (await store.GetExpeditionAsync(start.Id, "alice"))!.Version);
+                }
+
+                using var reached = await client.PostAsJsonAsync(route,
+                    new AdvanceCellWatchRequest(1, plan, Request(destinationLocationId)), ApiJson);
+                Assert.True(reached.IsSuccessStatusCode,
+                    await reached.Content.ReadAsStringAsync());
+                var body = await reached.Content.ReadFromJsonAsync<JsonElement>();
+                Assert.Equal(2, body.GetProperty("version").GetInt64());
+                var expedition = body.GetProperty("expedition");
+                Assert.Equal(destinationCell.Id, JsonSerializer.Deserialize<WorldCellId>(
+                    expedition.GetProperty("currentCell").GetRawText(), ApiJson));
+                var pending = expedition.GetProperty("pendingEncounter");
+                Assert.Equal(destinationLocationId, pending.GetProperty("locationId").GetGuid());
+                var occurrenceId = pending.GetProperty("id").GetGuid();
+                Assert.Single(body.GetProperty("history").EnumerateArray(),
+                    e => e.GetProperty("kind").GetString() == "CellExited"
+                        && JsonSerializer.Deserialize<WorldCellId>(
+                            e.GetProperty("cell").GetRawText(), ApiJson) == startCell.Id);
+                Assert.Single(body.GetProperty("history").EnumerateArray(),
+                    e => e.GetProperty("kind").GetString() == "CellEntered"
+                        && JsonSerializer.Deserialize<WorldCellId>(
+                            e.GetProperty("cell").GetRawText(), ApiJson) == destinationCell.Id);
+                Assert.Single(body.GetProperty("history").EnumerateArray(),
+                    e => e.GetProperty("kind").GetString() == "KeyedLocationEncountered"
+                        && e.GetProperty("subjectId").GetGuid() == destinationLocationId);
+                Assert.Single(body.GetProperty("history").EnumerateArray(),
+                    e => e.GetProperty("kind").GetString() == "LocationDiscovered"
+                        && e.GetProperty("subjectId").GetGuid() == destinationLocationId);
+
+                var resolveRoute =
+                    $"/api/expeditions/{start.Id:D}/cells/encounters/{occurrenceId:D}/resolve";
+                using var resolved = await client.PostAsJsonAsync(resolveRoute,
+                    new ResolveCellEncounterRequest(2, "Found at destination"), ApiJson);
+                Assert.True(resolved.IsSuccessStatusCode,
+                    await resolved.Content.ReadAsStringAsync());
+                using var duplicate = await client.PostAsJsonAsync(resolveRoute,
+                    new ResolveCellEncounterRequest(2, "Repeated resolution"), ApiJson);
+                Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
+            }
+
+            var reopened = new PostgresHexCrawlStore(database);
+            await reopened.InitializeAsync();
+            var persisted = await reopened.GetExpeditionAsync(start.Id, "alice");
+            Assert.NotNull(persisted);
+            Assert.Equal(3, persisted!.Version);
+            var finalState = Assert.IsType<CellExpeditionState>(persisted.Runtime);
+            Assert.Equal(destinationCell.Id, finalState.Traversal.CurrentCell);
+            Assert.Null(finalState.PendingEncounter);
+            Assert.Single(finalState.History,
+                e => e.Kind == CrawlRuntimeEventKind.LocationDiscovered
+                    && e.SubjectId == destinationLocationId);
+            Assert.DoesNotContain(finalState.History,
+                e => e.Kind == CrawlRuntimeEventKind.LocationDiscovered
+                    && e.SubjectId == startLocationId);
+            Assert.Single(finalState.History,
+                e => e.Kind == CrawlRuntimeEventKind.EncounterResolved);
+        }, procedureKey: "alexandrian-advanced");
+    }
+
     private static CellWatchAdvanceInputs Inputs(int steps) => new(
         ResolvedTravelAmount.CellTransitions(steps, Manual),
         new ResolvedCellNavigation(NavigationCheckOutcome.Succeeded, null, Manual),
