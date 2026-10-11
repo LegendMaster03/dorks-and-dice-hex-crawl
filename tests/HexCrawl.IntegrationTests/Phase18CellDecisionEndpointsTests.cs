@@ -554,6 +554,85 @@ public sealed class Phase18CellDecisionEndpointsTests
         });
     }
 
+    [Fact]
+    public async Task KeyedLocationDiscoveryRequiresCurrentCellLocationAndResolvesExactlyOnce()
+    {
+        await WithWorldAsync(async (database, store, world, procedure, cell) =>
+        {
+            var valid = Guid.NewGuid();
+            var distant = Guid.NewGuid();
+            var worldWithLocations = world with
+            {
+                Locations =
+                [
+                    new Location(valid, "Stone well", "landmark",
+                        cell.Center, LocationDiscoverability.Obvious, []),
+                    new Location(distant, "Faraway ruins", "landmark",
+                        new WorldPoint(100000, 100000), LocationDiscoverability.Hidden, [])
+                ]
+            };
+            var savedWorld = await store.GetOverworldAsync(world.Id, "alice");
+            Assert.NotNull(savedWorld);
+            Assert.Equal(SaveOutcome.Saved, (await store.SaveOverworldAsync(
+                savedWorld! with { World = worldWithLocations }, 1)).Outcome);
+
+            var state = BaseState(cell);
+            await SeedAsync(store, worldWithLocations, procedure, state);
+            var plan = Plan(new WorldPoint(1, 0));
+            var route = $"/api/expeditions/{state.Id:D}/cells/advance";
+            var encounterTime = TimeSpan.FromMinutes(15);
+            CellWatchAdvanceInputs WithKeyed(Guid id) => Inputs(0) with
+            {
+                Encounter = new ResolvedEncounter(
+                    EncounterOutcomeKind.KeyedLocationDiscovery, encounterTime, id,
+                    "Found by the party", Manual)
+            };
+
+            using (var host = TestWebHost.Create(database, "alice"))
+            using (var client = host.CreateClient())
+            {
+                using var invalid = await client.PostAsJsonAsync(route,
+                    new AdvanceCellWatchRequest(1, plan, WithKeyed(distant)), ApiJson);
+                Assert.False(invalid.IsSuccessStatusCode);
+                Assert.Equal(1, (await store.GetExpeditionAsync(state.Id, "alice"))!.Version);
+
+                using var advanced = await client.PostAsJsonAsync(route,
+                    new AdvanceCellWatchRequest(1, plan, WithKeyed(valid)), ApiJson);
+                Assert.True(advanced.IsSuccessStatusCode,
+                    await advanced.Content.ReadAsStringAsync());
+                var started = await advanced.Content.ReadFromJsonAsync<JsonElement>();
+                var pending = started.GetProperty("expedition").GetProperty("pendingEncounter");
+                Assert.Equal(valid, pending.GetProperty("locationId").GetGuid());
+                var occurrence = pending.GetProperty("id").GetGuid();
+                Assert.Single(started.GetProperty("history").EnumerateArray(),
+                    x => x.GetProperty("kind").GetString() == "KeyedLocationEncountered"
+                        && x.GetProperty("subjectId").GetGuid() == valid);
+
+                var resolvedRoute =
+                    $"/api/expeditions/{state.Id:D}/cells/encounters/{occurrence:D}/resolve";
+                using var completed = await client.PostAsJsonAsync(resolvedRoute,
+                    new ResolveCellEncounterRequest(2, "The keyed site has been explored"), ApiJson);
+                Assert.True(completed.IsSuccessStatusCode,
+                    await completed.Content.ReadAsStringAsync());
+                using var duplicate = await client.PostAsJsonAsync(resolvedRoute,
+                    new ResolveCellEncounterRequest(2, "Duplicate"), ApiJson);
+                Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
+            }
+
+            var reopened = new PostgresHexCrawlStore(database);
+            await reopened.InitializeAsync();
+            var persisted = await reopened.GetExpeditionAsync(state.Id, "alice");
+            Assert.NotNull(persisted);
+            var cellState = Assert.IsType<CellExpeditionState>(persisted!.Runtime);
+            Assert.Null(cellState.PendingEncounter);
+            Assert.Single(cellState.History,
+                evt => evt.Kind == CrawlRuntimeEventKind.LocationDiscovered
+                    && evt.SubjectId == valid);
+            Assert.Single(cellState.History,
+                evt => evt.Kind == CrawlRuntimeEventKind.EncounterResolved);
+        });
+    }
+
     private static CellWatchAdvanceInputs Inputs(int steps) => new(
         ResolvedTravelAmount.CellTransitions(steps, Manual),
         new ResolvedCellNavigation(NavigationCheckOutcome.Succeeded, null, Manual),
