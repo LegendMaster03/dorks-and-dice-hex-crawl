@@ -57,6 +57,10 @@ public sealed partial class CrawlRuntimeEngine
         var events = new EventCollector(expedition.History);
         var state = expedition;
         var active = state.ActiveWatch;
+        // Navigation veer is not a deliberate turn. Retain the last accepted
+        // user intent for explicit geometric turning-budget accounting.
+        var previousIntendedHeading = state.Traversal.TravelHeading is null
+            ? null : active?.PendingTurnFromHeading ?? state.IntendedHeading;
 
         if (active is { PendingDecision: { } pause })
         {
@@ -106,6 +110,9 @@ public sealed partial class CrawlRuntimeEngine
         state = state with { ActiveWatch = active, IntendedHeading = plan.IntendedHeading };
         if (plan.DeliberateDoubleBack)
         {
+            if (runtime.TurnPolicy is { SupportsDeliberateDoubleBack: false })
+                throw new InvalidOperationException(
+                    "The pinned procedure does not permit deliberate double-back movement.");
             var entry = state.Traversal.EntryInterfaceIndex
                 ?? throw new InvalidOperationException("Double-back requires a known entry interface.");
             state = state with
@@ -166,8 +173,34 @@ public sealed partial class CrawlRuntimeEngine
                 inputs.Travel.Provenance);
         }
 
+        // Evaluate effort separately from geometric displacement. A course
+        // requiring adjudication at the present position must not be charged.
+        var proposedDebit = SpatialTurnBudgetAccounting.Debit(
+            world, runtime.TurnPolicy, state.Traversal,
+            previousIntendedHeading, plan.IntendedHeading,
+            plan.DeliberateDoubleBack, runtime.Movement.ActualDistanceResolution,
+            segmentTravel, state.PendingTravelBudgetCharge);
+        var hasGeometricBudget = proposedDebit.GeometricTravel.CellSteps is > 0
+            || proposedDebit.GeometricTravel.ActualDistance is { Value: > 0d };
+        var unresolvedCourse = hasGeometricBudget
+            && PeriodicCellTraversalGeometry.NextCrossing(world, state.Traversal).Status
+                == CellCrossingStatus.RequiresAdjudication;
+        var debit = unresolvedCourse
+            ? new SpatialTurnBudgetDebit(segmentTravel, null, state.PendingTravelBudgetCharge)
+            : proposedDebit;
+        if (debit.ChargedBudget is { } charged)
+            AddCellEvent(events, active.WatchNumber,
+                CrawlRuntimeEventKind.ResolutionProvenanceRecorded, state,
+                $"Procedure turn debited {Format(charged.Value)} {charged.Unit.Symbol} from travel budget without physical displacement.",
+                charged.Value, charged.Unit.Symbol);
+        active = active with
+        {
+            PendingTurnFromHeading = unresolvedCourse ? previousIntendedHeading : null,
+            TurnPreflightWasDeferred = unresolvedCourse
+        };
+        state = state with { PendingTravelBudgetCharge = debit.OutstandingBudgetCharge };
         var movement = ResolveCellTravel(
-            world, procedure, state.Traversal, segmentTravel,
+            world, procedure, state.Traversal, debit.GeometricTravel,
             plan.ContinueAcrossBoundaries && !state.IsLost && !plan.DeliberateDoubleBack);
 
         var previousTime = state.ElapsedTravelTime;
@@ -176,7 +209,9 @@ public sealed partial class CrawlRuntimeEngine
             var transition = movement.Transitions[i];
             var share = runtime.Movement.TravelResolution == TravelResolutionMode.CellSteps
                 ? (i + 1d) / Math.Max(1, inputs.Travel.CellSteps!.Value)
-                : transition.CumulativeWorldDistance /
+                : (transition.CumulativeWorldDistance + (debit.ChargedBudget is { } turnCharge
+                    ? turnCharge.ConvertTo(world.PhysicalDistancePerWorldUnit!.Value.Unit).Value /
+                      world.PhysicalDistancePerWorldUnit.Value.Value : 0d)) /
                     (inputs.Travel.ActualDistance!.Value.ConvertTo(
                         world.PhysicalDistancePerWorldUnit!.Value.Unit).Value /
                         world.PhysicalDistancePerWorldUnit.Value.Value);
@@ -210,8 +245,10 @@ public sealed partial class CrawlRuntimeEngine
                         (double)movement.CompletedCellSteps / inputs.Travel.CellSteps!.Value)
                 : inputs.Travel.ActualDistance!.Value.Value == 0 ? TimeSpan.Zero
                     : ScaleTime(callDuration,
-                        movement.ConsumedPhysicalDistance!.Value.ConvertTo(
-                            inputs.Travel.ActualDistance.Value.Unit).Value /
+                        (movement.ConsumedPhysicalDistance!.Value.ConvertTo(
+                            inputs.Travel.ActualDistance.Value.Unit).Value
+                         + (debit.ChargedBudget is { } budgetCharge
+                             ? budgetCharge.ConvertTo(inputs.Travel.ActualDistance.Value.Unit).Value : 0d)) /
                         inputs.Travel.ActualDistance.Value.Value);
         spent = ClampTime(spent, TimeSpan.Zero, segmentDuration);
         state = state with
@@ -313,6 +350,9 @@ public sealed partial class CrawlRuntimeEngine
             active = active with
             {
                 Plan = active.Plan with { IntendedHeading = decision.IntendedHeading },
+                PendingTurnFromHeading = active.TurnPreflightWasDeferred
+                    ? active.PendingTurnFromHeading : active.Plan.IntendedHeading,
+                TurnPreflightWasDeferred = false,
                 PendingDecision = null
             };
         var next = expedition with
