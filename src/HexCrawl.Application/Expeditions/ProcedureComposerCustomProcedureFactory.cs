@@ -35,6 +35,11 @@ internal static class ProcedureComposerCustomProcedureFactory
             ("travelResolution", TravelResolutionMode.ContinuousDistance.ToString()),
             ("actualDistanceResolution", ActualDistanceResolutionMode.Fixed.ToString()),
             ("tracksIntraHexProgress", "true")),
+        GenericProcedureCatalog.SpatialTurnCostModule => Select(
+            GenericProcedureCatalog.SpatialTurnCostModule,
+            GenericProcedureCatalog.SpatialTurnCostPolicyMechanic,
+            ("neighborCenterDistanceFactor", "0"),
+            ("supportsDeliberateDoubleBack", "false")),
         GenericProcedureCatalog.HexProgressModule => Select(
             GenericProcedureCatalog.HexProgressModule,
             GenericProcedureCatalog.HexProgressPolicyMechanic,
