@@ -71,8 +71,8 @@ export async function renderWorldList(
                             <p class="hc-hint">Physical units use the map-scale unit selected below. Uncalibrated worlds can use cell-step travel but not physical-distance travel.</p>
                             <details data-custom-pattern hidden>
                                 <summary>Explicitly edit custom tiling JSON</summary>
-                                <label>Tiling source JSON <textarea name="patternJson" rows="4" spellcheck="false" placeholder='{"tilingDsSymbol":"..."}'></textarea></label>
-                                <p class="hc-hint">Advanced: the JSON must contain a supported tilingDsSymbol. The server validates its periodic and metric realization.</p>
+                                <label>Tiling source JSON <textarea name="patternJson" rows="8" spellcheck="false" placeholder='{"tilingDsSymbol":"...","straightEdgeSubdivisions":[{"motifCellId":"face-0","boundaryVertexIndex":1,"fraction":0.5}]}'></textarea></label>
+                                <p class="hc-hint">Optional straightEdgeSubdivisions identify split vertices and their fractional positions on straight geometric sides. For measured patterns, topologyWitness and metricRealization may supply an explicit verified periodic embedding. The server checks every atomic reciprocal interface, geometric-side group, and metric constraint. Explicit coordinates require size 1 and rotation 0.</p>
                             </details>
                         </div>
                         <div data-hex-controls class="hc-form">
@@ -257,6 +257,13 @@ export async function renderWorldList(
                         triangle: "<1:1,1,1:3,6>"
                     };
                     let dsSymbol = known[pattern.value];
+                    let customExtras: {
+                        straightEdgeSubdivisions?: Array<{
+                            motifCellId: string; boundaryVertexIndex: number; fraction: number;
+                        }>;
+                        topologyWitness?: unknown;
+                        metricRealization?: unknown;
+                    } = {};
                     if (pattern.value === "custom") {
                         let custom: unknown;
                         try {
@@ -269,6 +276,26 @@ export async function renderWorldList(
                             || typeof custom.tilingDsSymbol !== "string") {
                             throw new Error("Custom tiling JSON needs a tilingDsSymbol string.");
                         }
+                        const source = custom as Record<string, unknown>;
+                        const allowed = new Set([
+                            "tilingDsSymbol", "straightEdgeSubdivisions", "topologyWitness", "metricRealization"
+                        ]);
+                        if (Object.keys(source).some(key => !allowed.has(key)))
+                            throw new Error("Custom tiling JSON has an unrecognized field.");
+                        if (source.straightEdgeSubdivisions !== undefined) {
+                            if (!Array.isArray(source.straightEdgeSubdivisions)
+                                || source.straightEdgeSubdivisions.some((split: unknown) => {
+                                    if (typeof split !== "object" || split === null) return true;
+                                    const v = split as Record<string, unknown>;
+                                    return typeof v.motifCellId !== "string"
+                                        || !Number.isInteger(v.boundaryVertexIndex)
+                                        || typeof v.fraction !== "number"
+                                        || !(v.fraction > 0 && v.fraction < 1);
+                                })) throw new Error("Each straight-edge subdivision requires a motif cell, vertex index, and fraction between zero and one.");
+                            customExtras.straightEdgeSubdivisions = source.straightEdgeSubdivisions as typeof customExtras.straightEdgeSubdivisions;
+                        }
+                        customExtras.topologyWitness = source.topologyWitness;
+                        customExtras.metricRealization = source.metricRealization;
                         dsSymbol = custom.tilingDsSymbol;
                     }
                     if (!dsSymbol) throw new Error("Select a supported repeating cell pattern.");
@@ -295,7 +322,8 @@ export async function renderWorldList(
                         physicalDistancePerWorldUnit,
                         periodULengthWorldUnits: optionalPositiveNumber(input(form, "periodU")),
                         periodVLengthWorldUnits: optionalPositiveNumber(input(form, "periodV")),
-                        periodAngleDegrees: optionalAngle(input(form, "periodAngle"))
+                        periodAngleDegrees: optionalAngle(input(form, "periodAngle")),
+                        ...customExtras
                     });
                     if (!disposed) navigate(`/worlds/${world.id}/edit`);
                     return;

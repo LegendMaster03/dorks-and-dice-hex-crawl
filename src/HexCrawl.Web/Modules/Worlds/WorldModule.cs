@@ -72,7 +72,10 @@ public sealed class WorldModule : IHexCrawlModule
         HexCrawl.Domain.Spatial.DistanceMeasure? PhysicalDistancePerWorldUnit = null,
         double? PeriodULengthWorldUnits = null,
         double? PeriodVLengthWorldUnits = null,
-        double? PeriodAngleDegrees = null);
+        double? PeriodAngleDegrees = null,
+        IReadOnlyList<HexCrawl.Domain.Spatial.PeriodicStraightEdgeSubdivision>? StraightEdgeSubdivisions = null,
+        HexCrawl.Domain.Spatial.PeriodicTopologyWitness? TopologyWitness = null,
+        HexCrawl.Domain.Spatial.PeriodicMetricRealization? MetricRealization = null);
 
     private static async Task<IResult> CreatePeriodicOverworldAsync(
         CreatePeriodicOverworldRequest request,
@@ -112,16 +115,65 @@ public sealed class WorldModule : IHexCrawlModule
                     "The angle between repeating directions must be between 0 and 180 degrees.");
             constraints.Add(new("period-angle-degrees", "degrees", angle, angle));
         }
-        var realization = HexCrawl.Domain.Spatial.DelaneyDressHarmonicMetricRealization.Construct(
-            request.TilingDsSymbol, request.WorldUnitsPerAbstractPeriod, "world-unit",
-            request.RotationDegrees,
-            constraints: constraints.Count == 0 ? null : constraints);
-        if (realization.Status != "realized" || realization.Topology is null || realization.Realization is null)
-            throw new NotSupportedException(
-                "This repeating tile pattern needs a different or more complete geometric realization. "
-                + (realization.Reason ?? "No valid periodic geometry was constructed."));
+        HexCrawl.Domain.Spatial.PeriodicTopologyWitness topology;
+        HexCrawl.Domain.Spatial.PeriodicMetricRealization metric;
+        if (request.MetricRealization is { } supplied)
+        {
+            // An explicitly measured polygon witness is an alternative to
+            // harmonic fitting, not a guessed geometry from chamber incidence.
+            // It must validate against its independently proved atomic cover.
+            if (request.RotationDegrees != 0 || request.WorldUnitsPerAbstractPeriod != 1)
+                throw new ArgumentException(
+                    "Explicit metric realization uses absolute coordinates; repeating-pattern scale must be 1 and rotation 0.");
+            if (request.TopologyWitness is { } provided)
+            {
+                provided.ValidateAdjacency();
+                var source = HexCrawl.Domain.Spatial.DelaneyDressTopology.Inspect(request.TilingDsSymbol);
+                if (source.Status != HexCrawl.Domain.Spatial.DelaneyDressStatus.Euclidean
+                    || provided.QuotientDsSymbol != source.Symbol!.Canonical)
+                    throw new ArgumentException("Supplied periodic topology does not match the requested D-symbol.");
+                topology = provided;
+            }
+            else
+            {
+                var cover = HexCrawl.Domain.Spatial.DelaneyDressGeneralQuotientUnfolding.Construct(
+                    request.TilingDsSymbol);
+                if (cover.Status != HexCrawl.Domain.Spatial.DelaneyDressCoverStatus.Constructed
+                    || cover.Witness is null)
+                    throw new NotSupportedException(cover.Reason ?? "No proved translation topology could be constructed.");
+                topology = cover.Witness;
+            }
+            var splits = HexCrawl.Domain.Spatial.PeriodicStraightEdgeGeometry.Normalize(
+                topology, request.StraightEdgeSubdivisions);
+            topology = HexCrawl.Domain.Spatial.PeriodicStraightEdgeGeometry.Apply(topology, splits);
+            if (supplied.Units != "world-unit" || supplied.Constraints is null)
+                throw new ArgumentException("Explicit periodic geometry must use world-unit and include a constraints list.");
+            metric = supplied with
+            {
+                Constraints = supplied.Constraints.Concat(constraints)
+                    .Concat(splits.Select(HexCrawl.Domain.Spatial.PeriodicStraightEdgeGeometry.Constraint))
+                    .ToArray()
+            };
+            HexCrawl.Domain.Spatial.PeriodicMetricWitnessValidator.Validate(topology, metric);
+        }
+        else
+        {
+            if (request.TopologyWitness is not null)
+                throw new ArgumentException("An explicit topology witness requires an explicit metric realization.");
+            var realization = HexCrawl.Domain.Spatial.DelaneyDressHarmonicMetricRealization.Construct(
+                request.TilingDsSymbol, request.WorldUnitsPerAbstractPeriod, "world-unit",
+                request.RotationDegrees,
+                constraints: constraints.Count == 0 ? null : constraints,
+                straightEdgeSubdivisions: request.StraightEdgeSubdivisions);
+            if (realization.Status != "realized" || realization.Topology is null || realization.Realization is null)
+                throw new NotSupportedException(
+                    "This repeating tile pattern needs a different or more complete geometric realization. "
+                    + (realization.Reason ?? "No valid periodic geometry was constructed."));
+            topology = realization.Topology;
+            metric = realization.Realization;
+        }
         var worldTiling = new HexCrawl.Domain.Spatial.PeriodicWorldTiling(
-            Guid.NewGuid(), realization.Topology, realization.Realization, request.Origin,
+            Guid.NewGuid(), topology, metric, request.Origin,
             PhysicalDistancePerWorldUnit: request.PhysicalDistancePerWorldUnit);
         worldTiling.Validate();
         var stored = await service.CreatePeriodicOverworldAsync(

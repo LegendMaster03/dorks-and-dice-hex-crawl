@@ -153,6 +153,7 @@ public static class PeriodicMetricWitnessValidator
     }
 
     private static void ValidateConstraints(
+        PeriodicTopologyWitness topology,
         IReadOnlyList<TilingMetricConstraint> constraints,
         PeriodicMetricRealization realization,
         IReadOnlyDictionary<string, IReadOnlyList<TilingWorldPoint>> polygons,
@@ -311,7 +312,7 @@ public static class PeriodicMetricWitnessValidator
                     }
             }
         }
-        ValidateConstraints(geometry.Constraints, geometry, polygons, tolerance);
+        ValidateConstraints(topology, geometry.Constraints, geometry, polygons, tolerance);
         return true;
     }
 }

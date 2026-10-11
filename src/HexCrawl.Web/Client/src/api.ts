@@ -245,6 +245,13 @@ export class HexCrawlApi {
         periodULengthWorldUnits?: number;
         periodVLengthWorldUnits?: number;
         periodAngleDegrees?: number;
+        straightEdgeSubdivisions?: Array<{
+            motifCellId: string;
+            boundaryVertexIndex: number;
+            fraction: number;
+        }>;
+        topologyWitness?: unknown;
+        metricRealization?: unknown;
     }): Promise<Overworld> {
         return this.sendJson("POST", "/api/overworlds/periodic", input, "Create periodic world");
     }
