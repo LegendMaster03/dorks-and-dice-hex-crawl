@@ -53,7 +53,7 @@ public sealed class Phase19RasterRegistrationTests
             observed with { Candidate = candidate with { MotifCells = offset } }).Candidates);
     }
 
-    private static (PeriodicWorldTiling World, PeriodicMotifInvestigation Evidence) Fixture(string symbol)
+    internal static (PeriodicWorldTiling World, PeriodicMotifInvestigation Evidence) Fixture(string symbol)
     {
         var realized = DelaneyDressHarmonicMetricRealization.Construct(
             symbol, 2, "world-unit", rotationDegrees: 19);

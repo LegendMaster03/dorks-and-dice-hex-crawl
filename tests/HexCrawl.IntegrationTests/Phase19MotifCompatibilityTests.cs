@@ -39,6 +39,25 @@ public sealed class Phase19MotifCompatibilityTests
         Assert.DoesNotContain("<1:", assessed.Explanation);
     }
 
+    [Fact]
+    public void SelectedIncompatibleProcedureDoesNotHideProvenImageWorldRegistration()
+    {
+        var (world, image) = Phase19RasterRegistrationTests.Fixture(Square);
+        var incompatibleProcedure = CrawlProcedureCatalog.Resolve("simple-fixed-distance")
+            .MaterializeGeneric().Procedure with { TilingDsSymbol = Triangle };
+        var reviewed = Phase19TilingCompatibility.Assess(
+            world, image, incompatibleProcedure, [], 7);
+        Assert.Equal("mismatch", reviewed.Status);
+        Assert.Equal(7, reviewed.WorldVersion);
+        Assert.True(reviewed.WorldComparison is "ExactIdentity" or "ChamberIsomorphic" or "ProvenEquivalent");
+        Assert.Equal("StructurallyIncompatible", reviewed.ProcedureComparison);
+        Assert.Equal("candidates", reviewed.Registration?.Status);
+        Assert.NotEmpty(reviewed.Registration!.Candidates);
+        Assert.False(reviewed.CanCorrectInPlace);
+        Assert.Null(reviewed.Correction);
+        Assert.Contains("selected ruleset", reviewed.Explanation);
+    }
+
     [Theory]
     [InlineData("unsupported")]
     [InlineData("ambiguous")]
