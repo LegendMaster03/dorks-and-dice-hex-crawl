@@ -2,6 +2,7 @@ import { CanvasMapRenderer } from "./canvas-renderer";
 import type { HexCrawlApi } from "./api";
 import { worldToHex } from "./hex-math";
 import { RenderLifecycle } from "./render-lifecycle";
+import { resolveLatestWorldCellSelection } from "./map-selection-policy";
 import type { HexCoordinate, Overworld, WorldPoint, WorldCellGeometry } from "./types";
 import { Viewport } from "./viewport";
 
@@ -304,22 +305,22 @@ export class MapSurface {
             && this.getWorld()?.tiling?.revision === revision
             && this.getWorld()?.version === version;
         try {
-            const result = await this.api.lookupWorldCell(worldId, point);
-            if (!isCurrent()) return;
-            if (result.status !== "Unique" || result.candidates.length !== 1) {
-                this.accessibilityStatus.textContent = result.status === "Ambiguous"
-                    ? "Multiple cells meet here. Select a point inside the desired cell."
-                    : "No cell is at that map point.";
-                return;
-            }
-            const geometry = await this.api.resolveWorldCell(worldId, result.candidates[0]);
-            // A newer click or world edit may complete while geometry resolves.
-            // Only the latest request may publish a selected cell or callback.
-            if (!isCurrent() || geometry.id.tilingId !== tilingId) return;
-            this.renderer.selectedWorldCell = geometry;
-            this.accessibilityStatus.textContent = "Selected a world cell.";
-            this.cellSelectionHandler?.(geometry);
-            this.requestRender();
+            await resolveLatestWorldCellSelection(
+                () => this.api!.lookupWorldCell(worldId, point),
+                id => this.api!.resolveWorldCell(worldId, id),
+                isCurrent,
+                tilingId,
+                status => {
+                    this.accessibilityStatus.textContent = status === "Ambiguous"
+                        ? "Multiple cells meet here. Select a point inside the desired cell."
+                        : "No cell is at that map point.";
+                },
+                geometry => {
+                    this.renderer.selectedWorldCell = geometry;
+                    this.accessibilityStatus.textContent = "Selected a world cell.";
+                    this.cellSelectionHandler?.(geometry);
+                    this.requestRender();
+                });
         } catch {
             if (isCurrent()) this.accessibilityStatus.textContent =
                 "Cell selection failed. Retry after the map is available.";
