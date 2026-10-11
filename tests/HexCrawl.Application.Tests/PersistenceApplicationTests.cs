@@ -315,13 +315,16 @@ public sealed class PersistenceApplicationTests
         await using var database = await TestDatabase.CreateAsync();
         var service = await database.ServiceAsync();
         var world = await service.CreateOverworldAsync("alice", WorldCommand());
-        var expedition = await service.StartExpeditionAsync(world.World.Id, "alice", new StartExpeditionCommand(
-            "Survey", "alexandrian-advanced", new HexCoordinate(2, -1)));
+        var expedition = await StartCellAsync(
+            database, service, world.World.Id, "Survey", "alexandrian-advanced", new HexCoordinate(2, -1));
 
         var restarted = await database.ServiceAsync();
-        var loaded = await restarted.GetExpeditionAsync(expedition.State.Id, "alice");
+        var loaded = await restarted.GetExpeditionAsync(expedition.Id, "alice");
         var loadedRuntime = GenericProcedureRuntime.Bind(loaded.CampaignProcedure);
-        Assert.Equal(new HexCoordinate(2, -1), loaded.State.CurrentHex);
+        var cells = Assert.IsType<CellExpeditionState>(loaded.Runtime);
+        Assert.Equal(world.World.SpatialTiling.Resolve(
+            LegacyHexTilingCompatibility.ToAddress(new HexCoordinate(2, -1))).Id,
+            cells.Traversal.CurrentCell);
         Assert.Equal("alexandrian-advanced", loaded.CampaignProcedure.Key);
         Assert.True(loadedRuntime.Navigation.UsesPersistentVeer);
         Assert.Equal(expedition.CampaignProcedure, loaded.CampaignProcedure);
@@ -503,13 +506,13 @@ public sealed class PersistenceApplicationTests
         world = await service.CreateFeatureAsync(world.World.Id, "alice", new CreateFeatureCommand(
             "Spring", "spring", SpatialFeatureKind.Point, new WorldPoint(.2, .2), null, null, world.Version));
         var feature = Assert.Single(world.World.Features);
-        var expedition = await service.StartExpeditionAsync(world.World.Id, "alice", new StartExpeditionCommand(
-            "Knowledge", "simple-fixed-distance", new HexCoordinate(0, 0)));
-        expedition = await service.DiscoverAsync(expedition.State.Id, "alice", new DiscoverSubjectCommand(
+        var expedition = await StartCellAsync(
+            database, service, world.World.Id, "Knowledge", "simple-fixed-distance", new HexCoordinate(0, 0));
+        expedition = await service.DiscoverAsync(expedition.Id, "alice", new DiscoverSubjectCommand(
             expedition.Version, location.Id, KnowledgeSubjectType.Location, "test"));
 
         var restarted = await database.ServiceAsync();
-        var loaded = await restarted.GetExpeditionAsync(expedition.State.Id, "alice");
+        var loaded = await restarted.GetExpeditionAsync(expedition.Id, "alice");
         Assert.Equal(KnowledgeState.Discovered, loaded.RequireKnowledge().Entries[location.Id].State);
         Assert.False(loaded.RequireKnowledge().Entries.ContainsKey(feature.Id));
         Assert.Single(loaded.RequireKnowledge().Entries);
@@ -553,8 +556,8 @@ public sealed class PersistenceApplicationTests
         world = await service.CreateFeatureAsync(world.World.Id, "alice", new CreateFeatureCommand(
             "Keep feature", "road", SpatialFeatureKind.Line, null, [new(0, 0), new(1, 1)], null, world.Version));
         var feature = Assert.Single(world.World.Features);
-        _ = await service.StartExpeditionAsync(world.World.Id, "alice", new StartExpeditionCommand(
-            "Active", "simple-fixed-distance", new HexCoordinate(0, 0)));
+        _ = await StartCellAsync(
+            database, service, world.World.Id, "Active", "simple-fixed-distance", new HexCoordinate(0, 0));
 
         await Assert.ThrowsAsync<HexCrawlConflictException>(() => service.DeleteLocationAsync(
             world.World.Id, location.Id, "alice", world.Version));
@@ -594,6 +597,18 @@ public sealed class PersistenceApplicationTests
         ResolutionSource = ResolutionSource.ManualRoll,
         ContinueAcrossBoundaries = continueAcrossBoundaries
     };
+
+    private static Task<StoredExpedition> StartCellAsync(
+        TestDatabase database, HexCrawlService core, Guid worldId,
+        string name, string presetKey, HexCoordinate start)
+    {
+        var store = new PostgresHexCrawlStore(database.ConnectionString);
+        return new ExpeditionStartService(store, core, new CampaignProcedureService(store))
+            .StartWorldBoundCellsAsync(
+                worldId, "alice", name,
+                new ProcedureStartSelection(PresetKey: presetKey),
+                LegacyHexTilingCompatibility.ToAddress(start));
+    }
 
     private sealed class TestDatabase : IAsyncDisposable
     {
