@@ -551,7 +551,9 @@ export class SourceMapWorkspace {
             next.textContent = assessment.status === "structure-match"
                 ? "Existing world geometry is unchanged. Review registration or use manual placement before accepting map alignment."
                 : assessment.status === "mismatch"
-                    ? "Keep this world configuration and use a different map, or create a separate world. Automatic conversion is not available until its dependencies can be migrated safely."
+                    ? assessment.canCorrectInPlace
+                        ? "This world has no conflicting spatial data, so you may use the verified correction option below."
+                        : "Keep this world configuration and use another map, or create a separate world. Existing spatial data and rulesets will not be converted automatically."
                     : "Use manual placement or a different image. No world, procedure, or map registration was changed.";
             status.append(next);
             if (assessment.status === "mismatch" && assessment.canCorrectInPlace
