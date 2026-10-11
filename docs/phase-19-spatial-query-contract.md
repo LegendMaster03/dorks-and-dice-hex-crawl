@@ -1,6 +1,6 @@
 # Phase 19 — world geometry and browser integration status
 
-**Branch:** `feature/tile-crawl-phase-19`. **Status:** In progress; not an independent-review candidate yet.
+**Branch:** `feature/tile-crawl-phase-19`. **Status:** Implementation review candidate; independent WorkChat/browser and deployed existing-data acceptance are still required. Do not merge/deploy on the strength of CI alone.
 
 ## Authoritative integration completed
 
@@ -15,15 +15,19 @@
 - Source map placement retains the existing exact three-point affine transform and now offers an optional independent fourth landmark. That check measures disagreement in original image pixels without changing the fitted transform or the saved three-point contract. A failed attempted check blocks saving that attempt; clearing points resets it. This is a manual spot check, **not** Surveyor-driven automatic registration or full-raster metric certification. Experimental Surveyor v3 observations remain *read-only* and are compared with the saved world and optional selected pinned procedure.
 - Existing hex/Wonderdraft automatic grid analysis and the v2 client remain intact. Generalized patterns do not enter those hex-only controls.
 
-## Authority boundaries and unresolved gates
+## Authority boundaries and correction safety
 
-The compatibility response currently sets `canCorrectInPlace=false` deliberately. A Surveyor observation is not an accepted geometric realization or a verified map-to-world phase transform. The current store provides versioned single-aggregate writes, but not a transaction spanning a new procedure revision, world topology, and source-map registration while rechecking all dependencies. Exposing the requested one-click conversion before establishing that transaction would risk broken cell identities and tester data.
+Experimental Surveyor observations remain non-authoritative. The server now derives bounded candidate affine registrations by independently comparing motif polygons, a primitive translation-basis correspondence, and **every reciprocal atomic interface** against accepted world geometry. Only a matching, independently proved structure offers image placement candidates. The UI previews alternatives because symmetries can leave absolute orientation/phase ambiguous. Saving a chosen placement re-runs Surveyor and recomputes the candidates; an expected world version and checked transform must match. Existing images, world geometry and pinned rulesets remain unchanged.
 
-Additional Phase 19 gates remain: independently registered Surveyor-driven metric/phase alignment; approved safe correction for unblocked defaults; a true mixed/rhombille visual and browser-workflow matrix; broader names/geometry-qualified catalog entries and guided unfamiliar-pattern parameter editing; complete generalized route/coverage/knowledge/overlay parity; mobile, keyboard, dark mode, embedded and signed-in tester verification; and explicit test deployment checks. Keep these open rather than marking Phase 19 complete.
+For an observed mismatch, the only automatically correctable case is an **unused, uncalibrated generalized world** with no expeditions, registered images, authored locations/features, or environment annotations, and for which the independent metric constructor can realize the observed topology and then verify its pixel correspondence. A correction changes the tiling identity/revision and aligns the chosen source image **atomically in one overworld transaction**. World-bound expedition creation holds a conflicting PostgreSQL SHARE lock and validates current qualified cell identity under that lock. Replacement holds FOR UPDATE and rechecks references before committing. No procedure revision is invented when none is selected. A selected already-compatible immutable revision needs no edit; an incompatible selected procedure is not rewritten and disables direct correction. Legacy hex and Wonderdraft alignment flows are untouched.
 
-## Targeted Phase 19 regression matrix
+A candidate whose translation motif cannot be matched one-to-one, whose scale/phase/metric cannot be verified, or whose geometry has blockers remains advisory; manual registration or a separate world stays available. A successful correction replaces **only previously unused** cell geometry. No schema migration or map-asset mutation is introduced.
 
-A PostgreSQL-backed HTTP integration matrix now covers image-free authoring of the mixed triangle/square, rhombille and subdivided non-edge-to-edge fixtures, authenticated polygon selection, pinned procedure creation, two expedition starts and reciprocal atomic interface traversal context. These are API/persistence checks, **not** visual browser acceptance. The frontend `npm test` command explicitly runs generalized-cell hit testing and the optional independent affine-landmark checks. Manual browser verification and Surveyor-driven image registration remain separate release gates.
+Guided world creation now accepts optional repeating-direction lengths and angle, passed as general metric constraints to the same harmonic construction/validation path. Invalid or unsatisfiable geometry fails without creating a world. The human-readable catalog also includes qualified rhombille and descriptive mixed-cell entries, without becoming a pattern implementation allowlist.
+
+## Independent-review gates
+
+WorkChat must verify exact-head CI, signed-in visual workflows on existing tester data (including mobile/keyboard/Guided/Compact/dark/embedded), Surveyor v2/v3 compatibility, full-raster/map preview alignment, polygon/route/coverage/knowledge overlays, safe correction/stale conflicts, and restart/asset preservation. Existing image-free mixed-cell HTTP suites and unit tests are necessary, but they do **not** certify visual browser behavior or a live deployment. See `docs/phase-19-workchat-review-handoff.md` for specific scenarios. Full Phase 19 acceptance and merge depend on that independent review and any remediation.
 
 ## Test and release guidance
 
