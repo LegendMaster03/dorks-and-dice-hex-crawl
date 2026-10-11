@@ -101,6 +101,34 @@ public sealed class Phase20OneTimeStartupCutoverTests
         Assert.Equal("23514", rejected.SqlState);
     }
 
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("{\"kind\":null}")]
+    [InlineData("{\"kind\":\"Spatial\"}")]
+    [InlineData("[]")]
+    public async Task V2OnlyConstraintRejectsMissingNullLegacyAndNonObjectKinds(string snapshot)
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        await new PostgresSchemaMigrator(database.ConnectionString).MigrateAsync();
+        await using var connection = new NpgsqlConnection(database.ConnectionString);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT INTO expeditions
+                (id, owner_user_id, name, context_json, state_json,
+                 party_json, environment_json, effects_json, resources_json,
+                 survival_json, journey_state_json, generated_resolutions_json,
+                 procedure_json, remaining_watch_ticks, version, created_at, updated_at)
+            VALUES (gen_random_uuid(), 'owner', 'invalid snapshot', '{}'::jsonb, @state,
+                    '{}'::jsonb, '{}'::jsonb, '{}'::jsonb, '{}'::jsonb,
+                    '{}'::jsonb, '{}'::jsonb, '{}'::jsonb, '{}'::jsonb,
+                    0, 1, now(), now());
+            """;
+        command.Parameters.AddWithValue("state", NpgsqlTypes.NpgsqlDbType.Jsonb, snapshot);
+        var error = await Assert.ThrowsAsync<PostgresException>(() => command.ExecuteNonQueryAsync());
+        Assert.Equal("23514", error.SqlState);
+    }
+
     [Fact]
     public async Task UnknownRuntimeKindRollsBackEntireUpgradeAndPreservesOldData()
     {

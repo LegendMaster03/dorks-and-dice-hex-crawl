@@ -115,8 +115,8 @@ public sealed class PostgresSchemaMigrator(string connectionString)
 
             ALTER TABLE expeditions
                 ADD CONSTRAINT ck_expeditions_runtime_v2_only
-                CHECK (jsonb_typeof(state_json) = 'object'
-                   AND state_json->>'kind' IN ('CellSpatial', 'NonSpatial'));
+                CHECK (COALESCE(jsonb_typeof(state_json) = 'object'
+                   AND state_json->>'kind' IN ('CellSpatial', 'NonSpatial'), false));
 
             INSERT INTO hex_crawl_schema_migrations(version, applied_at)
             VALUES (@version, now());
@@ -183,8 +183,8 @@ public sealed class PostgresSchemaMigrator(string connectionString)
                 CONSTRAINT fk_expeditions_overworld
                     FOREIGN KEY(overworld_id) REFERENCES overworlds(id) ON DELETE RESTRICT,
                 CONSTRAINT ck_expeditions_runtime_v2_only
-                    CHECK (jsonb_typeof(state_json) = 'object'
-                       AND state_json->>'kind' IN ('CellSpatial', 'NonSpatial'))
+                    CHECK (COALESCE(jsonb_typeof(state_json) = 'object'
+                       AND state_json->>'kind' IN ('CellSpatial', 'NonSpatial'), false))
             );
             CREATE INDEX ix_expeditions_owner_world_updated
                 ON expeditions(owner_user_id, overworld_id, updated_at DESC, name);
