@@ -69,7 +69,10 @@ public sealed class WorldModule : IHexCrawlModule
         double WorldUnitsPerAbstractPeriod,
         HexCrawl.Domain.Spatial.WorldPoint Origin,
         double RotationDegrees = 0,
-        HexCrawl.Domain.Spatial.DistanceMeasure? PhysicalDistancePerWorldUnit = null);
+        HexCrawl.Domain.Spatial.DistanceMeasure? PhysicalDistancePerWorldUnit = null,
+        double? PeriodULengthWorldUnits = null,
+        double? PeriodVLengthWorldUnits = null,
+        double? PeriodAngleDegrees = null);
 
     private static async Task<IResult> CreatePeriodicOverworldAsync(
         CreatePeriodicOverworldRequest request,
@@ -81,9 +84,38 @@ public sealed class WorldModule : IHexCrawlModule
             || request.TilingDsSymbol is null or { Length: > 131072 }
             || !double.IsFinite(request.Origin.X) || !double.IsFinite(request.Origin.Y))
             throw new ArgumentException("A world name, supported pattern and finite origin are required.");
+        // Optional metric fitting works for every realizable D-symbol, not a
+        // branch per familiar polygon shape. Invalid measurements fail closed.
+        var constraints = new List<HexCrawl.Domain.Spatial.TilingMetricConstraint>();
+        static double RequireLength(double value, string label)
+        {
+            if (!double.IsFinite(value) || value <= 0)
+                throw new ArgumentOutOfRangeException(label,
+                    "The repeating distance must be finite and positive.");
+            return value;
+        }
+        if (request.PeriodULengthWorldUnits is { } u)
+        {
+            u = RequireLength(u, nameof(request.PeriodULengthWorldUnits));
+            constraints.Add(new("period-u-length", "world-unit", u, u));
+        }
+        if (request.PeriodVLengthWorldUnits is { } v)
+        {
+            v = RequireLength(v, nameof(request.PeriodVLengthWorldUnits));
+            constraints.Add(new("period-v-length", "world-unit", v, v));
+        }
+        if (request.PeriodAngleDegrees is { } angle)
+        {
+            if (!double.IsFinite(angle) || angle <= 0 || angle >= 180)
+                throw new ArgumentOutOfRangeException(
+                    nameof(request.PeriodAngleDegrees),
+                    "The angle between repeating directions must be between 0 and 180 degrees.");
+            constraints.Add(new("period-angle-degrees", "degrees", angle, angle));
+        }
         var realization = HexCrawl.Domain.Spatial.DelaneyDressHarmonicMetricRealization.Construct(
             request.TilingDsSymbol, request.WorldUnitsPerAbstractPeriod, "world-unit",
-            request.RotationDegrees);
+            request.RotationDegrees,
+            constraints: constraints.Count == 0 ? null : constraints);
         if (realization.Status != "realized" || realization.Topology is null || realization.Realization is null)
             throw new NotSupportedException(
                 "This repeating tile pattern needs a different or more complete geometric realization. "

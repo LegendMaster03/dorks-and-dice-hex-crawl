@@ -242,6 +242,9 @@ export class HexCrawlApi {
         origin: WorldPoint;
         rotationDegrees: number;
         physicalDistancePerWorldUnit?: { value: number; unit: DistanceUnit };
+        periodULengthWorldUnits?: number;
+        periodVLengthWorldUnits?: number;
+        periodAngleDegrees?: number;
     }): Promise<Overworld> {
         return this.sendJson("POST", "/api/overworlds/periodic", input, "Create periodic world");
     }

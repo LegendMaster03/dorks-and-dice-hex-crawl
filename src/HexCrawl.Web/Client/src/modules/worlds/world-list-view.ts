@@ -4,6 +4,24 @@ import { canonicalDistanceUnit, createOverworldInput, customUnitFieldsVisible } 
 import type { DistanceUnitKind } from "./world-form";
 import { applyGuidedExperience, attachFieldHelp, guidancePreferenceButton } from "../../ui/guidance";
 
+function optionalPositiveNumber(control: HTMLInputElement): number | undefined {
+    const raw = control.value.trim();
+    if (!raw) return undefined;
+    const value = Number(raw);
+    if (!Number.isFinite(value) || value <= 0)
+        throw new Error("Repeating distances must be finite and positive.");
+    return value;
+}
+
+function optionalAngle(control: HTMLInputElement): number | undefined {
+    const raw = control.value.trim();
+    if (!raw) return undefined;
+    const value = Number(raw);
+    if (!Number.isFinite(value) || value <= 0 || value >= 180)
+        throw new Error("Repeating direction angle must be greater than 0 and less than 180 degrees.");
+    return value;
+}
+
 export async function renderWorldList(
     root: HTMLElement,
     api: HexCrawlApi,
@@ -39,6 +57,13 @@ export async function renderWorldList(
                                 <label>Origin Y <input name="periodicOriginY" type="number" step="any" value="0"></label>
                             </div>
                             <label>Rotation degrees <input name="periodicRotation" type="number" step="any" value="0"></label>
+                            <details>
+                                <summary>Adjust repeating-cell geometry</summary>
+                                <p class="hc-hint">Most maps do not require this. When a repeating pattern needs a nonstandard size or angle, enter measured values; the server checks whether the complete pattern can actually use them.</p>
+                                <label>First repeating direction length (world units) <input name="periodU" type="number" step="any" min="0.000001" placeholder="Automatic"></label>
+                                <label>Second repeating direction length (world units) <input name="periodV" type="number" step="any" min="0.000001" placeholder="Automatic"></label>
+                                <label>Angle between repeating directions (degrees) <input name="periodAngle" type="number" step="any" min="0.001" max="179.999" placeholder="Automatic"></label>
+                            </details>
                             <label>Optional physical distance per world unit <input name="physicalScale" type="number" min="0.000001" step="any" placeholder="Leave blank if uncalibrated"></label>
                             <label>Physical distance unit
                                 <select name="periodicUnit"><option value="Mile">Miles</option><option value="Kilometer">Kilometers</option></select>
@@ -267,7 +292,10 @@ export async function renderWorldList(
                             y: numeric(input(form, "periodicOriginY"))
                         },
                         rotationDegrees: numeric(input(form, "periodicRotation")),
-                        physicalDistancePerWorldUnit
+                        physicalDistancePerWorldUnit,
+                        periodULengthWorldUnits: optionalPositiveNumber(input(form, "periodU")),
+                        periodVLengthWorldUnits: optionalPositiveNumber(input(form, "periodV")),
+                        periodAngleDegrees: optionalAngle(input(form, "periodAngle"))
                     });
                     if (!disposed) navigate(`/worlds/${world.id}/edit`);
                     return;
