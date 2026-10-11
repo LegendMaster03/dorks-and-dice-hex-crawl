@@ -303,8 +303,8 @@ public sealed class Phase20MaplessCellHttpTests
             Assert.Equal(JsonValueKind.Null,
                 corrected.GetProperty("expedition").GetProperty("currentHex").ValueKind);
 
-            // The Phase 15 start endpoint is not silently converted to the V2
-            // runtime while its request/response and workbench remain V1-only.
+            // Schema 11 does not allow new V1 spatial records. Legacy routes
+            // return an explicit client error until the UI speaks V2.
             using var oldClient = await client.PostAsJsonAsync(
                 $"/api/overworlds/{world.Id:D}/expeditions",
                 new
@@ -313,11 +313,9 @@ public sealed class Phase20MaplessCellHttpTests
                     procedureKey = "simple-fixed-distance",
                     startHex = new { q = 0, r = 0 }
                 }, ApiJson);
-            Assert.Equal(HttpStatusCode.Created, oldClient.StatusCode);
-            var legacy = await oldClient.Content.ReadFromJsonAsync<JsonElement>();
-            Assert.Equal(JsonValueKind.Object,
-                legacy.GetProperty("expedition").GetProperty("currentHex").ValueKind);
-            Assert.False(legacy.GetProperty("expedition").TryGetProperty("currentCell", out _));
+            Assert.Equal(HttpStatusCode.BadRequest, oldClient.StatusCode);
+            Assert.Contains("retired", await oldClient.Content.ReadAsStringAsync(),
+                StringComparison.OrdinalIgnoreCase);
         }
         finally
         {

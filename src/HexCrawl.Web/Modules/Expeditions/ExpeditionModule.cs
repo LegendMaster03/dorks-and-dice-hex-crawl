@@ -94,12 +94,16 @@ public sealed class ExpeditionModule : IHexCrawlModule
         HexCrawlService service,
         CancellationToken cancellationToken)
     {
+        var resolvedContext = request.Context.ToDomain();
+        if (resolvedContext is AbstractHexCrawlSessionContext)
+            throw new NotSupportedException(
+                "Legacy V1 hex expeditions have been retired. Start a geometric cell expedition using /api/expeditions/cells.");
         var owner = UserId(context);
         var expedition = await starter.StartStandaloneAsync(
             owner,
             request.Name,
             request.ProcedureSelection(),
-            request.Context.ToDomain(),
+            resolvedContext,
             request.StartHex,
             cancellationToken);
         return Results.Created(
@@ -145,27 +149,14 @@ public sealed class ExpeditionModule : IHexCrawlModule
             await ContractAsync(expedition, owner, service, cancellationToken));
     }
 
-    private static async Task<IResult> StartExpeditionAsync(
-        Guid overworldId,
-        StartProcedureExpeditionRequest request,
-        HttpContext context,
-        ExpeditionStartService starter,
-        HexCrawlService service,
-        CancellationToken cancellationToken)
-    {
-        var owner = UserId(context);
-        var expedition = await starter.StartWorldBoundAsync(
-            overworldId,
-            owner,
-            request.Name,
-            request.ProcedureSelection(),
-            request.ResolvedPresentationKey,
-            request.StartHex,
-            cancellationToken);
-        return Results.Created(
-            $"/api/expeditions/{expedition.Id:D}",
-            await ContractAsync(expedition, owner, service, cancellationToken));
-    }
+    // The retired hex-only endpoint cannot express authoritative cell geometry.
+    // Reject it explicitly rather than allowing a V1 insert to fail the schema-11
+    // database constraint with an opaque internal error.
+    private static IResult StartExpeditionAsync() =>
+        Results.BadRequest(new
+        {
+            error = "Legacy V1 world-bound starts have been retired. Use /api/overworlds/{overworldId}/cell-expeditions with a qualified cell."
+        });
 
     private static async Task<IResult> GetExpeditionAsync(
         Guid expeditionId,
