@@ -22,11 +22,12 @@ import { publishExpeditionRuntimeChanged } from "./expedition-runtime-events";
  */
 export async function renderPeriodicExpeditionWorkbench(
     root: HTMLElement, api: HexCrawlApi, initial: ExpeditionDetail,
-    world: Overworld | null, navigate: (route: string, replace?: boolean) => void,
+    initialWorld: Overworld | null, navigate: (route: string, replace?: boolean) => void,
     toolContext: ToolHostContext | null = null
 ): Promise<() => void> {
-    if (!world || !initial.expedition.isSpatial || !initial.expedition.currentCell)
+    if (!initialWorld || !initial.expedition.isSpatial || !initial.expedition.currentCell)
         throw new Error("A generalized expedition requires an authoritative world and current cell.");
+    let world = initialWorld;
     let runtime = initial;
     let topology = await api.getCellTopology(initial.id);
     let selectedExit = topology.selectedExitInterfaceIndex;
@@ -277,11 +278,13 @@ export async function renderPeriodicExpeditionWorkbench(
     };
     const refresh = async (): Promise<void> => {
         try {
-            const [next, nextTopology] = await Promise.all([
-                api.getExpedition(runtime.id), api.getCellTopology(runtime.id)
+            const [next, nextTopology, nextWorld] = await Promise.all([
+                api.getExpedition(runtime.id), api.getCellTopology(runtime.id),
+                api.getOverworld(world.id)
             ]);
             if (disposed) return;
             runtime = next;
+            world = nextWorld;
             topology = nextTopology;
             selectedExit = topology.selectedExitInterfaceIndex;
             render();
