@@ -153,6 +153,7 @@ public static class PeriodicMetricWitnessValidator
     }
 
     private static void ValidateConstraints(
+        PeriodicTopologyWitness topology,
         IReadOnlyList<TilingMetricConstraint> constraints,
         PeriodicMetricRealization realization,
         IReadOnlyDictionary<string, IReadOnlyList<TilingWorldPoint>> polygons,
@@ -164,7 +165,33 @@ public static class PeriodicMetricWitnessValidator
                 && !string.IsNullOrWhiteSpace(constraint.Unit)
                 && double.IsFinite(constraint.Min) && double.IsFinite(constraint.Max)
                 && constraint.Min <= constraint.Max, "Invalid metric constraint interval.");
-            var values = constraint.Key switch
+            bool fractionConstraint = PeriodicStraightEdgeGeometry.TryParseConstraint(
+                constraint.Key, out string fractionCell, out int fractionVertex);
+            double[] values;
+            double fractionTolerance = 0;
+            if (fractionConstraint)
+            {
+                Require(constraint.Min > 0 && constraint.Max < 1,
+                    "Straight-edge fraction bounds must be strictly between zero and one.");
+                Require(polygons.TryGetValue(fractionCell, out var polygon)
+                    && fractionVertex >= 0 && fractionVertex < polygon.Count,
+                    "Straight-edge fraction references an unknown polygon vertex.");
+                var motif = topology.MotifCells.First(cell => cell.Id == fractionCell);
+                int size = polygon.Count;
+                Require(motif.Boundary[(fractionVertex + size - 1) % size].BoundarySideIndex
+                    == motif.Boundary[fractionVertex].BoundarySideIndex,
+                    "Straight-edge fraction must identify a grouped atomic interface junction.");
+                var start = polygon[(fractionVertex + size - 1) % size];
+                var middle = polygon[fractionVertex];
+                var end = polygon[(fractionVertex + 1) % size];
+                var span = Sub(end, start);
+                values = [Dot(Sub(middle, start), span) / Dot(span, span)];
+                // The requested fraction is dimensionless. Applying the
+                // world-coordinate length tolerance to it would accept
+                // contradictory ratios on short subdivided edges.
+                fractionTolerance = 1e-9;
+            }
+            else values = constraint.Key switch
             {
                 "period-u-length" => new[] { Length(realization.TranslationU) },
                 "period-v-length" => new[] { Length(realization.TranslationV) },
@@ -182,11 +209,13 @@ public static class PeriodicMetricWitnessValidator
                     => new[] { Math.Abs(SignedArea(target)) },
                 _ => throw new InvalidOperationException("Unsupported metric constraint key; cannot certify its satisfaction.")
             };
-            Require(constraint.Unit == (constraint.Key == "period-angle-degrees"
+            Require(constraint.Unit == (fractionConstraint
+                    ? "ratio" : constraint.Key == "period-angle-degrees"
                     ? "degrees" : realization.Units),
                 "A metric constraint's unit does not match its measurement.");
             foreach (double value in values)
-                Require(value >= constraint.Min - tolerance && value <= constraint.Max + tolerance,
+                Require(value >= constraint.Min - (fractionConstraint ? fractionTolerance : tolerance)
+                    && value <= constraint.Max + (fractionConstraint ? fractionTolerance : tolerance),
                     "The supplied embedding violates a requested metric constraint.");
         }
     }
@@ -229,6 +258,25 @@ public static class PeriodicMetricWitnessValidator
             double area = SignedArea(polygon);
             Require(area > tolerance * tolerance, "Polygon must be simple, nondegenerate and counterclockwise.");
             Require(!SelfIntersection(polygon, tolerance), "Polygon has intersecting or repeated edges.");
+            // Grouping is a geometric claim: a repeated side identifier must
+            // describe consecutive, forward-moving collinear atomic segments.
+            // Distinct interfaces remain separately selectable and reciprocal.
+            for (int i = 0; i < polygon.Count; i++)
+            {
+                int prev = (i + polygon.Count - 1) % polygon.Count;
+                if (cell.Boundary[prev].BoundarySideIndex != cell.Boundary[i].BoundarySideIndex)
+                    continue;
+                var before = Sub(polygon[i], polygon[prev]);
+                var after = Sub(polygon[(i + 1) % polygon.Count], polygon[i]);
+                // Collinearity is angular, not a world-distance measurement.
+                // The period-wide coordinate tolerance would otherwise certify
+                // substantial bends on a short segment next to a long segment.
+                double beforeLength = Length(before), afterLength = Length(after);
+                Require(Math.Abs(Cross(before, after))
+                        <= 1e-8 * beforeLength * afterLength
+                    && Dot(before, after) > 0,
+                    "Grouped atomic interfaces must form one straight geometric side without reversing.");
+            }
             // The exhaustive periodic intersection check below is bounded
             // to a finite translation neighborhood. As in the TypeScript
             // witness verifier, only admit representatives near that
@@ -276,7 +324,7 @@ public static class PeriodicMetricWitnessValidator
                     }
             }
         }
-        ValidateConstraints(geometry.Constraints, geometry, polygons, tolerance);
+        ValidateConstraints(topology, geometry.Constraints, geometry, polygons, tolerance);
         return true;
     }
 }

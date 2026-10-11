@@ -214,11 +214,34 @@ public static class PeriodicCellTraversalGeometry
                 target.Polygon.Max(p => p.X) - target.Polygon.Min(p => p.X),
                 target.Polygon.Max(p => p.Y) - target.Polygon.Min(p => p.Y));
             var sampleDistance = Math.Min(cellScale, targetSpan) * 1e-4;
-            if (sampleDistance <= positionTolerance * 2
-                || !FeatureIntersection.PointInPolygon(
-                    chosen.Point + direction * sampleDistance, target.Polygon))
+            var sample = chosen.Point + direction * sampleDistance;
+            bool strictlyInside = sampleDistance > positionTolerance * 2
+                && FeatureIntersection.PointInPolygon(sample, target.Polygon);
+            if (strictlyInside)
+            {
+                // General point membership intentionally includes the boundary
+                // for cell lookup. At a T-junction it is not sufficient proof
+                // that a course enters this particular neighboring interior.
+                foreach (var (start, end) in target.Polygon.Select((p, i) =>
+                    (p, target.Polygon[(i + 1) % target.Polygon.Count])))
+                {
+                    var segment = end - start;
+                    double squared = segment.X * segment.X + segment.Y * segment.Y;
+                    if (squared <= 0) { strictlyInside = false; break; }
+                    var delta = sample - start;
+                    double fraction = Math.Clamp(
+                        (delta.X * segment.X + delta.Y * segment.Y) / squared, 0, 1);
+                    var projectedPoint = start + segment * fraction;
+                    if (sample.DistanceTo(projectedPoint) <= positionTolerance * 2)
+                    {
+                        strictlyInside = false;
+                        break;
+                    }
+                }
+            }
+            if (!strictlyInside)
                 return ResolveAdjudication([chosen.Boundary],
-                    "The chosen vertex interface is not confirmed by the outgoing geometry.");
+                    "The chosen vertex interface is not confirmed by the outgoing interior geometry.");
         }
 
         return new CellCrossingResolution(

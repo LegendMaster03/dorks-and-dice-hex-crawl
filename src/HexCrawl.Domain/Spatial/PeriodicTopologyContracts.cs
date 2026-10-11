@@ -40,6 +40,14 @@ public sealed record PeriodicEdgeInterface(int Index, int BoundarySideIndex, str
 public sealed record PeriodicMotifCell(string Id, IReadOnlyList<PeriodicEdgeInterface> Boundary);
 
 /// <summary>
+/// The atomic interfaces immediately before and after BoundaryVertexIndex lie on
+/// one straight geometric side. Fraction measures the vertex from its predecessor
+/// toward its successor (strictly between zero and one).
+/// </summary>
+public sealed record PeriodicStraightEdgeSubdivision(
+    string MotifCellId, int BoundaryVertexIndex, double Fraction);
+
+/// <summary>
 /// The translation motif is a finite covering *witness*. It is not inferred from a
 /// canonical D-symbol by this DTO. Phase 17 must reject any unverified witness.
 /// </summary>
@@ -70,6 +78,15 @@ public sealed record PeriodicTopologyWitness(
         {
             if (cell.Boundary.Count < 3 || cell.Boundary.Count > 256)
                 throw new InvalidOperationException("Invalid atomic boundary count.");
+            // Geometric sides are cyclic runs of atomic interfaces. A side
+            // identifier may wrap across index zero but may not occur in two
+            // disconnected runs or collapse the polygon below three sides.
+            var sideLabels = cell.Boundary.Select(edge => edge.BoundarySideIndex).ToArray();
+            int sideCount = sideLabels.Distinct().Count();
+            int transitions = Enumerable.Range(0, sideLabels.Length).Count(i =>
+                sideLabels[i] != sideLabels[(i + 1) % sideLabels.Length]);
+            if (sideCount < 3 || transitions != sideCount)
+                throw new InvalidOperationException("Geometric sides must group consecutive atomic interfaces into at least three cyclic sides.");
             for (int i = 0; i < cell.Boundary.Count; i++)
             {
                 var edge = cell.Boundary[i];
