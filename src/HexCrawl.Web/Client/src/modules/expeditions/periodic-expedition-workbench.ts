@@ -13,6 +13,7 @@ import { guidancePreferenceButton } from "../../ui/guidance";
 import { encounterLocationId } from "./keyed-location-encounter";
 import { mountPeriodicGameplayPanels } from "./periodic-gameplay-panels";
 import { publishExpeditionRuntimeChanged } from "./expedition-runtime-events";
+import { resolvePeriodicPace } from "./periodic-travel-pace";
 
 /**
  * Generalized view of the same expedition entity and authoritative watch runtime.
@@ -35,7 +36,7 @@ export async function renderPeriodicExpeditionWorkbench(
     let inspectedCell: WorldCellId | null = null;
 
     root.innerHTML = `
-        <section class="hc-page hc-workspace hc-expedition">
+        <section class="hc-page hc-workspace hc-expedition hc-periodic-expedition">
             <header class="hc-page-header">
                 <div><span class="hc-sheet-kicker">Expedition</span>
                     <h1 data-title></h1><p>World-bound travel and discovery</p></div>
@@ -63,7 +64,8 @@ export async function renderPeriodicExpeditionWorkbench(
                         <form class="hc-form" data-travel-form>
                             <div class="hc-inline"><label>Heading X <input name="headingX" type="number" step="any" required></label>
                                 <label>Heading Y <input name="headingY" type="number" step="any" required></label></div>
-                            <label>Pace <select name="pace"></select></label>
+                            <label data-pace-row>Pace <select name="pace"></select></label>
+                            <p class="hc-hint" data-fixed-pace aria-live="polite"></p>
                             <div data-distance-fields class="hc-inline">
                                 <label>Expected distance <input name="expected" type="number" min="0" step="any"></label>
                                 <label>Resolved distance <input name="actual" type="number" min="0" step="any"></label>
@@ -298,8 +300,9 @@ export async function renderPeriodicExpeditionWorkbench(
         event.preventDefault();
         void progress(async () => {
             const state = currentState();
-            const mode = choice("pace").value;
-            if (!mode) throw new Error("Choose a valid movement pace.");
+            const mode = resolvePeriodicPace(
+                runtime.movementComposition.policy.travelModeKeys,
+                choice("pace").value, state.activePaceKey).paceKey;
             const resolution = runtime.procedure.runtime?.travelResolution;
             if (!resolution) throw new Error("This expedition has no executable movement rules.");
             const unit = runtime.movementComposition.suggestedExpectedDistance?.unit
@@ -449,16 +452,24 @@ export async function renderPeriodicExpeditionWorkbench(
         showKeyedLocation();
         const modes = runtime.movementComposition.policy.travelModeKeys;
         const pace = choice("pace");
-        const previous = pace.value;
+        const effective = resolvePeriodicPace(modes, pace.value, state.activePaceKey);
         pace.replaceChildren();
-        for (const mode of modes) {
+        // Even without an editable selector, a fixed pace must have an exact
+        // value to submit to the shared server movement contract.
+        for (const mode of modes.length ? modes : [effective.paceKey]) {
             const option = document.createElement("option");
             option.value = mode;
             option.textContent = mode.replace(/[-_]/g, " ");
             pace.append(option);
         }
-        if (modes.includes(state.activePaceKey ?? "")) pace.value = state.activePaceKey!;
-        else if (modes.includes(previous)) pace.value = previous;
+        pace.value = effective.paceKey;
+        required<HTMLElement>("[data-pace-row]").hidden = !effective.needsChoice;
+        text("[data-fixed-pace]", modes.length === 0
+            ? "Fixed pace: normal (the server default). This ruleset does not require a pace choice."
+            : modes.length === 1
+                ? `Fixed pace: ${modes[0].replace(/[-_]/g, " ")}.`
+                : "");
+        pace.disabled = busy || state.activeWatchNumber !== null;
         const pausedForCourse = state.activeWatchPendingDecision === "CellCourseAdjudicationRequired";
         const pendingEncounter = state.pendingEncounter;
         required<HTMLElement>("[data-course-decision]").hidden = !pausedForCourse;
@@ -466,7 +477,7 @@ export async function renderPeriodicExpeditionWorkbench(
         text("[data-encounter-description]", pendingEncounter
             ? `Encounter at watch ${pendingEncounter.watchNumber}. Resolve it before continuing.` : "");
         required<HTMLButtonElement>("[data-advance]").disabled =
-            busy || pausedForCourse || !!pendingEncounter || !resolutions || modes.length === 0;
+            busy || pausedForCourse || !!pendingEncounter || !resolutions;
         required<HTMLButtonElement>("[data-confirm-course]").disabled =
             busy || !pausedForCourse || selectedExit === null;
         required<HTMLButtonElement>("[data-resolve-encounter]").disabled =

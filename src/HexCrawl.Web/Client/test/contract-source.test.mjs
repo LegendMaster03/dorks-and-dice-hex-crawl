@@ -263,7 +263,9 @@ test("focused party workspace exposes the persisted party register through a ded
     assert.match(party, /Per hour/);
     assert.match(party, /Per watch/);
     assert.match(party, /Per march/);
-    assert.match(party, /runtime\.context\.hexCenterDistance\?\.unit/);
+    const unitResolver = read("modules/expeditions/party-movement-rendering.ts");
+    assert.match(party, /preferredPartyMovementUnit/);
+    assert.match(unitResolver, /runtime\.context\.hexCenterDistance\?\.unit/);
 });
 
 test("watch planning uses authoritative typed party assignments instead of a free-form activity input", () => {
@@ -283,8 +285,11 @@ test("watch planning uses authoritative typed party assignments instead of a fre
 
 test("party movement editor derives units from persisted session data without a mile fallback", () => {
     const party = read("modules/expeditions/expedition-party-sheet.ts");
-    assert.match(party, /runtime\.context\.hexCenterDistance\?\.unit/);
-    assert.match(party, /runtime\.expedition\.distanceTraveled\.unit/);
+    const unitResolver = read("modules/expeditions/party-movement-rendering.ts");
+    assert.match(party, /preferredPartyMovementUnit/);
+    assert.match(unitResolver, /runtime\.context\.hexCenterDistance\?\.unit/);
+    assert.match(unitResolver, /runtime\.expedition\.distanceTraveled\?\.unit/);
+    assert.match(unitResolver, /\?\? null/);
     assert.doesNotMatch(party, /\?\? \{ kind: "Mile", symbol: "mi", metersPerUnit: 1609\.344 \}/);
     assert.match(party, /custom movement unit conversion must be a finite positive number/i);
 });

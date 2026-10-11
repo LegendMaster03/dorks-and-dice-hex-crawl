@@ -12,6 +12,7 @@ import type {
 } from "../../types";
 import { required } from "../../ui/dom";
 import { movementContributorsAfterMemberRemoval } from "./expedition-party-movement";
+import { movementReferenceFieldMarkup, preferredPartyMovementUnit } from "./party-movement-rendering";
 
 type PartyMutationRunner = (
     control: HTMLButtonElement | null,
@@ -665,20 +666,7 @@ export class ExpeditionPartySheetController {
 
     private movementFieldMarkup(key: MovementKey, label: string): string {
         const distance = this.requireDraft().baseMovement?.[key] ?? null;
-        const unit = distance?.unit ?? this.preferredUnit();
-        return `
-            <div class="hc-movement-reference" data-movement-key="${key}">
-                <label>${label} <input data-movement-value type="number" min="0" step="any" value="${distance?.value ?? ""}"></label>
-                <label>Unit
-                    <select data-movement-unit>
-                        <option value="Mile"${unit.kind === "Mile" ? " selected" : ""}>Miles</option>
-                        <option value="Kilometer"${unit.kind === "Kilometer" ? " selected" : ""}>Kilometers</option>
-                        <option value="Custom"${unit.kind === "Custom" ? " selected" : ""}>Custom</option>
-                    </select>
-                </label>
-                <label data-custom-symbol>Symbol <input data-movement-symbol maxlength="24" value="${escapeHtml(unit.kind === "Custom" ? unit.symbol : "")}"></label>
-                <label data-custom-meters>Meters / unit <input data-movement-meters type="number" min="0.0000001" step="any" value="${unit.kind === "Custom" ? unit.metersPerUnit ?? "" : ""}"></label>
-            </div>`;
+        return movementReferenceFieldMarkup(key, label, distance, this.preferredUnit());
     }
 
     private populateMovementControls(): void {
@@ -693,6 +681,7 @@ export class ExpeditionPartySheetController {
 
             const updateVisibility = (): void => {
                 const custom = kind.value === "Custom";
+                kind.required = value.value !== "";
                 symbolLabel.hidden = !custom;
                 metersLabel.hidden = !custom;
                 symbol.required = custom && value.value !== "";
@@ -710,6 +699,8 @@ export class ExpeditionPartySheetController {
                     this.markDirty();
                     return;
                 }
+                // An entered number without an explicit unit remains a draft.
+                if (!kind.value) { this.markDirty(); return; }
                 const unit = readUnit(kind.value, symbol.value, meters.value);
                 const movement = this.ensureMovement();
                 movement[key] = { value: Number(value.value), unit };
@@ -779,18 +770,10 @@ export class ExpeditionPartySheetController {
         }
     }
 
-    private preferredUnit(): DistanceUnit {
-        const runtime = this.runtimeForUnits ?? this.getRuntime();
-        const movement = this.requireDraft().baseMovement;
-        const existing = movement?.perHour?.unit
-            ?? movement?.perWatch?.unit
-            ?? movement?.perMarch?.unit;
-        if (existing) return existing;
-        if (!runtime.expedition.isSpatial) {
-            return { kind: "Mile", symbol: "mi", metersPerUnit: 1609.344 };
-        }
-        return runtime.context.hexCenterDistance?.unit
-            ?? runtime.expedition.distanceTraveled.unit;
+    private preferredUnit(): DistanceUnit | null {
+        return preferredPartyMovementUnit(
+            this.runtimeForUnits ?? this.getRuntime(),
+            this.requireDraft().baseMovement);
     }
 
     private validateDraft(): void {

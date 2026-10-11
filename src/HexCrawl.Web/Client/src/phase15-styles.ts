@@ -215,6 +215,10 @@ export function ensurePhase15Styles(): void {
         .hc-phase15-expedition .hc-map-canvas { height:100%; min-height:0; }
         .hc-map-frame { position:relative; min-width:0; overflow:hidden; border-radius:.55rem; }
         .hc-adjacency-navigator { position:absolute; z-index:6; top:.8rem; left:.8rem; width:8.5rem; aspect-ratio:1; pointer-events:none; filter:drop-shadow(0 .2rem .4rem rgba(0,0,0,.24)); }
+        /* Generalized expeditions host the same navigator in the sidebar,
+           not as a map overlay. Keep it in normal flow and fully contained. */
+        .hc-periodic-expedition [data-cell-navigator] { display:grid; place-items:center; width:100%; min-width:0; }
+        .hc-periodic-expedition [data-cell-navigator] .hc-adjacency-navigator { position:relative; inset:auto; width:min(8.5rem,100%); max-width:100%; height:auto; margin:0; }
         .hc-adjacency-cell { position:absolute; inset:0; width:100%; height:100%; overflow:visible; pointer-events:none; }
         .hc-adjacency-cell polygon { fill:color-mix(in srgb,var(--hc-surface) 36%,transparent); stroke:var(--hc-text-strong); stroke-width:5; stroke-linejoin:round; vector-effect:non-scaling-stroke; }
         #tool-root.hex-crawl-app button.hc-adjacency-interface { position:absolute; pointer-events:auto; left:var(--hc-adjacency-x); top:var(--hc-adjacency-y); transform:translate(-50%,-50%); display:grid; place-items:center; width:2.75rem; height:2.75rem; min-width:2.75rem; min-height:2.75rem; padding:0; border:0; border-radius:.35rem; background:transparent; color:inherit; line-height:1; box-shadow:none; cursor:pointer; }
@@ -338,6 +342,7 @@ export function ensurePhase15Styles(): void {
             .hc-advanced-index { max-height:none; }
             .hc-phase15-expedition .hc-map-host { height:clamp(20rem,48vh,30rem); min-height:0; }
             .hc-adjacency-navigator { width:7.5rem; top:.55rem; left:.55rem; }
+            .hc-periodic-expedition [data-cell-navigator] .hc-adjacency-navigator { width:min(7.5rem,100%); inset:auto; }
             .hc-adjacency-interface { min-width:2.75rem; min-height:2.75rem; }
             .hc-current-travel-facts { grid-template-columns:auto minmax(0,1fr); }
             .hc-movement-ledger-table, .hc-readable-table { display:block; width:100%; max-width:100%; overflow-x:auto; overscroll-behavior-inline:contain; }
