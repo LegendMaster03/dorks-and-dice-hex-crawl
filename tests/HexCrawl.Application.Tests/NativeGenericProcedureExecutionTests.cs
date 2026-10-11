@@ -84,63 +84,47 @@ public sealed class NativeGenericProcedureExecutionTests
     }
 
     [Fact]
-    public async Task WorldBoundWorkbenchPinsGenericProcedureAndExecutesWithoutRulesCore()
+    public async Task WorldBoundCellRuntimePinsNativeProcedureAndExecutesWithoutRulesCore()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = await StoreAsync(database.ConnectionString);
         var core = new HexCrawlService(store);
-        var contextResolver = new CrawlSessionContextResolver(core);
-        var workbench = new ExpeditionWorkbenchService(store, core, contextResolver);
         var world = await core.CreateOverworldAsync(Owner, WorldCommand());
+        var started = await new ExpeditionStartService(
+            store, core, new CampaignProcedureService(store))
+            .StartWorldBoundCellsAsync(
+                world.World.Id, Owner, "Native world-bound",
+                new ProcedureStartSelection(PresetKey: "simple-fixed-distance"),
+                LegacyHexTilingCompatibility.ToAddress(new HexCoordinate(0, 0)));
 
-        var started = await workbench.StartAsync(
-            world.World.Id,
-            Owner,
-            new StartExpeditionWorkbenchCommand(
-                "Native world-bound",
-                "simple-fixed-distance",
-                "exploration-map",
-                new HexCoordinate(0, 0)));
-
-        var advanced = await workbench.AdvanceAsync(
-            started.Id,
-            Owner,
-            FixedAdvance(started.Version, 2));
-
-        var state = Assert.IsType<ExpeditionState>(advanced.Runtime);
+        var advanced = await AdvanceCellAsync(core, started, 2);
+        var state = Assert.IsType<CellExpeditionState>(advanced.Runtime);
         Assert.Equal(1, state.CompletedWatches);
         Assert.Equal(TimeSpan.FromHours(4), state.ElapsedTravelTime);
         Assert.Equal(started.CampaignProcedure, advanced.CampaignProcedure);
+        Assert.Equal(2, GenericProcedureRuntime.Bind(advanced.CampaignProcedure).Movement.MechanicVersion);
     }
 
     [Fact]
-    public async Task AbstractHexSessionExecutesPinnedGenericProcedureAfterRestart()
+    public async Task AbstractCellSessionExecutesPinnedGenericProcedureAfterRestart()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = await StoreAsync(database.ConnectionString);
-        var sessions = new CrawlSessionService(store);
-        var started = await sessions.StartAsync(
-            Owner,
-            new StartStandaloneCrawlSessionCommand(
-                "Native abstract hex",
-                "simple-fixed-distance",
+        var core = new HexCrawlService(store);
+        var started = await new ExpeditionStartService(
+            store, core, new CampaignProcedureService(store))
+            .StartStandaloneCellsAsync(
+                Owner, "Native abstract cell",
+                new ProcedureStartSelection(PresetKey: "simple-fixed-distance"),
                 new AbstractHexCrawlSessionContext("Abstract region", HexOrientation.PointyTop, Context()),
-                new HexCoordinate(0, 0)));
+                new HexCoordinate(0, 0));
 
         var restartedStore = await StoreAsync(database.ConnectionString);
         var restartedCore = new HexCrawlService(restartedStore);
-        var restartedWorkbench = new ExpeditionWorkbenchService(
-            restartedStore,
-            restartedCore,
-            new CrawlSessionContextResolver(restartedCore));
         var loaded = await restartedCore.GetExpeditionAsync(started.Id, Owner);
+        var advanced = await AdvanceCellAsync(restartedCore, loaded, 2);
 
-        var advanced = await restartedWorkbench.AdvanceAsync(
-            loaded.Id,
-            Owner,
-            FixedAdvance(loaded.Version, 2));
-
-        var state = Assert.IsType<ExpeditionState>(advanced.Runtime);
+        var state = Assert.IsType<CellExpeditionState>(advanced.Runtime);
         Assert.Equal(1, state.CompletedWatches);
         Assert.Equal(TimeSpan.FromHours(4), state.ElapsedTravelTime);
         Assert.Equal(started.CampaignProcedure, advanced.CampaignProcedure);
@@ -183,14 +167,14 @@ public sealed class NativeGenericProcedureExecutionTests
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = await StoreAsync(database.ConnectionString);
-        var sessions = new CrawlSessionService(store);
-        var started = await sessions.StartAsync(
-            Owner,
-            new StartStandaloneCrawlSessionCommand(
-                "Detached origin",
-                "simple-fixed-distance",
+        var core = new HexCrawlService(store);
+        var started = await new ExpeditionStartService(
+            store, core, new CampaignProcedureService(store))
+            .StartStandaloneCellsAsync(
+                Owner, "Detached origin",
+                new ProcedureStartSelection(PresetKey: "simple-fixed-distance"),
                 new AbstractHexCrawlSessionContext("Detached", HexOrientation.PointyTop, Context()),
-                new HexCoordinate(0, 0)));
+                new HexCoordinate(0, 0));
         var detached = started with
         {
             ProcedureOrigin = new ProcedureOriginMetadata("removed-or-renamed-preset", "Removed preset", 999)
@@ -199,16 +183,29 @@ public sealed class NativeGenericProcedureExecutionTests
         Assert.Equal(SaveOutcome.Saved, saved.Outcome);
         var persisted = Assert.IsType<StoredExpedition>(saved.Value);
 
-        var core = new HexCrawlService(store);
-        var workbench = new ExpeditionWorkbenchService(store, core, new CrawlSessionContextResolver(core));
-        var advanced = await workbench.AdvanceAsync(
-            persisted.Id,
-            Owner,
-            FixedAdvance(persisted.Version, 1));
-
+        var advanced = await AdvanceCellAsync(core, persisted, 1);
         Assert.Equal("removed-or-renamed-preset", advanced.ProcedureOrigin?.PresetKey);
         Assert.Equal(started.CampaignProcedure, advanced.CampaignProcedure);
-        Assert.Equal(1, Assert.IsType<ExpeditionState>(advanced.Runtime).CompletedWatches);
+        Assert.Equal(1, Assert.IsType<CellExpeditionState>(advanced.Runtime).CompletedWatches);
+    }
+
+    private static async Task<StoredExpedition> AdvanceCellAsync(
+        HexCrawlService service, StoredExpedition expedition, double distance)
+    {
+        var cells = Assert.IsType<CellExpeditionState>(expedition.Runtime);
+        var geometry = (await service.ResolveCellGeometryAsync(expedition, Owner)).Tiling;
+        var hex = LegacyHexTilingCompatibility.ToHex(cells.Traversal.CurrentCell.Address);
+        var heading = SpatialCourseSelection.FromLegacyHexDirection(
+            geometry, hex, new HexDirection(0));
+        var source = new ResolutionProvenance(ResolutionSource.ManualRoll);
+        return await service.AdvanceCellExpeditionAsync(
+            expedition.Id, Owner, expedition.Version,
+            new CellWatchTravelPlan(
+                heading, false, true, TravelModeSelection.Normal, NavigationAidSelection.None),
+            new CellWatchAdvanceInputs(
+                ResolvedTravelAmount.Distance(Miles(distance), Miles(distance), source),
+                new ResolvedCellNavigation(NavigationCheckOutcome.Succeeded, null, source),
+                ResolvedEncounter.None));
     }
 
     private static async Task<PostgresHexCrawlStore> StoreAsync(string connectionString)

@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using HexCrawl.Application.Persistence;
 using HexCrawl.Domain.Runtime;
 using HexCrawl.Domain.Spatial;
@@ -32,7 +33,13 @@ public sealed record EncounterHandoffLocation(
 public sealed record EncounterHandoffWorldContext(
     Guid? OverworldId,
     HexCoordinate? Hex,
-    EncounterHandoffLocation? Location);
+    EncounterHandoffLocation? Location)
+{
+    // Historical V2 events retain qualified cell identity. Do not project an
+    // invented axial coordinate merely to satisfy older handoff consumers.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorldCellId? Cell { get; init; }
+}
 
 public sealed record EncounterHandoffEncounter(
     string Outcome,
@@ -194,6 +201,14 @@ public sealed class EncounterHandoffService(HexCrawlService coreService)
                 "The retained encounter location metadata does not match the runtime encounter subject.");
         }
 
+        if (runtimeEvent.Hex is not null && runtimeEvent.Cell is not null)
+            throw new InvalidOperationException("Runtime encounter has conflicting axial and qualified-cell coordinates.");
+        if (expedition.Runtime is CellExpeditionState spatial
+            && (runtimeEvent.Cell is not { } recordedCell
+                || recordedCell.TilingId != spatial.Traversal.CurrentCell.TilingId))
+            throw new InvalidOperationException(
+                "A V2 runtime encounter must retain a cell qualified by the expedition tiling.");
+
         var location = runtimeEvent.EncounterLocation is null
             ? null
             : new EncounterHandoffLocation(
@@ -217,6 +232,7 @@ public sealed class EncounterHandoffService(HexCrawlService coreService)
             watchNumber,
             overworldId,
             runtimeEvent.Hex,
+            runtimeEvent.Cell,
             location,
             runtimeEvent.EncounterOutcome.Value.ToString(),
             runtimeEvent.Message,
@@ -278,6 +294,7 @@ public sealed class EncounterHandoffService(HexCrawlService coreService)
             overworldId,
             null,
             null,
+            null,
             "JourneyEvent",
             occurrence.EventKey,
             occurrence.Note,
@@ -295,6 +312,7 @@ public sealed class EncounterHandoffService(HexCrawlService coreService)
         int? watchNumber,
         Guid? overworldId,
         HexCoordinate? hex,
+        WorldCellId? cell,
         EncounterHandoffLocation? location,
         string outcome,
         string summary,
@@ -325,7 +343,7 @@ public sealed class EncounterHandoffService(HexCrawlService coreService)
             new EncounterHandoffWorldContext(
                 overworldId,
                 hex,
-                location),
+                location) { Cell = cell },
             new EncounterHandoffEncounter(outcome, summary, dmNote),
             [],
             circumstances,

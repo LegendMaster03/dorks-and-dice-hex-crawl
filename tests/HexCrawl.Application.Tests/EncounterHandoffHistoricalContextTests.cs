@@ -11,7 +11,7 @@ public sealed class EncounterHandoffHistoricalContextTests
     public async Task RuntimeHandoffUsesLocationSnapshotCapturedAtEncounterTime()
     {
         await using var database = await TestDatabase.CreateAsync();
-        var (core, workbench) = await database.ServicesAsync();
+        var (core, starter) = await database.ServicesAsync();
         var world = await core.CreateOverworldAsync("alice", new CreateOverworldCommand(
             "Historical handoff world",
             HexOrientation.PointyTop,
@@ -28,35 +28,34 @@ public sealed class EncounterHandoffHistoricalContextTests
             world.Version));
         var originalLocation = Assert.Single(world.World.Locations);
 
-        var expedition = await workbench.StartAsync(
-            world.World.Id,
-            "alice",
-            new StartExpeditionWorkbenchCommand(
-                "Historical location",
-                "alexandrian-advanced",
-                "dm-controlled",
-                new HexCoordinate(0, 0)));
-        expedition = await workbench.AdvanceAsync(
-            expedition.State.Id,
-            "alice",
-            new AdvanceExpeditionWorkbenchCommand
-            {
-                ExpectedVersion = expedition.Version,
-                IntendedDirection = 0,
-                ExpectedDistance = 1,
-                ActualDistance = 1,
-                NavigationOutcome = NavigationCheckOutcome.Succeeded,
-                EncounterOutcome = EncounterOutcomeKind.KeyedLocationDiscovery,
-                EncounterHour = 0,
-                LocationId = originalLocation.Id,
-                TravelResolutionSource = ResolutionSource.ManualRoll,
-                NavigationResolutionSource = ResolutionSource.ManualRoll,
-                EncounterResolutionSource = ResolutionSource.ManualRoll
-            });
+        var start = new HexCoordinate(0, 0);
+        var startCell = world.World.SpatialTiling.Resolve(
+            LegacyHexTilingCompatibility.ToAddress(start)).Id;
+        var expedition = await starter.StartWorldBoundCellsAsync(
+            world.World.Id, "alice", "Historical location",
+            new ProcedureStartSelection(PresetKey: "alexandrian-advanced"),
+            startCell.Address, "dm-controlled");
+        var heading = SpatialCourseSelection.FromLegacyHexDirection(
+            world.World.SpatialTiling, start, new HexDirection(0));
+        var source = new ResolutionProvenance(ResolutionSource.ManualRoll);
+        expedition = await core.AdvanceCellExpeditionAsync(
+            expedition.Id, "alice", expedition.Version,
+            new CellWatchTravelPlan(
+                heading, false, false, TravelModeSelection.Normal, NavigationAidSelection.None),
+            new CellWatchAdvanceInputs(
+                ResolvedTravelAmount.Distance(
+                    new DistanceMeasure(1, DistanceUnit.Miles),
+                    new DistanceMeasure(1, DistanceUnit.Miles), source),
+                new ResolvedCellNavigation(NavigationCheckOutcome.Succeeded, null, source),
+                new ResolvedEncounter(
+                    EncounterOutcomeKind.KeyedLocationDiscovery, TimeSpan.Zero,
+                    originalLocation.Id, null, source)));
 
         var encounterEvent = Assert.Single(
-            expedition.State.History,
+            expedition.Runtime.History,
             value => value.Kind == CrawlRuntimeEventKind.EncounterTriggered);
+        Assert.Equal(startCell, encounterEvent.Cell);
+        Assert.Null(encounterEvent.Hex);
         var historicalLocation = Assert.IsType<CrawlRuntimeLocationSnapshot>(encounterEvent.EncounterLocation);
         Assert.Equal(originalLocation.Id, historicalLocation.Id);
         Assert.Equal("Old Ruin", historicalLocation.Name);
@@ -75,7 +74,7 @@ public sealed class EncounterHandoffHistoricalContextTests
         Assert.Equal("Renamed Settlement", Assert.Single(world.World.Locations).Name);
 
         var handoff = await new EncounterHandoffService(core).CreateAsync(
-            expedition.State.Id,
+            expedition.Id,
             "alice",
             new CreateEncounterHandoffCommand(
                 expedition.Version,
@@ -85,7 +84,8 @@ public sealed class EncounterHandoffHistoricalContextTests
                 null));
 
         Assert.Equal(world.World.Id, handoff.WorldContext.OverworldId);
-        Assert.Equal(new HexCoordinate(0, 0), handoff.WorldContext.Hex);
+        Assert.Null(handoff.WorldContext.Hex);
+        Assert.Equal(startCell, handoff.WorldContext.Cell);
         var handoffLocation = Assert.IsType<EncounterHandoffLocation>(handoff.WorldContext.Location);
         Assert.Equal(originalLocation.Id, handoffLocation.Id);
         Assert.Equal("Old Ruin", handoffLocation.Name);
@@ -111,13 +111,12 @@ public sealed class EncounterHandoffHistoricalContextTests
             return new TestDatabase(database);
         }
 
-        public async Task<(HexCrawlService Core, ExpeditionWorkbenchService Workbench)> ServicesAsync()
+        public async Task<(HexCrawlService Core, ExpeditionStartService Starter)> ServicesAsync()
         {
             var store = new PostgresHexCrawlStore(ConnectionString);
             await store.InitializeAsync();
             var core = new HexCrawlService(store);
-            var resolver = new CrawlSessionContextResolver(core);
-            return (core, new ExpeditionWorkbenchService(store, core, resolver));
+            return (core, new ExpeditionStartService(store, core, new CampaignProcedureService(store)));
         }
 
         public ValueTask DisposeAsync() => _database.DisposeAsync();
