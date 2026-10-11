@@ -60,13 +60,13 @@ public sealed class PostgresSchemaTests
         await using var versionCommand = connection.CreateCommand();
         versionCommand.CommandText = "SELECT MAX(version) FROM hex_crawl_schema_migrations;";
         Assert.Equal(PostgresSchemaMigrator.CurrentVersion, Convert.ToInt32(await versionCommand.ExecuteScalarAsync()));
-        Assert.Equal(10, PostgresSchemaMigrator.CurrentVersion);
+        Assert.Equal(11, PostgresSchemaMigrator.CurrentVersion);
     }
 
     [Theory]
     [InlineData(8)]
     [InlineData(9)]
-    [InlineData(11)]
+    [InlineData(12)]
     public async Task RetiredOrFutureSchemaVersionsFailClosedWithoutChangingExistingRecords(int oldVersion)
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
@@ -79,7 +79,7 @@ public sealed class PostgresSchemaTests
         await using (var seed = connection.CreateCommand())
         {
             seed.CommandText = """
-                UPDATE hex_crawl_schema_migrations SET version = @oldVersion WHERE version = 10;
+                UPDATE hex_crawl_schema_migrations SET version = @oldVersion WHERE version = 11;
                 INSERT INTO campaign_procedure_revisions
                     (procedure_id, revision, owner_user_id, procedure_json, created_at)
                 VALUES (@id, 1, 'preservation-test',
@@ -122,7 +122,7 @@ public sealed class PostgresSchemaTests
         await using (var seed = connection.CreateCommand())
         {
             seed.CommandText = """
-                UPDATE hex_crawl_schema_migrations SET version = 7 WHERE version = 10;
+                UPDATE hex_crawl_schema_migrations SET version = 7 WHERE version = 11;
                 INSERT INTO campaign_procedure_revisions
                     (procedure_id, revision, owner_user_id, procedure_json, created_at)
                 VALUES (@id, 1, 'preservation-test',
