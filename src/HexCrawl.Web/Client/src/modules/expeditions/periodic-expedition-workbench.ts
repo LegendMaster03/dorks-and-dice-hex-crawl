@@ -10,6 +10,7 @@ import { currentPeriodicCellAdjacency } from "./current-cell-topology";
 import { renderCurrentCellNavigator } from "./cell-navigator";
 import { adjacencyForIntent } from "./spatial-adjacency";
 import { guidancePreferenceButton } from "../../ui/guidance";
+import { encounterLocationId } from "./keyed-location-encounter";
 
 /**
  * Generalized view of the same expedition entity and authoritative watch runtime.
@@ -81,6 +82,10 @@ export async function renderPeriodicExpeditionWorkbench(
                                         <option value="KeyedLocationDiscovery">Keyed location</option>
                                         <option value="ManualCustom">Custom encounter</option>
                                     </select></label>
+                                <label data-keyed-location-row hidden>Keyed world location
+                                    <select name="keyedLocation" aria-label="Saved keyed world location"></select>
+                                    <span class="hc-hint">Choose an existing world location. Add new locations in the world editor first.</span>
+                                </label>
                                 <label>Encounter time within watch (hours) <input name="encounterHours" type="number" min="0" step="any" value="0"></label>
                                 <label>Encounter note <input name="encounterNote"></label>
                                 <label><input name="continueAcross" type="checkbox"> Continue across cell boundaries</label>
@@ -121,6 +126,26 @@ export async function renderPeriodicExpeditionWorkbench(
         if (!element) throw new Error(`Missing travel selection ${name}.`);
         return element;
     };
+    const keyedChoices = choice("keyedLocation");
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = world.locations.length
+        ? "Choose an existing world location"
+        : "No saved locations — add one on the world map";
+    keyedChoices.append(placeholder);
+    for (const location of world.locations) {
+        const option = document.createElement("option");
+        option.value = location.id;
+        option.textContent = `${location.name} · ${location.category}`;
+        keyedChoices.append(option);
+    }
+    const showKeyedLocation = (): void => {
+        required<HTMLElement>("[data-keyed-location-row]").hidden =
+            choice("encounter").value !== "KeyedLocationDiscovery";
+    };
+    choice("encounter").addEventListener("change", showKeyedLocation);
+    showKeyedLocation();
+
     const map = new MapSurface(required<HTMLElement>("[data-map]"), () => world, undefined, api);
     required<HTMLElement>("[data-guidance-controls]").append(guidancePreferenceButton(root));
     required<HTMLButtonElement>("[data-world]").addEventListener("click",
@@ -245,7 +270,8 @@ export async function renderPeriodicExpeditionWorkbench(
                     kind: encounterChoice as "None" | "WanderingEncounter" | "KeyedLocationDiscovery" | "ManualCustom",
                     occursAt: encounterChoice === "None"
                         ? null : timespanFromHours(readNumber("encounterHours")),
-                    locationId: null,
+                    locationId: encounterLocationId(
+                        encounterChoice, keyedChoices.value, world.locations),
                     note: input("encounterNote").value.trim() || null,
                     provenance: { source: "DmOverride" as const, note: "DM-resolved encounter" }
                 }
