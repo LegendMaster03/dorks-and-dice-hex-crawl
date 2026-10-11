@@ -164,6 +164,115 @@ public sealed class Phase20GeometricTurningRegressionTests
     }
 
     [Fact]
+    public void EncounterInterruptsPartialTurnChargeAndResumePaysOnlyOutstandingDebt()
+    {
+        var session = Session();
+        var world = session.World;
+        var procedure = GeometricNativeProcedureMaterializer.Materialize(
+            "alexandrian-advanced").Procedure;
+        var engine = new CrawlRuntimeEngine();
+        var east = SpatialCourseSelection.FromLegacyHexDirection(
+            world, new HexCoordinate(0, 0), new HexDirection(0));
+        var northEast = SpatialCourseSelection.FromLegacyHexDirection(
+            world, new HexCoordinate(0, 0), new HexDirection(1));
+        var first = engine.AdvanceCellWatch(
+            world, procedure, session.Expedition, Plan(east), Inputs(1));
+        Assert.Null(first.PauseReason);
+
+        // Only half of a 0.8-mile budget is available before the encounter,
+        // so 0.4 miles pays the one-mile turn with 0.6 left outstanding.
+        var encounter = new ResolvedEncounter(
+            EncounterOutcomeKind.WanderingEncounter, TimeSpan.FromHours(2),
+            null, "An interrupted turn", Manual);
+        var paused = engine.AdvanceCellWatch(
+            world, procedure, first.Expedition, Plan(northEast),
+            Inputs(0.8) with { Encounter = encounter });
+        Assert.Equal(RuntimePauseReason.EncounterTriggered, paused.PauseReason);
+        Assert.Equal(TimeSpan.FromHours(2), paused.RemainingWatchTime);
+        Assert.Equal(TimeSpan.FromHours(6), paused.Expedition.ElapsedTravelTime);
+        Assert.Equal(first.Expedition.Traversal.Position, paused.Expedition.Traversal.Position);
+        Assert.InRange(paused.Expedition.PendingTravelBudgetCharge!.Value.Value,
+            0.5999999, 0.6000001);
+        Assert.Equal(1d, paused.Expedition.DistanceTraveled!.Value.Value, 8);
+        var pending = Assert.IsType<PendingEncounterOccurrence>(
+            paused.Expedition.PendingEncounter);
+
+        // Save/reload while the encounter is pending, then resolve it and
+        // continue with a new budget for the remaining half of the watch.
+        var saved = JsonSerializer.Deserialize<CellExpeditionState>(
+            JsonSerializer.Serialize(paused.Expedition))!;
+        saved.Validate(world);
+        Assert.Equal(pending.Id, saved.PendingEncounter!.Id);
+        var resolved = engine.ResolveCellEncounter(saved, pending.Id, "Resolved");
+        Assert.Null(resolved.PauseReason);
+        Assert.Equal(TimeSpan.FromHours(2), resolved.RemainingWatchTime);
+        Assert.Null(resolved.Expedition.PendingEncounter);
+        var resumed = engine.AdvanceCellWatch(
+            world, procedure, resolved.Expedition, Plan(northEast),
+            Inputs(0.75));
+        Assert.Null(resumed.PauseReason);
+        Assert.Equal(2, resumed.Expedition.CompletedWatches);
+        Assert.Equal(TimeSpan.FromHours(8), resumed.Expedition.ElapsedTravelTime);
+        Assert.Null(resumed.Expedition.ActiveWatch);
+        Assert.Null(resumed.Expedition.PendingTravelBudgetCharge);
+        Assert.InRange(resumed.Expedition.DistanceTraveled!.Value.Value,
+            1.1499999, 1.1500001);
+        var debits = resumed.Expedition.History
+            .Where(e => e.Kind == CrawlRuntimeEventKind.ResolutionProvenanceRecorded
+                && e.Message.Contains("turn debited", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        Assert.Equal(2, debits.Length);
+        Assert.InRange(debits.Sum(e => e.DistanceValue ?? 0), 0.9999999, 1.0000001);
+        Assert.Single(resumed.Expedition.History, e =>
+            e.Kind == CrawlRuntimeEventKind.EncounterTriggered);
+        Assert.Single(resumed.Expedition.History, e =>
+            e.Kind == CrawlRuntimeEventKind.EncounterResolved);
+    }
+
+    [Fact]
+    public void FirstCourseAdjudicationDoesNotInventATurningCharge()
+    {
+        var session = Session();
+        var world = session.World;
+        var center = world.Resolve(session.Expedition.Traversal.CurrentCell.Address);
+        var edge = world.Boundaries(center.Id.Address)[0];
+        var midpoint = new WorldPoint(
+            (edge.Start.X + edge.End.X) / 2, (edge.Start.Y + edge.End.Y) / 2);
+        var outward = midpoint - center.Center;
+        var positionWithoutPriorCourse = session.Expedition with
+        {
+            Traversal = session.Expedition.Traversal with
+            {
+                Position = midpoint,
+                TravelHeading = null,
+                SelectedExitInterfaceIndex = null
+            },
+            IntendedHeading = null
+        };
+        var procedure = GeometricNativeProcedureMaterializer.Materialize(
+            "alexandrian-advanced").Procedure;
+        var engine = new CrawlRuntimeEngine();
+        var paused = engine.AdvanceCellWatch(
+            world, procedure, positionWithoutPriorCourse, Plan(outward), Inputs(2));
+        Assert.Equal(RuntimePauseReason.CellCourseAdjudicationRequired, paused.PauseReason);
+        Assert.Null(paused.Expedition.ActiveWatch!.PendingTurnFromHeading);
+        Assert.True(paused.Expedition.ActiveWatch.TurnPreflightWasDeferred);
+
+        var accepted = engine.ResolveCellCourse(
+            world, paused.Expedition,
+            new CellCourseDecision(outward, edge.InterfaceIndex, Manual));
+        var resumed = engine.AdvanceCellWatch(
+            world, procedure, accepted.Expedition, accepted.Expedition.ActiveWatch!.Plan, Inputs(2));
+        Assert.Null(resumed.PauseReason);
+        Assert.Equal(1, resumed.Expedition.CompletedWatches);
+        Assert.Equal(edge.To, resumed.Expedition.Traversal.CurrentCell);
+        Assert.InRange(resumed.Expedition.DistanceTraveled!.Value.Value, 1.9999999, 2.0000001);
+        Assert.DoesNotContain(resumed.Expedition.History, e =>
+            e.Kind == CrawlRuntimeEventKind.ResolutionProvenanceRecorded
+            && e.Message.Contains("turn debited", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void GeometricExitIsNotGovernedByTheHistoricalFarExitFactor()
     {
         var session = Session();
