@@ -548,8 +548,12 @@ export class SourceMapWorkspace {
             }
             const next = document.createElement("p");
             next.className = "hc-hint";
-            next.textContent = assessment.status === "structure-match"
-                ? "Existing world geometry is unchanged. Review registration or use manual placement before accepting map alignment."
+            next.textContent = assessment.registration?.status === "candidates"
+                ? assessment.status === "structure-match"
+                    ? "The image matches the saved world pattern. Preview the verified placement before saving it."
+                    : "The image can be registered to the unchanged world below. The selected exploration ruleset remains incompatible or unverified and must be resolved separately before starting an expedition."
+                : assessment.status === "structure-match"
+                    ? "Existing world geometry is unchanged. Review registration or use manual placement before accepting map alignment."
                 : assessment.status === "mismatch"
                     ? assessment.canCorrectInPlace
                         ? "This world has no conflicting spatial data, so you may use the verified correction option below."
