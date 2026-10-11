@@ -28,6 +28,7 @@ public static class DelaneyDressHarmonicMetricRealization
     private const int MaximumVertices = 96;
 
     private readonly record struct CornerArc(int Target, LatticeDisplacement Displacement);
+    private sealed record LinearEquality(double[] Coefficients, double X, double Y);
     private static TilingWorldPoint Add(TilingWorldPoint a, TilingWorldPoint b) =>
         new(a.X + b.X, a.Y + b.Y);
     private static LatticeDisplacement Sub(LatticeDisplacement a, LatticeDisplacement b) =>
@@ -62,15 +63,58 @@ public static class DelaneyDressHarmonicMetricRealization
         return double.IsFinite(selected) ? selected : null;
     }
 
-    private static double[]? SolveReducedLaplacian(double[,] full, double[] rhs)
+    // Remove dependent affine constraints before assembling the KKT system.
+    // A redundant identity is harmless; inconsistent equalities fail closed.
+    private static IReadOnlyList<LinearEquality>? IndependentEqualities(
+        IReadOnlyList<LinearEquality> requested)
     {
-        int n = rhs.Length - 1;
+        var rows = new List<(int Pivot, LinearEquality Equation)>();
+        foreach (var source in requested)
+        {
+            var coefficients = (double[])source.Coefficients.Clone();
+            double x = source.X, y = source.Y;
+            foreach (var (pivot, row) in rows)
+            {
+                double factor = coefficients[pivot];
+                for (int i = 0; i < coefficients.Length; i++)
+                    coefficients[i] -= factor * row.Coefficients[i];
+                x -= factor * row.X;
+                y -= factor * row.Y;
+            }
+            int next = Array.FindIndex(coefficients, value => Math.Abs(value) > 1e-9);
+            if (next < 0)
+            {
+                if (Math.Abs(x) > 1e-8 || Math.Abs(y) > 1e-8) return null;
+                continue;
+            }
+            double inverse = 1 / coefficients[next];
+            for (int i = 0; i < coefficients.Length; i++) coefficients[i] *= inverse;
+            var equality = new LinearEquality(coefficients, x * inverse, y * inverse);
+            rows.Add((next, equality));
+            rows.Sort((a, b) => a.Pivot.CompareTo(b.Pivot));
+        }
+        return rows.Select(row => row.Equation).ToArray();
+    }
+
+    private static double[]? SolveReducedLaplacian(double[,] full, double[] rhs,
+        IReadOnlyList<LinearEquality> equalities, bool useX)
+    {
+        int freeVertices = rhs.Length - 1;
+        int n = freeVertices + equalities.Count;
         if (n == 0) return [];
         var augmented = new double[n, n + 1];
-        for (int r = 0; r < n; r++)
+        for (int r = 0; r < freeVertices; r++)
         {
-            for (int c = 0; c < n; c++) augmented[r, c] = full[r + 1, c + 1];
+            for (int c = 0; c < freeVertices; c++) augmented[r, c] = full[r + 1, c + 1];
+            for (int c = 0; c < equalities.Count; c++)
+                augmented[r, freeVertices + c] = equalities[c].Coefficients[r];
             augmented[r, n] = rhs[r + 1];
+        }
+        for (int r = 0; r < equalities.Count; r++)
+        {
+            for (int c = 0; c < freeVertices; c++)
+                augmented[freeVertices + r, c] = equalities[r].Coefficients[c];
+            augmented[freeVertices + r, n] = useX ? equalities[r].X : equalities[r].Y;
         }
         for (int col = 0; col < n; col++)
         {
@@ -101,13 +145,14 @@ public static class DelaneyDressHarmonicMetricRealization
             if (!double.IsFinite(value)) return null;
             solution[row] = value;
         }
-        return solution;
+        return solution.Take(freeVertices).ToArray();
     }
 
     public static DelaneyDressHarmonicMetricResult Construct(
         string source, double worldUnitsPerAbstractPeriod, string units,
         double rotationDegrees = 0, int chamberLimit = 1024,
-        IReadOnlyList<TilingMetricConstraint>? constraints = null)
+        IReadOnlyList<TilingMetricConstraint>? constraints = null,
+        IReadOnlyList<PeriodicStraightEdgeSubdivision>? straightEdgeSubdivisions = null)
     {
         static DelaneyDressHarmonicMetricResult Unresolved(string reason) =>
             new("unresolved-geometry", Reason: reason);
@@ -126,6 +171,9 @@ public static class DelaneyDressHarmonicMetricRealization
                 Reason: abstractCover.Reason ?? "No proved finite Euclidean translation cover.");
 
         var topology = abstractCover.Witness;
+        IReadOnlyList<PeriodicStraightEdgeSubdivision> splits;
+        try { splits = PeriodicStraightEdgeGeometry.Normalize(topology, straightEdgeSubdivisions); }
+        catch (ArgumentException error) { return Unresolved(error.Message); }
         var cells = topology.MotifCells;
         if (cells.Count is < 1 or > MaximumCells)
             return Unresolved("The metric witness validator supports 1–24 motif cells.");
@@ -218,8 +266,34 @@ public static class DelaneyDressHarmonicMetricRealization
                     rhsY[first] += shift.V;
                     rhsY[second] -= shift.V;
                 }
-            var solX = SolveReducedLaplacian(laplacian, rhsX);
-            var solY = SolveReducedLaplacian(laplacian, rhsY);
+            var equalities = new List<LinearEquality>();
+            foreach (var split in splits)
+            {
+                int c = byId[split.MotifCellId];
+                int size = cells[c].Boundary.Count;
+                int vertex = split.BoundaryVertexIndex;
+                int previous = offsets[c] + (vertex + size - 1) % size;
+                int middle = offsets[c] + vertex;
+                int following = offsets[c] + (vertex + 1) % size;
+                double fraction = split.Fraction;
+                var terms = new[] { (previous, -(1 - fraction)), (middle, 1d),
+                    (following, -fraction) };
+                var coefficients = new double[vertexCount - 1];
+                double constantX = 0, constantY = 0;
+                foreach (var (corner, weight) in terms)
+                {
+                    int orbit = vertexOf[corner];
+                    if (orbit > 0) coefficients[orbit - 1] += weight;
+                    constantX -= weight * potential[corner].U;
+                    constantY -= weight * potential[corner].V;
+                }
+                equalities.Add(new LinearEquality(coefficients, constantX, constantY));
+            }
+            var independent = IndependentEqualities(equalities);
+            if (independent is null)
+                return Unresolved("Requested straight-edge subdivisions have contradictory periodic vertex relationships.");
+            var solX = SolveReducedLaplacian(laplacian, rhsX, independent, true);
+            var solY = SolveReducedLaplacian(laplacian, rhsY, independent, false);
             if (solX is null || solY is null)
                 return Unresolved("The periodic quotient has a singular harmonic embedding.");
             var coordinates = Enumerable.Range(0, vertexCount).Select(i =>
@@ -265,7 +339,8 @@ public static class DelaneyDressHarmonicMetricRealization
                 }).ToArray();
                 shiftedCells.Add(cells[c] with { Boundary = revisedEdges });
             }
-            var shiftedTopology = topology with { MotifCells = shiftedCells };
+            var shiftedTopology = PeriodicStraightEdgeGeometry.Apply(
+                topology with { MotifCells = shiftedCells }, splits);
 
             // An abstract harmonic embedding has two equally valid global
             // orientations. Some chamber presentations yield all clockwise
@@ -338,7 +413,7 @@ public static class DelaneyDressHarmonicMetricRealization
                     pair => (IReadOnlyList<TilingWorldPoint>)pair.Value
                         .Select(Apply).ToArray(),
                     StringComparer.Ordinal),
-                constraints ?? []);
+                (constraints ?? []).Concat(splits.Select(PeriodicStraightEdgeGeometry.Constraint)).ToArray());
             PeriodicMetricWitnessValidator.Validate(shiftedTopology, metric);
             return new("realized", shiftedTopology, metric);
         }
