@@ -152,9 +152,12 @@ public static class PeriodicCellTraversalGeometry
             hits.Add(new Hit(boundary, point, Math.Max(0d, distance), atEndpoint));
         }
 
+        // A known first intersection permits safe movement through the clear ray prefix.
         static CellCrossingResolution ResolveAdjudication(
-            IReadOnlyList<WorldCellBoundary> candidates, string reason) =>
-            new(CellCrossingStatus.RequiresAdjudication, null, null, null, null, candidates, reason);
+            IReadOnlyList<WorldCellBoundary> candidates, string reason,
+            double? distanceToFirstIntersection = null) =>
+            new(CellCrossingStatus.RequiresAdjudication, null, null, null,
+                distanceToFirstIntersection, candidates, reason);
 
         if (collinear.Count > 0)
             return ResolveAdjudication(collinear,
@@ -178,7 +181,7 @@ public static class PeriodicCellTraversalGeometry
             if (matching.Length != 1)
                 return ResolveAdjudication(
                     nearest.Select(h => h.Boundary).ToArray(),
-                    "The selected interface is not the first boundary crossed by this course.");
+                    "The selected interface is not the first boundary crossed by this course.", closest);
             chosen = matching[0];
         }
         else
@@ -186,7 +189,7 @@ public static class PeriodicCellTraversalGeometry
             if (nearest.Length != 1 || nearest[0].Endpoint)
                 return ResolveAdjudication(
                     nearest.Select(h => h.Boundary).ToArray(),
-                    "The course meets a shared vertex or more than one boundary interface.");
+                    "The course meets a shared vertex or more than one boundary interface.", closest);
             chosen = nearest[0];
         }
 
@@ -196,7 +199,7 @@ public static class PeriodicCellTraversalGeometry
         var selectedEdge = chosen.Boundary.End - chosen.Boundary.Start;
         if (Cross(selectedEdge, direction) >= -Length(selectedEdge) * edgeTolerance)
             return ResolveAdjudication([chosen.Boundary],
-                "The course does not leave the current cell through this interface.");
+                "The course does not leave the current cell through this interface.", closest);
 
         // Never rely on mere geometric proximity for the destination.
         var reciprocal = world.Reciprocal(chosen.Boundary);
@@ -241,7 +244,7 @@ public static class PeriodicCellTraversalGeometry
             }
             if (!strictlyInside)
                 return ResolveAdjudication([chosen.Boundary],
-                    "The chosen vertex interface is not confirmed by the outgoing interior geometry.");
+                    "The chosen vertex interface is not confirmed by the outgoing interior geometry.", closest);
         }
 
         return new CellCrossingResolution(
@@ -262,12 +265,28 @@ public static class PeriodicCellTraversalGeometry
         if (!double.IsFinite(availableWorldUnits) || availableWorldUnits < 0)
             throw new ArgumentOutOfRangeException(nameof(availableWorldUnits));
         var crossing = NextCrossing(world, traversal);
-        if (crossing.Status == CellCrossingStatus.RequiresAdjudication)
-            return new CellTraversalAdvance(traversal, 0, crossing);
-
         var heading = traversal.TravelHeading!.Value;
         var length = Length(heading);
         var unit = new WorldPoint(heading.X / length, heading.Y / length);
+        if (crossing.Status == CellCrossingStatus.RequiresAdjudication)
+        {
+            // Do not select any neighbor at an ambiguous vertex. The ray
+            // prefix before the known intersection is still traversable.
+            if (crossing.DistanceWorldUnits is not { } intersection || intersection <= 0)
+                return new CellTraversalAdvance(traversal, 0, crossing);
+            var progressed = Math.Min(availableWorldUnits, intersection);
+            var positioned = traversal with
+            {
+                Position = traversal.Position + unit * progressed
+            };
+            positioned.Validate(world);
+            if (availableWorldUnits < intersection)
+                return new CellTraversalAdvance(positioned, progressed,
+                    new CellCrossingResolution(CellCrossingStatus.None, null, null,
+                        null, null, [], null));
+            return new CellTraversalAdvance(positioned, progressed, crossing);
+        }
+
         var needed = crossing.DistanceWorldUnits ?? double.PositiveInfinity;
         if (availableWorldUnits < needed)
         {

@@ -182,9 +182,14 @@ public sealed partial class CrawlRuntimeEngine
             segmentTravel, state.PendingTravelBudgetCharge);
         var hasGeometricBudget = proposedDebit.GeometricTravel.CellSteps is > 0
             || proposedDebit.GeometricTravel.ActualDistance is { Value: > 0d };
-        var unresolvedCourse = hasGeometricBudget
-            && PeriodicCellTraversalGeometry.NextCrossing(world, state.Traversal).Status
-                == CellCrossingStatus.RequiresAdjudication;
+        var tentativeCrossing = hasGeometricBudget
+            ? PeriodicCellTraversalGeometry.NextCrossing(world, state.Traversal) : null;
+        // A future vertex permits normal movement and legitimate turning effort.
+        // Defer the charge only for ambiguity at the current cursor.
+        var unresolvedCourse = tentativeCrossing is not null
+            && tentativeCrossing.Status == CellCrossingStatus.RequiresAdjudication
+            && (tentativeCrossing.DistanceWorldUnits is null
+                || tentativeCrossing.DistanceWorldUnits <= 0d);
         var debit = unresolvedCourse
             ? new SpatialTurnBudgetDebit(segmentTravel, null, state.PendingTravelBudgetCharge)
             : proposedDebit;
