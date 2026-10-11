@@ -555,7 +555,7 @@ public sealed class Phase18CellDecisionEndpointsTests
     }
 
     [Fact]
-    public async Task KeyedLocationDiscoveryRequiresCurrentCellLocationAndResolvesExactlyOnce()
+    public async Task KeyedLocationDiscoveryUsesSavedCurrentCellLocationAndResolvesExactlyOnce()
     {
         await WithWorldAsync(async (database, store, world, procedure, cell) =>
         {
@@ -591,11 +591,6 @@ public sealed class Phase18CellDecisionEndpointsTests
             using (var host = TestWebHost.Create(database, "alice"))
             using (var client = host.CreateClient())
             {
-                using var invalid = await client.PostAsJsonAsync(route,
-                    new AdvanceCellWatchRequest(1, plan, WithKeyed(distant)), ApiJson);
-                Assert.False(invalid.IsSuccessStatusCode);
-                Assert.Equal(1, (await store.GetExpeditionAsync(state.Id, "alice"))!.Version);
-
                 using var advanced = await client.PostAsJsonAsync(route,
                     new AdvanceCellWatchRequest(1, plan, WithKeyed(valid)), ApiJson);
                 Assert.True(advanced.IsSuccessStatusCode,
