@@ -149,8 +149,12 @@ public sealed class PeriodicStraightEdgeSubdivisionTests
         };
         var unresolved = PeriodicCellTraversalGeometry.Advance(world, state, 3);
         Assert.Equal(CellCrossingStatus.RequiresAdjudication, unresolved.Crossing.Status);
-        Assert.Equal(0, unresolved.ConsumedWorldUnits);
-        Assert.Equal(state, unresolved.Traversal);
+        Assert.InRange(unresolved.ConsumedWorldUnits,
+            state.Position.DistanceTo(split) - 1e-8,
+            state.Position.DistanceTo(split) + 1e-8);
+        Assert.Equal(state.CurrentCell, unresolved.Traversal.CurrentCell);
+        Assert.InRange(unresolved.Traversal.Position.DistanceTo(split), 0, 1e-8);
+        Assert.Null(unresolved.Traversal.EnteredFrom);
         // Selecting one of two touching edges does not authorize a phantom
         // destination if the heading runs along the neighbors' common edge.
         var selected = PeriodicCellTraversalGeometry.NextCrossing(

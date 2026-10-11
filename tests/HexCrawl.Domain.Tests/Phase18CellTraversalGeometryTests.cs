@@ -59,8 +59,12 @@ public sealed class Phase18CellTraversalGeometryTests
         };
         var result = PeriodicCellTraversalGeometry.Advance(world, state, 10);
         Assert.Equal(CellCrossingStatus.RequiresAdjudication, result.Crossing.Status);
-        Assert.Equal(0, result.ConsumedWorldUnits);
-        Assert.Equal(state, result.Traversal);
+        Assert.InRange(result.ConsumedWorldUnits,
+            state.Position.DistanceTo(cell.Polygon[0]) - 1e-8,
+            state.Position.DistanceTo(cell.Polygon[0]) + 1e-8);
+        Assert.Equal(state.CurrentCell, result.Traversal.CurrentCell);
+        Assert.InRange(result.Traversal.Position.DistanceTo(cell.Polygon[0]), 0, 1e-8);
+        Assert.Null(result.Traversal.EnteredFrom);
     }
 
     [Fact]
