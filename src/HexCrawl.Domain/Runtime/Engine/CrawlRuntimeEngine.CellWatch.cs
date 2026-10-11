@@ -368,7 +368,9 @@ public sealed partial class CrawlRuntimeEngine
         {
             AddCellEvent(events, watch, CrawlRuntimeEventKind.NavigationCheckResolved,
                 state, "Navigation check not required.");
-            return state with { IsLost = false, ResolvedVeerDegrees = null };
+            // A suppressed check is not an explicit recognition or reorientation.
+            // Deliberate double-back resets lost state at its separate course step.
+            return state;
         }
         var outcome = resolved ?? throw new InvalidOperationException("A resolved navigation check is required.");
         if (outcome.Outcome == NavigationCheckOutcome.NotRequired)

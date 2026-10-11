@@ -44,6 +44,27 @@ public sealed class Phase18CellWatchRuntimeTests
     }
 
     [Fact]
+    public void SuppressingNavigationCheckDoesNotClearPersistentLostState()
+    {
+        var (world, procedure, state, plan) = Setup(
+            "<1:1,1,1:4,4>", calibrated: true, advanced: true);
+        var lost = state with { IsLost = true, ResolvedVeerDegrees = 20 };
+        var suppressingPlan = plan with
+        {
+            NavigationAid = new NavigationAidSelection("navigation-aid", SuppressesNavigationCheck: true)
+        };
+
+        var result = new CrawlRuntimeEngine().AdvanceCellWatch(
+            world, procedure, lost, suppressingPlan, Inputs(0));
+
+        Assert.Null(result.PauseReason);
+        Assert.True(result.Expedition.IsLost);
+        Assert.Equal(20d, result.Expedition.ResolvedVeerDegrees);
+        Assert.Contains(result.Events, e => e.Kind == CrawlRuntimeEventKind.NavigationCheckResolved);
+        Assert.DoesNotContain(result.Events, e => e.Kind == CrawlRuntimeEventKind.ExpeditionReoriented);
+    }
+
+    [Fact]
     public void NavigationDmOverrideNoteIsRecordedWhenTravelUsesManualResolution()
     {
         var (world, procedure, state, plan) = Setup("<1:1,1,1:4,4>", calibrated: true);
