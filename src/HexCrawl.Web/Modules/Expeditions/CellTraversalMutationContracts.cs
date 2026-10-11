@@ -11,22 +11,23 @@ namespace HexCrawl.Web.Api;
 /// </summary>
 public sealed record StartCellExpeditionRequest(
     string Name,
-    Guid ProcedureId,
-    int ProcedureRevision,
+    Guid? ProcedureId,
+    int? ProcedureRevision,
     PeriodicCellAddress StartCell,
-    string PresentationKey = "dm-controlled")
+    string PresentationKey = "dm-controlled",
+    string? PresetKey = null)
 {
     public ProcedureStartSelection Selection()
     {
         if (string.IsNullOrWhiteSpace(Name))
             throw new InvalidOperationException("Expedition name is required.");
-        if (ProcedureId == Guid.Empty || ProcedureRevision <= 0)
-            throw new InvalidOperationException(
-                "Cell starts require an explicitly pinned saved procedure revision.");
         if (string.IsNullOrWhiteSpace(PresentationKey))
             throw new InvalidOperationException("Cell starts require a valid presentation policy key.");
+        // The optional preset key selects the three executable geometric
+        // recipes only. An existing saved revision is never silently upgraded.
         var selection = new ProcedureStartSelection(
-            ProcedureId: ProcedureId, ProcedureRevision: ProcedureRevision);
+            PresetKey: PresetKey, ProcedureId: ProcedureId,
+            ProcedureRevision: ProcedureRevision);
         selection.Validate();
         return selection;
     }
@@ -90,6 +91,24 @@ public sealed record ResolveCellCourseRequest(
             throw new InvalidOperationException("An expected expedition version is required.");
         ArgumentNullException.ThrowIfNull(Decision);
         AdvanceCellWatchRequest.ValidateClientProvenance(Decision.Provenance);
+    }
+}
+
+/// <summary>Explicit qualified reposition, never inferred travel.</summary>
+public sealed record RepositionCellExpeditionRequest(
+    long ExpectedVersion,
+    WorldCellId TargetCell,
+    WorldPoint? Position,
+    string? Note = null)
+{
+    public void Validate()
+    {
+        if (ExpectedVersion <= 0)
+            throw new InvalidOperationException("An expected expedition version is required.");
+        if (Position is null)
+            throw new InvalidOperationException("An exact spatial position is required for cell repositioning.");
+        if (Note is { Length: > 2000 })
+            throw new InvalidOperationException("Repositioning note exceeds 2000 characters.");
     }
 }
 

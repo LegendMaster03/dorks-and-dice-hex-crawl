@@ -67,13 +67,17 @@ public sealed class Phase18CellExpeditionPersistenceTests
             1, TimeSpan.FromHours(4), TimeSpan.FromHours(1),
             new CellWatchTravelPlan(heading,
                 false, true, TravelModeSelection.Normal, NavigationAidSelection.None),
-            ResolvedEncounter.None, true, null);
+            ResolvedEncounter.None, true, null)
+        {
+            PendingTurnFromHeading = heading
+        };
         var state = new CellExpeditionState
         {
             Id = Guid.NewGuid(),
             Traversal = first.Traversal,
             IntendedHeading = heading,
             DistanceTraveled = first.ConsumedPhysicalDistance!.Value,
+            PendingTravelBudgetCharge = new DistanceMeasure(0.125, DistanceUnit.Miles),
             ElapsedTravelTime = TimeSpan.FromHours(1),
             ActiveWatch = active,
             History = [runtimeEvent]
@@ -93,6 +97,8 @@ public sealed class Phase18CellExpeditionPersistenceTests
             query.Parameters.AddWithValue("id", expedition.Id);
             var json = (string)(await query.ExecuteScalarAsync())!;
             Assert.Contains("\"cellTraversal\"", json);
+            Assert.Contains("\"cellPendingTravelBudgetCharge\"", json);
+            Assert.Contains("\"pendingTurnFromHeading\"", json);
             Assert.DoesNotContain("\"currentHex\":{\"q\":0", json, StringComparison.Ordinal);
         }
 
@@ -108,6 +114,9 @@ public sealed class Phase18CellExpeditionPersistenceTests
         Assert.Equal(edge.InterfaceIndex, loadedState.Traversal.SelectedExitInterfaceIndex);
         Assert.Equal(active.TotalDuration, loadedState.ActiveWatch!.TotalDuration);
         Assert.Equal(active.Elapsed, loadedState.ActiveWatch.Elapsed);
+        Assert.Equal(heading, loadedState.ActiveWatch.PendingTurnFromHeading);
+        Assert.False(loadedState.ActiveWatch.TurnPreflightWasDeferred);
+        Assert.Equal(state.PendingTravelBudgetCharge, loadedState.PendingTravelBudgetCharge);
         Assert.Equal(quarter, loadedState.DistanceTraveled);
         Assert.Equal(runtimeEvent.Cell, Assert.Single(loadedState.History).Cell);
 
@@ -148,6 +157,31 @@ public sealed class Phase18CellExpeditionPersistenceTests
         Assert.Equal(2, verifiedState.History.Count);
         Assert.Equal(crossing.To, verifiedState.History[1].Cell);
         Assert.Null(verifiedState.History[1].Hex);
+        Assert.Equal(state.PendingTravelBudgetCharge, verifiedState.PendingTravelBudgetCharge);
+
+        // Simulate a course decision being deferred at a boundary and verify that
+        // the real PostgreSQL snapshot round-trip preserves its preflight state.
+        var deferred = verified with
+        {
+            Runtime = verifiedState with
+            {
+                ActiveWatch = verifiedState.ActiveWatch! with
+                {
+                    PendingDecision = RuntimePauseReason.CellCourseAdjudicationRequired,
+                    PendingTurnFromHeading = heading,
+                    TurnPreflightWasDeferred = true
+                }
+            },
+            PauseReason = RuntimePauseReason.CellCourseAdjudicationRequired
+        };
+        Assert.Equal(SaveOutcome.Saved,
+            (await restarted.SaveExpeditionAsync(deferred, verified.Version)).Outcome);
+        var reloaded = await restarted.GetExpeditionAsync(expedition.Id, "owner");
+        var reloadedState = Assert.IsType<CellExpeditionState>(reloaded!.Runtime);
+        reloadedState.Validate(tiling);
+        Assert.True(reloadedState.ActiveWatch!.TurnPreflightWasDeferred);
+        Assert.Equal(heading, reloadedState.ActiveWatch.PendingTurnFromHeading);
+        Assert.Equal(state.PendingTravelBudgetCharge, reloadedState.PendingTravelBudgetCharge);
     }
 
     [Fact]
@@ -193,7 +227,10 @@ public sealed class Phase18CellExpeditionPersistenceTests
                 TravelModeSelection.Normal, NavigationAidSelection.None),
             new ResolvedEncounter(EncounterOutcomeKind.ManualCustom,
                 TimeSpan.FromHours(1), null, "Encounter pending", provenance),
-            true, RuntimePauseReason.EncounterTriggered);
+            true, RuntimePauseReason.EncounterTriggered)
+        {
+            PendingTurnFromHeading = heading
+        };
         var state = new CellExpeditionState
         {
             Id = Guid.NewGuid(), Traversal = cursor, IntendedHeading = heading,
@@ -217,6 +254,8 @@ public sealed class Phase18CellExpeditionPersistenceTests
         Assert.Equal(cell.Id, spatial.PendingEncounter.Cell);
         Assert.Equal(occurrenceId, spatial.PendingEncounter.Id);
         Assert.Equal(RuntimePauseReason.EncounterTriggered, spatial.ActiveWatch!.PendingDecision);
+        Assert.Equal(heading, spatial.ActiveWatch.PendingTurnFromHeading);
+        Assert.False(spatial.ActiveWatch.TurnPreflightWasDeferred);
         Assert.Equal(TimeSpan.FromHours(3), spatial.ActiveWatch.Remaining);
         Assert.Equal(cell.Id, Assert.Single(spatial.History).Cell);
 

@@ -210,6 +210,60 @@ public sealed class ExpeditionStartServiceTests
         Assert.Equal(3, (await store.ListExpeditionsAsync("alice")).Count);
     }
 
+    [Theory]
+    [InlineData("alexandrian-advanced")]
+    [InlineData("simple-fixed-distance")]
+    [InlineData("simple-hex-step")]
+    public async Task ExplicitCellStartOnLegacyHexWorldPinsGeometricPresetWithoutV1State(string presetKey)
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var store = new PostgresHexCrawlStore(database.ConnectionString);
+        await store.InitializeAsync();
+        var procedures = new CampaignProcedureService(store);
+        var starter = new ExpeditionStartService(store, new HexCrawlService(store), procedures);
+        var world = new OverworldDefinition
+        {
+            Id = Guid.NewGuid(), Name = "Geometric hex via legacy grid adapter",
+            Grid = new HexGridDefinition
+            {
+                Id = Guid.NewGuid(), HexRadiusWorldUnits = 2,
+                NeighborCenterDistance = new DistanceMeasure(12, DistanceUnit.Miles)
+            }
+        };
+        var now = DateTimeOffset.UtcNow;
+        await store.CreateOverworldAsync(new StoredOverworld(world, "alice", 1, now, now));
+        Assert.True(world.HasLegacyHexGrid);
+        Assert.Null(world.Tiling);
+
+        var start = LegacyHexTilingCompatibility.ToAddress(new HexCoordinate(0, 0));
+        var expedition = await starter.StartWorldBoundCellsAsync(
+            world.Id, "alice", "V2 hex", new ProcedureStartSelection(PresetKey: presetKey),
+            start, "dm-controlled");
+        var cellState = Assert.IsType<CellExpeditionState>(expedition.Runtime);
+        cellState.Validate(world.SpatialTiling);
+        Assert.Equal(world.SpatialTiling.Resolve(start).Id, cellState.Traversal.CurrentCell);
+        Assert.Equal(world.SpatialTiling.Resolve(start).Center, cellState.Traversal.Position);
+        Assert.Equal(2, GenericProcedureRuntime.Bind(expedition.CampaignProcedure).Movement.MechanicVersion);
+        Assert.Equal(presetKey, expedition.ProcedureOrigin?.PresetKey);
+        Assert.Null(expedition.ProcedureOrigin?.PresetRevision);
+        Assert.DoesNotContain(expedition.CampaignProcedure.Modules,
+            m => m.Mechanic.ExecutionHandler == GenericProcedureExecutionHandlers.HexProgressPolicy);
+        var pinned = await procedures.GetAsync("alice", expedition.CampaignProcedure.ProcedureId,
+            expedition.CampaignProcedure.Revision);
+        Assert.Equal(expedition.CampaignProcedure.ProcedureId, pinned.Procedure.ProcedureId);
+        Assert.Equal(expedition.CampaignProcedure.Revision, pinned.Procedure.Revision);
+        Assert.Equal(expedition.CampaignProcedure.TilingDsSymbol, pinned.Procedure.TilingDsSymbol);
+        Assert.Equal(2, GenericProcedureRuntime.Bind(pinned.Procedure).Movement.MechanicVersion);
+        Assert.Equal(expedition.ProcedureOrigin, pinned.ProcedureOrigin);
+
+        var reopened = new PostgresHexCrawlStore(database.ConnectionString);
+        await reopened.InitializeAsync();
+        var restored = (await reopened.GetExpeditionAsync(expedition.Id, "alice"))!;
+        Assert.IsType<CellExpeditionState>(restored.Runtime).Validate(world.SpatialTiling);
+        Assert.Equal(expedition.CampaignProcedure.ProcedureId, restored.CampaignProcedure.ProcedureId);
+        Assert.Equal(presetKey, restored.ProcedureOrigin?.PresetKey);
+    }
+
     [Fact]
     public async Task GeneralizedWorldStartPinsOwnedVersion2ProcedureWithoutInventingHexState()
     {

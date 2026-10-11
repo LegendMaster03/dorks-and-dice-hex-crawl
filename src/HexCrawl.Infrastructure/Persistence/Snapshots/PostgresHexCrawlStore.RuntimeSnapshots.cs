@@ -43,6 +43,8 @@ public sealed partial class PostgresHexCrawlStore
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public double? CellVeerDegrees { get; init; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public DistanceMeasure? CellPendingTravelBudgetCharge { get; init; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public CellActiveWatchSnapshot? CellActiveWatch { get; init; }
 
         public static RuntimeStateSnapshot FromDomain(CrawlSessionRuntimeState runtime) => runtime switch
@@ -76,6 +78,7 @@ public sealed partial class PostgresHexCrawlStore
                 CellIntendedHeading = state.IntendedHeading,
                 CellIsLost = state.IsLost,
                 CellVeerDegrees = state.ResolvedVeerDegrees,
+                CellPendingTravelBudgetCharge = state.PendingTravelBudgetCharge,
                 DistanceTraveled = state.DistanceTraveled,
                 ElapsedTravelTicks = state.ElapsedTravelTime.Ticks,
                 CompletedWatches = state.CompletedWatches,
@@ -129,6 +132,7 @@ public sealed partial class PostgresHexCrawlStore
                 IntendedHeading = CellIntendedHeading,
                 IsLost = CellIsLost ?? false,
                 ResolvedVeerDegrees = CellVeerDegrees,
+                PendingTravelBudgetCharge = CellPendingTravelBudgetCharge,
                 DistanceTraveled = distance,
                 ElapsedTravelTime = TimeSpan.FromTicks(ElapsedTravelTicks),
                 CompletedWatches = CompletedWatches,
@@ -184,16 +188,28 @@ public sealed partial class PostgresHexCrawlStore
         bool EncounterHandled,
         RuntimePauseReason? PendingDecision)
     {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public WorldPoint? PendingTurnFromHeading { get; init; }
+        public bool TurnPreflightWasDeferred { get; init; }
+
         public static CellActiveWatchSnapshot FromDomain(CellActiveWatchState active) => new(
             active.WatchNumber, active.TotalDuration.Ticks, active.Elapsed.Ticks, active.Plan,
             ResolvedEncounterSnapshot.FromDomain(active.Encounter), active.EncounterHandled,
-            active.PendingDecision);
+            active.PendingDecision)
+        {
+            PendingTurnFromHeading = active.PendingTurnFromHeading,
+            TurnPreflightWasDeferred = active.TurnPreflightWasDeferred
+        };
 
         public CellActiveWatchState ToDomain()
         {
             var state = new CellActiveWatchState(
                 WatchNumber, TimeSpan.FromTicks(TotalDurationTicks), TimeSpan.FromTicks(ElapsedTicks),
-                Plan, Encounter.ToDomain(), EncounterHandled, PendingDecision);
+                Plan, Encounter.ToDomain(), EncounterHandled, PendingDecision)
+            {
+                PendingTurnFromHeading = PendingTurnFromHeading,
+                TurnPreflightWasDeferred = TurnPreflightWasDeferred
+            };
             state.Validate();
             return state;
         }

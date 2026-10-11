@@ -36,6 +36,8 @@ public sealed class ExpeditionModule : IHexCrawlModule
     {
         api.MapGet("/expeditions", ListAllExpeditionsAsync);
         api.MapPost("/expeditions", StartStandaloneSessionAsync);
+        // Explicit V2 start; the old standalone route remains Phase 15-compatible.
+        api.MapPost("/expeditions/cells", StartStandaloneCellSessionAsync);
         api.MapGet("/overworlds/{overworldId:guid}/expeditions", ListExpeditionsAsync);
         api.MapPost("/overworlds/{overworldId:guid}/expeditions", StartExpeditionAsync);
         api.MapPost("/overworlds/{overworldId:guid}/cell-expeditions", StartCellExpeditionAsync);
@@ -43,6 +45,7 @@ public sealed class ExpeditionModule : IHexCrawlModule
         api.MapGet("/expeditions/{expeditionId:guid}/cell-topology", GetCellTopologyAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/cells/advance", AdvanceCellWatchAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/cells/course", ResolveCellCourseAsync);
+        api.MapPost("/expeditions/{expeditionId:guid}/cells/reposition", RepositionCellExpeditionAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/cells/encounters/{occurrenceId:guid}/resolve", ResolveCellEncounterAsync);
         api.MapDelete("/expeditions/{expeditionId:guid}", DeleteExpeditionAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/advance", AdvanceExpeditionAsync);
@@ -99,6 +102,26 @@ public sealed class ExpeditionModule : IHexCrawlModule
             request.Context.ToDomain(),
             request.StartHex,
             cancellationToken);
+        return Results.Created(
+            $"/api/expeditions/{expedition.Id:D}",
+            await ContractAsync(expedition, owner, service, cancellationToken));
+    }
+
+    private static async Task<IResult> StartStandaloneCellSessionAsync(
+        StartProcedureSessionRequest request,
+        HttpContext context,
+        ExpeditionStartService starter,
+        HexCrawlService service,
+        CancellationToken cancellationToken)
+    {
+        if (request.Context.ToDomain() is not AbstractHexCrawlSessionContext mapless)
+            throw new ArgumentException("Generalized mapless starts require an abstract hex context.");
+        if (request.StartHex is not { } startHex)
+            throw new ArgumentException("Generalized mapless starts require a starting hex.");
+        var owner = UserId(context);
+        var expedition = await starter.StartStandaloneCellsAsync(
+            owner, request.Name, request.ProcedureSelection(), mapless,
+            startHex, cancellationToken);
         return Results.Created(
             $"/api/expeditions/{expedition.Id:D}",
             await ContractAsync(expedition, owner, service, cancellationToken));
@@ -163,11 +186,10 @@ public sealed class ExpeditionModule : IHexCrawlModule
     {
         var owner = UserId(context);
         var expedition = await service.GetExpeditionAsync(expeditionId, owner, cancellationToken);
-        if (expedition.Runtime is not CellExpeditionState cell
-            || expedition.Context is not WorldBoundCrawlSessionContext worldContext)
+        if (expedition.Runtime is not CellExpeditionState cell)
             throw new NotSupportedException("This expedition does not have a generalized cell traversal.");
-        var world = await service.GetOverworldAsync(worldContext.WorldId, owner, cancellationToken);
-        return Results.Ok(CellTraversalContextContract.From(world.World.SpatialTiling, cell));
+        var geometry = await service.ResolveCellGeometryAsync(expedition, owner, cancellationToken);
+        return Results.Ok(CellTraversalContextContract.From(geometry.Tiling, cell));
     }
 
     private static async Task<IResult> AdvanceCellWatchAsync(
@@ -197,6 +219,22 @@ public sealed class ExpeditionModule : IHexCrawlModule
         var updated = await service.ResolveCellExpeditionCourseAsync(
             expeditionId, owner, request.ExpectedVersion,
             request.Decision, cancellationToken);
+        return Results.Ok(await ContractAsync(updated, owner, service, cancellationToken));
+    }
+
+    private static async Task<IResult> RepositionCellExpeditionAsync(
+        Guid expeditionId,
+        RepositionCellExpeditionRequest request,
+        HttpContext context,
+        HexCrawlService service,
+        CancellationToken cancellationToken)
+    {
+        request.Validate();
+        var owner = UserId(context);
+        var updated = await service.RepositionCellExpeditionAsync(
+            expeditionId, owner, request.ExpectedVersion,
+            request.TargetCell, request.Position!.Value, request.Note,
+            cancellationToken);
         return Results.Ok(await ContractAsync(updated, owner, service, cancellationToken));
     }
 

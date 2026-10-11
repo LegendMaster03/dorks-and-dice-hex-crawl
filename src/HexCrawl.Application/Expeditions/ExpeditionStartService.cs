@@ -143,13 +143,25 @@ public sealed class ExpeditionStartService(
         var owner = RequiredText(ownerUserId, "Owner user id");
         var expeditionName = RequiredText(name, "Expedition name");
         var world = await coreService.GetOverworldAsync(overworldId, owner, cancellationToken);
-        var tiling = world.World.Tiling
-            ?? throw new NotSupportedException("This world has no explicit generalized tiling.");
+        // A verified legacy hex grid is an adapter to the same periodic-cell
+        // authority, not a reason to select the V1 movement executor.
+        var tiling = world.World.SpatialTiling;
 
         // Check the cell address before materializing or loading a procedure.
         var cell = tiling.Resolve(startCell);
-        var selected = await ResolveProcedureAsync(owner, selection, cancellationToken);
-        var bound = GenericProcedureRuntime.Bind(selected.Procedure);
+        selection.Validate();
+        // Only an explicit generalized start uses the three executable
+        // hex-origin geometric recipes. Saved revisions remain pinned verbatim.
+        // Validate the recipe before storing a new campaign revision so an
+        // incompatible preset does not create an orphan revision.
+        var geometricPreset = !string.IsNullOrWhiteSpace(selection.PresetKey)
+            ? GeometricNativeProcedureMaterializer.Materialize(selection.PresetKey!)
+            : null;
+        var selected = geometricPreset is null
+            ? await ResolveProcedureAsync(owner, selection, cancellationToken)
+            : null;
+        var procedure = geometricPreset?.Procedure ?? selected!.Procedure;
+        var bound = GenericProcedureRuntime.Bind(procedure);
         if (bound.Movement.MechanicVersion != 2)
             throw new NotSupportedException("Generalized world traversal requires movement version 2.");
 
@@ -157,7 +169,7 @@ public sealed class ExpeditionStartService(
         // because their canonical strings differ. The world's independently
         // validated translation cover can prove structural equivalence.
         var comparison = DelaneyDressTopology.Compare(
-            selected.Procedure.TilingDsSymbol,
+            procedure.TilingDsSymbol,
             tiling.Topology.QuotientDsSymbol,
             tiling.Topology.TranslationDsSymbol);
         if (comparison.Status is not (
@@ -192,13 +204,20 @@ public sealed class ExpeditionStartService(
                 PresentationPolicy = presentation
             },
             cell.Id);
+        // All local spatial and knowledge validation has succeeded. Only now
+        // create a campaign revision for the explicitly selected V2 preset.
+        if (geometricPreset is not null)
+            selected = await procedures.CreateAsync(owner, geometricPreset.Procedure,
+                geometricPreset.Origin, cancellationToken: cancellationToken);
+        var pinned = selected ?? throw new InvalidOperationException(
+            "Generalized expedition start did not produce a pinned procedure.");
         var now = DateTimeOffset.UtcNow;
         return await store.CreateExpeditionAsync(new StoredExpedition(
             expeditionName,
             state,
             new WorldBoundCrawlSessionContext(world.World.Id),
             knowledge,
-            CampaignProcedureSnapshot.Copy(selected.Procedure),
+            CampaignProcedureSnapshot.Copy(pinned.Procedure),
             null,
             TimeSpan.Zero,
             owner,
@@ -206,8 +225,80 @@ public sealed class ExpeditionStartService(
             now,
             now)
         {
-            CampaignId = selected.CampaignId,
-            ProcedureOrigin = selected.ProcedureOrigin
+            CampaignId = pinned.CampaignId,
+            ProcedureOrigin = pinned.ProcedureOrigin
+        }, cancellationToken);
+    }
+
+    /// <summary>
+    /// Explicit geometric mapless start. The existing standalone endpoint remains
+    /// a V1 compatibility surface until the Phase 15 UI is replaced.
+    /// The session id is also the identity of its reproducible periodic geometry.
+    /// </summary>
+    public async Task<StoredExpedition> StartStandaloneCellsAsync(
+        string ownerUserId,
+        string name,
+        ProcedureStartSelection selection,
+        AbstractHexCrawlSessionContext context,
+        HexCoordinate startHex,
+        CancellationToken cancellationToken = default)
+    {
+        var owner = RequiredText(ownerUserId, "Owner user id");
+        var sessionName = RequiredText(name, "Session name");
+        ArgumentNullException.ThrowIfNull(context);
+        context.Validate();
+        ArgumentNullException.ThrowIfNull(selection);
+        selection.Validate();
+
+        var sessionId = Guid.NewGuid();
+        var geometry = AbstractCellSessionGeometry.CreateNewHexSession(sessionId, context, startHex);
+        // Saved revisions are never rematerialized. Only explicitly selected
+        // catalog presets use the new geometric creation recipe.
+        var geometricPreset = selection.PresetKey is { } presetKey
+            ? GeometricNativeProcedureMaterializer.Materialize(presetKey)
+            : null;
+        var selected = geometricPreset is null
+            ? await ResolveProcedureAsync(owner, selection, cancellationToken)
+            : null;
+        var procedure = geometricPreset?.Procedure ?? selected!.Procedure;
+        var movement = GenericProcedureRuntime.Bind(procedure).Movement;
+        if (movement.MechanicVersion != 2)
+            throw new NotSupportedException("Geometric mapless travel requires a version 2 movement procedure.");
+        var comparison = DelaneyDressTopology.Compare(
+            procedure.TilingDsSymbol,
+            geometry.World.Topology.QuotientDsSymbol,
+            geometry.World.Topology.TranslationDsSymbol);
+        if (comparison.Status is not (
+            TilingComparisonStatus.ExactIdentity
+            or TilingComparisonStatus.ChamberIsomorphic
+            or TilingComparisonStatus.ProvenEquivalent))
+            throw new InvalidOperationException(
+                "The saved ruleset's tiling has not been proven equivalent to the mapless hex geometry.");
+
+        // Never create a campaign revision for a rejected procedure. Preserve
+        // source attribution without inventing a new published preset revision.
+        if (geometricPreset is not null)
+            selected = await procedures.CreateAsync(owner, geometricPreset.Procedure,
+                geometricPreset.Origin, cancellationToken: cancellationToken);
+
+        var pinned = selected ?? throw new InvalidOperationException(
+            "Generalized mapless start did not produce a pinned procedure.");
+        var now = DateTimeOffset.UtcNow;
+        return await store.CreateExpeditionAsync(new StoredExpedition(
+            sessionName,
+            geometry.Expedition,
+            context,
+            null,
+            CampaignProcedureSnapshot.Copy(pinned.Procedure),
+            null,
+            TimeSpan.Zero,
+            owner,
+            1,
+            now,
+            now)
+        {
+            CampaignId = pinned.CampaignId,
+            ProcedureOrigin = pinned.ProcedureOrigin
         }, cancellationToken);
     }
 

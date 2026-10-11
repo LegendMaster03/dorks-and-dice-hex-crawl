@@ -24,6 +24,14 @@ public sealed class ProcedureResolutionHelperService(
                 "The crawl session changed before procedure inputs were resolved. Reload it before generating another helper result.");
         }
 
+        // This helper still encodes navigation failure as hex-step veer and
+        // returns distance values without the V2 physical-unit contract.
+        // Reject before any provider call, dice roll or audit write rather
+        // than misrepresenting a cell expedition as nonspatial or generating
+        // server-owned results that the cell endpoints cannot consume.
+        if (expedition.Runtime is CellExpeditionState)
+            throw new NotSupportedException("Geometric cell expeditions require a V2 resolution helper with angular navigation and qualified distance. Use manually sourced cell-watch inputs until that helper is implemented.");
+
         var environment = await ApplyEnvironmentAsync(expedition, ownerUserId, command, cancellationToken);
         command = environment.Command;
         command = await providerEnricher.PrepareAsync(
