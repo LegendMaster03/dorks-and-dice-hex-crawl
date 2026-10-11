@@ -681,6 +681,7 @@ export class ExpeditionPartySheetController {
 
             const updateVisibility = (): void => {
                 const custom = kind.value === "Custom";
+                kind.required = value.value !== "";
                 symbolLabel.hidden = !custom;
                 metersLabel.hidden = !custom;
                 symbol.required = custom && value.value !== "";
@@ -698,6 +699,8 @@ export class ExpeditionPartySheetController {
                     this.markDirty();
                     return;
                 }
+                // An entered number without an explicit unit remains a draft.
+                if (!kind.value) { this.markDirty(); return; }
                 const unit = readUnit(kind.value, symbol.value, meters.value);
                 const movement = this.ensureMovement();
                 movement[key] = { value: Number(value.value), unit };
@@ -767,7 +770,7 @@ export class ExpeditionPartySheetController {
         }
     }
 
-    private preferredUnit(): DistanceUnit {
+    private preferredUnit(): DistanceUnit | null {
         return preferredPartyMovementUnit(
             this.runtimeForUnits ?? this.getRuntime(),
             this.requireDraft().baseMovement);

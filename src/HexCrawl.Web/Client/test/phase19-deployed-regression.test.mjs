@@ -25,14 +25,14 @@ const mockRuntime = (physicalDistance = null, distanceUnit = null) => ({
 test("F1: rendered party movement fields work for an uncalibrated cell-step world with empty references", () => {
     const runtime = mockRuntime();
     const preferred = preferredPartyMovementUnit(runtime, null);
-    assert.deepEqual(preferred, { kind:"Mile", symbol:"mi", metersPerUnit:1609.344 });
+    assert.equal(preferred, null);
     const rendered = ["perHour", "perWatch", "perMarch"]
         .map((key, index) => movementReferenceFieldMarkup(
             key, ["Per hour", "Per watch", "Per march"][index], null, preferred)).join("");
     assert.equal((rendered.match(/data-movement-key=/g) ?? []).length, 3);
     assert.equal((rendered.match(/data-movement-value/g) ?? []).length, 3);
-    assert.equal((rendered.match(/value=""/g) ?? []).length, 3);
-    assert.match(rendered, /<option value="Mile" selected>Miles<\/option>/);
+    assert.equal((rendered.match(/data-movement-value type="number" min="0" step="any" value=""/g) ?? []).length, 3);
+    assert.equal((rendered.match(/<option value="" selected>Choose a unit<\/option>/g) ?? []).length, 3);
     assert.doesNotMatch(rendered, /undefined|null|NaN/);
     // Rendering an EMPTY optional rate must not create a world calibration
     // or a party movement reference, even if the input selector defaults to miles.
