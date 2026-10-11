@@ -65,6 +65,79 @@ public sealed class Phase18CellWatchRuntimeTests
     }
 
     [Fact]
+    public void DistantVertexAmbiguityAllowsPartialDistanceWithoutInventingCellTransition()
+    {
+        var (world, _, state, _) = Setup("<1:1,1,1:4,4>", calibrated: true);
+        var cell = world.Resolve(state.Traversal.CurrentCell.Address);
+        var heading = cell.Polygon[0] - cell.Center;
+        var cursor = state.Traversal with
+        {
+            Position = cell.Center,
+            TravelHeading = heading,
+            SelectedExitInterfaceIndex = null
+        };
+        var crossing = PeriodicCellTraversalGeometry.NextCrossing(world, cursor);
+        Assert.Equal(CellCrossingStatus.RequiresAdjudication, crossing.Status);
+        Assert.True(crossing.DistanceWorldUnits is > 0);
+
+        var physical = world.MeasurePhysicalDistance(cell.Center, cell.Polygon[0]);
+        var shortTrip = PeriodicTraversalExecution.AdvanceDistance(
+            world, cursor, new DistanceMeasure(physical.Value / 2, physical.Unit), true);
+        Assert.Empty(shortTrip.Transitions);
+        Assert.False(shortTrip.RequiresAdjudication);
+        Assert.Equal(cursor.CurrentCell, shortTrip.Traversal.CurrentCell);
+        Assert.InRange(shortTrip.Traversal.Position.DistanceTo(cell.Center),
+            crossing.DistanceWorldUnits!.Value * 0.49, crossing.DistanceWorldUnits.Value * 0.51);
+
+        var reachVertex = PeriodicTraversalExecution.AdvanceDistance(
+            world, cursor, new DistanceMeasure(physical.Value * 2, physical.Unit), true);
+        Assert.True(reachVertex.RequiresAdjudication);
+        Assert.Empty(reachVertex.Transitions);
+        Assert.Equal(cursor.CurrentCell, reachVertex.Traversal.CurrentCell);
+        Assert.InRange(reachVertex.Traversal.Position.DistanceTo(cell.Polygon[0]), 0, 1e-8);
+
+        var logical = PeriodicTraversalExecution.AdvanceCellSteps(world, cursor, 1, true);
+        Assert.True(logical.RequiresAdjudication);
+        Assert.Equal(0, logical.CompletedCellSteps);
+        Assert.Equal(cursor.Position, logical.Traversal.Position);
+    }
+
+    [Fact]
+    public void WatchPausesAtActuallyReachedAmbiguousVertexWithProportionalTime()
+    {
+        var (world, procedure, state, plan) = Setup(
+            "<1:1,1,1:4,4>", calibrated: true,
+            mode: TravelResolutionMode.ContinuousDistance);
+        var cell = world.Resolve(state.Traversal.CurrentCell.Address);
+        var heading = cell.Polygon[0] - cell.Center;
+        var starting = state with
+        {
+            Traversal = state.Traversal with
+            {
+                Position = cell.Center,
+                TravelHeading = heading,
+                SelectedExitInterfaceIndex = null
+            }
+        };
+        var geometricPlan = plan with { IntendedHeading = heading };
+        var physical = world.MeasurePhysicalDistance(cell.Center, cell.Polygon[0]);
+        var requested = new DistanceMeasure(physical.Value * 2, physical.Unit);
+        var result = new CrawlRuntimeEngine().AdvanceCellWatch(
+            world, procedure, starting, geometricPlan,
+            new CellWatchAdvanceInputs(
+                ResolvedTravelAmount.Distance(requested, requested, Manual),
+                Encounter: ResolvedEncounter.None));
+
+        Assert.Equal(RuntimePauseReason.CellCourseAdjudicationRequired, result.PauseReason);
+        Assert.Equal(cell.Id, result.Expedition.Traversal.CurrentCell);
+        Assert.InRange(result.Expedition.Traversal.Position.DistanceTo(cell.Polygon[0]), 0, 1e-8);
+        Assert.InRange(result.Expedition.ElapsedTravelTime.TotalHours, 1.999, 2.001);
+        Assert.InRange(result.Expedition.DistanceTraveled!.Value.Value,
+            physical.Value * 0.999, physical.Value * 1.001);
+        Assert.DoesNotContain(result.Events, e => e.Kind == CrawlRuntimeEventKind.CellEntered);
+    }
+
+    [Fact]
     public void NavigationDmOverrideNoteIsRecordedWhenTravelUsesManualResolution()
     {
         var (world, procedure, state, plan) = Setup("<1:1,1,1:4,4>", calibrated: true);
