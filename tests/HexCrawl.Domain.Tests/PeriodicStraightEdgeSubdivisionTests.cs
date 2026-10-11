@@ -184,13 +184,25 @@ public sealed class PeriodicStraightEdgeSubdivisionTests
         Assert.Throws<InvalidOperationException>(() =>
             PeriodicMetricWitnessValidator.Validate(world.Topology, bent));
 
-        var wrongRatio = world.Realization with
+        foreach (var (lower, upper) in new[]
         {
-            Constraints = [new TilingMetricConstraint(
-                "straight-edge-fraction:square:1", "ratio", .25, .25)]
-        };
-        Assert.Throws<InvalidOperationException>(() =>
-            PeriodicMetricWitnessValidator.Validate(world.Topology, wrongRatio));
+            (.25, .25),
+            (.50000004, .50000004),
+            (0d, 1d),
+            (-.5, .5),
+            (.5, 1.5)
+        })
+        {
+            var wrongRatio = world.Realization with
+            {
+                Constraints = [new TilingMetricConstraint(
+                    "straight-edge-fraction:square:1", "ratio", lower, upper)]
+            };
+            Assert.Throws<InvalidOperationException>(() =>
+                PeriodicMetricWitnessValidator.Validate(world.Topology, wrongRatio));
+        }
+        Assert.Throws<ArgumentException>(() => PeriodicStraightEdgeGeometry.Normalize(topology,
+            Enumerable.Repeat(new PeriodicStraightEdgeSubdivision("square", 1, .5), 1025).ToArray()));
 
         var invalidLabels = topology with
         {

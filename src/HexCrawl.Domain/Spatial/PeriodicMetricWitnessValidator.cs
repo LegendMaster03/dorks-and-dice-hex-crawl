@@ -171,6 +171,8 @@ public static class PeriodicMetricWitnessValidator
             double fractionTolerance = 0;
             if (fractionConstraint)
             {
+                Require(constraint.Min > 0 && constraint.Max < 1,
+                    "Straight-edge fraction bounds must be strictly between zero and one.");
                 Require(polygons.TryGetValue(fractionCell, out var polygon)
                     && fractionVertex >= 0 && fractionVertex < polygon.Count,
                     "Straight-edge fraction references an unknown polygon vertex.");
@@ -184,9 +186,10 @@ public static class PeriodicMetricWitnessValidator
                 var end = polygon[(fractionVertex + 1) % size];
                 var span = Sub(end, start);
                 values = [Dot(Sub(middle, start), span) / Dot(span, span)];
-                // A ratio is dimensionless. The global length tolerance must
-                // not become an oversized ratio allowance for large periods.
-                fractionTolerance = Math.Max(1e-9, tolerance / Length(span));
+                // The requested fraction is dimensionless. Applying the
+                // world-coordinate length tolerance to it would accept
+                // contradictory ratios on short subdivided edges.
+                fractionTolerance = 1e-9;
             }
             else values = constraint.Key switch
             {

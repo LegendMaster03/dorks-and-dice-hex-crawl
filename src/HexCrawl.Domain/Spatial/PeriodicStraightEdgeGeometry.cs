@@ -20,6 +20,10 @@ public static class PeriodicStraightEdgeGeometry
     {
         ArgumentNullException.ThrowIfNull(topology);
         if (requested is null || requested.Count == 0) return [];
+        // A primitive translation witness has at most 2048 chambers, hence
+        // at most 1024 atomic boundary vertices across the motif.
+        if (requested.Count > 1024)
+            throw new ArgumentException("Too many straight-edge subdivision constraints.");
         var byId = topology.MotifCells.ToDictionary(c => c.Id, StringComparer.Ordinal);
         var seen = new HashSet<(string Cell, int Vertex)>();
         var normalized = new List<PeriodicStraightEdgeSubdivision>(requested.Count);
