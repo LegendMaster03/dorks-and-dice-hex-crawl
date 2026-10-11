@@ -663,21 +663,11 @@ public sealed class Phase18CellDecisionEndpointsTests
             Assert.NotNull(storedWorld);
             Assert.Equal(SaveOutcome.Saved, (await store.SaveOverworldAsync(
                 storedWorld! with { World = worldWithLocations }, 1)).Outcome);
-            var start = BaseState(startCell) with
+            var initial = BaseState(startCell);
+            var start = initial with
             {
-                Traversal = BaseState(startCell).Traversal with
+                Traversal = initial.Traversal with
                 {
-                    SelectedExitInterfaceIndex = boundary.InterfaceIndex
-                }
-            };
-            // Preserve the same generated state identity and set its exit
-            // intentionally; no hex coordinates or guessed motif cell IDs.
-            start = start with
-            {
-                Traversal = start.Traversal with
-                {
-                    CurrentCell = startCell.Id,
-                    Position = startCell.Center,
                     SelectedExitInterfaceIndex = boundary.InterfaceIndex
                 }
             };
