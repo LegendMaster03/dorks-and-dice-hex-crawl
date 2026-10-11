@@ -151,7 +151,14 @@ public sealed partial class CrawlRuntimeEngine
             callDuration, active.Elapsed, active.TotalDuration,
             active.Encounter, active.EncounterHandled);
         if (window.EncounterImmediatelyDue)
+        {
+            // No travel or turning effort has been consumed. Preserve the last
+            // accepted intent across this zero-time encounter so resuming the
+            // same proposed turn cannot silently waive its budget charge.
+            active = active with { PendingTurnFromHeading = previousIntendedHeading };
+            state = state with { ActiveWatch = active };
             return TriggerCellEncounter(state, active, events);
+        }
         var segmentDuration = window.Duration;
         var encounterAtEnd = window.EncounterAtEnd;
 
@@ -173,26 +180,27 @@ public sealed partial class CrawlRuntimeEngine
                 inputs.Travel.Provenance);
         }
 
-        // Evaluate effort separately from geometric displacement. A course
-        // requiring adjudication at the present position must not be charged.
-        var proposedDebit = SpatialTurnBudgetAccounting.Debit(
-            world, runtime.TurnPolicy, state.Traversal,
-            previousIntendedHeading, plan.IntendedHeading,
-            plan.DeliberateDoubleBack, runtime.Movement.ActualDistanceResolution,
-            segmentTravel, state.PendingTravelBudgetCharge);
-        var hasGeometricBudget = proposedDebit.GeometricTravel.CellSteps is > 0
-            || proposedDebit.GeometricTravel.ActualDistance is { Value: > 0d };
-        var tentativeCrossing = hasGeometricBudget
+        // Check the proposed course before charging any effort. In particular,
+        // a turn may consume the *entire* budget: checking only the remaining
+        // geometric distance would waive adjudication and charge a rejected
+        // course at an ambiguous boundary.
+        var hasResolvedTravelBudget = segmentTravel.CellSteps is > 0
+            || segmentTravel.ActualDistance is { Value: > 0d };
+        var tentativeCrossing = hasResolvedTravelBudget
             ? PeriodicCellTraversalGeometry.NextCrossing(world, state.Traversal) : null;
-        // A future vertex permits normal movement and legitimate turning effort.
-        // Defer the charge only for ambiguity at the current cursor.
+        // An intersection farther down the ray still permits real travel and
+        // a legitimate turn cost. Only present-position ambiguity defers it.
         var unresolvedCourse = tentativeCrossing is not null
             && tentativeCrossing.Status == CellCrossingStatus.RequiresAdjudication
             && (tentativeCrossing.DistanceWorldUnits is null
                 || tentativeCrossing.DistanceWorldUnits <= 0d);
         var debit = unresolvedCourse
             ? new SpatialTurnBudgetDebit(segmentTravel, null, state.PendingTravelBudgetCharge)
-            : proposedDebit;
+            : SpatialTurnBudgetAccounting.Debit(
+                world, runtime.TurnPolicy, state.Traversal,
+                previousIntendedHeading, plan.IntendedHeading,
+                plan.DeliberateDoubleBack, runtime.Movement.ActualDistanceResolution,
+                segmentTravel, state.PendingTravelBudgetCharge);
         if (debit.ChargedBudget is { } charged)
             AddCellEvent(events, active.WatchNumber,
                 CrawlRuntimeEventKind.ResolutionProvenanceRecorded, state,

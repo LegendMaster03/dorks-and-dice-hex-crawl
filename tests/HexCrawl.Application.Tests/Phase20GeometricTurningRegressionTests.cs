@@ -273,6 +273,106 @@ public sealed class Phase20GeometricTurningRegressionTests
     }
 
     [Fact]
+    public void InsufficientBudgetDoesNotChargeAnUnadjudicatedBoundaryCourse()
+    {
+        var session = Session();
+        var world = session.World;
+        var cell = world.Resolve(session.Expedition.Traversal.CurrentCell.Address);
+        var edge = world.Boundaries(cell.Id.Address)[0];
+        var midpoint = new WorldPoint(
+            (edge.Start.X + edge.End.X) / 2, (edge.Start.Y + edge.End.Y) / 2);
+        var incoming = cell.Center - midpoint;
+        var outward = midpoint - cell.Center;
+        var state = session.Expedition with
+        {
+            Traversal = session.Expedition.Traversal with
+            {
+                Position = midpoint,
+                TravelHeading = incoming,
+                SelectedExitInterfaceIndex = null
+            },
+            IntendedHeading = incoming
+        };
+        var procedure = GeometricNativeProcedureMaterializer.Materialize(
+            "alexandrian-advanced").Procedure;
+        var engine = new CrawlRuntimeEngine();
+
+        // Only 0.4 miles are available; the full turning cost is 1 mile.
+        // The course must be adjudicated BEFORE debiting the 0.4 miles.
+        var paused = engine.AdvanceCellWatch(
+            world, procedure, state, Plan(outward), Inputs(0.4));
+        Assert.Equal(RuntimePauseReason.CellCourseAdjudicationRequired, paused.PauseReason);
+        Assert.Equal(TimeSpan.Zero, paused.Expedition.ElapsedTravelTime);
+        Assert.Equal(midpoint, paused.Expedition.Traversal.Position);
+        Assert.Null(paused.Expedition.PendingTravelBudgetCharge);
+        Assert.DoesNotContain(paused.Events, e =>
+            e.Message.Contains("turn debited", StringComparison.OrdinalIgnoreCase));
+
+        Assert.Throws<InvalidOperationException>(() => engine.ResolveCellCourse(
+            world, paused.Expedition, new CellCourseDecision(outward,
+                (edge.InterfaceIndex + 1) % world.Boundaries(cell.Id.Address).Count, Manual)));
+        var accepted = engine.ResolveCellCourse(
+            world, paused.Expedition, new CellCourseDecision(outward, edge.InterfaceIndex, Manual));
+        var result = engine.AdvanceCellWatch(
+            world, procedure, accepted.Expedition,
+            accepted.Expedition.ActiveWatch!.Plan, Inputs(0.4));
+        Assert.Null(result.PauseReason);
+        Assert.Equal(midpoint, result.Expedition.Traversal.Position);
+        Assert.Equal(cell.Id, result.Expedition.Traversal.CurrentCell);
+        Assert.Equal(1, result.Expedition.CompletedWatches);
+        Assert.InRange(result.Expedition.PendingTravelBudgetCharge!.Value.Value,
+            0.5999999, 0.6000001);
+        Assert.Single(result.Expedition.History, e =>
+            e.Message.Contains("turn debited", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void ZeroTimeEncounterRetainsUnpaidTurnAfterResumption()
+    {
+        var session = Session();
+        var world = session.World;
+        var procedure = GeometricNativeProcedureMaterializer.Materialize(
+            "alexandrian-advanced").Procedure;
+        var east = SpatialCourseSelection.FromLegacyHexDirection(
+            world, new HexCoordinate(0, 0), new HexDirection(0));
+        var northEast = SpatialCourseSelection.FromLegacyHexDirection(
+            world, new HexCoordinate(0, 0), new HexDirection(1));
+        var engine = new CrawlRuntimeEngine();
+        var first = engine.AdvanceCellWatch(
+            world, procedure, session.Expedition, Plan(east), Inputs(1));
+        Assert.Null(first.PauseReason);
+        var before = first.Expedition.Traversal.Position;
+
+        var zeroTimeEncounter = new ResolvedEncounter(
+            EncounterOutcomeKind.WanderingEncounter, TimeSpan.Zero,
+            null, "Encounter at watch start", Manual);
+        var paused = engine.AdvanceCellWatch(
+            world, procedure, first.Expedition, Plan(northEast),
+            Inputs(0.4) with { Encounter = zeroTimeEncounter });
+        Assert.Equal(RuntimePauseReason.EncounterTriggered, paused.PauseReason);
+        Assert.Equal(TimeSpan.FromHours(4), paused.RemainingWatchTime);
+        Assert.Equal(before, paused.Expedition.Traversal.Position);
+        Assert.Null(paused.Expedition.PendingTravelBudgetCharge);
+        Assert.Equal(east, paused.Expedition.ActiveWatch!.PendingTurnFromHeading);
+
+        var serialized = JsonSerializer.Deserialize<CellExpeditionState>(
+            JsonSerializer.Serialize(paused.Expedition))!;
+        serialized.Validate(world);
+        var pending = Assert.IsType<PendingEncounterOccurrence>(serialized.PendingEncounter);
+        var resolved = engine.ResolveCellEncounter(serialized, pending.Id, "Encounter resolved");
+        var resumed = engine.AdvanceCellWatch(
+            world, procedure, resolved.Expedition, Plan(northEast), Inputs(0.4));
+        Assert.Null(resumed.PauseReason);
+        Assert.Equal(2, resumed.Expedition.CompletedWatches);
+        Assert.Equal(before, resumed.Expedition.Traversal.Position);
+        Assert.InRange(resumed.Expedition.PendingTravelBudgetCharge!.Value.Value,
+            0.5999999, 0.6000001);
+        Assert.Equal(TimeSpan.FromHours(8), resumed.Expedition.ElapsedTravelTime);
+        Assert.Single(resumed.Expedition.History, e =>
+            e.Message.Contains("turn debited", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void GeometricExitIsNotGovernedByTheHistoricalFarExitFactor()
     {
         var session = Session();
