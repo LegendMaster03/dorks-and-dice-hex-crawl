@@ -23,6 +23,9 @@ public sealed class CrawlSessionService(IHexCrawlStore store)
             throw new ArgumentException("Owner user id is required.", nameof(ownerUserId));
         }
 
+        if (command.Context is AbstractHexCrawlSessionContext)
+            throw new NotSupportedException(
+                "Legacy V1 abstract-hex starts have been retired. Use ExpeditionStartService.StartStandaloneCellsAsync.");
         var materialized = CrawlProcedureCatalog.Resolve(command.ProcedureKey).MaterializeGeneric();
         if (command.Context is AbstractHexCrawlSessionContext
             && !CampaignProcedureSchema.RequiresLegacyHexTiling(materialized.Procedure.TilingDsSymbol))

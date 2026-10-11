@@ -35,52 +35,14 @@ public sealed partial class HexCrawlService
             ?? throw new HexCrawlNotFoundException("Crawl session was not found.");
     }
 
-    public async Task<StoredExpedition> StartExpeditionAsync(
+    public Task<StoredExpedition> StartExpeditionAsync(
         Guid overworldId,
         string ownerUserId,
         StartExpeditionCommand command,
         CancellationToken cancellationToken = default)
-    {
-        var world = await GetOverworldAsync(overworldId, ownerUserId, cancellationToken);
-        if (!world.World.HasLegacyHexGrid)
-            throw new NotSupportedException(
-                "Generalized world traversal is gated until Phase 18.");
-        var materialized = CrawlProcedureCatalog.Resolve(command.ProcedureKey).MaterializeGeneric();
-        if (!CampaignProcedureSchema.RequiresLegacyHexTiling(materialized.Procedure.TilingDsSymbol))
-            throw new NotSupportedException(
-                "The selected procedure is not compatible with hex-only movement.");
-        var expeditionId = Guid.NewGuid();
-        var state = new ExpeditionState
-        {
-            Id = expeditionId,
-            Position = HexGeometry.HexToWorld(world.World.Grid, command.StartHex),
-            PositionPrecision = WorldPositionPrecision.HexAnchor,
-            Traversal = HexTraversalState.StartingIn(command.StartHex, world.World.Grid.NeighborCenterDistance.Unit),
-            Navigation = new NavigationRuntimeState(false, 0),
-            DistanceTraveled = new DistanceMeasure(0, world.World.Grid.NeighborCenterDistance.Unit)
-        };
-        var knowledge = new PlayerKnowledgeState
-        {
-            ScopeId = Guid.NewGuid(),
-            OverworldId = world.World.Id
-        };
-        var now = DateTimeOffset.UtcNow;
-        return await _store.CreateExpeditionAsync(new StoredExpedition(
-            RequiredText(command.Name, "Expedition name"),
-            state,
-            new WorldBoundCrawlSessionContext(world.World.Id),
-            knowledge,
-            materialized.Procedure,
-            null,
-            TimeSpan.Zero,
-            world.OwnerUserId,
-            1,
-            now,
-            now)
-        {
-            ProcedureOrigin = materialized.Origin
-        }, cancellationToken);
-    }
+        => Task.FromException<StoredExpedition>(
+            new NotSupportedException(
+                "Legacy V1 expedition starts have been retired. Use ExpeditionStartService.StartWorldBoundCellsAsync."));
 
     public async Task<StoredExpedition> AdvanceExpeditionAsync(
         Guid expeditionId,

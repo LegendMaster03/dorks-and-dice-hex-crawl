@@ -99,7 +99,7 @@ jobs:
       # Distinguish the active V2 contract from legacy V1 test fixtures that
       # remain to be retired or migrated during the dev-only cutover.
       - name: Test Phase 20 V2 application and startup migration
-        run: timeout 180s dotnet test tests/HexCrawl.Application.Tests/HexCrawl.Application.Tests.csproj --configuration Release --no-restore --no-build -p:BuildClient=false --filter "FullyQualifiedName~Phase20MaplessCellApplicationTests|FullyQualifiedName~Phase20OneTimeStartupCutoverTests|FullyQualifiedName~Phase18CellExpeditionPersistenceTests" --logger "console;verbosity=normal"
+        run: timeout 180s dotnet test tests/HexCrawl.Application.Tests/HexCrawl.Application.Tests.csproj --configuration Release --no-restore --no-build -p:BuildClient=false --filter "FullyQualifiedName~Phase20MaplessCellApplicationTests|FullyQualifiedName~Phase20OneTimeStartupCutoverTests|FullyQualifiedName~Phase18CellExpeditionPersistenceTests|FullyQualifiedName~Phase20RetiredSpatialStartsTests" --logger "console;verbosity=normal"
 
       - name: Test Phase 20 V2 HTTP integration
         run: timeout 180s dotnet test tests/HexCrawl.IntegrationTests/HexCrawl.IntegrationTests.csproj --configuration Release --no-restore --no-build -p:BuildClient=false --filter "FullyQualifiedName~Phase20MaplessCellHttpTests" --logger "console;verbosity=normal"

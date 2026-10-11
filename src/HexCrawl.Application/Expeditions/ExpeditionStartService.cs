@@ -50,7 +50,7 @@ public sealed class ExpeditionStartService(
     HexCrawlService coreService,
     CampaignProcedureService procedures)
 {
-    public async Task<StoredExpedition> StartWorldBoundAsync(
+    public Task<StoredExpedition> StartWorldBoundAsync(
         Guid overworldId,
         string ownerUserId,
         string name,
@@ -58,60 +58,9 @@ public sealed class ExpeditionStartService(
         string presentationKey,
         HexCoordinate startHex,
         CancellationToken cancellationToken = default)
-    {
-        var owner = RequiredText(ownerUserId, "Owner user id");
-        var expeditionName = RequiredText(name, "Expedition name");
-        var presentation = MapPresentationPolicyCatalog.Resolve(presentationKey);
-        presentation.Validate();
-
-        var world = await coreService.GetOverworldAsync(overworldId, owner, cancellationToken);
-        // Phase 18 is responsible for generalized boundary-based movement.
-        // Avoid creating a materialized procedure revision for an unsupported start.
-        if (!world.World.HasLegacyHexGrid)
-            throw new NotSupportedException(
-                "Generalized world movement is gated until Phase 18. This world was not changed.");
-        var selected = await ResolveProcedureAsync(owner, selection, cancellationToken);
-        if (!CampaignProcedureSchema.RequiresLegacyHexTiling(selected.Procedure.TilingDsSymbol))
-            throw new NotSupportedException(
-                "The selected procedure requires a different tiling; this runtime supports hexagonal worlds only.");
-        RequireLegacyHexMovement(selected.Procedure);
-
-        var expeditionId = Guid.NewGuid();
-        var state = new ExpeditionState
-        {
-            Id = expeditionId,
-            Position = HexGeometry.HexToWorld(world.World.Grid, startHex),
-            PositionPrecision = WorldPositionPrecision.HexAnchor,
-            Traversal = HexTraversalState.StartingIn(startHex, world.World.Grid.NeighborCenterDistance.Unit),
-            Navigation = new NavigationRuntimeState(false, 0),
-            DistanceTraveled = new DistanceMeasure(0, world.World.Grid.NeighborCenterDistance.Unit)
-        };
-        var knowledge = new PlayerKnowledgeState
-        {
-            ScopeId = Guid.NewGuid(),
-            OverworldId = world.World.Id,
-            PresentationPolicy = presentation
-        };
-        knowledge = PresentationKnowledgeProjection.Initialize(world.World, presentation, knowledge, startHex);
-
-        var now = DateTimeOffset.UtcNow;
-        return await store.CreateExpeditionAsync(new StoredExpedition(
-            expeditionName,
-            state,
-            new WorldBoundCrawlSessionContext(world.World.Id),
-            knowledge,
-            CampaignProcedureSnapshot.Copy(selected.Procedure),
-            null,
-            TimeSpan.Zero,
-            world.OwnerUserId,
-            1,
-            now,
-            now)
-        {
-            CampaignId = selected.CampaignId,
-            ProcedureOrigin = selected.ProcedureOrigin
-        }, cancellationToken);
-    }
+        => Task.FromException<StoredExpedition>(
+            new NotSupportedException(
+                "Legacy V1 world starts have been retired. Use StartWorldBoundCellsAsync with an authoritative cell."));
 
     /// <summary>
     /// Begin a generalized world-bound expedition at an authoritative motif
@@ -313,6 +262,9 @@ public sealed class ExpeditionStartService(
         var owner = RequiredText(ownerUserId, "Owner user id");
         var sessionName = RequiredText(name, "Session name");
         ArgumentNullException.ThrowIfNull(context);
+        if (context is AbstractHexCrawlSessionContext)
+            throw new NotSupportedException(
+                "Legacy V1 abstract-hex starts have been retired. Use StartStandaloneCellsAsync.");
 
         var id = Guid.NewGuid();
         CrawlSessionRuntimeState runtime = context switch
