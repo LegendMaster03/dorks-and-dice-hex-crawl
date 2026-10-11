@@ -122,6 +122,59 @@ public sealed class Phase19WorldGeometryEndpointsTests
     }
 
     [Fact]
+    public async Task GuidedNonuniformMetricParametersAreValidatedAndPersisted()
+    {
+        var database = TestWebHost.NewDatabasePath();
+        try
+        {
+            Guid id;
+            using (var host = TestWebHost.Create(database, "alice"))
+            using (var client = host.CreateClient())
+            {
+                using var created = await client.PostAsJsonAsync("/api/overworlds/periodic", new
+                {
+                    name = "Skewed repeating cells",
+                    tilingDsSymbol = "<2:1 2,1 2,2:4 4,4>",
+                    worldUnitsPerAbstractPeriod = 2.0,
+                    origin = new { x = 12.0, y = -4.0 },
+                    rotationDegrees = 17.0,
+                    periodULengthWorldUnits = 3.5,
+                    periodVLengthWorldUnits = 2.25,
+                    periodAngleDegrees = 73.0
+                });
+                Assert.True(created.IsSuccessStatusCode,
+                    await created.Content.ReadAsStringAsync());
+                var body = await created.Content.ReadFromJsonAsync<JsonElement>();
+                id = body.GetProperty("id").GetGuid();
+
+                using var invalid = await client.PostAsJsonAsync("/api/overworlds/periodic", new
+                {
+                    name = "Rejected angle",
+                    tilingDsSymbol = "<1:1,1,1:4,4>",
+                    worldUnitsPerAbstractPeriod = 2.0,
+                    origin = new { x = 0.0, y = 0.0 },
+                    periodAngleDegrees = 180.0
+                });
+                Assert.False(invalid.IsSuccessStatusCode);
+            }
+            var store = new HexCrawl.Infrastructure.Persistence.PostgresHexCrawlStore(database);
+            var stored = await store.GetOverworldAsync(id, "alice");
+            Assert.NotNull(stored);
+            var tiling = stored!.World.SpatialTiling;
+            tiling.Validate();
+            var u = tiling.Realization.TranslationU;
+            var v = tiling.Realization.TranslationV;
+            Assert.InRange(Math.Sqrt(u.X * u.X + u.Y * u.Y), 3.5 - 1e-6, 3.5 + 1e-6);
+            Assert.InRange(Math.Sqrt(v.X * v.X + v.Y * v.Y), 2.25 - 1e-6, 2.25 + 1e-6);
+            double cosine = (u.X * v.X + u.Y * v.Y)
+                / (Math.Sqrt(u.X * u.X + u.Y * u.Y) * Math.Sqrt(v.X * v.X + v.Y * v.Y));
+            Assert.InRange(Math.Acos(Math.Clamp(cosine, -1, 1)) * 180 / Math.PI,
+                72.999, 73.001);
+        }
+        finally { TestWebHost.DeleteDatabase(database); }
+    }
+
+    [Fact]
     public async Task InvalidPatternDoesNotPersistAWorld()
     {
         var database = TestWebHost.NewDatabasePath();
