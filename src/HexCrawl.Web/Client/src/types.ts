@@ -718,54 +718,12 @@ export type StartStandaloneCrawlSessionInput = {
     startHex?: HexCoordinate;
 } & ProcedureStartSelectionInput;
 
-export type ProcedureResolutionHelperRequest = {
-    expectedVersion: number;
-    expectedDistance?: number;
-    suppressesNavigationCheck: boolean;
-    deliberateDoubleBack: boolean;
-    navigationDifficultyClass?: number;
-    navigationModifier: number;
-    failureVeerSteps?: number;
-    keyedLocationId?: string;
-};
-
 export type ProcedureResolutionRoll = {
     purpose: string;
     formula: string;
     dice: number[];
     modifier: number;
     total: number;
-};
-
-export type ProcedureResolvedTravel = {
-    expectedDistance: number;
-    actualDistance: number;
-    provenance: { source: ResolutionSource; note: string | null };
-};
-
-export type ProcedureResolvedNavigation = {
-    outcome: "NotRequired" | "Succeeded" | "Failed";
-    veerSteps: number | null;
-    provenance: { source: ResolutionSource; note: string | null };
-};
-
-export type ProcedureResolvedEncounter = {
-    kind: "None" | "WanderingEncounter" | "KeyedLocationDiscovery" | "ManualCustom";
-    occursAtHours: number | null;
-    locationId: string | null;
-    note: string | null;
-    provenance: { source: ResolutionSource; note: string | null };
-};
-
-export type ProcedureResolutionHelperResult = {
-    expeditionVersion: number;
-    generatedResolutionId: string | null;
-    auditSequence: number | null;
-    travel: ProcedureResolvedTravel | null;
-    navigation: ProcedureResolvedNavigation | null;
-    encounter: ProcedureResolvedEncounter | null;
-    rolls: ProcedureResolutionRoll[];
-    notes: string[];
 };
 
 export type NonSpatialWatchAssistantRequest = {

@@ -40,7 +40,6 @@ import type {
     UpdateExpeditionEnvironmentRequest,
     WorldEnvironment
 } from "./environment-types";
-import type { TravelEnvironmentCatalog } from "./travel-rules";
 
 let activeBackendBaseUrl = "";
 
@@ -606,11 +605,6 @@ export class HexCrawlApi {
         if (!response.ok) throw await apiError(response, "Delete expedition");
     }
 
-    public getTravelEnvironmentCatalog(expeditionId: string): Promise<TravelEnvironmentCatalog> {
-        return this.getJson(
-            `/api/expeditions/${encodeURIComponent(expeditionId)}/travel-environment`,
-            "Travel and environment rules");
-    }
 
 
     public resolveEncounter(
