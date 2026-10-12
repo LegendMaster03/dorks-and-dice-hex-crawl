@@ -33,8 +33,9 @@ test("generalized expedition keeps the existing route, context and shared gamepl
 
 test("generalized environment fact editing uses qualified Cell rather than fake axial hex", () => {
     const panel = source("modules","expeditions","environment-panel.ts");
-    assert.match(panel, /const inGeneralizedCell = runtime\.expedition\.isSpatial && !!runtime\.expedition\.currentCell/);
-    assert.match(panel, /if \(inGeneralizedCell\) scope\.value = "Cell"/);
+    assert.match(panel, /const inCell = runtime\.expedition\.isSpatial && !!runtime\.expedition\.currentCell/);
+    assert.match(panel, /if \(inCell\) scope\.value = "Cell"/);
+    assert.doesNotMatch(panel, /<option value="Hex">/);
     assert.match(panel, /cell: selectedScope === "Cell" \? currentCell : null/);
     assert.match(panel, /selectedScope === "Cell" && !currentCell/);
 });
