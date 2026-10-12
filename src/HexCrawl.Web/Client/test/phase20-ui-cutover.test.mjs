@@ -73,7 +73,7 @@ test("active expedition start entry points use cell APIs and no retired V1 start
     assert.match(api, /"POST", "\/api\/expeditions"/);
 });
 
-test("renderer shows actual cell polygon and party in mapless and legacy hex worlds", () => {
+test("renderer shows authoritative cell polygons and party in mapless and periodic worlds", () => {
     const renderer = file("canvas-renderer.ts");
     const map = file("map-surface.ts");
     const periodic = file("modules","expeditions","periodic-expedition-workbench.ts");
@@ -83,10 +83,11 @@ test("renderer shows actual cell polygon and party in mapless and legacy hex wor
     assert.match(renderer, /!world \|\| world\.tiling\?\.id === this\.currentWorldCell\.id\.tilingId/);
     assert.match(renderer, /if \(this\.selectedWorldCell && world\.tiling\) \{/);
     const surface = file("map-surface.ts");
-    assert.match(renderer, /if \(!this\.gridPreview && world\.tiling\) \{/);
-    assert.doesNotMatch(renderer, /if \(!this\.gridPreview && world\.tiling && !world\.grid\)/);
-    assert.match(surface, /if \(!world\?\.tiling \|\| this\.renderer\.gridPreview \|\| !this\.api\) return/);
-    assert.match(surface, /if \(world\.tiling && !this\.renderer\.gridPreview && this\.api\)/);
+    assert.match(renderer, /if \(!world\.tiling\) return/);
+    assert.match(renderer, /for \(const cell of this\.visibleWorldCells\)/);
+    assert.match(surface, /if \(!world\?\.tiling \|\| !this\.api\) return/);
+    assert.match(surface, /if \(world\?\.tiling && this\.api\)/);
+    assert.doesNotMatch(renderer + surface, /gridPreview|hexCorners|worldToHex/);
     assert.doesNotMatch(renderer, /if \(this\.selectedWorldCell && world\.tiling && !world\.grid\)/);
     assert.match(map, /public centerOn\(point: WorldPoint\)/);
     assert.match(periodic, /if \(!world\) map\.centerOn\(topology\.position\)/);

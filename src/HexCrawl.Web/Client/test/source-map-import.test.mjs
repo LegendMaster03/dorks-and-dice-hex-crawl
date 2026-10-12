@@ -73,7 +73,7 @@ test("periodic polygon rendering and qualified cell selection do not use axial p
     const surface = fs.readFileSync(path.join(sourceRoot, "map-surface.ts"), "utf8");
     const renderer = fs.readFileSync(path.join(sourceRoot, "canvas-renderer.ts"), "utf8");
 
-    assert.match(surface, /world\.tiling && this\.api/);
+    assert.match(surface, /world\?\.tiling && this\.api/);
     assert.match(surface, /void this\.activateWorldCell/);
     assert.match(surface, /this\.onWorldClick\?\.\(point\)/);
     assert.doesNotMatch(surface, /worldToHex|setHexSelectionHandler|selectedHex|gridPreview/);
