@@ -16,7 +16,7 @@ public sealed partial class CrawlRuntimeEngine
         if (movementPolicy.TravelResolution != TravelResolutionMode.ContinuousDistance)
             throw new InvalidOperationException(
                 "Physical-distance resolution requires an executable continuous-distance movement policy.");
-        if (travel.HexSteps is not null || travel.CellSteps is not null)
+        if (travel.CellSteps is not null)
             throw new InvalidOperationException(
                 "Continuous-distance travel accepts physical distances, not discrete boundary-transition counts.");
         switch (movementPolicy.ActualDistanceResolution)
