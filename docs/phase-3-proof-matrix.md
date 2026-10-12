@@ -100,6 +100,7 @@ The following table records which already-executable Phase 2 modules are selecte
 | B/X | `time.interval`, `encounters.cadence` |
 | AD&D 2e | `time.interval` |
 | D&D 3.5e | `time.interval` |
+| D&D 5e / 2014 | `time.interval` |
 | D&D 5.5e / 2024 | `time.interval` |
 | Pathfinder 2e Hexploration | `time.interval` |
 | Forbidden Lands | `time.interval` |
@@ -136,6 +137,16 @@ The preset represents an hourly interval plus speed-derived movement budget, ter
 Forced travel produces the transient consequence consumed by the persistent-effect contract. Resource consumption is not falsely modeled as a required source of fatigue.
 
 Evidence basis: D&D 3.5 SRD movement, Survival, and wilderness rules from d20srd.org.
+
+### D&D 5e / 2014
+
+The 2014 preset uses an hourly interval, separate hourly and daily pace rates, difficult-terrain distance multipliers, travel activities, contextual navigation, foraging, food/water consumption, and forced-march exhaustion. The source's pace distances are Fast 4 miles/hour and 30 miles/day, Normal 3 miles/hour and 24 miles/day, and Slow 2 miles/hour and 18 miles/day. Because the daily rates differ from simply multiplying the hourly rates by eight, they are retained independently in the generic movement budget contract. Fast travel applies a −5 passive Perception consequence; slow travel permits stealth.
+
+The generic \`movement.budget\` contract accepts optional \`paceDistanceUnit\`, \`paceRatesPerHour\`, \`paceRatesPerDay\`, and \`paceEffects\` parameters. Its projection validates numeric rates, pace keys, and units without selecting behavior by preset identity. These tables currently provide authoritative declarative data; the movement composer still requires actual party movement capability or a DM/provider-resolved value rather than silently generating movement from preset identity.
+
+Terrain is represented by \`adjustmentModel = multiplier\` with \`normal=1;difficult=0.5\`, not the 2024 maximum-pace map. Navigation, travel tasks, survival checks, and the edition-specific meaning of exhaustion remain explicit DM/provider or Rules Core responsibilities where the generic runtime does not have a matching automatic mechanic. No arbitrary wilderness encounter cadence is invented.
+
+Evidence basis: official D&D Basic Rules 2014 adventuring chapter / SRD 5.1 (https://www.dndbeyond.com/sources/dnd/basic-rules-2014/adventuring).
 
 ### D&D 5.5e / 2024
 
