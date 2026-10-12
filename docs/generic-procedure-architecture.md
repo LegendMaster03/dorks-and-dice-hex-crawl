@@ -2,6 +2,10 @@
 
 This document records the implemented generic procedure architecture established through Phase 15. It remains architectural reference material, not an active development roadmap. The current transition plan is `docs/tile-crawl-development-plan.md`; completed implementation history remains available through Git history and the focused Phase 15 design/implementation documents.
 
+## Preset file organization
+
+Each of the 13 catalog presets is defined in its own file under `src/HexCrawl.Application/Expeditions/Presets/`. The catalog registers presets and resolves keys; the shared factory provides system-neutral recipe construction helpers. Named-system data does not determine runtime implementation. The OSE preset intentionally shares the B/X recipe.
+
 ## Architectural boundary
 
 Named systems remain creation-time preset metadata in `CrawlProcedureCatalog`. A preset is not a runtime authority. It contains a `GenericProcedurePresetRecipe` selecting generic modules, versioned mechanics, and parameters.

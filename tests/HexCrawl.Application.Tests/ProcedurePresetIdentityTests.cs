@@ -7,6 +7,36 @@ namespace HexCrawl.Application.Tests;
 public sealed class ProcedurePresetIdentityTests
 {
     [Fact]
+    public void CatalogRegistersOneDefinitionPerPresetInStableOrder()
+    {
+        string[] expected =
+        [
+            "alexandrian-advanced",
+            "simple-fixed-distance",
+            "simple-hex-step",
+            CrawlProcedureCatalog.BxPresetKey,
+            CrawlProcedureCatalog.OseClassicPresetKey,
+            CrawlProcedureCatalog.Adnd2ePresetKey,
+            CrawlProcedureCatalog.Dnd35PresetKey,
+            CrawlProcedureCatalog.Dnd2014PresetKey,
+            CrawlProcedureCatalog.Dnd2024PresetKey,
+            CrawlProcedureCatalog.Pathfinder2eHexplorationPresetKey,
+            CrawlProcedureCatalog.ForbiddenLandsPresetKey,
+            CrawlProcedureCatalog.WorldsWithoutNumberPresetKey,
+            CrawlProcedureCatalog.OneRing2ePresetKey,        ];
+        var actual = CrawlProcedureCatalog.Catalog.Select(preset => preset.PresetKey).ToArray();
+        Assert.Equal(expected, actual);
+        Assert.Equal(actual.Length, actual.Distinct(StringComparer.Ordinal).Count());
+        foreach (var preset in CrawlProcedureCatalog.Catalog)
+        {
+            preset.Validate();
+            var materialized = preset.MaterializeGeneric();
+            materialized.Procedure.Validate();
+            Assert.Equal(preset.PresetKey, materialized.Origin?.PresetKey);
+        }
+    }
+
+    [Fact]
     public void ChoosingPresetMaterializesIndependentCampaignOwnedSnapshots()
     {
         var preset = CrawlProcedureCatalog.Resolve("simple-fixed-distance");
