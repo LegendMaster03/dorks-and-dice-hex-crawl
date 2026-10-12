@@ -512,7 +512,13 @@ export class HexCrawlApi {
     }
 
     public startStandaloneSession(input: StartStandaloneCrawlSessionInput): Promise<ExpeditionDetail> {
-        return this.sendJson("POST", "/api/expeditions", input, "Start expedition");
+        return this.sendJson("POST", "/api/expeditions", input, "Start nonspatial expedition");
+    }
+
+    public startStandaloneCellSession(input: StartStandaloneCrawlSessionInput): Promise<ExpeditionDetail> {
+        if (input.context.kind !== "AbstractHex" || !input.startHex)
+            throw new Error("A mapless cell expedition requires a spatial context and starting hex address.");
+        return this.sendJson("POST", "/api/expeditions/cells", input, "Start mapless cell expedition");
     }
 
     public assessCellProcedure(

@@ -5,11 +5,12 @@ import type { PresentationProfile, ProcedurePreset, WorldCellId } from "../../ty
 import { clearUiError, showUiError } from "../../ui-error";
 import { campaignProcedureSummary, renderProcedureMechanicList } from "../../campaign-procedure-view";
 import {
-    applyWorldProcedureChoice,
+    applyCellProcedureChoice,
     populateProcedureStartChoices,
     readProcedureStartChoice,
     startChoiceSummary
 } from "./procedure-start-selection";
+import { resolveHexStartCell } from "./world-cell-start";
 
 export async function enhanceExpeditionSetup(
     root: HTMLElement,
@@ -42,7 +43,9 @@ export async function enhanceExpeditionSetup(
     previous.replaceWith(form);
 
     const procedure = select(form, "procedure");
-    populateProcedureStartChoices(procedure, savedProcedures, world.grid ? presets : []);
+    const geometricPresets = presets.filter(value =>
+        ["alexandrian-advanced", "simple-fixed-distance", "simple-hex-step"].includes(value.presetKey));
+    populateProcedureStartChoices(procedure, savedProcedures, world.grid ? geometricPresets : []);
     let createCellRulesetButton: HTMLButtonElement | null = null;
     if (!world.grid) {
         createCellRulesetButton = document.createElement("button");
@@ -216,27 +219,24 @@ export async function enhanceExpeditionSetup(
         void (async () => {
             try {
                 const choice = readProcedureStartChoice(procedure.value);
-                const expedition = world.grid
-                    ? await api.startConfiguredExpedition(worldId, applyWorldProcedureChoice({
-                        name: input(form, "name").value.trim(),
-                        presentationKey: presentation.value,
-                        startHex: { q: integer(numberInput(form, "q")), r: integer(numberInput(form, "r")) }
-                    }, choice))
-                    : choice.kind === "saved"
-                        ? await api.startCellExpedition(worldId, {
-                            name: input(form, "name").value.trim(),
-                            presentationKey: presentation.value,
-                            procedureId: choice.procedureId,
-                            procedureRevision: choice.revision,
-                            startCell: {
-                                motifCellId: select(form, "motifCellId").value,
-                                translation: {
-                                    u: integer(numberInput(form, "u")),
-                                    v: integer(numberInput(form, "v"))
-                                }
-                            }
-                        })
-                        : (() => { throw new Error("Choose a saved ruleset for this world."); })();
+                const startCell = world.grid
+                    ? await resolveHexStartCell(api, world, {
+                        q: integer(numberInput(form, "q")), r: integer(numberInput(form, "r"))
+                    })
+                    : {
+                        motifCellId: select(form, "motifCellId").value,
+                        translation: {
+                            u: integer(numberInput(form, "u")),
+                            v: integer(numberInput(form, "v"))
+                        }
+                    };
+                if (!world.grid && choice.kind !== "saved")
+                    throw new Error("Choose a compatible saved ruleset for this generalized world.");
+                const expedition = await api.startCellExpedition(worldId, applyCellProcedureChoice({
+                    name: input(form, "name").value.trim(),
+                    presentationKey: presentation.value,
+                    startCell
+                }, choice));
                 navigate(`/worlds/${worldId}/expeditions/${expedition.id}`);
             } catch (value) {
                 if (error) showUiError(error, value);

@@ -625,11 +625,12 @@ export type ProcedureStartSelectionInput =
 
 export type StartCellExpeditionInput = {
     name: string;
-    procedureId: string;
-    procedureRevision: number;
     startCell: PeriodicCellAddress;
     presentationKey: string;
-};
+} & (
+    | { presetKey: string; procedureId?: never; procedureRevision?: never }
+    | { presetKey?: never; procedureId: string; procedureRevision: number }
+);
 
 export type CellWatchRequest = {
     expectedVersion: number;
