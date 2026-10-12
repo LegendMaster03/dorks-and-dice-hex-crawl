@@ -1,6 +1,8 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using HexCrawl.Application;
+using HexCrawl.Domain.Procedure;
+using HexCrawl.Infrastructure.Persistence;
 
 namespace HexCrawl.IntegrationTests;
 
@@ -131,6 +133,38 @@ internal static class SyntheticProcedureApiFixture
         return new SyntheticProcedureRevision(
             stored.GetProperty("procedureId").GetGuid(),
             stored.GetProperty("revision").GetInt32());
+    }
+
+    // Create a native geometric procedure with the independent pace policy
+    // attached. The old API composer fixture is intentionally V1 and must not
+    // be converted into an executable V2 snapshot by a start endpoint.
+    public static async Task<SyntheticProcedureRevision> CreatePacedGeometricAsync(
+        string connectionString)
+    {
+        var store = new PostgresHexCrawlStore(connectionString);
+        await store.InitializeAsync();
+        var native = GeometricNativeProcedureMaterializer.Materialize("simple-fixed-distance").Procedure;
+        var budget = new MaterializedProcedureModule(
+            GenericProcedureCatalog.ResolveModule(GenericProcedureCatalog.MovementBudgetModule),
+            GenericProcedureCatalog.ResolveMechanic(GenericProcedureCatalog.MovementBudgetMechanic),
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["budgetModel"] = "speed-and-pace",
+                ["baseBudget"] = "12",
+                ["budgetUnit"] = "mi",
+                ["limitingScope"] = "party",
+                ["travelModeKeys"] = "normal;fast;slow"
+            });
+        var procedure = native with
+        {
+            ProcedureId = Guid.NewGuid(),
+            Name = "Paced native cell movement",
+            Modules = [.. native.Modules, budget]
+        };
+        procedure.Validate();
+        var saved = await new CampaignProcedureService(store).CreateAsync(
+            "integration-user", procedure, null);
+        return new SyntheticProcedureRevision(saved.ProcedureId, saved.Revision);
     }
 
     private static object Include(string moduleKey) => new { moduleKey, included = true };

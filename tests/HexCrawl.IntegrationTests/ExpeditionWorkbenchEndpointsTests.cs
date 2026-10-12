@@ -283,8 +283,8 @@ public sealed class ExpeditionWorkbenchEndpointsTests
             using (var factory = TestWebHost.Create(database))
             using (var client = factory.CreateClient())
             {
-                var procedure = await SyntheticProcedureApiFixture.CreatePacedExecutableAsync(client);
-                using var startResponse = await client.PostAsJsonAsync("/api/expeditions", new
+                var procedure = await SyntheticProcedureApiFixture.CreatePacedGeometricAsync(database);
+                using var startResponse = await client.PostAsJsonAsync("/api/expeditions/cells", new
                 {
                     name = "Pace persistence",
                     procedureId = procedure.ProcedureId,
@@ -311,23 +311,32 @@ public sealed class ExpeditionWorkbenchEndpointsTests
                     .ToArray();
                 Assert.Equal(new[] { "normal", "fast", "slow" }, modes);
 
+                var topology = await client.GetFromJsonAsync<JsonElement>(
+                    $"/api/expeditions/{sessionId:D}/cell-topology");
+                var center = topology.GetProperty("center");
+                var side = topology.GetProperty("interfaces")[0];
+                var heading = new WorldPoint(
+                    (side.GetProperty("start").GetProperty("x").GetDouble()
+                     + side.GetProperty("end").GetProperty("x").GetDouble()) / 2
+                     - center.GetProperty("x").GetDouble(),
+                    (side.GetProperty("start").GetProperty("y").GetDouble()
+                     + side.GetProperty("end").GetProperty("y").GetDouble()) / 2
+                     - center.GetProperty("y").GetDouble());
+                var manual = new ResolutionProvenance(ResolutionSource.ManualRoll);
                 using var advance = await client.PostAsJsonAsync(
-                    $"/api/expeditions/{sessionId:D}/advance",
-                    new
-                    {
-                        expectedVersion = session.GetProperty("version").GetInt64(),
-                        intendedDirection = 0,
-                        paceKey = "fast",
-                        navigationAidKey = "none",
-                        suppressesNavigationCheck = false,
-                        resetsVeerAtBoundary = false,
-                        expectedDistance = 12,
-                        actualDistance = 12,
-                        resolutionSource = "ManualRoll",
-                        travelResolutionSource = "ManualRoll",
-                        deliberateDoubleBack = false,
-                        continueAcrossBoundaries = false
-                    });
+                    $"/api/expeditions/{sessionId:D}/cells/advance",
+                    new AdvanceCellWatchRequest(
+                        session.GetProperty("version").GetInt64(),
+                        new CellWatchTravelPlan(heading, false, false,
+                            new TravelModeSelection("fast", []),
+                            NavigationAidSelection.None),
+                        new CellWatchAdvanceInputs(
+                            ResolvedTravelAmount.Distance(
+                                new DistanceMeasure(12, DistanceUnit.Miles),
+                                new DistanceMeasure(12, DistanceUnit.Miles), manual),
+                            new ResolvedCellNavigation(NavigationCheckOutcome.Succeeded, null, manual),
+                            ResolvedEncounter.None)),
+                    CellJson);
                 advance.EnsureSuccessStatusCode();
                 session = await advance.Content.ReadFromJsonAsync<JsonElement>();
 
