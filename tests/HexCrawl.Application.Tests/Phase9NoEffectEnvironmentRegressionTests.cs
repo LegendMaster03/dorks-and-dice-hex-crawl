@@ -34,12 +34,7 @@ public sealed class Phase9NoEffectEnvironmentRegressionTests
         var now = DateTimeOffset.UtcNow;
         var expedition = new StoredExpedition(
             "No-effect environment regression",
-            new ExpeditionState
-            {
-                Id = Guid.NewGuid(),
-                Traversal = HexTraversalState.StartingIn(new HexCoordinate(0, 0), DistanceUnit.Miles),
-                DistanceTraveled = new DistanceMeasure(0, DistanceUnit.Miles)
-            },
+            PeriodicCourseFixture.StartingState(),
             new AbstractHexCrawlSessionContext(
                 "No-effect environment regression",
                 HexOrientation.PointyTop,

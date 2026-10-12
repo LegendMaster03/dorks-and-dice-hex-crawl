@@ -39,12 +39,7 @@ public sealed class Phase9ReviewRegressionTests
             .MaterializeGeneric().Procedure;
         var expedition = new StoredExpedition(
             "Trimmed dimension expedition",
-            new ExpeditionState
-            {
-                Id = Guid.NewGuid(),
-                Traversal = HexTraversalState.StartingIn(new HexCoordinate(0, 0), DistanceUnit.Miles),
-                DistanceTraveled = new DistanceMeasure(0, DistanceUnit.Miles)
-            },
+            PeriodicCourseFixture.StartingState(world.SpatialTiling),
             new WorldBoundCrawlSessionContext(world.Id),
             null,
             procedure,
@@ -180,12 +175,7 @@ public sealed class Phase9ReviewRegressionTests
         var procedure = CrawlProcedureCatalog.Resolve(procedureKey).MaterializeGeneric().Procedure;
         var expedition = new StoredExpedition(
             "Phase 9 review expedition",
-            new ExpeditionState
-            {
-                Id = Guid.NewGuid(),
-                Traversal = HexTraversalState.StartingIn(new HexCoordinate(0, 0), DistanceUnit.Miles),
-                DistanceTraveled = new DistanceMeasure(0, DistanceUnit.Miles)
-            },
+            PeriodicCourseFixture.StartingState(world.SpatialTiling),
             new WorldBoundCrawlSessionContext(world.Id),
             null,
             procedure,

@@ -73,12 +73,7 @@ public sealed class MovementCapabilityCompositionOrderingRegressionTests
         var interval = FocusedIntervalPolicyResolver.Resolve(procedure).IntervalDuration ?? TimeSpan.Zero;
         return new StoredExpedition(
             "Movement ordering regression",
-            new ExpeditionState
-            {
-                Id = Guid.NewGuid(),
-                Traversal = HexTraversalState.StartingIn(new HexCoordinate(0, 0), DistanceUnit.Miles),
-                DistanceTraveled = new DistanceMeasure(0, DistanceUnit.Miles)
-            },
+            PeriodicCourseFixture.StartingState(),
             new AbstractHexCrawlSessionContext(
                 "Movement ordering regression",
                 HexOrientation.PointyTop,
