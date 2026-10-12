@@ -37,6 +37,9 @@ public sealed class Phase18CellWatchRuntimeTests
         Assert.Equal(exited.BoundaryInterfaceIndex, entered.ReciprocalInterfaceIndex);
         Assert.NotNull(exited.Cell);
         Assert.NotNull(entered.Cell);
+        // Until the axial event field is deleted, V2 movement must never populate it.
+        Assert.Null(exited.Hex);
+        Assert.Null(entered.Hex);
         Assert.Equal(result.Events.Count, result.Events.Select(e => e.Sequence).Distinct().Count());
         Assert.Equal(result.Events.Count, result.Expedition.History.Count);
     }
