@@ -14,7 +14,6 @@ import {
     readProcedureStartChoice,
     startChoiceSummary
 } from "../expeditions/procedure-start-selection";
-import { resolveHexStartCell } from "../expeditions/world-cell-start";
 
 const ABSTRACT_CONTEXT = "__abstract__";
 const NON_SPATIAL_CONTEXT = "__nonspatial__";
@@ -113,7 +112,7 @@ export async function renderToolHome(
                                     <label>East/west repeat <input name="u" type="number" step="1" value="0"></label>
                                     <label>North/south repeat <input name="v" type="number" step="1" value="0"></label>
                                 </div>
-                                <p class="hc-hint">Choose an authoritative motif cell and repeat position. No hex q/r conversion is used for this world.</p>
+                                <p class="hc-hint">Choose an authoritative motif cell and repeat position. The world and ruleset determine the cell topology.</p>
                             </div>
                             <div data-nonspatial-context hidden>
                                 <label>Setup name <input name="nonSpatialName" value="Journey" autocomplete="off"></label>
@@ -251,8 +250,8 @@ export async function renderToolHome(
         abstractContext.hidden = !abstract;
         nonSpatialContext.hidden = !nonSpatial;
         const spatial = Boolean(context.value) && !nonSpatial;
-        spatialStart.hidden = !(abstract || spatial && !!selectedWorld?.grid);
-        periodicStart.hidden = !(spatial && selectedWorld !== null && !selectedWorld.grid);
+        spatialStart.hidden = !abstract;
+        periodicStart.hidden = !(spatial && selectedWorld !== null);
         input(form, "contextName").required = abstract;
         input(form, "scale").required = abstract;
         unit.required = abstract;
@@ -332,10 +331,14 @@ export async function renderToolHome(
     const refreshAvailableProcedures = (): void => {
         const previous = procedure.value;
         const geometric = presets.filter(value =>
-            ["alexandrian-advanced", "simple-fixed-distance", "simple-hex-step"].includes(value.presetKey));
+            ["alexandrian-advanced", "simple-fixed-distance", "simple-hex-step"].includes(value.presetKey)
+            && value.procedure.isExecutable);
         const available = context.value === NON_SPATIAL_CONTEXT
             ? presets
-            : selectedWorld && !selectedWorld.grid ? [] : geometric;
+            : selectedWorld
+                ? geometric.filter(value =>
+                    value.procedure.tilingDsSymbol === selectedWorld!.tiling?.topology.quotientDsSymbol)
+                : geometric;
         populateProcedureStartChoices(procedure, savedProcedures, available);
         if ([...procedure.options].some(option => option.value === previous))
             procedure.value = previous;
@@ -422,18 +425,12 @@ export async function renderToolHome(
                     const world = selectedWorld;
                     if (!world || world.id !== context.value)
                         throw new Error("The selected world topology is not loaded. Select it again.");
-                    const startCell = world.grid
-                        ? await resolveHexStartCell(api, world, {
-                            q: integer(input(form, "q")), r: integer(input(form, "r"))
-                        })
-                        : {
-                            motifCellId: select(form, "motifCellId").value,
-                            translation: {
-                                u: integer(input(form, "u")), v: integer(input(form, "v"))
-                            }
-                        };
-                    if (!world.grid && choice.kind === "preset")
-                        throw new Error("Generalized worlds require a compatible saved cell-travel ruleset.");
+                    const startCell = {
+                        motifCellId: select(form, "motifCellId").value,
+                        translation: {
+                            u: integer(input(form, "u")), v: integer(input(form, "v"))
+                        }
+                    };
                     if (choice.kind === "saved") {
                         const compatibility = await api.assessCellProcedure(
                             world.id, choice.procedureId, choice.revision);
