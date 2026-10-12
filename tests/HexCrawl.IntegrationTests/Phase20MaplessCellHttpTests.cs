@@ -61,6 +61,18 @@ public sealed class Phase20MaplessCellHttpTests
                 Assert.NotEqual(Guid.Empty,
                     initial.GetProperty("currentCell").GetProperty("tilingId").GetGuid());
 
+                // Nonspatial encounter APIs must never reinterpret a spatial
+                // cell runtime as the old axial assistant state.
+                using (var nonspatialCheck = await client.PostAsJsonAsync(
+                    $"/api/expeditions/{id:D}/nonspatial/encounters",
+                    new
+                    {
+                        expectedVersion = version,
+                        outcome = "WanderingEncounter",
+                        resolutionSource = "ManualRoll"
+                    }, ApiJson))
+                    Assert.Equal(HttpStatusCode.BadRequest, nonspatialCheck.StatusCode);
+
                 using var topologyResponse = await client.GetAsync(
                     $"/api/expeditions/{id:D}/cell-topology");
                 topologyResponse.EnsureSuccessStatusCode();
