@@ -178,15 +178,49 @@ jobs:
             -o "$response_dir/upload-map.json"
           source_map_id="$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d["sourceMaps"][-1]["id"])' "$response_dir/upload-map.json")"
 
-          curl -fsS -X POST "http://127.0.0.1:18092/api/overworlds/$world_id/expeditions" \
+          curl -fsS -X POST "http://127.0.0.1:18092/api/overworlds/$world_id/cell-expeditions" \
             -H 'Content-Type: application/json' \
-            --data '{"name":"CI persisted procedure","procedureKey":"simple-fixed-distance","presentationKey":"exploration-map","startHex":{"q":0,"r":0}}' \
+            --data '{"name":"CI persisted procedure","presetKey":"simple-fixed-distance","presentationKey":"exploration-map","startCell":{"motifCellId":"hex","translation":{"u":0,"v":0}}}' \
             -o "$response_dir/start-expedition.json"
           expedition_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$response_dir/start-expedition.json")"
           expedition_version="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$response_dir/start-expedition.json")"
-          curl -fsS -X POST "http://127.0.0.1:18092/api/expeditions/$expedition_id/advance" \
+          curl -fsS "http://127.0.0.1:18092/api/expeditions/$expedition_id/cell-topology" \
+            -o "$response_dir/topology.json"
+          python3 - "$response_dir/topology.json" "$expedition_version" "$response_dir/advance-request.json" <<'PY'
+          import json, sys
+          topology = json.load(open(sys.argv[1]))
+          center = topology["center"]
+          boundary = topology["interfaces"][0]
+          heading = {
+              axis: (boundary["start"][axis] + boundary["end"][axis]) / 2 - center[axis]
+              for axis in ("x", "y")
+          }
+          distance = {"value": 2.0, "unit": {
+              "kind": "Mile", "symbol": "mi", "metersPerUnit": 1609.344
+          }}
+          request = {
+              "expectedVersion": int(sys.argv[2]),
+              "plan": {
+                  "intendedHeading": heading,
+                  "deliberateDoubleBack": False,
+                  "continueAcrossBoundaries": False,
+                  "mode": {"paceKey": "normal", "activityAssignments": []},
+                  "navigationAid": {"key": "none"}
+              },
+              "inputs": {
+                  "travel": {
+                      "expectedDistance": distance,
+                      "actualDistance": distance,
+                      "provenance": {"source": "ManualRoll", "note": "CI cell smoke"}
+                  }
+              }
+          }
+          with open(sys.argv[3], "w") as output:
+              json.dump(request, output)
+          PY
+          curl -fsS -X POST "http://127.0.0.1:18092/api/expeditions/$expedition_id/cells/advance" \
             -H 'Content-Type: application/json' \
-            --data "{\"expectedVersion\":$expedition_version,\"intendedDirection\":0,\"expectedDistance\":12,\"actualDistance\":12,\"resolutionSource\":\"ManualRoll\",\"continueAcrossBoundaries\":false}" \
+            --data @"$response_dir/advance-request.json" \
             -o "$response_dir/advance.json"
 
           docker rm -f hex-crawl-smoke >/dev/null
@@ -206,7 +240,10 @@ jobs:
           import json, sys
           d = json.load(open(sys.argv[1]))
           assert d["procedure"]["key"] == "simple-fixed-distance", d
-          assert d["expedition"]["activeWatchNumber"] == 1, d
+          assert d["expedition"]["completedWatches"] == 1, d
+          assert d["expedition"]["distanceTraveled"]["value"] == 2.0, d
+          assert d["expedition"]["currentCell"]["address"]["motifCellId"] == "hex", d
+          assert d["expedition"]["currentHex"] is None, d
           PY
           curl -fsS "http://127.0.0.1:18092/api/overworlds/$world_id/source-maps/$source_map_id/asset" -o "$response_dir/map-after-restart.png"
           cmp "$response_dir/tiny.png" "$response_dir/map-after-restart.png"
@@ -284,7 +321,7 @@ jobs:
                     (SELECT count(*) FROM smoke_world.expedition_events)::text || ':' || \
                     (SELECT max(version) FROM smoke_world.hex_crawl_schema_migrations)::text")"
           test "$original" = "$restored"
-          test "$original" = "1:1:$(echo "$original" | cut -d: -f3):10"
+          test "$original" = "1:1:$(echo "$original" | cut -d: -f3):11"
           mkdir -p "$backup_dir/asset-restore"
           tar -xzf "$backup_dir/assets.tar.gz" -C "$backup_dir/asset-restore"
           diff -qr "$asset_parent/assets" "$backup_dir/asset-restore/assets"
