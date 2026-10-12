@@ -103,14 +103,13 @@ public sealed class Phase20MaplessCellHttpTests
                     Assert.Equal(HttpStatusCode.BadRequest, forged.StatusCode);
                 }
 
-                // The V1 helper emits hex-step navigation, not geometric
-                // angular veer. Until a V2 helper contract exists, it must
-                // reject the request without a version change or audit event.
+                // The obsolete V1 helper route is no longer registered.
+                // It cannot mutate a V2 session.
                 using (var helper = await client.PostAsJsonAsync(
                     $"/api/expeditions/{id:D}/resolution-helper",
                     new { expectedVersion = version }, ApiJson))
                 {
-                    Assert.Equal(HttpStatusCode.BadRequest, helper.StatusCode);
+                    Assert.Equal(HttpStatusCode.NotFound, helper.StatusCode);
                 }
                 using (var unchanged = await client.GetAsync($"/api/expeditions/{id:D}"))
                 {
@@ -303,8 +302,7 @@ public sealed class Phase20MaplessCellHttpTests
             Assert.Equal(JsonValueKind.Null,
                 corrected.GetProperty("expedition").GetProperty("currentHex").ValueKind);
 
-            // Schema 11 does not allow new V1 spatial records. Legacy routes
-            // return an explicit client error until the UI speaks V2.
+            // Removed prototype routes do not remain in the new API surface.
             using var oldClient = await client.PostAsJsonAsync(
                 $"/api/overworlds/{world.Id:D}/expeditions",
                 new
@@ -313,9 +311,7 @@ public sealed class Phase20MaplessCellHttpTests
                     procedureKey = "simple-fixed-distance",
                     startHex = new { q = 0, r = 0 }
                 }, ApiJson);
-            Assert.Equal(HttpStatusCode.BadRequest, oldClient.StatusCode);
-            Assert.Contains("retired", await oldClient.Content.ReadAsStringAsync(),
-                StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(HttpStatusCode.NotFound, oldClient.StatusCode);
         }
         finally
         {

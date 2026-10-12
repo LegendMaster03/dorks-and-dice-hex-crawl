@@ -36,10 +36,9 @@ public sealed class ExpeditionModule : IHexCrawlModule
     {
         api.MapGet("/expeditions", ListAllExpeditionsAsync);
         api.MapPost("/expeditions", StartStandaloneSessionAsync);
-        // Explicit V2 start; the old standalone route remains Phase 15-compatible.
+        // Spatial sessions use authoritative cell geometry.
         api.MapPost("/expeditions/cells", StartStandaloneCellSessionAsync);
         api.MapGet("/overworlds/{overworldId:guid}/expeditions", ListExpeditionsAsync);
-        api.MapPost("/overworlds/{overworldId:guid}/expeditions", StartExpeditionAsync);
         api.MapPost("/overworlds/{overworldId:guid}/cell-expeditions", StartCellExpeditionAsync);
         api.MapGet("/expeditions/{expeditionId:guid}", GetExpeditionAsync);
         api.MapGet("/expeditions/{expeditionId:guid}/cell-topology", GetCellTopologyAsync);
@@ -48,12 +47,6 @@ public sealed class ExpeditionModule : IHexCrawlModule
         api.MapPost("/expeditions/{expeditionId:guid}/cells/reposition", RepositionCellExpeditionAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/cells/encounters/{occurrenceId:guid}/resolve", ResolveCellEncounterAsync);
         api.MapDelete("/expeditions/{expeditionId:guid}", DeleteExpeditionAsync);
-        api.MapPost("/expeditions/{expeditionId:guid}/advance", AdvanceExpeditionAsync);
-        api.MapPost("/expeditions/{expeditionId:guid}/encounters/{occurrenceId:guid}/resolve", ResolveEncounterAsync);
-        api.MapPost("/expeditions/{expeditionId:guid}/boundary-decision", ResolveBoundaryDecisionAsync);
-        api.MapPut("/expeditions/{expeditionId:guid}/course-intent", SetCourseIntentAsync);
-        api.MapPost("/expeditions/{expeditionId:guid}/reposition", RepositionExpeditionAsync);
-        api.MapPost("/expeditions/{expeditionId:guid}/resolution-helper", ResolveProcedureInputsAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/discover", DiscoverAsync);
         api.MapPut("/expeditions/{expeditionId:guid}/party", UpdatePartyAsync);
         api.MapGet("/expeditions/{expeditionId:guid}/effects", GetEffectsAsync);
@@ -62,10 +55,7 @@ public sealed class ExpeditionModule : IHexCrawlModule
         api.MapPost("/expeditions/{expeditionId:guid}/effects/{effectId:guid}/recover", RecoverEffectAsync);
         api.MapDelete("/expeditions/{expeditionId:guid}/effects/{effectId:guid}", ClearEffectAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/consequences/{consequenceId:guid}/resolve", ResolvePendingConsequenceAsync);
-        api.MapPost("/expeditions/{expeditionId:guid}/assistants/travel", RecordTravelAssistantAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/assistants/watch", RecordNonSpatialWatchAssistantAsync);
-        api.MapPost("/expeditions/{expeditionId:guid}/assistants/navigation", RecordNavigationAssistantAsync);
-        api.MapPost("/expeditions/{expeditionId:guid}/assistants/encounters", RecordEncounterAssistantAsync);
     }
 
     private static async Task<IResult> ListAllExpeditionsAsync(
@@ -152,12 +142,6 @@ public sealed class ExpeditionModule : IHexCrawlModule
     // The retired hex-only endpoint cannot express authoritative cell geometry.
     // Reject it explicitly rather than allowing a V1 insert to fail the schema-11
     // database constraint with an opaque internal error.
-    private static IResult StartExpeditionAsync() =>
-        Results.BadRequest(new
-        {
-            error = "Legacy V1 world-bound starts have been retired. Use /api/overworlds/{overworldId}/cell-expeditions with a qualified cell."
-        });
-
     private static async Task<IResult> GetExpeditionAsync(
         Guid expeditionId,
         HttpContext context,
@@ -254,94 +238,6 @@ public sealed class ExpeditionModule : IHexCrawlModule
     {
         await service.DeleteExpeditionAsync(expeditionId, UserId(context), expectedVersion, cancellationToken);
         return Results.NoContent();
-    }
-
-    private static async Task<IResult> AdvanceExpeditionAsync(
-        Guid expeditionId,
-        AdvanceExpeditionWorkbenchRequest request,
-        HttpContext context,
-        ExpeditionWorkbenchService workbench,
-        HexCrawlService service,
-        CancellationToken cancellationToken)
-    {
-        var owner = UserId(context);
-        var expedition = await workbench.AdvanceAsync(expeditionId, owner, request.ToCommand(), cancellationToken);
-        return Results.Ok(await ContractAsync(expedition, owner, service, cancellationToken));
-    }
-
-    private static async Task<IResult> ResolveEncounterAsync(
-        Guid expeditionId,
-        Guid occurrenceId,
-        ResolveEncounterRequest request,
-        HttpContext context,
-        ExpeditionAssistantService assistants,
-        HexCrawlService service,
-        CancellationToken cancellationToken)
-    {
-        var owner = UserId(context);
-        var expedition = await assistants.ResolveEncounterAsync(
-            expeditionId, owner, request.ToCommand(occurrenceId), cancellationToken);
-        return Results.Ok(await ContractAsync(expedition, owner, service, cancellationToken));
-    }
-
-    private static async Task<IResult> ResolveBoundaryDecisionAsync(
-        Guid expeditionId,
-        ResolveBoundaryDecisionRequest request,
-        HttpContext context,
-        ExpeditionWorkbenchService workbench,
-        HexCrawlService service,
-        CancellationToken cancellationToken)
-    {
-        var owner = UserId(context);
-        var expedition = await workbench.ResolveBoundaryDecisionAsync(
-            expeditionId,
-            owner,
-            request.ToCommand(),
-            cancellationToken);
-        return Results.Ok(await ContractAsync(expedition, owner, service, cancellationToken));
-    }
-
-    private static async Task<IResult> SetCourseIntentAsync(
-        Guid expeditionId,
-        SetExpeditionCourseIntentRequest request,
-        HttpContext context,
-        HexCrawlService service,
-        CancellationToken cancellationToken)
-    {
-        var owner = UserId(context);
-        var expedition = await service.SetExpeditionCourseIntentAsync(
-            expeditionId,
-            owner,
-            request.ToCommand(),
-            cancellationToken);
-        return Results.Ok(await ContractAsync(expedition, owner, service, cancellationToken));
-    }
-
-    private static async Task<IResult> RepositionExpeditionAsync(
-        Guid expeditionId,
-        RepositionExpeditionRequest request,
-        HttpContext context,
-        HexCrawlService service,
-        CancellationToken cancellationToken)
-    {
-        var owner = UserId(context);
-        var expedition = await service.RepositionExpeditionAsync(
-            expeditionId,
-            owner,
-            request.ToCommand(),
-            cancellationToken);
-        return Results.Ok(await ContractAsync(expedition, owner, service, cancellationToken));
-    }
-
-    private static async Task<IResult> ResolveProcedureInputsAsync(
-        Guid expeditionId,
-        ResolveProcedureInputsRequest request,
-        HttpContext context,
-        ProcedureResolutionHelperService helper,
-        CancellationToken cancellationToken)
-    {
-        var result = await helper.ResolveAsync(expeditionId, UserId(context), request.ToCommand(), cancellationToken);
-        return Results.Ok(result);
     }
 
     private static async Task<IResult> DiscoverAsync(
@@ -487,19 +383,6 @@ public sealed class ExpeditionModule : IHexCrawlModule
             "Deferred consequence resolution recorded."));
     }
 
-    private static async Task<IResult> RecordTravelAssistantAsync(
-        Guid expeditionId,
-        TravelWatchAssistantRequest request,
-        HttpContext context,
-        ExpeditionAssistantService assistants,
-        HexCrawlService service,
-        CancellationToken cancellationToken)
-    {
-        var owner = UserId(context);
-        var expedition = await assistants.RecordTravelWatchAsync(expeditionId, owner, request.ToCommand(), cancellationToken);
-        return Results.Ok(await ContractAsync(expedition, owner, service, cancellationToken));
-    }
-
     private static async Task<IResult> RecordNonSpatialWatchAssistantAsync(
         Guid expeditionId,
         NonSpatialWatchAssistantRequest request,
@@ -510,32 +393,6 @@ public sealed class ExpeditionModule : IHexCrawlModule
     {
         var owner = UserId(context);
         var expedition = await assistants.RecordNonSpatialWatchAsync(expeditionId, owner, request.ToCommand(), cancellationToken);
-        return Results.Ok(await ContractAsync(expedition, owner, service, cancellationToken));
-    }
-
-    private static async Task<IResult> RecordNavigationAssistantAsync(
-        Guid expeditionId,
-        NavigationAssistantRequest request,
-        HttpContext context,
-        ExpeditionAssistantService assistants,
-        HexCrawlService service,
-        CancellationToken cancellationToken)
-    {
-        var owner = UserId(context);
-        var expedition = await assistants.RecordNavigationAsync(expeditionId, owner, request.ToCommand(), cancellationToken);
-        return Results.Ok(await ContractAsync(expedition, owner, service, cancellationToken));
-    }
-
-    private static async Task<IResult> RecordEncounterAssistantAsync(
-        Guid expeditionId,
-        EncounterCadenceAssistantRequest request,
-        HttpContext context,
-        ExpeditionAssistantService assistants,
-        HexCrawlService service,
-        CancellationToken cancellationToken)
-    {
-        var owner = UserId(context);
-        var expedition = await assistants.RecordEncounterCadenceAsync(expeditionId, owner, request.ToCommand(), cancellationToken);
         return Results.Ok(await ContractAsync(expedition, owner, service, cancellationToken));
     }
 
