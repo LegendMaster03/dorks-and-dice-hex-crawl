@@ -592,6 +592,132 @@ export async function renderPeriodicExpeditionWorkbench(
                 required<HTMLInputElement>("[data-encounter-result]").value.trim());
         }));
 
+    /**
+     * Phase 15 is the presentation owner. V2 topology supplies spatial
+     * positions and atomic actions without recreating the retired hex watch
+     * controller or representing a square/triangle as a six-sided cell.
+     */
+    function renderPhase15Chrome(): void {
+        const state = currentState();
+        const pending = state.pendingEncounter;
+        const pause = state.activeWatchPendingDecision ?? runtime.pauseReason;
+        const hasCourse = selectedExit !== null || state.intendedHeading !== null;
+        let action: ExpeditionWorkspaceAction;
+        if (pending || pause === "EncounterTriggered") {
+            action = {
+                kind: "encounter", label: "Resolve encounter",
+                detail: "An encounter interrupted travel. Complete its table resolution before continuing the watch.",
+                urgent: true
+            };
+        } else if (pause === "CellCourseAdjudicationRequired") {
+            action = {
+                kind: "boundary", label: "Resolve boundary course",
+                detail: "Multiple atomic interfaces meet the attempted course. Choose the confirmed exit.",
+                urgent: true
+            };
+        } else if (pause === "LostRecognitionRequired") {
+            action = {
+                kind: "boundary", label: "Resolve lost-party decision",
+                detail: "Decide whether the party recognizes its lost course and reorients.",
+                urgent: true
+            };
+        } else if (pause !== null) {
+            action = {
+                kind: "travel", label: "Review paused travel",
+                detail: "Review the saved watch and its remaining travel before resuming.",
+                urgent: true
+            };
+        } else if (!runtime.procedure.runtime) {
+            action = {
+                kind: "procedure", label: "Review exploration rules",
+                detail: "This saved ruleset has no executable cell movement procedure.",
+                urgent: false
+            };
+        } else if (!hasCourse) {
+            action = {
+                kind: "travel", label: "Choose travel direction",
+                detail: "Select an adjacent atomic boundary in the current-cell navigator. Choosing a course does not move the party.",
+                urgent: false
+            };
+        } else {
+            action = {
+                kind: "travel",
+                label: state.activeWatchNumber === null ? "Continue travel" : `Resume watch ${state.activeWatchNumber}`,
+                detail: "Use the selected course and pace; supply only the DM decisions required by the saved ruleset.",
+                urgent: false
+            };
+        }
+        const guide = document.createElement("details");
+        guide.className = "hc-guided-action-guide hc-guided-only";
+        const summary = document.createElement("summary");
+        summary.textContent = "What this action needs and changes";
+        guide.append(summary,
+            textElement("p", `Input: ${action.detail}`),
+            textElement("p", "After resolution: the server stores the confirmed watch, position, cell boundary and any pending navigation or encounter outcomes."),
+            textElement("p", `Saved position: ${topology.currentCell.address.motifCellId} (${topology.currentCell.address.translation.u}, ${topology.currentCell.address.translation.v})`),
+            textElement("p", `Time: day ${state.currentDay}, ${state.completedWatches} completed watches.`));
+        if (runtime.history.length > 0) {
+            guide.append(textElement("p",
+                `Last recorded event: ${runtime.history[runtime.history.length - 1].message}`));
+        }
+        const activate = (): void => {
+            if (action.kind === "procedure") {
+                navigate(`/procedures/${encodeURIComponent(runtime.procedure.procedureId)}/revisions/${runtime.procedure.revision}/reference`);
+            } else if (action.label === "Choose travel direction") {
+                const navigatorButton = root.querySelector<HTMLButtonElement>(
+                    "[data-cell-navigator] .hc-adjacency-interface:not(:disabled)");
+                if (navigatorButton) navigatorButton.focus();
+                else openTravelDrawer();
+            } else {
+                openTravelDrawer(action.kind === "encounter" ? "encounter"
+                    : action.kind === "boundary" && pause === "CellCourseAdjudicationRequired" ? "course"
+                    : undefined);
+            }
+        };
+        const content = renderPhase15NextAction(
+            action, { label: action.label, detail: action.detail }, activate, guide,
+            "The next action comes from the saved procedure and current server-authored expedition state.");
+        required<HTMLElement>("[data-phase15-action]").replaceChildren(content);
+
+        const address = topology.currentCell.address;
+        const position = `Cell ${address.motifCellId} · ${address.translation.u}, ${address.translation.v}`;
+        const openParty = (): void => {
+            const panel = required<HTMLDetailsElement>("[data-gameplay-disclosure]");
+            panel.open = true;
+            panel.scrollIntoView({ block: "nearest" });
+        };
+        const stats = [
+            statAction("Time",
+                state.activeWatchNumber === null
+                    ? `Day ${state.currentDay} · ${state.completedWatches} watches complete`
+                    : `Day ${state.currentDay} · watch ${state.activeWatchNumber}`,
+                state.activeWatchNumber === null ? "Ready for next watch" : "Travel period in progress",
+                () => required<HTMLDetailsElement>("[data-history-disclosure]").open = true),
+            statAction("Position", position,
+                world ? "Mapped spatial position" : "Mapless spatial position",
+                () => root.querySelector<HTMLElement>("[data-cell-navigator] button")?.focus(),
+                pause ? "warning" : "neutral"),
+            statAction("Movement", runtime.movementComposition.status,
+                runtime.movementComposition.effectiveValue === null ? "Review travel conditions"
+                    : `${runtime.movementComposition.effectiveValue} ${runtime.movementComposition.effectiveUnit ?? ""}`,
+                () => openTravelDrawer(),
+                runtime.movementComposition.missingInputs.length ? "warning" : "neutral")
+        ];
+        if (runtime.party.members.length || runtime.party.activityAssignments.length)
+            stats.push(statAction("Party",
+                `${runtime.party.members.length} members`, "Party and activities", openParty));
+        if (runtime.procedure.runtime?.usesNavigationChecks || state.isLost)
+            stats.push(statAction("Navigation",
+                state.isLost ? "Lost / off course" : "Course known",
+                pause === "LostRecognitionRequired" ? "Recognition decision required" : null,
+                () => openTravelDrawer(), state.isLost ? "warning" : "neutral"));
+        if (pending)
+            stats.push(statAction("Encounters", "Encounter active",
+                "Resolve before more movement", () => openTravelDrawer("encounter"), "danger"));
+        required<HTMLElement>("[data-phase15-stats]").replaceChildren(...stats);
+        required<HTMLButtonElement>("[data-open-travel]").disabled = busy || !runtime.procedure.runtime;
+    }
+
     function render(): void {
         if (disposed) return;
         const state = currentState();
