@@ -77,9 +77,8 @@ public static class CrawlProcedureCatalog
                     EncounterCheckCadence.PerWatch,
                     usesNavigationChecks: true,
                     usesPersistentVeer: true,
-                    directionChangesCostProgress: true,
+                    neighborCenterDistanceFactor: 1d / 6d,
                     supportsDeliberateDoubleBack: true,
-                    directionChangeProgressCostFactor: 1d / 6d,
                     resolutionHelpers: new ProcedureResolutionHelperProfile(
                         Travel: new TravelResolutionHelperProfile(new DiceRollFormula(2, 6, 3), 0.1d),
                         Navigation: new NavigationResolutionHelperProfile(new DiceRollFormula(1, 20)),
@@ -102,7 +101,7 @@ public static class CrawlProcedureCatalog
                     EncounterCheckCadence.None,
                     usesNavigationChecks: false,
                     usesPersistentVeer: false,
-                    directionChangesCostProgress: false,
+                    neighborCenterDistanceFactor: 0d,
                     supportsDeliberateDoubleBack: false),
                 category: "Generic starting points"),
             Preset(
@@ -118,7 +117,7 @@ public static class CrawlProcedureCatalog
                     EncounterCheckCadence.None,
                     usesNavigationChecks: false,
                     usesPersistentVeer: false,
-                    directionChangesCostProgress: false,
+                    neighborCenterDistanceFactor: 0d,
                     supportsDeliberateDoubleBack: false),
                 category: "Generic starting points"),
 
@@ -340,9 +339,8 @@ public static class CrawlProcedureCatalog
         EncounterCheckCadence encounterCadence,
         bool usesNavigationChecks,
         bool usesPersistentVeer,
-        bool directionChangesCostProgress,
+        double neighborCenterDistanceFactor,
         bool supportsDeliberateDoubleBack,
-        double directionChangeProgressCostFactor = 0d,
         ProcedureResolutionHelperProfile? resolutionHelpers = null) =>
     [
         NativeTime(interval),
@@ -357,8 +355,7 @@ public static class CrawlProcedureCatalog
             }),
         Structural(GenericProcedureCatalog.SpatialTurnCostModule,
             GenericProcedureCatalog.SpatialTurnCostPolicyMechanic,
-            ("neighborCenterDistanceFactor", Number(
-                directionChangesCostProgress ? directionChangeProgressCostFactor : 0d)),
+            ("neighborCenterDistanceFactor", Number(neighborCenterDistanceFactor)),
             ("supportsDeliberateDoubleBack", Bool(supportsDeliberateDoubleBack))),
         Structural(GenericProcedureCatalog.NavigationModule, GenericProcedureCatalog.NavigationCheckPolicyMechanic,
             ("usesNavigationChecks", Bool(usesNavigationChecks)),

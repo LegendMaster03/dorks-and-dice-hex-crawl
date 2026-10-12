@@ -132,9 +132,6 @@ public sealed class ExpeditionModule : IHexCrawlModule
             await ContractAsync(expedition, owner, service, cancellationToken));
     }
 
-    // The retired hex-only endpoint cannot express authoritative cell geometry.
-    // Reject it explicitly rather than allowing a V1 insert to fail the schema-11
-    // database constraint with an opaque internal error.
     private static async Task<IResult> GetExpeditionAsync(
         Guid expeditionId,
         HttpContext context,
