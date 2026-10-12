@@ -1,11 +1,21 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using HexCrawl.Application;
+using HexCrawl.Domain.Runtime;
+using HexCrawl.Domain.Spatial;
+using HexCrawl.Web.Api;
 
 namespace HexCrawl.IntegrationTests;
 
 public sealed class ExpeditionWorkbenchEndpointsTests
 {
+    private static readonly JsonSerializerOptions CellJson = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter(allowIntegerValues: false) }
+    };
+
     [Fact]
     public async Task PresentationCatalogExposesFourBuiltInPolicies()
     {
@@ -972,56 +982,78 @@ public sealed class ExpeditionWorkbenchEndpointsTests
     }
 
     [Fact]
-    public async Task ActiveWatchContractPreservesNavigationAidFlagsAcrossReload()
+    public async Task CellActiveWatchContractPreservesNavigationAidFlagsAcrossRestart()
     {
         var database = TestWebHost.NewDatabasePath();
+        Guid expeditionId;
         try
         {
-            using var factory = TestWebHost.Create(database);
-            using var client = factory.CreateClient();
-            var world = await CreateWorld(client);
-            var worldId = world.GetProperty("id").GetGuid();
-
-            using var startResponse = await client.PostAsJsonAsync($"/api/overworlds/{worldId:D}/expeditions", new
+            using (var factory = TestWebHost.Create(database))
+            using (var client = factory.CreateClient())
             {
-                name = "Navigation aid persistence",
-                procedureKey = "simple-fixed-distance",
-                presentationKey = "exploration-map",
-                startHex = new { q = 0, r = 0 }
-            });
-            startResponse.EnsureSuccessStatusCode();
-            var expedition = await startResponse.Content.ReadFromJsonAsync<JsonElement>();
-            var expeditionId = expedition.GetProperty("id").GetGuid();
+                var world = await CreateWorld(client);
+                var worldId = world.GetProperty("id").GetGuid();
+                using var startedResponse = await client.PostAsJsonAsync(
+                    $"/api/overworlds/{worldId:D}/cell-expeditions",
+                    new
+                    {
+                        name = "Navigation aid persistence",
+                        presetKey = "alexandrian-advanced",
+                        presentationKey = "exploration-map",
+                        startCell = new { motifCellId = "hex", translation = new { u = 0L, v = 0L } }
+                    });
+                startedResponse.EnsureSuccessStatusCode();
+                var started = await startedResponse.Content.ReadFromJsonAsync<JsonElement>();
+                expeditionId = started.GetProperty("id").GetGuid();
+                var topology = await client.GetFromJsonAsync<JsonElement>(
+                    $"/api/expeditions/{expeditionId:D}/cell-topology");
+                var center = topology.GetProperty("center");
+                var face = topology.GetProperty("interfaces")[0];
+                var heading = new WorldPoint(
+                    (face.GetProperty("start").GetProperty("x").GetDouble()
+                     + face.GetProperty("end").GetProperty("x").GetDouble()) / 2
+                    - center.GetProperty("x").GetDouble(),
+                    (face.GetProperty("start").GetProperty("y").GetDouble()
+                     + face.GetProperty("end").GetProperty("y").GetDouble()) / 2
+                    - center.GetProperty("y").GetDouble());
+                var manual = new ResolutionProvenance(ResolutionSource.ManualRoll);
+                var input = new AdvanceCellWatchRequest(
+                    started.GetProperty("version").GetInt64(),
+                    new CellWatchTravelPlan(
+                        heading, false, false, TravelModeSelection.Normal,
+                        new NavigationAidSelection("trail-markers", true, true)),
+                    new CellWatchAdvanceInputs(
+                        ResolvedTravelAmount.Distance(
+                            new DistanceMeasure(0.25, DistanceUnit.Miles),
+                            new DistanceMeasure(0.25, DistanceUnit.Miles), manual),
+                        null,
+                        new ResolvedEncounter(
+                            EncounterOutcomeKind.WanderingEncounter,
+                            TimeSpan.FromHours(2), null, "Midwatch encounter", manual)));
+                using var response = await client.PostAsJsonAsync(
+                    $"/api/expeditions/{expeditionId:D}/cells/advance", input, CellJson);
+                response.EnsureSuccessStatusCode();
+                var result = await response.Content.ReadFromJsonAsync<JsonElement>();
+                var active = result.GetProperty("expedition");
+                Assert.Equal("EncounterTriggered", result.GetProperty("pauseReason").GetString());
+                Assert.Equal(1, active.GetProperty("activeWatchNumber").GetInt32());
+                Assert.Equal("trail-markers", active.GetProperty("activeNavigationAidKey").GetString());
+                Assert.True(active.GetProperty("activeSuppressesNavigationCheck").GetBoolean());
+                Assert.True(active.GetProperty("activeResetsVeerAtBoundary").GetBoolean());
+            }
 
-            using var advanceResponse = await client.PostAsJsonAsync(
-                $"/api/expeditions/{expeditionId:D}/advance",
-                new
-                {
-                    expectedVersion = expedition.GetProperty("version").GetInt64(),
-                    intendedDirection = 0,
-                    paceKey = "normal",
-                    activities = Array.Empty<string>(),
-                    navigationAidKey = "trail-markers",
-                    suppressesNavigationCheck = true,
-                    resetsVeerAtBoundary = true,
-                    effectiveDistance = 12,
-                    travelResolutionSource = "ManualRoll",
-                    continueAcrossBoundaries = false
-                });
-            advanceResponse.EnsureSuccessStatusCode();
-            expedition = await advanceResponse.Content.ReadFromJsonAsync<JsonElement>();
-            var active = expedition.GetProperty("expedition");
-
-            Assert.Equal(1, active.GetProperty("activeWatchNumber").GetInt32());
-            Assert.Equal("trail-markers", active.GetProperty("activeNavigationAidKey").GetString());
-            Assert.True(active.GetProperty("activeSuppressesNavigationCheck").GetBoolean());
-            Assert.True(active.GetProperty("activeResetsVeerAtBoundary").GetBoolean());
-
-            expedition = await client.GetFromJsonAsync<JsonElement>($"/api/expeditions/{expeditionId:D}");
-            active = expedition.GetProperty("expedition");
-            Assert.Equal("trail-markers", active.GetProperty("activeNavigationAidKey").GetString());
-            Assert.True(active.GetProperty("activeSuppressesNavigationCheck").GetBoolean());
-            Assert.True(active.GetProperty("activeResetsVeerAtBoundary").GetBoolean());
+            using (var restartedFactory = TestWebHost.Create(database))
+            using (var restarted = restartedFactory.CreateClient())
+            {
+                var persisted = await restarted.GetFromJsonAsync<JsonElement>(
+                    $"/api/expeditions/{expeditionId:D}");
+                var active = persisted.GetProperty("expedition");
+                Assert.Equal(1, active.GetProperty("activeWatchNumber").GetInt32());
+                Assert.Equal("trail-markers", active.GetProperty("activeNavigationAidKey").GetString());
+                Assert.True(active.GetProperty("activeSuppressesNavigationCheck").GetBoolean());
+                Assert.True(active.GetProperty("activeResetsVeerAtBoundary").GetBoolean());
+                Assert.Equal("EncounterTriggered", persisted.GetProperty("pauseReason").GetString());
+            }
         }
         finally
         {
