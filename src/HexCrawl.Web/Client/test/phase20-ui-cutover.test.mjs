@@ -100,6 +100,9 @@ test("active expedition start entry points use cell APIs and no retired V1 start
     assert.match(setup, /api\.startCellExpedition\(/);
     assert.match(editor, /enhanceExpeditionSetup\(/);
     assert.doesNotMatch(home + editor + setup, /api\.(startConfiguredExpedition|startExpedition)\(/);
+    assert.doesNotMatch(api, /public (?:startConfiguredExpedition|startExpedition)\(/);
+    assert.doesNotMatch(file("modules","expeditions","procedure-start-selection.ts"),
+        /applyWorldProcedureChoice/);
     assert.match(api, /"POST", "\/api\/expeditions\/cells"/);
     assert.match(api, /"POST", "\/api\/expeditions"/);
 });

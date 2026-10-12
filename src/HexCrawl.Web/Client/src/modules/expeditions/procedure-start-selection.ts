@@ -1,7 +1,7 @@
 import type { SavedProcedureSummary } from "../../procedure-composer-types";
 import type {
     PeriodicCellAddress, ProcedurePreset, StartCellExpeditionInput,
-    StartExpeditionInput, StartStandaloneCrawlSessionInput
+    StartStandaloneCrawlSessionInput
 } from "../../types";
 
 const SAVED_PREFIX = "saved:";
@@ -70,19 +70,6 @@ export function startChoiceSummary(
     return preset
         ? `${preset.description} · creates a new saved procedure for this crawl when play begins`
         : "Preset starting point";
-}
-
-export function applyWorldProcedureChoice(
-    base: Omit<StartExpeditionInput, "procedureKey" | "procedureId" | "procedureRevision">,
-    choice: ProcedureStartChoice): StartExpeditionInput {
-    if (choice.kind === "preset") {
-        return { ...base, procedureKey: choice.presetKey };
-    }
-    return {
-        ...base,
-        procedureId: choice.procedureId,
-        procedureRevision: choice.revision
-    };
 }
 
 export function applyCellProcedureChoice(

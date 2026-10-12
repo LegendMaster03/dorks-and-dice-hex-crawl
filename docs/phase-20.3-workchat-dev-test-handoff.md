@@ -1,6 +1,8 @@
 # Phase 20.3 — WorkChat signed-in dev/testing acceptance handoff
 
-**Intent:** Review the deployed, owner-authorized Hex Crawl dev/testing environment after the Phase 15-first V2 cell UI cutover. This is **acceptance testing**, not implementation, deployment or merge permission. Use the project development plan and `docs/phase-20.3-ui-cutover-checkpoint.md` as the contract.
+**Intent:** Review the deployed, owner-authorized Tile Crawl dev/testing environment after the Phase 15-first generalized cell UI cutover. This is **acceptance testing**, not implementation, deployment or merge permission. Use the project development plan and `docs/phase-20.3-ui-cutover-checkpoint.md` as the contract.
+
+**BLOCKED UNTIL ZERO-PROTOTYPE CLEANUP PASSES:** On 2026-10-12 the owner required that all original V1 and hex-specific implementation code be removed *before* dev/testing deployment. This checklist is retained for use only after `docs/phase-20.4-zero-prototype-gate.md` passes. Do not use previous CI or this handoff as permission to deploy a partial migration.
 
 ## Starting conditions and safety
 

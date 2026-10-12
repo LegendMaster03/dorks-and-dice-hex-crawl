@@ -3,7 +3,7 @@
 **Repository and branch:** `LegendMaster03/dorks-and-dice-hex-crawl`, `feature/tile-crawl-phase-20.2-application-persistence`  
 **Self-reviewed Phase 15-first implementation code head:** `1a65b136c625a8bd26ef15d8b60eb0baa6d35140`  
 **Verification:** prior Phase 15-first baseline passed [CI 38207311309](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38207311309) at `019f5863`. Further code-level review fixes are committed; verify successful CI for the current final documentation-inclusive head before dev deployment. CI's frontend, .NET, container and PostgreSQL checks do **not** run the signed-in Phase 15 browser acceptance matrix.  
-**Merge and deployment:** Neither is authorized. The Phase 20.2 one-time schema-10→11 migration has not been applied to the development deployment.
+**Merge and deployment:** Neither is authorized. The Phase 20.2 one-time schema-10→11 migration has not been applied to the development deployment. **Owner superseded the previous dev-ready conclusion on 2026-10-12: no V1 or hex-specific source code may survive before the dev/testing deployment.** This checkpoint is no longer a deploy green light; see `docs/phase-20.4-zero-prototype-gate.md`.
 
 ## Implemented first slice
 

@@ -37,7 +37,6 @@ import type {
     SourceMapList,
     SourceMapRole,
     SpatialFeature,
-    StartExpeditionInput,
     StartStandaloneCrawlSessionInput,
     ToolHostContext,
     UpdateExpeditionPartyRequest,
@@ -498,19 +497,6 @@ export class HexCrawlApi {
         return worldId
             ? this.getJson(`/api/overworlds/${encodeURIComponent(worldId)}/expeditions`, "Expedition list")
             : this.getJson("/api/expeditions", "Expedition list");
-    }
-
-    public startExpedition(worldId: string, name: string, procedureKey: string, startHex: HexCoordinate): Promise<ExpeditionDetail> {
-        return this.startConfiguredExpedition(worldId, {
-            name,
-            procedureKey,
-            presentationKey: "exploration-map",
-            startHex
-        });
-    }
-
-    public startConfiguredExpedition(worldId: string, input: StartExpeditionInput): Promise<ExpeditionDetail> {
-        return this.sendJson("POST", `/api/overworlds/${encodeURIComponent(worldId)}/expeditions`, input, "Start expedition");
     }
 
     public startStandaloneSession(input: StartStandaloneCrawlSessionInput): Promise<ExpeditionDetail> {

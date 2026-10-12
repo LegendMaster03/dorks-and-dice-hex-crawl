@@ -706,12 +706,6 @@ export type CellCourseRequest = {
     };
 };
 
-export type StartExpeditionInput = {
-    name: string;
-    presentationKey: string;
-    startHex: HexCoordinate;
-} & ProcedureStartSelectionInput;
-
 export type StandaloneCrawlContextInput =
     | {
         kind: "AbstractHex";
