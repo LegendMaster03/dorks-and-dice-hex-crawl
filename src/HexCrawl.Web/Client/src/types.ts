@@ -163,7 +163,7 @@ export type Overworld = {
 export type DemoWorld = Overworld;
 
 export type EncounterCadence = "None" | "PerWatch" | "PerDay";
-export type TravelResolutionMode = "ContinuousDistance" | "HexSteps" | "CellSteps";
+export type TravelResolutionMode = "ContinuousDistance" | "CellSteps";
 export type ActualDistanceResolutionMode = "Fixed" | "VariableResolved";
 export type ResolutionSource = "ProcedureDefault" | "AutomaticRoll" | "ManualRoll" | "ExternalSystem" | "DmOverride";
 
@@ -196,14 +196,7 @@ export type ProcedureRuntime = {
     encounterCadence: EncounterCadence;
     usesNavigationChecks: boolean;
     usesPersistentVeer: boolean;
-    tracksIntraHexProgress: boolean;
-    directionChangesCostProgress: boolean;
     supportsDeliberateDoubleBack: boolean;
-    startingExitProgressFactor: number;
-    nearExitProgressFactor: number;
-    farExitProgressFactor: number;
-    backExitProgressFactor: number;
-    directionChangeProgressCostFactor: number;
     resolutionHelpers: ProcedureResolutionHelpers | null;
 };
 
