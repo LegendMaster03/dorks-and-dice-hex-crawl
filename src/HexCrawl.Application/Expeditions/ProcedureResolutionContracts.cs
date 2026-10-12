@@ -111,6 +111,11 @@ public sealed record GeneratedProcedureResolution(
     public ResolvedTravelAmount? CellTravel { get; init; }
     public ResolvedCellNavigation? CellNavigation { get; init; }
     public ResolvedEncounter? CellEncounter { get; init; }
+    // Bind the generated navigation result to the plan whose check policy
+    // produced it. Null marks older, non-V2 grants; these are never usable
+    // to authorize geometric automatic resolutions.
+    public bool? CellSuppressesNavigationCheck { get; init; }
+    public bool? CellDeliberateDoubleBack { get; init; }
 }
 
 public sealed record ProcedureResolutionHelperResult(

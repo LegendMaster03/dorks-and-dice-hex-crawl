@@ -79,6 +79,24 @@ public sealed class ProcedureResolutionHelperEndpointsTests
                     second.ExpeditionVersion, heading, second.GeneratedResolutionId)))
                 Assert.Equal(HttpStatusCode.BadRequest, changed.StatusCode);
 
+            // A generated navigation roll cannot be silently consumed by
+            // changing the plan to suppress the check after generation.
+            var alteredPlan = Request(
+                second, second.ExpeditionVersion, heading, second.GeneratedResolutionId);
+            alteredPlan = alteredPlan with
+            {
+                Plan = alteredPlan.Plan with
+                {
+                    NavigationAid = new NavigationAidSelection("none", true, false)
+                }
+            };
+            using (var suppressed = await PostAdvanceAsync(client, id, alteredPlan))
+                Assert.Equal(HttpStatusCode.BadRequest, suppressed.StatusCode);
+            var afterSuppression = await client.GetFromJsonAsync<JsonElement>(
+                $"/api/expeditions/{id:D}");
+            Assert.Equal(second.ExpeditionVersion,
+                afterSuppression.GetProperty("version").GetInt64());
+
             using var valid = await PostAdvanceAsync(client, id,
                 Request(second, second.ExpeditionVersion, heading, second.GeneratedResolutionId));
             valid.EnsureSuccessStatusCode();

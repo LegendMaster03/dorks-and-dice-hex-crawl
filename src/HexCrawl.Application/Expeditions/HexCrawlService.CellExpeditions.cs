@@ -49,6 +49,7 @@ public sealed partial class HexCrawlService
         CellExpeditionState state,
         long expectedVersion,
         CellWatchAdvanceInputs inputs,
+        CellWatchTravelPlan plan,
         Guid? generationId)
     {
         var usesAutomatic = inputs.Travel.Provenance.Source == ResolutionSource.AutomaticRoll
@@ -72,6 +73,8 @@ public sealed partial class HexCrawlService
             || grant.Status != GeneratedProcedureResolutionStatus.Available
             || grant.GeneratedAtVersion != expectedVersion
             || grant.WatchNumber != expectedWatch
+            || grant.CellSuppressesNavigationCheck != plan.NavigationAid.SuppressesNavigationCheck
+            || grant.CellDeliberateDoubleBack != plan.DeliberateDoubleBack
             || grant.CellTravel is null && grant.CellNavigation is null && grant.CellEncounter is null
             || grant.Travel is not null || grant.Navigation is not null || grant.Encounter is not null)
             throw new InvalidOperationException(
@@ -184,7 +187,7 @@ public sealed partial class HexCrawlService
         var state = expedition.Runtime as CellExpeditionState
             ?? throw new InvalidOperationException("This expedition has no generalized cell traversal state.");
         var verifiedGeneration = VerifyCellGeneration(
-            expedition, state, expectedVersion, inputs, generatedProcedureResolutionId);
+            expedition, state, expectedVersion, inputs, plan, generatedProcedureResolutionId);
         RequireClientCellInputs(inputs, verifiedGeneration is not null);
         JourneyRuntimeIntegration.EnsureRelevantTravelAllowed(expedition);
         ParticipantActivityPolicyResolver.ValidateAssignments(

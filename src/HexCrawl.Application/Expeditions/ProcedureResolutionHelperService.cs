@@ -203,7 +203,9 @@ public sealed class ProcedureResolutionHelperService(
         {
             CellTravel = audited.Travel,
             CellNavigation = audited.Navigation,
-            CellEncounter = audited.Encounter
+            CellEncounter = audited.Encounter,
+            CellSuppressesNavigationCheck = command.SuppressesNavigationCheck,
+            CellDeliberateDoubleBack = command.DeliberateDoubleBack
         });
         var save = await store.SaveExpeditionAsync(
             expedition with
