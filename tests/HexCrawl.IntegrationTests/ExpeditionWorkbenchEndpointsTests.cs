@@ -754,8 +754,11 @@ public sealed class ExpeditionWorkbenchEndpointsTests
                 var summary = Assert.Single(sessions.EnumerateArray());
                 Assert.Equal(sessionId, summary.GetProperty("id").GetGuid());
                 Assert.Equal("AbstractHex", summary.GetProperty("context").GetProperty("kind").GetString());
-                Assert.Equal(JsonValueKind.Null, summary.GetProperty("overworldId").ValueKind);
-                Assert.Equal(3, summary.GetProperty("expedition")
+                Assert.Equal(JsonValueKind.Null,
+                    summary.GetProperty("context").GetProperty("overworldId").ValueKind);
+                var reloaded = await restarted.GetFromJsonAsync<JsonElement>(
+                    $"/api/expeditions/{sessionId:D}");
+                Assert.Equal(3, reloaded.GetProperty("expedition")
                     .GetProperty("distanceTraveled").GetProperty("value").GetDouble(), 6);
                 Assert.Empty((await restarted.GetFromJsonAsync<JsonElement>("/api/overworlds")).EnumerateArray());
             }
