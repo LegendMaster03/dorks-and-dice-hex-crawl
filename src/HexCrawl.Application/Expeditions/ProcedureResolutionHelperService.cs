@@ -31,9 +31,6 @@ public sealed class ProcedureResolutionHelperService(
         var geometry = await coreService.ResolveCellGeometryAsync(
             expedition, ownerUserId, cancellationToken);
         var runtime = ExpeditionProcedureExecutionResolver.Resolve(expedition);
-        if (runtime.Movement.MechanicVersion != 2)
-            throw new InvalidOperationException("Cell resolution requires a pinned V2 movement procedure.");
-
         // The provider's legacy numeric carrier is used only for existing
         // provider dispatch. The qualified distance is independently retained.
         // A provider result without a proven physical unit is never accepted.
