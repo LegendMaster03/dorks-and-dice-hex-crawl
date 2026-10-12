@@ -4,6 +4,14 @@
 
 **Release status:** BLOCKED for dev/testing deployment, merge and WorkChat signed-in acceptance until the criteria below are demonstrated. The previous green CI at `a76aa430` proves the then-present code compiled; it does not prove absence of V1 or special-case geometry.
 
+## First implementation slices completed — not the release gate
+
+- Deleted the retired browser world-bound hex start methods and `StartExpeditionInput` type. The world editor/home still start through the qualified-cell API.
+- Persisted map grids now render and pick from `PeriodicWorldTiling` server polygon records regardless of the world's legacy grid projection. The old hex preview/registration authoring path still exists and must be replaced.
+- Converted the three existing spatial preset recipes to native mechanic-version-2 cell/distance modules and generic turn-cost modules. Deleted `GeometricNativeProcedureMaterializer.cs`; the generic campaign procedure materializer now accepts any executable version-2 spatial preset data without translating a V1 recipe. The existing preset keys remain **data identifiers**.
+- Removed the obsolete world-start and abstract-hex-state constructors from `ExpeditionStartService`. Nonspatial creation uses `StartNonSpatialAsync`, with the original cell starts remaining separate. Tests that required the V1-only preset materializer or V1 spatial advance were removed or rewritten against V2.
+- Regression verification is in progress on branch `feature/tile-crawl-phase-20.2-application-persistence`; **a passing commit of this partial migration must never be called zero-prototype acceptance.** The owner has not authorized a deploy or merge.
+
 ## Mandatory removal inventory
 
 | Layer | Known remaining source to eliminate or rewrite | Required replacement |
