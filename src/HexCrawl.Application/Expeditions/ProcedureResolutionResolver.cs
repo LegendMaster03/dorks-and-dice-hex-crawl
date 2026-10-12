@@ -96,24 +96,19 @@ public sealed class ProcedureResolutionResolver(IProcedureResolutionRandomSource
         {
             // Encounter cadence and location semantics are shared across
             // geometries. Only traversal and navigation have separate models.
-            var resolved = ResolveEncounter(procedure, context, state, encounterProfile,
-                new ProcedureResolutionHelperCommand { KeyedLocationId = command.KeyedLocationId },
-                rolls, notes)!;
-            encounter = new ResolvedEncounter(
-                resolved.Kind,
-                resolved.OccursAtHours is { } hours ? TimeSpan.FromHours(hours) : null,
-                resolved.LocationId, resolved.Note, resolved.Provenance);
+            encounter = ResolveEncounter(procedure, context, state, encounterProfile,
+                command.KeyedLocationId, rolls, notes);
         }
 
         return new(expeditionVersion, null, null, travel, navigation, encounter, rolls, notes);
     }
 
-    private ProcedureResolvedEncounter? ResolveEncounter(
+    private ResolvedEncounter? ResolveEncounter(
         GenericProcedureRuntime procedure,
         CrawlSessionContext context,
-        CrawlSessionRuntimeState runtime,
+        CellExpeditionState runtime,
         EncounterResolutionHelperProfile? helper,
-        ProcedureResolutionHelperCommand command,
+        Guid? keyedLocationId,
         List<ProcedureResolutionRoll> rolls,
         List<string> notes)
     {
@@ -135,7 +130,7 @@ public sealed class ProcedureResolutionResolver(IProcedureResolutionRandomSource
         {
             if (context.Kind == CrawlSessionContextKind.WorldBound)
             {
-                locationId = command.KeyedLocationId;
+                locationId = keyedLocationId;
                 if (locationId is null)
                 {
                     notes.Add("The encounter helper resolved a keyed-location discovery. Select the applicable keyed location before applying the result.");
@@ -175,9 +170,9 @@ public sealed class ProcedureResolutionResolver(IProcedureResolutionRandomSource
             provenanceNote += $" {encounterNote}";
         }
 
-        return new ProcedureResolvedEncounter(
+        return new ResolvedEncounter(
             kind,
-            occursAtHours,
+            occursAtHours is { } hours ? TimeSpan.FromHours(hours) : null,
             locationId,
             encounterNote,
             new ResolutionProvenance(ResolutionSource.AutomaticRoll, provenanceNote));
