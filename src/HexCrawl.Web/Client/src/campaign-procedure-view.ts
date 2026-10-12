@@ -7,8 +7,8 @@ export function campaignProcedureSummary(procedure: CampaignProcedure): string {
         return `${procedure.modules.length} configured rules · manual or reference behavior · not fully automated`;
     }
 
-    return `${formatHours(runtime.intervalHours)} watches · ${runtime.travelResolution === "HexSteps"
-        ? "hex-step travel"
+    return `${formatHours(runtime.intervalHours)} watches · ${runtime.travelResolution === "CellSteps"
+        ? "cell-step travel"
         : runtime.actualDistanceResolution === "Fixed"
             ? "fixed distance"
             : "resolved variable distance"} · ${runtime.usesNavigationChecks
@@ -34,25 +34,20 @@ export function procedureMechanicLines(procedure: CampaignProcedure): string[] {
             : ["This ruleset contains no selected rules."];
     }
 
-    const travel = runtime.travelResolution === "HexSteps"
-        ? "Travel: resolved hex-step movement."
+    const travel = runtime.travelResolution === "CellSteps"
+        ? "Travel: discrete cell-boundary transitions."
         : runtime.actualDistanceResolution === "VariableResolved"
             ? "Travel: continuous distance with a separately resolved expected and actual distance."
             : "Travel: continuous distance with a fixed resolved movement amount.";
 
     const navigation = runtime.usesNavigationChecks
-        ? `Navigation: checks enabled; veer is ${runtime.usesPersistentVeer ? "persistent" : "not persistent"}; deliberate single-hex double-back ${runtime.supportsDeliberateDoubleBack ? "supported" : "not supported"}.`
+        ? `Navigation: checks enabled; veer is ${runtime.usesPersistentVeer ? "persistent" : "not persistent"}.`
         : "Navigation: procedure checks disabled.";
-
-    const progress = runtime.tracksIntraHexProgress
-        ? `Progress: intra-hex tracking enabled; exit factors start ${formatNumber(runtime.startingExitProgressFactor)}, near ${formatNumber(runtime.nearExitProgressFactor)}, far ${formatNumber(runtime.farExitProgressFactor)}, back ${formatNumber(runtime.backExitProgressFactor)}${runtime.directionChangesCostProgress ? `; direction-change cost factor ${formatNumber(runtime.directionChangeProgressCostFactor)}` : ""}.`
-        : "Progress: discrete hex steps; no intra-hex progress tracking.";
 
     return [
         `Watch: ${formatHours(runtime.intervalHours)}; encounter cadence ${prettyWords(runtime.encounterCadence)}.`,
         travel,
         navigation,
-        progress,
         ...procedureHelperLines(runtime),
         ...procedure.modules.map(module =>
             `${module.moduleName}: ${module.mechanicKey} v${module.mechanicVersion} · ${module.automationLevel.toLowerCase()}.`)
