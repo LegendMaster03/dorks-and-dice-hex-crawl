@@ -10,6 +10,9 @@ import { currentPeriodicCellAdjacency } from "./current-cell-topology";
 import { renderCurrentCellNavigator } from "./cell-navigator";
 import { adjacencyForIntent } from "./spatial-adjacency";
 import { guidancePreferenceButton } from "../../ui/guidance";
+import { badge, openWorkspaceDrawer, statAction, textElement, type WorkspaceDrawer } from "../../ui/workspace";
+import { renderPhase15NextAction } from "./phase15-next-action";
+import type { ExpeditionWorkspaceAction } from "./expedition-workspace-model";
 import { encounterLocationId } from "./keyed-location-encounter";
 import { mountPeriodicGameplayPanels } from "./periodic-gameplay-panels";
 import { publishExpeditionRuntimeChanged } from "./expedition-runtime-events";
@@ -37,32 +40,61 @@ export async function renderPeriodicExpeditionWorkbench(
     let inspectedCell: WorldCellId | null = null;
 
     root.innerHTML = `
-        <section class="hc-page hc-workspace hc-expedition hc-periodic-expedition">
+        <section class="hc-page hc-workspace hc-expedition hc-periodic-expedition hc-phase15-expedition">
             <header class="hc-page-header">
-                <div><span class="hc-sheet-kicker">Expedition</span>
-                    <h1 data-title></h1><p data-context-label></p></div>
+                <div><h1 data-title></h1><p data-context-label></p></div>
                 <nav class="hc-button-row">
-                    <button type="button" data-world>World map</button>
+                    <button type="button" data-home>Hex Crawl home</button>
+                    <button type="button" data-world>World authoring</button>
+                    <button type="button" data-ruleset>Ruleset reference</button>
                     <button type="button" data-reload>Reload expedition</button>
                     <span data-guidance-controls></span>
                 </nav>
             </header>
             <div data-error class="hc-error" role="alert" hidden></div>
+            <div data-phase15-action></div>
+            <section class="hc-phase15-runtime-summary">
+                <div class="hc-stat-action-grid" data-phase15-stats></div>
+            </section>
             <div class="hc-workspace-grid">
-                <section class="hc-map-panel" aria-label="Expedition map">
-                    <div class="hc-map-host" data-map></div>
+                <div class="hc-panel hc-map-panel" aria-label="Expedition map">
+                    <h2 data-map-title>Expedition map</h2>
+                    <div class="hc-map-frame"><div class="hc-map-host" data-map></div></div>
                     <p class="hc-hint" data-inspection>Click a cell to inspect it. This does not change travel intent or move the party.</p>
-                </section>
-                <aside class="hc-sidebar hc-stack" aria-label="Expedition controls">
-                    <section class="hc-stack" aria-label="Current position">
-                        <h2>Current location</h2><p data-status></p><p data-actual></p>
+                </div>
+                <aside class="hc-panel hc-sidebar hc-table-rail" aria-label="At the table">
+                    <h2>At the table</h2>
+                    <section class="hc-current-travel" aria-label="Current travel">
+                        <h3>Current travel</h3><p data-status></p><p data-actual></p>
                         <div data-cell-navigator></div>
                         <p class="hc-hint" data-course>Choose a boundary to set intended travel.</p>
+                        <button type="button" data-open-travel>Resolve travel / watch</button>
                     </section>
-                    <section class="hc-stack" aria-label="Travel decisions">
-                        <h2>Travel</h2>
-                        <p class="hc-hint">Choosing a course does not resolve movement. A watch advances only when you confirm the DM resolution.</p>
-                        <form class="hc-form" data-travel-form>
+                    <details><summary>Party and movement summary</summary><div data-party></div><div data-movement></div></details>
+                    <details data-gameplay-disclosure>
+                        <summary>Party and gameplay</summary>
+                        <section class="hc-stack hc-gameplay-controls" data-gameplay-panels
+                            aria-label="Shared party and gameplay editors">
+                            <p class="hc-hint">The existing party, environment, journey, effects and survival editors remain available.</p>
+                        </section>
+                    </details>
+                    <details data-history-disclosure><summary>Journey events</summary><ol data-history></ol></details>
+                </aside>
+            </div>
+            <section class="hc-gm-tools">
+                <details><summary>GM Tools</summary>
+                    <div class="hc-button-row">
+                        <button type="button" data-gm-travel>Travel and navigation</button>
+                        <button type="button" data-gm-party>Party and gameplay</button>
+                        <button type="button" data-gm-history>Expedition history</button>
+                    </div>
+                </details>
+            </section>
+            <div data-travel-staging hidden>
+                <section data-travel-content class="hc-focused-watch-workspace">
+                    <h2>Travel and watch resolution</h2>
+                    <p class="hc-hint">Choosing a course does not move the party. The server resolves every boundary and actual movement after the table confirms inputs.</p>
+                    <form class="hc-form" data-travel-form>
                             <div class="hc-inline"><label>Heading X <input name="headingX" type="number" step="any" required></label>
                                 <label>Heading Y <input name="headingY" type="number" step="any" required></label></div>
                             <label data-pace-row>Pace <select name="pace"></select></label>
@@ -119,15 +151,7 @@ export async function renderPeriodicExpeditionWorkbench(
                         <div data-encounter-decision hidden><p data-encounter-description></p>
                             <label>Resolution note <input data-encounter-result></label>
                             <button type="button" data-resolve-encounter>Resolve pending encounter</button></div>
-                    </section>
-                    <details><summary>Party and movement summary</summary><div data-party></div><div data-movement></div></details>
-                    <section class="hc-stack hc-page hc-gameplay-controls" data-gameplay-panels
-                        aria-label="Shared party and gameplay editors">
-                        <h2>Party and gameplay</h2>
-                        <p class="hc-hint">These are the same party, environment, journey, effects and survival editors used by other expeditions.</p>
-                    </section>
-                    <details><summary>Journey events</summary><ol data-history></ol></details>
-                </aside>
+                </section>
             </div>
         </section>`;
     const required = <T extends Element>(selector: string): T => {
