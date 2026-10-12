@@ -30,7 +30,7 @@ public sealed class ExpeditionWorkbenchEndpointsTests
     }
 
     [Fact]
-    public async Task ExpeditionContractReturnsProcedurePresentationAndKnownHexState()
+    public async Task CellExpeditionContractReturnsPinnedProcedurePresentationAndQualifiedKnowledge()
     {
         var database = TestWebHost.NewDatabasePath();
         try
@@ -40,12 +40,12 @@ public sealed class ExpeditionWorkbenchEndpointsTests
             var world = await CreateWorld(client);
             var worldId = world.GetProperty("id").GetGuid();
 
-            using var startResponse = await client.PostAsJsonAsync($"/api/overworlds/{worldId:D}/expeditions", new
+            using var startResponse = await client.PostAsJsonAsync($"/api/overworlds/{worldId:D}/cell-expeditions", new
             {
                 name = "Configured expedition",
-                procedureKey = "simple-fixed-distance",
+                presetKey = "simple-fixed-distance",
                 presentationKey = "exploration-map",
-                startHex = new { q = 3, r = -2 }
+                startCell = new { motifCellId = "hex", translation = new { u = 3L, v = -2L } }
             });
             startResponse.EnsureSuccessStatusCode();
             var started = await startResponse.Content.ReadFromJsonAsync<JsonElement>();
@@ -57,9 +57,13 @@ public sealed class ExpeditionWorkbenchEndpointsTests
             Assert.Equal(4, procedure.GetProperty("runtime").GetProperty("intervalHours").GetDouble());
             Assert.Equal("None", procedure.GetProperty("runtime").GetProperty("encounterCadence").GetString());
             Assert.Equal("exploration-map", started.GetProperty("presentation").GetProperty("key").GetString());
-            var knownHex = Assert.Single(started.GetProperty("knownHexes").EnumerateArray());
-            Assert.Equal(3, knownHex.GetProperty("q").GetInt32());
-            Assert.Equal(-2, knownHex.GetProperty("r").GetInt32());
+            var knownCell = Assert.Single(started.GetProperty("knownCells").EnumerateArray());
+            Assert.Equal("hex", knownCell.GetProperty("address").GetProperty("motifCellId").GetString());
+            Assert.Equal(3L, knownCell.GetProperty("address").GetProperty("translation").GetProperty("u").GetInt64());
+            Assert.Equal(-2L, knownCell.GetProperty("address").GetProperty("translation").GetProperty("v").GetInt64());
+            Assert.Equal(knownCell.GetRawText(),
+                started.GetProperty("expedition").GetProperty("currentCell").GetRawText());
+            Assert.Empty(started.GetProperty("knownHexes").EnumerateArray());
         }
         finally
         {
@@ -155,12 +159,12 @@ public sealed class ExpeditionWorkbenchEndpointsTests
                 var world = await CreateWorld(client);
                 var worldId = world.GetProperty("id").GetGuid();
 
-                using var startResponse = await client.PostAsJsonAsync($"/api/overworlds/{worldId:D}/expeditions", new
+                using var startResponse = await client.PostAsJsonAsync($"/api/overworlds/{worldId:D}/cell-expeditions", new
                 {
                     name = "Procedure helper expedition",
-                    procedureKey = "alexandrian-advanced",
+                    presetKey = "alexandrian-advanced",
                     presentationKey = "exploration-map",
-                    startHex = new { q = 0, r = 0 }
+                    startCell = new { motifCellId = "hex", translation = new { u = 0L, v = 0L } }
                 });
                 startResponse.EnsureSuccessStatusCode();
                 var started = await startResponse.Content.ReadFromJsonAsync<JsonElement>();
@@ -230,12 +234,12 @@ public sealed class ExpeditionWorkbenchEndpointsTests
 
             foreach (var (worldId, name) in new[] { (firstWorldId, "First crawl"), (secondWorldId, "Second crawl") })
             {
-                using var startResponse = await client.PostAsJsonAsync($"/api/overworlds/{worldId:D}/expeditions", new
+                using var startResponse = await client.PostAsJsonAsync($"/api/overworlds/{worldId:D}/cell-expeditions", new
                 {
                     name,
-                    procedureKey = "simple-fixed-distance",
+                    presetKey = "simple-fixed-distance",
                     presentationKey = "dm-controlled",
-                    startHex = new { q = 0, r = 0 }
+                    startCell = new { motifCellId = "hex", translation = new { u = 0L, v = 0L } }
                 });
                 startResponse.EnsureSuccessStatusCode();
             }
