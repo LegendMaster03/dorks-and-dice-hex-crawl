@@ -65,6 +65,32 @@ public sealed class ProcedureComposerServiceTests
     }
 
     [Fact]
+    public async Task BlankCustomMovementDefaultsToNativeGeneralizedCellExecution()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var store = new PostgresHexCrawlStore(database.ConnectionString);
+        await store.InitializeAsync();
+        var draft = await Composer(store).CreateDraftAsync(
+            "alice", null, null, null,
+            [
+                new ProcedureModuleSelection(GenericProcedureCatalog.TimeIntervalModule, true),
+                new ProcedureModuleSelection(GenericProcedureCatalog.MovementResolutionModule, true)
+            ],
+            []);
+
+        var movement = Assert.Single(draft.Procedure.Modules, module =>
+            module.Module.Key == GenericProcedureCatalog.MovementResolutionModule);
+        Assert.Equal(2, movement.Mechanic.Version);
+        Assert.Equal(GenericProcedureExecutionHandlers.MovementResolutionPolicy,
+            movement.Mechanic.ExecutionHandler);
+        Assert.Equal(TravelResolutionMode.ContinuousDistance.ToString(),
+            movement.Parameters["travelResolution"]);
+        Assert.Equal("false", movement.Parameters["tracksIntraHexProgress"]);
+        Assert.DoesNotContain(draft.Procedure.Modules, module =>
+            module.Mechanic.ExecutionHandler == GenericProcedureExecutionHandlers.HexProgressPolicy);
+    }
+
+    [Fact]
     public async Task DraftBehaviorReplacementUsesGenericAlternativeAndRefreshesDependencies()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
