@@ -854,8 +854,6 @@ export async function renderExpedition(
             travelFact("Actual", actualCourseLabel(runtime, adjacency), "currentTravelActual"),
             travelFact("Progress", travelProgressDetail(runtime), "currentTravelProgress"));
         section.append(facts);
-        const cellProgress = cellProgressIndicator(runtime);
-        if (cellProgress) section.append(cellProgress);
 
         if (!world) {
             const course = document.createElement("select");
@@ -2105,44 +2103,6 @@ function movementSummary(runtime: ExpeditionDetail): string {
 function movementSuggestionDetail(runtime: ExpeditionDetail): string | null {
     const suggestion = runtime.movementComposition.suggestedExpectedDistance;
     return suggestion ? `Suggested next watch: ${formatDistance(suggestion)}` : null;
-}
-
-function cellProgressIndicator(runtime: ExpeditionDetail): HTMLElement | null {
-    if (!runtime.expedition.isSpatial || runtime.procedure.runtime?.tracksIntraHexProgress !== true) return null;
-
-    const progress = runtime.expedition.hexProgress;
-    const requirement = runtime.expedition.exitRequirement;
-    const section = document.createElement("section");
-    section.className = "hc-cell-progress";
-    section.dataset.cellProgress = "";
-
-    const heading = document.createElement("div");
-    heading.className = "hc-progress-heading";
-    heading.append(
-        textElement("span", "Cell progress", "hc-ledger-kicker"),
-        textElement(
-            "strong",
-            requirement && requirement.unit.symbol === progress.unit.symbol
-                ? `${formatNumber(progress.value)} / ${formatNumber(requirement.value)} ${progress.unit.symbol}`
-                : `${formatNumber(progress.value)} ${progress.unit.symbol}`));
-    section.append(heading);
-
-    if (requirement && requirement.unit.symbol === progress.unit.symbol && requirement.value > 0) {
-        const meter = document.createElement("progress");
-        meter.max = requirement.value;
-        meter.value = Math.max(0, Math.min(progress.value, requirement.value));
-        meter.setAttribute("aria-label", "Progress through the current cell");
-        section.append(meter);
-    } else {
-        section.classList.add("is-unbounded");
-        section.append(textElement(
-            "span",
-            requirement
-                ? `Exit requirement uses ${requirement.unit.symbol}; no percentage is derived across unlike units.`
-                : "No authoritative exit requirement is available, so no percentage is shown.",
-            "hc-muted"));
-    }
-    return section;
 }
 
 function journeyStageSequence(
