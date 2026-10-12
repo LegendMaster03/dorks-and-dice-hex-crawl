@@ -94,6 +94,9 @@ public sealed class PostgresSchemaMigrator(string connectionString)
             preflight.CommandText = """
                 SELECT count(*) FROM expeditions
                 WHERE jsonb_typeof(state_json) IS DISTINCT FROM 'object'
+                   -- Absence is a supported old V1 discriminator default,
+                   -- but an explicitly null discriminator is malformed.
+                   OR (state_json ? 'kind' AND state_json->>'kind' IS NULL)
                    OR COALESCE(state_json->>'kind', 'Spatial')
                       NOT IN ('Spatial', 'CellSpatial', 'NonSpatial');
                 """;

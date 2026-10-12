@@ -129,8 +129,10 @@ public sealed class Phase20OneTimeStartupCutoverTests
         Assert.Equal("23514", error.SqlState);
     }
 
-    [Fact]
-    public async Task UnknownRuntimeKindRollsBackEntireUpgradeAndPreservesOldData()
+    [Theory]
+    [InlineData("FutureKind")]
+    [InlineData(null)]
+    public async Task UnknownRuntimeKindRollsBackEntireUpgradeAndPreservesOldData(string? unknownKind)
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var migrator = new PostgresSchemaMigrator(database.ConnectionString);
@@ -151,8 +153,10 @@ public sealed class Phase20OneTimeStartupCutoverTests
                        jsonb_build_object('kind', value),
                        '{}'::jsonb, '{}'::jsonb, '{}'::jsonb, '{}'::jsonb,
                        '{}'::jsonb, '{}'::jsonb, '{}'::jsonb, '{}'::jsonb, 0, 1, now(), now()
-                FROM (VALUES ('Spatial'), ('FutureKind')) as kinds(value);
+                FROM (VALUES ('Spatial'), (@unknownKind)) as kinds(value);
                 """;
+            seed.Parameters.Add("unknownKind", NpgsqlTypes.NpgsqlDbType.Text).Value =
+                unknownKind is null ? DBNull.Value : unknownKind;
             await seed.ExecuteNonQueryAsync();
         }
         var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => migrator.MigrateAsync());
