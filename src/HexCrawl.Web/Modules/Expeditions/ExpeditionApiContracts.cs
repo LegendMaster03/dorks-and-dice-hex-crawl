@@ -55,19 +55,11 @@ public sealed record PendingEncounterContract(
 public sealed record WorkbenchExpeditionStateContract(
     Guid Id,
     bool IsSpatial,
-    HexCoordinate? CurrentHex,
     WorldPoint? Position,
     WorldPositionPrecision? PositionPrecision,
-    int? EntryDirection,
-    int? LastTravelDirection,
-    int? IntendedDirection,
-    int? ActualDirection,
     bool? IsLost,
-    int? VeerSteps,
     double? VeerDegrees,
     DistanceContract? DistanceTraveled,
-    DistanceContract? HexProgress,
-    DistanceContract? ExitRequirement,
     double ElapsedTravelHours,
     int CurrentDay,
     int CompletedWatches,
@@ -88,8 +80,7 @@ public sealed record WorkbenchExpeditionStateContract(
     bool? ActiveEncounterHandled,
     PendingEncounterContract? PendingEncounter)
 {
-    // Additive qualified-cell authority. These fields are absent from legacy
-    // hex and nonspatial JSON rather than populated with invented coordinates.
+    // Qualified-cell fields are present for spatial expeditions only.
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public WorldCellId? CurrentCell { get; init; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -103,60 +94,43 @@ public sealed record WorkbenchExpeditionStateContract(
     {
         CellExpeditionState cells => FromCells(cells),
         NonSpatialSessionState nonSpatial => new(
-            nonSpatial.Id,
-            false,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            nonSpatial.ElapsedTime.TotalHours,
-            (int)Math.Floor(nonSpatial.ElapsedTime.TotalDays) + 1,
-            nonSpatial.CompletedWatches,
-            nonSpatial.ActiveWatch?.WatchNumber,
-            nonSpatial.ActiveWatch?.TotalDuration.TotalHours,
-            nonSpatial.ActiveWatch?.Elapsed.TotalHours,
-            nonSpatial.ActiveWatch?.Remaining.TotalHours,
-            null,
-            null,
-            nonSpatial.ActiveWatch?.ActivityAssignments
-                .Select(ParticipantActivityAssignmentContract.From)
-                .ToArray() ?? [],
-            null,
-            false,
-            false,
-            false,
-            false,
-            null,
-            null,
-            null,
-            PendingEncounterContract.From(nonSpatial.PendingEncounter)),
+            Id: nonSpatial.Id,
+            IsSpatial: false,
+            Position: null,
+            PositionPrecision: null,
+            IsLost: null,
+            VeerDegrees: null,
+            DistanceTraveled: null,
+            ElapsedTravelHours: nonSpatial.ElapsedTime.TotalHours,
+            CurrentDay: (int)Math.Floor(nonSpatial.ElapsedTime.TotalDays) + 1,
+            CompletedWatches: nonSpatial.CompletedWatches,
+            ActiveWatchNumber: nonSpatial.ActiveWatch?.WatchNumber,
+            ActiveWatchTotalHours: nonSpatial.ActiveWatch?.TotalDuration.TotalHours,
+            ActiveWatchElapsedHours: nonSpatial.ActiveWatch?.Elapsed.TotalHours,
+            ActiveWatchRemainingHours: nonSpatial.ActiveWatch?.Remaining.TotalHours,
+            ActiveWatchPendingDecision: null,
+            ActivePaceKey: null,
+            ActiveActivityAssignments: nonSpatial.ActiveWatch?.ActivityAssignments
+                .Select(ParticipantActivityAssignmentContract.From).ToArray() ?? [],
+            ActiveNavigationAidKey: null,
+            ActiveSuppressesNavigationCheck: false,
+            ActiveResetsVeerAtBoundary: false,
+            ActiveDeliberateDoubleBack: false,
+            ActiveContinueAcrossBoundaries: false,
+            ActiveEncounterKind: null,
+            ActiveEncounterHour: null,
+            ActiveEncounterHandled: null,
+            PendingEncounter: PendingEncounterContract.From(nonSpatial.PendingEncounter)),
         _ => throw new ArgumentOutOfRangeException(nameof(runtime))
     };
     private static WorkbenchExpeditionStateContract FromCells(CellExpeditionState cells) => new(
         Id: cells.Id,
         IsSpatial: true,
-        CurrentHex: null,
         Position: cells.Traversal.Position,
         PositionPrecision: WorldPositionPrecision.Exact,
-        EntryDirection: null,
-        LastTravelDirection: null,
-        IntendedDirection: null,
-        ActualDirection: null,
         IsLost: cells.IsLost,
-        VeerSteps: null,
         VeerDegrees: cells.ResolvedVeerDegrees,
         DistanceTraveled: cells.DistanceTraveled is { } distance ? DistanceContract.From(distance) : null,
-        HexProgress: null,
-        ExitRequirement: null,
         ElapsedTravelHours: cells.ElapsedTravelTime.TotalHours,
         CurrentDay: (int)Math.Floor(cells.ElapsedTravelTime.TotalDays) + 1,
         CompletedWatches: cells.CompletedWatches,
@@ -252,7 +226,6 @@ public sealed record ExpeditionWorkbenchContract(
     ExpeditionPartyContract Party,
     ParticipantActivityPolicyContract ParticipantActivityPolicy,
     MovementCapabilityCompositionContract MovementComposition,
-    IReadOnlyList<HexCoordinate> KnownHexes,
     IReadOnlyList<KnowledgeEntryContract> Knowledge,
     IReadOnlyList<RuntimeEventContract> History)
 {
@@ -285,7 +258,6 @@ public sealed record ExpeditionWorkbenchContract(
                 ParticipantActivityPolicyResolver.Resolve(expedition.CampaignProcedure)),
             MovementCapabilityCompositionContract.From(
                 MovementCapabilityComposer.Compose(expedition)),
-            expedition.Knowledge?.KnownHexes ?? [],
             expedition.Knowledge?.Entries.Values
                 .OrderBy(item => item.SubjectType)
                 .ThenBy(item => item.SubjectId)

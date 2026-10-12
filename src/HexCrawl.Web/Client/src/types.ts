@@ -299,19 +299,11 @@ export type PendingEncounter = {
 export type SpatialRuntimeExpedition = {
     id: string;
     isSpatial: true;
-    currentHex: HexCoordinate;
     position: WorldPoint | null;
     positionPrecision: "Exact" | "HexAnchor" | null;
-    entryDirection: number | null;
-    lastTravelDirection: number | null;
-    intendedDirection: number | null;
-    actualDirection: number | null;
     isLost: boolean;
-    veerSteps: number;
     veerDegrees: number;
     distanceTraveled: DistanceValue;
-    hexProgress: DistanceValue;
-    exitRequirement: DistanceValue | null;
     elapsedTravelHours: number;
     currentDay: number;
     completedWatches: number;
@@ -331,7 +323,7 @@ export type SpatialRuntimeExpedition = {
     activeEncounterHour: number | null;
     activeEncounterHandled: boolean | null;
     pendingEncounter: PendingEncounter | null;
-    /** Present only in Phase 18 generalized cell state, with currentHex null on the wire. */
+    /** Qualified cell identity from the authoritative tiling. */
     currentCell?: WorldCellId | null;
     cellTraversal?: {
         currentCell: WorldCellId;
@@ -348,19 +340,11 @@ export type SpatialRuntimeExpedition = {
 export type NonSpatialRuntimeExpedition = {
     id: string;
     isSpatial: false;
-    currentHex: null;
     position: null;
     positionPrecision: null;
-    entryDirection: null;
-    lastTravelDirection: null;
-    intendedDirection: null;
-    actualDirection: null;
     isLost: null;
-    veerSteps: null;
     veerDegrees: null;
     distanceTraveled: null;
-    hexProgress: null;
-    exitRequirement: null;
     elapsedTravelHours: number;
     currentDay: number;
     completedWatches: number;
@@ -597,7 +581,6 @@ export type ExpeditionDetail = {
     party: ExpeditionParty;
     participantActivityPolicy: ParticipantActivityPolicy;
     movementComposition: MovementCapabilityComposition;
-    knownHexes: HexCoordinate[];
     knowledge: RuntimeKnowledgeEntry[];
     history: RuntimeEvent[];
 };
