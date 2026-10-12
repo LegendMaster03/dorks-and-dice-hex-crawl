@@ -83,9 +83,6 @@ public sealed partial class PostgresHexCrawlStore
 
         private CellExpeditionState ToCellSpatial()
         {
-            if (CurrentHex is not null || EntryDirection is not null || LastTravelDirection is not null
-                || Progress is not null || IntendedDirection is not null || ActualDirection is not null)
-                throw new InvalidDataException("Generalized cell snapshots must not include axial runtime authority.");
             var cursor = CellTraversal
                 ?? throw new InvalidDataException("Persisted generalized expedition has no traversal cursor.");
             if (cursor.FormatVersion != PeriodicCellTraversal.CurrentFormatVersion)
