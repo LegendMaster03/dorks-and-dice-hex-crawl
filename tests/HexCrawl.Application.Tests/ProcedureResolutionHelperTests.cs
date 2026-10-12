@@ -12,8 +12,8 @@ public sealed class ProcedureResolutionHelperTests
         var procedure = CampaignProcedureMaterializer.MaterializeExecutableSpatial(CrawlProcedureCatalog.Resolve("alexandrian-advanced")).Procedure;
         var runtime = GenericProcedureRuntime.Bind(procedure);
         var mapless = Context();
-        var state = AbstractCellSessionGeometry.CreateNewHexSession(
-            Guid.NewGuid(), mapless, new HexCoordinate(0, 0)).Expedition;
+        var state = MaplessCellSessionGeometry.Create(
+            mapless.Tiling.Id, mapless.Tiling).Expedition;
         var resolver = new ProcedureResolutionResolver(
             new SequenceRandomSource(1, 1, 1, 1, 2));
         var result = resolver.ResolveCells(
@@ -48,8 +48,8 @@ public sealed class ProcedureResolutionHelperTests
     {
         var procedure = CampaignProcedureMaterializer.MaterializeExecutableSpatial(CrawlProcedureCatalog.Resolve("alexandrian-advanced")).Procedure;
         var mapless = Context();
-        var state = AbstractCellSessionGeometry.CreateNewHexSession(
-            Guid.NewGuid(), mapless, new HexCoordinate(0, 0)).Expedition;
+        var state = MaplessCellSessionGeometry.Create(
+            mapless.Tiling.Id, mapless.Tiling).Expedition;
         var resolver = new ProcedureResolutionResolver(
             new SequenceRandomSource(1, 1, 1));
         Assert.Throws<InvalidOperationException>(() => resolver.ResolveCells(
@@ -66,10 +66,8 @@ public sealed class ProcedureResolutionHelperTests
         Assert.Null(state.ActiveWatch);
     }
 
-    private static AbstractHexCrawlSessionContext Context() => new(
-        "Helper test",
-        HexOrientation.PointyTop,
-        new CrawlRuntimeContext(new DistanceMeasure(12, DistanceUnit.Miles)));
+    private static MaplessSpatialCrawlSessionContext Context() =>
+        MaplessSessionFixture.Context("Helper test");
 
     private sealed class SequenceRandomSource(params int[] values) : IProcedureResolutionRandomSource
     {

@@ -240,12 +240,9 @@ public sealed class MovementCapabilityCompositionAcceptanceTests
     private static StoredExpedition Expedition(CampaignProcedure procedure, CrawlPartySheet party)
     {
         var now = DateTimeOffset.UtcNow;
-        var context = new AbstractHexCrawlSessionContext(
-            "Phase 8 acceptance",
-            HexOrientation.PointyTop,
-            new CrawlRuntimeContext(new DistanceMeasure(12, DistanceUnit.Miles)));
-        var state = AbstractCellSessionGeometry.CreateNewHexSession(
-            Guid.NewGuid(), context, new HexCoordinate(0, 0)).Expedition;
+        var geometry = MaplessSessionFixture.Start();
+        var context = new MaplessSpatialCrawlSessionContext("Phase 8 acceptance", geometry.World);
+        var state = geometry.Expedition;
         return new StoredExpedition(
             "Phase 8 acceptance",
             state,

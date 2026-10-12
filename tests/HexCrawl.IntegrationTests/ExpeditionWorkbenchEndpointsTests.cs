@@ -291,13 +291,11 @@ public sealed class ExpeditionWorkbenchEndpointsTests
                     procedureRevision = procedure.Revision,
                     context = new
                     {
-                        kind = "AbstractHex",
+                        kind = "MaplessSpatial",
                         name = "Pace proof",
-                        orientation = "PointyTop",
-                        hexCenterDistance = 12,
+                        physicalDistancePerWorldUnit = 12,
                         distanceUnit = new { kind = "Mile", symbol = "mi", metersPerUnit = 1609.344 }
-                    },
-                    startHex = new { q = 0, r = 0 }
+                    }
                 });
                 startResponse.EnsureSuccessStatusCode();
                 var session = await startResponse.Content.ReadFromJsonAsync<JsonElement>();
@@ -365,7 +363,7 @@ public sealed class ExpeditionWorkbenchEndpointsTests
     }
 
     [Fact]
-    public async Task FlatTopMaplessCellExpeditionPersistsAndAdvancesWithoutAnyWorld()
+    public async Task MaplessPeriodicCellExpeditionPersistsAndAdvancesWithoutAnAuthoredWorld()
     {
         var database = TestWebHost.NewDatabasePath();
         Guid sessionId;
@@ -384,26 +382,33 @@ public sealed class ExpeditionWorkbenchEndpointsTests
                         procedureKey = "simple-fixed-distance",
                         context = new
                         {
-                            kind = "AbstractHex",
+                            kind = "MaplessSpatial",
                             name = "Paper map",
-                            orientation = "FlatTop",
-                            hexCenterDistance = 12,
+                            physicalDistancePerWorldUnit = 12,
                             distanceUnit = new { kind = "Mile", symbol = "mi", metersPerUnit = 1609.344 }
                         },
-                        startHex = new { q = 2, r = -1 }
+                        startCell = new
+                        {
+                            motifCellId = DelaneyDressHarmonicMetricRealization
+                                .Construct("<1:1,1,1:6,3>", 1d, "world-unit")
+                                .Topology!.MotifCells[0].Id,
+                            translation = new { u = 2, v = -1 }
+                        }
                     }, CellJson);
                 startResponse.EnsureSuccessStatusCode();
                 var session = await startResponse.Content.ReadFromJsonAsync<JsonElement>();
                 sessionId = session.GetProperty("id").GetGuid();
                 Assert.Equal(JsonValueKind.Null, session.GetProperty("overworldId").ValueKind);
-                Assert.Equal("AbstractHex", session.GetProperty("context").GetProperty("kind").GetString());
+                Assert.Equal("MaplessSpatial", session.GetProperty("context").GetProperty("kind").GetString());
                 Assert.Equal("Paper map", session.GetProperty("context").GetProperty("name").GetString());
-                Assert.Equal("FlatTop", session.GetProperty("context").GetProperty("orientation").GetString());
+                Assert.True(session.GetProperty("context").TryGetProperty("tiling", out _));
                 var spatial = session.GetProperty("expedition");
                 Assert.True(spatial.GetProperty("isSpatial").GetBoolean());
                 Assert.False(spatial.TryGetProperty("currentHex", out _));
                 var currentCell = spatial.GetProperty("currentCell").GetProperty("address");
-                Assert.Equal("hex", currentCell.GetProperty("motifCellId").GetString());
+                Assert.Equal(DelaneyDressHarmonicMetricRealization
+                    .Construct("<1:1,1,1:6,3>", 1d, "world-unit")
+                    .Topology!.MotifCells[0].Id, currentCell.GetProperty("motifCellId").GetString());
                 Assert.Equal(2L, currentCell.GetProperty("translation").GetProperty("u").GetInt64());
                 Assert.Equal(-1L, currentCell.GetProperty("translation").GetProperty("v").GetInt64());
 
@@ -446,7 +451,7 @@ public sealed class ExpeditionWorkbenchEndpointsTests
                 var sessions = await restarted.GetFromJsonAsync<JsonElement>("/api/expeditions");
                 var summary = Assert.Single(sessions.EnumerateArray());
                 Assert.Equal(sessionId, summary.GetProperty("id").GetGuid());
-                Assert.Equal("AbstractHex", summary.GetProperty("context").GetProperty("kind").GetString());
+                Assert.Equal("MaplessSpatial", summary.GetProperty("context").GetProperty("kind").GetString());
                 Assert.Equal(JsonValueKind.Null,
                     summary.GetProperty("context").GetProperty("overworldId").ValueKind);
                 var reloaded = await restarted.GetFromJsonAsync<JsonElement>(
@@ -463,7 +468,7 @@ public sealed class ExpeditionWorkbenchEndpointsTests
     }
 
     [Fact]
-    public async Task AbstractHexSessionRejectsMissingDistanceUnit()
+    public async Task MaplessSessionRejectsMissingDistanceUnit()
     {
         var database = TestWebHost.NewDatabasePath();
         try
@@ -471,18 +476,17 @@ public sealed class ExpeditionWorkbenchEndpointsTests
             using var factory = TestWebHost.Create(database);
             using var client = factory.CreateClient();
 
-            using var response = await client.PostAsJsonAsync("/api/expeditions", new
+            using var response = await client.PostAsJsonAsync("/api/expeditions/cells", new
             {
                 name = "Unitless crawl",
                 procedureKey = "simple-fixed-distance",
                 context = new
                 {
-                    kind = "AbstractHex",
+                    kind = "MaplessSpatial",
                     name = "Unitless paper map",
-                    orientation = "PointyTop",
-                    hexCenterDistance = 12
+                                        physicalDistancePerWorldUnit = 12
                 },
-                startHex = new { q = 0, r = 0 }
+                startCell = new { motifCellId = "cell-0", translation = new { u = 0, v = 0 } }
             });
 
             Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -782,8 +786,7 @@ public sealed class ExpeditionWorkbenchEndpointsTests
         using var response = await client.PostAsJsonAsync("/api/overworlds", new
         {
             name = "Workbench API",
-            orientation = "PointyTop",
-            origin = new { x = 0, y = 0 },
+                        origin = new { x = 0, y = 0 },
             rotationDegrees = 0,
             hexRadiusWorldUnits = 1,
             neighborCenterDistance = 12,

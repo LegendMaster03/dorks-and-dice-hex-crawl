@@ -495,8 +495,8 @@ export class HexCrawlApi {
     }
 
     public startStandaloneCellSession(input: StartStandaloneCrawlSessionInput): Promise<ExpeditionDetail> {
-        if (input.context.kind !== "AbstractHex" || !input.startHex)
-            throw new Error("A mapless cell expedition requires a spatial context and starting hex address.");
+        if (input.context.kind !== "MaplessSpatial")
+            throw new Error("A mapless cell expedition requires a spatial context.");
         return this.sendJson("POST", "/api/expeditions/cells", input, "Start mapless cell expedition");
     }
 

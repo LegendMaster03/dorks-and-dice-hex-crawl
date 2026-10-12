@@ -9,7 +9,7 @@ public sealed record StartProcedureSessionRequest(
     Guid? ProcedureId,
     int? ProcedureRevision,
     StandaloneCrawlContextRequest Context,
-    HexCoordinate? StartHex = null)
+    PeriodicCellAddress? StartCell = null)
 {
     public ProcedureStartSelection ProcedureSelection() =>
         new(ProcedureKey, ProcedureId, ProcedureRevision);

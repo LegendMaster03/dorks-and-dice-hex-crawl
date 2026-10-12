@@ -10,7 +10,7 @@ import type {
 } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
 import { campaignProcedureSummary, renderProcedureMechanicList } from "../../campaign-procedure-view";
-import { input, integer, numeric, required, select } from "../../ui/dom";
+import { input, numeric, required, select } from "../../ui/dom";
 import { applyGuidedExperience, attachFieldHelp, guidancePreferenceButton } from "../../ui/guidance";
 import {
     applyStandaloneProcedureChoice,
@@ -73,12 +73,6 @@ export async function renderAssistantEntry(
                         </div>
                         <div class="hc-form" data-abstract hidden>
                             <label>Setup name <input name="contextName" value="${defaultContextName(assistant, true)}" autocomplete="off"></label>
-                            <label>Grid orientation
-                                <select name="orientation">
-                                    <option value="PointyTop">Pointy top</option>
-                                    <option value="FlatTop">Flat top</option>
-                                </select>
-                            </label>
                             <fieldset class="hc-field-group hc-map-scale-field">
                                 <legend>Map scale</legend>
                                 <div class="hc-inline">
@@ -92,17 +86,12 @@ export async function renderAssistantEntry(
                                         </select>
                                     </label>
                                 </div>
-                                <p class="hc-hint">Game-world distance from the center of one adjacent cell to the next.</p>
+                                <p class="hc-hint">Physical distance represented by one realized geometry unit.</p>
                             </fieldset>
                             <div class="hc-form" data-custom-unit hidden>
                                 <label>Custom symbol <input name="symbol" autocomplete="off"></label>
                                 <label>Custom meters per unit <input name="meters" type="number" min="0.001" step="any"></label>
                             </div>
-                            <div class="hc-inline">
-                                <label>Start q <input name="q" type="number" step="1" value="0"></label>
-                                <label>Start r <input name="r" type="number" step="1" value="0"></label>
-                            </div>
-                            <p class="hc-hint hc-guided-only">q/r are axial cell coordinates. For a new mapless grid, 0 / 0 is a normal starting point.</p>
                             <p class="hc-hint">Spatial positions are tracked, but no authored map is created or loaded.</p>
                         </div>
                         <button type="submit" class="hc-primary-action" data-submit>${createButton(assistant)}</button>
@@ -128,8 +117,7 @@ export async function renderAssistantEntry(
     if (modeField) {
         attachFieldHelp(modeField, "Bookkeeping mode", "Time / interval only avoids creating spatial state. Mapless travel adds only the grid information needed to track position and direction.");
     }
-    attachFieldHelp(select(form, "orientation"), "Hex orientation", "Pointy-top and flat-top describe the grid geometry. They do not define map north.");
-    attachFieldHelp(input(form, "scale"), "Map scale", "This is the game-world distance from the center of one cell to the center of an adjacent cell.", "If adjacent cells represent 6 miles, enter 6 and choose Miles.");
+    attachFieldHelp(input(form, "scale"), "Map scale", "This is the physical distance represented by one realized world geometry unit.", "If adjacent cells represent 6 miles, enter 6 and choose Miles.");
     attachFieldHelp(select(form, "unit"), "Map scale unit", "The physical unit used by the map scale.");
     attachFieldHelp(input(form, "meters"), "Custom meters per unit", "Only used for Custom units. Enter the number of meters represented by one custom unit.");
 
@@ -162,8 +150,6 @@ export async function renderAssistantEntry(
         input(form, "contextName").required = abstract;
         input(form, "scale").required = abstract;
         unit.required = abstract;
-        input(form, "q").required = abstract;
-        input(form, "r").required = abstract;
         input(form, "nonSpatialName").required = !abstract;
         syncUnit();
     };
@@ -320,15 +306,10 @@ function buildRequest(
     return {
         name,
         context: {
-            kind: "AbstractHex",
+            kind: "MaplessSpatial",
             name: input(form, "contextName").value.trim(),
-            orientation: select(form, "orientation").value === "FlatTop" ? "FlatTop" : "PointyTop",
-            hexCenterDistance: positive(input(form, "scale")),
+            physicalDistancePerWorldUnit: positive(input(form, "scale")),
             distanceUnit: distanceUnit(unitKind, form)
-        },
-        startHex: {
-            q: integer(input(form, "q")),
-            r: integer(input(form, "r"))
         }
     };
 }
@@ -405,7 +386,7 @@ function defaultContextName(assistant: ExpeditionAssistant, spatial: boolean): s
 
 function contextLabel(session: ExpeditionSummary): string {
     if (session.context.kind === "WorldBound") return `Map: ${session.context.name}`;
-    if (session.context.kind === "AbstractHex") return `Mapless: ${session.context.name}`;
+    if (session.context.kind === "MaplessSpatial") return `Mapless: ${session.context.name}`;
     return `Journey / no grid: ${session.context.name}`;
 }
 

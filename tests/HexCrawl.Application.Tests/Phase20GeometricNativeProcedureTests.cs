@@ -70,11 +70,13 @@ public sealed class Phase20GeometricNativeProcedureTests
     [Fact]
     public void AlexandrianTurnChargesEffortWithoutFabricatingPhysicalDistance()
     {
-        var context = new AbstractHexCrawlSessionContext("Geometric watch",
-            HexOrientation.PointyTop,
-            new CrawlRuntimeContext(new DistanceMeasure(6, DistanceUnit.Miles)));
-        var session = AbstractCellSessionGeometry.CreateNewHexSession(
-            Guid.NewGuid(), context, new HexCoordinate(0, 0));
+        var realized = DelaneyDressHarmonicMetricRealization.Construct(
+            "<1:1,1,1:6,3>", 1d, "world-unit");
+        var id = Guid.NewGuid();
+        var tiling = new PeriodicWorldTiling(id, realized.Topology!,
+            realized.Realization!, new WorldPoint(0, 0),
+            PhysicalDistancePerWorldUnit: new DistanceMeasure(6, DistanceUnit.Miles));
+        var session = MaplessCellSessionGeometry.Create(id, tiling);
         var procedure = CampaignProcedureMaterializer.MaterializeExecutableSpatial(CrawlProcedureCatalog.Resolve("alexandrian-advanced")).Procedure;
         var current = session.Expedition.Traversal.CurrentCell;
         var east = HeadingToBoundary(session.World, current, 0);

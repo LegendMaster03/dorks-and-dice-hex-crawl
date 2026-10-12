@@ -466,14 +466,11 @@ public sealed class ProcedureResolutionProviderEnricherTests
         };
     }
 
-    private static AbstractHexCrawlSessionContext Context() => new(
-        "Provider test",
-        HexOrientation.PointyTop,
-        new CrawlRuntimeContext(new DistanceMeasure(12, DistanceUnit.Miles)));
+    private static MaplessSpatialCrawlSessionContext Context() =>
+        MaplessSessionFixture.Context("Provider test");
 
     private static CellExpeditionState State() =>
-        AbstractCellSessionGeometry.CreateNewHexSession(
-            Guid.NewGuid(), Context(), new HexCoordinate(0, 0)).Expedition;
+        MaplessSessionFixture.Start().Expedition;
 
     private static TravelEnvironmentProviderCatalogResult CatalogResult(
         Guid? campaignId,

@@ -84,8 +84,7 @@ public sealed class ExpeditionModule : IHexCrawlModule
         HexCrawlService service,
         CancellationToken cancellationToken)
     {
-        if (request.Context.ToDomain() is not NonSpatialCrawlSessionContext nonSpatial)
-            throw new ArgumentException("This endpoint starts nonspatial sessions only.");
+        var nonSpatial = request.Context.ToNonSpatial();
         var owner = UserId(context);
         var expedition = await starter.StartNonSpatialAsync(
             owner, request.Name, request.ProcedureSelection(), nonSpatial, cancellationToken);
@@ -101,14 +100,11 @@ public sealed class ExpeditionModule : IHexCrawlModule
         HexCrawlService service,
         CancellationToken cancellationToken)
     {
-        if (request.Context.ToDomain() is not AbstractHexCrawlSessionContext mapless)
-            throw new ArgumentException("Generalized mapless starts require an abstract hex context.");
-        if (request.StartHex is not { } startHex)
-            throw new ArgumentException("Generalized mapless starts require a starting hex.");
+        var options = request.Context.ToMaplessOptions();
         var owner = UserId(context);
         var expedition = await starter.StartStandaloneCellsAsync(
-            owner, request.Name, request.ProcedureSelection(), mapless,
-            startHex, cancellationToken);
+            owner, request.Name, request.ProcedureSelection(), options,
+            request.StartCell, cancellationToken);
         return Results.Created(
             $"/api/expeditions/{expedition.Id:D}",
             await ContractAsync(expedition, owner, service, cancellationToken));

@@ -53,7 +53,7 @@ test("mapless session creation never creates a placeholder Overworld", () => {
     assert.equal(source.includes("api.createOverworld("), false);
     assert.match(source, /api\.startStandaloneSession/);
     assert.match(source, /applyStandaloneProcedureChoice/);
-    assert.match(source, /kind: "AbstractHex"/);
+    assert.match(source, /kind: "MaplessSpatial"/);
     assert.match(source, /kind: "NonSpatial"/);
 });
 
@@ -96,7 +96,7 @@ test("direct assistant entry does not create or fetch an Overworld", () => {
     assert.equal(source.includes("createOverworld"), false);
     assert.match(source, /startStandaloneSession/);
     assert.match(source, /kind: "NonSpatial"/);
-    assert.match(source, /kind: "AbstractHex"/);
+    assert.match(source, /kind: "MaplessSpatial"/);
 });
 
 test("dashboard prominently exposes all top-level assistant entry routes", () => {
@@ -217,7 +217,7 @@ test("focused party workspace exposes the persisted party register through a ded
     assert.match(party, /Per march/);
     const unitResolver = read("modules/expeditions/party-movement-rendering.ts");
     assert.match(party, /preferredPartyMovementUnit/);
-    assert.match(unitResolver, /runtime\.context\.hexCenterDistance\?\.unit/);
+    assert.ok(unitResolver.includes("runtime.context.tiling?.physicalDistancePerWorldUnit?.unit"));
 });
 
 test("cell watches use persisted participant assignments instead of free-form activity input", () => {
@@ -235,7 +235,7 @@ test("party movement editor derives units from persisted session data without a 
     const party = read("modules/expeditions/expedition-party-sheet.ts");
     const unitResolver = read("modules/expeditions/party-movement-rendering.ts");
     assert.match(party, /preferredPartyMovementUnit/);
-    assert.match(unitResolver, /runtime\.context\.hexCenterDistance\?\.unit/);
+    assert.ok(unitResolver.includes("runtime.context.tiling?.physicalDistancePerWorldUnit?.unit"));
     assert.match(unitResolver, /runtime\.expedition\.distanceTraveled\?\.unit/);
     assert.match(unitResolver, /\?\? null/);
     assert.doesNotMatch(party, /\?\? \{ kind: "Mile", symbol: "mi", metersPerUnit: 1609\.344 \}/);

@@ -146,6 +146,14 @@ export type OverworldSummary = {
     updatedAt: string;
 };
 
+export type PeriodicWorldTiling = {
+    id: string;
+    revision: number;
+    origin: WorldPoint;
+    topology: { motifCells: { id: string }[]; quotientDsSymbol: string };
+    physicalDistancePerWorldUnit: DistanceValue | null;
+};
+
 export type Overworld = {
     id: string;
     name: string;
@@ -154,7 +162,7 @@ export type Overworld = {
     updatedAt: string;
     grid: GridDefinition | null;
     /** Authoritative world topology/metric witness remains on the server. */
-    tiling: { id: string; revision: number; origin: WorldPoint; topology: { motifCells: { id: string }[]; quotientDsSymbol: string } } | null;
+    tiling: PeriodicWorldTiling | null;
     features: SpatialFeature[];
     locations: Location[];
     sourceMaps: SourceMapRepresentation[];
@@ -390,14 +398,13 @@ export type RuntimeEvent = {
     encounterOccurrenceId?: string | null;
 };
 
-export type CrawlSessionContextKind = "WorldBound" | "AbstractHex" | "NonSpatial";
+export type CrawlSessionContextKind = "WorldBound" | "MaplessSpatial" | "NonSpatial";
 
 export type CrawlContext = {
     kind: CrawlSessionContextKind;
     name: string;
     overworldId: string | null;
-    orientation: HexOrientation | null;
-    hexCenterDistance: DistanceValue | null;
+    tiling: PeriodicWorldTiling | null;
 };
 
 export type ExpeditionSummary = {
@@ -682,10 +689,9 @@ export type CellCourseRequest = {
 
 export type StandaloneCrawlContextInput =
     | {
-        kind: "AbstractHex";
+        kind: "MaplessSpatial";
         name: string;
-        orientation: HexOrientation;
-        hexCenterDistance: number;
+        physicalDistancePerWorldUnit: number;
         distanceUnit: DistanceUnit;
     }
     | {
@@ -696,7 +702,7 @@ export type StandaloneCrawlContextInput =
 export type StartStandaloneCrawlSessionInput = {
     name: string;
     context: StandaloneCrawlContextInput;
-    startHex?: HexCoordinate;
+    startCell?: PeriodicCellAddress;
 } & ProcedureStartSelectionInput;
 
 export type ProcedureResolutionRoll = {

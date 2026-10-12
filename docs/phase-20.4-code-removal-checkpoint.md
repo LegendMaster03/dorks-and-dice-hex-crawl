@@ -41,3 +41,7 @@ The transactional, guarded schema 10→11 upgrade is **not executed against the 
 The controlling checklist is [`phase-20.4-zero-prototype-gate.md`](phase-20.4-zero-prototype-gate.md). The development plan is [`tile-crawl-development-plan.md`](tile-crawl-development-plan.md).
 
 **October 12 geometry removal:** Axial-only feature intersection, axial world feature lookup, and fixed six-neighbor/distance algorithms were removed; CI 38298608309 passed at `32e75b52`. Follow-up deletion of `HexId` converters and axial point-to-cell geometry is pending CI. This does not authorize migration, deployment, or WorkChat testing.
+
+## Mapless periodic-session cutover (October 12; awaiting CI)
+
+Replaced `AbstractHexCrawlSessionContext` and its reconstructed axial geometry with a `MaplessSpatialCrawlSessionContext` that retains the actual validated `PeriodicWorldTiling`. Session creation realizes the selected procedure's D-symbol and starts at a qualified motif/lattice address; PostgreSQL snapshots store the tiling directly. The HTTP and browser start contract uses `MaplessSpatial`, physical distance per world unit, and optional qualified `startCell`, with no q/r or orientation inputs. Updated application, domain, HTTP and frontend tests, preserving nonspatial journeys and pinned procedure revisions. Removed hex-only mapless constructors/tests. **This branch is not cleared for WorkChat until full CI and remaining world, rendering, registration and data-preservation gates pass.** The development database was not modified.

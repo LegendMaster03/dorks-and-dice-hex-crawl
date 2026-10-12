@@ -317,8 +317,7 @@ public sealed class EnvironmentContextTests
     {
         var now = DateTimeOffset.UtcNow;
         return new StoredExpedition("Abstract environment test", PeriodicCourseFixture.StartingState(Tiling()),
-            new AbstractHexCrawlSessionContext("Abstract", HexOrientation.PointyTop,
-                new CrawlRuntimeContext(new DistanceMeasure(12, DistanceUnit.Miles))),
+            MaplessSessionFixture.Context("Abstract"),
             null, procedure, null, TimeSpan.FromHours(1), "owner", 1, now, now)
         { Party = party ?? CrawlPartySheet.Empty };
     }

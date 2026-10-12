@@ -39,6 +39,21 @@ public sealed record ProcedureStartSelection(
     }
 }
 
+public sealed record MaplessSpatialStartOptions(
+    string Name, DistanceMeasure PhysicalDistancePerWorldUnit)
+{
+    public void Validate()
+    {
+        if (string.IsNullOrWhiteSpace(Name))
+            throw new ArgumentException("Mapless setup name is required.");
+        if (!double.IsFinite(PhysicalDistancePerWorldUnit.Value)
+            || PhysicalDistancePerWorldUnit.Value <= 0)
+            throw new ArgumentException("Mapless physical scale must be finite and positive.");
+        if (string.IsNullOrWhiteSpace(PhysicalDistancePerWorldUnit.Unit.Symbol))
+            throw new ArgumentException("Mapless physical scale unit is required.");
+    }
+}
+
 /// <summary>
 /// Owns the creation-time procedure selection boundary for new crawl sessions.
 /// Presets are materialized into campaign-owned procedure revisions before use; saved
@@ -79,15 +94,12 @@ public sealed class ExpeditionStartService(
         var owner = RequiredText(ownerUserId, "Owner user id");
         var expeditionName = RequiredText(name, "Expedition name");
         var world = await coreService.GetOverworldAsync(overworldId, owner, cancellationToken);
-        // A verified legacy hex grid is an adapter to the same periodic-cell
-        // authority, not a reason to select the V1 movement executor.
         var tiling = world.World.SpatialTiling;
 
         // Check the cell address before materializing or loading a procedure.
         var cell = tiling.Resolve(startCell);
         selection.Validate();
-        // Only an explicit generalized start uses the three executable
-        // hex-origin geometric recipes. Saved revisions remain pinned verbatim.
+        // Saved revisions remain pinned verbatim.
         // Validate the recipe before storing a new campaign revision so an
         // incompatible preset does not create an orphan revision.
         var geometricPreset = !string.IsNullOrWhiteSpace(selection.PresetKey)
@@ -139,7 +151,7 @@ public sealed class ExpeditionStartService(
             },
             cell.Id);
         // All local spatial and knowledge validation has succeeded. Only now
-        // create a campaign revision for the explicitly selected V2 preset.
+        // create a campaign revision for the selected preset.
         if (geometricPreset is not null)
             selected = await procedures.CreateAsync(owner, geometricPreset.Procedure,
                 geometricPreset.Origin, cancellationToken: cancellationToken);
@@ -165,29 +177,25 @@ public sealed class ExpeditionStartService(
     }
 
     /// <summary>
-    /// Explicit geometric mapless start. The existing standalone endpoint remains
-    /// a V1 compatibility surface until the Phase 15 UI is replaced.
-    /// The session id is also the identity of its reproducible periodic geometry.
+    /// Materialize one periodic tiling from the selected executable procedure.
+    /// This same realized geometry is retained in the session context and
+    /// reloaded without any shape-specific constructor or axial projection.
     /// </summary>
     public async Task<StoredExpedition> StartStandaloneCellsAsync(
         string ownerUserId,
         string name,
         ProcedureStartSelection selection,
-        AbstractHexCrawlSessionContext context,
-        HexCoordinate startHex,
+        MaplessSpatialStartOptions options,
+        PeriodicCellAddress? startCell = null,
         CancellationToken cancellationToken = default)
     {
         var owner = RequiredText(ownerUserId, "Owner user id");
         var sessionName = RequiredText(name, "Session name");
-        ArgumentNullException.ThrowIfNull(context);
-        context.Validate();
+        ArgumentNullException.ThrowIfNull(options);
+        options.Validate();
         ArgumentNullException.ThrowIfNull(selection);
         selection.Validate();
 
-        var sessionId = Guid.NewGuid();
-        var geometry = AbstractCellSessionGeometry.CreateNewHexSession(sessionId, context, startHex);
-        // Saved revisions are never rematerialized. Only explicitly selected
-        // catalog presets use the new geometric creation recipe.
         var geometricPreset = selection.PresetKey is { } presetKey
             ? CampaignProcedureMaterializer.MaterializeExecutableSpatial(CrawlProcedureCatalog.Resolve(presetKey))
             : null;
@@ -196,29 +204,41 @@ public sealed class ExpeditionStartService(
             : null;
         var procedure = geometricPreset?.Procedure ?? selected!.Procedure;
         GenericProcedureRuntime.Bind(procedure);
+
+        var realized = DelaneyDressHarmonicMetricRealization.Construct(
+            procedure.TilingDsSymbol, 1d, "world-unit");
+        if (realized.Status != "realized" || realized.Topology is null || realized.Realization is null)
+            throw new InvalidOperationException("The selected ruleset does not provide realizable periodic mapless geometry.");
+        var sessionId = Guid.NewGuid();
+        var tiling = new PeriodicWorldTiling(
+            sessionId, realized.Topology, realized.Realization, new WorldPoint(0, 0),
+            PhysicalDistancePerWorldUnit: options.PhysicalDistancePerWorldUnit);
+        tiling.Validate();
+
         var comparison = DelaneyDressTopology.Compare(
             procedure.TilingDsSymbol,
-            geometry.World.Topology.QuotientDsSymbol,
-            geometry.World.Topology.TranslationDsSymbol);
+            tiling.Topology.QuotientDsSymbol,
+            tiling.Topology.TranslationDsSymbol);
         if (comparison.Status is not (
             TilingComparisonStatus.ExactIdentity
             or TilingComparisonStatus.ChamberIsomorphic
             or TilingComparisonStatus.ProvenEquivalent))
             throw new InvalidOperationException(
-                "The saved ruleset's tiling has not been proven equivalent to the mapless hex geometry.");
+                "The selected ruleset has not been proven equivalent to the realized mapless geometry.");
 
-        // Never create a campaign revision for a rejected procedure. Preserve
-        // source attribution without inventing a new published preset revision.
+        var initial = MaplessCellSessionGeometry.Create(sessionId, tiling, startCell);
+        var context = new MaplessSpatialCrawlSessionContext(options.Name.Trim(), tiling);
+        context.Validate();
         if (geometricPreset is not null)
             selected = await procedures.CreateAsync(owner, geometricPreset.Procedure,
                 geometricPreset.Origin, cancellationToken: cancellationToken);
 
         var pinned = selected ?? throw new InvalidOperationException(
-            "Generalized mapless start did not produce a pinned procedure.");
+            "Mapless expedition start did not produce a pinned procedure.");
         var now = DateTimeOffset.UtcNow;
         return await store.CreateExpeditionAsync(new StoredExpedition(
             sessionName,
-            geometry.Expedition,
+            initial.Expedition,
             context,
             null,
             CampaignProcedureSnapshot.Copy(pinned.Procedure),

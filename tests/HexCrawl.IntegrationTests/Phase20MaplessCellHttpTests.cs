@@ -28,13 +28,11 @@ public sealed class Phase20MaplessCellHttpTests
         procedureKey = presetKey,
         context = new
         {
-            kind = "AbstractHex",
-            name = "Persistent abstract geometry",
-            orientation = "PointyTop",
-            hexCenterDistance = 12,
+            kind = "MaplessSpatial",
+            name = "Persistent periodic geometry",
+            physicalDistancePerWorldUnit = 12,
             distanceUnit = new { kind = "Mile", symbol = "mi", metersPerUnit = 1609.344 }
-        },
-        startHex = new { q = 0, r = 0 }
+        }
     };
 
     [Fact]

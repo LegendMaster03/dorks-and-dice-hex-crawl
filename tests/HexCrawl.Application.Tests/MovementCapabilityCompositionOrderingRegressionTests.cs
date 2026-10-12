@@ -74,10 +74,7 @@ public sealed class MovementCapabilityCompositionOrderingRegressionTests
         return new StoredExpedition(
             "Movement ordering regression",
             PeriodicCourseFixture.StartingState(),
-            new AbstractHexCrawlSessionContext(
-                "Movement ordering regression",
-                HexOrientation.PointyTop,
-                new CrawlRuntimeContext(new DistanceMeasure(12, DistanceUnit.Miles))),
+            MaplessSessionFixture.Context("Movement ordering regression"),
             null,
             procedure,
             null,

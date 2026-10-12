@@ -178,13 +178,11 @@ public sealed class ProcedureResolutionHelperEndpointsTests
             procedureKey = "alexandrian-advanced",
             context = new
             {
-                kind = "AbstractHex",
+                kind = "MaplessSpatial",
                 name,
-                orientation = "PointyTop",
-                hexCenterDistance = 12,
+                                physicalDistancePerWorldUnit = 12,
                 distanceUnit = new { kind = "Mile", symbol = "mi", metersPerUnit = 1609.344 }
             },
-            startHex = new { q = 0, r = 0 }
         }, Json);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<JsonElement>();

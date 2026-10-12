@@ -85,7 +85,7 @@ test("active journey stays primary instead of falling through to generic interva
 
 test("abstract spatial position does not fabricate legacy intra-cell progress", () => {
     const state = {
-        context: { kind: "AbstractHex" },
+        context: { kind: "MaplessSpatial" },
         expedition: {
             isSpatial: true,
             currentCell: { tilingId: "tile", address: { motifCellId: "alpha", translation: { u: 0, v: 0 } } }

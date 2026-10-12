@@ -25,10 +25,7 @@ public sealed class NativeGenericProcedureExecutionTests
                 null,
                 null,
                 new Dictionary<string, string> { ["durationTicks"] = sixHours })]);
-        var context = new AbstractHexCrawlSessionContext(
-            "Native cell override", HexOrientation.PointyTop, Context());
-        var start = AbstractCellSessionGeometry.CreateNewHexSession(
-            Guid.NewGuid(), context, new HexCoordinate(0, 0));
+        var start = MaplessSessionFixture.Start();
         var heading = PeriodicCourseFixture.ThroughInterface(start.World, start.Expedition.Traversal.CurrentCell);
         var source = new ResolutionProvenance(ResolutionSource.ManualRoll);
         var result = new CrawlRuntimeEngine().AdvanceCellWatch(
@@ -120,8 +117,7 @@ public sealed class NativeGenericProcedureExecutionTests
             .StartStandaloneCellsAsync(
                 Owner, "Native abstract cell",
                 new ProcedureStartSelection(PresetKey: "simple-fixed-distance"),
-                new AbstractHexCrawlSessionContext("Abstract region", HexOrientation.PointyTop, Context()),
-                new HexCoordinate(0, 0));
+                MaplessSessionFixture.Options("Abstract region"));
 
         var restartedStore = await StoreAsync(database.ConnectionString);
         var restartedCore = new HexCrawlService(restartedStore);
@@ -172,8 +168,7 @@ public sealed class NativeGenericProcedureExecutionTests
             .StartStandaloneCellsAsync(
                 Owner, "Detached origin",
                 new ProcedureStartSelection(PresetKey: "simple-fixed-distance"),
-                new AbstractHexCrawlSessionContext("Detached", HexOrientation.PointyTop, Context()),
-                new HexCoordinate(0, 0));
+                MaplessSessionFixture.Options("Detached"));
         var detached = started with
         {
             ProcedureOrigin = new ProcedureOriginMetadata("removed-or-renamed-preset", "Removed preset", 999)

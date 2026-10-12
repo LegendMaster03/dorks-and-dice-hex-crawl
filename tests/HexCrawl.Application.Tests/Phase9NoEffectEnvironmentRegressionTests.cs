@@ -35,10 +35,7 @@ public sealed class Phase9NoEffectEnvironmentRegressionTests
         var expedition = new StoredExpedition(
             "No-effect environment regression",
             PeriodicCourseFixture.StartingState(),
-            new AbstractHexCrawlSessionContext(
-                "No-effect environment regression",
-                HexOrientation.PointyTop,
-                new CrawlRuntimeContext(new DistanceMeasure(12, DistanceUnit.Miles))),
+            MaplessSessionFixture.Context("No-effect environment regression"),
             null,
             procedure,
             null,

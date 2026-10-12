@@ -24,10 +24,9 @@ public sealed class EnvironmentProcedureResolutionIntegrationTests
                 procedureKey = "alexandrian-advanced",
                 context = new
                 {
-                    kind = "AbstractHex",
+                    kind = "MaplessSpatial",
                     name = "Environment helper review",
-                    orientation = "PointyTop",
-                    hexCenterDistance = 12,
+                                        physicalDistancePerWorldUnit = 12,
                     distanceUnit = new
                     {
                         kind = "Mile",
@@ -35,7 +34,6 @@ public sealed class EnvironmentProcedureResolutionIntegrationTests
                         metersPerUnit = 1609.344
                     }
                 },
-                startHex = new { q = 0, r = 0 }
             });
             startResponse.EnsureSuccessStatusCode();
             var started = await startResponse.Content.ReadFromJsonAsync<JsonElement>();

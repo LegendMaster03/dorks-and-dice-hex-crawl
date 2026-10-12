@@ -495,7 +495,7 @@ export async function renderPeriodicExpeditionWorkbench(
             if (!resolution) throw new Error("This expedition has no executable movement rules.");
             const unit = runtime.movementComposition.suggestedExpectedDistance?.unit
                 ?? runtime.movementComposition.effectiveDistanceUnit
-                ?? runtime.context.hexCenterDistance?.unit;
+                ?? runtime.context.tiling?.physicalDistancePerWorldUnit?.unit;
             const travel: CellWatchRequest["inputs"]["travel"] = {
                 provenance: { source: "DmOverride", note: "DM-confirmed travel resolution" }
             };
@@ -589,7 +589,7 @@ export async function renderPeriodicExpeditionWorkbench(
             try {
                 const unit = runtime.movementComposition.suggestedExpectedDistance?.unit
                     ?? runtime.movementComposition.effectiveDistanceUnit
-                    ?? runtime.context.hexCenterDistance?.unit;
+                    ?? runtime.context.tiling?.physicalDistancePerWorldUnit?.unit;
                 const dc = input("helperDc").value.trim();
                 const veer = input("helperVeer").value.trim();
                 const result = await api.resolveCellProcedureInputs(runtime.id, {
@@ -912,7 +912,7 @@ export async function renderPeriodicExpeditionWorkbench(
         required<HTMLElement>("[data-distance-fields]").hidden = isSteps;
         const units = runtime.movementComposition.suggestedExpectedDistance?.unit
             ?? runtime.movementComposition.effectiveDistanceUnit
-            ?? runtime.context.hexCenterDistance?.unit;
+            ?? runtime.context.tiling?.physicalDistancePerWorldUnit?.unit;
         if (!isSteps && !generated && !input("expected").value.trim()
             && runtime.movementComposition.suggestedExpectedDistance) {
             input("expected").value = String(runtime.movementComposition.suggestedExpectedDistance.value);

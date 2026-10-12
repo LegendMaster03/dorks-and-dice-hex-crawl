@@ -81,30 +81,19 @@ export async function renderToolHome(
                             <label>Expedition name <input name="name" required value="Expedition" autocomplete="off"></label>
                             <div class="hc-form" data-abstract-context hidden>
                                 <label>Setup name <input name="contextName" value="Mapless exploration" autocomplete="off"></label>
-                                <details class="hc-optional-reference"><summary>Optional grid orientation</summary><label>Grid orientation <select name="orientation"><option value="PointyTop">Pointy top</option><option value="FlatTop">Flat top</option></select></label><p class="hc-hint">Keep pointy top unless your grid uses flat-top cells.</p></details>
                                 <fieldset class="hc-field-group hc-map-scale-field">
                                     <legend>Map scale</legend>
                                     <div class="hc-inline">
                                         <label>Distance <input name="scale" type="number" min="0.001" step="any" placeholder="required"></label>
                                         <label>Unit <select name="unit"><option value="">Select unit</option><option value="Mile">Miles</option><option value="Kilometer">Kilometers</option><option value="Custom">Custom</option></select></label>
                                     </div>
-                                    <p class="hc-hint">The game-world distance from the center of one cell to the center of an adjacent cell.</p>
+                                    <p class="hc-hint">Physical travel distance represented by one world geometry unit.</p>
                                 </fieldset>
                                 <div class="hc-form" data-custom-unit hidden>
                                     <label>Custom symbol <input name="symbol" autocomplete="off"></label>
                                     <label>Custom meters per unit <input name="meters" type="number" min="0.001" step="any"></label>
                                 </div>
                                 <p class="hc-hint">There is no authored map, but spatial positions and adjacent-cell travel are still tracked.</p>
-                            </div>
-                            <div data-spatial-start hidden>
-                                <details class="hc-optional-reference">
-                                    <summary>Optional starting position (defaults to cell 0, 0)</summary>
-                                    <p class="hc-hint">Leave these coordinates unchanged to begin at the default cell. For an existing grid, enter the exact cell coordinates if you need another starting point.</p>
-                                    <div class="hc-inline">
-                                        <label>Cell coordinate q <input name="q" type="number" step="1" value="0"></label>
-                                        <label>Cell coordinate r <input name="r" type="number" step="1" value="0"></label>
-                                    </div>
-                                </details>
                             </div>
                             <div data-periodic-start hidden class="hc-form">
                                 <label>Starting cell type <select name="motifCellId"></select></label>
@@ -177,7 +166,6 @@ export async function renderToolHome(
     const procedure = select(form, "procedure");
     const unit = select(form, "unit");
     const abstractContext = required<HTMLElement>(form, "[data-abstract-context]");
-    const spatialStart = required<HTMLElement>(form, "[data-spatial-start]");
     const nonSpatialContext = required<HTMLElement>(form, "[data-nonspatial-context]");
     const customUnit = required<HTMLElement>(form, "[data-custom-unit]");
     const startButton = required<HTMLButtonElement>(form, "[data-start-button]");
@@ -221,14 +209,10 @@ export async function renderToolHome(
         "Map or travel setup",
         "Choose an authored map, mapless spatial exploration, or a journey that does not use a grid.");
     attachFieldHelp(
-        select(form, "orientation"),
-        "Hex orientation",
-        "Pointy-top and flat-top describe how the hexes are drawn. Orientation alone does not define north or change the distance represented by a hex.");
-    attachFieldHelp(
         input(form, "scale"),
         "Map scale",
-        "This is the game-world distance from the center of one cell to the center of an adjacent cell.",
-        "If adjacent hexes on your map represent 6 miles of travel, enter 6 and choose Miles.");
+        "This is the physical distance represented by one geometry unit of the selected ruleset.",
+        "Set the travel scale and unit explicitly before starting a mapless session.");
     attachFieldHelp(
         unit,
         "Map scale unit",
@@ -250,13 +234,10 @@ export async function renderToolHome(
         abstractContext.hidden = !abstract;
         nonSpatialContext.hidden = !nonSpatial;
         const spatial = Boolean(context.value) && !nonSpatial;
-        spatialStart.hidden = !abstract;
         periodicStart.hidden = !(spatial && selectedWorld !== null);
         input(form, "contextName").required = abstract;
         input(form, "scale").required = abstract;
         unit.required = abstract;
-        input(form, "q").required = !spatialStart.hidden;
-        input(form, "r").required = !spatialStart.hidden;
         select(form, "motifCellId").required = !periodicStart.hidden;
         input(form, "u").required = !periodicStart.hidden;
         input(form, "v").required = !periodicStart.hidden;
@@ -400,15 +381,10 @@ export async function renderToolHome(
                     const base: Omit<StartStandaloneCrawlSessionInput, "procedureKey"> = {
                         name,
                         context: {
-                            kind: "AbstractHex",
+                            kind: "MaplessSpatial",
                             name: input(form, "contextName").value.trim(),
-                            orientation: select(form, "orientation").value === "FlatTop" ? "FlatTop" : "PointyTop",
-                            hexCenterDistance: numeric(input(form, "scale")),
+                            physicalDistancePerWorldUnit: numeric(input(form, "scale")),
                             distanceUnit: distanceUnit(unitKind, form)
-                        },
-                        startHex: {
-                            q: integer(input(form, "q")),
-                            r: integer(input(form, "r"))
                         }
                     };
                     expedition = await api.startStandaloneCellSession(applyStandaloneProcedureChoice(base, choice));
@@ -547,7 +523,7 @@ function distanceUnit(kind: DistanceUnitKind, form: HTMLFormElement) {
 
 function contextLabel(kind: ExpeditionSummary["context"]["kind"]): string {
     if (kind === "WorldBound") return "Map";
-    if (kind === "AbstractHex") return "Mapless spatial";
+    if (kind === "MaplessSpatial") return "Mapless spatial";
     return "Journey / no grid";
 }
 

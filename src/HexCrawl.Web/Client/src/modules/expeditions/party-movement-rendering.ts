@@ -19,7 +19,7 @@ export function preferredPartyMovementUnit(
         ?? references?.perMarch?.unit;
     if (existing) return existing;
     if (!runtime.expedition.isSpatial) return NONSPATIAL_INPUT_UNIT;
-    return runtime.context.hexCenterDistance?.unit
+    return runtime.context.tiling?.physicalDistancePerWorldUnit?.unit
         ?? runtime.movementComposition.suggestedExpectedDistance?.unit
         ?? runtime.movementComposition.effectiveDistanceUnit
         ?? runtime.expedition.distanceTraveled?.unit

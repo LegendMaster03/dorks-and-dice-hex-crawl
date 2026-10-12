@@ -5,18 +5,24 @@ namespace HexCrawl.Domain.Tests;
 
 public sealed class Phase20SpatialAdapterTests
 {
-    private static AbstractHexCrawlSessionContext Context() =>
-        new("Unmapped hex voyage", HexOrientation.PointyTop,
-            new CrawlRuntimeContext(new DistanceMeasure(6, DistanceUnit.Miles)));
+    private static MaplessCellSessionStart Session(
+        Guid? identity = null, PeriodicCellAddress? start = null)
+    {
+        var realized = DelaneyDressHarmonicMetricRealization.Construct(
+            "<1:1,1,1:6,3>", 1d, "world-unit");
+        var id = identity ?? Guid.NewGuid();
+        var tiling = new PeriodicWorldTiling(
+            id, realized.Topology!, realized.Realization!, new WorldPoint(0, 0),
+            PhysicalDistancePerWorldUnit: new DistanceMeasure(6, DistanceUnit.Miles));
+        return MaplessCellSessionGeometry.Create(id, tiling, start);
+    }
 
     [Fact]
-    public void MaplessHexCreationIsDeterministicAndStartsAtExactCellCenter()
+    public void MaplessPeriodicGeometryStartsAtExactQualifiedCellCenter()
     {
         var id = Guid.NewGuid();
-        var context = Context();
-        var start = new HexCoordinate(3, -2);
-        var first = AbstractCellSessionGeometry.CreateNewHexSession(id, context, start);
-        var second = AbstractCellSessionGeometry.CreateNewHexSession(id, context, start);
+        var first = Session(id);
+        var second = MaplessCellSessionGeometry.Create(id, first.World);
 
         Assert.Equal(first.World.Id, second.World.Id);
         Assert.Equal(first.Expedition.Traversal.CurrentCell, second.Expedition.Traversal.CurrentCell);
@@ -26,11 +32,32 @@ public sealed class Phase20SpatialAdapterTests
         Assert.Equal(0, first.Expedition.DistanceTraveled!.Value.Value);
     }
 
+    [Theory]
+    [InlineData("<1:1,1,1:4,4>")]
+    [InlineData("<1:1,1,1:3,6>")]
+    public void MaplessStartsUseSuppliedPeriodicGeometryAndQualifiedAddresses(string symbol)
+    {
+        var realized = DelaneyDressHarmonicMetricRealization.Construct(symbol, 1d, "world-unit");
+        Assert.Equal("realized", realized.Status);
+        var id = Guid.NewGuid();
+        var tiling = new PeriodicWorldTiling(
+            id, realized.Topology!, realized.Realization!, new WorldPoint(4, -3),
+            PhysicalDistancePerWorldUnit: new DistanceMeasure(2, DistanceUnit.Miles));
+        var startAddress = new PeriodicCellAddress(
+            tiling.Topology.MotifCells[^1].Id, new LatticeDisplacement(2, -1));
+        var start = MaplessCellSessionGeometry.Create(id, tiling, startAddress);
+        Assert.Equal(new WorldCellId(id, startAddress), start.Expedition.Traversal.CurrentCell);
+        Assert.Equal(tiling.Resolve(startAddress).Center, start.Expedition.Traversal.Position);
+        Assert.Equal(tiling.Boundaries(startAddress).Count,
+            tiling.Topology.MotifCells[^1].Boundary.Count);
+        var context = new MaplessSpatialCrawlSessionContext("Periodic session", tiling);
+        context.Validate();
+    }
+
     [Fact]
     public void NeighborCourseUsesAuthoritativePeriodicCellCenters()
     {
-        var session = AbstractCellSessionGeometry.CreateNewHexSession(
-            Guid.NewGuid(), Context(), new HexCoordinate(0, 0));
+        var session = Session();
         var world = session.World;
         var current = session.Expedition.Traversal.CurrentCell;
         var from = world.Resolve(current.Address);
@@ -46,8 +73,7 @@ public sealed class Phase20SpatialAdapterTests
     [Fact]
     public void TurnChargeDoesNotMoveTheAuthoritativeCursor()
     {
-        var session = AbstractCellSessionGeometry.CreateNewHexSession(
-            Guid.NewGuid(), Context(), new HexCoordinate(0, 0));
+        var session = Session();
         var world = session.World;
         var cursor = session.Expedition.Traversal with { TravelHeading = new WorldPoint(1, 0) };
         var before = cursor.Position;

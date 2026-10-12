@@ -157,9 +157,12 @@ public sealed partial class HexCrawlService
                 state.Validate(tiling);
                 return (tiling, savedWorld.World);
             }
-            case AbstractHexCrawlSessionContext mapless:
+            case MaplessSpatialCrawlSessionContext mapless:
             {
-                var tiling = AbstractCellSessionGeometry.CreateHexWorld(expedition.Id, mapless);
+                mapless.Validate();
+                var tiling = mapless.Tiling;
+                if (tiling.Id != expedition.Id)
+                    throw new InvalidDataException("Mapless geometry identity disagrees with its expedition.");
                 state.Validate(tiling);
                 return (tiling, null);
             }

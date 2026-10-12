@@ -16,12 +16,9 @@ public sealed class MovementGeneratedResolutionPersistenceTests
 
         var now = DateTimeOffset.UtcNow;
         var procedure = CampaignProcedureMaterializer.MaterializeExecutableSpatial(CrawlProcedureCatalog.Resolve("simple-fixed-distance")).Procedure;
-        var context = new AbstractHexCrawlSessionContext(
-            "Movement history",
-            HexOrientation.PointyTop,
-            new CrawlRuntimeContext(new DistanceMeasure(12, DistanceUnit.Miles)));
-        var state = AbstractCellSessionGeometry.CreateNewHexSession(
-            Guid.NewGuid(), context, new HexCoordinate(0, 0)).Expedition;
+        var geometry = MaplessSessionFixture.Start();
+        var context = new MaplessSpatialCrawlSessionContext("Movement history", geometry.World);
+        var state = geometry.Expedition;
         var generatedId = Guid.NewGuid();
         var generated = new GeneratedProcedureResolution(
             generatedId,

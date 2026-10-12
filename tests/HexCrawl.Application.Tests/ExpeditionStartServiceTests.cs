@@ -146,9 +146,6 @@ public sealed class ExpeditionStartServiceTests
         await procedures.CreateAsync("alice", catalogProcedure, null);
         await procedures.CreateAsync("alice", sessionProcedure, null);
         var start = new HexCoordinate(0, 0);
-        var abstractContext = new AbstractHexCrawlSessionContext(
-            "Mapless cell session", HexOrientation.PointyTop,
-            new CrawlRuntimeContext(new DistanceMeasure(12, DistanceUnit.Miles)));
         var address = LegacyHexTilingCompatibility.ToAddress(start);
         foreach (var procedure in new[] { catalogProcedure, sessionProcedure })
         {
@@ -157,7 +154,7 @@ public sealed class ExpeditionStartServiceTests
             var inWorld = await starter.StartWorldBoundCellsAsync(
                 world.Id, "alice", "World cells", pinned, address, "dm-controlled");
             var mapless = await starter.StartStandaloneCellsAsync(
-                "alice", "Mapless cells", pinned, abstractContext, start);
+                "alice", "Mapless cells", pinned, MaplessSessionFixture.Options("Mapless cell session"));
             Assert.IsType<CellExpeditionState>(inWorld.Runtime);
             Assert.IsType<CellExpeditionState>(mapless.Runtime);
         }

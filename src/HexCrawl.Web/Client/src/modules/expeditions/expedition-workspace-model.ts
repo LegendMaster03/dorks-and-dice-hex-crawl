@@ -75,7 +75,7 @@ export function spatialPositionPresentation(runtime: ExpeditionDetail): SpatialP
     const value = `Cell ${motifCellId} (${translation.u}, ${translation.v})`;
     return {
         value,
-        detail: runtime.context.kind === "AbstractHex"
+        detail: runtime.context.kind === "MaplessSpatial"
             ? "Mapless spatial position"
             : "Mapped spatial position"
     };

@@ -816,8 +816,7 @@ function runtimeFixture() {
             kind: "WorldBound",
             name: "The Shattered Marches",
             overworldId: world.id,
-            orientation: null,
-            hexCenterDistance: distance(12)
+            tiling: world.tiling
         },
         name: "Crossing the Shattered Marches",
         version: 42,
@@ -970,14 +969,13 @@ function nonSpatialRuntimeFixture() {
     return value;
 }
 
-function abstractHexRuntimeFixture() {
+function maplessRuntimeFixture() {
     const value = runtimeFixture();
     value.overworldId = null;
     value.context = {
-        kind: "AbstractHex",
-        name: "Abstract route",
-        orientation: "PointyTop",
-        hexCenterDistance: distance(12)
+        kind: "MaplessSpatial",
+        name: "Unmapped route",
+        tiling: world.tiling
     };
     return value;
 }
@@ -1538,7 +1536,7 @@ switch (stateName) {
         });
         break;
     case "abstract-spatial-course":
-        runtime = abstractHexRuntimeFixture();
+        runtime = maplessRuntimeFixture();
         runtime.expedition.intendedDirection = 2;
         runtime.expedition.actualDirection = 2;
         runtime.procedure.runtime.usesNavigationChecks = true;
@@ -2264,7 +2262,7 @@ const metrics = {
         && !root.querySelector('[data-phase15-drawer] select[name="intendedDirection"]')
     ),
     abstractSpatialCourseReused: stateName !== "abstract-spatial-course" || (
-        runtime.context.kind === "AbstractHex"
+        runtime.context.kind === "MaplessSpatial"
         && root.querySelector("[data-adjacency-select]")?.value === "2"
         && !root.querySelector('[data-phase15-drawer] select[name="intendedDirection"]')
     ),

@@ -12,9 +12,20 @@ namespace HexCrawl.Application.Tests;
 /// </summary>
 public sealed class Phase20MaplessCellApplicationTests
 {
-    private static AbstractHexCrawlSessionContext Context() => new(
-        "Mapless V2", HexOrientation.PointyTop,
-        new CrawlRuntimeContext(new DistanceMeasure(12, DistanceUnit.Miles)));
+    private static MaplessSpatialStartOptions Options() => new(
+        "Mapless exploration",
+        new DistanceMeasure(12, DistanceUnit.Miles));
+
+    private static MaplessCellSessionStart SampleGeometry()
+    {
+        var id = Guid.NewGuid();
+        var realized = DelaneyDressHarmonicMetricRealization.Construct(
+            "<1:1,1,1:6,3>", 1d, "world-unit");
+        return MaplessCellSessionGeometry.Create(id,
+            new PeriodicWorldTiling(
+                id, realized.Topology!, realized.Realization!, new WorldPoint(0, 0),
+                PhysicalDistancePerWorldUnit: Options().PhysicalDistancePerWorldUnit));
+    }
 
     [Theory]
     [InlineData("alexandrian-advanced")]
@@ -27,12 +38,11 @@ public sealed class Phase20MaplessCellApplicationTests
         await store.InitializeAsync();
         var procedures = new CampaignProcedureService(store);
         var startService = new ExpeditionStartService(store, new HexCrawlService(store), procedures);
-        var startHex = new HexCoordinate(2, -1);
         var created = await startService.StartStandaloneCellsAsync(
             "owner", "No imported map", new ProcedureStartSelection(PresetKey: key),
-            Context(), startHex);
+            Options());
 
-        Assert.IsType<AbstractHexCrawlSessionContext>(created.Context);
+        Assert.IsType<MaplessSpatialCrawlSessionContext>(created.Context);
         Assert.IsType<CellExpeditionState>(created.Runtime);
         Assert.Null(created.Knowledge);
         Assert.Equal(key, created.ProcedureOrigin?.PresetKey);
@@ -47,8 +57,8 @@ public sealed class Phase20MaplessCellApplicationTests
         Assert.Null(geometry.World);
         var cell = Assert.IsType<CellExpeditionState>(saved.Runtime);
         cell.Validate(geometry.Tiling);
-        var expected = AbstractCellSessionGeometry.CreateNewHexSession(
-            created.Id, Context(), startHex);
+        var expected = MaplessCellSessionGeometry.Create(
+            created.Id, Assert.IsType<MaplessSpatialCrawlSessionContext>(created.Context).Tiling);
         Assert.Equal(expected.Expedition.Traversal, cell.Traversal);
         Assert.Equal(expected.World.Id, geometry.Tiling.Id);
         Assert.Equal(expected.World.Resolve(cell.Traversal.CurrentCell.Address).Center,
@@ -57,17 +67,16 @@ public sealed class Phase20MaplessCellApplicationTests
     }
 
     [Fact]
-    public async Task MaplessV2WatchUsesSameCellRuntimeAndOwnerVersionProtection()
+    public async Task MaplessWatchUsesSameCellRuntimeAndOwnerVersionProtection()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = new PostgresHexCrawlStore(database.ConnectionString);
         await store.InitializeAsync();
         var starter = new ExpeditionStartService(store, new HexCrawlService(store),
             new CampaignProcedureService(store));
-        var startHex = new HexCoordinate(0, 0);
         var created = await starter.StartStandaloneCellsAsync(
             "owner", "Unmapped travel", new ProcedureStartSelection(PresetKey: "simple-fixed-distance"),
-            Context(), startHex);
+            Options());
         var service = new HexCrawlService(store);
         var world = (await service.ResolveCellGeometryAsync(created, "owner")).Tiling;
         var heading = PeriodicCourseFixture.ThroughInterface(world, Assert.IsType<CellExpeditionState>(created.Runtime).Traversal.CurrentCell);
@@ -128,8 +137,7 @@ public sealed class Phase20MaplessCellApplicationTests
     [Fact]
     public void ExactCellRepositionRefusesAnUnfinishedWatchAndOutstandingTurnCharge()
     {
-        var session = AbstractCellSessionGeometry.CreateNewHexSession(
-            Guid.NewGuid(), Context(), new HexCoordinate(0, 0));
+        var session = SampleGeometry();
         var state = session.Expedition;
         var world = session.World;
         var target = world.Boundaries(state.Traversal.CurrentCell.Address)[0].To;
@@ -171,11 +179,11 @@ public sealed class Phase20MaplessCellApplicationTests
         var started = await starter.StartStandaloneCellsAsync(
             "owner", "Native cell session", new ProcedureStartSelection(
                 ProcedureId: saved.ProcedureId, ProcedureRevision: saved.Revision),
-            Context(), new HexCoordinate(0, 0));
+            Options());
         Assert.IsType<CellExpeditionState>(started.Runtime);
         await Assert.ThrowsAsync<NotSupportedException>(() => starter.StartStandaloneCellsAsync(
             "owner", "Declarative only", new ProcedureStartSelection(PresetKey: "bx"),
-            Context(), new HexCoordinate(0, 0)));
+            Options()));
         Assert.Single(await store.ListExpeditionsAsync("owner"));
         Assert.Single(await procedures.ListLatestAsync("owner"));
     }

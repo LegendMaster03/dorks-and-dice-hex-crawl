@@ -162,30 +162,17 @@ public sealed record CrawlContextContract(
     CrawlSessionContextKind Kind,
     string Name,
     Guid? OverworldId,
-    HexOrientation? Orientation,
-    DistanceContract? HexCenterDistance)
+    PeriodicWorldTiling? Tiling)
 {
     public static CrawlContextContract From(CrawlSessionContext context, OverworldDefinition? world = null) => context switch
     {
         WorldBoundCrawlSessionContext worldContext => new(
-            context.Kind,
-            world?.Name ?? "World-bound crawl",
-            worldContext.WorldId,
-            world is { HasLegacyHexGrid: true } ? world.Grid.Orientation : null,
-            world is { HasLegacyHexGrid: true }
-                ? DistanceContract.From(world.Grid.NeighborCenterDistance) : null),
-        AbstractHexCrawlSessionContext abstractContext => new(
-            context.Kind,
-            abstractContext.DisplayName,
-            null,
-            abstractContext.Orientation,
-            DistanceContract.From(abstractContext.HexContext.HexCenterDistance)),
+            context.Kind, world?.Name ?? "World-bound crawl",
+            worldContext.WorldId, world?.SpatialTiling),
+        MaplessSpatialCrawlSessionContext mapless => new(
+            context.Kind, mapless.DisplayName, null, mapless.Tiling),
         NonSpatialCrawlSessionContext nonSpatial => new(
-            context.Kind,
-            nonSpatial.DisplayName,
-            null,
-            null,
-            null),
+            context.Kind, nonSpatial.DisplayName, null, null),
         _ => throw new ArgumentOutOfRangeException(nameof(context))
     };
 }
@@ -274,27 +261,28 @@ public sealed record ExpeditionWorkbenchContract(
 public sealed record StandaloneCrawlContextRequest(
     CrawlSessionContextKind Kind,
     string? Name = null,
-    HexOrientation? Orientation = null,
-    double? HexCenterDistance = null,
+    double? PhysicalDistancePerWorldUnit = null,
     DistanceUnitContract? DistanceUnit = null)
 {
-    public CrawlSessionContext ToDomain() => Kind switch
+    public NonSpatialCrawlSessionContext ToNonSpatial() =>
+        Kind == CrawlSessionContextKind.NonSpatial
+            ? new NonSpatialCrawlSessionContext(
+                string.IsNullOrWhiteSpace(Name) ? "Non-spatial session" : Name.Trim())
+            : throw new ArgumentException("This endpoint starts nonspatial sessions only.");
+
+    public MaplessSpatialStartOptions ToMaplessOptions()
     {
-        CrawlSessionContextKind.AbstractHex => new AbstractHexCrawlSessionContext(
-            string.IsNullOrWhiteSpace(Name) ? "Abstract hex crawl" : Name.Trim(),
-            Orientation ?? HexOrientation.PointyTop,
-            new CrawlRuntimeContext(new DistanceMeasure(
-                HexCenterDistance is > 0 and < double.PositiveInfinity
-                    ? HexCenterDistance.Value
-                    : throw new ArgumentException("Abstract-hex context requires a positive finite hex-center distance."),
-                (DistanceUnit ?? throw new ArgumentException(
-                    "Abstract-hex context requires an explicit distance unit.")).ToDomain()))),
-        CrawlSessionContextKind.NonSpatial => new NonSpatialCrawlSessionContext(
-            string.IsNullOrWhiteSpace(Name) ? "Non-spatial session" : Name.Trim()),
-        CrawlSessionContextKind.WorldBound => throw new ArgumentException(
-            "World-bound sessions must be started through an overworld endpoint."),
-        _ => throw new ArgumentOutOfRangeException(nameof(Kind))
-    };
+        if (Kind != CrawlSessionContextKind.MaplessSpatial)
+            throw new ArgumentException("This endpoint starts mapless spatial sessions only.");
+        if (PhysicalDistancePerWorldUnit is not { } distance
+            || !double.IsFinite(distance) || distance <= 0)
+            throw new ArgumentException("Mapless physical distance per world unit must be finite and positive.");
+        var units = (DistanceUnit ?? throw new ArgumentException(
+            "Mapless spatial scale requires an explicit physical unit.")).ToDomain();
+        return new MaplessSpatialStartOptions(
+            string.IsNullOrWhiteSpace(Name) ? "Mapless exploration" : Name.Trim(),
+            new DistanceMeasure(distance, units));
+    }
 }
 
 public sealed record NonSpatialWatchAssistantRequest(

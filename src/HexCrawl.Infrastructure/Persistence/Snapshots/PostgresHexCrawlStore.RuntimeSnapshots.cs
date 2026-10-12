@@ -196,8 +196,7 @@ public sealed partial class PostgresHexCrawlStore
         CrawlSessionContextKind Kind,
         Guid? OverworldId = null,
         string? Name = null,
-        HexOrientation? Orientation = null,
-        DistanceMeasure? HexCenterDistance = null,
+        PeriodicWorldTiling? Tiling = null,
         Guid? CampaignId = null)
     {
         public static CrawlSessionContextSnapshot FromDomain(
@@ -205,32 +204,25 @@ public sealed partial class PostgresHexCrawlStore
             Guid? campaignId = null) => context switch
         {
             WorldBoundCrawlSessionContext world => new(
-                context.Kind,
-                world.WorldId,
-                CampaignId: campaignId),
-            AbstractHexCrawlSessionContext hex => new(
-                context.Kind,
-                Name: hex.DisplayName,
-                Orientation: hex.Orientation,
-                HexCenterDistance: hex.HexContext.HexCenterDistance,
-                CampaignId: campaignId),
+                context.Kind, world.WorldId, CampaignId: campaignId),
+            MaplessSpatialCrawlSessionContext mapless => new(
+                context.Kind, Name: mapless.DisplayName,
+                Tiling: mapless.Tiling, CampaignId: campaignId),
             NonSpatialCrawlSessionContext nonSpatial => new(
-                context.Kind,
-                Name: nonSpatial.DisplayName,
+                context.Kind, Name: nonSpatial.DisplayName,
                 CampaignId: campaignId),
-            _ => throw new ArgumentOutOfRangeException(nameof(context))
+            _ => throw new InvalidDataException("Unknown crawl context type.")
         };
 
         public CrawlSessionContext ToDomain() => Kind switch
         {
             CrawlSessionContextKind.WorldBound => new WorldBoundCrawlSessionContext(
                 OverworldId ?? throw new InvalidDataException("Persisted world-bound context has no overworld id.")),
-            CrawlSessionContextKind.AbstractHex => new AbstractHexCrawlSessionContext(
-                Name ?? "Abstract hex crawl",
-                Orientation ?? HexOrientation.PointyTop,
-                new CrawlRuntimeContext(
-                    HexCenterDistance ?? throw new InvalidDataException("Persisted abstract-hex context has no hex-center distance."))),
-            CrawlSessionContextKind.NonSpatial => new NonSpatialCrawlSessionContext(Name ?? "Non-spatial session"),
+            CrawlSessionContextKind.MaplessSpatial => new MaplessSpatialCrawlSessionContext(
+                Name ?? throw new InvalidDataException("Persisted mapless context has no name."),
+                Tiling ?? throw new InvalidDataException("Persisted mapless context has no periodic geometry.")),
+            CrawlSessionContextKind.NonSpatial => new NonSpatialCrawlSessionContext(
+                Name ?? throw new InvalidDataException("Persisted nonspatial context has no name.")),
             _ => throw new InvalidDataException("Persisted crawl session context kind is not supported.")
         };
     }

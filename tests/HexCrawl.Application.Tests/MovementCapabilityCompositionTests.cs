@@ -583,10 +583,8 @@ public sealed class MovementCapabilityCompositionTests
         };
     }
 
-    private static AbstractHexCrawlSessionContext Context() => new(
-        "Movement test",
-        HexOrientation.PointyTop,
-        new CrawlRuntimeContext(new DistanceMeasure(12, DistanceUnit.Miles)));
+    private static MaplessSpatialCrawlSessionContext Context() =>
+        MaplessSessionFixture.Context("Movement test");
 
     private static CrawlPartyMember Member(string name, bool counts = true) =>
         new(Guid.NewGuid(), name, CountsTowardPartyMovement: counts);

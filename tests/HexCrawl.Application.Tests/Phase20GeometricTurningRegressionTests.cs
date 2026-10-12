@@ -14,13 +14,16 @@ public sealed class Phase20GeometricTurningRegressionTests
     private static readonly ResolutionProvenance Manual =
         new(ResolutionSource.ManualRoll);
 
-    private static AbstractCellSessionStart Session() =>
-        AbstractCellSessionGeometry.CreateNewHexSession(
-            Guid.NewGuid(),
-            new AbstractHexCrawlSessionContext(
-                "Mapless geometric test", HexOrientation.PointyTop,
-                new CrawlRuntimeContext(new DistanceMeasure(6, DistanceUnit.Miles))),
-            new HexCoordinate(0, 0));
+    private static MaplessCellSessionStart Session()
+    {
+        var realized = DelaneyDressHarmonicMetricRealization.Construct(
+            "<1:1,1,1:6,3>", 1d, "world-unit");
+        var id = Guid.NewGuid();
+        var tiling = new PeriodicWorldTiling(id, realized.Topology!,
+            realized.Realization!, new WorldPoint(0, 0),
+            PhysicalDistancePerWorldUnit: new DistanceMeasure(6, DistanceUnit.Miles));
+        return MaplessCellSessionGeometry.Create(id, tiling);
+    }
 
     private static WorldPoint HeadingToBoundary(PeriodicWorldTiling world, WorldCellId current, int interfaceIndex)
     {
