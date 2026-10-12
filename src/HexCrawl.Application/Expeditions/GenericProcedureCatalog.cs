@@ -355,20 +355,8 @@ public static class GenericProcedureCatalog
             ProcedureAutomationLevel.Automatic),
         Mechanic(
             MovementResolutionPolicyMechanic,
-            "Movement resolution policy",
-            "Selects continuous-distance or whole-hex movement and how actual distance is resolved.",
-            ["time.interval-duration"],
-            ["movement.resolution-mode"],
-            RequiredMany(
-                ("travelResolution", "enum", "Travel resolution mode."),
-                ("actualDistanceResolution", "enum", "Actual-distance resolution mode."),
-                ("tracksIntraHexProgress", "boolean", "Track progress within a hex.")),
-            GenericProcedureExecutionHandlers.MovementResolutionPolicy,
-            ProcedureAutomationLevel.Automatic),
-        Mechanic(
-            MovementResolutionPolicyMechanic,
-            "Geometric movement resolution policy",
-            "Uses actual periodic-cell crossings with calibrated distance or logical boundary-transition counts.",
+            "Generalized cell movement resolution policy",
+            "Uses periodic-cell crossings with calibrated physical distance or discrete boundary-transition counts.",
             ["time.interval-duration"],
             ["movement.resolution-mode"],
             RequiredMany(
