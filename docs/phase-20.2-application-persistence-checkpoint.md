@@ -3,7 +3,7 @@
 **Repository:** `LegendMaster03/dorks-and-dice-hex-crawl`  
 **Reviewed baseline:** `68a5c231e411a969b52e9dd3cdb23c8452f9735c` on `feature/tile-crawl-phase-20.2-application-persistence`  
 **Baseline CI:** [38196941315](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38196941315), successful (domain, application, HTTP, frontend, PostgreSQL and restart smoke)  
-**Status:** Review-stage document. The null-discriminator migration correction and new regression test in the associated proposal are **not yet CI-verified**. No merge, dev migration or deployment is claimed.
+**Verified review fix:** `fb86c28b65a34a6db5359d045a7ed79779be04fd` ([CI 38200571111](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38200571111); full test and PostgreSQL/container checks passed). The explicit-null-kind migration preflight and rollback theory are verified. No merge, dev migration or deployment is claimed.
 
 ## Scope and decision precedence
 
@@ -102,6 +102,6 @@ Do not restore old API routes, V1 persistence codecs, deleted workbench services
 
 ## Verification and remaining decision gates
 
-**Baseline:** [CI 38196941315](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38196941315), successful at `68a5c231`. This is baseline evidence only, not proof of subsequent review edits. The proposed test expansion requires a new PostgreSQL run before calling the correction verified. The baseline Phase 20.2 full test counts documented in the plan are domain 227/227, application 376/376 and HTTP 190/190 from the preceding fully tested checkpoint; consult actual CI logs for per-step counts and restarts.
+**Verified source review:** the pre-review baseline `68a5c231` passed [CI 38196941315](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38196941315). The corrected code `fb86c28b65a34a6db5359d045a7ed79779be04fd` passed [CI 38200571111](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38200571111): domain **227/227**, focused V2 application/migration **17/17**, focused V2 HTTP **3/3**, full application **377/377**, full HTTP integration **190/190**. Frontend/embedded builds, container build, PostgreSQL/filesystem-asset restart, mapless restart, and isolated PostgreSQL/map-asset backup/restore also passed. Phase 15 rendered-review capture was skipped. This is source/CI evidence, not signed-in live UI acceptance or authorization for schema migration.
 
 **Outstanding:** Review whether helper generation should bind further plan-dependent pace/navigation/environment semantics; obtain owner authorization for the coordinated 20.3 UI/backend cutover and database migration; perform pre-deployment backup/restore and signed-in verification; complete legacy removal, presentation cleanup, arbitrary-cell test coverage and product naming in 20.4. No live migration, merge or deployed tester acceptance is claimed here.
