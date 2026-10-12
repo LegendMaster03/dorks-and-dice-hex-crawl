@@ -539,7 +539,7 @@ public static class MovementCapabilityComposer
         out Quantity result)
     {
         result = current;
-        var paceKey = input.PaceKey ?? (expedition.Runtime as ExpeditionState)?.ActiveWatch?.Plan.Mode.PaceKey;
+        var paceKey = input.PaceKey ?? (expedition.Runtime as CellExpeditionState)?.ActiveWatch?.Plan.Mode.PaceKey;
 
         currentStatus = ApplyContributorStage(
             MovementCapabilityContributorKind.Load,
@@ -818,7 +818,7 @@ public static class MovementCapabilityComposer
 
         Quantity? quantity = null;
         string? detail = null;
-        if (expedition.Runtime is ExpeditionState { ActiveWatch: null } && reference.PerWatch is { } readyWatch)
+        if (expedition.Runtime is CellExpeditionState { ActiveWatch: null } && reference.PerWatch is { } readyWatch)
         {
             quantity = Physical(readyWatch, "watch");
             detail = "Explicit per-watch party movement reference.";
@@ -1019,12 +1019,9 @@ public static class MovementCapabilityComposer
 
     private static DistanceMeasure? Suggest(StoredExpedition expedition, Quantity quantity)
     {
-        // Physical travel suggestions are meaningful for both historical and
-        // generalized spatial sessions, but never for independent nonspatial
-        // bookkeeping or an uncalibrated cell expedition.
+        // Physical travel suggestions require calibrated spatial distance.
         var traveled = expedition.Runtime switch
         {
-            ExpeditionState legacy => legacy.DistanceTraveled,
             CellExpeditionState cells => cells.DistanceTraveled,
             _ => null
         };
@@ -1044,7 +1041,6 @@ public static class MovementCapabilityComposer
 
         var remaining = expedition.Runtime switch
         {
-            ExpeditionState legacy => legacy.ActiveWatch?.Remaining,
             CellExpeditionState cells => cells.ActiveWatch?.Remaining,
             _ => null
         };
