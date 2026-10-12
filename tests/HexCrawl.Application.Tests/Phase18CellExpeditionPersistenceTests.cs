@@ -250,9 +250,9 @@ public sealed class Phase18CellExpeditionPersistenceTests
         var spatial = Assert.IsType<CellExpeditionState>(loaded!.Runtime);
         spatial.Validate(tiling);
         Assert.Null(spatial.DistanceTraveled);
-        var pending = Assert.IsType<PendingEncounterOccurrence>(spatial.PendingEncounter);
-        Assert.Equal(cell.Id, pending.Cell);
-        Assert.Equal(occurrenceId, pending.Id);
+        var persistedPending = Assert.IsType<PendingEncounterOccurrence>(spatial.PendingEncounter);
+        Assert.Equal(cell.Id, persistedPending.Cell);
+        Assert.Equal(occurrenceId, persistedPending.Id);
         Assert.Equal(RuntimePauseReason.EncounterTriggered, spatial.ActiveWatch!.PendingDecision);
         Assert.Equal(heading, spatial.ActiveWatch.PendingTurnFromHeading);
         Assert.False(spatial.ActiveWatch.TurnPreflightWasDeferred);
