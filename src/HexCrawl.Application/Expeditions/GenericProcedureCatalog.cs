@@ -78,8 +78,7 @@ public static class GenericProcedureCatalog
             [MovementResolutionPolicyMechanic],
             RequiredMany(
                 ("travelResolution", "enum", "Travel resolution mode."),
-                ("actualDistanceResolution", "enum", "Actual-distance resolution mode."),
-                ("tracksIntraHexProgress", "boolean", "Whether physical movement tracks progress inside a hex."))),
+                ("actualDistanceResolution", "enum", "Actual-distance resolution mode."))),
         Module(
             SpatialTurnCostModule,
             "Movement",
@@ -361,8 +360,7 @@ public static class GenericProcedureCatalog
             ["movement.resolution-mode"],
             RequiredMany(
                 ("travelResolution", "enum", "ContinuousDistance or CellSteps."),
-                ("actualDistanceResolution", "enum", "Actual-distance resolution mode."),
-                ("tracksIntraHexProgress", "boolean", "Must be false for geometric movement.")),
+                ("actualDistanceResolution", "enum", "Actual-distance resolution mode.")),
             GenericProcedureExecutionHandlers.MovementResolutionPolicy,
             ProcedureAutomationLevel.Automatic,
             version: 2),

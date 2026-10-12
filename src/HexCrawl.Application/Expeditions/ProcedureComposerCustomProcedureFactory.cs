@@ -33,8 +33,7 @@ internal static class ProcedureComposerCustomProcedureFactory
             GenericProcedureCatalog.MovementResolutionModule,
             GenericProcedureCatalog.MovementResolutionPolicyMechanic,
             ("travelResolution", TravelResolutionMode.ContinuousDistance.ToString()),
-            ("actualDistanceResolution", ActualDistanceResolutionMode.Fixed.ToString()),
-            ("tracksIntraHexProgress", "false")),
+            ("actualDistanceResolution", ActualDistanceResolutionMode.Fixed.ToString())),
         GenericProcedureCatalog.SpatialTurnCostModule => Select(
             GenericProcedureCatalog.SpatialTurnCostModule,
             GenericProcedureCatalog.SpatialTurnCostPolicyMechanic,

@@ -199,8 +199,6 @@ public sealed class WorldModule : IHexCrawlModule
             .MaterializeGeneric();
         var template = materialized.Procedure;
         var modules = template.Modules
-            .Where(module => module.Mechanic.ExecutionHandler !=
-                GenericProcedureExecutionHandlers.HexProgressPolicy)
             .Select(module =>
             {
                 if (module.Mechanic.ExecutionHandler !=
@@ -209,7 +207,6 @@ public sealed class WorldModule : IHexCrawlModule
                 var parameters = module.Parameters.ToDictionary(item => item.Key, item => item.Value);
                 parameters["travelResolution"] = TravelResolutionMode.CellSteps.ToString();
                 parameters["actualDistanceResolution"] = ActualDistanceResolutionMode.Fixed.ToString();
-                parameters["tracksIntraHexProgress"] = "false";
                 return module with
                 {
                     Mechanic = module.Mechanic with { Version = 2 },
@@ -225,8 +222,7 @@ public sealed class WorldModule : IHexCrawlModule
         };
         edition.Validate();
         var bound = GenericProcedureRuntime.Bind(edition);
-        if (bound.Movement.MechanicVersion != 2
-            || bound.Movement.TravelResolution != TravelResolutionMode.CellSteps)
+        if (bound.Movement.TravelResolution != TravelResolutionMode.CellSteps)
             throw new InvalidOperationException("The generated cell ruleset is not executable.");
         var saved = await procedures.CreateAsync(owner, edition, materialized.Origin,
             cancellationToken: cancellationToken);
@@ -285,15 +281,6 @@ public sealed class WorldModule : IHexCrawlModule
                 revision
             });
         }
-        if (bound.Movement.MechanicVersion != 2)
-            return Results.Ok(new
-            {
-                status = "unsupported",
-                explanation = "This saved ruleset uses legacy hex movement. Create or select a cell-travel ruleset.",
-                worldVersion = stored.Version,
-                procedureId,
-                revision
-            });
         if (bound.Movement.TravelResolution == TravelResolutionMode.ContinuousDistance
             && stored.World.Tiling.PhysicalDistancePerWorldUnit is null)
             return Results.Ok(new

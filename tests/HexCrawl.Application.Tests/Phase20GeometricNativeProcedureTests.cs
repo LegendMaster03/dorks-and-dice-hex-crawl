@@ -31,8 +31,6 @@ public sealed class Phase20GeometricNativeProcedureTests
         Assert.Equal(published.Origin!.PresetKey, geometric.Origin!.PresetKey);
         Assert.Null(geometric.Origin.PresetRevision);
         Assert.NotNull(published.Origin.PresetRevision);
-        Assert.DoesNotContain(geometric.Procedure.Modules, module =>
-            module.Mechanic.ExecutionHandler == GenericProcedureExecutionHandlers.HexProgressPolicy);
     }
 
     [Theory]

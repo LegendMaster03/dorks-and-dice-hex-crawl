@@ -353,8 +353,7 @@ public static class CrawlProcedureCatalog
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["travelResolution"] = travelResolution.ToString(),
-                ["actualDistanceResolution"] = actualDistanceResolution.ToString(),
-                ["tracksIntraHexProgress"] = "false"
+                ["actualDistanceResolution"] = actualDistanceResolution.ToString()
             }),
         Structural(GenericProcedureCatalog.SpatialTurnCostModule,
             GenericProcedureCatalog.SpatialTurnCostPolicyMechanic,
