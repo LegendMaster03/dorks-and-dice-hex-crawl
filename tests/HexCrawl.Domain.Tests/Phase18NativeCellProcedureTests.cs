@@ -44,6 +44,29 @@ public sealed class Phase18NativeCellProcedureTests
     }
 
     [Fact]
+    public void ProvenEquivalentSymmetryQuotientCanTraverseTheAcceptedWorld()
+    {
+        const string square = "<1:1,1,1:4,4>";
+        const string checkerboard = "<2:1 2,1 2,2:4 4,4>";
+        var world = CreateWorld(checkerboard);
+        var comparison = DelaneyDressTopology.Compare(
+            square, world.Topology.QuotientDsSymbol, world.Topology.TranslationDsSymbol);
+        Assert.Equal(TilingComparisonStatus.ProvenEquivalent, comparison.Status);
+
+        var procedure = Version2Procedure(world, TravelResolutionMode.CellSteps)
+            with { TilingDsSymbol = square };
+        procedure.Validate();
+        var cursor = Start(world);
+        var moved = new CrawlRuntimeEngine().ResolveCellTravel(
+            world, procedure, cursor,
+            ResolvedTravelAmount.CellTransitions(1, ResolutionProvenance.ProcedureDefault),
+            continueAcrossBoundaries: true);
+
+        Assert.Single(moved.Transitions);
+        Assert.NotEqual(cursor.CurrentCell, moved.Traversal.CurrentCell);
+    }
+
+    [Fact]
     public void Version1HexPolicyIsNotReinterpretedAsGeneralizedMovement()
     {
         var world = CreateWorld("<1:1,1,1:6,3>");

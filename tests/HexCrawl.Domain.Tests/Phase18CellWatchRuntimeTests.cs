@@ -44,6 +44,24 @@ public sealed class Phase18CellWatchRuntimeTests
     }
 
     [Fact]
+    public void CellWatchAcceptsRulesetProvenEquivalentByWorldTranslationCover()
+    {
+        const string square = "<1:1,1,1:4,4>";
+        const string checkerboard = "<2:1 2,1 2,2:4 4,4>";
+        var (world, worldProcedure, state, plan) = Setup(checkerboard, calibrated: true);
+        var comparison = DelaneyDressTopology.Compare(
+            square, world.Topology.QuotientDsSymbol, world.Topology.TranslationDsSymbol);
+        Assert.Equal(TilingComparisonStatus.ProvenEquivalent, comparison.Status);
+        var procedure = worldProcedure with { TilingDsSymbol = square };
+        procedure.Validate();
+
+        var result = new CrawlRuntimeEngine().AdvanceCellWatch(
+            world, procedure, state, plan, Inputs(1));
+        Assert.Single(result.Events, e => e.Kind == CrawlRuntimeEventKind.CellEntered);
+        Assert.NotEqual(state.Traversal.CurrentCell, result.Expedition.Traversal.CurrentCell);
+    }
+
+    [Fact]
     public void SuppressingNavigationCheckDoesNotClearPersistentLostState()
     {
         var (world, procedure, state, plan) = Setup(
