@@ -350,7 +350,6 @@ public sealed class Phase18CellExpeditionPersistenceTests
         Assert.Equal(1, moved.CompletedWatches);
         Assert.Equal(1, moved.History.Count(e => e.Kind == CrawlRuntimeEventKind.CellEntered));
         Assert.True(saved.Version > initial.Version);
-        Assert.Empty(saved.Knowledge!.KnownHexes);
         Assert.Equal(exit.To, Assert.Single(saved.Knowledge.KnownCells!));
 
         await Assert.ThrowsAsync<HexCrawlConcurrencyException>(() =>
@@ -431,7 +430,6 @@ public sealed class Phase18CellExpeditionPersistenceTests
         Assert.Contains(loaded.Effects.AppliedConsequences, e => e.ConsequenceId == delay.Id);
         Assert.Equal(KnowledgeState.Discovered, loaded.Knowledge!.Entries[landmark.Id].State);
         Assert.Equal(exit.To, Assert.Single(loaded.Knowledge.KnownCells!));
-        Assert.Empty(loaded.Knowledge.KnownHexes);
         Assert.Single(restored.History, e => e.Kind == CrawlRuntimeEventKind.CellEntered);
         Assert.Single(restored.History, e => e.Kind == CrawlRuntimeEventKind.LocationDiscovered);
     }

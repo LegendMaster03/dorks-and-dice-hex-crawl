@@ -4,11 +4,13 @@
 
 **Repository:** `LegendMaster03/dorks-and-dice-hex-crawl`  
 **Feature branch (unmerged, undeployed):** `feature/tile-crawl-phase-20.2-application-persistence`  
-**Last verified green automated head before the latest edits:** [`8e7bddc5`](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/commit/8e7bddc56ef4b6cffbf33502131c2bc438df585d), [CI 38296378851](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38296378851), **successful**. This is automated validation, **not** completion of the architectural deletion gate or rendered browser acceptance.
+**Last verified green automated head before the latest edits:** [`003c1247`](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/commit/003c124745ca80eccd7660c452dc56dd7e6fcb2c), [CI 38297158435](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38297158435), **successful**. This is automated validation, **not** completion of the architectural deletion gate or rendered browser acceptance.
 
 ## Deleted from the feature branch
 
-- **Pending CI:** Delete unused axial map selection and highlighting in `map-surface.ts` and `canvas-renderer.ts`. Removed the dead `setHexSelectionHandler`, local `selectedHex` state and the world-to-axial click fallback. Retained exact periodic cell selection, pointer authoring, registered-map source previews, accessibility input and polygon highlighting. The old grid-preview drawing and registration model must still be generalized.
+- **Pending CI:** Delete the unused `KnownHexes` state collection from player knowledge and stale runtime visual fixture/test assertions. Generalized discovery, known-cell serialization and knowledge ownership remain intact; schema/procedure revision fields remain unchanged.
+
+- **Verified CI 38297158435:** Delete unused axial map selection and highlighting in `map-surface.ts` and `canvas-renderer.ts`. Removed the dead `setHexSelectionHandler`, local `selectedHex` state and the world-to-axial click fallback. Retained exact periodic cell selection, pointer authoring, registered-map source previews, accessibility input and polygon highlighting. The old grid-preview drawing and registration model must still be generalized.
 
 - **Verified CI 38296378851:** Removed the axial `Hex` property from `CrawlRuntimeEvent`, event collector, handoff world context and browser handoff type. All spatial event constructors use their existing qualified `Cell` identity, while nonspatial events have no cell. Converted integration/domain/application regressions to assert the retained cell and event behavior; historical handoff location snapshots, linked scenes, encounter metadata and journey handoff behavior remain covered.
 

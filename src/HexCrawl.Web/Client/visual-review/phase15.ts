@@ -876,7 +876,6 @@ function runtimeFixture() {
             unsupportedReason: null
         },
         movementComposition: movement(true),
-        knownHexes: [{ q: 0, r: 0 }],
         knowledge: [],
         history: [{
             sequence: 1,
@@ -967,7 +966,6 @@ function nonSpatialRuntimeFixture() {
         referenceUse: "None",
         suggestedExpectedDistance: null
     };
-    value.knownHexes = [];
     value.knowledge = [];
     return value;
 }

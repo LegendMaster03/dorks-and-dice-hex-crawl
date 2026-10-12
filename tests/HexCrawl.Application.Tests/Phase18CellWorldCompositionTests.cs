@@ -27,7 +27,6 @@ public sealed class Phase18CellWorldCompositionTests
         var initialized = PresentationKnowledgeProjection.InitializeCells(
             world, policy, baseline, current.Id);
         Assert.Equal(current.Id, Assert.Single(initialized.KnownCells!));
-        Assert.Empty(initialized.KnownHexes);
         Assert.Contains(obvious.Id, initialized.Entries.Keys);
         Assert.DoesNotContain(hidden.Id, initialized.Entries.Keys);
         Assert.DoesNotContain(distant.Id, initialized.Entries.Keys);
@@ -36,7 +35,6 @@ public sealed class Phase18CellWorldCompositionTests
             world, MapPresentationPolicy.TraditionalHiddenHexcrawl(),
             baseline, current.Id);
         Assert.Null(traditional.KnownCells);
-        Assert.Empty(traditional.KnownHexes);
 
         var dmControlled = PresentationKnowledgeProjection.InitializeCells(
             world, MapPresentationPolicy.DmControlled(),
@@ -58,7 +56,6 @@ public sealed class Phase18CellWorldCompositionTests
         var events = projected.State.History;
         Assert.Equal(4, events.Count);
         Assert.Equal(4, events.Select(e => e.Sequence).Distinct().Count());
-        Assert.Empty(projected.Knowledge.KnownHexes);
         Assert.Equal(current.Id, Assert.Single(projected.Knowledge.KnownCells!));
         Assert.Equal(KnowledgeState.Discovered, projected.Knowledge.Entries[inside.Id].State);
         Assert.DoesNotContain(outside.Id, projected.Knowledge.Entries.Keys);

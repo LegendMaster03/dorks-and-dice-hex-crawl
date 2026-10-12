@@ -17,7 +17,7 @@ public enum CrawlRuntimeEventKind
     DirectionChanged,
     TravelResolved,
     DistanceTraveled,
-    // Preserve the persisted numeric identities of current event kinds after retiring V1 hex events.
+    // Event-kind identifiers remain stable across persisted runtime histories.
     EncounterCheckPerformed = 13,
     EncounterTriggered,
     KeyedLocationEncountered,
