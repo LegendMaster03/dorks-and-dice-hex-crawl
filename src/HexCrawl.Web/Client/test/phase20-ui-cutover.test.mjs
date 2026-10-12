@@ -170,6 +170,9 @@ test("V2 cell-workbench helpers generate owner/version-scoped automatic rolls", 
     assert.match(view, /onToggle: edge => \{[\s\S]*if \(generated\) invalidateGenerated\(\)/);
     assert.match(view, /runtime = next;\s*generated = null/);
     assert.match(view, /next\.version !== result\.expeditionVersion/);
+    assert.match(view, /displayedWatchNumber !== state\.activeWatchNumber/);
+    assert.match(view, /state\.activeDeliberateDoubleBack/);
+    assert.match(view, /state\.activeContinueAcrossBoundaries/);
 });
 
 test("Phase 15 next action respects V2 interrupt, decision and travel precedence", () => {

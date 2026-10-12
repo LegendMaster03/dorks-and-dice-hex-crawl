@@ -40,6 +40,7 @@ export async function renderPeriodicExpeditionWorkbench(
     let disposed = false;
     let busy = false;
     let generated: CellProcedureResolutionHelperResult | null = null;
+    let displayedWatchNumber: number | null | undefined = undefined;
     let inspectedGeometry: WorldCellGeometry | null = null;
     let inspectedTilingRevision: number | null = null;
 
@@ -889,6 +890,15 @@ export async function renderPeriodicExpeditionWorkbench(
                 input("headingX").value = String(state.intendedHeading.x);
                 input("headingY").value = String(state.intendedHeading.y);
             } else if (selectedExit !== null) selectHeading(selectedExit);
+        }
+        // When reopening or entering a saved watch, carry forward its
+        // resolved plan instead of presenting unchecked fallback toggles.
+        if (displayedWatchNumber !== state.activeWatchNumber) {
+            displayedWatchNumber = state.activeWatchNumber;
+            input("doubleBack").checked = state.activeWatchNumber !== null
+                && state.activeDeliberateDoubleBack;
+            input("continueAcross").checked = state.activeWatchNumber !== null
+                && state.activeContinueAcrossBoundaries;
         }
         const resolutions = runtime.procedure.runtime?.travelResolution;
         const helpers = runtime.procedure.runtime?.resolutionHelpers;
