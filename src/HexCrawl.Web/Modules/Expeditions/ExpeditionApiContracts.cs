@@ -101,43 +101,6 @@ public sealed record WorkbenchExpeditionStateContract(
 
     public static WorkbenchExpeditionStateContract From(CrawlSessionRuntimeState runtime) => runtime switch
     {
-        ExpeditionState expedition => new(
-            expedition.Id,
-            true,
-            expedition.CurrentHex,
-            expedition.Position,
-            expedition.PositionPrecision,
-            expedition.Traversal.EntryDirection?.Value,
-            expedition.Traversal.LastTravelDirection?.Value,
-            expedition.IntendedDirection?.Value,
-            expedition.ActualDirection?.Value,
-            expedition.Navigation.IsLost,
-            expedition.Navigation.VeerSteps,
-            expedition.Navigation.VeerDegrees,
-            DistanceContract.From(expedition.DistanceTraveled),
-            DistanceContract.From(expedition.Traversal.Progress),
-            expedition.Traversal.CurrentExitRequirement is { } requirement ? DistanceContract.From(requirement) : null,
-            expedition.ElapsedTravelTime.TotalHours,
-            (int)Math.Floor(expedition.ElapsedTravelTime.TotalDays) + 1,
-            expedition.CompletedWatches,
-            expedition.ActiveWatch?.WatchNumber,
-            expedition.ActiveWatch?.TotalDuration.TotalHours,
-            expedition.ActiveWatch?.Elapsed.TotalHours,
-            expedition.ActiveWatch?.Remaining.TotalHours,
-            expedition.ActiveWatch?.PendingDecision,
-            expedition.ActiveWatch?.Plan.Mode.PaceKey,
-            expedition.ActiveWatch?.Plan.Mode.ActivityAssignments
-                .Select(ParticipantActivityAssignmentContract.From)
-                .ToArray() ?? [],
-            expedition.ActiveWatch?.Plan.NavigationAid.Key,
-            expedition.ActiveWatch?.Plan.NavigationAid.SuppressesNavigationCheck ?? false,
-            expedition.ActiveWatch?.Plan.NavigationAid.ResetsVeerAtBoundary ?? false,
-            expedition.ActiveWatch?.Plan.DeliberateDoubleBack ?? false,
-            expedition.ActiveWatch?.Plan.ContinueAcrossBoundaries ?? false,
-            expedition.ActiveWatch?.Encounter.Kind,
-            expedition.ActiveWatch?.Encounter.OccursAt?.TotalHours,
-            expedition.ActiveWatch?.EncounterHandled,
-            PendingEncounterContract.From(expedition.PendingEncounter)),
         CellExpeditionState cells => FromCells(cells),
         NonSpatialSessionState nonSpatial => new(
             nonSpatial.Id,
