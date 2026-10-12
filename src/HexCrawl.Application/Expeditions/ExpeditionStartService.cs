@@ -50,23 +50,10 @@ public sealed class ExpeditionStartService(
     HexCrawlService coreService,
     CampaignProcedureService procedures)
 {
-    public Task<StoredExpedition> StartWorldBoundAsync(
-        Guid overworldId,
-        string ownerUserId,
-        string name,
-        ProcedureStartSelection selection,
-        string presentationKey,
-        HexCoordinate startHex,
-        CancellationToken cancellationToken = default)
-        => Task.FromException<StoredExpedition>(
-            new NotSupportedException(
-                "Legacy V1 world starts have been retired. Use StartWorldBoundCellsAsync with an authoritative cell."));
-
     /// <summary>
     /// Begin a generalized world-bound expedition at an authoritative motif
-    /// cell. No hex coordinate, fake center distance or hex presentation
-    /// projection is created. This is an application capability; the existing
-    /// hex-only HTTP start route stays gated until its cell contracts are ready.
+    /// cell. All spatial authority belongs to the actual persisted tiling;
+    /// no separate coordinate model or presentation projection is fabricated.
     /// </summary>
     public Task<StoredExpedition> StartWorldBoundCellsAsync(
         Guid overworldId,
@@ -251,41 +238,19 @@ public sealed class ExpeditionStartService(
         }, cancellationToken);
     }
 
-    public async Task<StoredExpedition> StartStandaloneAsync(
+    public async Task<StoredExpedition> StartNonSpatialAsync(
         string ownerUserId,
         string name,
         ProcedureStartSelection selection,
-        CrawlSessionContext context,
-        HexCoordinate? startHex = null,
+        NonSpatialCrawlSessionContext context,
         CancellationToken cancellationToken = default)
     {
         var owner = RequiredText(ownerUserId, "Owner user id");
         var sessionName = RequiredText(name, "Session name");
         ArgumentNullException.ThrowIfNull(context);
-        if (context is AbstractHexCrawlSessionContext)
-            throw new NotSupportedException(
-                "Legacy V1 abstract-hex starts have been retired. Use StartStandaloneCellsAsync.");
-
-        var id = Guid.NewGuid();
-        CrawlSessionRuntimeState runtime = context switch
-        {
-            AbstractHexCrawlSessionContext abstractContext => CreateAbstractState(
-                id,
-                abstractContext,
-                startHex ?? throw new ArgumentException("Abstract-hex sessions require a starting hex.", nameof(startHex))),
-            NonSpatialCrawlSessionContext nonSpatialContext => CreateNonSpatialState(id, nonSpatialContext),
-            WorldBoundCrawlSessionContext => throw new ArgumentException(
-                "World-bound sessions must be started through the overworld expedition endpoint.",
-                nameof(context)),
-            _ => throw new ArgumentException("Unsupported crawl session context.", nameof(context))
-        };
+        context.Validate();
+        var runtime = CreateNonSpatialState(Guid.NewGuid(), context);
         var selected = await ResolveProcedureAsync(owner, selection, cancellationToken);
-        if (context is AbstractHexCrawlSessionContext
-            && !CampaignProcedureSchema.RequiresLegacyHexTiling(selected.Procedure.TilingDsSymbol))
-            throw new NotSupportedException(
-                "This abstract hex runtime cannot execute a nonhex tiling until Phase 18.");
-        if (context is AbstractHexCrawlSessionContext)
-            RequireLegacyHexMovement(selected.Procedure);
 
         var now = DateTimeOffset.UtcNow;
         return await store.CreateExpeditionAsync(new StoredExpedition(
@@ -304,20 +269,6 @@ public sealed class ExpeditionStartService(
             CampaignId = selected.CampaignId,
             ProcedureOrigin = selected.ProcedureOrigin
         }, cancellationToken);
-    }
-
-    private static void RequireLegacyHexMovement(CampaignProcedure procedure)
-    {
-        // Existing legacy starts can select symbolic/non-native procedures.
-        // Preserve that established contract; only a concrete generalized
-        // movement handler must be rejected before constructing ExpeditionState.
-        var movement = procedure.Modules.SingleOrDefault(module =>
-            module.Mechanic.ExecutionHandler ==
-                GenericProcedureExecutionHandlers.MovementResolutionPolicy);
-        if (movement is not null && movement.Mechanic.Version != 1)
-            throw new NotSupportedException(
-                "Legacy world-bound and abstract-hex expeditions require movement version 1. " +
-                "Use the explicit cell expedition start for movement version 2.");
     }
 
     private async Task<StoredCampaignProcedureRevision> ResolveProcedureAsync(
@@ -340,24 +291,6 @@ public sealed class ExpeditionStartService(
             ownerUserId,
             selection.PresetKey!,
             cancellationToken: cancellationToken);
-    }
-
-    private static ExpeditionState CreateAbstractState(
-        Guid id,
-        AbstractHexCrawlSessionContext context,
-        HexCoordinate startHex)
-    {
-        context.Validate();
-        var unit = context.HexContext.HexCenterDistance.Unit;
-        return new ExpeditionState
-        {
-            Id = id,
-            Position = null,
-            PositionPrecision = null,
-            Traversal = HexTraversalState.StartingIn(startHex, unit),
-            Navigation = new NavigationRuntimeState(false, 0),
-            DistanceTraveled = new DistanceMeasure(0, unit)
-        };
     }
 
     private static NonSpatialSessionState CreateNonSpatialState(

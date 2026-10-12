@@ -86,18 +86,11 @@ public sealed class ExpeditionModule : IHexCrawlModule
         HexCrawlService service,
         CancellationToken cancellationToken)
     {
-        var resolvedContext = request.Context.ToDomain();
-        if (resolvedContext is AbstractHexCrawlSessionContext)
-            throw new NotSupportedException(
-                "Legacy V1 hex expeditions have been retired. Start a geometric cell expedition using /api/expeditions/cells.");
+        if (request.Context.ToDomain() is not NonSpatialCrawlSessionContext nonSpatial)
+            throw new ArgumentException("This endpoint starts nonspatial sessions only.");
         var owner = UserId(context);
-        var expedition = await starter.StartStandaloneAsync(
-            owner,
-            request.Name,
-            request.ProcedureSelection(),
-            resolvedContext,
-            request.StartHex,
-            cancellationToken);
+        var expedition = await starter.StartNonSpatialAsync(
+            owner, request.Name, request.ProcedureSelection(), nonSpatial, cancellationToken);
         return Results.Created(
             $"/api/expeditions/{expedition.Id:D}",
             await ContractAsync(expedition, owner, service, cancellationToken));

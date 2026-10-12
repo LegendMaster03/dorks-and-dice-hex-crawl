@@ -19,7 +19,7 @@ public sealed class ExpeditionStartServiceTests
         var procedures = new CampaignProcedureService(store);
         var starter = new ExpeditionStartService(store, new HexCrawlService(store), procedures);
 
-        var session = await starter.StartStandaloneAsync(
+        var session = await starter.StartNonSpatialAsync(
             "alice",
             "Preset session",
             new ProcedureStartSelection(PresetKey: "simple-fixed-distance"),
@@ -55,7 +55,7 @@ public sealed class ExpeditionStartServiceTests
                 null,
                 new Dictionary<string, string> { ["durationTicks"] = sixHours })]);
 
-        var session = await starter.StartStandaloneAsync(
+        var session = await starter.StartNonSpatialAsync(
             "alice",
             "Pinned historical procedure",
             new ProcedureStartSelection(
@@ -305,7 +305,7 @@ public sealed class ExpeditionStartServiceTests
         var created = await composer.CreateAsync("alice", "simple-fixed-distance", []);
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            starter.StartStandaloneAsync(
+            starter.StartNonSpatialAsync(
                 "alice",
                 "Ambiguous saved procedure",
                 new ProcedureStartSelection(ProcedureId: created.ProcedureId),
@@ -324,7 +324,7 @@ public sealed class ExpeditionStartServiceTests
         var created = await composer.CreateAsync("alice", "simple-fixed-distance", []);
 
         await Assert.ThrowsAsync<HexCrawlNotFoundException>(() =>
-            starter.StartStandaloneAsync(
+            starter.StartNonSpatialAsync(
                 "bob",
                 "Unauthorized saved procedure",
                 new ProcedureStartSelection(
@@ -335,22 +335,5 @@ public sealed class ExpeditionStartServiceTests
         Assert.Empty(await procedures.ListLatestAsync("bob"));
     }
 
-    [Fact]
-    public async Task InvalidStandaloneContextDoesNotMaterializePresetProcedure()
-    {
-        await using var database = await PostgresTestDatabase.CreateAsync();
-        var store = new PostgresHexCrawlStore(database.ConnectionString);
-        await store.InitializeAsync();
-        var procedures = new CampaignProcedureService(store);
-        var starter = new ExpeditionStartService(store, new HexCrawlService(store), procedures);
 
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            starter.StartStandaloneAsync(
-                "alice",
-                "Invalid standalone context",
-                new ProcedureStartSelection(PresetKey: "simple-fixed-distance"),
-                new WorldBoundCrawlSessionContext(Guid.NewGuid())));
-
-        Assert.Empty(await procedures.ListLatestAsync("alice"));
-    }
 }
