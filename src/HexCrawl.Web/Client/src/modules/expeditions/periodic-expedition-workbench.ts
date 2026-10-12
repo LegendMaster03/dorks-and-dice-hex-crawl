@@ -787,11 +787,13 @@ export async function renderPeriodicExpeditionWorkbench(
         panel.append(row);
         const known = discoveredSubjectIds(runtime);
         const subjects = [
-            ...world.locations.filter(location => polygonContainsSubject(selected.polygon, location.position))
-                .map(location => ({ id: location.id, name: location.name, type: "Location" as const })),
-            ...world.features.filter(feature => feature.kind === "Point" && feature.position !== null
-                && polygonContainsSubject(selected.polygon, feature.position))
-                .map(feature => ({ id: feature.id, name: feature.name, type: "Feature" as const }))
+            ...world.locations.flatMap(location =>
+                polygonContainsSubject(selected.polygon, location.position)
+                    ? [{ id: location.id, name: location.name, type: "Location" as const }] : []),
+            ...world.features.flatMap(feature =>
+                feature.kind === "Point" && feature.position !== null
+                    && polygonContainsSubject(selected.polygon, feature.position)
+                    ? [{ id: feature.id, name: feature.name, type: "Feature" as const }] : [])
         ];
         if (subjects.length === 0) {
             panel.append(textElement("p", "No authored point locations or features are registered in this cell.", "hc-muted"));
