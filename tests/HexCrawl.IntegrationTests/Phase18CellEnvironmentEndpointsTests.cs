@@ -136,8 +136,8 @@ public sealed class Phase18CellEnvironmentEndpointsTests
                     .GetProperty("tag").GetString());
                 Assert.Equal(current.Id, ReadCell(
                     EffectiveTerrain(before).GetProperty("source").GetProperty("cell")));
-                Assert.Equal(JsonValueKind.Null,
-                    EffectiveTerrain(before).GetProperty("source").GetProperty("hex").ValueKind);
+                Assert.False(EffectiveTerrain(before).GetProperty("source")
+                    .TryGetProperty("hex", out _));
 
                 var midpoint = new WorldPoint(
                     (exit.Start.X + exit.End.X) / 2,
