@@ -209,14 +209,15 @@ test("selected-cell derivation stays bounded for a representative authored world
 
 test("world editor composes existing authorities and does not mutate player knowledge when selecting content", () => {
     const source = fs.readFileSync(path.join(sourceRoot, "modules/worlds/world-editor-view.ts"), "utf8");
-    assert.match(source, /setHexSelectionHandler/);
-    assert.match(source, /locationsInCell\(world, cell\)/);
-    assert.match(source, /featuresIntersectingCell\(world, cell\)/);
-    assert.match(source, /replaceHexTerrain/);
+    assert.match(source, /setCellSelectionHandler/);
+    assert.doesNotMatch(source, /setHexSelectionHandler/);
+    assert.match(source, /pointInPolygon\(location.position, cell.polygon\)/);
+    assert.match(source, /featureIntersectsPolygon\(feature, cell.polygon\)/);
+    assert.match(source, /const replaceTerrain = async/);
     assert.match(source, /api\.createLocation/);
     assert.match(source, /api\.createFeature/);
     assert.match(source, /kind: "Line"/);
-    assert.match(source, /replaceFeatureTagFact/);
+    assert.match(source, /kind: "SpatialFeature"/);
     assert.match(source, /featureHasEnvironmentRules/);
     assert.match(source, /confirmDeletion/);
     assert.match(source, /window\.confirm/);
