@@ -264,19 +264,15 @@ test("focused party workspace exposes the persisted party register through a ded
     assert.match(unitResolver, /runtime\.context\.hexCenterDistance\?\.unit/);
 });
 
-test("watch planning uses authoritative typed party assignments instead of a free-form activity input", () => {
-    const view = read("modules/expeditions/expedition-view.ts");
-    const controller = read("modules/expeditions/expedition-watch-controller.ts");
+test("cell watches use persisted participant assignments instead of free-form activity input", () => {
+    const periodic = read("modules/expeditions/periodic-expedition-workbench.ts");
     const party = read("modules/expeditions/expedition-party-sheet.ts");
-    assert.match(view, /partyActivitySummary\(runtime\)/);
-    assert.match(view, /partyRailContext\(runtime\)/);
-    assert.doesNotMatch(view, /railAction\("Party & activities"/);
-    assert.doesNotMatch(view, /name="activities"/);
-    assert.doesNotMatch(controller, /activities:/);
+    assert.match(periodic, /runtime\.party\.activityAssignments/);
+    assert.match(periodic, /activeActivityAssignments/);
+    assert.doesNotMatch(periodic, /name="activities"/);
     assert.match(party, /activityAssignments/);
     assert.match(party, /participantActivityPolicy/);
     assert.match(party, /The current procedure does not define participant activity assignments/);
-    assert.match(party, /structural or future activity policy/);
 });
 
 test("party movement editor derives units from persisted session data without a mile fallback", () => {

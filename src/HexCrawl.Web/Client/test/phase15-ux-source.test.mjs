@@ -508,36 +508,18 @@ test("Phase 15 focused editing uses accessible drawers and keeps secondary tools
     assert.match(styles, /hc-focus-workspace/);
     assert.match(styles, /@media \(max-width: 760px\)/);
 });
-test("Phase 15 spatial travel uses semantic current-cell adjacency and focused navigation", () => {
-    const view = fs.readFileSync(
-        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
-        "utf8");
-    const adjacency = fs.readFileSync(
-        path.join(sourceDir, "modules/expeditions/spatial-adjacency.ts"),
-        "utf8");
-    const model = fs.readFileSync(
-        path.join(sourceDir, "modules/expeditions/expedition-workspace-model.ts"),
-        "utf8");
-    const obsolete = path.join(sourceDir, "modules/expeditions/phase15-expedition-workspace.ts");
-
+test("periodic spatial travel uses topology-derived adjacency and angular navigation", () => {
+    const view = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-view.ts"), "utf8");
+    const periodic = fs.readFileSync(path.join(sourceDir, "modules/expeditions/periodic-expedition-workbench.ts"), "utf8");
+    const adjacency = fs.readFileSync(path.join(sourceDir, "modules/expeditions/spatial-adjacency.ts"), "utf8");
+    assert.match(view, /return renderPeriodicExpeditionWorkbench/);
+    assert.match(periodic, /renderCurrentCellNavigator/);
+    assert.match(periodic, /veerDegreesOnFailure/);
+    assert.match(periodic, /activeActivityAssignments/);
     assert.match(adjacency, /createCurrentCellAdjacency/);
-    assert.match(adjacency, /CurrentCellAdjacency/);
-    assert.doesNotMatch(adjacency, /HexCoordinate|HexOrientation|PointyTop|FlatTop/);
-    assert.match(adjacency, /center: polygonCenter\(boundary\)/);
-    assert.match(adjacency, /outwardVector: AdjacencyPoint/);
     assert.doesNotMatch(adjacency, /adjacencies\.length === 6/);
-    assert.match(view, /renderCurrentCellNavigator/);
-    assert.match(view, /renderCurrentCellNavigator/);
-    assert.match(view, /actualIntent: runtime\.expedition\.actualDirection/);
-    assert.match(view, /recordNavigationAssistant/);
-    assert.match(view, /openNavigationWorkspace/);
-    assert.match(model, /navigationResolutionDue/);
-    assert.match(model, /kind: "boundary"/);
-    assert.match(model, /kind: "survival"/);
-    assert.equal(fs.existsSync(obsolete), false);
-    assert.doesNotMatch(view, /getAttribute\("aria-label"\)/);
+    assert.doesNotMatch(periodic, /new HexDirection/);
 });
-
 
 test("Compact authoring offers generic one-click dependency repair", () => {
     const workspace = fs.readFileSync(
@@ -675,33 +657,13 @@ test("encounter resume requires an explicit resolved-at-table acknowledgement", 
     assert.doesNotMatch(controller, /resumeEncounter/);
 });
 
-test("normal spatial travel has one primary continuation path and focused unresolved workspaces", () => {
-    const view = fs.readFileSync(
-        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
-        "utf8");
-
-    const sharedAction = fs.readFileSync(
-        path.join(sourceDir, "modules/expeditions/phase15-next-action.ts"), "utf8");
-    assert.match(view, /\(\) => activateAction\(action.kind\)/);
-    assert.match(sharedAction, /primary\.addEventListener\("click", activate\)/);
-    assert.doesNotMatch(view, /const continueControl = button\("Continue travel"/);
-    assert.match(view, /if \(paceEditor && pace\)[\s\S]*actions\.append\(changePace\)/);
-    assert.match(view, /actions\.append\(more\)/);
-    assert.doesNotMatch(view, /button\("Travel controls"/);
-    assert.match(view, /const continueTravel = \(resumeTravelReview = false\): void =>/);
-    assert.match(view, /spatialTravelContinuationTarget/);
-    assert.match(view, /case "navigation":[\s\S]*openNavigationWorkspace\(\)/);
-    assert.match(view, /case "encounter":[\s\S]*openTravelWorkspace\("encounter"\)/);
-    assert.match(view, /case "movement":[\s\S]*openTravelWorkspace\("movement"\)/);
-    assert.match(view, /case "boundary":[\s\S]*openBoundaryWorkspace\(\)/);
-    assert.match(view, /case "survival":[\s\S]*openSurvivalWorkspace\("attention"\)/);
-    assert.match(view, /ExpeditionWatchController\.continueResolvedTravel/);
-    const controller = fs.readFileSync(
-        path.join(sourceDir, "modules/expeditions/expedition-watch-controller.ts"),
-        "utf8");
-    assert.match(controller, /return api\.advanceExpedition\(runtime\.id, request\)/);
-    assert.match(view, /button\("More options", \(\) => openTravelWorkspace\("advanced"\)\)/);
-    assert.doesNotMatch(view, /openTravelWorkspace\("travel"\)/);
+test("periodic spatial travel uses one native cell-watch action", () => {
+    const view = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-view.ts"), "utf8");
+    const periodic = fs.readFileSync(path.join(sourceDir, "modules/expeditions/periodic-expedition-workbench.ts"), "utf8");
+    assert.match(view, /return renderPeriodicExpeditionWorkbench/);
+    assert.match(periodic, /api\.advanceCellWatch/);
+    assert.match(periodic, /data-gm-travel/);
+    assert.doesNotMatch(periodic, /ExpeditionWatchController|api\.advanceExpedition/);
 });
 
 test("narrow hierarchy keeps the map primary while rail context stacks without disappearing", () => {
