@@ -3,6 +3,7 @@ using HexCrawl.Application.Persistence;
 using HexCrawl.Application.Rules;
 using HexCrawl.Domain.Runtime;
 using HexCrawl.Domain.Spatial;
+using HexCrawl.Domain.Procedure;
 
 namespace HexCrawl.Application;
 
