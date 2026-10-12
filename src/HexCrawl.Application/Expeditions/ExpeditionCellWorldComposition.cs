@@ -47,7 +47,7 @@ public static class ExpeditionCellWorldComposition
             e.Kind == CrawlRuntimeEventKind.EncounterTriggered);
         if (triggered is null)
             return new CellWorldProjection(state, knowledge);
-        if (triggered.Cell != state.Traversal.CurrentCell || triggered.Hex is not null)
+        if (triggered.Cell != state.Traversal.CurrentCell)
             throw new InvalidOperationException("Encounter must refer to the party's authoritative cell.");
 
         Location? location = null;
@@ -80,14 +80,14 @@ public static class ExpeditionCellWorldComposition
         var occurred = new CrawlRuntimeEvent(
             nextSequence, triggered.WatchNumber,
             CrawlRuntimeEventKind.KeyedLocationEncountered,
-            state.ElapsedTravelTime, null,
+            state.ElapsedTravelTime,
             $"Encountered keyed location {location.Name}.",
             SubjectId: location.Id, SubjectType: KnowledgeSubjectType.Location)
         { Cell = state.Traversal.CurrentCell };
         var discovered = new CrawlRuntimeEvent(
             nextSequence + 1, triggered.WatchNumber,
             CrawlRuntimeEventKind.LocationDiscovered,
-            state.ElapsedTravelTime, null,
+            state.ElapsedTravelTime,
             $"Discovered location {location.Name}; unrelated cell contents remain unchanged.",
             SubjectId: location.Id, SubjectType: KnowledgeSubjectType.Location)
         { Cell = state.Traversal.CurrentCell };

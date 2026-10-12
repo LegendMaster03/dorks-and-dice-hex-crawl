@@ -112,7 +112,7 @@ public sealed partial class HexCrawlService
             var note = string.IsNullOrWhiteSpace(source.Note) ? "" : " Note: " + source.Note.Trim();
             added.Add(new CrawlRuntimeEvent(
                 sequence++, watch, CrawlRuntimeEventKind.ResolutionProvenanceRecorded,
-                state.ElapsedTravelTime, null,
+                state.ElapsedTravelTime,
                 $"{component} source submitted as {source.Source}.{note}")
             { Cell = state.Traversal.CurrentCell });
         }
@@ -226,7 +226,7 @@ public sealed partial class HexCrawlService
                 consumedSequence.Value,
                 verifiedGeneration.WatchNumber,
                 CrawlRuntimeEventKind.ProcedureResolutionHelperConsumed,
-                updatedState.ElapsedTravelTime, null,
+                updatedState.ElapsedTravelTime,
                 $"Verified geometric procedure resolution {verifiedGeneration.Id:D} consumed.")
             { Cell = updatedState.Traversal.CurrentCell };
             updatedState = updatedState with

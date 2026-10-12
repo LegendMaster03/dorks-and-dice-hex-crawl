@@ -52,7 +52,6 @@ public static class CrawlRuntimeActions
             Math.Max(1, expedition.CompletedWatches),
             CrawlRuntimeEventKind.DmOverrideApplied,
             expedition.ElapsedTravelTime,
-            null,
             message)
         { Cell = destination };
 
@@ -90,7 +89,7 @@ public static class CrawlRuntimeActions
         var watch = expedition.ActiveWatch?.WatchNumber ?? Math.Max(1, expedition.CompletedWatches);
         var recorded = new CrawlRuntimeEvent(
             sequence, watch, kind, expedition.ElapsedTravelTime,
-            null, $"Discovered {subjectType.ToString().ToLowerInvariant()} {name}; unrelated contents remain unchanged.",
+            $"Discovered {subjectType.ToString().ToLowerInvariant()} {name}; unrelated contents remain unchanged.",
             SubjectId: subjectId, SubjectType: subjectType)
         { Cell = expedition.Traversal.CurrentCell };
         return new CellManualDiscoveryResult(

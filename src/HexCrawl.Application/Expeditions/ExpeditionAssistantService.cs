@@ -154,7 +154,6 @@ public sealed class ExpeditionAssistantService(
             pending.WatchNumber,
             CrawlRuntimeEventKind.EncounterResolved,
             elapsed,
-            null,
             string.IsNullOrWhiteSpace(command.ResultNote)
                 ? $"{pending.Outcome} resolved."
                 : $"{pending.Outcome} resolved: {command.ResultNote.Trim()}",

@@ -87,7 +87,6 @@ public sealed class ProcedureResolutionHelperService(
             CurrentWatchNumber(state),
             CrawlRuntimeEventKind.ProcedureResolutionHelperGenerated,
             state.ElapsedTravelTime,
-            null,
             $"Geometric procedure resolution #{sequence} [{id:D}]: rolls={rollDescription}; "
             + $"travel={audited.Travel?.ActualDistance?.Value.ToString(CultureInfo.InvariantCulture) ?? "none"} "
             + $"{audited.Travel?.ActualDistance?.Unit.Symbol ?? ""}; "

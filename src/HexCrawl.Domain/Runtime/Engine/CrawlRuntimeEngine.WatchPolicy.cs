@@ -107,7 +107,7 @@ public sealed partial class CrawlRuntimeEngine
         var occurrenceId = EncounterOccurrenceIdentity.Create(expeditionId, events.NextSequence);
         return events.Add(
             watchNumber, CrawlRuntimeEventKind.EncounterTriggered,
-            elapsed, null, message,
+            elapsed, message,
             subjectId: encounter.LocationId,
             encounterOutcome: encounter.Kind,
             encounterNote: encounter.Note,

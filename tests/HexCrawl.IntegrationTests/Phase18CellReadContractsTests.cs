@@ -77,7 +77,7 @@ public sealed class Phase18CellReadContractsTests
             var boundary = tiling.Boundaries(cell.Id.Address)[0];
             var record = new CrawlRuntimeEvent(
                 1, 1, CrawlRuntimeEventKind.CellEntered,
-                TimeSpan.Zero, null, "Qualified cell transition")
+                TimeSpan.Zero, "Qualified cell transition")
             {
                 Cell = cell.Id,
                 BoundaryInterfaceIndex = boundary.InterfaceIndex,

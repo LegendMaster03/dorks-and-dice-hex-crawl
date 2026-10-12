@@ -22,7 +22,6 @@ public static partial class CrawlAssistantActions
             watchNumber,
             kind,
             elapsed,
-            null,
             message,
             distanceValue,
             distanceUnit,

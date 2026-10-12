@@ -38,9 +38,6 @@ public sealed class Phase18CellWatchRuntimeTests
         Assert.Equal(exited.BoundaryInterfaceIndex, entered.ReciprocalInterfaceIndex);
         Assert.NotNull(exited.Cell);
         Assert.NotNull(entered.Cell);
-        // Until the axial event field is deleted, V2 movement must never populate it.
-        Assert.Null(exited.Hex);
-        Assert.Null(entered.Hex);
         Assert.Equal(result.Events.Count, result.Events.Select(e => e.Sequence).Distinct().Count());
         Assert.Equal(result.Events.Count, result.Expedition.History.Count);
     }
@@ -174,7 +171,6 @@ public sealed class Phase18CellWatchRuntimeTests
             e => e.Kind == CrawlRuntimeEventKind.DmOverrideApplied);
         Assert.Equal("Navigator used a DM-resolved course.", audit.Message);
         Assert.Equal(state.Traversal.CurrentCell, audit.Cell);
-        Assert.Null(audit.Hex);
     }
 
     [Fact]
@@ -293,7 +289,6 @@ public sealed class Phase18CellWatchRuntimeTests
         var audit = Assert.Single(decided.Events,
             e => e.Kind == CrawlRuntimeEventKind.ResolutionProvenanceRecorded);
         Assert.Equal(state.Traversal.CurrentCell, audit.Cell);
-        Assert.Null(audit.Hex);
         Assert.Contains("ManualRoll", audit.Message);
         Assert.Contains(boundary.InterfaceIndex.ToString(), audit.Message);
         var resumed = engine.AdvanceCellWatch(world, procedure,
@@ -353,7 +348,6 @@ public sealed class Phase18CellWatchRuntimeTests
         var decision = Assert.Single(changed.Events,
             e => e.Kind == CrawlRuntimeEventKind.DirectionChanged);
         Assert.Equal(paused.Expedition.Traversal.CurrentCell, decision.Cell);
-        Assert.Null(decision.Hex);
         Assert.True(decision.ExpeditionElapsedTime >= paused.Expedition.ElapsedTravelTime);
         Assert.Equal(changed.Expedition.History.Count,
             changed.Expedition.History.Select(e => e.Sequence).Distinct().Count());

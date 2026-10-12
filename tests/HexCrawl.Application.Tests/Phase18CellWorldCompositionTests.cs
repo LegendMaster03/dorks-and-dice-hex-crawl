@@ -66,8 +66,6 @@ public sealed class Phase18CellWorldCompositionTests
             e.Kind == CrawlRuntimeEventKind.KeyedLocationEncountered).Cell);
         Assert.Equal(current.Id, Assert.Single(events, e =>
             e.Kind == CrawlRuntimeEventKind.LocationDiscovered).Cell);
-        Assert.Null(Assert.Single(events, e =>
-            e.Kind == CrawlRuntimeEventKind.LocationDiscovered).Hex);
         Assert.Equal(inside.Id, Assert.Single(events, e =>
             e.Kind == CrawlRuntimeEventKind.EncounterTriggered).EncounterLocation!.Id);
     }
@@ -99,7 +97,7 @@ public sealed class Phase18CellWorldCompositionTests
         Assert.Null(projection.Knowledge.KnownCells);
         Assert.Contains(projection.State.History,
             e => e.Kind == CrawlRuntimeEventKind.LocationDiscovered
-                 && e.Cell == current.Id && e.Hex is null);
+                 && e.Cell == current.Id);
     }
 
     [Fact]
@@ -156,13 +154,13 @@ public sealed class Phase18CellWorldCompositionTests
         var occurrenceId = Guid.NewGuid();
         var trigger = new CrawlRuntimeEvent(
             2, 1, CrawlRuntimeEventKind.EncounterTriggered,
-            TimeSpan.FromHours(1), null, "A location was encountered.",
+            TimeSpan.FromHours(1), "A location was encountered.",
             SubjectId: subjectId, EncounterOutcome: kind,
             EncounterOccurrenceId: occurrenceId)
         { Cell = current.Id };
         var entry = new CrawlRuntimeEvent(
             1, 1, CrawlRuntimeEventKind.CellEntered,
-            TimeSpan.FromMinutes(20), null, "Entered a new cell.")
+            TimeSpan.FromMinutes(20), "Entered a new cell.")
         { Cell = current.Id };
         var runtime = new CellExpeditionState
         {

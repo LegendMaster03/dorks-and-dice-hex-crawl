@@ -54,7 +54,6 @@ public sealed class EncounterHandoffHistoricalContextTests
             expedition.Runtime.History,
             value => value.Kind == CrawlRuntimeEventKind.EncounterTriggered);
         Assert.Equal(startCell, encounterEvent.Cell);
-        Assert.Null(encounterEvent.Hex);
         var historicalLocation = Assert.IsType<CrawlRuntimeLocationSnapshot>(encounterEvent.EncounterLocation);
         Assert.Equal(originalLocation.Id, historicalLocation.Id);
         Assert.Equal("Old Ruin", historicalLocation.Name);
@@ -83,7 +82,6 @@ public sealed class EncounterHandoffHistoricalContextTests
                 null));
 
         Assert.Equal(world.World.Id, handoff.WorldContext.OverworldId);
-        Assert.Null(handoff.WorldContext.Hex);
         Assert.Equal(startCell, handoff.WorldContext.Cell);
         var handoffLocation = Assert.IsType<EncounterHandoffLocation>(handoff.WorldContext.Location);
         Assert.Equal(originalLocation.Id, handoffLocation.Id);

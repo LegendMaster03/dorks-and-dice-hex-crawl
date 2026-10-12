@@ -104,7 +104,7 @@ public sealed class Phase20MaplessCellApplicationTests
         Assert.Equal(1, after.CompletedWatches);
         Assert.NotEqual(((CellExpeditionState)created.Runtime).Traversal.Position,
             after.Traversal.Position);
-        Assert.DoesNotContain(after.History, e => e.Hex is not null);
+        Assert.All(after.History, e => Assert.NotNull(e.Cell));
         Assert.Contains(after.History, e =>
             e.Kind == CrawlRuntimeEventKind.ResolutionProvenanceRecorded
             && e.Cell == after.Traversal.CurrentCell

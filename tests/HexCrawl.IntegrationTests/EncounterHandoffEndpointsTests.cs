@@ -124,7 +124,7 @@ public sealed class EncounterHandoffEndpointsTests
             Assert.Equal($"runtime:{occurrenceId:D}",
                 handoff.GetProperty("identity").GetProperty("encounterOccurrenceId").GetString());
             Assert.Equal("WanderingEncounter", handoff.GetProperty("encounter").GetProperty("outcome").GetString());
-            Assert.Equal(JsonValueKind.Null, handoff.GetProperty("worldContext").GetProperty("hex").ValueKind);
+            Assert.False(handoff.GetProperty("worldContext").TryGetProperty("hex", out _));
             Assert.Equal(startingCellText, handoff.GetProperty("worldContext").GetProperty("cell").GetRawText());
             Assert.Equal(worldId, handoff.GetProperty("worldContext").GetProperty("overworldId").GetGuid());
 
@@ -313,7 +313,7 @@ public sealed class EncounterHandoffEndpointsTests
 
             Assert.Equal($"journey-event:{eventId:D}", handoff.GetProperty("identity").GetProperty("encounterOccurrenceId").GetString());
             Assert.Equal(JsonValueKind.Null, handoff.GetProperty("worldContext").GetProperty("overworldId").ValueKind);
-            Assert.Equal(JsonValueKind.Null, handoff.GetProperty("worldContext").GetProperty("hex").ValueKind);
+            Assert.False(handoff.GetProperty("worldContext").TryGetProperty("hex", out _));
             Assert.Equal(JsonValueKind.Null, handoff.GetProperty("worldContext").GetProperty("location").ValueKind);
             Assert.Equal(JsonValueKind.Null, handoff.GetProperty("timeContext").GetProperty("watchNumber").ValueKind);
             Assert.Empty(handoff.GetProperty("resources").EnumerateArray());

@@ -27,8 +27,8 @@ public sealed class CrawlAssistantActionsTests
         Assert.Equal(profile.WatchLength, partial.ActiveWatch.TotalDuration);
         Assert.Equal(TimeSpan.FromHours(1.5), partial.ActiveWatch.Elapsed);
         Assert.Equal(profile.WatchLength - TimeSpan.FromHours(1.5), partial.ActiveWatch.Remaining);
-        Assert.Contains(partial.History, item => item.Kind == CrawlRuntimeEventKind.WatchStarted && item.Hex is null);
-        Assert.Contains(partial.History, item => item.Kind == CrawlRuntimeEventKind.WatchTimeAdvanced && item.Hex is null);
+        Assert.Contains(partial.History, item => item.Kind == CrawlRuntimeEventKind.WatchStarted && item.Cell is null);
+        Assert.Contains(partial.History, item => item.Kind == CrawlRuntimeEventKind.WatchTimeAdvanced && item.Cell is null);
         Assert.Contains(partial.History, item =>
             item.Kind == CrawlRuntimeEventKind.ResolutionProvenanceRecorded
             && item.Message.Contains("watch-assistant=ProcedureDefault", StringComparison.Ordinal));
@@ -47,7 +47,7 @@ public sealed class CrawlAssistantActionsTests
         Assert.Contains(completed.History, item =>
             item.Kind == CrawlRuntimeEventKind.WatchCompleted
             && item.WatchNumber == 1
-            && item.Hex is null);
+            && item.Cell is null);
     }
 
     [Fact]
@@ -90,7 +90,7 @@ public sealed class CrawlAssistantActionsTests
 
         Assert.Equal(TimeSpan.FromHours(1), result.ElapsedTime);
         Assert.NotNull(result.ActiveWatch);
-        Assert.All(result.History, item => Assert.Null(item.Hex));
+        Assert.All(result.History, item => Assert.Null(item.Cell));
         Assert.Contains(result.History, item =>
             item.Kind == CrawlRuntimeEventKind.DmOverrideApplied
             && item.Message.Contains("advance the clock", StringComparison.Ordinal));

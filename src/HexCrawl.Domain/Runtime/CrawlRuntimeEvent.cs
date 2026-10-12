@@ -51,7 +51,6 @@ public sealed record CrawlRuntimeEvent(
     int WatchNumber,
     CrawlRuntimeEventKind Kind,
     TimeSpan ExpeditionElapsedTime,
-    HexCoordinate? Hex,
     string Message,
     double? DistanceValue = null,
     string? DistanceUnit = null,

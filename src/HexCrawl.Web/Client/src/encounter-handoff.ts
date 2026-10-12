@@ -1,4 +1,3 @@
-import type { HexCoordinate } from "./types";
 
 export type EncounterHandoffCombatant = {
     name: string;
@@ -90,7 +89,6 @@ export type HexCrawlEncounterHandoffV2 = {
     };
     worldContext: {
         overworldId: string | null;
-        hex: HexCoordinate | null;
         location: { id: string; name: string; category: string } | null;
     };
     encounter: {

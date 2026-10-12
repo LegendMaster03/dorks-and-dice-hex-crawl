@@ -170,7 +170,7 @@ public sealed class Phase20MaplessCellHttpTests
             var geometry = await new HexCrawlService(restarted).ResolveCellGeometryAsync(saved, "alice");
             Assert.Null(geometry.World);
             state.Validate(geometry.Tiling);
-            Assert.All(state.History, item => Assert.Null(item.Hex));
+            Assert.All(state.History, item => Assert.NotNull(item.Cell));
         }
         finally
         {

@@ -505,7 +505,7 @@ public sealed partial class CrawlRuntimeEngine
         CellExpeditionState state, string message, double? distance = null,
         string? unit = null, Guid? encounterId = null)
     {
-        events.Add(watch, kind, state.ElapsedTravelTime, null, message,
+        events.Add(watch, kind, state.ElapsedTravelTime, message,
             distance, unit, encounterOccurrenceId: encounterId,
             cell: state.Traversal.CurrentCell);
     }
@@ -514,7 +514,7 @@ public sealed partial class CrawlRuntimeEngine
         EventCollector events, int watch, CrawlRuntimeEventKind kind,
         TimeSpan elapsed, WorldCellId cell, int interfaceIndex, int reciprocalIndex)
     {
-        events.Add(watch, kind, elapsed, null, $"Cell {cell} boundary crossed.",
+        events.Add(watch, kind, elapsed, $"Cell {cell} boundary crossed.",
             cell: cell, boundaryInterfaceIndex: interfaceIndex,
             reciprocalInterfaceIndex: reciprocalIndex);
     }

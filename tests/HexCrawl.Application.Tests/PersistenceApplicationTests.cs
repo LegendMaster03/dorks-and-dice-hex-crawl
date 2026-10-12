@@ -403,7 +403,7 @@ public sealed class PersistenceApplicationTests
         var cell = Assert.IsType<CellExpeditionState>(loaded.Runtime);
         Assert.Equal(2, cell.CompletedWatches);
         Assert.NotEmpty(cell.History);
-        Assert.All(cell.History, item => Assert.Null(item.Hex));
+        Assert.All(cell.History, item => Assert.NotNull(item.Cell));
         Assert.Equal(cell.History.Count, cell.History.Select(item => item.Sequence).Distinct().Count());
     }
 

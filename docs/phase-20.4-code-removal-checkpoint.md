@@ -4,11 +4,13 @@
 
 **Repository:** `LegendMaster03/dorks-and-dice-hex-crawl`  
 **Feature branch (unmerged, undeployed):** `feature/tile-crawl-phase-20.2-application-persistence`  
-**Last verified green automated head before the latest edits:** [`51f4e8b6`](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/commit/51f4e8b65a00978c23288dcd8cd4af68cfdb64c6), [CI 38290780871](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38290780871), **successful**. This is automated validation, **not** completion of the architectural deletion gate or rendered browser acceptance.
+**Last verified green automated head before the latest edits:** [`28820231`](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/commit/2882023188ac777a6ab004fd0b3dbda8db15ff07), [CI 38294385551](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38294385551), **successful**. This is automated validation, **not** completion of the architectural deletion gate or rendered browser acceptance.
 
 ## Deleted from the feature branch
 
-- The pending-encounter `HexCoordinate`/snapshot `Hex` field and its axial compatibility assertions. Encounter identity, provenance, elapsed time, location id and qualified cell remain intact; spatial watch validation still requires the encounter cell to equal the traversal cell. This deletion is awaiting fresh CI verification.
+- **Pending CI:** Removed the axial `Hex` property from `CrawlRuntimeEvent`, event collector, handoff world context and browser handoff type. All spatial event constructors use their existing qualified `Cell` identity, while nonspatial events have no cell. Converted integration/domain/application regressions to assert the retained cell and event behavior; historical handoff location snapshots, linked scenes, encounter metadata and journey handoff behavior remain covered.
+
+- The pending-encounter `HexCoordinate`/snapshot `Hex` field and its axial compatibility assertions. Encounter identity, provenance, elapsed time, location id and qualified cell remain intact; spatial watch validation still requires the encounter cell to equal the traversal cell. The deletion passed CI 38294385551 at `28820231`.
 
 - Obsolete `ExpeditionState`, `HexTraversalState`, `HexDirection`, axial watch inputs and watch lifecycle/movement/navigation implementation. Current spatial execution uses `CellExpeditionState`, `PeriodicCellTraversal` and realized boundaries; nonspatial sessions have their own state.
 - V1 movement-progress mechanic and runtime binder, `HexSteps` travel primitive, mechanic-version selection overload, compatibility branches, obsolete scalar procedure-resolution/assistant paths, axial knowledge progression and old wire `currentHex`/hex-progress fields.

@@ -479,7 +479,7 @@ public sealed class Phase18CellDecisionEndpointsTests
                 half, null, "Trail ambush", Manual);
             var triggered = new CrawlRuntimeEvent(
                 1, 1, CrawlRuntimeEventKind.EncounterTriggered, half,
-                null, "Trail ambush",
+                "Trail ambush",
                 EncounterOutcome: encounter.Kind,
                 EncounterOccurrenceId: id)
             { Cell = cell.Id };

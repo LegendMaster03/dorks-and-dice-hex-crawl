@@ -2,7 +2,7 @@
 
 **Owner directive, October 12, 2026:** There is one spatial implementation. Delete all prototype axial/hex-specific execution, authoring, rendering, contracts, compatibility selectors, fallbacks and obsolete tests. Hexagonal tilings and the three established spatial presets remain fully supported **as data** for the shared periodic-polygon framework. No V1/V2 runtime choice, production-compatibility shim or dual-authority path is permitted. Procedure/schema revision history is separate and remains legitimate.
 
-**Status: BLOCKED** for merge, development deployment and signed-in WorkChat acceptance. **Last verified green automated head before this deletion:** [`51f4e8b6`](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/commit/51f4e8b65a00978c23288dcd8cd4af68cfdb64c6), [CI 38290780871](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38290780871), success. Automated validation does **not** prove source elimination or rendered UI quality. No owner-approved database migration, merge or deployment has happened.
+**Status: BLOCKED** for merge, development deployment and signed-in WorkChat acceptance. **Last verified green automated head before this deletion:** [`28820231`](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/commit/2882023188ac777a6ab004fd0b3dbda8db15ff07), [CI 38294385551](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38294385551), success. Automated validation does **not** prove source elimination or rendered UI quality. No owner-approved database migration, merge or deployment has happened.
 
 ## Completed deletion categories
 
@@ -37,4 +37,6 @@ The obsolete axial spatial runtime classes, hex-progress mechanics, version-gate
 5. Phase 15 rendered, keyboard, responsive, Guided/Compact and signed-in behavior is reviewed with WorkChat **only after** the sole workflow is present and the user authorizes the testing.
 6. Owner authorizes merge and development cutover separately; do not infer it from green tests.
 
-**Pending-encounter contract deletion (October 12):** Removed the obsolete axial coordinate from pending encounter domain and snapshot records, construction sites, and dependent tests. Generalized spatial encounters remain identified by their qualified cell; nonspatial encounters remain cell-free. This is partial source cleanup; the runtime event axial field, mapless context and other blockers above are still present. New CI verification is required for this edit.
+**Pending-encounter contract deletion (October 12; verified green at `28820231`):** Removed the obsolete axial coordinate from pending encounter domain and snapshot records, construction sites, and dependent tests. Spatial encounters retain their qualified cell; nonspatial encounters remain cell-free.
+
+**Runtime event and handoff contract deletion (pending CI):** Removed axial `Hex` fields from runtime event serialization and encounter handoff world context, all associated constructors and stale event assertions. Qualified `WorldCellId` is the only spatial event/handoff identity; nonspatial events remain cell-free. The world model, mapless context, rendering and other blockers above remain open.

@@ -60,7 +60,7 @@ public sealed class Phase18CellExpeditionPersistenceTests
 
         var runtimeEvent = new CrawlRuntimeEvent(
             1, 1, CrawlRuntimeEventKind.DistanceTraveled,
-            TimeSpan.FromHours(1), null, "Partial generalized cell movement.",
+            TimeSpan.FromHours(1), "Partial generalized cell movement.",
             DistanceValue: quarter.Value, DistanceUnit: quarter.Unit.Symbol)
         { Cell = startingCell.Id };
         var active = new CellActiveWatchState(
@@ -129,7 +129,7 @@ public sealed class Phase18CellExpeditionPersistenceTests
         var nextSequence = loadedState.History[^1].Sequence + 1;
         var entered = new CrawlRuntimeEvent(
             nextSequence, 1, CrawlRuntimeEventKind.CellEntered,
-            TimeSpan.FromHours(3), null, "Entered cell through reciprocal interface.")
+            TimeSpan.FromHours(3), "Entered cell through reciprocal interface.")
         {
             Cell = second.Traversal.CurrentCell,
             BoundaryInterfaceIndex = crossing.ExitInterfaceIndex,
@@ -156,7 +156,6 @@ public sealed class Phase18CellExpeditionPersistenceTests
         Assert.Equal(crossing.EntryInterfaceIndex, verifiedState.Traversal.EntryInterfaceIndex);
         Assert.Equal(2, verifiedState.History.Count);
         Assert.Equal(crossing.To, verifiedState.History[1].Cell);
-        Assert.Null(verifiedState.History[1].Hex);
         Assert.Equal(state.PendingTravelBudgetCharge, verifiedState.PendingTravelBudgetCharge);
 
         // Simulate a course decision being deferred at a boundary and verify that
@@ -213,7 +212,7 @@ public sealed class Phase18CellExpeditionPersistenceTests
         var provenance = new ResolutionProvenance(ResolutionSource.DmOverride, "Explicit test encounter");
         var eventRecord = new CrawlRuntimeEvent(
             1, 1, CrawlRuntimeEventKind.EncounterTriggered,
-            TimeSpan.FromHours(1), null, "A pending custom encounter.",
+            TimeSpan.FromHours(1), "A pending custom encounter.",
             EncounterOutcome: EncounterOutcomeKind.ManualCustom,
             EncounterOccurrenceId: occurrenceId)
         { Cell = cell.Id };
@@ -350,7 +349,6 @@ public sealed class Phase18CellExpeditionPersistenceTests
         Assert.Null(moved.DistanceTraveled);
         Assert.Equal(1, moved.CompletedWatches);
         Assert.Equal(1, moved.History.Count(e => e.Kind == CrawlRuntimeEventKind.CellEntered));
-        Assert.DoesNotContain(moved.History, e => e.Hex is not null);
         Assert.True(saved.Version > initial.Version);
         Assert.Empty(saved.Knowledge!.KnownHexes);
         Assert.Equal(exit.To, Assert.Single(saved.Knowledge.KnownCells!));
@@ -366,7 +364,6 @@ public sealed class Phase18CellExpeditionPersistenceTests
         var manualEvent = Assert.Single(
             ((CellExpeditionState)discovered.Runtime).History,
             e => e.Kind == CrawlRuntimeEventKind.LocationDiscovered);
-        Assert.Null(manualEvent.Hex);
         Assert.Equal(exit.To, manualEvent.Cell);
         Assert.Equal(landmark.Id, manualEvent.SubjectId);
 

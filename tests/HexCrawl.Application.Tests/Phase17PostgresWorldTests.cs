@@ -110,7 +110,7 @@ public sealed class Phase17PostgresWorldTests
         var current = new HexCoordinate(-91, 47);
         var cell = world.SpatialTiling.Resolve(LegacyHexTilingCompatibility.ToAddress(current));
         var evt = new CrawlRuntimeEvent(1, 1, CrawlRuntimeEventKind.WatchStarted,
-            TimeSpan.Zero, null, "An event must survive.") { Cell = cell.Id };
+            TimeSpan.Zero, "An event must survive.") { Cell = cell.Id };
         var expedition = new StoredExpedition(
             "Resumable", new CellExpeditionState
             {
@@ -151,7 +151,6 @@ public sealed class Phase17PostgresWorldTests
         var savedEvent = Assert.Single(cells.History);
         Assert.Equal(evt.Message, savedEvent.Message);
         Assert.Equal(cell.Id, savedEvent.Cell);
-        Assert.Null(savedEvent.Hex);
         Assert.Equal(expedition.Id, savedExpedition.Id);
     }
 
