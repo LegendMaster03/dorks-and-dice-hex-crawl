@@ -13,7 +13,7 @@ public sealed class NativeGenericProcedureExecutionTests
     private const string Owner = "alice";
 
     [Fact]
-    public void NativeRuntimeExecutesModuleOverrideFromPinnedProcedure()
+    public void NativeCellRuntimeExecutesModuleOverrideFromPinnedProcedure()
     {
         var baseProcedure = CrawlProcedureCatalog.Resolve("simple-fixed-distance").MaterializeGeneric().Procedure;
         var sixHours = TimeSpan.FromHours(6).Ticks.ToString(CultureInfo.InvariantCulture);
@@ -25,19 +25,25 @@ public sealed class NativeGenericProcedureExecutionTests
                 null,
                 null,
                 new Dictionary<string, string> { ["durationTicks"] = sixHours })]);
-        var engine = new CrawlRuntimeEngine();
-
-        var result = engine.Advance(
-            Context(),
-            revised,
-            SpatialState(),
-            Plan(),
-            new WatchAdvanceInputs(TravelDistanceResolver.Fixed(Miles(2))));
+        var context = new AbstractHexCrawlSessionContext(
+            "Native cell override", HexOrientation.PointyTop, Context());
+        var start = AbstractCellSessionGeometry.CreateNewHexSession(
+            Guid.NewGuid(), context, new HexCoordinate(0, 0));
+        var heading = SpatialCourseSelection.FromLegacyHexDirection(
+            start.World, new HexCoordinate(0, 0), new HexDirection(0));
+        var source = new ResolutionProvenance(ResolutionSource.ManualRoll);
+        var result = new CrawlRuntimeEngine().AdvanceCellWatch(
+            start.World, revised, start.Expedition,
+            new CellWatchTravelPlan(
+                heading, false, true, TravelModeSelection.Normal, NavigationAidSelection.None),
+            new CellWatchAdvanceInputs(
+                ResolvedTravelAmount.Distance(Miles(2), Miles(2), source),
+                null, ResolvedEncounter.None));
 
         Assert.Equal(TimeSpan.FromHours(6), result.Expedition.ElapsedTravelTime);
         Assert.Equal(1, result.Expedition.CompletedWatches);
         Assert.Null(result.Expedition.ActiveWatch);
-        Assert.Equal(2, result.Expedition.DistanceTraveled.Value, 6);
+        Assert.Equal(2, result.Expedition.DistanceTraveled!.Value.Value, 6);
     }
 
     [Fact]

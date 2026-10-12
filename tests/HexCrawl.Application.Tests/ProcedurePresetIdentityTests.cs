@@ -93,7 +93,7 @@ public sealed class ProcedurePresetIdentityTests
         Assert.Equal(expected.Name, actual.Name);
         Assert.Equal(expected.Time, actual.Time);
         Assert.Equal(expected.Movement, actual.Movement);
-        Assert.Equal(expected.HexProgress, actual.HexProgress);
+        Assert.Equal(expected.TurnPolicy, actual.TurnPolicy);
         Assert.Equal(expected.Navigation, actual.Navigation);
         Assert.Equal(expected.Encounters, actual.Encounters);
         Assert.Equal(expected.ResolutionHelpers, actual.ResolutionHelpers);

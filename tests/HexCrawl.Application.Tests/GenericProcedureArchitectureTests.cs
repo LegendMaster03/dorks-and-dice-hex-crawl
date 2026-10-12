@@ -48,7 +48,7 @@ public sealed class GenericProcedureArchitectureTests
 
         Assert.Equal(originalRuntime.Time, renamedRuntime.Time);
         Assert.Equal(originalRuntime.Movement, renamedRuntime.Movement);
-        Assert.Equal(originalRuntime.HexProgress, renamedRuntime.HexProgress);
+        Assert.Equal(originalRuntime.TurnPolicy, renamedRuntime.TurnPolicy);
         Assert.Equal(originalRuntime.Navigation, renamedRuntime.Navigation);
         Assert.Equal(originalRuntime.Encounters, renamedRuntime.Encounters);
         Assert.Equal(originalRuntime.ResolutionHelpers, renamedRuntime.ResolutionHelpers);

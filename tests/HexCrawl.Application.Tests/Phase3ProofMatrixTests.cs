@@ -29,7 +29,7 @@ public sealed class Phase3ProofMatrixTests
     [
         GenericProcedureCatalog.TimeIntervalModule,
         GenericProcedureCatalog.MovementResolutionModule,
-        GenericProcedureCatalog.HexProgressModule,
+        GenericProcedureCatalog.SpatialTurnCostModule,
         GenericProcedureCatalog.NavigationModule,
         GenericProcedureCatalog.EncounterCadenceModule,
         GenericProcedureCatalog.ResolutionHelpersModule

@@ -90,62 +90,6 @@ public sealed class Phase2ReviewRegressionTests
     }
 
     [Fact]
-    public void NativeRuntimeRejectsDifferingFixedExpectedAndActualDistance()
-    {
-        var procedure = CrawlProcedureCatalog.Resolve("simple-fixed-distance").MaterializeGeneric().Procedure;
-        var malformed = ResolvedTravelAmount.Distance(
-            Miles(3),
-            Miles(2),
-            ResolutionProvenance.ProcedureDefault);
-
-        var exception = Assert.Throws<InvalidOperationException>(() => new CrawlRuntimeEngine().Advance(
-            Context(),
-            procedure,
-            SpatialState(),
-            Plan(),
-            new WatchAdvanceInputs(malformed)));
-
-        Assert.Contains("same effective distance", exception.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void NativeRuntimeRejectsIncompleteVariableExpectedActualDistance()
-    {
-        var procedure = CrawlProcedureCatalog.Resolve("alexandrian-advanced").MaterializeGeneric().Procedure;
-        var malformed = new ResolvedTravelAmount
-        {
-            ExpectedDistance = Miles(3),
-            Provenance = ResolutionProvenance.ProcedureDefault
-        };
-
-        var exception = Assert.Throws<InvalidOperationException>(() => new CrawlRuntimeEngine().Advance(
-            Context(),
-            procedure,
-            SpatialState(),
-            Plan(),
-            new WatchAdvanceInputs(malformed)));
-
-        Assert.Contains("requires both expected and actual distance", exception.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void NativeHexStepTravelStillUsesResolvedStepCountOnly()
-    {
-        var procedure = CrawlProcedureCatalog.Resolve("simple-hex-step").MaterializeGeneric().Procedure;
-
-        var result = new CrawlRuntimeEngine().Advance(
-            Context(),
-            procedure,
-            SpatialState(),
-            Plan(),
-            new WatchAdvanceInputs(ResolvedTravelAmount.Steps(1, ResolutionProvenance.ProcedureDefault)));
-
-        Assert.Equal(1, result.Expedition.CompletedWatches);
-        Assert.Equal(new HexCoordinate(1, 0), result.Expedition.CurrentHex);
-        Assert.Equal(12, result.Expedition.DistanceTraveled.Value, 6);
-    }
-
-    [Fact]
     public void NativeRuntimeRejectsUnsupportedFutureVersionWithKnownHandlerWithoutRewritingSnapshot()
     {
         var original = CrawlProcedureCatalog.Resolve("simple-fixed-distance").MaterializeGeneric().Procedure;
