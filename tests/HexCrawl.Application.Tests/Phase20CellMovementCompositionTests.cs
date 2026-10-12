@@ -50,11 +50,9 @@ public sealed class Phase20CellMovementCompositionTests
 
     private static StoredExpedition Session()
     {
-        var context = new AbstractHexCrawlSessionContext(
-            "Generalized movement test", HexOrientation.PointyTop,
-            new CrawlRuntimeContext(new DistanceMeasure(12, DistanceUnit.Miles)));
-        var started = AbstractCellSessionGeometry.CreateNewHexSession(
-            Guid.NewGuid(), context, new HexCoordinate(0, 0));
+        var started = MaplessSessionFixture.Start();
+        var context = new MaplessSpatialCrawlSessionContext(
+            "Generalized movement test", started.World);
         var pinned = CampaignProcedureMaterializer.MaterializeExecutableSpatial(
             CrawlProcedureCatalog.Resolve("simple-fixed-distance")).Procedure;
         var now = DateTimeOffset.UtcNow;
