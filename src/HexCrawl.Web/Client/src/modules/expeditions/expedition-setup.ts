@@ -89,6 +89,14 @@ export async function enhanceExpeditionSetup(
         input(form, "v").value = String(cell.address.translation.v);
     };
     if (!world.grid) root.addEventListener("hex-crawl:world-cell-selected", acceptMapCell);
+    const acceptMapHex = (event: Event): void => {
+        if (!world.grid) return;
+        const selected = (event as CustomEvent<{ q: number; r: number }>).detail;
+        if (!selected || !Number.isSafeInteger(selected.q) || !Number.isSafeInteger(selected.r)) return;
+        input(form, "q").value = String(selected.q);
+        input(form, "r").value = String(selected.r);
+    };
+    if (world.grid) root.addEventListener("hex-crawl:world-hex-selected", acceptMapHex);
     const presentation = select(form, "presentation");
     for (const policy of presentations) presentation.append(option(policy.key, policy.name));
     if (presentations.some(policy => policy.key === "exploration-map")) presentation.value = "exploration-map";
@@ -255,6 +263,7 @@ export async function enhanceExpeditionSetup(
     return () => {
         compatibilityGeneration++;
         root.removeEventListener("hex-crawl:world-cell-selected", acceptMapCell);
+        root.removeEventListener("hex-crawl:world-hex-selected", acceptMapHex);
         form.remove();
     };
 }

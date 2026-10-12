@@ -50,6 +50,16 @@ test("cell start rejects absent, ambiguous and foreign tiling selections", async
         /safe integers/);
 });
 
+test("world authoring map selections feed the single shared V2 cell-start form", () => {
+    const editor = file("modules","worlds","world-editor-view.ts");
+    const setup = file("modules","expeditions","expedition-setup.ts");
+    assert.match(editor, /new CustomEvent\("hex-crawl:world-hex-selected"/);
+    assert.match(editor, /new CustomEvent\("hex-crawl:world-cell-selected"/);
+    assert.match(setup, /root\.addEventListener\("hex-crawl:world-hex-selected", acceptMapHex\)/);
+    assert.match(setup, /root\.addEventListener\("hex-crawl:world-cell-selected", acceptMapCell\)/);
+    assert.match(setup, /root\.removeEventListener\("hex-crawl:world-hex-selected", acceptMapHex\)/);
+});
+
 test("active expedition start entry points use cell APIs and no retired V1 starts", () => {
     const home = file("modules","home","tool-home-view.ts");
     const editor = file("modules","worlds","world-editor-view.ts");

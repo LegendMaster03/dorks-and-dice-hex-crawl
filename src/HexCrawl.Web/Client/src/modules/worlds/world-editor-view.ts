@@ -849,6 +849,8 @@ export async function renderWorldEditor(
         cellRouteDraftLabel.textContent = "Draw a continuous line on the map; it may cross any number of cells.";
         persistSelectedCell(worldId, selectedCell);
         renderSelectedCell();
+        if (hex) root.dispatchEvent(
+            new CustomEvent("hex-crawl:world-hex-selected", { detail: hex }));
         if (hex) mapHint.textContent = `Selected Hex ${hex.q},${hex.r} for world authoring.`;
         else mapHint.textContent = "Select a map cell to author its contents.";
     });
