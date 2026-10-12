@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { regularHexCorners } from "../.test-dist/hex-math.js";
 import {
     adjacencyForCell,
     adjacencyForIntent,
@@ -9,11 +8,8 @@ import {
     screenRelativeAdjacencyLabel
 } from "../.test-dist/modules/expeditions/spatial-adjacency.js";
 import {
-    CURRENT_HEX_DS_SYMBOL,
-    currentRuntimeCellAdjacency,
     currentPeriodicCellAdjacency,
-    sameWorldCell,
-    sameHexCell
+    sameWorldCell
 } from "../.test-dist/modules/expeditions/current-cell-topology.js";
 
 test("current-cell presentation supports more adjacency interfaces than polygon sides", () => {
@@ -39,86 +35,6 @@ test("current-cell presentation supports more adjacency interfaces than polygon 
 test("screen-relative labels are derived from supplied adjacency geometry", () => {
     assert.equal(screenRelativeAdjacencyLabel({ x: 0.9, y: 0.5 }), "right boundary");
     assert.equal(screenRelativeAdjacencyLabel({ x: 0.8, y: 0.2 }), "upper-right boundary");
-});
-
-test("world-backed navigator geometry comes from the same authoritative cell corners as the map", () => {
-    const grid = {
-        id: "grid",
-        orientation: "FlatTop",
-        coordinateConvention: "AxialQr",
-        origin: { x: 13, y: -7 },
-        rotationDegrees: 0,
-        hexRadiusWorldUnits: 4,
-        neighborCenterDistance: { value: 6, unit: { kind: "Mile", symbol: "mi", metersPerUnit: 1609.344 } }
-    };
-    const current = currentRuntimeCellAdjacency({
-        currentCell: { q: 4, r: -2 },
-        tilingDsSymbol: CURRENT_HEX_DS_SYMBOL,
-        selectedDirection: 1,
-        worldGrid: grid,
-        abstractOrientation: null
-    });
-
-    assert.equal(current.adjacencies.length, 6);
-    assert.equal(current.selectedAdjacencyId, "adjacency-1");
-    for (const adjacency of current.adjacencies) {
-        const [start, end] = adjacency.boundarySegment;
-        const tangent = { x: end.x - start.x, y: end.y - start.y };
-        assert.ok(Math.abs(
-            tangent.x * adjacency.outwardVector.x
-            + tangent.y * adjacency.outwardVector.y) < 1e-12);
-        assert.ok(Math.abs(Math.hypot(
-            adjacency.outwardVector.x,
-            adjacency.outwardVector.y) - 1) < 1e-12);
-    }
-    const raw = regularHexCorners("FlatTop");
-    const rawWidth = Math.max(...raw.map(p => p.x)) - Math.min(...raw.map(p => p.x));
-    const rawHeight = Math.max(...raw.map(p => p.y)) - Math.min(...raw.map(p => p.y));
-    const shownWidth = Math.max(...current.boundary.map(p => p.x)) - Math.min(...current.boundary.map(p => p.x));
-    const shownHeight = Math.max(...current.boundary.map(p => p.y)) - Math.min(...current.boundary.map(p => p.y));
-    assert.ok(Math.abs(shownWidth / shownHeight - rawWidth / rawHeight) < 1e-12);
-    assert.ok(Math.abs(shownWidth / shownHeight - (2 / Math.sqrt(3))) < 1e-12);
-});
-
-test("mapless geometry is resolved before the navigator consumes it", () => {
-    const current = currentRuntimeCellAdjacency({
-        currentCell: { q: 0, r: 0 },
-        tilingDsSymbol: CURRENT_HEX_DS_SYMBOL,
-        selectedDirection: null,
-        worldGrid: null,
-        abstractOrientation: "PointyTop"
-    });
-    assert.equal(current.boundary.length, 6);
-    assert.equal(current.adjacencies.length, 6);
-    assert.ok(current.adjacencies.every(value => value.boundarySegment.length === 2));
-});
-
-test("hex-only adapter rejects other patterns without exposing technical notation", () => {
-    assert.throws(() => currentRuntimeCellAdjacency({
-        currentCell: { q: 0, r: 0 },
-        tilingDsSymbol: "<1:1,1,1:4,4>",
-        selectedDirection: null,
-        worldGrid: null,
-        abstractOrientation: "PointyTop"
-    }), error => {
-        assert.match(error.message, /Open a generalized cell expedition/);
-        assert.doesNotMatch(error.message, /<1:|tiling '\\w/);
-        return true;
-    });
-});
-
-test("map target and navigator intent resolve to the same adjacency interface", () => {
-    const current = currentRuntimeCellAdjacency({
-        currentCell: { q: 0, r: 0 },
-        tilingDsSymbol: CURRENT_HEX_DS_SYMBOL,
-        selectedDirection: null,
-        worldGrid: null,
-        abstractOrientation: "FlatTop"
-    });
-    const byIntent = adjacencyForIntent(current, 2);
-    assert.ok(byIntent);
-    const byCell = adjacencyForCell(current, byIntent.targetCell, sameHexCell);
-    assert.equal(byCell?.id, byIntent.id);
 });
 
 test("generalized adapter preserves actual atomic interface identity and polygon shape", () => {

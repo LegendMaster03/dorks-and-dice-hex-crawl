@@ -421,7 +421,9 @@ test("current-cell navigator stays orientation-neutral unless authoritative comp
         "utf8");
 
     assert.match(adjacency, /screenRelativeAdjacencyLabel/);
-    assert.match(topology, /hexCorners\(input\.worldGrid, input\.currentCell\)/);
+    assert.match(topology, /currentPeriodicCellAdjacency/);
+    assert.match(topology, /context\.interfaces\.map\(edge =>/);
+    assert.doesNotMatch(topology, /axialSteps|hexCorners|currentRuntimeCellAdjacency/);
     assert.doesNotMatch(adjacency + topology + navigator, /Northeast|Northwest|Southeast|Southwest/);
     assert.match(navigator, /Travel through \$\{candidate\.label\}/);
     assert.match(view, /return renderPeriodicExpeditionWorkbench/);
