@@ -4,9 +4,31 @@
 
 **Repository:** `LegendMaster03/dorks-and-dice-hex-crawl`  
 **Unmerged, undeployed feature branch:** `feature/tile-crawl-phase-20.2-application-persistence`  
-**Verified partial cleanup code head:** `cf05640d4212582daca7619dfd4bdb37ffa3c1f2`, [CI 38218781220](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38218781220) successful. The documentation commit will have a newer head and should be checked separately.  
+**Last green baseline:** `cc79753e25549d73e88677d423e8f9c8d05f9d41`, [CI 38219426704](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38219426704). **Last source-cleanup commit before documentation updates:** `bd7d6940ffc3ef57830b32cb6b42249670bb687e`; its CI and the final documentation-inclusive head are not yet verified. Verify latest branch ref and CI before further work.
 **Release gate:** `docs/phase-20.4-zero-prototype-gate.md`  
 **Authoritative plan:** `docs/tile-crawl-development-plan.md`
+
+## October 12 incremental cleanup and concrete remaining dependencies
+
+Source commits on this feature branch after the last green baseline:
+
+- `61644f7d`: delete obsolete V1 `HexEntered` / `HexExited` event kinds, explicitly preserving the numeric value of the next event kind to protect serialized histories.
+- `a229d0ed`: update qualified-cell boundary regression assertions accordingly.
+- `e02dea65`: delete unused `WatchAdvanceResult`, whose payload referenced the V1 `ExpeditionState` type.
+- `b5cc652c`, `bd7d6940`: remove the unreferenced axial `expedition-watch-ledger.ts` module and its tests. That module read legacy `event.hex.q/r`; the active V2 view maintains its own event history.
+
+**CI:** The previous successful check is [38219426704](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38219426704) at `cc79753e`; do not label cleanup commits green without checking [the latest branch runs](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions). No local .NET or browser acceptance run is claimed.
+
+Confirmed source coupling requiring coordinated edits:
+
+- `src/HexCrawl.Domain/Runtime/ExpeditionState.cs`, `HexTraversalState.cs`, `GenericProcedureRuntime.cs` (`ProcedureHexProgressRuntime`, mechanic-v1 handler), `CrawlSessionContext.cs` (`AbstractHexCrawlSessionContext`) and `CrawlRuntimeEvent.cs` (`HexCoordinate? Hex` event payload). Removing classes without replacing all consumers is unsafe.
+- `src/HexCrawl.Web/Modules/Expeditions/ExpeditionApiContracts.cs` still emits axial `CurrentHex`, `HexProgress`, direction and position placeholders for `CellExpeditionState` and `NonSpatialSessionState`; corresponding client union in `src/HexCrawl.Web/Client/src/types.ts` is V1-shaped.
+- `src/HexCrawl.Domain/World/OverworldDefinition.cs` still has fallback `Grid` plus axial environment scopes; `src/HexCrawl.Infrastructure/Persistence/Snapshots/PostgresHexCrawlStore.WorldSnapshots.cs` still reads versions 1/2 using that grid.
+- `src/HexCrawl.Domain/Runtime/AbstractCellSessionGeometry.cs`, `src/HexCrawl.Application/Expeditions/ExpeditionStartService.cs`, `src/HexCrawl.Application/Expeditions/HexCrawlService.CellExpeditions.cs`, and mapless `/api/expeditions/cells` still construct geometry using the legacy axial bridge.
+- `src/HexCrawl.Web/Client/src/modules/expeditions/expedition-view.ts` routes spatial sessions into V2 but retains approximately 2,500 lines of dormant spatial and live nonspatial/shared Phase 15 code; `expedition-watch-controller.ts` remains imported there. Extract nonspatial/shared functionality before deleting dormant branches; adjust legacy source tests without weakening V2 behavioral assertions.
+- Old frontend world-preview/source-map alignment code and `HexGridDefinition`/`HexCoordinate` utilities have not been removed; they remain outside the generalized persisted-tiling renderer.
+
+**Migration/deployment boundary:** schema 10→11 startup migration remains unexecuted on the real dev database and transactionally removes disposable V1 expeditions only. An additional verified one-time conversion of retained authored world JSON, environment scopes, map registrations, and asset references is required before eliminating all read-time grid conversion. Rehearse PostgreSQL plus filesystem asset backup/restore together. Run only with owner authorization. After verified cutover, remove temporary upgrade code from the application while keeping schema 11 and its V2-only constraint. Do not merge, deploy, or conduct signed-in acceptance until the zero-prototype gate is demonstrably passed.
 
 ## Verified implementation decisions
 
