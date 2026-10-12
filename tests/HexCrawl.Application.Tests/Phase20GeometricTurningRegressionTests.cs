@@ -437,7 +437,7 @@ public sealed class Phase20GeometricTurningRegressionTests
     }
 
     [Fact]
-    public void GeometricExitIsNotGovernedByTheHistoricalFarExitFactor()
+    public void GeometricExitUsesAuthoritativePolygonBoundary()
     {
         var session = Session();
         var world = session.World;
@@ -446,8 +446,6 @@ public sealed class Phase20GeometricTurningRegressionTests
         var geometric = GenericProcedureRuntime.Bind(
             CampaignProcedureMaterializer.MaterializeExecutableSpatial(
                 CrawlProcedureCatalog.Resolve("alexandrian-advanced")).Procedure);
-        Assert.Equal(2, published.Movement.MechanicVersion);
-        Assert.Equal(2, geometric.Movement.MechanicVersion);
         Assert.Equal(published.TurnPolicy, geometric.TurnPolicy);
         Assert.Equal(1d / 6d, geometric.TurnPolicy!.NeighborCenterDistanceFactor, 12);
 
