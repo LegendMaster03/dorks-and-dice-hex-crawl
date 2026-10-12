@@ -97,7 +97,12 @@ public sealed class ProcedureResolutionHelperEndpointsTests
             Assert.Equal(second.ExpeditionVersion,
                 afterSuppression.GetProperty("version").GetInt64());
 
-            using var valid = await PostAdvanceAsync(client, id,
+            // Consume through a newly created host: a server-issued grant
+            // must survive a process restart and still be checked against its
+            // persisted owner-scoped state rather than in-memory roll results.
+            using var restartedFactory = TestWebHost.Create(database);
+            using var restartedClient = restartedFactory.CreateClient();
+            using var valid = await PostAdvanceAsync(restartedClient, id,
                 Request(second, second.ExpeditionVersion, heading, second.GeneratedResolutionId));
             valid.EnsureSuccessStatusCode();
             var advanced = await valid.Content.ReadFromJsonAsync<JsonElement>();
@@ -114,7 +119,7 @@ public sealed class ProcedureResolutionHelperEndpointsTests
                     heading, second.GeneratedResolutionId));
             Assert.Equal(HttpStatusCode.BadRequest, reused.StatusCode);
 
-            var persisted = await client.GetFromJsonAsync<JsonElement>($"/api/expeditions/{id:D}");
+            var persisted = await restartedClient.GetFromJsonAsync<JsonElement>($"/api/expeditions/{id:D}");
             Assert.Equal(advanced.GetProperty("version").GetInt64(),
                 persisted.GetProperty("version").GetInt64());
         }
