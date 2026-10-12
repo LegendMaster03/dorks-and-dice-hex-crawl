@@ -15,7 +15,7 @@ import { openWorkspaceDrawer, statAction, textElement, type WorkspaceDrawer } fr
 import { renderPhase15NextAction } from "./phase15-next-action";
 import { nextCellExpeditionAction } from "./phase15-cell-action";
 import { resolveHexStartCell } from "./world-cell-start";
-import { polygonContainsSubject } from "./phase20-cell-ui-policy";
+import { polygonContainsSubject, uniquelyAdjacentInterface } from "./phase20-cell-ui-policy";
 import { discoveredSubjectIds } from "../../runtime-view";
 import { encounterLocationId } from "./keyed-location-encounter";
 import { mountPeriodicGameplayPanels } from "./periodic-gameplay-panels";
@@ -42,6 +42,7 @@ export async function renderPeriodicExpeditionWorkbench(
     let busy = false;
     let generated: CellProcedureResolutionHelperResult | null = null;
     let inspectedGeometry: WorldCellGeometry | null = null;
+    let inspectedTilingRevision: number | null = null;
 
     root.innerHTML = `
         <section class="hc-page hc-workspace hc-expedition hc-periodic-expedition hc-phase15-expedition">
@@ -64,7 +65,7 @@ export async function renderPeriodicExpeditionWorkbench(
                 <div class="hc-panel hc-map-panel" aria-label="Expedition map">
                     <h2 data-map-title>Expedition map</h2>
                     <div class="hc-map-frame"><div class="hc-map-host" data-map></div></div>
-                    <p class="hc-hint" data-inspection>Click a cell to inspect it. This does not change travel intent or move the party.</p>
+                    <p class="hc-hint" data-inspection>Click a uniquely adjacent cell to set travel intent; distant or ambiguous cells are inspection-only. Clicking never moves the party.</p>
                     <section class="hc-stack" data-cell-details aria-label="Selected cell and player knowledge"></section>
                 </div>
                 <aside class="hc-panel hc-sidebar hc-table-rail" aria-label="At the table">
@@ -303,9 +304,18 @@ export async function renderPeriodicExpeditionWorkbench(
     required<HTMLButtonElement>("[data-reload]").addEventListener("click", () => void refresh());
     const setInspectedGeometry = (geometry: WorldCellGeometry | null): void => {
         inspectedGeometry = geometry;
+        inspectedTilingRevision = geometry ? world?.tiling?.revision ?? null : null;
         map.renderer.selectedWorldCell = geometry;
+        const adjacent = geometry ? uniquelyAdjacentInterface(geometry.id, topology.interfaces) : null;
+        if (adjacent !== null && !busy) {
+            if (generated) invalidateGenerated();
+            selectHeading(adjacent);
+            render();
+        }
         text("[data-inspection]", geometry
-            ? `Selected cell at ${geometry.center.x.toFixed(2)}, ${geometry.center.y.toFixed(2)}. Inspection does not move the party.`
+            ? adjacent !== null
+                ? "Adjacent cell selected as travel intent. The party has not moved."
+                : `Selected cell at ${geometry.center.x.toFixed(2)}, ${geometry.center.y.toFixed(2)}. Inspection does not change travel intent.`
             : "Select a cell on the map to inspect its player knowledge and GM actions.");
         renderSelectedCellDetails();
         map.requestRender();
@@ -325,7 +335,8 @@ export async function renderPeriodicExpeditionWorkbench(
                     tilingId: current.tiling!.id, address
                 });
                 if (disposed || generation !== hexInspectionGeneration
-                    || world?.tiling?.id !== geometry.id.tilingId) return;
+                    || world?.tiling?.id !== geometry.id.tilingId
+                    || world?.tiling?.revision !== current.tiling?.revision) return;
                 setInspectedGeometry(geometry);
             } catch (cause) {
                 if (!disposed && generation === hexInspectionGeneration) showUiError(error, cause);
@@ -936,8 +947,12 @@ export async function renderPeriodicExpeditionWorkbench(
         map.renderer.expeditionPosition = { ...mapPoint };
         map.renderer.discoveredSubjectIds = discoveredSubjectIds(runtime);
         if (world?.grid) map.renderer.expeditionHex = null;
-        if (inspectedGeometry && inspectedGeometry.id.tilingId !== topology.currentCell.tilingId)
+        if (inspectedGeometry
+            && (inspectedGeometry.id.tilingId !== topology.currentCell.tilingId
+                || inspectedTilingRevision !== (world?.tiling?.revision ?? null))) {
             inspectedGeometry = null;
+            inspectedTilingRevision = null;
+        }
         map.renderer.selectedWorldCell = inspectedGeometry;
         renderSelectedCellDetails();
         map.requestRender();

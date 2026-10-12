@@ -1,4 +1,21 @@
-import type { WorldPoint } from "../../types.js";
+import type { WorldPoint, WorldCellId, CellInterface } from "../../types.js";
+
+/**
+ * Map picking may suggest an intent only when exactly one authoritative
+ * atomic interface reaches the selected cell. A distant cell or multiple
+ * interfaces reaching the same cell is not an unambiguous travel course.
+ */
+export function uniquelyAdjacentInterface(
+    target: WorldCellId,
+    interfaces: readonly Pick<CellInterface, "interfaceIndex" | "neighborCell">[]
+): number | null {
+    const matches = interfaces.filter(edge =>
+        edge.neighborCell.tilingId === target.tilingId
+        && edge.neighborCell.address.motifCellId === target.address.motifCellId
+        && edge.neighborCell.address.translation.u === target.address.translation.u
+        && edge.neighborCell.address.translation.v === target.address.translation.v);
+    return matches.length === 1 ? matches[0].interfaceIndex : null;
+}
 
 /**
  * Presentation-only containment for revealing authored point subjects in an

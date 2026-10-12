@@ -4,7 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { resolveHexStartCell } from "../.test-dist/modules/expeditions/world-cell-start.js";
 import { nextCellExpeditionAction } from "../.test-dist/modules/expeditions/phase15-cell-action.js";
-import { polygonContainsSubject } from "../.test-dist/modules/expeditions/phase20-cell-ui-policy.js";
+import { polygonContainsSubject, uniquelyAdjacentInterface } from "../.test-dist/modules/expeditions/phase20-cell-ui-policy.js";
 
 const file = (...segments) => fs.readFileSync(path.join("src", ...segments), "utf8");
 const world = {
@@ -20,6 +20,21 @@ const world = {
 const id = (tilingId = "tiling-1") => ({
     tilingId,
     address: { motifCellId: "accepted-hex-motif", translation: { u: 7, v: -4 } }
+});
+
+test("map click selects a travel course only for a uniquely adjacent qualified cell", () => {
+    const target = id();
+    assert.equal(uniquelyAdjacentInterface(target, []), null);
+    assert.equal(uniquelyAdjacentInterface(target, [{
+        interfaceIndex: 5, neighborCell: target
+    }]), 5);
+    assert.equal(uniquelyAdjacentInterface(target, [
+        { interfaceIndex: 0, neighborCell: target },
+        { interfaceIndex: 4, neighborCell: target }
+    ]), null);
+    assert.equal(uniquelyAdjacentInterface(target, [{
+        interfaceIndex: 4, neighborCell: id("foreign")
+    }]), null);
 });
 
 test("authored subjects are listed only inside the selected server cell polygon", () => {
@@ -127,6 +142,8 @@ test("V2 cell GM tools use server-qualified position and manual discovery, never
     assert.match(view, /api\.repositionCellExpedition\(runtime\.id/);
     assert.match(view, /api\.discover\(runtime\.id, runtime\.version/);
     assert.match(view, /polygonContainsSubject\(selected\.polygon/);
+    assert.match(view, /uniquelyAdjacentInterface\(geometry\.id, topology\.interfaces\)/);
+    assert.match(view, /selectHeading\(adjacent\)/);
     assert.match(view, /map\.renderer\.discoveredSubjectIds = discoveredSubjectIds\(runtime\)/);
     assert.match(api, /\/cells\/reposition/);
 });
