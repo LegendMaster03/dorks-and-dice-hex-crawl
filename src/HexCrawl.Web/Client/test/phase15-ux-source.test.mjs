@@ -841,10 +841,11 @@ test("Phase 15.1 explains domain-specific numeric grid settings at their point o
         assert.match(source, /Map scale/);
         assert.doesNotMatch(source, /Hex center distance/);
     }
-    assert.match(home, /center of one cell to the center of an adjacent cell/);
+    assert.match(home, /physical distance represented by one geometry unit/i);
     assert.match(worlds, /center of one adjacent cell to the next/);
     assert.match(editor, /They are not travel-distance settings/);
-    assert.match(assistant, /q\/r are axial cell coordinates/);
+    assert.match(assistant, /physical distance represented by one (realized )?geometry unit/i);
+    assert.doesNotMatch(assistant, /Start q|Start r|name="orientation"/);
 });
 
 
