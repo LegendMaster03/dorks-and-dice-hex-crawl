@@ -71,8 +71,3 @@ public sealed record CrawlRuntimeEvent(
     public int? ReciprocalInterfaceIndex { get; init; }
 }
 
-public sealed record WatchAdvanceResult(
-    ExpeditionState Expedition,
-    RuntimePauseReason? PauseReason,
-    TimeSpan RemainingWatchTime,
-    IReadOnlyList<CrawlRuntimeEvent> Events);
