@@ -23,8 +23,8 @@ test("application-owned DOM does not use MutationObserver", () => {
 test("unified expedition workspace only loads an Overworld when the session has one", () => {
     const source = read("modules/expeditions/expedition-view.ts");
     assert.match(source, /let world: Overworld \| null = runtime\.overworldId \? await api\.getOverworld\(runtime\.overworldId\) : null/);
-    assert.match(source, /if \(!host \|\| !world \|\| !runtime\.expedition\.isSpatial\) \{/);
-    assert.match(source, /map\?\.dispose\(\);\s*map = null;\s*return;/);
+    assert.match(source, /return renderPeriodicExpeditionWorkbench/);
+    assert.doesNotMatch(source, /new MapSurface|setHexSelectionHandler/);
     assert.doesNotMatch(source, /showMap/);
 });
 
@@ -256,7 +256,7 @@ test("triggered encounters expose a Block Initiative handoff without loading ano
     const assistant = read("modules/assistants/expedition-assistant-view.ts");
     const handoff = read("encounter-handoff.ts");
     assert.match(view, /Open in Block Initiative/);
-    assert.match(view, /runtime\.pauseReason === "EncounterTriggered"/);
+    assert.match(view, /runtime\.expedition\.pendingEncounter/);
     assert.match(view, /api\.createEncounterHandoff/);
     assert.match(view, /blockInitiativeHandoffHref/);
     assert.match(assistant, /Open in Block Initiative/);
@@ -269,7 +269,7 @@ test("spatial sessions use only the periodic-cell workbench while nonspatial ses
     const view = read("modules/expeditions/expedition-view.ts");
     const periodic = read("modules/expeditions/periodic-expedition-workbench.ts");
     assert.match(view, /return renderPeriodicExpeditionWorkbench/);
-    assert.match(view, /page\.append\(renderNonSpatialWorkspace\(\)\)/);
+    assert.match(view, /page\.append\(status, renderNonSpatialWorkspace\(\), renderGmTools\(\)\)/);
     assert.match(periodic, /hc-workspace-grid/);
     assert.match(periodic, /hc-panel hc-map-panel/);
     assert.doesNotMatch(view, /renderSpatialWorkspace|renderCurrentTravel|renderAdjacencyNavigator/);
