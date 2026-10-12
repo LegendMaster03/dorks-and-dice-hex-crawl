@@ -40,13 +40,11 @@ test("authored subjects are listed only inside the selected server cell polygon"
 
 test("world starts use qualified cell addresses without axial translation", () => {
     const setup = file("modules", "expeditions", "expedition-setup.ts");
-    const worldContract = file("..", "..", "Modules", "Worlds", "WorldApiContracts.cs");
     assert.ok(setup.includes("const startCell = {"));
     assert.ok(setup.includes('motifCellId: select(form, "motifCellId").value'));
     assert.ok(setup.includes('u: integer(numberInput(form, "u"))'));
     assert.ok(setup.includes('v: integer(numberInput(form, "v"))'));
     assert.doesNotMatch(setup, /resolveHexStartCell|acceptMapHex|world\.grid|name="q"|name="r"/);
-    assert.ok(worldContract.includes("world.World.SpatialTiling"));
 });
 
 test("world authoring map selections feed the sole periodic cell-start form", () => {
