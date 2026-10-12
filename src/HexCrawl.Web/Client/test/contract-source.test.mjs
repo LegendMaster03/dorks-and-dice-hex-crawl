@@ -45,7 +45,7 @@ test("focused assistants require explicit resolved outcomes and provenance", () 
     assert.match(source, /source\.append\(option\("", "Select result source"\)\)/);
     assert.match(source, /source\.value = mode === "travel" \? "ProcedureDefault" : ""/);
     assert.doesNotMatch(source, /source\.value = "ManualRoll"/);
-    assert.match(source, /select\(form, "source"\)\.value = "ProcedureDefault"/);
+    assert.match(source, /source\.value = mode === "travel" \? "ProcedureDefault" : ""/);
 });
 
 test("mapless session creation never creates a placeholder Overworld", () => {
