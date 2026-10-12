@@ -73,7 +73,7 @@ public sealed class ExpeditionWorkbenchEndpointsTests
             Assert.Equal(-2L, knownCell.GetProperty("address").GetProperty("translation").GetProperty("v").GetInt64());
             Assert.Equal(knownCell.GetRawText(),
                 started.GetProperty("expedition").GetProperty("currentCell").GetRawText());
-            Assert.Empty(started.GetProperty("knownHexes").EnumerateArray());
+            Assert.False(started.TryGetProperty("knownHexes", out _));
         }
         finally
         {

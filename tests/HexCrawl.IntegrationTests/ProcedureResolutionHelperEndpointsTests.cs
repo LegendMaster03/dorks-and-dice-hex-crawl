@@ -42,7 +42,7 @@ public sealed class ProcedureResolutionHelperEndpointsTests
             var audit = Assert.Single(recorded.GetProperty("history").EnumerateArray());
             Assert.Equal("ProcedureResolutionHelperGenerated", audit.GetProperty("kind").GetString());
             Assert.NotEqual(JsonValueKind.Null, audit.GetProperty("cell").ValueKind);
-            Assert.Equal(JsonValueKind.Null, audit.GetProperty("hex").ValueKind);
+            Assert.False(audit.TryGetProperty("hex", out _));
 
             using (var stale = await PostGenerateAsync(client, id, firstVersion))
                 Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
