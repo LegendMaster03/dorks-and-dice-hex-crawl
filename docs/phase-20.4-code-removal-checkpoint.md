@@ -4,13 +4,13 @@
 
 **Repository:** `LegendMaster03/dorks-and-dice-hex-crawl`  
 **Feature branch (unmerged, undeployed):** `feature/tile-crawl-phase-20.2-application-persistence`  
-**Last verified green automated head before the latest edits:** [`5907d314`](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/commit/5907d314d78ca151a931b230dc3547a4dac2d67c), [CI 38297955265](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38297955265), **successful**. This is automated validation, **not** completion of the architectural deletion gate or rendered browser acceptance.
+**Last verified green automated head before the latest edits:** [`32e75b52`](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/commit/32e75b52cde2b4ea59d9e9368c2d72553d06449e), [CI 38298608309](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38298608309), **successful**. This is automated validation, **not** completion of the architectural deletion gate or rendered browser acceptance.
 
 ## Deleted from the feature branch
 
 - **Pending CI:** Remove `FeatureIntersection.IntersectsHex`, `OverworldDefinition.FeaturesIntersecting(HexCoordinate)` and the no-longer-used six-neighbor/distance algorithms on the axial data record. Keep generalized polygon intersection and convert behavior tests to realized periodic geometry. The remaining `HexCoordinate` record is legacy persisted data only; actual data conversion is still unperformed.
 
-- **Verified CI 38297955265:** Delete the unused `KnownHexes` state collection from player knowledge and stale runtime visual fixture/test assertions. Generalized discovery, known-cell serialization and knowledge ownership remain intact; schema/procedure revision fields remain unchanged.
+- **Verified CI 38298608309:** Delete the unused `KnownHexes` state collection from player knowledge and stale runtime visual fixture/test assertions. Generalized discovery, known-cell serialization and knowledge ownership remain intact; schema/procedure revision fields remain unchanged.
 
 - **Verified CI 38297158435:** Delete unused axial map selection and highlighting in `map-surface.ts` and `canvas-renderer.ts`. Removed the dead `setHexSelectionHandler`, local `selectedHex` state and the world-to-axial click fallback. Retained exact periodic cell selection, pointer authoring, registered-map source previews, accessibility input and polygon highlighting. The old grid-preview drawing and registration model must still be generalized.
 
@@ -39,3 +39,5 @@
 The transactional, guarded schema 10→11 upgrade is **not executed against the real development database**. A separate, verified, data-preserving migration for authored worlds, scope annotations, map registrations and saved procedure revisions is required before removing all old readers. Disposable short-lived prototype expeditions may be deleted in the authorized cutover. Do not merge, deploy, run migrations against live development data or start WorkChat acceptance until the owner authorizes it **after** the sole generalized workflow and zero-prototype source gate are complete.
 
 The controlling checklist is [`phase-20.4-zero-prototype-gate.md`](phase-20.4-zero-prototype-gate.md). The development plan is [`tile-crawl-development-plan.md`](tile-crawl-development-plan.md).
+
+**October 12 geometry removal:** Axial-only feature intersection, axial world feature lookup, and fixed six-neighbor/distance algorithms were removed; CI 38298608309 passed at `32e75b52`. Follow-up deletion of `HexId` converters and axial point-to-cell geometry is pending CI. This does not authorize migration, deployment, or WorkChat testing.

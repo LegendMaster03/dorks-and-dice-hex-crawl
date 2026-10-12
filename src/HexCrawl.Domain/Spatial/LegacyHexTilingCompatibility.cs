@@ -38,12 +38,6 @@ public static class LegacyHexTilingCompatibility
         return new HexCoordinate((int)address.Translation.U, (int)address.Translation.V);
     }
 
-    public static WorldCellId ToCellId(HexId hex) =>
-        new(hex.GridId, ToAddress(hex.Coordinate));
-
-    public static HexId ToHexId(WorldCellId cell) =>
-        new(cell.TilingId, ToHex(cell.Address));
-
     /// <summary>Legacy grid is a verified compatibility projection, never a second editable authority.</summary>
     public static bool Matches(PeriodicWorldTiling authoritative, HexGridDefinition grid)
     {

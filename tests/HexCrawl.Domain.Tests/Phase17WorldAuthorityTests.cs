@@ -35,9 +35,6 @@ public sealed class Phase17WorldAuthorityTests
         {
             var address = LegacyHexTilingCompatibility.ToAddress(coordinate);
             Assert.Equal(coordinate, LegacyHexTilingCompatibility.ToHex(address));
-            Assert.Equal(new HexId(grid.Id, coordinate),
-                LegacyHexTilingCompatibility.ToHexId(
-                    LegacyHexTilingCompatibility.ToCellId(new HexId(grid.Id, coordinate))));
             var original = HexGeometry.Corners(grid, coordinate);
             var resolved = tiling.Resolve(address);
             Assert.Equal(6, resolved.Polygon.Count);

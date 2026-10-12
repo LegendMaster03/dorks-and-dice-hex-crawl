@@ -71,7 +71,8 @@ public sealed class Phase18EnvironmentContextTests
             HexRadiusWorldUnits = 1,
             NeighborCenterDistance = new DistanceMeasure(6, DistanceUnit.Miles)
         };
-        var cell = LegacyHexTilingCompatibility.ToCellId(new HexId(grid.Id, new HexCoordinate(0, 0)));
+        var cell = new WorldCellId(grid.Id,
+            new PeriodicCellAddress(LegacyHexTilingCompatibility.MotifId, new LatticeDisplacement(0, 0)));
         var world = new OverworldDefinition
         {
             Id = Guid.NewGuid(), Name = "Legacy cell annotations", Grid = grid,

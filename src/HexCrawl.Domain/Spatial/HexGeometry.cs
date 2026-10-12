@@ -23,27 +23,6 @@ public static class HexGeometry
         return Rotate(local, grid.RotationDegrees) + grid.Origin;
     }
 
-    public static HexCoordinate WorldToHex(HexGridDefinition grid, WorldPoint point)
-    {
-        grid.Validate();
-        var translated = point - grid.Origin;
-        var local = Rotate(translated, -grid.RotationDegrees);
-        var radius = grid.HexRadiusWorldUnits;
-
-        var (q, r) = grid.Orientation switch
-        {
-            HexOrientation.PointyTop => (
-                ((Sqrt3 / 3d) * local.X - (1d / 3d) * local.Y) / radius,
-                ((2d / 3d) * local.Y) / radius),
-            HexOrientation.FlatTop => (
-                ((2d / 3d) * local.X) / radius,
-                (-(1d / 3d) * local.X + (Sqrt3 / 3d) * local.Y) / radius),
-            _ => throw new ArgumentOutOfRangeException(nameof(grid.Orientation))
-        };
-
-        return CubeRound(q, r);
-    }
-
     public static IReadOnlyList<WorldPoint> Corners(HexGridDefinition grid, HexCoordinate hex)
     {
         var center = HexToWorld(grid, hex);
@@ -59,29 +38,6 @@ public static class HexGeometry
         }
 
         return corners;
-    }
-
-    private static HexCoordinate CubeRound(double q, double r)
-    {
-        var s = -q - r;
-        var rq = Math.Round(q);
-        var rr = Math.Round(r);
-        var rs = Math.Round(s);
-
-        var qDiff = Math.Abs(rq - q);
-        var rDiff = Math.Abs(rr - r);
-        var sDiff = Math.Abs(rs - s);
-
-        if (qDiff > rDiff && qDiff > sDiff)
-        {
-            rq = -rr - rs;
-        }
-        else if (rDiff > sDiff)
-        {
-            rr = -rq - rs;
-        }
-
-        return new HexCoordinate((int)rq, (int)rr);
     }
 
     private static WorldPoint Rotate(WorldPoint point, double degrees)

@@ -17,6 +17,14 @@ public sealed class DistanceMeasureTests
     }
 
     [Fact]
+    public void DistanceMeasureConvertsKnownPhysicalUnits()
+    {
+        var miles = new DistanceMeasure(1, DistanceUnit.Miles);
+        var kilometers = miles.ConvertTo(DistanceUnit.Kilometers);
+        Assert.Equal(1.609344, kilometers.Value, 6);
+    }
+
+    [Fact]
     public void CustomDistanceUnitAllowsUnknownPhysicalConversion()
     {
         var unit = DistanceUnit.Custom("hex");

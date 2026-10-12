@@ -40,7 +40,3 @@ public sealed record HexGridDefinition
     }
 }
 
-public readonly record struct HexId(Guid GridId, HexCoordinate Coordinate)
-{
-    public override string ToString() => $"{GridId:N}:{Coordinate.Q}:{Coordinate.R}";
-}
