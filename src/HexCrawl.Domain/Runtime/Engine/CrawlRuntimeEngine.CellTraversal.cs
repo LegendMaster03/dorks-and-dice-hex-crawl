@@ -47,7 +47,7 @@ public sealed partial class CrawlRuntimeEngine
         switch (policy.TravelResolution)
         {
             case TravelResolutionMode.ContinuousDistance:
-                ValidateNativeTravelAmountPolicy(policy, travel);
+                ValidateCellDistanceTravelPolicy(policy, travel);
                 return PeriodicTraversalExecution.AdvanceDistance(
                     world, traversal, travel.ActualDistance!.Value, continueAcrossBoundaries);
 

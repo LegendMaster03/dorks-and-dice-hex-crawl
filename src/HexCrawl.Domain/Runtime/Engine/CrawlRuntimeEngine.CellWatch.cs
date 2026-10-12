@@ -487,7 +487,7 @@ public sealed partial class CrawlRuntimeEngine
         }
         else
         {
-            ValidateNativeTravelAmountPolicy(policy, travel);
+            ValidateCellDistanceTravelPolicy(policy, travel);
             if (travel.ExpectedDistance!.Value.Value < 0 || travel.ActualDistance!.Value.Value < 0)
                 throw new InvalidOperationException("Travel distances must not be negative.");
         }
