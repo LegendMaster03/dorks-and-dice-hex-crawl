@@ -355,11 +355,7 @@ export async function renderExpedition(
         status.append(stats);
         page.append(status);
 
-        if (runtime.expedition.isSpatial) {
-            page.append(renderSpatialWorkspace());
-        } else {
-            page.append(renderNonSpatialWorkspace());
-        }
+        page.append(renderNonSpatialWorkspace());
 
         page.append(renderGmTools());
         root.replaceChildren(page);
@@ -502,56 +498,6 @@ export async function renderExpedition(
             () => activateAction(action.kind),
             renderGuidedActionGuide(action),
             guidedActionExplanation(action.kind));
-
-    const renderSpatialWorkspace = (): HTMLElement => {
-        const section = document.createElement("section");
-        section.className = world ? "hc-workspace-grid" : "hc-nonspatial-primary";
-
-        const primary = document.createElement("div");
-        primary.className = "hc-panel hc-map-panel";
-        primary.append(textElement("h2", world ? "Expedition map" : "Mapless exploration"));
-        if (!world) primary.append(renderCurrentTravel());
-        if (world) {
-            const frame = document.createElement("div");
-            frame.className = "hc-map-frame";
-            const host = document.createElement("div");
-            host.className = "hc-map-host";
-            host.dataset.map = "";
-            const context = document.createElement("div");
-            context.dataset.mapContext = "";
-            context.className = "hc-map-context-overlay";
-            context.hidden = true;
-            frame.append(host, renderAdjacencyNavigator(), context);
-            primary.append(frame);
-        } else {
-            primary.append(textElement("p", "There is no authored map. Spatial positions are still tracked; choose an adjacent destination with the travel-direction control below.", "hc-muted"));
-        }
-
-        const secondary = document.createElement("aside");
-        secondary.className = "hc-panel hc-sidebar hc-table-rail";
-        secondary.append(textElement("h2", "At the table"));
-        if (world) secondary.append(renderCurrentTravel());
-
-        const partyContext = partyRailContext(runtime);
-        if (partyContext) {
-            secondary.append(railAction(partyContext.title, partyContext.detail, openPartyWorkspace));
-        }
-        const environmentContext = environmentRailDetail(survival);
-        if (environmentContext) {
-            secondary.append(railAction("Current cell", environmentContext, openEnvironmentWorkspace));
-        }
-        if (journeyRailUseful(journey)) {
-            secondary.append(railAction("Journey / challenge", journeyDetail(journey), openJourneyWorkspace));
-        }
-        if (survivalRailUseful(survival) || effectsUseful(effects)) {
-            secondary.append(railAction("Resources & effects", resourcesEffectsDetail(survival, effects), openSurvivalWorkspace));
-        }
-        if (encounterScheduleAvailable(runtime)) {
-            secondary.append(railAction("Encounter schedule", encounterScheduleSummary(runtime), openEncounterWorkspace));
-        }
-        section.append(primary, secondary);
-        return section;
-    };
 
     const renderNonSpatialWorkspace = (): HTMLElement => {
         const section = document.createElement("section");
@@ -822,103 +768,6 @@ export async function renderExpedition(
         if (nextDetail) nextDetail.textContent = copy.detail;
         const nextButton = root.querySelector<HTMLButtonElement>("[data-current-action-button]");
         if (nextButton) nextButton.textContent = copy.label;
-    };
-
-    const renderAdjacencyNavigator = (): HTMLElement => {
-        const adjacency = currentAdjacency();
-        const action = expeditionWorkspacePresentation(runtime, journey, survival).action;
-        return renderCurrentCellNavigator(adjacency, {
-            selectable: action.kind === "travel" || action.kind === "navigation",
-            actualIntent: runtime.expedition.actualDirection,
-            onToggle: selected => toggleTravelIntent(selected.intentValue)
-        });
-    };
-
-    const renderCurrentTravel = (): HTMLElement => {
-        const adjacency = currentAdjacency();
-        const section = document.createElement("section");
-        section.className = "hc-current-travel";
-        section.dataset.currentTravel = "";
-        section.append(textElement("h3", "Current travel"));
-
-        if (!adjacency) {
-            section.append(textElement("p", "Current-cell adjacency is unavailable.", "hc-muted"));
-            return section;
-        }
-
-        const facts = document.createElement("dl");
-        facts.className = "hc-current-travel-facts";
-        facts.append(
-            travelFact("Travel direction", currentCourseLabel(preferences, adjacency), "currentTravelCourse"),
-            travelFact("Pace", humanize(preferences.pace), "currentTravelPace"),
-            travelFact("Actual", actualCourseLabel(runtime, adjacency), "currentTravelActual"),
-            travelFact("Progress", travelProgressDetail(runtime), "currentTravelProgress"));
-        section.append(facts);
-
-        if (!world) {
-            const course = document.createElement("select");
-            course.dataset.adjacencySelect = "";
-            course.setAttribute("aria-label", "Intended adjacent cell");
-            const empty = document.createElement("option");
-            empty.value = "";
-            empty.textContent = "Choose adjacent cell";
-            course.append(empty);
-            for (const edge of adjacency.adjacencies) {
-                const option = document.createElement("option");
-                option.value = String(edge.intentValue);
-                option.textContent = edgeCourseLabel(edge);
-                course.append(option);
-            }
-            course.value = preferences.direction === null ? "" : String(preferences.direction);
-            course.addEventListener("change", () => {
-                if (!course.value) {
-                    clearTravelIntent();
-                    return;
-                }
-                const edge = adjacencyForIntent(adjacency, Number(course.value));
-                if (edge) selectTravelIntent(edge.intentValue);
-            });
-            section.append(labelled("Travel direction", course));
-        }
-
-        const summary = textElement("p", travelIntentSummary(runtime, preferences, adjacency), "hc-muted");
-        summary.dataset.travelIntentSummary = "";
-        section.append(summary);
-
-        const pace = createPaceControl();
-        let paceEditor: HTMLDivElement | null = null;
-        if (pace) {
-            const editablePace = pace;
-            paceEditor = document.createElement("div");
-            paceEditor.className = "hc-current-travel-pace-editor";
-            paceEditor.hidden = true;
-            const savePace = button("Save pace", () => {
-                preferences.pace = editablePace.value;
-                saveTravelPreferences(runtime.id, preferences);
-                paceEditor!.hidden = true;
-                syncTravelIntentControls();
-            });
-            paceEditor.append(labelled("Pace / travel mode", editablePace), savePace);
-            section.append(paceEditor);
-        }
-
-        if (runtime.procedure.runtime !== null) {
-            const actions = document.createElement("div");
-            actions.className = "hc-button-row hc-current-travel-actions";
-            if (paceEditor && pace) {
-                const editablePace = pace;
-                const changePace = button("Change pace", () => {
-                    paceEditor!.hidden = !paceEditor!.hidden;
-                    if (!paceEditor!.hidden) editablePace.focus();
-                });
-                actions.append(changePace);
-            }
-            const more = button("More options", () => openTravelWorkspace("advanced"));
-            more.className = "hc-secondary-action";
-            actions.append(more);
-            section.append(actions);
-        }
-        return section;
     };
 
     const renderGmTools = (): HTMLElement => {
