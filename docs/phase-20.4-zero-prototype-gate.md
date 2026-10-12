@@ -10,7 +10,8 @@
 - Persisted map grids now render and pick from `PeriodicWorldTiling` server polygon records regardless of the world's legacy grid projection. The old hex preview/registration authoring path still exists and must be replaced.
 - Converted the three existing spatial preset recipes to native mechanic-version-2 cell/distance modules and generic turn-cost modules. Deleted `GeometricNativeProcedureMaterializer.cs`; the generic campaign procedure materializer now accepts any executable version-2 spatial preset data without translating a V1 recipe. The existing preset keys remain **data identifiers**.
 - Removed the obsolete world-start and abstract-hex-state constructors from `ExpeditionStartService`. Nonspatial creation uses `StartNonSpatialAsync`, with the original cell starts remaining separate. Tests that required the V1-only preset materializer or V1 spatial advance were removed or rewritten against V2.
-- Regression verification is in progress on branch `feature/tile-crawl-phase-20.2-application-persistence`; **a passing commit of this partial migration must never be called zero-prototype acceptance.** The owner has not authorized a deploy or merge.
+- Removed redundant V1 application session and context services and old movement/navigation/watch lifecycle engine files. Rewrote the focused browser assistant to retain only nonspatial interval/encounter work and route all spatial sessions into the V2 cell view; removed its V1 hex-steps/direction/forms. [CI 38218781220](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38218781220) passed at code commit `cf05640d`.
+- **The release gate is still blocked**: both V1 runtime state classes, the original browser expedition and watch controller, axial world/authoring, mapless start context, and legacy wire responses still remain. Passing CI on this partial migration is not zero-prototype acceptance. No deploy or merge is authorized.
 
 ## Mandatory removal inventory
 
