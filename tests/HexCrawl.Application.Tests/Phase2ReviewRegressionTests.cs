@@ -177,21 +177,6 @@ public sealed class Phase2ReviewRegressionTests
             module.Module.Key == GenericProcedureCatalog.MovementResolutionModule).Mechanic.ExecutionHandler);
     }
 
-    private static AdvanceExpeditionWorkbenchCommand VariableWorkbenchAdvance(
-        long version,
-        double expected,
-        double actual) => new()
-    {
-        ExpectedVersion = version,
-        IntendedDirection = 0,
-        ExpectedDistance = expected,
-        ActualDistance = actual,
-        NavigationOutcome = NavigationCheckOutcome.Succeeded,
-        EncounterOutcome = EncounterOutcomeKind.None,
-        ContinueAcrossBoundaries = true,
-        ResolutionSource = ResolutionSource.ManualRoll
-    };
-
     private static async Task<PostgresHexCrawlStore> StoreAsync(string connectionString)
     {
         var store = new PostgresHexCrawlStore(connectionString);

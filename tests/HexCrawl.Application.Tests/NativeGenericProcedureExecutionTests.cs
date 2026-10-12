@@ -234,15 +234,6 @@ public sealed class NativeGenericProcedureExecutionTests
         false,
         true);
 
-    private static AdvanceExpeditionWorkbenchCommand FixedAdvance(long version, double distance) => new()
-    {
-        ExpectedVersion = version,
-        IntendedDirection = 0,
-        EffectiveDistance = distance,
-        ContinueAcrossBoundaries = true,
-        TravelResolutionSource = ResolutionSource.ProcedureDefault
-    };
-
     private static DistanceMeasure Miles(double value) => new(value, DistanceUnit.Miles);
 
     private static CreateOverworldCommand WorldCommand() => new(
