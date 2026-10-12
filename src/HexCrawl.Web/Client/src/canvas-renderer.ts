@@ -1,7 +1,6 @@
 import { sourceMapAssetUrl } from "./api";
-import { hexCorners, hexToWorld, visibleHexBounds } from "./hex-math";
 import { RasterImageCache } from "./raster-image-cache";
-import type { DemoWorld, GridDefinition, MapRegistrationTransform, SpatialFeature, WorldPoint, WorldCellGeometry } from "./types";
+import type { DemoWorld, MapRegistrationTransform, SpatialFeature, WorldPoint, WorldCellGeometry } from "./types";
 
 export type MapReviewGeometry = {
     id: string;
@@ -24,7 +23,6 @@ export class CanvasMapRenderer {
     public discoveredSubjectIds = new Set<string>();
     public hiddenSourceMapIds = new Set<string>();
     public registrationPreview: { sourceMapId: string; transform: MapRegistrationTransform } | null = null;
-    public gridPreview: GridDefinition | null = null;
     public reviewOverlay: MapReviewOverlay | null = null;
     private readonly rasterCache = new RasterImageCache();
     private readonly provisionalSourceMapTransforms = new Map<string, MapRegistrationTransform>();
@@ -231,54 +229,22 @@ export class CanvasMapRenderer {
     }
 
     private drawGrid(ctx: CanvasRenderingContext2D, world: DemoWorld, width: number, height: number): void {
-        if (!this.gridPreview && world.tiling) {
-            ctx.save();
-            ctx.strokeStyle = "rgba(52, 67, 55, .38)";
-            ctx.lineWidth = 1;
-            for (const cell of this.visibleWorldCells) {
-                // The polygons and qualified identities were enumerated by the
-                // server's bounded PeriodicWorldTiling.Intersecting operation.
-                if (cell.polygon.length < 3) continue;
-                const vertices = cell.polygon.map(point => this.toScreen(point, width, height));
-                ctx.beginPath();
-                vertices.forEach((point, index) =>
-                    index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
-                ctx.closePath();
-                ctx.stroke();
-            }
-            ctx.restore();
-            return;
+        if (!world.tiling) return;
+        ctx.save();
+        ctx.strokeStyle = "rgba(52, 67, 55, .38)";
+        ctx.lineWidth = 1;
+        for (const cell of this.visibleWorldCells) {
+            // Render only authoritative bounded polygon geometry. No inferred
+            // coordinates or shape-specific prototype rendering is involved.
+            if (cell.id.tilingId !== world.tiling.id || cell.polygon.length < 3) continue;
+            const vertices = cell.polygon.map(point => this.toScreen(point, width, height));
+            ctx.beginPath();
+            vertices.forEach((point, index) =>
+                index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
+            ctx.closePath();
+            ctx.stroke();
         }
-        const grid = this.gridPreview ?? world.grid;
-        if (!grid) return;
-        const corners = [
-            this.viewport.screenToWorld(0, 0, width, height),
-            this.viewport.screenToWorld(width, 0, width, height),
-            this.viewport.screenToWorld(width, height, width, height),
-            this.viewport.screenToWorld(0, height, width, height)
-        ];
-        const bounds = visibleHexBounds(grid, corners);
-        ctx.strokeStyle = this.gridPreview ? "rgba(139, 76, 20, .70)" : "rgba(52, 67, 55, .38)";
-        ctx.lineWidth = this.gridPreview ? 1.5 : 1;
-        ctx.font = "11px ui-monospace, SFMono-Regular, Menlo, monospace";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillStyle = this.gridPreview ? "rgba(112, 58, 14, .82)" : "rgba(35, 49, 39, .72)";
-
-        for (let q = bounds.minQ; q <= bounds.maxQ; q++) {
-            for (let r = bounds.minR; r <= bounds.maxR; r++) {
-                const hex = { q, r };
-                const screenCorners = hexCorners(grid, hex).map(point => this.toScreen(point, width, height));
-                ctx.beginPath();
-                screenCorners.forEach((point, index) => index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
-                ctx.closePath();
-                ctx.stroke();
-                if (this.viewport.zoom >= 38) {
-                    const center = this.toScreen(hexToWorld(grid, hex), width, height);
-                    ctx.fillText(`${q},${r}`, center.x, center.y);
-                }
-            }
-        }
+        ctx.restore();
     }
 
     private drawRegions(ctx: CanvasRenderingContext2D, world: DemoWorld, width: number, height: number): void {

@@ -7,8 +7,7 @@ import type {
 } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
 import { input, required, select } from "../../ui/dom";
-import { SourceMapGridAlignmentController } from "./source-map-grid-alignment-controller";
-import { SourceMapRegistrationController } from "./source-map-registration-controller";
+ import { SourceMapRegistrationController } from "./source-map-registration-controller";
 import { WonderdraftImportController } from "./wonderdraft-import-controller";
 
 const newGeographyValue = "__new_geography__";
@@ -17,7 +16,6 @@ type CoordinatedRasterView = "manual" | "gm-grid" | "gm-gridless" | "player-grid
 export class SourceMapWorkspace {
     private details: SourceMapDetail[] = [];
     private selected: SourceMapDetail | null = null;
-    private readonly gridAlignmentController: SourceMapGridAlignmentController;
     private readonly registrationController: SourceMapRegistrationController;
     private readonly wonderdraftController: WonderdraftImportController;
     private readonly list: HTMLElement;
@@ -31,7 +29,6 @@ export class SourceMapWorkspace {
     private readonly rasterViewStatus: HTMLElement;
     private coordinatedRasterView: CoordinatedRasterView = "manual";
     private manualHiddenSourceMapIds: Set<string> | null = null;
-    private gridAlignmentBusy = false;
     private compatibilityGeneration = 0;
     private disposed = false;
 
@@ -90,7 +87,6 @@ export class SourceMapWorkspace {
                 <label><input name="bakedGrid" type="checkbox"> Image includes visible tile boundaries</label>
                 <div class="hc-button-row">
                     <button type="submit" class="hc-primary-action">Save metadata</button>
-                    <button type="button" data-align-grid>Detect / repair hex grid</button>
                     <button type="button" data-check-pattern title="Read-only experimental image comparison">Check cell pattern</button>
                     <button type="button" data-register>Manual placement</button>
                     <button type="button" class="hc-danger-action" data-delete>Delete reference map</button>
@@ -141,12 +137,6 @@ export class SourceMapWorkspace {
             this.errorHost,
             action => { void this.run(null, action); },
             async () => { await this.refresh(); });
-        this.gridAlignmentController = new SourceMapGridAlignmentController(
-            this.api,
-            this.map,
-            this.getWorld,
-            this.applyWorld,
-            async () => { await this.refresh(); });
         this.wonderdraftController = new WonderdraftImportController(
             this.host,
             this.api,
@@ -169,12 +159,8 @@ export class SourceMapWorkspace {
         required<HTMLButtonElement>(this.host, "[data-check-pattern]")
             .addEventListener("click", () =>
                 void this.run(null, () => this.assessPattern(this.selected)));
-        const selectedAlignButton = required<HTMLButtonElement>(this.host, "[data-align-grid]");
-        selectedAlignButton.addEventListener("click", () =>
-            void this.run(null, () => this.detectGrid(this.selected, selectedAlignButton)));
         required<HTMLButtonElement>(this.host, "[data-register]").addEventListener("click", () => {
-            if (!this.selected || this.gridAlignmentBusy) return;
-            this.gridAlignmentController.cancelActive();
+            if (!this.selected) return;
             this.ensureVisibleForEditing(this.selected);
             this.registrationController.begin(this.selected);
         });
@@ -197,12 +183,10 @@ export class SourceMapWorkspace {
         this.renderList();
         this.renderSelected();
         this.applyCoordinatedRasterView();
-        this.setGridAlignmentBusy(this.gridAlignmentBusy);
     }
 
     public dispose(): void {
         this.disposed = true;
-        this.gridAlignmentController.dispose();
         this.compatibilityGeneration++;
         this.registrationController.dispose();
         this.wonderdraftController.dispose();
@@ -417,27 +401,16 @@ export class SourceMapWorkspace {
                     this.renderSelected();
                 });
 
-                const alignButton = document.createElement("button");
-                alignButton.type = "button";
-                alignButton.textContent = sourceMap.alignment ? "Repair grid alignment" : "Detect grid";
-                alignButton.disabled = this.gridAlignmentBusy;
-                alignButton.addEventListener("click", () =>
-                    void this.run(null, () => this.detectGrid(sourceMap, alignButton)));
-
                 const registerButton = document.createElement("button");
                 registerButton.type = "button";
                 registerButton.textContent = "Manual placement";
-                registerButton.disabled = this.gridAlignmentBusy;
                 registerButton.addEventListener("click", () => {
-                    if (this.gridAlignmentBusy) return;
                     this.selected = sourceMap;
-                    this.gridAlignmentController.cancelActive();
                     this.ensureVisibleForEditing(sourceMap);
                     this.renderSelected();
                     this.registrationController.begin(this.selected);
                 });
                 controls.append(visibleLabel, selectButton);
-                if (this.getWorld().grid) controls.append(alignButton);
                 controls.append(registerButton);
 
                 const hasRetainedWonderdraft =
@@ -480,10 +453,6 @@ export class SourceMapWorkspace {
             assessment.replaceChildren();
             assessment.dataset.sourceMapId = this.selected.id;
         }
-        const hexOnly = !!this.getWorld().grid;
-        const align = required<HTMLButtonElement>(this.editForm, "[data-align-grid]");
-        align.hidden = !hexOnly;
-        align.disabled = !hexOnly || this.gridAlignmentBusy;
         input(this.editForm, "name").value = this.selected.name;
         this.editGeographySelect.value = this.selected.geographyKey;
         select(this.editForm, "role").value = this.selected.role;
@@ -494,7 +463,6 @@ export class SourceMapWorkspace {
 
     private async assessPattern(sourceMap: SourceMapDetail | null): Promise<void> {
         if (!sourceMap) throw new Error("Select a reference map first.");
-        if (this.gridAlignmentBusy) throw new Error("Finish the current map analysis first.");
         const generation = ++this.compatibilityGeneration;
         const button = required<HTMLButtonElement>(this.editForm, "[data-check-pattern]");
         const status = required<HTMLElement>(this.editForm, "[data-pattern-assessment]");
@@ -742,35 +710,6 @@ export class SourceMapWorkspace {
         }
     }
 
-    private async detectGrid(sourceMap: SourceMapDetail | null, button: HTMLButtonElement): Promise<void> {
-        if (!sourceMap) throw new Error("Select a reference map first.");
-        if (this.gridAlignmentBusy) throw new Error("Another grid alignment is already in progress.");
-        this.selected = sourceMap;
-        this.ensureVisibleForEditing(sourceMap);
-        this.renderSelected();
-        this.registrationController.cancelActive();
-        const idleText = sourceMap.alignment ? "Repair grid alignment" : "Detect grid";
-        this.setGridAlignmentBusy(true);
-        button.textContent = "Analyzing…";
-        try {
-            const applied = await this.gridAlignmentController.detectAndApply(sourceMap, progress => {
-                button.textContent = progress === "detecting" ? "Analyzing…" : "Applying…";
-            });
-            if (applied) this.mapHint.textContent = `Grid alignment updated for ${sourceMap.name}.`;
-        } finally {
-            this.setGridAlignmentBusy(false);
-            const current = this.details.find(item => item.id === sourceMap.id);
-            button.textContent = current?.alignment ? "Repair grid alignment" : idleText;
-        }
-    }
-
-    private setGridAlignmentBusy(busy: boolean): void {
-        this.gridAlignmentBusy = busy;
-        for (const button of this.host.querySelectorAll<HTMLButtonElement>("[data-align-grid], [data-register], [data-check-pattern]")) {
-            button.disabled = busy;
-        }
-    }
-
     private async upload(): Promise<void> {
         const files = [...(input(this.uploadForm, "file").files ?? [])];
         if (files.length === 0) throw new Error("Choose at least one PNG, JPEG, or WebP map image.");
@@ -849,7 +788,6 @@ export class SourceMapWorkspace {
         const updated = await this.api.deleteSourceMap(world.id, id, world.version);
         this.map.renderer.hiddenSourceMapIds.delete(id);
         this.manualHiddenSourceMapIds?.delete(id);
-        this.gridAlignmentController.cancelIfMap(id);
         this.registrationController.cancelIfMap(id);
         this.selected = null;
         this.applyWorld(updated);

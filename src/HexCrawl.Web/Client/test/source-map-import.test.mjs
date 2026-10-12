@@ -69,17 +69,17 @@ test("renderer source puts rasters before semantic regions and grid", () => {
     assert.match(renderer, /rasterCache\.get/);
 });
 
-test("grid preview does not restore axial selection and polygons remain authoritative", () => {
+test("periodic polygon rendering and qualified cell selection do not use axial previews", () => {
     const surface = fs.readFileSync(path.join(sourceRoot, "map-surface.ts"), "utf8");
     const renderer = fs.readFileSync(path.join(sourceRoot, "canvas-renderer.ts"), "utf8");
 
-    assert.match(surface, /world\.tiling && !this\.renderer\.gridPreview && this\.api/);
+    assert.match(surface, /world\.tiling && this\.api/);
     assert.match(surface, /void this\.activateWorldCell/);
     assert.match(surface, /this\.onWorldClick\?\.\(point\)/);
-    assert.doesNotMatch(surface, /worldToHex|setHexSelectionHandler|selectedHex/);
+    assert.doesNotMatch(surface, /worldToHex|setHexSelectionHandler|selectedHex|gridPreview/);
+    assert.match(renderer, /private drawGrid[\s\S]*this\.visibleWorldCells/);
     assert.match(renderer, /private drawSelection[\s\S]*this\.selectedWorldCell/);
-    assert.doesNotMatch(renderer, /selectedHex/);
-    assert.match(renderer, /const grid = this\.gridPreview \?\? world\.grid/);
+    assert.doesNotMatch(renderer, /hexCorners|hexToWorld|visibleHexBounds|gridPreview|selectedHex/);
 });
 
 test("map navigation uses direct drag panning without redundant arrow controls", () => {

@@ -167,7 +167,7 @@ export class MapSurface {
 
     private loadVisibleCells(): void {
         const world = this.getWorld();
-        if (!world?.tiling || this.renderer.gridPreview || !this.api) return;
+        if (!world?.tiling || !this.api) return;
         const width = this.canvas.clientWidth;
         const height = this.canvas.clientHeight;
         if (!(width > 0 && height > 0) || !Number.isFinite(this.viewport.zoom)) return;
@@ -274,23 +274,12 @@ export class MapSurface {
         }
 
         const world = this.getWorld();
-        if (world) {
-            if (world.tiling && !this.renderer.gridPreview && this.api) {
-                void this.activateWorldCell(world.id, world.tiling.id, point);
-                return;
-            }
-            // Grid-registration previews must not reintroduce axial cell picking.
-            // Preserve world-point authoring while clearing any stale cell selection.
-            if (this.renderer.gridPreview) {
-                this.renderer.selectedWorldCell = null;
-                this.cellSelectionGeneration++;
-                this.cellSelectionHandler?.(null);
-                this.requestRender();
-            }
-        } else {
-            this.accessibilityStatus.textContent = `Selected map position ${point.x.toFixed(2)}, ${point.y.toFixed(2)}.`;
+        if (world?.tiling && this.api) {
+            void this.activateWorldCell(world.id, world.tiling.id, point);
+            return;
         }
-
+        this.accessibilityStatus.textContent =
+            `Selected map position ${point.x.toFixed(2)}, ${point.y.toFixed(2)}.`;
         this.onWorldClick?.(point);
     }
 
