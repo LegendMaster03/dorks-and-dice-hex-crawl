@@ -412,7 +412,7 @@ public sealed class MovementCapabilityCompositionTests
             3,
             scope: MovementCapabilityScope.Party);
         var heading = new WorldPoint(1, 0);
-        var state = State() with
+        var state = PeriodicCourseFixture.StartingState() with
         {
             IntendedHeading = heading,
             ActiveWatch = new CellActiveWatchState(
@@ -568,7 +568,7 @@ public sealed class MovementCapabilityCompositionTests
         var interval = FocusedIntervalPolicyResolver.Resolve(procedure).IntervalDuration ?? TimeSpan.Zero;
         return new StoredExpedition(
             "Movement test",
-            state ?? State(),
+            state ?? PeriodicCourseFixture.StartingState(),
             Context(),
             null,
             procedure,
@@ -587,24 +587,6 @@ public sealed class MovementCapabilityCompositionTests
         "Movement test",
         HexOrientation.PointyTop,
         new CrawlRuntimeContext(new DistanceMeasure(12, DistanceUnit.Miles)));
-
-    private static CellExpeditionState State()
-    {
-        var realized = DelaneyDressHarmonicMetricRealization.Construct(
-            "<1:1,1,1:4,4>", 1.5, "world-unit");
-        Assert.Equal("realized", realized.Status);
-        var tiling = new PeriodicWorldTiling(
-            Guid.NewGuid(), realized.Topology!, realized.Realization!, new WorldPoint(0, 0),
-            PhysicalDistancePerWorldUnit: new DistanceMeasure(12, DistanceUnit.Miles));
-        var cell = tiling.Resolve(new PeriodicCellAddress(
-            tiling.Topology.MotifCells[0].Id, new LatticeDisplacement(0, 0)));
-        return new CellExpeditionState
-        {
-            Id = Guid.NewGuid(),
-            Traversal = new PeriodicCellTraversal { CurrentCell = cell.Id, Position = cell.Center },
-            DistanceTraveled = new DistanceMeasure(0, DistanceUnit.Miles)
-        };
-    }
 
     private static CrawlPartyMember Member(string name, bool counts = true) =>
         new(Guid.NewGuid(), name, CountsTowardPartyMovement: counts);

@@ -308,7 +308,7 @@ public sealed class EnvironmentContextTests
     private static StoredExpedition WorldExpedition(OverworldDefinition world, CellExpeditionState? state = null)
     {
         var now = DateTimeOffset.UtcNow;
-        return new StoredExpedition("World environment test", state ?? State(world.SpatialTiling),
+        return new StoredExpedition("World environment test", state ?? PeriodicCourseFixture.StartingState(world.SpatialTiling),
             new WorldBoundCrawlSessionContext(world.Id), null, Procedure(CrawlProcedureCatalog.Dnd35PresetKey),
             null, TimeSpan.FromHours(1), "owner", 1, now, now);
     }
@@ -316,7 +316,7 @@ public sealed class EnvironmentContextTests
     private static StoredExpedition AbstractExpedition(CampaignProcedure procedure, CrawlPartySheet? party = null)
     {
         var now = DateTimeOffset.UtcNow;
-        return new StoredExpedition("Abstract environment test", State(Tiling()),
+        return new StoredExpedition("Abstract environment test", PeriodicCourseFixture.StartingState(Tiling()),
             new AbstractHexCrawlSessionContext("Abstract", HexOrientation.PointyTop,
                 new CrawlRuntimeContext(new DistanceMeasure(12, DistanceUnit.Miles))),
             null, procedure, null, TimeSpan.FromHours(1), "owner", 1, now, now)
@@ -329,18 +329,6 @@ public sealed class EnvironmentContextTests
         return new StoredExpedition("Nonspatial environment test", new NonSpatialSessionState { Id = Guid.NewGuid() },
             new NonSpatialCrawlSessionContext("Journey"), null, procedure, null, TimeSpan.Zero,
             "owner", 1, now, now);
-    }
-
-    private static CellExpeditionState State(PeriodicWorldTiling tiling)
-    {
-        var cell = tiling.Resolve(new PeriodicCellAddress(
-            tiling.Topology.MotifCells[0].Id, new LatticeDisplacement(0, 0)));
-        return new CellExpeditionState
-        {
-            Id = Guid.NewGuid(),
-            Traversal = new PeriodicCellTraversal { CurrentCell = cell.Id, Position = cell.Center },
-            DistanceTraveled = new DistanceMeasure(0, DistanceUnit.Miles)
-        };
     }
 
     private static PeriodicWorldTiling Tiling()
