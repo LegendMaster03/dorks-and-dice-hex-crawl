@@ -48,6 +48,7 @@ public sealed record CellProcedureResolutionHelperCommand
     public string? Terrain { get; init; }
     public string? Route { get; init; }
     public IReadOnlyList<string> NavigationRiskFactors { get; init; } = [];
+    internal string? NavigationDifficultyRulesNote { get; init; }
 }
 
 public sealed record CellProcedureResolutionHelperResult(

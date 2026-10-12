@@ -7,61 +7,6 @@ namespace HexCrawl.Application;
 
 public sealed class ProcedureResolutionResolver(IProcedureResolutionRandomSource random)
 {
-    public ProcedureResolutionHelperResult Resolve(
-        GenericProcedureRuntime procedure,
-        CrawlSessionContext context,
-        CrawlSessionRuntimeState runtime,
-        long expeditionVersion,
-        ProcedureResolutionHelperCommand command)
-    {
-        ArgumentNullException.ThrowIfNull(procedure);
-        ArgumentNullException.ThrowIfNull(context);
-        ArgumentNullException.ThrowIfNull(runtime);
-        ArgumentNullException.ThrowIfNull(command);
-
-        var configured = procedure.ResolutionHelpers;
-        var rolls = new List<ProcedureResolutionRoll>();
-        var notes = new List<string>();
-        ProcedureResolvedTravel? travel = null;
-        ProcedureResolvedNavigation? navigation = null;
-        ProcedureResolvedEncounter? encounter = null;
-
-        if (configured is null)
-        {
-            notes.Add("This procedure snapshot does not configure automatic resolution helpers.");
-            return new ProcedureResolutionHelperResult(expeditionVersion, null, null, null, null, null, rolls, notes);
-        }
-
-        if (runtime is ExpeditionState spatial)
-        {
-            travel = ResolveTravel(procedure, configured.Travel, command, rolls, notes);
-            navigation = ResolveNavigation(procedure, spatial, configured.Navigation, command, rolls, notes);
-        }
-        else
-        {
-            if (configured.Travel is not null)
-            {
-                notes.Add("Travel resolution was not generated because this session is non-spatial.");
-            }
-            if (configured.Navigation is not null)
-            {
-                notes.Add("Navigation resolution was not generated because this session is non-spatial.");
-            }
-        }
-
-        encounter = ResolveEncounter(procedure, context, runtime, configured.Encounter, command, rolls, notes);
-
-        return new ProcedureResolutionHelperResult(
-            expeditionVersion,
-            null,
-            null,
-            travel,
-            navigation,
-            encounter,
-            rolls,
-            notes);
-    }
-
     public CellProcedureResolutionHelperResult ResolveCells(
         GenericProcedureRuntime procedure,
         CrawlSessionContext context,
@@ -136,6 +81,8 @@ public sealed class ProcedureResolutionResolver(IProcedureResolutionRandomSource
                     throw new InvalidOperationException("Angular veer must be finite, nonzero, and at most 180 degrees.");
             }
             var note = $"Automatic cell navigation: {Describe(check)}; modifier={command.NavigationModifier}; total={total}; DC={dc}.";
+            if (!string.IsNullOrWhiteSpace(command.NavigationDifficultyRulesNote))
+                note += " " + command.NavigationDifficultyRulesNote.Trim();
             if (veer.HasValue) note += $" DM-confirmed angular veer={veer.Value} degrees.";
             navigation = new ResolvedCellNavigation(
                 result, veer, new ResolutionProvenance(ResolutionSource.AutomaticRoll, note));
@@ -157,102 +104,6 @@ public sealed class ProcedureResolutionResolver(IProcedureResolutionRandomSource
         }
 
         return new(expeditionVersion, null, null, travel, navigation, encounter, rolls, notes);
-    }
-
-    private ProcedureResolvedTravel? ResolveTravel(
-        GenericProcedureRuntime procedure,
-        TravelResolutionHelperProfile? helper,
-        ProcedureResolutionHelperCommand command,
-        List<ProcedureResolutionRoll> rolls,
-        List<string> notes)
-    {
-        if (helper is null)
-        {
-            return null;
-        }
-        if (procedure.Movement.TravelResolution != TravelResolutionMode.ContinuousDistance
-            || procedure.Movement.ActualDistanceResolution != ActualDistanceResolutionMode.VariableResolved)
-        {
-            notes.Add("The configured travel helper is not applicable to the active travel-resolution mode.");
-            return null;
-        }
-
-        var expected = command.ExpectedDistance
-            ?? throw new InvalidOperationException(
-                "The travel helper requires an explicit DM expected distance or sufficient source-backed travel inputs.");
-        if (!double.IsFinite(expected) || expected < 0)
-        {
-            throw new InvalidOperationException("Expected travel distance must be finite and non-negative.");
-        }
-
-        var roll = Roll("travel-distance", helper.Roll, rolls);
-        var actual = expected * roll.Total * helper.DistanceFactorPerRollPoint;
-        if (!double.IsFinite(actual) || actual < 0)
-        {
-            throw new InvalidOperationException("The configured travel helper produced an invalid distance.");
-        }
-
-        var note = string.Create(
-            CultureInfo.InvariantCulture,
-            $"Automatic travel helper: {Describe(roll)}; expected={expected:0.###}; factor={helper.DistanceFactorPerRollPoint:0.###}; actual={actual:0.###}.");
-        if (!string.IsNullOrWhiteSpace(command.ExpectedDistanceRulesNote))
-        {
-            note += " " + command.ExpectedDistanceRulesNote.Trim();
-        }
-        return new ProcedureResolvedTravel(
-            expected,
-            actual,
-            new ResolutionProvenance(ResolutionSource.AutomaticRoll, note));
-    }
-
-    private ProcedureResolvedNavigation? ResolveNavigation(
-        GenericProcedureRuntime procedure,
-        ExpeditionState state,
-        NavigationResolutionHelperProfile? helper,
-        ProcedureResolutionHelperCommand command,
-        List<ProcedureResolutionRoll> rolls,
-        List<string> notes)
-    {
-        if (helper is null
-            || !ExpeditionProcedureRequirements.IsNavigationResolutionPotentiallyRequired(procedure, state)
-            || command.SuppressesNavigationCheck
-            || command.DeliberateDoubleBack)
-        {
-            return null;
-        }
-
-        var difficultyClass = command.NavigationDifficultyClass
-            ?? throw new InvalidOperationException(
-                "The navigation helper requires an explicit DM DC or sufficient source-backed navigation inputs.");
-        var roll = Roll("navigation-check", helper.CheckRoll, rolls);
-        var resolvedTotal = checked(roll.Total + command.NavigationModifier);
-        var outcome = resolvedTotal >= difficultyClass
-            ? NavigationCheckOutcome.Succeeded
-            : NavigationCheckOutcome.Failed;
-        int? veer = null;
-        if (outcome == NavigationCheckOutcome.Failed)
-        {
-            veer = command.FailureVeerSteps
-                ?? throw new InvalidOperationException("A failed navigation helper result requires a DM-confirmed non-zero failure veer.");
-            if (veer == 0)
-            {
-                throw new InvalidOperationException("A failed navigation helper result requires a non-zero failure veer.");
-            }
-        }
-
-        var note = $"Automatic navigation helper: {Describe(roll)}; situational modifier={command.NavigationModifier}; total={resolvedTotal}; DC={difficultyClass}.";
-        if (!string.IsNullOrWhiteSpace(command.NavigationDifficultyRulesNote))
-        {
-            note += " " + command.NavigationDifficultyRulesNote.Trim();
-        }
-        if (veer.HasValue)
-        {
-            note += $" DM-confirmed failure veer={veer.Value}.";
-        }
-        return new ProcedureResolvedNavigation(
-            outcome,
-            veer,
-            new ResolutionProvenance(ResolutionSource.AutomaticRoll, note));
     }
 
     private ProcedureResolvedEncounter? ResolveEncounter(
