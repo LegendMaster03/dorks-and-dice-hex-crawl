@@ -166,12 +166,12 @@ public sealed class ExpeditionDeletionEndpointsTests
 
     private static async Task<JsonElement> StartExpedition(HttpClient client, Guid worldId, string name)
     {
-        using var response = await client.PostAsJsonAsync($"/api/overworlds/{worldId:D}/expeditions", new
+        using var response = await client.PostAsJsonAsync($"/api/overworlds/{worldId:D}/cell-expeditions", new
         {
             name,
-            procedureKey = "simple-fixed-distance",
+            presetKey = "simple-fixed-distance",
             presentationKey = "exploration-map",
-            startHex = new { q = 0, r = 0 }
+            startCell = new { motifCellId = "hex", translation = new { u = 0L, v = 0L } }
         });
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<JsonElement>();

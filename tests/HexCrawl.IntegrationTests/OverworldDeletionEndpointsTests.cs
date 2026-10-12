@@ -50,12 +50,12 @@ public sealed class OverworldDeletionEndpointsTests
             var worldId = world.GetProperty("id").GetGuid();
             var version = world.GetProperty("version").GetInt64();
 
-            using (var start = await client.PostAsJsonAsync($"/api/overworlds/{worldId:D}/expeditions", new
+            using (var start = await client.PostAsJsonAsync($"/api/overworlds/{worldId:D}/cell-expeditions", new
             {
                 name = "Active expedition",
-                procedureKey = "simple-fixed-distance",
+                presetKey = "simple-fixed-distance",
                 presentationKey = "exploration-map",
-                startHex = new { q = 0, r = 0 }
+                startCell = new { motifCellId = "hex", translation = new { u = 0L, v = 0L } }
             }))
             {
                 start.EnsureSuccessStatusCode();
