@@ -819,8 +819,7 @@ public sealed class Phase18CellDecisionEndpointsTests
             var original = CrawlProcedureCatalog.Resolve(
                 procedureKey).MaterializeGeneric().Procedure;
             var modules = original.Modules
-                .Where(m => m.Mechanic.ExecutionHandler !=
-                    GenericProcedureExecutionHandlers.HexProgressPolicy)
+
                 .Select(m =>
                 {
                     if (m.Mechanic.ExecutionHandler ==
@@ -838,10 +837,8 @@ public sealed class Phase18CellDecisionEndpointsTests
                     var parameters = m.Parameters.ToDictionary(x => x.Key, x => x.Value);
                     parameters["travelResolution"] = TravelResolutionMode.CellSteps.ToString();
                     parameters["actualDistanceResolution"] = ActualDistanceResolutionMode.Fixed.ToString();
-                    parameters["tracksIntraHexProgress"] = "false";
                     return m with
                     {
-                        Mechanic = m.Mechanic with { Version = 2 },
                         Parameters = parameters
                     };
                 }).ToArray();

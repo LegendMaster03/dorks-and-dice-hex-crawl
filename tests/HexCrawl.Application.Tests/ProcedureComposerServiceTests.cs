@@ -85,9 +85,6 @@ public sealed class ProcedureComposerServiceTests
             movement.Mechanic.ExecutionHandler);
         Assert.Equal(TravelResolutionMode.ContinuousDistance.ToString(),
             movement.Parameters["travelResolution"]);
-        Assert.Equal("false", movement.Parameters["tracksIntraHexProgress"]);
-        Assert.DoesNotContain(draft.Procedure.Modules, module =>
-            module.Mechanic.ExecutionHandler == GenericProcedureExecutionHandlers.HexProgressPolicy);
     }
 
     [Fact]

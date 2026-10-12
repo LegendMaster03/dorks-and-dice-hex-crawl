@@ -443,16 +443,15 @@ public sealed class Phase18CellExpeditionPersistenceTests
     {
         var original = SyntheticProcedureFixtures.MixedProcedure();
         var modules = original.Modules
-            .Where(m => m.Mechanic.ExecutionHandler != GenericProcedureExecutionHandlers.HexProgressPolicy)
+
             .Select(m =>
             {
                 if (m.Mechanic.ExecutionHandler != GenericProcedureExecutionHandlers.MovementResolutionPolicy)
                     return m;
                 var parameters = m.Parameters.ToDictionary(x => x.Key, x => x.Value);
                 parameters["travelResolution"] = mode.ToString();
-                parameters["tracksIntraHexProgress"] = "false";
                 parameters["actualDistanceResolution"] = ActualDistanceResolutionMode.Fixed.ToString();
-                return m with { Mechanic = m.Mechanic with { Version = 2 }, Parameters = parameters };
+                return m with { Parameters = parameters };
             }).ToArray();
         var procedure = original with
         {

@@ -202,8 +202,6 @@ public sealed class ExpeditionStartServiceTests
         Assert.Equal(2, GenericProcedureRuntime.Bind(expedition.CampaignProcedure).Movement.MechanicVersion);
         Assert.Equal(presetKey, expedition.ProcedureOrigin?.PresetKey);
         Assert.Null(expedition.ProcedureOrigin?.PresetRevision);
-        Assert.DoesNotContain(expedition.CampaignProcedure.Modules,
-            m => m.Mechanic.ExecutionHandler == GenericProcedureExecutionHandlers.HexProgressPolicy);
         var pinned = await procedures.GetAsync("alice", expedition.CampaignProcedure.ProcedureId,
             expedition.CampaignProcedure.Revision);
         Assert.Equal(expedition.CampaignProcedure.ProcedureId, pinned.Procedure.ProcedureId);
@@ -221,7 +219,7 @@ public sealed class ExpeditionStartServiceTests
     }
 
     [Fact]
-    public async Task GeneralizedWorldStartPinsOwnedVersion2ProcedureWithoutInventingHexState()
+    public async Task GeneralizedWorldStartPinsOwnedProcedureWithoutInventingHexState()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = new PostgresHexCrawlStore(database.ConnectionString);
@@ -236,14 +234,14 @@ public sealed class ExpeditionStartServiceTests
         tiling.Validate();
         var world = new OverworldDefinition
         {
-            Id = Guid.NewGuid(), Name = "Version 2 start world", Tiling = tiling
+            Id = Guid.NewGuid(), Name = "Cell start world", Tiling = tiling
         };
         var now = DateTimeOffset.UtcNow;
         await store.CreateOverworldAsync(new StoredOverworld(world, "alice", 1, now, now));
 
         var original = SyntheticProcedureFixtures.MixedProcedure();
         var modules = original.Modules
-            .Where(m => m.Mechanic.ExecutionHandler != GenericProcedureExecutionHandlers.HexProgressPolicy)
+
             .Select(m =>
             {
                 if (m.Mechanic.ExecutionHandler != GenericProcedureExecutionHandlers.MovementResolutionPolicy)
@@ -251,23 +249,22 @@ public sealed class ExpeditionStartServiceTests
                 var parameters = m.Parameters.ToDictionary(x => x.Key, x => x.Value);
                 parameters["travelResolution"] = TravelResolutionMode.CellSteps.ToString();
                 parameters["actualDistanceResolution"] = ActualDistanceResolutionMode.Fixed.ToString();
-                parameters["tracksIntraHexProgress"] = "false";
-                return m with { Mechanic = m.Mechanic with { Version = 2 }, Parameters = parameters };
+                return m with { Parameters = parameters };
             }).ToArray();
-        var version2 = original with
+        var procedure = original with
         {
             ProcedureId = Guid.NewGuid(),
             TilingDsSymbol = tiling.Topology.QuotientDsSymbol,
             Modules = modules
         };
-        version2.Validate();
+        procedure.Validate();
         await procedures.CreateAsync("alice", version2, null);
 
         var address = new PeriodicCellAddress(
             tiling.Topology.MotifCells[0].Id, new LatticeDisplacement(2, -1));
         var selection = new ProcedureStartSelection(
-            ProcedureId: version2.ProcedureId,
-            ProcedureRevision: version2.Revision);
+            ProcedureId: procedure.ProcedureId,
+            ProcedureRevision: procedure.Revision);
         await Assert.ThrowsAsync<HexCrawlNotFoundException>(() =>
             starter.StartWorldBoundCellsAsync(
                 world.Id, "bob", "Unauthorized cell expedition", selection, address));
@@ -280,8 +277,8 @@ public sealed class ExpeditionStartServiceTests
         Assert.Equal(tiling.Resolve(address).Center, state.Traversal.Position);
         Assert.Null(state.DistanceTraveled);
         Assert.Null(state.Traversal.TravelHeading);
-        Assert.Equal(version2.ProcedureId, session.CampaignProcedure.ProcedureId);
-        Assert.Equal(version2.Revision, session.CampaignProcedure.Revision);
+        Assert.Equal(procedure.ProcedureId, session.CampaignProcedure.ProcedureId);
+        Assert.Equal(procedure.Revision, session.CampaignProcedure.Revision);
         Assert.NotNull(session.Knowledge);
 
         var reopened = new PostgresHexCrawlStore(database.ConnectionString);
