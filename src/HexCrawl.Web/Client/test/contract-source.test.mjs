@@ -346,11 +346,12 @@ test("expedition setup accepts saved revisions and materializes preset selection
     assert.match(setup, /api\.getProcedurePresets\(\)/);
     assert.match(setup, /ProcedureComposerApi\.create/);
     assert.match(setup, /populateProcedureStartChoices/);
-    assert.match(setup, /applyWorldProcedureChoice/);
+    assert.match(setup, /applyCellProcedureChoice/);
     assert.match(setup, /Saved rulesets use the selected revision/);
-    assert.match(setup, /applyWorldProcedureChoice/);
+    assert.match(setup, /applyCellProcedureChoice/);
     assert.match(setup, /choice\.revision/);
-    assert.match(selection, /procedureKey: choice\.presetKey/);
+    assert.match(setup, /api\.startCellExpedition/);
+    assert.match(selection, /presetKey: choice\.presetKey/);
     assert.match(selection, /procedureId: choice\.procedureId/);
     assert.match(selection, /procedureRevision: choice\.revision/);
     assert.match(selection, /for \(const value of saved\)/);

@@ -1,4 +1,4 @@
-import { hexToWorld } from "../../hex-math";
+import { hexToWorld } from "../../hex-math.js";
 import type { HexCrawlApi } from "../../api";
 import type { HexCoordinate, Overworld, PeriodicCellAddress } from "../../types";
 
