@@ -119,7 +119,6 @@ public sealed class Phase2ReviewRegressionTests
         return store;
     }
 
-    private static CrawlRuntimeContext Context() => new(Miles(12));
 
     private static DistanceMeasure Miles(double value) => new(value, DistanceUnit.Miles);
 
