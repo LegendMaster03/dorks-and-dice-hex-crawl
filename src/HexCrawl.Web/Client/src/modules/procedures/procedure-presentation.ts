@@ -34,6 +34,7 @@ const rules: CompactRuleDescriptor[] = [
     { moduleKey: "movement.budget", group: "Travel flow", label: "Available movement", description: "Determines how much movement the party has before terrain and route adjustments.", order: 30 },
     { moduleKey: "movement.terrain", group: "Travel flow", label: "Terrain and routes", description: "Adjusts movement for terrain, routes, and weather.", order: 40 },
     { moduleKey: "movement.resolution", group: "Travel flow", label: "Resolve movement", description: "Defines whether travel advances by distance or whole cells and how actual distance is resolved.", order: 80 },
+    { moduleKey: "movement.turn-cost", group: "Travel flow", label: "Turning and backtracking", description: "Defines the turning cost and whether deliberate backtracking is permitted.", order: 90 },
     { moduleKey: "navigation.check", group: "Travel flow", label: "Navigation checks", description: "Determines whether route checks are required and whether an incorrect course persists.", order: 50 },
     { moduleKey: "navigation.outcome", group: "Travel flow", label: "Getting lost and recovery", description: "Defines what happens when navigation fails and how the party recognizes or corrects its course.", order: 60 },
     { moduleKey: "encounters.cadence", group: "Travel flow", label: "Encounter checks", description: "Sets the ordinary cadence for encounter checks.", order: 70 },
@@ -266,6 +267,9 @@ const presentationSectionLayouts: Record<string, PresentationSectionLayout[]> = 
     ],
     "movement.resolution": [
         { key: "resolution", label: "Movement resolution", parameters: ["travelResolution", "actualDistanceResolution"] }
+    ],
+    "movement.turn-cost": [
+        { key: "turning", label: "Turning and backtracking", parameters: ["neighborCenterDistanceFactor", "supportsDeliberateDoubleBack"] }
     ],
     "navigation.check": [
         { key: "check", label: "Navigation check", parameters: ["usesNavigationChecks", "usesPersistentVeer"] }
