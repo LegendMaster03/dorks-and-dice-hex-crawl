@@ -671,9 +671,10 @@ public sealed class ExpeditionWorkbenchEndpointsTests
     }
 
     [Fact]
-    public async Task AbstractHexSessionPersistsAndAdvancesWithoutAnyOverworld()
+    public async Task FlatTopMaplessCellExpeditionPersistsAndAdvancesWithoutAnyWorld()
     {
         var database = TestWebHost.NewDatabasePath();
+        Guid sessionId;
         try
         {
             using (var factory = TestWebHost.Create(database))
@@ -682,62 +683,81 @@ public sealed class ExpeditionWorkbenchEndpointsTests
                 var worldsBefore = await client.GetFromJsonAsync<JsonElement>("/api/overworlds");
                 Assert.Equal(0, worldsBefore.GetArrayLength());
 
-                using var startResponse = await client.PostAsJsonAsync("/api/expeditions", new
-                {
-                    name = "Paper map crawl",
-                    procedureKey = "simple-fixed-distance",
-                    context = new
+                using var startResponse = await client.PostAsJsonAsync(
+                    "/api/expeditions/cells", new
                     {
-                        kind = "AbstractHex",
-                        name = "Paper map",
-                        orientation = "FlatTop",
-                        hexCenterDistance = 12,
-                        distanceUnit = new { kind = "Mile", symbol = "mi", metersPerUnit = 1609.344 }
-                    },
-                    startHex = new { q = 2, r = -1 }
-                });
+                        name = "Paper map crawl",
+                        procedureKey = "simple-fixed-distance",
+                        context = new
+                        {
+                            kind = "AbstractHex",
+                            name = "Paper map",
+                            orientation = "FlatTop",
+                            hexCenterDistance = 12,
+                            distanceUnit = new { kind = "Mile", symbol = "mi", metersPerUnit = 1609.344 }
+                        },
+                        startHex = new { q = 2, r = -1 }
+                    }, CellJson);
                 startResponse.EnsureSuccessStatusCode();
                 var session = await startResponse.Content.ReadFromJsonAsync<JsonElement>();
-
+                sessionId = session.GetProperty("id").GetGuid();
                 Assert.Equal(JsonValueKind.Null, session.GetProperty("overworldId").ValueKind);
                 Assert.Equal("AbstractHex", session.GetProperty("context").GetProperty("kind").GetString());
                 Assert.Equal("Paper map", session.GetProperty("context").GetProperty("name").GetString());
                 Assert.Equal("FlatTop", session.GetProperty("context").GetProperty("orientation").GetString());
-                Assert.True(session.GetProperty("expedition").GetProperty("isSpatial").GetBoolean());
-                Assert.Equal(2, session.GetProperty("expedition").GetProperty("currentHex").GetProperty("q").GetInt32());
+                var spatial = session.GetProperty("expedition");
+                Assert.True(spatial.GetProperty("isSpatial").GetBoolean());
+                Assert.Equal(JsonValueKind.Null, spatial.GetProperty("currentHex").ValueKind);
+                var currentCell = spatial.GetProperty("currentCell").GetProperty("address");
+                Assert.Equal("hex", currentCell.GetProperty("motifCellId").GetString());
+                Assert.Equal(2L, currentCell.GetProperty("translation").GetProperty("u").GetInt64());
+                Assert.Equal(-1L, currentCell.GetProperty("translation").GetProperty("v").GetInt64());
 
-                var sessionId = session.GetProperty("id").GetGuid();
-                using var advanceResponse = await client.PostAsJsonAsync($"/api/expeditions/{sessionId:D}/advance", new
-                {
-                    expectedVersion = session.GetProperty("version").GetInt64(),
-                    intendedDirection = 0,
-                    paceKey = "normal",
-                    activities = Array.Empty<string>(),
-                    navigationAidKey = "none",
-                    suppressesNavigationCheck = false,
-                    resetsVeerAtBoundary = false,
-                    effectiveDistance = 3,
-                    resolutionSource = "ManualRoll",
-                    deliberateDoubleBack = false,
-                    continueAcrossBoundaries = true
-                });
+                var topology = await client.GetFromJsonAsync<JsonElement>(
+                    $"/api/expeditions/{sessionId:D}/cell-topology");
+                var center = topology.GetProperty("center");
+                var edge = topology.GetProperty("interfaces")[0];
+                var heading = new WorldPoint(
+                    (edge.GetProperty("start").GetProperty("x").GetDouble()
+                     + edge.GetProperty("end").GetProperty("x").GetDouble()) / 2
+                     - center.GetProperty("x").GetDouble(),
+                    (edge.GetProperty("start").GetProperty("y").GetDouble()
+                     + edge.GetProperty("end").GetProperty("y").GetDouble()) / 2
+                     - center.GetProperty("y").GetDouble());
+                var manual = new ResolutionProvenance(ResolutionSource.ManualRoll);
+                using var advanceResponse = await client.PostAsJsonAsync(
+                    $"/api/expeditions/{sessionId:D}/cells/advance",
+                    new AdvanceCellWatchRequest(
+                        session.GetProperty("version").GetInt64(),
+                        new CellWatchTravelPlan(heading, false, false,
+                            TravelModeSelection.Normal, NavigationAidSelection.None),
+                        new CellWatchAdvanceInputs(
+                            ResolvedTravelAmount.Distance(
+                                new DistanceMeasure(3, DistanceUnit.Miles),
+                                new DistanceMeasure(3, DistanceUnit.Miles), manual),
+                            new ResolvedCellNavigation(NavigationCheckOutcome.Succeeded, null, manual),
+                            ResolvedEncounter.None)), CellJson);
                 advanceResponse.EnsureSuccessStatusCode();
                 session = await advanceResponse.Content.ReadFromJsonAsync<JsonElement>();
-                Assert.Equal(3, session.GetProperty("expedition").GetProperty("distanceTraveled").GetProperty("value").GetDouble());
-
+                Assert.Equal(3, session.GetProperty("expedition")
+                    .GetProperty("distanceTraveled").GetProperty("value").GetDouble(), 6);
+                Assert.Equal(JsonValueKind.Null,
+                    session.GetProperty("expedition").GetProperty("currentHex").ValueKind);
                 var worldsAfter = await client.GetFromJsonAsync<JsonElement>("/api/overworlds");
                 Assert.Equal(0, worldsAfter.GetArrayLength());
             }
 
             using (var restartedFactory = TestWebHost.Create(database))
-            using (var restartedClient = restartedFactory.CreateClient())
+            using (var restarted = restartedFactory.CreateClient())
             {
-                var sessions = await restartedClient.GetFromJsonAsync<JsonElement>("/api/expeditions");
+                var sessions = await restarted.GetFromJsonAsync<JsonElement>("/api/expeditions");
                 var summary = Assert.Single(sessions.EnumerateArray());
+                Assert.Equal(sessionId, summary.GetProperty("id").GetGuid());
                 Assert.Equal("AbstractHex", summary.GetProperty("context").GetProperty("kind").GetString());
-                Assert.Equal(JsonValueKind.Null, summary.GetProperty("context").GetProperty("overworldId").ValueKind);
-                var worlds = await restartedClient.GetFromJsonAsync<JsonElement>("/api/overworlds");
-                Assert.Equal(0, worlds.GetArrayLength());
+                Assert.Equal(JsonValueKind.Null, summary.GetProperty("overworldId").ValueKind);
+                Assert.Equal(3, summary.GetProperty("expedition")
+                    .GetProperty("distanceTraveled").GetProperty("value").GetDouble(), 6);
+                Assert.Empty((await restarted.GetFromJsonAsync<JsonElement>("/api/overworlds")).EnumerateArray());
             }
         }
         finally
