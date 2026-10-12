@@ -14,16 +14,16 @@ public sealed class Phase9ProviderCompositionRegressionTests
         var procedure = CrawlProcedureCatalog.Resolve(CrawlProcedureCatalog.Dnd35PresetKey)
             .MaterializeGeneric().Procedure;
         var now = DateTimeOffset.UtcNow;
-        var context = new AbstractHexCrawlSessionContext(
+        var sessionContext = new AbstractHexCrawlSessionContext(
             "Provider environment regression",
             HexOrientation.PointyTop,
             new CrawlRuntimeContext(new DistanceMeasure(12, DistanceUnit.Miles)));
         var cells = AbstractCellSessionGeometry.CreateNewHexSession(
-            Guid.NewGuid(), context, new HexCoordinate(0, 0)).Expedition;
+            Guid.NewGuid(), sessionContext, new HexCoordinate(0, 0)).Expedition;
         var expedition = new StoredExpedition(
             "Provider environment regression",
             cells,
-            context,
+            sessionContext,
             null,
             procedure,
             null,
