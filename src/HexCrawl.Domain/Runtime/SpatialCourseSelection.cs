@@ -29,21 +29,6 @@ public static class SpatialCourseSelection
     }
 
     /// <summary>
-    /// Six-way legacy input adapter for a known regular-hex address convention.
-    /// It is intentionally outside the universal traversal engine; the actual
-    /// exit is still resolved from the cursor and world geometry.
-    /// </summary>
-    public static WorldPoint FromLegacyHexDirection(
-        PeriodicWorldTiling world, HexCoordinate current, HexDirection selectedDirection)
-    {
-        ArgumentNullException.ThrowIfNull(world);
-        var from = new WorldCellId(world.Id, LegacyHexTilingCompatibility.ToAddress(current));
-        var to = new WorldCellId(world.Id,
-            LegacyHexTilingCompatibility.ToAddress(current.Neighbor(selectedDirection.Value)));
-        return ParallelToNeighborCenters(world, from, to);
-    }
-
-    /// <summary>
     /// Aim at a particular real atomic interface from the exact cursor, for
     /// manual adjudication of topology-specific choices. The core still checks
     /// that the resulting ray can cross the selected interface.

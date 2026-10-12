@@ -80,10 +80,9 @@ public sealed class Phase20GeometricNativeProcedureTests
         var session = AbstractCellSessionGeometry.CreateNewHexSession(
             Guid.NewGuid(), context, new HexCoordinate(0, 0));
         var procedure = CampaignProcedureMaterializer.MaterializeExecutableSpatial(CrawlProcedureCatalog.Resolve("alexandrian-advanced")).Procedure;
-        var east = SpatialCourseSelection.FromLegacyHexDirection(session.World,
-            new HexCoordinate(0, 0), new HexDirection(0));
-        var turn = SpatialCourseSelection.FromLegacyHexDirection(session.World,
-            new HexCoordinate(0, 0), new HexDirection(1));
+        var current = session.Expedition.Traversal.CurrentCell;
+        var east = HeadingToBoundary(session.World, current, 0);
+        var turn = HeadingToBoundary(session.World, current, 5);
         var engine = new CrawlRuntimeEngine();
         var inputs1 = new CellWatchAdvanceInputs(
             ResolvedTravelAmount.Distance(
@@ -112,5 +111,10 @@ public sealed class Phase20GeometricNativeProcedureTests
         Assert.Contains(second.Events, e => e.Kind == CrawlRuntimeEventKind.ResolutionProvenanceRecorded
             && e.Message.Contains("turn debited", StringComparison.OrdinalIgnoreCase)
             && e.DistanceValue == 1d);
+    }
+    private static WorldPoint HeadingToBoundary(PeriodicWorldTiling world, WorldCellId current, int interfaceIndex)
+    {
+        var boundary = world.Boundaries(current.Address)[interfaceIndex];
+        return SpatialCourseSelection.ParallelToNeighborCenters(world, current, boundary.To);
     }
 }

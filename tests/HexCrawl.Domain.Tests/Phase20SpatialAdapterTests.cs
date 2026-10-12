@@ -27,18 +27,19 @@ public sealed class Phase20SpatialAdapterTests
     }
 
     [Fact]
-    public void LegacySixDirectionInputIsTranslatedToGeometricCourse()
+    public void NeighborCourseUsesAuthoritativePeriodicCellCenters()
     {
         var session = AbstractCellSessionGeometry.CreateNewHexSession(
             Guid.NewGuid(), Context(), new HexCoordinate(0, 0));
         var world = session.World;
-        var current = new HexCoordinate(0, 0);
-        for (var d = 0; d < 6; d++)
+        var current = session.Expedition.Traversal.CurrentCell;
+        var from = world.Resolve(current.Address);
+        var neighbors = world.Neighbors(current.Address);
+        Assert.Equal(6, neighbors.Count); // Six is a property of this test fixture, not a runtime direction contract.
+        foreach (var neighbor in neighbors)
         {
-            var heading = SpatialCourseSelection.FromLegacyHexDirection(world, current, new HexDirection(d));
-            var from = world.Resolve(LegacyHexTilingCompatibility.ToAddress(current));
-            var to = world.Resolve(LegacyHexTilingCompatibility.ToAddress(current.Neighbor(d)));
-            Assert.Equal(to.Center - from.Center, heading);
+            var heading = SpatialCourseSelection.ParallelToNeighborCenters(world, current, neighbor);
+            Assert.Equal(world.Resolve(neighbor.Address).Center - from.Center, heading);
         }
     }
 
