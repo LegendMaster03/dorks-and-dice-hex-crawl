@@ -64,10 +64,14 @@ export async function renderExpedition(
     }
 
     let world: Overworld | null = runtime.overworldId ? await api.getOverworld(runtime.overworldId) : null;
-    // Phase 18 cell expeditions retain their qualified identity and use the same
-    // expedition route, map and cell navigator. Do not enter the hex adapter.
-    if (runtime.expedition.isSpatial && runtime.expedition.currentCell)
+    // Every spatial expedition must carry an authoritative qualified cell.
+    // A malformed or historical spatial snapshot must fail closed; it must
+    // never fall through to a superseded axial movement implementation.
+    if (runtime.expedition.isSpatial) {
+        if (!runtime.expedition.currentCell)
+            throw new Error("Spatial expedition is missing its required authoritative cell.");
         return renderPeriodicExpeditionWorkbench(root, api, runtime, world, navigate, toolContext);
+    }
 
     const survivalApi = new SurvivalResourcesApi(toolContext);
     const effectsApi = new ExpeditionEffectsApi(toolContext);

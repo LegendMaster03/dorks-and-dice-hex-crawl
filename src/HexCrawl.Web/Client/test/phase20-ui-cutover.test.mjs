@@ -200,6 +200,14 @@ test("Phase 15 next action respects V2 interrupt, decision and travel precedence
     assert.equal(nextCellExpeditionAction({ ...ready, pendingEncounter: true, pauseReason: "CellCourseAdjudicationRequired" }).kind, "encounter");
 });
 
+test("spatial expedition route rejects snapshots without authoritative cells rather than invoking V1", () => {
+    const view = file("modules","expeditions","expedition-view.ts");
+    assert.match(view, /if \(runtime\.expedition\.isSpatial\) \{/);
+    assert.match(view, /if \(!runtime\.expedition\.currentCell\)/);
+    assert.match(view, /throw new Error\("Spatial expedition is missing its required authoritative cell\."\)/);
+    assert.doesNotMatch(view, /if \(runtime\.expedition\.isSpatial && runtime\.expedition\.currentCell\)/);
+});
+
 test("Phase 15 is the shared action, summary, drawer and map-first UI for V2 cells", () => {
     const legacy = file("modules","expeditions","expedition-view.ts");
     const periodic = file("modules","expeditions","periodic-expedition-workbench.ts");
