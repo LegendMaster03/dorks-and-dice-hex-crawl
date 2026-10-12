@@ -247,6 +247,27 @@ public sealed class MovementCapabilityCompositionTests
     }
 
     [Fact]
+    public void Dnd2014DifficultTerrainUsesNumericMultiplierWithPartyMovement()
+    {
+        var walker = Member("Walker");
+        var party = new CrawlPartySheet
+        {
+            Members = [walker],
+            MovementContributors = [Participant(walker, 3)]
+        };
+
+        var result = MovementCapabilityComposer.Compose(
+            Expedition(Procedure(CrawlProcedureCatalog.Dnd2014PresetKey), party),
+            new MovementCompositionInput(TerrainKey: "difficult", PaceKey: "normal"));
+
+        Assert.Equal(MovementCompositionStatus.Resolved, result.Status);
+        Assert.Equal(1.5, result.EffectiveValue);
+        Assert.Equal(1.5, result.SuggestedExpectedDistance?.Value);
+        Assert.Equal(3, result.Policy.PaceDistances?.PerHour["normal"]);
+        Assert.Equal(24, result.Policy.PaceDistances?.PerDay["normal"]);
+    }
+
+    [Fact]
     public void Dnd2024ArcticPaceRemainsConditionalSymbolicData()
     {
         var walker = Member("Walker");
@@ -519,6 +540,7 @@ public sealed class MovementCapabilityCompositionTests
     [InlineData(CrawlProcedureCatalog.BxPresetKey, "fixed-per-day", "travel-day")]
     [InlineData(CrawlProcedureCatalog.Adnd2ePresetKey, "movement-points", "daily-movement-budget")]
     [InlineData(CrawlProcedureCatalog.Dnd35PresetKey, "speed-derived-distance", "hour")]
+    [InlineData(CrawlProcedureCatalog.Dnd2014PresetKey, "speed-and-pace", "hour")]
     [InlineData(CrawlProcedureCatalog.Dnd2024PresetKey, "speed-and-pace", "hour")]
     [InlineData(CrawlProcedureCatalog.Pathfinder2eHexplorationPresetKey, "speed-derived-activities", "hexploration-activity")]
     [InlineData(CrawlProcedureCatalog.ForbiddenLandsPresetKey, "quarter-day-activities", "quarter-day")]
