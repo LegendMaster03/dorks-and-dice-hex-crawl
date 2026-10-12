@@ -31,13 +31,6 @@ public sealed record NavigationAidSelection(
     public static NavigationAidSelection None { get; } = new("none");
 }
 
-public sealed record WatchTravelPlan(
-    HexDirection IntendedDirection,
-    TravelModeSelection Mode,
-    NavigationAidSelection NavigationAid,
-    bool DeliberateDoubleBack = false,
-    bool ContinueAcrossBoundaries = false);
-
 public sealed record ResolvedTravelAmount
 {
     public DistanceMeasure? ExpectedDistance { get; init; }
@@ -70,17 +63,6 @@ public enum NavigationCheckOutcome
     Failed
 }
 
-public sealed record ResolvedNavigation(
-    NavigationCheckOutcome Outcome,
-    int? VeerStepsOnFailure,
-    ResolutionProvenance Provenance)
-{
-    public static ResolvedNavigation NotRequired { get; } = new(
-        NavigationCheckOutcome.NotRequired,
-        null,
-        ResolutionProvenance.ProcedureDefault);
-}
-
 public enum EncounterOutcomeKind
 {
     None,
@@ -109,13 +91,6 @@ public sealed record BoundaryNavigationDecision(
     bool Reorient,
     ResolutionProvenance Provenance);
 
-public sealed record WatchAdvanceInputs(
-    ResolvedTravelAmount Travel,
-    ResolvedNavigation? Navigation = null,
-    ResolvedEncounter? Encounter = null,
-    BoundaryNavigationDecision? BoundaryDecision = null,
-    string? DmOverrideNote = null);
-
 public enum RuntimePauseReason
 {
     ConditionsReviewRequired,
@@ -123,16 +98,4 @@ public enum RuntimePauseReason
     EncounterTriggered,
     BacktrackBoundaryReached,
     CellCourseAdjudicationRequired
-}
-
-public sealed record ActiveWatchState(
-    int WatchNumber,
-    TimeSpan TotalDuration,
-    TimeSpan Elapsed,
-    WatchTravelPlan Plan,
-    ResolvedEncounter Encounter,
-    bool EncounterHandled,
-    RuntimePauseReason? PendingDecision)
-{
-    public TimeSpan Remaining => TotalDuration > Elapsed ? TotalDuration - Elapsed : TimeSpan.Zero;
 }
