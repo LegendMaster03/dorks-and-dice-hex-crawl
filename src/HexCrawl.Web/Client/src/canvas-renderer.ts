@@ -51,7 +51,7 @@ export class CanvasMapRenderer {
         this.resizeToDisplaySize();
         const world = this.getWorld();
         const ctx = this.canvas.getContext("2d");
-        if (!ctx || !world) return;
+        if (!ctx) return;
 
         const ratio = Math.max(1, window.devicePixelRatio || 1);
         const width = this.canvas.width / ratio;
@@ -59,13 +59,17 @@ export class CanvasMapRenderer {
         ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
         ctx.clearRect(0, 0, width, height);
 
-        this.drawSourceMaps(ctx, world, width, height);
-        this.drawReviewOverlay(ctx, width, height);
-        this.drawRegions(ctx, world, width, height);
-        this.drawGrid(ctx, world, width, height);
-        this.drawLinesAndPoints(ctx, world.features, width, height);
-        this.drawLocations(ctx, world, width, height);
-        this.drawSelection(ctx, world, width, height);
+        if (world) {
+            this.drawSourceMaps(ctx, world, width, height);
+            this.drawReviewOverlay(ctx, width, height);
+            this.drawRegions(ctx, world, width, height);
+            this.drawGrid(ctx, world, width, height);
+            this.drawLinesAndPoints(ctx, world.features, width, height);
+            this.drawLocations(ctx, world, width, height);
+            this.drawSelection(ctx, world, width, height);
+        }
+        // Mapless V2 sessions still have authoritative cell geometry.
+        // Render it without inventing an authored world or source image.
         this.drawExpedition(ctx, world, width, height);
     }
 
@@ -378,11 +382,10 @@ export class CanvasMapRenderer {
         ctx.stroke();
     }
 
-    private drawExpedition(ctx: CanvasRenderingContext2D, world: DemoWorld, width: number, height: number): void {
+    private drawExpedition(ctx: CanvasRenderingContext2D, world: DemoWorld | null, width: number, height: number): void {
         // Current cell and inspected cell are separate visual states. Use the
         // authoritative Phase 18 polygon, not an inferred hex-shaped marker.
-        if (this.currentWorldCell && world.tiling && !world.grid
-            && this.currentWorldCell.id.tilingId === world.tiling.id
+        if (this.currentWorldCell && (!world || world.tiling?.id === this.currentWorldCell.id.tilingId)
             && this.currentWorldCell.polygon.length >= 3) {
             const corners = this.currentWorldCell.polygon.map(point => this.toScreen(point, width, height));
             ctx.save();
@@ -397,8 +400,8 @@ export class CanvasMapRenderer {
             ctx.stroke();
             ctx.restore();
         }
-        if (!this.expeditionPosition && (!this.expeditionHex || !world.grid)) return;
-        const position = this.expeditionPosition ?? hexToWorld(world.grid!, this.expeditionHex!);
+        if (!this.expeditionPosition && (!this.expeditionHex || !world?.grid)) return;
+        const position = this.expeditionPosition ?? hexToWorld(world!.grid!, this.expeditionHex!);
         const point = this.toScreen(position, width, height);
         ctx.beginPath();
         ctx.arc(point.x, point.y, 10, 0, Math.PI * 2);

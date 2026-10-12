@@ -169,6 +169,8 @@ export async function renderPeriodicExpeditionWorkbench(
     showKeyedLocation();
 
     const map = new MapSurface(required<HTMLElement>("[data-map]"), () => world, undefined, api);
+    // Mapless geometry has no world origin to center on automatically.
+    if (!world) map.centerOn(topology.position);
     required<HTMLButtonElement>("[data-world]").hidden = world === null;
     required<HTMLElement>("[data-guidance-controls]").append(guidancePreferenceButton(root));
     required<HTMLButtonElement>("[data-world]").addEventListener("click", () => {

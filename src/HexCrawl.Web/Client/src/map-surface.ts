@@ -240,10 +240,20 @@ export class MapSurface {
         if (!this.disposed) this.lifecycle.requestRender();
     }
 
+    public centerOn(point: WorldPoint): void {
+        if (!Number.isFinite(point.x) || !Number.isFinite(point.y))
+            throw new Error("Map center requires a finite world position.");
+        this.viewport.center = { ...point };
+        this.requestRender();
+    }
+
     public resetView(): void {
         const world = this.getWorld();
         this.viewport.center = world?.tiling && !world.grid
-            ? { ...world.tiling.origin } : { x: 0, y: 0 };
+            ? { ...world.tiling.origin }
+            : !world && this.renderer.currentWorldCell
+                ? { ...this.renderer.currentWorldCell.center }
+                : { x: 0, y: 0 };
         this.viewport.zoom = 56;
         this.announceView("Map view reset");
         this.requestRender();

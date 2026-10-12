@@ -65,6 +65,18 @@ test("active expedition start entry points use cell APIs and no retired V1 start
     assert.match(api, /"POST", "\/api\/expeditions"/);
 });
 
+test("renderer shows actual cell polygon and party in mapless and legacy hex worlds", () => {
+    const renderer = file("canvas-renderer.ts");
+    const map = file("map-surface.ts");
+    const periodic = file("modules","expeditions","periodic-expedition-workbench.ts");
+    assert.match(renderer, /if \(!ctx\) return/);
+    assert.doesNotMatch(renderer, /if \(!ctx \|\| !world\) return/);
+    assert.match(renderer, /this\.drawExpedition\(ctx, world, width, height\)/);
+    assert.match(renderer, /!world \|\| world\.tiling\?\.id === this\.currentWorldCell\.id\.tilingId/);
+    assert.match(map, /public centerOn\(point: WorldPoint\)/);
+    assert.match(periodic, /if \(!world\) map\.centerOn\(topology\.position\)/);
+});
+
 test("mapless cell workbench does not require a fabricated overworld", () => {
     const view = file("modules","expeditions","expedition-view.ts");
     const periodic = file("modules","expeditions","periodic-expedition-workbench.ts");
