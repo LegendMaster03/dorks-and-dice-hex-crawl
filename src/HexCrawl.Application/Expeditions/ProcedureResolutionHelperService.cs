@@ -71,6 +71,7 @@ public sealed class ProcedureResolutionHelperService(
             expedition.Version, command with
             {
                 ExpectedDistance = expected,
+                ExpectedDistanceRulesNote = prepared.ExpectedDistanceRulesNote,
                 NavigationDifficultyClass = prepared.NavigationDifficultyClass,
                 NavigationDifficultyRulesNote = prepared.NavigationDifficultyRulesNote
             });

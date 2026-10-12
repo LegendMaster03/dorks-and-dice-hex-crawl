@@ -49,6 +49,7 @@ public sealed record CellProcedureResolutionHelperCommand
     public string? Route { get; init; }
     public IReadOnlyList<string> NavigationRiskFactors { get; init; } = [];
     internal string? NavigationDifficultyRulesNote { get; init; }
+    internal string? ExpectedDistanceRulesNote { get; init; }
 }
 
 public sealed record CellProcedureResolutionHelperResult(

@@ -22,7 +22,9 @@ public sealed class ProcedureResolutionHelperTests
             {
                 ExpectedVersion = 1,
                 ExpectedDistance = new DistanceMeasure(2, DistanceUnit.Miles),
+                ExpectedDistanceRulesNote = "Provider: distance measurement.",
                 NavigationDifficultyClass = 20,
+                NavigationDifficultyRulesNote = "Provider: navigation risk.",
                 FailureVeerDegrees = 37.5
             });
 
@@ -31,9 +33,11 @@ public sealed class ProcedureResolutionHelperTests
         Assert.Equal(1d, result.Travel.ActualDistance!.Value.Value, 8);
         Assert.Equal(DistanceUnit.Miles, result.Travel.ActualDistance.Value.Unit);
         Assert.Equal(ResolutionSource.AutomaticRoll, result.Travel.Provenance.Source);
+        Assert.Contains("Provider: distance measurement.", result.Travel.Provenance.Note!);
         Assert.Equal(NavigationCheckOutcome.Failed, result.Navigation!.Outcome);
         Assert.Equal(37.5, result.Navigation.VeerDegreesOnFailure);
         Assert.Contains("degrees", result.Navigation.Provenance.Note!);
+        Assert.Contains("Provider: navigation risk.", result.Navigation.Provenance.Note!);
         Assert.Equal(EncounterOutcomeKind.WanderingEncounter, result.Encounter!.Kind);
         Assert.Equal(TimeSpan.FromHours(1), result.Encounter.OccursAt);
         Assert.Equal(4, result.Rolls.Count);

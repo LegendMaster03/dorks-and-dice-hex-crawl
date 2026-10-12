@@ -44,6 +44,8 @@ public sealed class ProcedureResolutionResolver(IProcedureResolutionRandomSource
                     throw new InvalidOperationException("A generated cell travel distance is invalid.");
                 var note = string.Create(CultureInfo.InvariantCulture,
                     $"Automatic cell travel: {Describe(roll)}; expected={expected.Value:0.###} {expected.Unit.Symbol}; actual={actual:0.###} {expected.Unit.Symbol}.");
+                if (!string.IsNullOrWhiteSpace(command.ExpectedDistanceRulesNote))
+                    note += " " + command.ExpectedDistanceRulesNote.Trim();
                 travel = ResolvedTravelAmount.Distance(
                     expected, new DistanceMeasure(actual, expected.Unit),
                     new ResolutionProvenance(ResolutionSource.AutomaticRoll, note));
