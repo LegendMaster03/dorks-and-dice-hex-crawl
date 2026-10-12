@@ -634,6 +634,7 @@ export type StartCellExpeditionInput = {
 
 export type CellWatchRequest = {
     expectedVersion: number;
+    generatedProcedureResolutionId?: string;
     plan: {
         intendedHeading: WorldPoint;
         deliberateDoubleBack: boolean;

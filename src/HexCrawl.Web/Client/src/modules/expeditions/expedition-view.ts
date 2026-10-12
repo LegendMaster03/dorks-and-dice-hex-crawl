@@ -26,6 +26,7 @@ import { renderPeriodicExpeditionWorkbench } from "./periodic-expedition-workben
 import { publishExpeditionRuntimeChanged } from "./expedition-runtime-events";
 import { ExpeditionSurvivalResourcesPanel } from "./survival-resources-panel";
 import { ExpeditionWatchController } from "./expedition-watch-controller";
+import { renderPhase15NextAction } from "./phase15-next-action";
 import { authoritativeFixedWatchDistance } from "./expedition-party-movement";
 import {
     loadTravelPreferences,
@@ -491,27 +492,12 @@ export async function renderExpedition(
         return guide;
     };
 
-    const renderCurrentAction = (action: ReturnType<typeof expeditionWorkspacePresentation>["action"]): HTMLElement => {
-        const section = document.createElement("section");
-        section.className = "hc-current-action";
-        const header = document.createElement("header");
-        header.append(textElement("h2", "Next action"), badge(action.urgent ? "Needs resolution" : "Ready", action.urgent ? "warning" : "good"));
-        const copy = currentActionCopy(action);
-        const actionLabel = textElement("p", copy.label, "hc-current-action-primary");
-        actionLabel.dataset.currentActionLabel = "";
-        const actionDetail = textElement("p", copy.detail, "hc-current-action-detail");
-        actionDetail.dataset.currentActionDetail = "";
-        section.append(header, actionLabel, actionDetail);
-        const row = document.createElement("div");
-        row.className = "hc-button-row";
-        const primary = button(copy.label, () => activateAction(action.kind));
-        primary.className = "hc-primary-action";
-        primary.dataset.currentActionButton = "";
-        row.append(primary);
-        section.append(row, renderGuidedActionGuide(action));
-        section.append(guidedDisclosure("Why is this next?", copy.label, guidedActionExplanation(action.kind)));
-        return section;
-    };
+    const renderCurrentAction = (action: ReturnType<typeof expeditionWorkspacePresentation>["action"]): HTMLElement =>
+        renderPhase15NextAction(
+            action, currentActionCopy(action),
+            () => activateAction(action.kind),
+            renderGuidedActionGuide(action),
+            guidedActionExplanation(action.kind));
 
     const renderSpatialWorkspace = (): HTMLElement => {
         const section = document.createElement("section");
