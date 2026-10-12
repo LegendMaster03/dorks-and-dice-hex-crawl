@@ -2,7 +2,7 @@
 
 **Owner directive (2026-10-12):** the initial hex prototype must leave no executable source trace. Hexagonal worlds and the three existing hex-oriented procedure presets must remain functional **as data-driven instances of the single generalized polygonal tiling engine**, not through hex-specific algorithms, adapters, runtime structures, rendering, start forms, snapshots, or fallback handlers. This requirement supersedes the previous Phase 20.3 readiness assessment.
 
-**Release status:** BLOCKED for dev/testing deployment, merge and WorkChat signed-in acceptance until the criteria below are demonstrated. The previous green CI at `a76aa430` proves the then-present code compiled; it does not prove absence of V1 or special-case geometry.
+**Release status (2026-10-12):** BLOCKED for dev/testing deployment, merge and WorkChat signed-in acceptance. The last verified successful baseline is `cc79753e` ([CI 38219426704](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38219426704)). The current incremental cleanup has not passed the architectural gate, and its final CI must be independently checked.
 
 ## First implementation slices completed — not the release gate
 
@@ -12,6 +12,14 @@
 - Removed the obsolete world-start and abstract-hex-state constructors from `ExpeditionStartService`. Nonspatial creation uses `StartNonSpatialAsync`, with the original cell starts remaining separate. Tests that required the V1-only preset materializer or V1 spatial advance were removed or rewritten against V2.
 - Removed redundant V1 application session and context services and old movement/navigation/watch lifecycle engine files. Rewrote the focused browser assistant to retain only nonspatial interval/encounter work and route all spatial sessions into the V2 cell view; removed its V1 hex-steps/direction/forms. [CI 38218781220](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38218781220) passed at code commit `cf05640d`.
 - **The release gate is still blocked**: both V1 runtime state classes, the original browser expedition and watch controller, axial world/authoring, mapless start context, and legacy wire responses still remain. Passing CI on this partial migration is not zero-prototype acceptance. No deploy or merge is authorized.
+
+### Further confirmed source removals (October 12)
+
+- Obsolete `HexExited` and `HexEntered` enumerators removed; surviving event ids retain their original numeric values; generalized cell event tests now assert `Cell` identifiers.
+- The no-longer-used V1 `WatchAdvanceResult` domain payload was removed.
+- The unused axial `expedition-watch-ledger.ts` and its V1-only unit tests were removed. Active V2 travel history remains in `periodic-expedition-workbench.ts`.
+- The live branch still contains `ExpeditionState`, `HexTraversalState`, legacy procedure movement and old HTTP state placeholders, an axial mapless constructor, persisted grid/world fallback, dormant V1 expedition page/controller, and hex-only map authoring. **Do not mistake incremental deletion for a passing source gate.**
+- The development database still requires an owner-authorized, verified one-time schema 10→11 migration. Old world snapshots and map registrations additionally need a data-preserving conversion before removing grid readers. No dev database or map-asset migration has been performed.
 
 ## Mandatory removal inventory
 
