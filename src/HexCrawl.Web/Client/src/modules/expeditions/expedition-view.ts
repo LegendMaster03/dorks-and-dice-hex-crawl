@@ -5,7 +5,7 @@ import type { ExpeditionEffectState } from "../../effect-types";
 import { JourneyApi } from "../../journey-api";
 import type { ExpeditionJourneyState } from "../../journey-types";
 import { ensurePhase15Styles } from "../../phase15-styles";
-import { formatHours } from "../../runtime-view";
+import { formatDistance, formatHours } from "../../runtime-view";
 import { SurvivalResourcesApi } from "../../survival-api";
 import type { SurvivalResources } from "../../survival-types";
 import { canonicalExpeditionRoute } from "../../tool-route";
