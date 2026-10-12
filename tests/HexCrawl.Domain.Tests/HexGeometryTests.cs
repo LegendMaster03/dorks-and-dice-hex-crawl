@@ -24,15 +24,6 @@ public sealed class HexGeometryTests
     }
 
     [Fact]
-    public void NeighborAndDistanceUseAxialInvariants()
-    {
-        var origin = new HexCoordinate(0, 0);
-        Assert.Equal(6, origin.Neighbors().Distinct().Count());
-        Assert.All(origin.Neighbors(), neighbor => Assert.Equal(1, origin.DistanceTo(neighbor)));
-        Assert.Equal(3, origin.DistanceTo(new HexCoordinate(3, -2)));
-    }
-
-    [Fact]
     public void DistanceMeasureConvertsKnownPhysicalUnits()
     {
         var miles = new DistanceMeasure(1, DistanceUnit.Miles);

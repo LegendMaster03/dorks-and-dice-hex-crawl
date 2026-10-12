@@ -2,19 +2,6 @@ namespace HexCrawl.Domain.Spatial;
 
 public static class FeatureIntersection
 {
-    public static bool IntersectsHex(HexGridDefinition grid, HexCoordinate coordinate, SpatialFeature feature)
-    {
-        var hex = HexGeometry.Corners(grid, coordinate);
-        return feature switch
-        {
-            PointFeature point => PointInPolygon(point.Position, hex),
-            LinearFeature line => PolylineIntersectsPolygon(line.Path, hex),
-            RegionFeature region => PolygonsIntersect(region.Boundary, hex),
-            _ => false
-        };
-    }
-
-
     /// <summary>The shortest Euclidean distance to a polygon (zero on or inside it).</summary>
     public static double DistanceToPolygon(WorldPoint point, IReadOnlyList<WorldPoint> polygon)
     {

@@ -4,11 +4,13 @@
 
 **Repository:** `LegendMaster03/dorks-and-dice-hex-crawl`  
 **Feature branch (unmerged, undeployed):** `feature/tile-crawl-phase-20.2-application-persistence`  
-**Last verified green automated head before the latest edits:** [`003c1247`](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/commit/003c124745ca80eccd7660c452dc56dd7e6fcb2c), [CI 38297158435](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38297158435), **successful**. This is automated validation, **not** completion of the architectural deletion gate or rendered browser acceptance.
+**Last verified green automated head before the latest edits:** [`5907d314`](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/commit/5907d314d78ca151a931b230dc3547a4dac2d67c), [CI 38297955265](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38297955265), **successful**. This is automated validation, **not** completion of the architectural deletion gate or rendered browser acceptance.
 
 ## Deleted from the feature branch
 
-- **Pending CI:** Delete the unused `KnownHexes` state collection from player knowledge and stale runtime visual fixture/test assertions. Generalized discovery, known-cell serialization and knowledge ownership remain intact; schema/procedure revision fields remain unchanged.
+- **Pending CI:** Remove `FeatureIntersection.IntersectsHex`, `OverworldDefinition.FeaturesIntersecting(HexCoordinate)` and the no-longer-used six-neighbor/distance algorithms on the axial data record. Keep generalized polygon intersection and convert behavior tests to realized periodic geometry. The remaining `HexCoordinate` record is legacy persisted data only; actual data conversion is still unperformed.
+
+- **Verified CI 38297955265:** Delete the unused `KnownHexes` state collection from player knowledge and stale runtime visual fixture/test assertions. Generalized discovery, known-cell serialization and knowledge ownership remain intact; schema/procedure revision fields remain unchanged.
 
 - **Verified CI 38297158435:** Delete unused axial map selection and highlighting in `map-surface.ts` and `canvas-renderer.ts`. Removed the dead `setHexSelectionHandler`, local `selectedHex` state and the world-to-axial click fallback. Retained exact periodic cell selection, pointer authoring, registered-map source previews, accessibility input and polygon highlighting. The old grid-preview drawing and registration model must still be generalized.
 
