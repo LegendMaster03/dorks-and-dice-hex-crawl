@@ -148,11 +148,11 @@ test("interactive canvas exposes accessible keyboard controls and authoritative 
     assert.match(surface, /aria-keyshortcuts/);
     assert.match(surface, /ArrowUp/);
     assert.match(surface, /event\.key === "Enter" \|\| event\.key === " "/);
-    assert.match(surface, /worldToHex/);
-    assert.match(surface, /renderer\.selectedHex = selected/);
-    assert.doesNotMatch(surface, /Current expedition hex q/);
+    assert.match(surface, /lookupWorldCell/);
+    assert.match(surface, /renderer\.selectedWorldCell = geometry/);
+    assert.doesNotMatch(surface, /worldToHex|selectedHex|setHexSelectionHandler/);
     assert.match(surface, /Current expedition cell is outlined/);
-    assert.match(surface, /Selected hex q/);
+    assert.match(surface, /Selected a world cell/);
 });
 
 test("DM-facing world authoring copy explains empty states and keeps deeper map terminology secondary", () => {
