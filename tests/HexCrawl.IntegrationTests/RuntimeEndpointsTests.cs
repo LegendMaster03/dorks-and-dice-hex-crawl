@@ -50,7 +50,7 @@ public sealed class RuntimeEndpointsTests
                 presets.EnumerateArray(),
                 preset => preset.GetProperty("presetKey").GetString() == "simple-hex-step");
             Assert.Equal(
-                "HexSteps",
+                "CellSteps",
                 hexStepPreset.GetProperty("procedure").GetProperty("runtime").GetProperty("travelResolution").GetString());
 
             var oneRingPreset = Assert.Single(

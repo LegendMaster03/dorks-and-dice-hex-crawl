@@ -823,6 +823,16 @@ public sealed class Phase18CellDecisionEndpointsTests
                     GenericProcedureExecutionHandlers.HexProgressPolicy)
                 .Select(m =>
                 {
+                    if (m.Mechanic.ExecutionHandler ==
+                        GenericProcedureExecutionHandlers.SpatialTurnCostPolicy)
+                    {
+                        // A discrete cell-step procedure has no distance-denominated
+                        // turning charge. This test changes its movement policy
+                        // without inventing a second hex-specific runtime.
+                        var turns = m.Parameters.ToDictionary(x => x.Key, x => x.Value);
+                        turns["neighborCenterDistanceFactor"] = "0";
+                        return m with { Parameters = turns };
+                    }
                     if (m.Mechanic.ExecutionHandler !=
                         GenericProcedureExecutionHandlers.MovementResolutionPolicy) return m;
                     var parameters = m.Parameters.ToDictionary(x => x.Key, x => x.Value);
