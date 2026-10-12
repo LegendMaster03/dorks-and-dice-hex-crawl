@@ -55,6 +55,8 @@ public sealed class ExpeditionModule : IHexCrawlModule
         api.MapDelete("/expeditions/{expeditionId:guid}/effects/{effectId:guid}", ClearEffectAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/consequences/{consequenceId:guid}/resolve", ResolvePendingConsequenceAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/assistants/watch", RecordNonSpatialWatchAssistantAsync);
+        api.MapPost("/expeditions/{expeditionId:guid}/nonspatial/encounters", RecordNonSpatialEncounterAsync);
+        api.MapPost("/expeditions/{expeditionId:guid}/nonspatial/encounters/{occurrenceId:guid}/resolve", ResolveNonSpatialEncounterAsync);
     }
 
     private static async Task<IResult> ListAllExpeditionsAsync(
@@ -392,6 +394,43 @@ public sealed class ExpeditionModule : IHexCrawlModule
     {
         var owner = UserId(context);
         var expedition = await assistants.RecordNonSpatialWatchAsync(expeditionId, owner, request.ToCommand(), cancellationToken);
+        return Results.Ok(await ContractAsync(expedition, owner, service, cancellationToken));
+    }
+
+    private static async Task<IResult> RecordNonSpatialEncounterAsync(
+        Guid expeditionId,
+        RecordNonSpatialEncounterRequest request,
+        HttpContext context,
+        ExpeditionAssistantService assistants,
+        HexCrawlService service,
+        CancellationToken cancellationToken)
+    {
+        request.Validate();
+        var owner = UserId(context);
+        var loaded = await service.GetExpeditionAsync(expeditionId, owner, cancellationToken);
+        if (loaded.Runtime is not NonSpatialSessionState)
+            throw new InvalidOperationException("Nonspatial encounter recording requires a nonspatial session.");
+        var expedition = await assistants.RecordEncounterCadenceAsync(
+            expeditionId, owner, request.ToCommand(), cancellationToken);
+        return Results.Ok(await ContractAsync(expedition, owner, service, cancellationToken));
+    }
+
+    private static async Task<IResult> ResolveNonSpatialEncounterAsync(
+        Guid expeditionId,
+        Guid occurrenceId,
+        ResolveNonSpatialEncounterRequest request,
+        HttpContext context,
+        ExpeditionAssistantService assistants,
+        HexCrawlService service,
+        CancellationToken cancellationToken)
+    {
+        request.Validate();
+        var owner = UserId(context);
+        var loaded = await service.GetExpeditionAsync(expeditionId, owner, cancellationToken);
+        if (loaded.Runtime is not NonSpatialSessionState)
+            throw new InvalidOperationException("Nonspatial encounter resolution requires a nonspatial session.");
+        var expedition = await assistants.ResolveEncounterAsync(
+            expeditionId, owner, request.ToCommand(occurrenceId), cancellationToken);
         return Results.Ok(await ContractAsync(expedition, owner, service, cancellationToken));
     }
 

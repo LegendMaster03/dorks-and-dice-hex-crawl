@@ -825,7 +825,7 @@ public sealed class ExpeditionWorkbenchEndpointsTests
                         && item.GetProperty("watchNumber").GetInt32() == 1);
 
                 using var encounterResponse = await client.PostAsJsonAsync(
-                    $"/api/expeditions/{sessionId:D}/assistants/encounters",
+                    $"/api/expeditions/{sessionId:D}/nonspatial/encounters",
                     new
                     {
                         expectedVersion = session.GetProperty("version").GetInt64(),
@@ -873,7 +873,7 @@ public sealed class ExpeditionWorkbenchEndpointsTests
 
                 var pendingVersion = session.GetProperty("version").GetInt64();
                 using (var resolveResponse = await restartedClient.PostAsJsonAsync(
-                    $"/api/expeditions/{sessionId:D}/encounters/{occurrenceId:D}/resolve",
+                    $"/api/expeditions/{sessionId:D}/nonspatial/encounters/{occurrenceId:D}/resolve",
                     new
                     {
                         expectedVersion = pendingVersion,
@@ -895,7 +895,7 @@ public sealed class ExpeditionWorkbenchEndpointsTests
                         && item.GetProperty("encounterOccurrenceId").GetGuid() == occurrenceId);
 
                 using (var staleResolve = await restartedClient.PostAsJsonAsync(
-                    $"/api/expeditions/{sessionId:D}/encounters/{occurrenceId:D}/resolve",
+                    $"/api/expeditions/{sessionId:D}/nonspatial/encounters/{occurrenceId:D}/resolve",
                     new
                     {
                         expectedVersion = pendingVersion,
