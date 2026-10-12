@@ -100,6 +100,7 @@ The following table records which already-executable Phase 2 modules are selecte
 | B/X | `time.interval`, `encounters.cadence` |
 | AD&D 2e | `time.interval` |
 | D&D 3.5e | `time.interval` |
+| D&D 5e / 2014 | `time.interval` |
 | D&D 5.5e / 2024 | `time.interval` |
 | Pathfinder 2e Hexploration | `time.interval` |
 | Forbidden Lands | `time.interval` |
@@ -136,6 +137,14 @@ The preset represents an hourly interval plus speed-derived movement budget, ter
 Forced travel produces the transient consequence consumed by the persistent-effect contract. Resource consumption is not falsely modeled as a required source of fatigue.
 
 Evidence basis: D&D 3.5 SRD movement, Survival, and wilderness rules from d20srd.org.
+
+### D&D 5e / 2014
+
+The 2014 preset specifies three rates independently for hourly and daily travel: fast 4 mi/hour and 30 mi/day, normal 3 mi/hour and 24 mi/day, slow 2 mi/hour and 18 mi/day. Difficult terrain halves travel distances. Travel tasks, navigation, getting lost, foraging, food/water consumption, and exhaustion are stored as generic procedure data.
+
+The generic `movement.budget` contract accepts optional `paceDistanceUnit`, `paceRatesPerHour`, `paceRatesPerDay`, and `paceEffects` parameters. Its policy projection validates rate completeness without introducing edition-specific dispatch. Fast-pace Perception and slow-pace stealth effects remain declarative until a selected mechanic resolves them.
+
+Source: D&D Basic Rules (2014) / SRD 5.1 adventuring rules.
 
 ### D&D 5.5e / 2024
 

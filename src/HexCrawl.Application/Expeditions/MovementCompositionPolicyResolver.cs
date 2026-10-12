@@ -40,6 +40,12 @@ public sealed record MovementTerrainPolicy(
         null);
 }
 
+public sealed record MovementPaceDistances(
+    string DistanceUnit,
+    IReadOnlyDictionary<string, double> PerHour,
+    IReadOnlyDictionary<string, double> PerDay,
+    IReadOnlyDictionary<string, string> Effects);
+
 public sealed record MovementCompositionPolicy(
     MovementCompositionPolicySupport Support,
     string? BudgetModel,
@@ -51,7 +57,8 @@ public sealed record MovementCompositionPolicy(
     string? MechanicKey,
     int? MechanicVersion,
     string? ExecutionHandler,
-    string? UnsupportedReason)
+    string? UnsupportedReason,
+    MovementPaceDistances? PaceDistances = null)
 {
     public static MovementCompositionPolicy None { get; } = new(
         MovementCompositionPolicySupport.None,
@@ -159,6 +166,40 @@ public static class MovementCompositionPolicyResolver
                 .ToArray()
             : [];
 
+        MovementPaceDistances? paceDistances = null;
+        var hasPaceData = budget.Parameters.ContainsKey("paceDistanceUnit")
+            || budget.Parameters.ContainsKey("paceRatesPerHour")
+            || budget.Parameters.ContainsKey("paceRatesPerDay")
+            || budget.Parameters.ContainsKey("paceEffects");
+        if (hasPaceData)
+        {
+            if (!budget.Parameters.TryGetValue("paceDistanceUnit", out var distanceUnit)
+                || string.IsNullOrWhiteSpace(distanceUnit)
+                || !budget.Parameters.TryGetValue("paceRatesPerHour", out var hourlyText)
+                || !TryParseMap(hourlyText, out var hourlyMap)
+                || !budget.Parameters.TryGetValue("paceRatesPerDay", out var dailyText)
+                || !TryParseMap(dailyText, out var dailyMap)
+                || travelModeKeys.Length == 0
+                || hourlyMap.Count != travelModeKeys.Length
+                || dailyMap.Count != travelModeKeys.Length
+                || !travelModeKeys.ToHashSet(StringComparer.Ordinal).SetEquals(hourlyMap.Keys)
+                || !travelModeKeys.ToHashSet(StringComparer.Ordinal).SetEquals(dailyMap.Keys)
+                || !TryParsePositiveRates(hourlyMap, out var hourly)
+                || !TryParsePositiveRates(dailyMap, out var daily))
+            {
+                return Unsupported(budget, terrain, "The stored travel-pace rate tables must define positive finite distances for every named pace and a distance unit.");
+            }
+            IReadOnlyDictionary<string, string> effects = new Dictionary<string, string>(StringComparer.Ordinal);
+            if (budget.Parameters.TryGetValue("paceEffects", out var effectsText)
+                && (!TryParseMap(effectsText, out effects)
+                    || effects.Count != travelModeKeys.Length
+                    || !travelModeKeys.ToHashSet(StringComparer.Ordinal).SetEquals(effects.Keys)))
+            {
+                return Unsupported(budget, terrain, "The stored pace effects must describe every named pace.");
+            }
+            paceDistances = new MovementPaceDistances(distanceUnit.Trim(), hourly, daily, effects);
+        }
+
         return new MovementCompositionPolicy(
             MovementCompositionPolicySupport.Supported,
             budgetModel,
@@ -170,7 +211,8 @@ public static class MovementCompositionPolicyResolver
             budget.Mechanic.Key,
             budget.Mechanic.Version,
             budget.Mechanic.ExecutionHandler,
-            null);
+            null,
+            paceDistances);
     }
 
     private static MovementTerrainPolicy ResolveTerrain(CampaignProcedure procedure)
@@ -258,6 +300,26 @@ public static class MovementCompositionPolicyResolver
         selected.Mechanic.Version,
         selected.Mechanic.ExecutionHandler,
         reason);
+
+    private static bool TryParsePositiveRates(
+        IReadOnlyDictionary<string, string> source,
+        out IReadOnlyDictionary<string, double> rates)
+    {
+        var parsed = new Dictionary<string, double>(StringComparer.Ordinal);
+        foreach (var (pace, rawRate) in source)
+        {
+            if (!double.TryParse(rawRate, NumberStyles.Float, CultureInfo.InvariantCulture, out var rate)
+                || !double.IsFinite(rate)
+                || rate <= 0)
+            {
+                rates = parsed;
+                return false;
+            }
+            parsed.Add(pace, rate);
+        }
+        rates = parsed;
+        return true;
+    }
 
     private static bool TryParseMap(string value, out IReadOnlyDictionary<string, string> result)
     {
