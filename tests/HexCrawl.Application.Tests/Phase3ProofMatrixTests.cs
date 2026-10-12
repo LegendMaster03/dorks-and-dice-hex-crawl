@@ -253,7 +253,6 @@ public sealed class Phase3ProofMatrixTests
         [
             GenericProcedureExecutionHandlers.FixedIntervalDuration,
             GenericProcedureExecutionHandlers.MovementResolutionPolicy,
-            GenericProcedureExecutionHandlers.HexProgressPolicy,
             GenericProcedureExecutionHandlers.NavigationCheckPolicy,
             GenericProcedureExecutionHandlers.EncounterCheckCadence,
             GenericProcedureExecutionHandlers.DeterministicResolutionHelpers

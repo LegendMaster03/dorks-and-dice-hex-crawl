@@ -26,8 +26,7 @@ internal static class SyntheticProcedureApiFixture
             {
                 Include(GenericProcedureCatalog.TimeIntervalModule),
                 Include(GenericProcedureCatalog.MovementResolutionModule),
-                Include(GenericProcedureCatalog.HexProgressModule),
-                Include(GenericProcedureCatalog.NavigationModule),
+                    Include(GenericProcedureCatalog.NavigationModule),
                 Include(GenericProcedureCatalog.EncounterCadenceModule),
                 Include(GenericProcedureCatalog.ResolutionHelpersModule),
                 Include(GenericProcedureCatalog.MovementBudgetModule),
@@ -135,9 +134,8 @@ internal static class SyntheticProcedureApiFixture
             stored.GetProperty("revision").GetInt32());
     }
 
-    // Create a native geometric procedure with the independent pace policy
-    // attached. The old API composer fixture is intentionally V1 and must not
-    // be converted into an executable V2 snapshot by a start endpoint.
+    // Create a pinned native geometric procedure with an independent pace policy.
+    // This is distinct from the data-only mixed-procedure fixture above.
     public static async Task<SyntheticProcedureRevision> CreatePacedGeometricAsync(
         string connectionString)
     {

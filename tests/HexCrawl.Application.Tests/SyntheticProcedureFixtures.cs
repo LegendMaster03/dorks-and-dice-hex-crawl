@@ -23,7 +23,6 @@ internal static class SyntheticProcedureFixtures
         [
             Include(GenericProcedureCatalog.TimeIntervalModule),
             Include(GenericProcedureCatalog.MovementResolutionModule),
-            Include(GenericProcedureCatalog.HexProgressModule),
             Include(GenericProcedureCatalog.NavigationModule),
             Include(GenericProcedureCatalog.EncounterCadenceModule),
             Include(GenericProcedureCatalog.ResolutionHelpersModule),
