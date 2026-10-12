@@ -34,7 +34,6 @@ const rules: CompactRuleDescriptor[] = [
     { moduleKey: "movement.budget", group: "Travel flow", label: "Available movement", description: "Determines how much movement the party has before terrain and route adjustments.", order: 30 },
     { moduleKey: "movement.terrain", group: "Travel flow", label: "Terrain and routes", description: "Adjusts movement for terrain, routes, and weather.", order: 40 },
     { moduleKey: "movement.resolution", group: "Travel flow", label: "Resolve movement", description: "Defines whether travel advances by distance or whole cells and how actual distance is resolved.", order: 80 },
-    { moduleKey: "movement.hex-progress", group: "Travel flow", label: "Cell progress", description: "Tracks partial progress and direction changes when movement crosses map cells.", order: 90 },
     { moduleKey: "navigation.check", group: "Travel flow", label: "Navigation checks", description: "Determines whether route checks are required and whether an incorrect course persists.", order: 50 },
     { moduleKey: "navigation.outcome", group: "Travel flow", label: "Getting lost and recovery", description: "Defines what happens when navigation fails and how the party recognizes or corrects its course.", order: 60 },
     { moduleKey: "encounters.cadence", group: "Travel flow", label: "Encounter checks", description: "Sets the ordinary cadence for encounter checks.", order: 70 },
@@ -56,13 +55,6 @@ const labels: Record<string, string> = {
     durationTicks: "Travel period",
     travelResolution: "Movement method",
     actualDistanceResolution: "Actual distance",
-    tracksIntraHexProgress: "Track partial cell progress",
-    startingExitProgressFactor: "Starting exit progress",
-    nearExitProgressFactor: "Nearby exit progress",
-    farExitProgressFactor: "Far exit progress",
-    backExitProgressFactor: "Back exit progress",
-    directionChangesCostProgress: "Direction changes cost progress",
-    directionChangeProgressCostFactor: "Direction-change cost",
     neighborCenterDistanceFactor: "Turning effort as a fraction of the neighboring cell-center distance",
     supportsDeliberateDoubleBack: "Allow deliberate double-back",
     usesNavigationChecks: "Checks required",
@@ -151,11 +143,6 @@ const labels: Record<string, string> = {
 };
 
 const numericHelp: Partial<Record<string, string>> = {
-    startingExitProgressFactor: "The fraction of the configured map scale required to leave the starting hex before an entry side is known. 0.5 means half the map scale.",
-    nearExitProgressFactor: "The fraction of the configured map scale required to leave through a nearby side after an entry side is known. 0.5 means half the map scale.",
-    farExitProgressFactor: "The fraction of the configured map scale required to leave through a far side after an entry side is known. 1 means the full configured center-to-center distance.",
-    backExitProgressFactor: "The fraction of the configured map scale required to leave back through the entry side. 0.5 means half the map scale.",
-    directionChangeProgressCostFactor: "The fraction of the configured map scale subtracted from accumulated progress when a direction change costs progress. 0.5 means half the map scale.",
     baseBudget: "The unadjusted movement allowance before terrain, routes, weather, load, effects, or DM overrides are applied. The Movement unit setting supplies the unit.",
     travelChecksPerInterval: "How many encounter checks this schedule makes during each configured travel period.",
     timeCost: "How many units of the selected Time unit this activity or procedure step consumes.",
@@ -165,7 +152,7 @@ const numericHelp: Partial<Record<string, string>> = {
 };
 
 const choiceSets: Record<string, Array<{ value: string; label: string }>> = {
-    "movement.resolution.travelResolution": choices("ContinuousDistance", "HexSteps"),
+    "movement.resolution.travelResolution": choices("ContinuousDistance", "CellSteps"),
     "movement.resolution.actualDistanceResolution": choices("Fixed", "VariableResolved"),
     "encounters.cadence.cadence": choices("None", "PerWatch", "PerDay"),
     "movement.budget.budgetModel": choices(
@@ -240,14 +227,13 @@ const choiceSets: Record<string, Array<{ value: string; label: string }>> = {
 };
 
 const booleanKeys = new Set([
-    "tracksIntraHexProgress", "directionChangesCostProgress", "supportsDeliberateDoubleBack",
+    "supportsDeliberateDoubleBack",
     "usesNavigationChecks", "usesPersistentVeer", "campCheck", "roleDriven", "allowNegativeProgress",
     "requiresResolvedTrigger", "blocksRelevantTravelWhileResolutionRequired"
 ]);
 
 const numberKeys = new Set([
-    "startingExitProgressFactor", "nearExitProgressFactor", "farExitProgressFactor", "backExitProgressFactor",
-    "directionChangeProgressCostFactor", "baseBudget", "travelChecksPerInterval", "timeCost", "normalTravelLimit",
+    "baseBudget", "travelChecksPerInterval", "timeCost", "normalTravelLimit",
     "progressFloor", "progressCeiling"
 ]);
 
@@ -255,10 +241,6 @@ const keyListKeys = new Set([
     "activityKeys", "roleKeys", "resourceKinds", "effectKinds", "triggerSources", "dimensions", "stageKeys"
 ]);
 const mappingKeys = new Set(["terrainAdjustments"]);
-const progressFactorKeys = new Set([
-    "startingExitProgressFactor", "nearExitProgressFactor", "farExitProgressFactor",
-    "backExitProgressFactor", "directionChangeProgressCostFactor"
-]);
 const textKeys = new Set(["evaluationInterval"]);
 
 type PresentationSectionLayout = {
@@ -284,10 +266,6 @@ const presentationSectionLayouts: Record<string, PresentationSectionLayout[]> = 
     ],
     "movement.resolution": [
         { key: "resolution", label: "Movement resolution", parameters: ["travelResolution", "actualDistanceResolution"] }
-    ],
-    "movement.hex-progress": [
-        { key: "progress", label: "Cell progress", parameters: ["tracksIntraHexProgress", "startingExitProgressFactor", "nearExitProgressFactor", "farExitProgressFactor", "backExitProgressFactor"] },
-        { key: "course-change", label: "Course changes", parameters: ["directionChangesCostProgress", "directionChangeProgressCostFactor", "supportsDeliberateDoubleBack"] }
     ],
     "navigation.check": [
         { key: "check", label: "Navigation check", parameters: ["usesNavigationChecks", "usesPersistentVeer"] }
@@ -434,10 +412,6 @@ export function friendlyStoredValue(key: string, value: string, moduleKey: strin
         const [storedKey, storedValue] = part.split("=", 2);
         return storedValue === undefined ? friendlyToken(part) : `${friendlyToken(storedKey)}: ${friendlyToken(storedValue)}`;
     }).join(", ");
-    if (progressFactorKeys.has(key)) {
-        const factor = Number(value);
-        if (Number.isFinite(factor)) return `${formatNumber(factor * 100)}% of a cell crossing`;
-    }
     return friendlyToken(value);
 }
 
