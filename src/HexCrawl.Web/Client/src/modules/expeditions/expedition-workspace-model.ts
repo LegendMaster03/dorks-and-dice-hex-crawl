@@ -69,7 +69,10 @@ export function expeditionWorkspacePresentation(
 export function spatialPositionPresentation(runtime: ExpeditionDetail): SpatialPositionPresentation | null {
     if (!runtime.expedition.isSpatial) return null;
     const state = runtime.expedition;
-    const value = `Cell ${state.currentHex.q}, ${state.currentHex.r}`;
+    const cell = state.currentCell;
+    if (!cell) return null;
+    const { motifCellId, translation } = cell.address;
+    const value = `Cell ${motifCellId} (${translation.u}, ${translation.v})`;
     return {
         value,
         detail: runtime.context.kind === "AbstractHex"
@@ -272,17 +275,22 @@ function timeLabel(runtime: ExpeditionDetail, hasInterval: boolean): string {
 
 function routeLabel(runtime: ExpeditionDetail): string {
     const state = runtime.expedition as SpatialRuntimeExpedition;
-    const intended = state.intendedDirection === null ? "No course selected" : "Course selected";
+    const intended = state.intendedHeading ? "Course selected" : "No course selected";
     return `Current cell · ${intended}`;
 }
 
 function navigationLabel(runtime: ExpeditionDetail): string {
     const state = runtime.expedition as SpatialRuntimeExpedition;
-    const actualDiffers = state.actualDirection !== null
-        && state.intendedDirection !== null
-        && state.actualDirection !== state.intendedDirection;
+    const intended = state.intendedHeading;
+    const actual = state.actualHeading;
+    const intendedMagnitude = intended ? Math.hypot(intended.x, intended.y) : 0;
+    const actualMagnitude = actual ? Math.hypot(actual.x, actual.y) : 0;
+    const actualDiffers = !!intended && !!actual && intendedMagnitude > 0 && actualMagnitude > 0
+        && (intended.x * actual.x + intended.y * actual.y)
+            / (intendedMagnitude * actualMagnitude) < 0.999999;
     if (state.isLost) {
-        return `Lost · veer ${state.veerSteps}${actualDiffers ? " · actual course differs" : ""}`;
+        const angle = state.veerDegrees;
+        return `Lost${angle === null || angle === undefined ? "" : ` · veer ${formatNumber(angle)}°`}${actualDiffers ? " · actual course differs" : ""}`;
     }
     if (actualDiffers) {
         return "Off course · actual course differs";

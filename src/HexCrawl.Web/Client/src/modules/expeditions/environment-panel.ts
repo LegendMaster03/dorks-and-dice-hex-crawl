@@ -199,12 +199,11 @@ export class ExpeditionEnvironmentPanel {
         const scope = form.elements.namedItem("scope") as HTMLSelectElement;
         const feature = form.elements.namedItem("featureId") as HTMLSelectElement;
         const runtime = this.getRuntime();
-        const inGeneralizedCell = runtime.expedition.isSpatial && !!runtime.expedition.currentCell;
+        const inCell = runtime.expedition.isSpatial && !!runtime.expedition.currentCell;
         for (const option of [...scope.options]) {
-            if (option.value === "Hex") option.disabled = !runtime.expedition.isSpatial || inGeneralizedCell;
-            if (option.value === "Cell") option.disabled = !inGeneralizedCell;
+            if (option.value === "Cell") option.disabled = !inCell;
         }
-        if (inGeneralizedCell) scope.value = "Cell";
+        if (inCell) scope.value = "Cell";
         feature.innerHTML = '<option value="">Select spatial feature</option>';
         for (const item of this.world?.features ?? []) {
             const option = document.createElement("option");
@@ -220,17 +219,15 @@ export class ExpeditionEnvironmentPanel {
             event.preventDefault();
             const fact = readFactForm(form);
             if (!fact) return;
-            const selectedScope = scope.value as "World" | "Hex" | "Cell" | "SpatialFeature";
-            const currentHex = runtime.expedition.isSpatial ? runtime.expedition.currentHex : null;
+            const selectedScope = scope.value as "World" | "Cell" | "SpatialFeature";
             const currentCell = runtime.expedition.isSpatial ? runtime.expedition.currentCell : null;
-            if (selectedScope === "Hex" && !currentHex) return;
             if (selectedScope === "Cell" && !currentCell) return;
             if (selectedScope === "SpatialFeature" && !feature.value) return;
             const annotation: EnvironmentAnnotation = {
                 id: crypto.randomUUID(),
                 scope: {
                     kind: selectedScope,
-                    hex: selectedScope === "Hex" ? currentHex : null,
+                    hex: null,
                     cell: selectedScope === "Cell" ? currentCell : null,
                     featureId: selectedScope === "SpatialFeature" ? feature.value : null
                 },
@@ -314,7 +311,7 @@ function factForm(buttonText: string, includeScope: boolean): HTMLFormElement {
     form.className = "hc-form hc-environment-fact-form";
     const dimensions = knownDimensions.map(value => `<option value="${value}">${value}</option>`).join("");
     form.innerHTML = `
-        ${includeScope ? `<label>Scope <select name="scope"><option value="World">World</option><option value="Hex">Current hex</option><option value="Cell">Current cell</option><option value="SpatialFeature">Spatial feature</option></select></label><label>Feature <select name="featureId"></select></label>` : ""}
+        ${includeScope ? `<label>Scope <select name="scope"><option value="World">World</option><option value="Cell">Current cell</option><option value="SpatialFeature">Spatial feature</option></select></label><label>Feature <select name="featureId"></select></label>` : ""}
         <label>Dimension <input name="dimension" list="hc-environment-dimensions" required><datalist id="hc-environment-dimensions">${dimensions}</datalist></label>
         <label>Value type <select name="valueKind"><option value="Tag">Tag/value</option><option value="Measurement">Measurement</option></select></label>
         <label data-tag-row>Value <input name="tag"></label>

@@ -88,12 +88,12 @@ test("abstract spatial position does not fabricate legacy intra-cell progress", 
         context: { kind: "AbstractHex" },
         expedition: {
             isSpatial: true,
-            currentHex: { q: 0, r: 0 }
+            currentCell: { tilingId: "tile", address: { motifCellId: "alpha", translation: { u: 0, v: 0 } } }
         }
     };
 
     assert.deepEqual(spatialPositionPresentation(state), {
-        value: "Cell 0, 0",
+        value: "Cell alpha (0, 0)",
         detail: "Mapless spatial position"
     });
 });
@@ -103,12 +103,12 @@ test("spatial procedures without partial progress do not fabricate a progress va
         context: { kind: "WorldBound" },
         expedition: {
             isSpatial: true,
-            currentHex: { q: 4, r: -2 }
+            currentCell: { tilingId: "tile", address: { motifCellId: "beta", translation: { u: 4, v: -2 } } }
         }
     };
 
     assert.deepEqual(spatialPositionPresentation(state), {
-        value: "Cell 4, -2",
+        value: "Cell beta (4, -2)",
         detail: "Mapped spatial position"
     });
 });
