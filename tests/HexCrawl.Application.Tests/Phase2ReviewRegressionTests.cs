@@ -127,23 +127,6 @@ public sealed class Phase2ReviewRegressionTests
 
     private static CrawlRuntimeContext Context() => new(Miles(12));
 
-    private static ExpeditionState SpatialState() => new()
-    {
-        Id = Guid.NewGuid(),
-        Position = new WorldPoint(0, 0),
-        PositionPrecision = WorldPositionPrecision.HexAnchor,
-        Traversal = HexTraversalState.StartingIn(new HexCoordinate(0, 0), DistanceUnit.Miles),
-        Navigation = new NavigationRuntimeState(false, 0),
-        DistanceTraveled = Miles(0)
-    };
-
-    private static WatchTravelPlan Plan() => new(
-        new HexDirection(0),
-        TravelModeSelection.Normal,
-        NavigationAidSelection.None,
-        false,
-        true);
-
     private static DistanceMeasure Miles(double value) => new(value, DistanceUnit.Miles);
 
     private static CreateOverworldCommand WorldCommand() => new(
