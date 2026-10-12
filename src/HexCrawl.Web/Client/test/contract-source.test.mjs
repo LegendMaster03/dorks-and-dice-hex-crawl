@@ -32,10 +32,9 @@ test("focused assistants never load an Overworld or construct a map surface", ()
     const source = read("modules/assistants/expedition-assistant-view.ts");
     assert.equal(source.includes("getOverworld"), false);
     assert.equal(source.includes("MapSurface"), false);
-    assert.match(source, /recordTravelAssistant/);
     assert.match(source, /recordWatchAssistant/);
-    assert.match(source, /recordNavigationAssistant/);
     assert.match(source, /recordEncounterAssistant/);
+    assert.doesNotMatch(source, /recordTravelAssistant|recordNavigationAssistant|hexSteps|currentHex|veerSteps/);
 });
 
 test("focused assistants require explicit resolved outcomes and provenance", () => {
@@ -44,7 +43,7 @@ test("focused assistants require explicit resolved outcomes and provenance", () 
     assert.match(source, /<select name="outcome" required>/);
     assert.match(source, /<select name="source" data-source required>/);
     assert.match(source, /source\.append\(option\("", "Select result source"\)\)/);
-    assert.match(source, /source\.value = ""/);
+    assert.match(source, /source\.value = mode === "travel" \? "ProcedureDefault" : ""/);
     assert.doesNotMatch(source, /source\.value = "ManualRoll"/);
     assert.match(source, /select\(form, "source"\)\.value = "ProcedureDefault"/);
 });
@@ -201,8 +200,7 @@ test("direction controls retain numeric runtime values while current-cell adjace
     assert.match(navigator, /for \(const candidate of adjacency\.adjacencies\)/);
     assert.match(navigator, /control\.dataset\.adjacencyInterfaceId = candidate\.id/);
     assert.match(navigator, /aria-label", "Current-cell adjacent travel"/);
-    assert.match(assistant, /<option value="">Select intended direction<\/option>/);
-    assert.match(assistant, /\$\{directionLabel\(value\)\}<\/option>/);
+    assert.doesNotMatch(assistant, /Select intended direction|directionOptions|hexSteps/);
     assert.match(watch, /state\.intendedDirection === null \? "" : String\(state\.intendedDirection\)/);
     assert.match(watch, /else if \(!direction\.value && state\.intendedDirection !== null\)/);
     assert.match(watch, /direction\.value = String\(state\.intendedDirection\)/);
@@ -303,7 +301,7 @@ test("watch forms do not invent unresolved travel results", () => {
     assert.match(controller, /suggestedWatchDistance\(runtime\)/);
     assert.doesNotMatch(assistant, /name="hexSteps"[^>]*value="1"/);
     assert.doesNotMatch(assistant, /name="distance"[^>]*value="\$\{scale\}"/);
-    assert.match(assistant, /does not infer distance or hex steps from the map scale/);
+    assert.match(assistant, /partial time, watch completion and provenance without spatial movement/);
 });
 
 test("running surfaces use document scrolling and focused assistants keep a readable content width", () => {
@@ -373,8 +371,8 @@ test("spatial structural procedures stay viewable without constructing executabl
 test("focused encounter assistant does not imply it can discard automatic helper timing", () => {
     const assistant = read("modules/assistants/expedition-assistant-view.ts");
     assert.match(assistant, /resolutionHelpers\?\.encounter/);
-    assert.match(assistant, /does not apply it because the helper also resolves encounter timing/);
-    assert.match(assistant, /manual, external, or DM-override bookkeeping/);
+    assert.match(assistant, /Automatic encounter helpers also resolve timing/);
+    assert.match(assistant, /independently resolved manual, external, or DM-override outcomes/);
 });
 
 test("procedure selectors expose materialized procedure mechanics before a session is created", () => {

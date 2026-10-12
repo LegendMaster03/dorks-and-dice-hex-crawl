@@ -140,7 +140,9 @@ test("focused spatial assistants use V2 expedition workbench; nonspatial cadence
     assert.match(entry, /api\.startStandaloneCellSession\(request\)/);
     assert.match(entry, /api\.startStandaloneSession\(request\)/);
     assert.match(entry, /session\.context\.kind === "NonSpatial"/);
-    assert.match(view, /runtime\.expedition\.currentCell[\s\S]*navigate\(`\/expeditions\/\$\{runtime\.id\}`, true\)/);
+    assert.match(view, /if \(runtime\.expedition\.isSpatial\)/);
+    assert.match(view, /navigate\(`\/expeditions\/\$\{runtime\.id\}`, true\)/);
+    assert.doesNotMatch(view, /recordTravelAssistant|recordNavigationAssistant|currentHex|hexProgress/);
     assert.match(api, /\/nonspatial\/encounters/);
     assert.doesNotMatch(entry, /api\.startConfiguredExpedition\(/);
 });
