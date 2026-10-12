@@ -16,7 +16,6 @@ public abstract record CrawlSessionContext
 {
     public abstract CrawlSessionContextKind Kind { get; }
     public virtual Guid? OverworldId => null;
-    public virtual CrawlRuntimeContext? RuntimeContext => null;
     public virtual string DisplayName => Kind.ToString();
 }
 

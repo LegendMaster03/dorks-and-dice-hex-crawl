@@ -1,5 +1,7 @@
 # Phase 20.4 — source deletion checkpoint
 
+**Verified current branch checkpoint (October 12, 2026):** [`70434cae`](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/commit/70434cae3a6a8c47834f0f7667ae75898affe5cf) passed [CI 38310684225](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38310684225). Mapless sessions now persist periodic geometry and use qualified start cells; container restart tests pass. A subsequent source-only deletion removes the unreferenced `CrawlRuntimeContext` hex-center-distance record and runtime-context property, along with an obsolete hex-executor comment. CI verification for that deletion is pending. World-grid persistence, authored-data conversion and hex-specific raster preview/registration remain blockers. No migration of the development database, merge, deployment, or WorkChat testing is authorized.
+
 **Objective:** Delete the initial hex-specific prototype completely. There is no production release or compatibility requirement. Keep the established hexagon-oriented presets only as **data** used by the one periodic polygon engine. Document/schema revision numbers are not runtime implementation switches.
 
 **Repository:** `LegendMaster03/dorks-and-dice-hex-crawl`  
