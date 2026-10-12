@@ -47,6 +47,7 @@ public static class CrawlProcedureCatalog
             Pathfinder2eHexplorationPreset.Create(),
             ForbiddenLandsPreset.Create(),
             WorldsWithoutNumberPreset.Create(),
-            OneRing2ePreset.Create(),        ];
+            OneRing2ePreset.Create()
+        ];
     }
 }

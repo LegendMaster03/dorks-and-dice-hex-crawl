@@ -23,7 +23,8 @@ public sealed class ProcedurePresetIdentityTests
             CrawlProcedureCatalog.Pathfinder2eHexplorationPresetKey,
             CrawlProcedureCatalog.ForbiddenLandsPresetKey,
             CrawlProcedureCatalog.WorldsWithoutNumberPresetKey,
-            CrawlProcedureCatalog.OneRing2ePresetKey,        ];
+            CrawlProcedureCatalog.OneRing2ePresetKey
+        ];
 
         var actual = CrawlProcedureCatalog.Catalog.Select(preset => preset.PresetKey).ToArray();
         Assert.Equal(expected, actual);

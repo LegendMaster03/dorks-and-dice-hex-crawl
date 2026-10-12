@@ -4,7 +4,7 @@ This document records the implemented generic procedure architecture established
 
 ## Preset file organization
 
-Every catalog preset is defined in exactly one file under \`src/HexCrawl.Application/Expeditions/Presets/\`. \`CrawlProcedureCatalog\` registers these definitions in stable display order and resolves preset keys; it does not contain preset parameter data. \`CrawlProcedurePresetFactory\` contains only shared, system-neutral recipe construction helpers. The OSE preset explicitly reuses the B/X recipe as intentional source identity, not as a separate execution path.
+Every catalog preset is defined in exactly one file under `src/HexCrawl.Application/Expeditions/Presets/`. `CrawlProcedureCatalog` registers these definitions in stable display order and resolves preset keys; it does not contain preset parameter data. `CrawlProcedurePresetFactory` contains only shared, system-neutral recipe construction helpers. The OSE preset explicitly reuses the B/X recipe as intentional source identity, not as a separate execution path.
 
 Adding a preset requires a single new preset definition file and its catalog registration. Any new generic capability belongs in the appropriate system-neutral mechanic contract, not in edition-specific runtime branching. Tests and documentation may be updated separately.
 
