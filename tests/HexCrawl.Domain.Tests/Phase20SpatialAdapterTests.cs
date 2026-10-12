@@ -77,10 +77,12 @@ public sealed class Phase20SpatialAdapterTests
         var world = session.World;
         var cursor = session.Expedition.Traversal with { TravelHeading = new WorldPoint(1, 0) };
         var before = cursor.Position;
-        var debit = new SpatialTurnBudgetPolicy(1d / 6d)
-            .EvaluateDeliberateTurn(world, cursor, new WorldPoint(0, 1));
-        Assert.NotNull(debit);
-        Assert.InRange(debit!.BudgetCost.Value, 0.9999999, 1.0000001);
+        // The general realized motif is not necessarily equidistant to every
+        // neighbor. A procedure-defined turning-cost reference is required
+        // rather than silently using the first neighbor's distance.
+        Assert.Throws<NotSupportedException>(() =>
+            new SpatialTurnBudgetPolicy(1d / 6d)
+                .EvaluateDeliberateTurn(world, cursor, new WorldPoint(0, 1)));
         Assert.Equal(before, cursor.Position);
     }
 }
