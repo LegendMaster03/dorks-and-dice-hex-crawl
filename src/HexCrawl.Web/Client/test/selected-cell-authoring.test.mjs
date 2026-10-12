@@ -216,7 +216,7 @@ test("world editor composes existing authorities and does not mutate player know
     assert.match(source, /const replaceTerrain = async/);
     assert.match(source, /api\.createLocation/);
     assert.match(source, /api\.createFeature/);
-    assert.match(source, /kind: "Line"/);
+    assert.match(source, /select\(featureForm, "kind"\)\.value/);
     assert.match(source, /kind: "SpatialFeature"/);
     assert.match(source, /featureHasEnvironmentRules/);
     assert.match(source, /confirmDeletion/);
