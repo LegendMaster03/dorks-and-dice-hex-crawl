@@ -67,7 +67,7 @@ public sealed class EncounterHandoffEndpointsTests
             var encounterSequence = encounterEvent.GetProperty("sequence").GetInt64();
             var occurrenceId = encounterEvent.GetProperty("encounterOccurrenceId").GetGuid();
             Assert.Equal(startingCellText, encounterEvent.GetProperty("cell").GetRawText());
-            Assert.Equal(JsonValueKind.Null, encounterEvent.GetProperty("hex").ValueKind);
+            Assert.False(encounterEvent.TryGetProperty("hex", out _));
             Assert.Equal("WanderingEncounter", encounterEvent.GetProperty("encounterOutcome").GetString());
 
             var pendingHandoffId = Guid.NewGuid();

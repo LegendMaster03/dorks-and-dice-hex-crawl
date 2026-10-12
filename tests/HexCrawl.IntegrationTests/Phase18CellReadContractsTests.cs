@@ -167,7 +167,7 @@ public sealed class Phase18CellReadContractsTests
                     .Single(item => item.GetProperty("kind").GetString() == "LocationDiscovered");
                 Assert.Equal(cell.Id.TilingId,
                     discoveredEvent.GetProperty("cell").GetProperty("tilingId").GetGuid());
-                Assert.Equal(JsonValueKind.Null, discoveredEvent.GetProperty("hex").ValueKind);
+                Assert.False(discoveredEvent.TryGetProperty("hex", out _));
 
                 var heading = new WorldPoint(
                     (boundary.Start.X + boundary.End.X) / 2 - cell.Center.X,

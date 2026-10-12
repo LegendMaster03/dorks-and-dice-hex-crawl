@@ -77,8 +77,7 @@ public sealed class Phase19WorldGeometryEndpointsTests
                     });
                 start.EnsureSuccessStatusCode();
                 var started = await start.Content.ReadFromJsonAsync<JsonElement>();
-                Assert.Equal(JsonValueKind.Null, started.GetProperty("expedition")
-                    .GetProperty("currentHex").ValueKind);
+                Assert.False(started.GetProperty("expedition").TryGetProperty("currentHex", out _));
                 Assert.Equal("CellSteps", started.GetProperty("procedure")
                     .GetProperty("runtime").GetProperty("travelResolution").GetString());
                 Assert.Equal(cell.GetProperty("id").GetProperty("tilingId").GetGuid(),
