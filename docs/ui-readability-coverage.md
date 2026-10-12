@@ -1,6 +1,6 @@
 # UI Readability Coverage Matrix
 
-This matrix records the presentation coverage for the comprehensive expedition readability pass. The current catalog contains **12 presets** and **19 authoring modules**. Presets remain compositions of generic modules; no presentation behavior branches on preset identity.
+This matrix records the presentation coverage for the comprehensive expedition readability pass. The current catalog contains **13 presets** and **19 authoring modules**. Presets remain compositions of generic modules; no presentation behavior branches on preset identity.
 
 The layout follows the same design principle across authoring and play: compact aligned facts for scanable state, roster or ledger rows for repeated entities, progress indicators only when authoritative bounds exist, stage sequences for journeys, and focused resolution blocks for actions that require a decision.
 
