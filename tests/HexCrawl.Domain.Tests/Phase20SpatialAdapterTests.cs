@@ -71,6 +71,24 @@ public sealed class Phase20SpatialAdapterTests
     }
 
     [Fact]
+    public void IrregularMotifUsesExplicitTurningCostReferenceWithoutChangingPosition()
+    {
+        var start = Session();
+        var world = start.World with
+        {
+            PhysicalTurnCostReference = new DistanceMeasure(6, DistanceUnit.Miles)
+        };
+        var cursor = start.Expedition.Traversal with { TravelHeading = new WorldPoint(1, 0) };
+        var originalPosition = cursor.Position;
+        var charge = new SpatialTurnBudgetPolicy(1d / 6d)
+            .EvaluateDeliberateTurn(world, cursor, new WorldPoint(0, 1));
+        Assert.NotNull(charge);
+        Assert.Equal(DistanceUnit.Miles, charge!.BudgetCost.Unit);
+        Assert.Equal(1, charge.BudgetCost.Value, 8);
+        Assert.Equal(originalPosition, cursor.Position);
+    }
+
+    [Fact]
     public void TurnChargeDoesNotMoveTheAuthoritativeCursor()
     {
         var session = Session();

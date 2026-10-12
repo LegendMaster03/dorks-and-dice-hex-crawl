@@ -15,7 +15,10 @@ internal static class MaplessSessionFixture
         var id = Guid.NewGuid();
         var tiling = new PeriodicWorldTiling(
             id, realized.Topology!, realized.Realization!, new WorldPoint(0, 0),
-            PhysicalDistancePerWorldUnit: new DistanceMeasure(physicalPerWorldUnit, DistanceUnit.Miles));
+            PhysicalDistancePerWorldUnit: new DistanceMeasure(physicalPerWorldUnit, DistanceUnit.Miles))
+        {
+            PhysicalTurnCostReference = new DistanceMeasure(physicalPerWorldUnit, DistanceUnit.Miles)
+        };
         return MaplessCellSessionGeometry.Create(id, tiling);
     }
 

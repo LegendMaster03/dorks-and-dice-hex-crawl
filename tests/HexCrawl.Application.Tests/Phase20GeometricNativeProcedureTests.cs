@@ -75,7 +75,10 @@ public sealed class Phase20GeometricNativeProcedureTests
         var id = Guid.NewGuid();
         var tiling = new PeriodicWorldTiling(id, realized.Topology!,
             realized.Realization!, new WorldPoint(0, 0),
-            PhysicalDistancePerWorldUnit: new DistanceMeasure(6, DistanceUnit.Miles));
+            PhysicalDistancePerWorldUnit: new DistanceMeasure(6, DistanceUnit.Miles))
+        {
+            PhysicalTurnCostReference = new DistanceMeasure(6, DistanceUnit.Miles)
+        };
         var session = MaplessCellSessionGeometry.Create(id, tiling);
         var procedure = CampaignProcedureMaterializer.MaterializeExecutableSpatial(CrawlProcedureCatalog.Resolve("alexandrian-advanced")).Procedure;
         var current = session.Expedition.Traversal.CurrentCell;

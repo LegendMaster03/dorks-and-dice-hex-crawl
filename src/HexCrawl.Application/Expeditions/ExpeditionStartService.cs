@@ -212,7 +212,10 @@ public sealed class ExpeditionStartService(
         var sessionId = Guid.NewGuid();
         var tiling = new PeriodicWorldTiling(
             sessionId, realized.Topology, realized.Realization, new WorldPoint(0, 0),
-            PhysicalDistancePerWorldUnit: options.PhysicalDistancePerWorldUnit);
+            PhysicalDistancePerWorldUnit: options.PhysicalDistancePerWorldUnit)
+        {
+            PhysicalTurnCostReference = options.PhysicalDistancePerWorldUnit
+        };
         tiling.Validate();
 
         var comparison = DelaneyDressTopology.Compare(
