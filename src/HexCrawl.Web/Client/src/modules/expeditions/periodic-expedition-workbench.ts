@@ -4,7 +4,7 @@ import { MapSurface } from "../../map-surface";
 import { blockInitiativeHandoffHref } from "../../encounter-handoff";
 import type {
     CellTraversalContext, CellProcedureResolutionHelperResult, CellWatchRequest, ExpeditionDetail, Overworld,
-    WorldCellId, WorldPoint, ToolHostContext
+    WorldCellGeometry, WorldPoint, ToolHostContext
 } from "../../types";
 import { showUiError, clearUiError } from "../../ui-error";
 import { currentPeriodicCellAdjacency } from "./current-cell-topology";
@@ -15,6 +15,8 @@ import { openWorkspaceDrawer, statAction, textElement, type WorkspaceDrawer } fr
 import { renderPhase15NextAction } from "./phase15-next-action";
 import { nextCellExpeditionAction } from "./phase15-cell-action";
 import { resolveHexStartCell } from "./world-cell-start";
+import { polygonContainsSubject } from "./phase20-cell-ui-policy";
+import { discoveredSubjectIds } from "../../runtime-view";
 import { encounterLocationId } from "./keyed-location-encounter";
 import { mountPeriodicGameplayPanels } from "./periodic-gameplay-panels";
 import { publishExpeditionRuntimeChanged } from "./expedition-runtime-events";
@@ -39,7 +41,7 @@ export async function renderPeriodicExpeditionWorkbench(
     let disposed = false;
     let busy = false;
     let generated: CellProcedureResolutionHelperResult | null = null;
-    let inspectedCell: WorldCellId | null = null;
+    let inspectedGeometry: WorldCellGeometry | null = null;
 
     root.innerHTML = `
         <section class="hc-page hc-workspace hc-expedition hc-periodic-expedition hc-phase15-expedition">
@@ -63,6 +65,7 @@ export async function renderPeriodicExpeditionWorkbench(
                     <h2 data-map-title>Expedition map</h2>
                     <div class="hc-map-frame"><div class="hc-map-host" data-map></div></div>
                     <p class="hc-hint" data-inspection>Click a cell to inspect it. This does not change travel intent or move the party.</p>
+                    <section class="hc-stack" data-cell-details aria-label="Selected cell and player knowledge"></section>
                 </div>
                 <aside class="hc-panel hc-sidebar hc-table-rail" aria-label="At the table">
                     <h2>At the table</h2>
@@ -89,6 +92,7 @@ export async function renderPeriodicExpeditionWorkbench(
                         <button type="button" data-gm-travel>Travel and navigation</button>
                         <button type="button" data-gm-party>Party and gameplay</button>
                         <button type="button" data-gm-history>Expedition history</button>
+                        <button type="button" data-gm-reposition>Teleport party to selected cell</button>
                     </div>
                 </details>
             </section>
@@ -201,6 +205,42 @@ export async function renderPeriodicExpeditionWorkbench(
         disclosure.open = true;
         disclosure.scrollIntoView({ block: "nearest" });
     });
+    const openRepositionDrawer = (): void => {
+        if (!inspectedGeometry || busy) return;
+        const target = inspectedGeometry;
+        openWorkspaceDrawer(root, "Teleport party", (body, close) => {
+            body.append(textElement("p",
+                "This moves the party to the selected authoritative cell without spending travel time. It is not a movement or discovery resolution."));
+            body.append(textElement("p",
+                `Target: ${target.id.address.motifCellId} (${target.id.address.translation.u}, ${target.id.address.translation.v}).`));
+            const form = document.createElement("form");
+            form.className = "hc-form";
+            const note = document.createElement("input");
+            note.placeholder = "Optional reason or correction note";
+            note.maxLength = 2000;
+            const confirm = document.createElement("button");
+            confirm.type = "submit";
+            confirm.className = "hc-primary-action";
+            confirm.textContent = "Confirm teleport";
+            form.append(note, confirm);
+            form.addEventListener("submit", event => {
+                event.preventDefault();
+                void progress(async () => {
+                    const result = await api.repositionCellExpedition(runtime.id, {
+                        expectedVersion: runtime.version,
+                        targetCell: target.id,
+                        position: target.center,
+                        note: note.value.trim() || undefined
+                    });
+                    close();
+                    inspectedGeometry = null;
+                    return result;
+                });
+            });
+            body.append(form);
+        });
+    };
+    required<HTMLButtonElement>("[data-gm-reposition]").addEventListener("click", openRepositionDrawer);
     required<HTMLButtonElement>("[data-home]").addEventListener("click", () => navigate("/"));
     required<HTMLButtonElement>("[data-ruleset]").addEventListener("click", () =>
         navigate(`/procedures/${encodeURIComponent(runtime.procedure.procedureId)}/revisions/${runtime.procedure.revision}/reference`));
@@ -261,6 +301,15 @@ export async function renderPeriodicExpeditionWorkbench(
         if (world) navigate(`/worlds/${world.id}`);
     });
     required<HTMLButtonElement>("[data-reload]").addEventListener("click", () => void refresh());
+    const setInspectedGeometry = (geometry: WorldCellGeometry | null): void => {
+        inspectedGeometry = geometry;
+        map.renderer.selectedWorldCell = geometry;
+        text("[data-inspection]", geometry
+            ? `Selected cell at ${geometry.center.x.toFixed(2)}, ${geometry.center.y.toFixed(2)}. Inspection does not move the party.`
+            : "Select a cell on the map to inspect its player knowledge and GM actions.");
+        renderSelectedCellDetails();
+        map.requestRender();
+    };
     let hexInspectionGeneration = 0;
     map.setHexSelectionHandler(hex => {
         // Legacy q/r is only an editor gesture; identify the selected cell
@@ -268,23 +317,24 @@ export async function renderPeriodicExpeditionWorkbench(
         if (!world?.grid || !hex) return;
         const current = world;
         const generation = ++hexInspectionGeneration;
+        setInspectedGeometry(null);
         void (async () => {
             try {
                 const address = await resolveHexStartCell(api, current, hex);
-                if (disposed || generation !== hexInspectionGeneration) return;
-                inspectedCell = { tilingId: current.tiling!.id, address };
-                text("[data-inspection]",
-                    `Selected cell via grid ${hex.q}, ${hex.r}. Inspection does not move the party.`);
+                const geometry = await api.resolveWorldCell(current.id, {
+                    tilingId: current.tiling!.id, address
+                });
+                if (disposed || generation !== hexInspectionGeneration
+                    || world?.tiling?.id !== geometry.id.tilingId) return;
+                setInspectedGeometry(geometry);
             } catch (cause) {
                 if (!disposed && generation === hexInspectionGeneration) showUiError(error, cause);
             }
         })();
     });
     map.setCellSelectionHandler(cell => {
-        inspectedCell = cell?.id ?? null;
-        text("[data-inspection]", cell
-            ? `Selected an adjacent or distant cell at ${cell.center.x.toFixed(2)}, ${cell.center.y.toFixed(2)}. The party remains in its current cell.`
-            : "Cell inspection cleared. The party has not moved.");
+        hexInspectionGeneration++;
+        setInspectedGeometry(cell);
     });
 
     const readNumber = (name: string, integer = false): number => {
@@ -298,7 +348,13 @@ export async function renderPeriodicExpeditionWorkbench(
     };
     const selectHeading = (interfaceIndex: number | null): void => {
         selectedExit = interfaceIndex;
-        if (interfaceIndex === null) return;
+        if (interfaceIndex === null) {
+            // Clearing a proposed boundary must not silently submit the old
+            // manually chosen heading as a new travel intent.
+            input("headingX").value = "";
+            input("headingY").value = "";
+            return;
+        }
         const edge = topology.interfaces.find(item => item.interfaceIndex === interfaceIndex);
         if (!edge) return;
         const target = {
@@ -493,12 +549,10 @@ export async function renderPeriodicExpeditionWorkbench(
     // Any direct change to travel intent or resolution values invalidates the
     // displayed automatic result. Programmatic helper field fill does not fire
     // input/change events, so a generation remains usable until a real edit.
-    form.addEventListener("input", event => {
-        if ((event.target as Element).closest("[data-helper-section]")) return;
+    form.addEventListener("input", () => {
         if (generated) invalidateGenerated();
     });
-    form.addEventListener("change", event => {
-        if ((event.target as Element).closest("[data-helper-section]")) return;
+    form.addEventListener("change", () => {
         if (generated) invalidateGenerated();
     });
     const invalidateGenerated = (): void => {
@@ -715,6 +769,55 @@ export async function renderPeriodicExpeditionWorkbench(
         required<HTMLButtonElement>("[data-open-travel]").disabled = busy || !runtime.procedure.runtime;
     }
 
+    function renderSelectedCellDetails(): void {
+        const panel = required<HTMLElement>("[data-cell-details]");
+        panel.replaceChildren();
+        required<HTMLButtonElement>("[data-gm-reposition]").disabled =
+            busy || !inspectedGeometry;
+        if (!inspectedGeometry || !world) return;
+        const selected = inspectedGeometry;
+        const row = document.createElement("div");
+        row.className = "hc-button-row";
+        const teleport = document.createElement("button");
+        teleport.type = "button";
+        teleport.textContent = "Teleport party here";
+        teleport.disabled = busy;
+        teleport.addEventListener("click", openRepositionDrawer);
+        row.append(teleport);
+        panel.append(row);
+        const known = discoveredSubjectIds(runtime);
+        const subjects = [
+            ...world.locations.filter(location => polygonContainsSubject(selected.polygon, location.position))
+                .map(location => ({ id: location.id, name: location.name, type: "Location" as const })),
+            ...world.features.filter(feature => feature.kind === "Point" && feature.position !== null
+                && polygonContainsSubject(selected.polygon, feature.position))
+                .map(feature => ({ id: feature.id, name: feature.name, type: "Feature" as const }))
+        ];
+        if (subjects.length === 0) {
+            panel.append(textElement("p", "No authored point locations or features are registered in this cell.", "hc-muted"));
+            return;
+        }
+        panel.append(textElement("h3", "Player knowledge"));
+        for (const subject of subjects) {
+            const item = document.createElement("div");
+            item.className = "hc-discovery-row";
+            item.append(textElement("span", `${subject.name} · ${subject.type}`));
+            if (known.has(subject.id)) {
+                item.append(textElement("span", "Known to players", "hc-ux-badge hc-ux-badge-good"));
+            } else {
+                const reveal = document.createElement("button");
+                reveal.type = "button";
+                reveal.textContent = "Reveal / discover";
+                reveal.disabled = busy;
+                reveal.addEventListener("click", () => {
+                    void progress(() => api.discover(runtime.id, runtime.version, subject.id, subject.type));
+                });
+                item.append(reveal);
+            }
+            panel.append(item);
+        }
+    }
+
     function render(): void {
         if (disposed) return;
         const state = currentState();
@@ -768,6 +871,10 @@ export async function renderPeriodicExpeditionWorkbench(
         const units = runtime.movementComposition.suggestedExpectedDistance?.unit
             ?? runtime.movementComposition.effectiveDistanceUnit
             ?? runtime.context.hexCenterDistance?.unit;
+        if (!isSteps && !generated && !input("expected").value.trim()
+            && runtime.movementComposition.suggestedExpectedDistance) {
+            input("expected").value = String(runtime.movementComposition.suggestedExpectedDistance.value);
+        }
         text("[data-distance-unit]", isSteps ? "Cell transitions are resolved by the server."
             : units ? `Distance is entered in ${units.symbol}; the server resolves actual movement.`
                 : "This procedure requires a calibrated distance unit before travel can be resolved.");
@@ -825,7 +932,12 @@ export async function renderPeriodicExpeditionWorkbench(
             center: topology.center
         };
         map.renderer.expeditionPosition = { ...mapPoint };
+        map.renderer.discoveredSubjectIds = discoveredSubjectIds(runtime);
         if (world?.grid) map.renderer.expeditionHex = null;
+        if (inspectedGeometry && inspectedGeometry.id.tilingId !== topology.currentCell.tilingId)
+            inspectedGeometry = null;
+        map.renderer.selectedWorldCell = inspectedGeometry;
+        renderSelectedCellDetails();
         map.requestRender();
         const party = required<HTMLElement>("[data-party]");
         party.replaceChildren();
@@ -844,8 +956,7 @@ export async function renderPeriodicExpeditionWorkbench(
             li.textContent = entry.message;
             history.append(li);
         }
-        if (inspectedCell && inspectedCell.tilingId !== topology.currentCell.tilingId)
-            inspectedCell = null;
+
     }
     render();
     gameplay.sync();

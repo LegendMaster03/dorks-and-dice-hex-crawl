@@ -4,6 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { resolveHexStartCell } from "../.test-dist/modules/expeditions/world-cell-start.js";
 import { nextCellExpeditionAction } from "../.test-dist/modules/expeditions/phase15-cell-action.js";
+import { polygonContainsSubject } from "../.test-dist/modules/expeditions/phase20-cell-ui-policy.js";
 
 const file = (...segments) => fs.readFileSync(path.join("src", ...segments), "utf8");
 const world = {
@@ -19,6 +20,18 @@ const world = {
 const id = (tilingId = "tiling-1") => ({
     tilingId,
     address: { motifCellId: "accepted-hex-motif", translation: { u: 7, v: -4 } }
+});
+
+test("authored subjects are listed only inside the selected server cell polygon", () => {
+    const square = [{x:0,y:0},{x:2,y:0},{x:2,y:2},{x:0,y:2}];
+    assert.equal(polygonContainsSubject(square,{x:1,y:1}),true);
+    assert.equal(polygonContainsSubject(square,{x:0,y:1}),true);
+    assert.equal(polygonContainsSubject(square,{x:3,y:1}),false);
+    assert.equal(polygonContainsSubject(square,{x:0,y:3}),false);
+    assert.equal(polygonContainsSubject([],{x:0,y:0}),false);
+    const concave = [{x:0,y:0},{x:3,y:0},{x:3,y:1},{x:1,y:1},{x:1,y:3},{x:0,y:3}];
+    assert.equal(polygonContainsSubject(concave,{x:.5,y:2}),true);
+    assert.equal(polygonContainsSubject(concave,{x:2,y:2}),false);
 });
 
 test("hex q/r start resolves one authoritative server cell without guessing motif identity", async () => {
@@ -107,6 +120,17 @@ test("focused spatial assistants use V2 expedition workbench; nonspatial cadence
     assert.doesNotMatch(entry, /api\.startConfiguredExpedition\(/);
 });
 
+test("V2 cell GM tools use server-qualified position and manual discovery, never q/r state", () => {
+    const view = file("modules","expeditions","periodic-expedition-workbench.ts");
+    const api = file("api.ts");
+    assert.match(view, /api\.resolveWorldCell\(current\.id/);
+    assert.match(view, /api\.repositionCellExpedition\(runtime\.id/);
+    assert.match(view, /api\.discover\(runtime\.id, runtime\.version/);
+    assert.match(view, /polygonContainsSubject\(selected\.polygon/);
+    assert.match(view, /map\.renderer\.discoveredSubjectIds = discoveredSubjectIds\(runtime\)/);
+    assert.match(api, /\/cells\/reposition/);
+});
+
 test("V2 cell-workbench helpers generate owner/version-scoped automatic rolls", () => {
     const view = file("modules","expeditions","periodic-expedition-workbench.ts");
     const api = file("api.ts");
@@ -118,6 +142,7 @@ test("V2 cell-workbench helpers generate owner/version-scoped automatic rolls", 
     assert.match(view, /generated\?\.encounter \?\? encounter/);
     assert.match(view, /form\.addEventListener\("input"/);
     assert.match(view, /form\.addEventListener\("change"/);
+    assert.doesNotMatch(view, /if \(\(event\.target as Element\)\.closest\("\[data-helper-section\]"\)\) return/);
     assert.match(view, /onToggle: edge => \{[\s\S]*if \(generated\) invalidateGenerated\(\)/);
     assert.match(view, /runtime = next;\s*generated = null/);
     assert.match(view, /next\.version !== result\.expeditionVersion/);

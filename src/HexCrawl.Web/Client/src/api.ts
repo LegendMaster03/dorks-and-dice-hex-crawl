@@ -580,6 +580,17 @@ export class HexCrawlApi {
             { expectedVersion, resultNote }, "Resolve cell encounter");
     }
 
+    public repositionCellExpedition(expeditionId: string, input: {
+        expectedVersion: number;
+        targetCell: WorldCellId;
+        position: WorldPoint;
+        note?: string;
+    }): Promise<ExpeditionDetail> {
+        return this.sendJson("POST",
+            `/api/expeditions/${encodeURIComponent(expeditionId)}/cells/reposition`,
+            input, "Teleport to selected cell");
+    }
+
     public getCellTopology(expeditionId: string): Promise<CellTraversalContext> {
         return this.getJson(
             `/api/expeditions/${encodeURIComponent(expeditionId)}/cell-topology`,
