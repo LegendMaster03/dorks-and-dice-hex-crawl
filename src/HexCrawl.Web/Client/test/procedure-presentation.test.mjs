@@ -37,19 +37,15 @@ test("Compact converts canonical interval ticks to tabletop duration controls", 
     assert.equal(presentation?.help, "Set the length of one travel period.");
 });
 
-test("Compact starting-exit help describes the runtime exit requirement rather than prepaid progress", () => {
-    const presentation = compactParameter("startingExitProgressFactor", {
+test("Compact turning controls preserve the generalized procedure description", () => {
+    const presentation = compactParameter("neighborCenterDistanceFactor", {
         type: "number",
         required: true,
-        description: "Starting exit progress factor.",
+        description: "Cost relative to a neighboring cell-center distance.",
         defaultValue: "0.5"
-    }, "movement.hex-progress");
-
+    }, "movement.turn-cost");
     assert.equal(presentation?.control, "number");
-    assert.match(presentation?.help ?? "", /required to leave the starting hex/i);
-    assert.match(presentation?.help ?? "", /map scale/i);
-    assert.doesNotMatch(presentation?.help ?? "", /already counted/i);
-    assert.notEqual(presentation?.help, "Starting exit progress factor.");
+    assert.equal(presentation?.help, "Cost relative to a neighboring cell-center distance.");
 
     const mechanicSpecific = compactParameter("travel.diceCount", {
         type: "integer",
@@ -164,13 +160,13 @@ test("Inspect and Compact share semantic duration, boolean, progress, and enum f
         ]);
 
     assert.deepEqual(
-        procedureParameterFacts("movement.hex-progress", {
-            startingExitProgressFactor: "0.5",
-            farExitProgressFactor: "1"
+        procedureParameterFacts("movement.turn-cost", {
+            neighborCenterDistanceFactor: "0.5",
+            supportsDeliberateDoubleBack: "true"
         }),
         [
-            { label: "Starting exit progress", value: "50% of a cell crossing" },
-            { label: "Far exit progress", value: "100% of a cell crossing" }
+            { label: "Turning effort as a fraction of the neighboring cell-center distance", value: "0.5" },
+            { label: "Allow deliberate double-back", value: "Yes" }
         ]);
 
     assert.equal(
@@ -217,7 +213,7 @@ test("all 19 authoring modules use their semantic layouts with representative re
         "movement.budget": { budgetModel: "watch-distance", baseBudget: "6", budgetUnit: "mi", limitingScope: "party", travelModeKeys: "normal;fast;slow" },
         "movement.terrain": { adjustmentModel: "multiplier", terrainAdjustments: "clear=1;rough=0.75;difficult=0.5", routeAdjustmentModel: "route-improves-cost", weatherAdjustmentModel: "symbolic" },
         "movement.resolution": { travelResolution: "continuous-distance", actualDistanceResolution: "fixed" },
-        "movement.hex-progress": { tracksIntraHexProgress: "true", startingExitProgressFactor: "0", nearExitProgressFactor: "0.5", farExitProgressFactor: "1", backExitProgressFactor: "1", directionChangesCostProgress: "true", directionChangeProgressCostFactor: "0.5", supportsDeliberateDoubleBack: "true" },
+        "movement.turn-cost": { neighborCenterDistanceFactor: "0.5", supportsDeliberateDoubleBack: "true" },
         "navigation.check": { usesNavigationChecks: "true", usesPersistentVeer: "true" },
         "navigation.outcome": { checkTriggerModel: "per-watch", failureStateModel: "lost", directionalErrorModel: "persistent-veer", recognitionModel: "procedure-check", reorientationModel: "resolved-check" },
         "encounters.cadence": { cadence: "per-watch" },
@@ -238,7 +234,7 @@ test("all 19 authoring modules use their semantic layouts with representative re
         "movement.budget": ["budget"],
         "movement.terrain": ["terrain", "context"],
         "movement.resolution": ["resolution"],
-        "movement.hex-progress": ["progress", "course-change"],
+        "movement.turn-cost": ["turning"],
         "navigation.check": ["check"],
         "navigation.outcome": ["trigger", "failure", "recovery"],
         "encounters.cadence": ["cadence"],
