@@ -2,12 +2,6 @@ import type { GridDefinition, HexCoordinate, WorldPoint } from "./types";
 
 const SQRT3 = Math.sqrt(3);
 
-export function hexDistance(a: HexCoordinate, b: HexCoordinate): number {
-    const aS = -a.q - a.r;
-    const bS = -b.q - b.r;
-    return (Math.abs(a.q - b.q) + Math.abs(a.r - b.r) + Math.abs(aS - bS)) / 2;
-}
-
 export function hexToWorld(grid: GridDefinition, hex: HexCoordinate): WorldPoint {
     const radius = grid.hexRadiusWorldUnits;
     const local = grid.orientation === "PointyTop"

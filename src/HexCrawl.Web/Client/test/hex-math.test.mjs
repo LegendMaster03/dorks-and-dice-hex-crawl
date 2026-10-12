@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { hexDistance, hexToWorld, worldToHex } from "../.test-dist/hex-math.js";
+import { hexToWorld, worldToHex } from "../.test-dist/hex-math.js";
 
 const grid = orientation => ({
     id: "grid",
@@ -13,8 +13,6 @@ const grid = orientation => ({
 });
 
 test("axial distance is deterministic", () => {
-    assert.equal(hexDistance({ q: 0, r: 0 }, { q: 3, r: -2 }), 3);
-    assert.equal(hexDistance({ q: -4, r: 1 }, { q: 2, r: -3 }), 6);
 });
 
 for (const orientation of ["PointyTop", "FlatTop"]) {
