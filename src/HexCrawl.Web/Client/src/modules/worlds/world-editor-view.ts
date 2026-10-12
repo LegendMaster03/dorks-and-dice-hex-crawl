@@ -495,6 +495,100 @@ export async function renderWorldEditor(
         });
         panel.append(localForm);
 
+        // Scoped rules use the same authoritative cell, world, and feature
+        // identities regardless of the polygon's geometry.
+        const scopedDetails = document.createElement("details");
+        scopedDetails.className = "hc-stack";
+        const scopedSummary = document.createElement("summary");
+        scopedSummary.textContent = "Advanced environment and feature mechanics";
+        scopedDetails.append(scopedSummary);
+        const scopedForm = document.createElement("form");
+        scopedForm.className = "hc-form";
+        scopedForm.innerHTML = `
+            <label>Exact scope <select name="scope"><option value="Cell">Selected cell</option><option value="SpatialFeature">Intersecting feature</option><option value="World">Entire world</option></select></label>
+            <label data-scope-feature hidden>Feature <select name="featureId"></select></label>
+            <label>Dimension <input name="dimension" required></label>
+            <label>Value type <select name="valueKind"><option value="Tag">Tag/value</option><option value="Measurement">Measurement</option></select></label>
+            <label data-scope-tag>Value <input name="tag"></label>
+            <div data-scope-measurement hidden class="hc-inline"><label>Numeric value <input name="measurement" type="number" step="any"></label><label>Unit <input name="unit"></label></div>
+            <label>Provenance <input name="provenance"></label>
+            <label>Note <input name="note"></label>
+            <button type="submit">Add environment fact</button>`;
+        const featureChoice = select(scopedForm, "featureId");
+        for (const feature of features) {
+            const option = document.createElement("option");
+            option.value = feature.id;
+            option.textContent = `${feature.name} · ${feature.category}`;
+            featureChoice.append(option);
+        }
+        const scopeChoice = select(scopedForm, "scope");
+        const valueKindChoice = select(scopedForm, "valueKind");
+        const syncScopeFields = (): void => {
+            const feature = scopeChoice.value === "SpatialFeature";
+            required<HTMLElement>(scopedForm, "[data-scope-feature]").hidden = !feature;
+            featureChoice.required = feature;
+            const measurement = valueKindChoice.value === "Measurement";
+            required<HTMLElement>(scopedForm, "[data-scope-tag]").hidden = measurement;
+            required<HTMLElement>(scopedForm, "[data-scope-measurement]").hidden = !measurement;
+            input(scopedForm, "tag").required = !measurement;
+            input(scopedForm, "measurement").required = measurement;
+            input(scopedForm, "unit").required = measurement;
+        };
+        scopeChoice.addEventListener("change", syncScopeFields);
+        valueKindChoice.addEventListener("change", syncScopeFields);
+        syncScopeFields();
+        scopedForm.addEventListener("submit", event => {
+            event.preventDefault();
+            void run(scopedForm, async () => {
+                const dimension = input(scopedForm, "dimension").value.trim();
+                const provenance = input(scopedForm, "provenance").value.trim() || null;
+                const note = input(scopedForm, "note").value.trim() || null;
+                const fact = valueKindChoice.value === "Measurement"
+                    ? measurementFact(dimension, numeric(input(scopedForm, "measurement")),
+                        input(scopedForm, "unit").value, provenance, note)
+                    : tagFact(dimension, input(scopedForm, "tag").value, provenance, note);
+                const scopeKind = scopeChoice.value;
+                const featureId = featureChoice.value;
+                if (scopeKind === "SpatialFeature"
+                    && !features.some(item => item.id === featureId))
+                    throw new Error("Select an intersecting feature.");
+                const scope: EnvironmentAnnotation["scope"] = scopeKind === "World"
+                    ? { kind: "World", hex: null, featureId: null }
+                    : scopeKind === "SpatialFeature"
+                        ? { kind: "SpatialFeature", hex: null, featureId }
+                        : { kind: "Cell", cell: cell.id, hex: null, featureId: null };
+                if (scopeKind === "Cell" && dimension.toLowerCase() === "terrain"
+                    && fact.valueKind === "Tag") {
+                    await replaceTerrain(fact.tag ?? "");
+                    return;
+                }
+                await saveWorldEnvironment(addEnvironmentFact(worldEnvironment.annotations, scope, fact));
+            });
+        });
+        scopedDetails.append(scopedForm);
+
+        const applicable = worldEnvironment.annotations.filter(annotation =>
+            annotation.scope.kind === "World"
+            || annotation.scope.kind === "SpatialFeature"
+                && features.some(feature => feature.id === annotation.scope.featureId));
+        for (const annotation of applicable) {
+            for (const fact of annotation.facts) {
+                const line = document.createElement("div");
+                line.className = "hc-discovery-row";
+                const description = document.createElement("span");
+                description.textContent = `${annotation.scope.kind}: ${fact.dimension} · ${formatEnvironmentFact(fact)}`;
+                const remove = document.createElement("button");
+                remove.type = "button";
+                remove.textContent = "Remove";
+                remove.addEventListener("click", () => void run(null, () =>
+                    saveWorldEnvironment(removeEnvironmentFact(
+                        worldEnvironment.annotations, annotation.id, fact.id))));
+                line.append(description, remove);
+                scopedDetails.append(line);
+            }
+        }
+        panel.append(scopedDetails);
+
         const addLocation = document.createElement("button");
         addLocation.type = "button";
         addLocation.textContent = "Add location at this cell's center";
