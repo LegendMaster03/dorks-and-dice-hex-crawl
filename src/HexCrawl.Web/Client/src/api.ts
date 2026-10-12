@@ -21,18 +21,10 @@ import type {
     OverworldSummary,
     PresentationProfile,
     ProcedurePreset,
-    ProcedureResolutionHelperRequest,
-    ProcedureResolutionHelperResult,
     MapRegistrationTransform,
     RegistrationControlPoint,
-    RuntimeAdvanceRequest,
-    ResolveBoundaryDecisionRequest,
     ResolveEncounterRequest,
-    RepositionExpeditionRequest,
-    SetExpeditionCourseIntentRequest,
-    TravelWatchAssistantRequest,
     NonSpatialWatchAssistantRequest,
-    NavigationAssistantRequest,
     EncounterCadenceAssistantRequest,
     SourceMapList,
     SourceMapRole,
@@ -620,9 +612,6 @@ export class HexCrawlApi {
             "Travel and environment rules");
     }
 
-    public advanceExpedition(expeditionId: string, input: RuntimeAdvanceRequest): Promise<ExpeditionDetail> {
-        return this.sendJson("POST", `/api/expeditions/${encodeURIComponent(expeditionId)}/advance`, input, "Advance expedition");
-    }
 
     public resolveEncounter(
         expeditionId: string,
@@ -635,43 +624,13 @@ export class HexCrawlApi {
             "Resolve nonspatial encounter");
     }
 
-    public resolveBoundaryDecision(
-        expeditionId: string,
-        input: ResolveBoundaryDecisionRequest): Promise<ExpeditionDetail> {
-        return this.sendJson(
-            "POST",
-            `/api/expeditions/${encodeURIComponent(expeditionId)}/boundary-decision`,
-            input,
-            "Resolve boundary");
-    }
 
-    public setExpeditionCourseIntent(
-        expeditionId: string,
-        input: SetExpeditionCourseIntentRequest): Promise<ExpeditionDetail> {
-        return this.sendJson(
-            "PUT",
-            `/api/expeditions/${encodeURIComponent(expeditionId)}/course-intent`,
-            input,
-            "Set expedition course");
-    }
 
-    public repositionExpedition(
-        expeditionId: string,
-        input: RepositionExpeditionRequest): Promise<ExpeditionDetail> {
-        return this.sendJson(
-            "POST",
-            `/api/expeditions/${encodeURIComponent(expeditionId)}/reposition`,
-            input,
-            "Teleport party");
-    }
 
     public updateExpeditionParty(expeditionId: string, input: UpdateExpeditionPartyRequest): Promise<ExpeditionDetail> {
         return this.sendJson("PUT", `/api/expeditions/${encodeURIComponent(expeditionId)}/party`, input, "Update party sheet");
     }
 
-    public resolveProcedureInputs(expeditionId: string, input: ProcedureResolutionHelperRequest): Promise<ProcedureResolutionHelperResult> {
-        return this.sendJson("POST", `/api/expeditions/${encodeURIComponent(expeditionId)}/resolution-helper`, input, "Resolve procedure inputs");
-    }
 
     public discover(expeditionId: string, expectedVersion: number, subjectId: string, subjectType: "Location" | "Feature"): Promise<ExpeditionDetail> {
         return this.sendJson("POST", `/api/expeditions/${encodeURIComponent(expeditionId)}/discover`, {
@@ -682,17 +641,11 @@ export class HexCrawlApi {
         }, "Runtime discovery");
     }
 
-    public recordTravelAssistant(expeditionId: string, input: TravelWatchAssistantRequest): Promise<ExpeditionDetail> {
-        return this.sendJson("POST", `/api/expeditions/${encodeURIComponent(expeditionId)}/assistants/travel`, input, "Travel/watch assistant");
-    }
 
     public recordWatchAssistant(expeditionId: string, input: NonSpatialWatchAssistantRequest): Promise<ExpeditionDetail> {
         return this.sendJson("POST", `/api/expeditions/${encodeURIComponent(expeditionId)}/assistants/watch`, input, "Watch/time assistant");
     }
 
-    public recordNavigationAssistant(expeditionId: string, input: NavigationAssistantRequest): Promise<ExpeditionDetail> {
-        return this.sendJson("POST", `/api/expeditions/${encodeURIComponent(expeditionId)}/assistants/navigation`, input, "Navigation assistant");
-    }
 
     public recordEncounterAssistant(expeditionId: string, input: EncounterCadenceAssistantRequest): Promise<ExpeditionDetail> {
         return this.sendJson("POST", `/api/expeditions/${encodeURIComponent(expeditionId)}/nonspatial/encounters`, input, "Nonspatial encounter cadence");

@@ -718,51 +718,6 @@ export type StartStandaloneCrawlSessionInput = {
     startHex?: HexCoordinate;
 } & ProcedureStartSelectionInput;
 
-export type RuntimeAdvanceRequest = {
-    expectedVersion: number;
-    intendedDirection: number;
-    paceKey: string;
-    navigationAidKey: string;
-    suppressesNavigationCheck: boolean;
-    resetsVeerAtBoundary: boolean;
-    effectiveDistance?: number;
-    expectedDistance?: number;
-    actualDistance?: number;
-    hexSteps?: number;
-    resolutionSource: ResolutionSource;
-    travelResolutionSource?: ResolutionSource;
-    travelResolutionNote?: string;
-    navigationResolutionSource?: ResolutionSource;
-    navigationResolutionNote?: string;
-    encounterResolutionSource?: ResolutionSource;
-    encounterResolutionNote?: string;
-    boundaryResolutionSource?: ResolutionSource;
-    boundaryResolutionNote?: string;
-    navigationOutcome?: "NotRequired" | "Succeeded" | "Failed";
-    veerSteps?: number;
-    encounterOutcome?: "None" | "WanderingEncounter" | "KeyedLocationDiscovery" | "ManualCustom";
-    encounterHour?: number;
-    locationId?: string;
-    encounterNote?: string;
-    deliberateDoubleBack: boolean;
-    continueAcrossBoundaries: boolean;
-    recognizedLost?: boolean;
-    reorient?: boolean;
-    dmOverrideNote?: string;
-    generatedProcedureResolutionId?: string;
-};
-
-export type SetExpeditionCourseIntentRequest = {
-    expectedVersion: number;
-    intendedDirection: number | null;
-};
-
-export type RepositionExpeditionRequest = {
-    expectedVersion: number;
-    targetHex: HexCoordinate;
-    note?: string;
-};
-
 export type ProcedureResolutionHelperRequest = {
     expectedVersion: number;
     expectedDistance?: number;
@@ -813,42 +768,9 @@ export type ProcedureResolutionHelperResult = {
     notes: string[];
 };
 
-export type ResolveBoundaryDecisionRequest = {
-    expectedVersion: number;
-    recognizedLost: boolean;
-    reorient: boolean;
-    resolutionSource: ResolutionSource;
-    resolutionNote?: string;
-};
-
-export type TravelWatchAssistantRequest = {
-    expectedVersion: number;
-    elapsedHours: number;
-    distance?: number;
-    hexSteps?: number;
-    resultingHex: HexCoordinate;
-    hexProgress?: number;
-    intendedDirection?: number;
-    actualDirection?: number;
-    completeWatch: boolean;
-    resolutionSource: ResolutionSource;
-    resolutionNote?: string;
-    note?: string;
-};
-
 export type NonSpatialWatchAssistantRequest = {
     expectedVersion: number;
     elapsedHours: number;
-    resolutionSource: ResolutionSource;
-    resolutionNote?: string;
-    note?: string;
-};
-
-export type NavigationAssistantRequest = {
-    expectedVersion: number;
-    isLost: boolean;
-    veerSteps: number;
-    intendedDirection?: number;
     resolutionSource: ResolutionSource;
     resolutionNote?: string;
     note?: string;
