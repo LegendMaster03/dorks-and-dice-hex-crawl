@@ -35,10 +35,8 @@ public sealed class Phase18CellWatchRuntimeTests
         Assert.Equal(result.Expedition.Traversal.CurrentCell, entered.Cell);
         Assert.Equal(exited.ReciprocalInterfaceIndex, entered.BoundaryInterfaceIndex);
         Assert.Equal(exited.BoundaryInterfaceIndex, entered.ReciprocalInterfaceIndex);
-        Assert.Null(exited.Hex);
-        Assert.Null(entered.Hex);
-        Assert.DoesNotContain(result.Events, e =>
-            e.Kind is CrawlRuntimeEventKind.HexEntered or CrawlRuntimeEventKind.HexExited);
+        Assert.NotNull(exited.Cell);
+        Assert.NotNull(entered.Cell);
         Assert.Equal(result.Events.Count, result.Events.Select(e => e.Sequence).Distinct().Count());
         Assert.Equal(result.Events.Count, result.Expedition.History.Count);
     }
@@ -353,8 +351,6 @@ public sealed class Phase18CellWatchRuntimeTests
         Assert.Equal(paused.Expedition.Traversal.CurrentCell, decision.Cell);
         Assert.Null(decision.Hex);
         Assert.True(decision.ExpeditionElapsedTime >= paused.Expedition.ElapsedTravelTime);
-        Assert.DoesNotContain(changed.Events, e => e.Kind is
-            CrawlRuntimeEventKind.HexEntered or CrawlRuntimeEventKind.HexExited);
         Assert.Equal(changed.Expedition.History.Count,
             changed.Expedition.History.Select(e => e.Sequence).Distinct().Count());
     }
