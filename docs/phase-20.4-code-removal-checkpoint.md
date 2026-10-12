@@ -4,11 +4,13 @@
 
 **Repository:** `LegendMaster03/dorks-and-dice-hex-crawl`  
 **Feature branch (unmerged, undeployed):** `feature/tile-crawl-phase-20.2-application-persistence`  
-**Last verified green automated head before the latest edits:** [`28820231`](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/commit/2882023188ac777a6ab004fd0b3dbda8db15ff07), [CI 38294385551](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38294385551), **successful**. This is automated validation, **not** completion of the architectural deletion gate or rendered browser acceptance.
+**Last verified green automated head before the latest edits:** [`8e7bddc5`](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/commit/8e7bddc56ef4b6cffbf33502131c2bc438df585d), [CI 38296378851](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38296378851), **successful**. This is automated validation, **not** completion of the architectural deletion gate or rendered browser acceptance.
 
 ## Deleted from the feature branch
 
-- **Pending CI:** Removed the axial `Hex` property from `CrawlRuntimeEvent`, event collector, handoff world context and browser handoff type. All spatial event constructors use their existing qualified `Cell` identity, while nonspatial events have no cell. Converted integration/domain/application regressions to assert the retained cell and event behavior; historical handoff location snapshots, linked scenes, encounter metadata and journey handoff behavior remain covered.
+- **Pending CI:** Delete unused axial map selection and highlighting in `map-surface.ts` and `canvas-renderer.ts`. Removed the dead `setHexSelectionHandler`, local `selectedHex` state and the world-to-axial click fallback. Retained exact periodic cell selection, pointer authoring, registered-map source previews, accessibility input and polygon highlighting. The old grid-preview drawing and registration model must still be generalized.
+
+- **Verified CI 38296378851:** Removed the axial `Hex` property from `CrawlRuntimeEvent`, event collector, handoff world context and browser handoff type. All spatial event constructors use their existing qualified `Cell` identity, while nonspatial events have no cell. Converted integration/domain/application regressions to assert the retained cell and event behavior; historical handoff location snapshots, linked scenes, encounter metadata and journey handoff behavior remain covered.
 
 - The pending-encounter `HexCoordinate`/snapshot `Hex` field and its axial compatibility assertions. Encounter identity, provenance, elapsed time, location id and qualified cell remain intact; spatial watch validation still requires the encounter cell to equal the traversal cell. The deletion passed CI 38294385551 at `28820231`.
 

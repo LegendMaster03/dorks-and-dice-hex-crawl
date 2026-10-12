@@ -1,7 +1,7 @@
 import { sourceMapAssetUrl } from "./api";
 import { hexCorners, hexToWorld, visibleHexBounds } from "./hex-math";
 import { RasterImageCache } from "./raster-image-cache";
-import type { DemoWorld, GridDefinition, HexCoordinate, MapRegistrationTransform, SpatialFeature, WorldPoint, WorldCellGeometry } from "./types";
+import type { DemoWorld, GridDefinition, MapRegistrationTransform, SpatialFeature, WorldPoint, WorldCellGeometry } from "./types";
 
 export type MapReviewGeometry = {
     id: string;
@@ -17,7 +17,6 @@ export type MapReviewOverlay = {
 import { Viewport } from "./viewport";
 
 export class CanvasMapRenderer {
-    public selectedHex: HexCoordinate | null = null;
     public selectedWorldCell: WorldCellGeometry | null = null;
     public currentWorldCell: WorldCellGeometry | null = null;
     public visibleWorldCells: WorldCellGeometry[] = [];
@@ -367,18 +366,6 @@ export class CanvasMapRenderer {
             ctx.stroke();
             return;
         }
-        if (!this.selectedHex) return;
-        const grid = this.gridPreview ?? world.grid;
-        if (!grid) return;
-        const points = hexCorners(grid, this.selectedHex).map(point => this.toScreen(point, width, height));
-        ctx.beginPath();
-        points.forEach((point, index) => index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
-        ctx.closePath();
-        ctx.fillStyle = "rgba(210, 139, 39, .24)";
-        ctx.fill();
-        ctx.strokeStyle = "#9b5f12";
-        ctx.lineWidth = 3;
-        ctx.stroke();
     }
 
     private drawExpedition(ctx: CanvasRenderingContext2D, world: DemoWorld | null, width: number, height: number): void {
