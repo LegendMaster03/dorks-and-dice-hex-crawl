@@ -229,8 +229,14 @@ export async function renderAssistantEntry(
                 const request = applyStandaloneProcedureChoice(
                     buildRequest(form, assistant, usesAbstract()),
                     choice);
-                const session = await api.startStandaloneSession(request);
-                if (!disposed) navigate(`/expeditions/${session.id}/${assistant}`);
+                const session = usesAbstract()
+                    ? await api.startStandaloneCellSession(request)
+                    : await api.startStandaloneSession(request);
+                // Spatial bookkeeping is handled by the V2 cell workbench;
+                // the independent hex-only assistant actions were retired.
+                if (!disposed) navigate(usesAbstract()
+                    ? `/expeditions/${session.id}`
+                    : `/expeditions/${session.id}/${assistant}`);
             } catch (value) {
                 if (!disposed) showUiError(error, value);
             } finally {
@@ -277,7 +283,10 @@ function renderSessions(
         open.type = "button";
         open.className = "hc-primary-action";
         open.textContent = openLabel(assistant, session);
-        open.addEventListener("click", () => navigate(`/expeditions/${session.id}/${assistant}`));
+        open.addEventListener("click", () => navigate(
+            session.context.kind === "NonSpatial"
+                ? `/expeditions/${session.id}/${assistant}`
+                : `/expeditions/${session.id}`));
         actions.append(open);
 
         card.append(copy, actions);

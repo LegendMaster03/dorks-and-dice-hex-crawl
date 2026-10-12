@@ -26,6 +26,12 @@ export async function renderExpeditionAssistant(
     mode: ExpeditionAssistantMode,
     navigate: (route: string, replace?: boolean) => void): Promise<() => void> {
     let runtime = await api.getExpedition(expeditionId);
+    // Spatial assistants expected deleted V1 hex state and routes.
+    // Continue the existing expedition through generalized cell controls.
+    if (runtime.expedition.isSpatial && runtime.expedition.currentCell) {
+        navigate(`/expeditions/${runtime.id}`, true);
+        return () => {};
+    }
     let disposed = false;
     let pending = false;
 

@@ -94,6 +94,18 @@ test("mapless encounter choices do not offer authored world discoveries", () => 
     assert.match(periodic, /!world \|\| choice\("encounter"\)\.value !== "KeyedLocationDiscovery"/);
 });
 
+test("focused spatial assistants use V2 expedition workbench; nonspatial cadence keeps live routes", () => {
+    const entry = file("modules","assistants","assistant-entry-view.ts");
+    const view = file("modules","assistants","expedition-assistant-view.ts");
+    const api = file("api.ts");
+    assert.match(entry, /api\.startStandaloneCellSession\(request\)/);
+    assert.match(entry, /api\.startStandaloneSession\(request\)/);
+    assert.match(entry, /session\.context\.kind === "NonSpatial"/);
+    assert.match(view, /runtime\.expedition\.currentCell[\s\S]*navigate\(`\/expeditions\/\$\{runtime\.id\}`, true\)/);
+    assert.match(api, /\/nonspatial\/encounters/);
+    assert.doesNotMatch(entry, /api\.startConfiguredExpedition\(/);
+});
+
 test("mapless cell workbench does not require a fabricated overworld", () => {
     const view = file("modules","expeditions","expedition-view.ts");
     const periodic = file("modules","expeditions","periodic-expedition-workbench.ts");

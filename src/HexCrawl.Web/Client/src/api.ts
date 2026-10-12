@@ -623,9 +623,9 @@ export class HexCrawlApi {
         input: ResolveEncounterRequest): Promise<ExpeditionDetail> {
         return this.sendJson(
             "POST",
-            `/api/expeditions/${encodeURIComponent(expeditionId)}/encounters/${encodeURIComponent(occurrenceId)}/resolve`,
+            `/api/expeditions/${encodeURIComponent(expeditionId)}/nonspatial/encounters/${encodeURIComponent(occurrenceId)}/resolve`,
             input,
-            "Resolve encounter");
+            "Resolve nonspatial encounter");
     }
 
     public resolveBoundaryDecision(
@@ -688,7 +688,7 @@ export class HexCrawlApi {
     }
 
     public recordEncounterAssistant(expeditionId: string, input: EncounterCadenceAssistantRequest): Promise<ExpeditionDetail> {
-        return this.sendJson("POST", `/api/expeditions/${encodeURIComponent(expeditionId)}/assistants/encounters`, input, "Encounter cadence assistant");
+        return this.sendJson("POST", `/api/expeditions/${encodeURIComponent(expeditionId)}/nonspatial/encounters`, input, "Nonspatial encounter cadence");
     }
 
     private async getJson<T>(path: string, label: string): Promise<T> {
