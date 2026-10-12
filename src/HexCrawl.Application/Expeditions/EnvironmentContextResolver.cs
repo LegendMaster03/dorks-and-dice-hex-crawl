@@ -94,8 +94,8 @@ public static class EnvironmentContextResolver
 
     private static void AddWorld(StoredExpedition expedition, OverworldDefinition world, List<Candidate> candidates)
     {
-        WorldCellId? currentCell = expedition.Runtime is CellExpeditionState cell
-            ? cell.Traversal.CurrentCell : null;
+        WorldCellId? currentCell = expedition.Runtime is CellExpeditionState cellExpedition
+            ? cellExpedition.Traversal.CurrentCell : null;
         if (currentCell is { } identity && identity.TilingId != world.SpatialTiling.Id)
             throw new InvalidOperationException("The expedition is positioned in a different authoritative world tiling.");
 
