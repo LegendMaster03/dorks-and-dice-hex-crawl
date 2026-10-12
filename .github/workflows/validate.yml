@@ -271,6 +271,11 @@ jobs:
             --data '{"name":"CI mapless PostgreSQL","procedureKey":"simple-fixed-distance","context":{"kind":"NonSpatial","name":"CI procedure clock"}}' \
             -o "$response_dir/session.json"
           session_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$response_dir/session.json")"
+          curl -fsS -X POST http://127.0.0.1:18093/api/expeditions/cells \
+            -H 'Content-Type: application/json' \
+            --data '{"name":"CI geometric mapless PostgreSQL","procedureKey":"simple-fixed-distance","context":{"kind":"AbstractHex","name":"CI paper map","orientation":"FlatTop","hexCenterDistance":12,"distanceUnit":{"kind":"Mile","symbol":"mi","metersPerUnit":1609.344}},"startHex":{"q":2,"r":-1}}' \
+            -o "$response_dir/cell-session.json"
+          cell_session_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$response_dir/cell-session.json")"
           docker rm -f hex-crawl-mapless-smoke >/dev/null
           docker run -d --name hex-crawl-mapless-smoke \
             --network hex-crawl-ci -p 127.0.0.1:18093:8080 \
@@ -288,6 +293,17 @@ jobs:
           import json, sys
           d = json.load(open(sys.argv[1]))
           assert d["context"]["kind"] == "NonSpatial", d
+          assert d["procedure"]["key"] == "simple-fixed-distance", d
+          PY
+          curl -fsS "http://127.0.0.1:18093/api/expeditions/$cell_session_id" -o "$response_dir/reloaded-cell.json"
+          python3 - "$response_dir/reloaded-cell.json" <<'PY'
+          import json, sys
+          d = json.load(open(sys.argv[1]))
+          assert d["context"]["kind"] == "AbstractHex", d
+          assert d["context"]["orientation"] == "FlatTop", d
+          assert d["expedition"]["currentCell"]["address"]["motifCellId"] == "hex", d
+          assert d["expedition"]["currentCell"]["address"]["translation"] == {"u": 2, "v": -1}, d
+          assert d["expedition"]["currentHex"] is None, d
           assert d["procedure"]["key"] == "simple-fixed-distance", d
           PY
 
