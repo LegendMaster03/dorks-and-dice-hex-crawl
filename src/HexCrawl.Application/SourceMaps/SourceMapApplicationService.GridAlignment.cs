@@ -19,9 +19,6 @@ public sealed partial class SourceMapApplicationService
         ArgumentNullException.ThrowIfNull(alignment);
         var current = await GetOverworldAsync(overworldId, ownerUserId, cancellationToken);
         RequireVersion(expectedVersion, current.Version);
-        if (current.World.HasLegacyHexGrid)
-            throw new NotSupportedException(
-                "Detected motif placement is not the legacy hex-grid alignment workflow.");
         var existing = Find(current, sourceMapId);
         if (existing.PixelWidth <= 0 || existing.PixelHeight <= 0)
             throw new InvalidOperationException("This map must have valid raster dimensions.");
@@ -51,7 +48,7 @@ public sealed partial class SourceMapApplicationService
         var current = await GetOverworldAsync(overworldId, ownerUserId, cancellationToken);
         RequireVersion(expectedVersion, current.Version);
         var old = current.World;
-        if (old.HasLegacyHexGrid || old.Tiling is null
+        if (old.Tiling is null
             || old.Tiling.PhysicalDistancePerWorldUnit is not null
             || old.SourceMaps.Any(map => map.Alignment is not null)
             || old.Locations.Count != 0 || old.Features.Count != 0
