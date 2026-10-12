@@ -11,16 +11,4 @@ public static class ExpeditionProcedureExecutionResolver
         return GenericProcedureRuntime.Bind(expedition.CampaignProcedure);
     }
 
-    public static WatchAdvanceResult Advance(
-        CrawlRuntimeEngine engine,
-        StoredExpedition expedition,
-        CrawlRuntimeContext context,
-        ExpeditionState state,
-        WatchTravelPlan plan,
-        WatchAdvanceInputs inputs)
-    {
-        ArgumentNullException.ThrowIfNull(engine);
-        ArgumentNullException.ThrowIfNull(expedition);
-        return engine.Advance(context, expedition.CampaignProcedure, state, plan, inputs);
-    }
 }
