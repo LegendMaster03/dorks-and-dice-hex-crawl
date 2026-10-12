@@ -143,7 +143,7 @@ public sealed class NativeGenericProcedureExecutionTests
         var store = await StoreAsync(database.ConnectionString);
         var sessions = new CrawlSessionService(store);
         var core = new HexCrawlService(store);
-        var assistants = new ExpeditionAssistantService(store, core, new CrawlSessionContextResolver(core));
+        var assistants = new ExpeditionAssistantService(store, core);
         var started = await sessions.StartAsync(
             Owner,
             new StartStandaloneCrawlSessionCommand(
