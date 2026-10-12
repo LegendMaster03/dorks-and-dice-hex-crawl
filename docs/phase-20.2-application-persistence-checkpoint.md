@@ -50,7 +50,7 @@ Example topology response excerpt (illustrative IDs and coordinates, not a real 
 
 ```json
 {
-  "formatVersion": 2,
+  "formatVersion": 1,
   "currentCell": {
     "tilingId": "11111111-1111-4111-8111-111111111111",
     "address": {"motifCellId": "cell-0", "translation": {"u": 0, "v": 0}}
@@ -63,7 +63,7 @@ Example topology response excerpt (illustrative IDs and coordinates, not a real 
 }
 ```
 
-The actual topology response additionally includes the authoritative polygon and interface records (`interfaceIndex`, `boundarySideIndex`, `neighborCell`, `reciprocalInterfaceIndex`, `start`, `end`); `interfaces: []` above is only a formatting illustration, **not** the expected geometry for a traversable cell. The current `formatVersion` must be read from `PeriodicCellTraversal.CurrentFormatVersion`, not hardcoded by consumers.
+The actual topology response additionally includes the authoritative polygon and interface records (`interfaceIndex`, `boundarySideIndex`, `neighborCell`, `reciprocalInterfaceIndex`, `start`, `end`); `interfaces: []` above is only a formatting illustration, **not** the expected geometry for a traversable cell. The verified current cursor format is `PeriodicCellTraversal.CurrentFormatVersion = 1`; clients should read `formatVersion` from the server rather than hardcode it.
 
 ## Authoritative execution, persistence and mutations
 
