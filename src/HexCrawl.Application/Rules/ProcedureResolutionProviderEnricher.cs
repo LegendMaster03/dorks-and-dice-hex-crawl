@@ -112,10 +112,12 @@ public sealed class ProcedureResolutionProviderEnricher(TravelEnvironmentProvide
         MovementCompositionInput? movementInput,
         CancellationToken cancellationToken)
     {
-        if (expedition.Runtime is not (ExpeditionState or CellExpeditionState))
+        // The only routed resolution endpoint is the generalized cell helper.
+        // Do not interpret a retired V1 or nonspatial runtime as geometric travel.
+        if (expedition.Runtime is not CellExpeditionState)
         {
             throw new InvalidOperationException(
-                "Provider-backed travel distance is available only for spatial crawl sessions.");
+                "Provider-backed travel distance requires an authoritative cell expedition.");
         }
         if (command.BaseSpeedFeet is null or <= 0)
         {
