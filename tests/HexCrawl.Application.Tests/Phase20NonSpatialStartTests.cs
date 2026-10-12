@@ -14,7 +14,7 @@ public sealed class Phase20NonSpatialStartTests
         await store.InitializeAsync();
         var core = new HexCrawlService(store);
         var starter = new ExpeditionStartService(store, core, new CampaignProcedureService(store));
-        var created = await starter.StartStandaloneAsync(
+        var created = await starter.StartNonSpatialAsync(
             "owner", "scene", new ProcedureStartSelection(PresetKey: "simple-fixed-distance"),
             new NonSpatialCrawlSessionContext("Story mode"));
         Assert.IsType<NonSpatialSessionState>(created.Runtime);
