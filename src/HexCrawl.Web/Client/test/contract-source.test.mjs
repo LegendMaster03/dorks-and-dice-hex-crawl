@@ -81,18 +81,6 @@ test("standalone crawl sessions post directly to the expedition collection", () 
     assert.match(source, /sendJson\("POST", "\/api\/expeditions"/);
 });
 
-test("DM repositioning is a dedicated non-travel mutation", () => {
-    const api = read("api.ts");
-    const view = read("modules/expeditions/expedition-view.ts");
-    assert.match(api, /repositionExpedition/);
-    assert.match(api, /\/reposition/);
-    assert.match(view, /openRepositionWorkspace/);
-    assert.match(view, /Teleport party here/);
-    assert.doesNotMatch(
-        view.slice(view.indexOf("const openRepositionWorkspace"), view.indexOf("const openPartyWorkspace")),
-        /recordTravelAssistant|advanceExpedition/);
-});
-
 test("non-spatial watch bookkeeping uses a dedicated non-spatial API", () => {
     const api = read("api.ts");
     const view = read("modules/assistants/expedition-assistant-view.ts");
@@ -183,29 +171,6 @@ test("DM-facing world authoring copy explains empty states and keeps deeper map 
     assert.doesNotMatch(maps, /Semantic locations and features remain independent world truth/);
 });
 
-test("direction controls retain numeric runtime values while current-cell adjacency stays topology-derived", () => {
-    const runtime = read("runtime-view.ts");
-    const adjacency = read("modules/expeditions/spatial-adjacency.ts");
-    const navigator = read("modules/expeditions/cell-navigator.ts");
-    const expedition = read("modules/expeditions/expedition-view.ts");
-    const watch = read("modules/expeditions/expedition-watch-controller.ts");
-    const assistant = read("modules/assistants/expedition-assistant-view.ts");
-    assert.match(runtime, /Edge \${direction \+ 1}/);
-    assert.doesNotMatch(runtime, /"North"|"South"|"East"|"West"/);
-    assert.match(adjacency, /createCurrentCellAdjacency/);
-    assert.match(adjacency, /adjacencies: SpatialAdjacencyInterface/);
-    assert.match(adjacency, /boundarySegment/);
-    assert.doesNotMatch(adjacency, /HexCoordinate|HexOrientation|PointyTop|FlatTop/);
-    assert.doesNotMatch(expedition, /direction < 6/);
-    assert.match(navigator, /for \(const candidate of adjacency\.adjacencies\)/);
-    assert.match(navigator, /control\.dataset\.adjacencyInterfaceId = candidate\.id/);
-    assert.match(navigator, /aria-label", "Current-cell adjacent travel"/);
-    assert.doesNotMatch(assistant, /Select intended direction|directionOptions|hexSteps/);
-    assert.match(watch, /state\.intendedDirection === null \? "" : String\(state\.intendedDirection\)/);
-    assert.match(watch, /else if \(!direction\.value && state\.intendedDirection !== null\)/);
-    assert.match(watch, /direction\.value = String\(state\.intendedDirection\)/);
-});
-
 test("non-spatial primary workspace does not fabricate route, navigation, course, or pace state", () => {
     const view = read("modules/expeditions/expedition-view.ts");
     const start = view.indexOf("const renderNonSpatialWorkspace");
@@ -235,23 +200,13 @@ test("unified expedition workspace keeps presentation derivation separate from m
     assert.doesNotMatch(view, /api\.advanceExpedition/);
 });
 
-test("expedition watch controller owns watch form policy and mutation submission", () => {
-    const view = read("modules/expeditions/expedition-view.ts");
-    const controller = read("modules/expeditions/expedition-watch-controller.ts");
-    assert.match(view, /ExpeditionWatchController/);
-    assert.doesNotMatch(view, /api\.advanceExpedition/);
-    assert.match(controller, /api\.advanceExpedition/);
-    assert.match(controller, /navigationResolutionDue/);
-    assert.match(controller, /encounterCheckDue/);
-});
-
 test("focused party workspace exposes the persisted party register through a dedicated controller", () => {
     const view = read("modules/expeditions/expedition-view.ts");
     const party = read("modules/expeditions/expedition-party-sheet.ts");
     assert.match(view, /ExpeditionPartySheetController/);
     assert.match(view, /summary\.dataset\.partySummary = ""/);
     assert.match(view, /editor\.dataset\.partyEditor = ""/);
-    assert.match(view, /openDrawer\(runtime\.expedition\.isSpatial \? "Party & travel order" : "Party & activities"/);
+    assert.match(view, /openDrawer\("Party & activities"/);
     assert.match(party, /updateExpeditionParty/);
     assert.match(party, /Marching order/);
     assert.match(party, /Watch list/);
@@ -284,18 +239,6 @@ test("party movement editor derives units from persisted session data without a 
     assert.match(unitResolver, /\?\? null/);
     assert.doesNotMatch(party, /\?\? \{ kind: "Mile", symbol: "mi", metersPerUnit: 1609\.344 \}/);
     assert.match(party, /custom movement unit conversion must be a finite positive number/i);
-});
-
-test("watch forms do not invent unresolved travel results", () => {
-    const view = read("modules/expeditions/expedition-view.ts");
-    const controller = read("modules/expeditions/expedition-watch-controller.ts");
-    const assistant = read("modules/assistants/expedition-assistant-view.ts");
-    assert.doesNotMatch(view, /name="hexSteps"[^>]*value="1"/);
-    assert.doesNotMatch(controller, /actualDistance"\)\.value = String\(scale\)/);
-    assert.match(controller, /suggestedWatchDistance\(runtime\)/);
-    assert.doesNotMatch(assistant, /name="hexSteps"[^>]*value="1"/);
-    assert.doesNotMatch(assistant, /name="distance"[^>]*value="\$\{scale\}"/);
-    assert.match(assistant, /partial time, watch completion and provenance without spatial movement/);
 });
 
 test("running surfaces use document scrolling and focused assistants keep a readable content width", () => {
@@ -354,14 +297,6 @@ test("expedition setup accepts saved revisions and materializes preset selection
     assert.doesNotMatch(setup, /compatibleResolutionHelpers/);
 });
 
-test("spatial structural procedures stay viewable without constructing executable watch controls", () => {
-    const view = read("modules/expeditions/expedition-view.ts");
-    assert.match(view, /if \(!runtime\.expedition\.isSpatial \|\| runtime\.procedure\.runtime === null\) \{\s*openHistory\(\);\s*return;\s*\}/);
-    assert.match(view, /const controller = new ExpeditionWatchController/);
-    assert.match(view, /This expedition has no executable spatial, journey, or interval action/);
-    assert.doesNotMatch(view, /api\.advanceExpedition/);
-});
-
 test("focused encounter assistant does not imply it can discard automatic helper timing", () => {
     const assistant = read("modules/assistants/expedition-assistant-view.ts");
     assert.match(assistant, /resolutionHelpers\?\.encounter/);
@@ -405,78 +340,36 @@ test("procedure mechanics use shared presentation policy and the unified expedit
     assert.match(campaignProcedureView, /configured components are not applicable to the active procedure mechanics/);
 });
 
-test("automatic helper controls show the persisted procedure formulas at the point of use", () => {
+
+test("spatial mutation and discovery use only qualified cell interfaces", () => {
+    const route = read("modules/expeditions/expedition-view.ts");
+    const periodic = read("modules/expeditions/periodic-expedition-workbench.ts");
+    assert.match(route, /if \(!runtime\.expedition\.currentCell\)/);
+    assert.match(route, /return renderPeriodicExpeditionWorkbench/);
+    assert.match(periodic, /api\.repositionCellExpedition\(runtime\.id/);
+    assert.match(periodic, /api\.lookupWorldCell\(current\.id, point\)/);
+    assert.match(periodic, /api\.advanceCellWatch/);
+    assert.doesNotMatch(route, /ExpeditionWatchController|advanceExpedition|repositionExpedition|selectedHex|currentHex/);
+    assert.doesNotMatch(periodic, /api\.advanceExpedition|setHexSelectionHandler/);
+});
+
+test("native cell resolution retains authoritative provenance and expires stale results", () => {
+    const periodic = read("modules/expeditions/periodic-expedition-workbench.ts");
+    assert.match(periodic, /api\.resolveCellProcedureInputs\(runtime\.id/);
+    assert.match(periodic, /generatedProcedureResolutionId: generated\?\.generatedResolutionId/);
+    assert.match(periodic, /generated\?\.travel \?\? travel/);
+    assert.match(periodic, /generated\?\.navigation \?\? nav/);
+    assert.match(periodic, /runtime = next;\s*generated = null/);
+    assert.match(periodic, /next\.version !== result\.expeditionVersion/);
+    assert.match(periodic, /displayedWatchNumber !== state\.activeWatchNumber/);
+});
+
+test("independent nonspatial page retains focused bookkeeping without axial watch controls", () => {
     const view = read("modules/expeditions/expedition-view.ts");
-    const controller = read("modules/expeditions/expedition-watch-controller.ts");
-    assert.match(view, /data-helper-travel-mechanic/);
-    assert.match(view, /data-helper-navigation-mechanic/);
-    assert.match(view, /data-helper-encounter-mechanic/);
-    assert.match(controller, /procedureHelperMechanics\(runtime\.procedure\)/);
-    assert.match(controller, /mechanics\.travel \?\? ""/);
-    assert.match(controller, /mechanics\.navigation \?\? ""/);
-    assert.match(controller, /mechanics\.encounter \?\? ""/);
-});
-
-test("running sheet wires server-verified automatic procedure resolution through the watch controller", () => {
-    const view = read("modules/expeditions/expedition-view.ts");
-    const controller = read("modules/expeditions/expedition-watch-controller.ts");
-    assert.match(view, /data-resolution-helper-button/);
-    assert.match(controller, /resolveProcedureInputs/);
-    assert.match(controller, /getExpedition/);
-    assert.match(controller, /generatedProcedureResolutionId/);
-    assert.match(controller, /AutomaticRoll/);
-    assert.match(controller, /Edited after automatic generation/);
-    assert.match(controller, /DmOverride/);
-    assert.match(controller, /generatedEncounterLocationId === null/);
-});
-
-test("automatic resolution provenance expires when another session mutation advances the version", () => {
-    const controller = read("modules/expeditions/expedition-watch-controller.ts");
-    assert.match(controller, /private generatedResolutionVersion: number \| null = null/);
-    assert.match(controller, /expireGeneratedResolutionIfVersionChanged\(runtime\.version\)/);
-    assert.match(controller, /this\.generatedResolutionVersion = result\.generatedResolutionId === null/);
-    assert.match(controller, /this\.generatedResolutionVersion === runtimeVersion/);
-    assert.match(controller, /source\.value = ""/);
-    assert.match(controller, /Generated procedure inputs expired because the crawl session changed/);
-});
-
-test("automatic resolution and watch advancement lock each other while pending", () => {
-    const controller = read("modules/expeditions/expedition-watch-controller.ts");
-    assert.match(controller, /private resolutionPending = false/);
-    assert.match(controller, /button\.disabled = !any \|\| this\.advancePending \|\| this\.resolutionPending/);
-    assert.match(controller, /this\.disposed \|\| this\.advancePending \|\| this\.resolutionPending/);
-    assert.match(controller, /this\.advancePending \|\| this\.resolutionPending \|\| this\.disposed/);
-    assert.match(controller, /this\.advanceButton\.disabled = true;[\s\S]{0,160}button\.disabled = true;/);
-});
-
-test("due navigation and encounter inputs have no implicit successful result", () => {
-    const view = read("modules/expeditions/expedition-view.ts");
-    const controller = read("modules/expeditions/expedition-watch-controller.ts");
-    assert.match(view, /name="navigationOutcome"><option value="">Select resolved result/);
-    assert.match(view, /name="encounterOutcome"><option value="">Select resolved outcome/);
-    assert.doesNotMatch(view, /name="veerSteps"[^>]*value="1"/);
-    assert.match(controller, /A navigation check is due\. Select its resolved result\./);
-    assert.match(controller, /An encounter check is due\. Select its resolved outcome\./);
-});
-
-test("watch controller clears resolved inputs only when authoritative segment state changes", () => {
-    const controller = read("modules/expeditions/expedition-watch-controller.ts");
-    assert.match(controller, /segmentStateKey/);
-    assert.match(controller, /activeWatchElapsedHours/);
-    assert.match(controller, /clearResolvedSegmentInputs/);
-    assert.match(controller, /input\(this\.form, "veerSteps"\)\.value = ""/);
-    assert.match(controller, /checkbox\(this\.form, "doubleBack"\)\.checked = false/);
-    assert.doesNotMatch(controller, /runtime\.version[\s\S]{0,100}segmentStateKey/);
-});
-
-test("running sheet requires explicit provenance and navigation-helper inputs", () => {
-    const view = read("modules/expeditions/expedition-view.ts");
-    const controller = read("modules/expeditions/expedition-watch-controller.ts");
-    assert.doesNotMatch(view, /helperNavigationModifier"[^>]*value="0"/);
-    assert.match(controller, /Select resolution source/);
-    assert.match(controller, /readResolutionSource\("travelSource", "travel"\)/);
-    assert.match(controller, /readResolutionSource\("navigationSource", "navigation"\)/);
-    assert.match(controller, /readResolutionSource\("encounterSource", "encounter"\)/);
-    assert.match(controller, /readResolutionSource\("boundarySource", "boundary", false\)/);
-    assert.doesNotMatch(controller, /control\.value = "ManualRoll"/);
+    assert.match(view, /recordWatchAssistant/);
+    assert.match(view, /renderNonSpatialWorkspace/);
+    assert.match(view, /ExpeditionPartySheetController/);
+    assert.match(view, /ExpeditionJourneyPanel/);
+    assert.match(view, /ExpeditionSurvivalResourcesPanel/);
+    assert.doesNotMatch(view, /HexCoordinate|HexDirection|hexSteps|WatchTravelPlan|ExpeditionWatchController/);
 });
