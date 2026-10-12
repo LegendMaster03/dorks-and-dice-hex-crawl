@@ -11,12 +11,11 @@ public sealed class Phase18NativeCellProcedureTests
     [InlineData("<1:1,1,1:4,4>")]
     [InlineData("<1:1,1,1:6,3>")]
     [InlineData("<10:2 5 4 6 7 8 10,1 4 6 5 9 10,3 5 7 8 9 10:3 3 4,5 5>")]
-    public void Version2CellStepContractMovesThroughAnySupportedTiling(string symbol)
+    public void CellStepContractMovesThroughAnySupportedTiling(string symbol)
     {
         var world = CreateWorld(symbol);
-        var procedure = Version2Procedure(world, TravelResolutionMode.CellSteps);
-        var runtime = GenericProcedureRuntime.Bind(procedure);
-        Assert.Equal(2, runtime.Movement.MechanicVersion);
+        var procedure = CellProcedure(world, TravelResolutionMode.CellSteps);
+        GenericProcedureRuntime.Bind(procedure);
 
         var cursor = Start(world);
         var result = new CrawlRuntimeEngine().ResolveCellTravel(
@@ -29,10 +28,10 @@ public sealed class Phase18NativeCellProcedureTests
     }
 
     [Fact]
-    public void Version2PhysicalMovementHonorsActualDistanceAndCalibration()
+    public void PhysicalMovementHonorsActualDistanceAndCalibration()
     {
         var world = CreateWorld("<1:1,1,1:4,4>");
-        var procedure = Version2Procedure(world, TravelResolutionMode.ContinuousDistance);
+        var procedure = CellProcedure(world, TravelResolutionMode.ContinuousDistance);
         var cursor = Start(world);
         var budget = new DistanceMeasure(0.1, DistanceUnit.Miles);
         var result = new CrawlRuntimeEngine().ResolveCellTravel(
@@ -52,7 +51,7 @@ public sealed class Phase18NativeCellProcedureTests
             square, world.Topology.QuotientDsSymbol, world.Topology.TranslationDsSymbol);
         Assert.Equal(TilingComparisonStatus.ProvenEquivalent, comparison.Status);
 
-        var procedure = Version2Procedure(world, TravelResolutionMode.CellSteps)
+        var procedure = CellProcedure(world, TravelResolutionMode.CellSteps)
             with { TilingDsSymbol = square };
         procedure.Validate();
         var cursor = Start(world);
@@ -70,13 +69,13 @@ public sealed class Phase18NativeCellProcedureTests
     {
         var world = CreateWorld("<1:1,1,1:4,4>");
         var wrong = CreateWorld("<1:1,1,1:3,6>");
-        var procedure = Version2Procedure(wrong, TravelResolutionMode.CellSteps);
+        var procedure = CellProcedure(wrong, TravelResolutionMode.CellSteps);
         Assert.Throws<InvalidOperationException>(() => new CrawlRuntimeEngine().ResolveCellTravel(
             world, procedure, Start(world),
             ResolvedTravelAmount.CellTransitions(1, ResolutionProvenance.ProcedureDefault), true));
     }
 
-    private static CampaignProcedure Version2Procedure(
+    private static CampaignProcedure CellProcedure(
         PeriodicWorldTiling world, TravelResolutionMode mode)
     {
         var original = TestProcedureProfiles.FixedDistance().Materialize();

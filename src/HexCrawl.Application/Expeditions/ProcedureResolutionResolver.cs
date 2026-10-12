@@ -18,8 +18,6 @@ public sealed class ProcedureResolutionResolver(IProcedureResolutionRandomSource
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(command);
-        if (procedure.Movement.MechanicVersion != 2)
-            throw new InvalidOperationException("Only a native geometric movement procedure can resolve cell inputs.");
         var rolls = new List<ProcedureResolutionRoll>();
         var notes = new List<string>();
         var helpers = procedure.ResolutionHelpers;

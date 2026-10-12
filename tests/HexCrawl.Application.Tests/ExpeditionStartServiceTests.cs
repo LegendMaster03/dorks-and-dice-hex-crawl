@@ -160,8 +160,6 @@ public sealed class ExpeditionStartServiceTests
                 "alice", "Mapless cells", pinned, abstractContext, start);
             Assert.IsType<CellExpeditionState>(inWorld.Runtime);
             Assert.IsType<CellExpeditionState>(mapless.Runtime);
-            Assert.Equal(2, GenericProcedureRuntime.Bind(inWorld.CampaignProcedure).Movement.MechanicVersion);
-            Assert.Equal(2, GenericProcedureRuntime.Bind(mapless.CampaignProcedure).Movement.MechanicVersion);
         }
         Assert.Equal(4, (await store.ListExpeditionsAsync("alice")).Count);
     }
@@ -199,7 +197,6 @@ public sealed class ExpeditionStartServiceTests
         cellState.Validate(world.SpatialTiling);
         Assert.Equal(world.SpatialTiling.Resolve(start).Id, cellState.Traversal.CurrentCell);
         Assert.Equal(world.SpatialTiling.Resolve(start).Center, cellState.Traversal.Position);
-        Assert.Equal(2, GenericProcedureRuntime.Bind(expedition.CampaignProcedure).Movement.MechanicVersion);
         Assert.Equal(presetKey, expedition.ProcedureOrigin?.PresetKey);
         Assert.Null(expedition.ProcedureOrigin?.PresetRevision);
         var pinned = await procedures.GetAsync("alice", expedition.CampaignProcedure.ProcedureId,
@@ -207,7 +204,6 @@ public sealed class ExpeditionStartServiceTests
         Assert.Equal(expedition.CampaignProcedure.ProcedureId, pinned.Procedure.ProcedureId);
         Assert.Equal(expedition.CampaignProcedure.Revision, pinned.Procedure.Revision);
         Assert.Equal(expedition.CampaignProcedure.TilingDsSymbol, pinned.Procedure.TilingDsSymbol);
-        Assert.Equal(2, GenericProcedureRuntime.Bind(pinned.Procedure).Movement.MechanicVersion);
         Assert.Equal(expedition.ProcedureOrigin, pinned.ProcedureOrigin);
 
         var reopened = new PostgresHexCrawlStore(database.ConnectionString);
@@ -258,7 +254,7 @@ public sealed class ExpeditionStartServiceTests
             Modules = modules
         };
         procedure.Validate();
-        await procedures.CreateAsync("alice", version2, null);
+        await procedures.CreateAsync("alice", procedure, null);
 
         var address = new PeriodicCellAddress(
             tiling.Topology.MotifCells[0].Id, new LatticeDisplacement(2, -1));

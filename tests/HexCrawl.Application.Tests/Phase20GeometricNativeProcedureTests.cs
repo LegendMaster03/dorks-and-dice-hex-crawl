@@ -18,8 +18,6 @@ public sealed class Phase20GeometricNativeProcedureTests
         var publishedRuntime = GenericProcedureRuntime.Bind(published.Procedure);
         var runtime = GenericProcedureRuntime.Bind(geometric.Procedure);
 
-        Assert.Equal(2, publishedRuntime.Movement.MechanicVersion);
-        Assert.Equal(2, runtime.Movement.MechanicVersion);
         Assert.Equal(mode, runtime.Movement.TravelResolution);
         Assert.Equal(hasTurnCost, runtime.TurnPolicy!.NeighborCenterDistanceFactor > 0);
         Assert.Equal(publishedRuntime.Time.IntervalDuration, runtime.Time.IntervalDuration);
