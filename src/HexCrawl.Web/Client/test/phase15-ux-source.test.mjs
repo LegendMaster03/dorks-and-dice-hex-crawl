@@ -1349,11 +1349,6 @@ test("Phase 15.1 Compact supplies domain explanations for numeric procedure sett
         "utf8");
 
     for (const key of [
-        "startingExitProgressFactor",
-        "nearExitProgressFactor",
-        "farExitProgressFactor",
-        "backExitProgressFactor",
-        "directionChangeProgressCostFactor",
         "baseBudget",
         "travelChecksPerInterval",
         "timeCost",
@@ -1363,8 +1358,9 @@ test("Phase 15.1 Compact supplies domain explanations for numeric procedure sett
     ]) {
         assert.match(presentation, new RegExp(key + ":"));
     }
+    assert.match(presentation, /neighborCenterDistanceFactor:/);
+    assert.match(presentation, /"movement.turn-cost": \[/);
     assert.match(presentation, /numericHelp\[key\] \?\? definition\.description \?\? null/);
-    assert.match(presentation, /0\.5 means half the map scale/);
 });
 
 test("Phase 15.1 rendered review requires Guided onboarding, preset advice, and next-action explanations", () => {
