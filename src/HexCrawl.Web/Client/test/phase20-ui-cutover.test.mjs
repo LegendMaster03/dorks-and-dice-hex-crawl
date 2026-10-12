@@ -40,7 +40,7 @@ test("authored subjects are listed only inside the selected server cell polygon"
 
 test("world starts use qualified cell addresses without axial translation", () => {
     const setup = file("modules", "expeditions", "expedition-setup.ts");
-    const worldContract = file("HexCrawl.Web", "Modules", "Worlds", "WorldApiContracts.cs");
+    const worldContract = file("..", "..", "Modules", "Worlds", "WorldApiContracts.cs");
     assert.ok(setup.includes("const startCell = {"));
     assert.ok(setup.includes('motifCellId: select(form, "motifCellId").value'));
     assert.ok(setup.includes('u: integer(numberInput(form, "u"))'));
