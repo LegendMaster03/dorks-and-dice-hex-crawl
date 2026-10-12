@@ -111,7 +111,7 @@ public sealed record OverworldContract(
         world.World.Features.Select(FeatureContract.From).ToArray(),
         world.World.Locations.Select(LocationContract.From).ToArray(),
         world.World.SourceMaps.Select(SourceMapContract.From).ToArray(),
-        world.World.Tiling);
+        world.World.SpatialTiling);
 }
 
 public sealed record CreateOverworldRequest(

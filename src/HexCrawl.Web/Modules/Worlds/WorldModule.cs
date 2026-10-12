@@ -182,7 +182,7 @@ public sealed class WorldModule : IHexCrawlModule
     }
 
     // Generate a normal editable, pinned campaign revision using existing
-    // movement-v2 capabilities. Preset templates and past revisions are not
+    // cell movement capabilities. Preset templates and past revisions are not
     // edited. No image or manually authored notation is required.
     private static async Task<IResult> CreateCellTravelProcedureAsync(
         Guid overworldId,
@@ -193,8 +193,6 @@ public sealed class WorldModule : IHexCrawlModule
     {
         var owner = UserId(context);
         var stored = await service.GetOverworldAsync(overworldId, owner, cancellationToken);
-        if (stored.World.HasLegacyHexGrid || stored.World.Tiling is null)
-            throw new NotSupportedException("This world already uses legacy hex procedures.");
         var materialized = CrawlProcedureCatalog.Resolve("simple-fixed-distance")
             .MaterializeGeneric();
         var template = materialized.Procedure;
@@ -209,7 +207,6 @@ public sealed class WorldModule : IHexCrawlModule
                 parameters["actualDistanceResolution"] = ActualDistanceResolutionMode.Fixed.ToString();
                 return module with
                 {
-                    Mechanic = module.Mechanic with { Version = 2 },
                     Parameters = parameters
                 };
             }).ToArray();
@@ -217,7 +214,7 @@ public sealed class WorldModule : IHexCrawlModule
         {
             ProcedureId = Guid.NewGuid(),
             Name = "Cell-step exploration for " + stored.World.Name,
-            TilingDsSymbol = stored.World.Tiling.Topology.QuotientDsSymbol,
+            TilingDsSymbol = stored.World.SpatialTiling.Topology.QuotientDsSymbol,
             Modules = modules
         };
         edition.Validate();
@@ -240,15 +237,12 @@ public sealed class WorldModule : IHexCrawlModule
             throw new ArgumentException("A saved ruleset id and pinned revision are required.");
         var owner = UserId(context);
         var stored = await service.GetOverworldAsync(overworldId, owner, cancellationToken);
-        if (stored.World.HasLegacyHexGrid || stored.World.Tiling is null)
-            throw new NotSupportedException(
-                "This compatibility check applies to generalized cell worlds.");
         var procedure = (await procedures.GetAsync(
             owner, procedureId, revision, cancellationToken)).Procedure;
         var comparison = HexCrawl.Domain.Spatial.DelaneyDressTopology.Compare(
             procedure.TilingDsSymbol,
-            stored.World.Tiling.Topology.QuotientDsSymbol,
-            stored.World.Tiling.Topology.TranslationDsSymbol);
+            stored.World.SpatialTiling.Topology.QuotientDsSymbol,
+            stored.World.SpatialTiling.Topology.TranslationDsSymbol);
         if (comparison.Status is not (
             HexCrawl.Domain.Spatial.TilingComparisonStatus.ExactIdentity
             or HexCrawl.Domain.Spatial.TilingComparisonStatus.ChamberIsomorphic
@@ -282,7 +276,7 @@ public sealed class WorldModule : IHexCrawlModule
             });
         }
         if (bound.Movement.TravelResolution == TravelResolutionMode.ContinuousDistance
-            && stored.World.Tiling.PhysicalDistancePerWorldUnit is null)
+            && stored.World.SpatialTiling.PhysicalDistancePerWorldUnit is null)
             return Results.Ok(new
             {
                 status = "needs-calibration",
