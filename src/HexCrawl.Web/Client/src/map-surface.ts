@@ -54,7 +54,7 @@ export class MapSurface {
         host.replaceChildren(this.canvas, this.accessibilityHelp, this.accessibilityStatus);
 
         const initialWorld = this.getWorld();
-        if (initialWorld?.tiling && !initialWorld.grid) {
+        if (initialWorld?.tiling) {
             this.viewport.center = { ...initialWorld.tiling.origin };
         }
         this.renderer = new CanvasMapRenderer(this.canvas, this.viewport, this.getWorld, () => this.requestRender());
@@ -173,7 +173,7 @@ export class MapSurface {
 
     private loadVisibleCells(): void {
         const world = this.getWorld();
-        if (!world?.tiling || world.grid || !this.api) return;
+        if (!world?.tiling || this.renderer.gridPreview || !this.api) return;
         const width = this.canvas.clientWidth;
         const height = this.canvas.clientHeight;
         if (!(width > 0 && height > 0) || !Number.isFinite(this.viewport.zoom)) return;
@@ -249,7 +249,7 @@ export class MapSurface {
 
     public resetView(): void {
         const world = this.getWorld();
-        this.viewport.center = world?.tiling && !world.grid
+        this.viewport.center = world?.tiling
             ? { ...world.tiling.origin }
             : !world && this.renderer.currentWorldCell
                 ? { ...this.renderer.currentWorldCell.center }
@@ -282,7 +282,7 @@ export class MapSurface {
 
         const world = this.getWorld();
         if (world) {
-            if (world.tiling && !world.grid && !this.renderer.gridPreview && this.api) {
+            if (world.tiling && !this.renderer.gridPreview && this.api) {
                 void this.activateWorldCell(world.id, world.tiling.id, point);
                 return;
             }

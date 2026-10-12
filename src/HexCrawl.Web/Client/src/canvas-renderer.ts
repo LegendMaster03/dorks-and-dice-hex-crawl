@@ -233,7 +233,7 @@ export class CanvasMapRenderer {
     }
 
     private drawGrid(ctx: CanvasRenderingContext2D, world: DemoWorld, width: number, height: number): void {
-        if (!this.gridPreview && world.tiling && !world.grid) {
+        if (!this.gridPreview && world.tiling) {
             ctx.save();
             ctx.strokeStyle = "rgba(52, 67, 55, .38)";
             ctx.lineWidth = 1;
