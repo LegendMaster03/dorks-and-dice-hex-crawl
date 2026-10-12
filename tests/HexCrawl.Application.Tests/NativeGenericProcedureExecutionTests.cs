@@ -141,15 +141,10 @@ public sealed class NativeGenericProcedureExecutionTests
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = await StoreAsync(database.ConnectionString);
-        var sessions = new CrawlSessionService(store);
+        var sessions = new ExpeditionStartService(store, new HexCrawlService(store), new CampaignProcedureService(store));
         var core = new HexCrawlService(store);
         var assistants = new ExpeditionAssistantService(store, core);
-        var started = await sessions.StartAsync(
-            Owner,
-            new StartStandaloneCrawlSessionCommand(
-                "Native non-spatial",
-                "simple-fixed-distance",
-                new NonSpatialCrawlSessionContext("Travel clock")));
+        var started = await sessions.StartNonSpatialAsync(Owner, "Native non-spatial", new ProcedureStartSelection(PresetKey: "simple-fixed-distance"), new NonSpatialCrawlSessionContext("Travel clock"));
 
         var advanced = await assistants.RecordNonSpatialWatchAsync(
             started.Id,

@@ -153,14 +153,9 @@ public sealed class ProcedureComposerServiceTests
         var store = new PostgresHexCrawlStore(database.ConnectionString);
         await store.InitializeAsync();
         var composer = Composer(store);
-        var sessions = new CrawlSessionService(store);
+        var sessions = new ExpeditionStartService(store, new HexCrawlService(store), new CampaignProcedureService(store));
 
-        var pinned = await sessions.StartAsync(
-            "alice",
-            new StartStandaloneCrawlSessionCommand(
-                "Pinned expedition",
-                "simple-fixed-distance",
-                new NonSpatialCrawlSessionContext("Procedure clock")));
+        var pinned = await sessions.StartNonSpatialAsync("alice", "Pinned expedition", new ProcedureStartSelection(PresetKey: "simple-fixed-distance"), new NonSpatialCrawlSessionContext("Procedure clock"));
         var originalPinned = pinned.CampaignProcedure;
 
         var created = await composer.CreateAsync("alice", "simple-fixed-distance", []);

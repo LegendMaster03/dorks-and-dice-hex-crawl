@@ -16,14 +16,9 @@ public sealed class GenericProcedureReviewRegressionTests
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = new PostgresHexCrawlStore(database.ConnectionString);
         await store.InitializeAsync();
-        var service = new CrawlSessionService(store);
+        var service = new ExpeditionStartService(store, new HexCrawlService(store), new CampaignProcedureService(store));
 
-        var started = await service.StartAsync(
-            "alice",
-            new StartStandaloneCrawlSessionCommand(
-                "Pinned",
-                "simple-fixed-distance",
-                new NonSpatialCrawlSessionContext("Travel clock")));
+        var started = await service.StartNonSpatialAsync("alice", "Pinned", new ProcedureStartSelection(PresetKey: "simple-fixed-distance"), new NonSpatialCrawlSessionContext("Travel clock"));
         var pinned = started.CampaignProcedure;
 
         var saved = await store.SaveExpeditionAsync(started with { Name = "Still pinned" }, started.Version);
@@ -40,13 +35,8 @@ public sealed class GenericProcedureReviewRegressionTests
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = new PostgresHexCrawlStore(database.ConnectionString);
         await store.InitializeAsync();
-        var service = new CrawlSessionService(store);
-        var started = await service.StartAsync(
-            "alice",
-            new StartStandaloneCrawlSessionCommand(
-                "Future source",
-                "simple-fixed-distance",
-                new NonSpatialCrawlSessionContext("Travel clock")));
+        var service = new ExpeditionStartService(store, new HexCrawlService(store), new CampaignProcedureService(store));
+        var started = await service.StartNonSpatialAsync("alice", "Future source", new ProcedureStartSelection(PresetKey: "simple-fixed-distance"), new NonSpatialCrawlSessionContext("Travel clock"));
         var future = WithFutureMovementMechanic(started.CampaignProcedure);
         var futureExpedition = DuplicateStandalone(started, "Future snapshot") with { CampaignProcedure = future };
 
@@ -154,13 +144,8 @@ public sealed class GenericProcedureReviewRegressionTests
         var store = new PostgresHexCrawlStore(database.ConnectionString);
         await store.InitializeAsync();
 
-        var standaloneService = new CrawlSessionService(store);
-        var standalone = await standaloneService.StartAsync(
-            "alice",
-            new StartStandaloneCrawlSessionCommand(
-                "Standalone",
-                "simple-fixed-distance",
-                new NonSpatialCrawlSessionContext("Travel clock")));
+        var standaloneService = new ExpeditionStartService(store, new HexCrawlService(store), new CampaignProcedureService(store));
+        var standalone = await standaloneService.StartNonSpatialAsync("alice", "Standalone", new ProcedureStartSelection(PresetKey: "simple-fixed-distance"), new NonSpatialCrawlSessionContext("Travel clock"));
 
         var core = new HexCrawlService(store);
         var world = await core.CreateOverworldAsync("alice", WorldCommand());

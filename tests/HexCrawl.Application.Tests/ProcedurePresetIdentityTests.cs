@@ -63,14 +63,9 @@ public sealed class ProcedurePresetIdentityTests
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = new PostgresHexCrawlStore(database.ConnectionString);
         await store.InitializeAsync();
-        var service = new CrawlSessionService(store);
+        var service = new ExpeditionStartService(store, new HexCrawlService(store), new CampaignProcedureService(store));
 
-        var started = await service.StartAsync(
-            "alice",
-            new StartStandaloneCrawlSessionCommand(
-                "Origin independence",
-                "simple-fixed-distance",
-                new NonSpatialCrawlSessionContext("Procedure clock")));
+        var started = await service.StartNonSpatialAsync("alice", "Origin independence", new ProcedureStartSelection(PresetKey: "simple-fixed-distance"), new NonSpatialCrawlSessionContext("Procedure clock"));
         var pinned = started.CampaignProcedure;
         var runtimeBefore = GenericProcedureRuntime.Bind(pinned);
 

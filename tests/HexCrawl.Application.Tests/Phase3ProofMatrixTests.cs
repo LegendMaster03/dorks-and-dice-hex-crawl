@@ -434,13 +434,8 @@ public sealed class Phase3ProofMatrixTests
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = new PostgresHexCrawlStore(database.ConnectionString);
         await store.InitializeAsync();
-        var service = new CrawlSessionService(store);
-        var started = await service.StartAsync(
-            "alice",
-            new StartStandaloneCrawlSessionCommand(
-                "Pinned proof",
-                "alexandrian-advanced",
-                new NonSpatialCrawlSessionContext("Clock")));
+        var service = new ExpeditionStartService(store, new HexCrawlService(store), new CampaignProcedureService(store));
+        var started = await service.StartNonSpatialAsync("alice", "Pinned proof", new ProcedureStartSelection(PresetKey: "alexandrian-advanced"), new NonSpatialCrawlSessionContext("Clock"));
         var pinned = started.CampaignProcedure;
 
         var save = await store.SaveExpeditionAsync(started with { ProcedureOrigin = null }, started.Version);

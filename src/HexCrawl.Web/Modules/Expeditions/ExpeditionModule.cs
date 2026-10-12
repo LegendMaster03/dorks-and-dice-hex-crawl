@@ -21,8 +21,6 @@ public sealed class ExpeditionModule : IHexCrawlModule
 
     public void RegisterServices(IServiceCollection services)
     {
-        services.AddScoped<CrawlSessionContextResolver>();
-        services.AddScoped<CrawlSessionService>();
         services.AddScoped<ExpeditionStartService>();
         services.AddScoped<ExpeditionAssistantService>();
         services.AddScoped<ExpeditionPartyService>();

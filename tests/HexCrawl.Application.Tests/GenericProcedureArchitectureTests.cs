@@ -181,14 +181,9 @@ public sealed class GenericProcedureArchitectureTests
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = new PostgresHexCrawlStore(database.ConnectionString);
         await store.InitializeAsync();
-        var service = new CrawlSessionService(store);
+        var service = new ExpeditionStartService(store, new HexCrawlService(store), new CampaignProcedureService(store));
 
-        var started = await service.StartAsync(
-            "alice",
-            new StartStandaloneCrawlSessionCommand(
-                "Pinned snapshot",
-                "simple-fixed-distance",
-                new NonSpatialCrawlSessionContext("Travel clock")));
+        var started = await service.StartNonSpatialAsync("alice", "Pinned snapshot", new ProcedureStartSelection(PresetKey: "simple-fixed-distance"), new NonSpatialCrawlSessionContext("Travel clock"));
         var loaded = await store.GetExpeditionAsync(started.Id, "alice");
 
         Assert.NotNull(loaded);
