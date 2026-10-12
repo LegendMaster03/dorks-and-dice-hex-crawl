@@ -144,6 +144,7 @@ test("V2 cell GM tools use server-qualified position and manual discovery, never
     assert.match(view, /polygonContainsSubject\(selected\.polygon/);
     assert.match(view, /uniquelyAdjacentInterface\(geometry\.id, topology\.interfaces\)/);
     assert.match(view, /selectHeading\(adjacent\)/);
+    assert.match(view, /control\.dataset\.adjacencyInterfaceId === edge\.id\)\?\.focus\(\)/);
     assert.match(view, /map\.renderer\.discoveredSubjectIds = discoveredSubjectIds\(runtime\)/);
     assert.match(api, /\/cells\/reposition/);
 });

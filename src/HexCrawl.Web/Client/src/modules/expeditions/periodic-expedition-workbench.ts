@@ -857,6 +857,15 @@ export async function renderPeriodicExpeditionWorkbench(
                 if (generated) invalidateGenerated();
                 selectHeading(edge.intentValue === selectedExit ? null : edge.intentValue);
                 render();
+                // Render replaces the navigator buttons; keep keyboard focus
+                // on the same atomic interface for repeated decisions.
+                queueMicrotask(() => {
+                    if (disposed) return;
+                    const controls = root.querySelectorAll<HTMLButtonElement>(
+                        "[data-cell-navigator] .hc-adjacency-interface");
+                    [...controls].find(control =>
+                        control.dataset.adjacencyInterfaceId === edge.id)?.focus();
+                });
             }
         });
         required<HTMLElement>("[data-cell-navigator]").replaceChildren(navigation);
