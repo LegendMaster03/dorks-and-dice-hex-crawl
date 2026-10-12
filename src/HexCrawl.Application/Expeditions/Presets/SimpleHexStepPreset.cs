@@ -8,6 +8,7 @@ internal static class SimpleHexStepPreset
 {
     internal static CrawlProcedurePresetDefinition Create() =>
         Preset(
+            CampaignProcedureSchema.CurrentHexTilingDsSymbol,
             "simple-hex-step",
             "Simple Hex Step",
             "Four-hour whole-cell travel with no partial progress, navigation, or encounter checks.",

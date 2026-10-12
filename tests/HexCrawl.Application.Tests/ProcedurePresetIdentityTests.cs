@@ -1,5 +1,6 @@
 using HexCrawl.Application.Persistence;
 using HexCrawl.Domain.Runtime;
+using HexCrawl.Domain.Procedure;
 using HexCrawl.Infrastructure.Persistence;
 
 namespace HexCrawl.Application.Tests;
@@ -33,6 +34,7 @@ public sealed class ProcedurePresetIdentityTests
         foreach (var preset in CrawlProcedureCatalog.Catalog)
         {
             preset.Validate();
+            Assert.Equal(CampaignProcedureSchema.CurrentHexTilingDsSymbol, preset.Recipe.TilingDsSymbol);
             var materialized = preset.MaterializeGeneric();
             materialized.Procedure.Validate();
             Assert.Equal(preset.PresetKey, materialized.Origin?.PresetKey);

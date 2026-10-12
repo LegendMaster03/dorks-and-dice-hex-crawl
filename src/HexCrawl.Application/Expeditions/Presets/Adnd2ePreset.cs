@@ -8,6 +8,7 @@ internal static class Adnd2ePreset
 {
     internal static CrawlProcedurePresetDefinition Create() =>
         Preset(
+            CampaignProcedureSchema.CurrentHexTilingDsSymbol,
             Adnd2ePresetKey,
             "AD&D 2e",
             "Daily overland travel with terrain movement costs and getting lost; encounter scheduling remains manual where source detail is uncertain.",

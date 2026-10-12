@@ -6,6 +6,7 @@ namespace HexCrawl.Application;
 internal static class CrawlProcedurePresetFactory
 {
     internal static CrawlProcedurePresetDefinition Preset(
+        string tilingDsSymbol,
         string presetKey,
         string displayName,
         string description,
@@ -22,7 +23,7 @@ internal static class CrawlProcedurePresetFactory
             2,
             new GenericProcedurePresetRecipe(procedureKey, procedureName, modules.ToArray())
             {
-                TilingDsSymbol = CampaignProcedureSchema.CurrentHexTilingDsSymbol
+                TilingDsSymbol = tilingDsSymbol
             },
             attribution,
             disclaimer,

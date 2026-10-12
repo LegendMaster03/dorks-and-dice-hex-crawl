@@ -8,6 +8,7 @@ internal static class Pathfinder2eHexplorationPreset
 {
     internal static CrawlProcedurePresetDefinition Create() =>
         Preset(
+            CampaignProcedureSchema.CurrentHexTilingDsSymbol,
             Pathfinder2eHexplorationPresetKey,
             "Pathfinder 2e Hexploration",
             "Daily Hexploration with speed-based activity budgets, terrain costs, reconnoitering, camping, and subsistence.",

@@ -8,6 +8,7 @@ internal static class AlexandrianAdvancedPreset
 {
     internal static CrawlProcedurePresetDefinition Create() =>
         Preset(
+            CampaignProcedureSchema.CurrentHexTilingDsSymbol,
             "alexandrian-advanced",
             "Alexandrian Advanced",
             "Four-hour distance travel with navigation, persistent veer, per-watch encounters, and built-in resolution helpers.",

@@ -8,6 +8,7 @@ internal static class SimpleFixedDistancePreset
 {
     internal static CrawlProcedurePresetDefinition Create() =>
         Preset(
+            CampaignProcedureSchema.CurrentHexTilingDsSymbol,
             "simple-fixed-distance",
             "Simple Fixed Distance",
             "Four-hour fixed-distance travel with partial cell progress and no navigation or encounter checks.",

@@ -8,6 +8,7 @@ internal static class Dnd2014Preset
 {
     internal static CrawlProcedurePresetDefinition Create() =>
         Preset(
+            CampaignProcedureSchema.CurrentHexTilingDsSymbol,
             Dnd2014PresetKey,
             "D&D 5e / 2014",
             "Hourly travel with 2014 pace distances, difficult-terrain slowdown, travel activities, getting lost, foraging, and forced-march exhaustion.",

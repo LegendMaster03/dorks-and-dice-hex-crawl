@@ -8,6 +8,7 @@ internal static class ForbiddenLandsPreset
 {
     internal static CrawlProcedurePresetDefinition Create() =>
         Preset(
+            CampaignProcedureSchema.CurrentHexTilingDsSymbol,
             ForbiddenLandsPresetKey,
             "Forbidden Lands",
             "Quarter-day journeys with assigned travel roles, resource dice, foraging, camping, forced travel, and mishaps.",

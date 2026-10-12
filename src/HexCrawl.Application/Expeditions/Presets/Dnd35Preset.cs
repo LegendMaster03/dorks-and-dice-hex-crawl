@@ -8,6 +8,7 @@ internal static class Dnd35Preset
 {
     internal static CrawlProcedurePresetDefinition Create() =>
         Preset(
+            CampaignProcedureSchema.CurrentHexTilingDsSymbol,
             Dnd35PresetKey,
             "D&D 3.5e",
             "Hourly overland travel with difficult terrain, getting lost, foraging, forced-march checks, and fatigue consequences.",

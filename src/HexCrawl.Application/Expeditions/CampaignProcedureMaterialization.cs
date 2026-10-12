@@ -25,7 +25,7 @@ public sealed record GenericProcedurePresetRecipe(
     string DefaultProcedureName,
     IReadOnlyList<ProcedureModuleRecipe> ModuleSelections)
 {
-    public string TilingDsSymbol { get; init; } = CampaignProcedureSchema.CurrentHexTilingDsSymbol;
+    public required string TilingDsSymbol { get; init; }
 }
 
 public sealed record MaterializedCampaignProcedure(

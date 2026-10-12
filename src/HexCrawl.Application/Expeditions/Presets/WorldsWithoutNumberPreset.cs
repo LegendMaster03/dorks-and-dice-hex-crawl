@@ -8,6 +8,7 @@ internal static class WorldsWithoutNumberPreset
 {
     internal static CrawlProcedurePresetDefinition Create() =>
         Preset(
+            CampaignProcedureSchema.CurrentHexTilingDsSymbol,
             WorldsWithoutNumberPresetKey,
             "Worlds Without Number",
             "Ten-hour expedition days with terrain speed, travel/camp encounter checks, supplies, foraging, and camping.",
