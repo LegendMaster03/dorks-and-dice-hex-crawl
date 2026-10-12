@@ -141,7 +141,7 @@ test("world editor removes nested control scrolling without changing narrow-layo
     assert.match(styles, /@media \(max-width: 820px\)[\s\S]*\.hc-world-editor \.hc-map-panel \{ position: static; \}/);
 });
 
-test("interactive canvas exposes a named keyboard interaction surface and selected hex state", () => {
+test("interactive canvas exposes accessible keyboard controls and authoritative cell position", () => {
     const surface = read("map-surface.ts");
     assert.match(surface, /setAttribute\("role", "region"\)/);
     assert.match(surface, /aria-describedby/);
@@ -150,7 +150,8 @@ test("interactive canvas exposes a named keyboard interaction surface and select
     assert.match(surface, /event\.key === "Enter" \|\| event\.key === " "/);
     assert.match(surface, /worldToHex/);
     assert.match(surface, /renderer\.selectedHex = selected/);
-    assert.match(surface, /Current expedition hex q/);
+    assert.doesNotMatch(surface, /Current expedition hex q/);
+    assert.match(surface, /Current expedition cell is outlined/);
     assert.match(surface, /Selected hex q/);
 });
 
