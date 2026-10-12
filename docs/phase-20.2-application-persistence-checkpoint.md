@@ -3,7 +3,8 @@
 **Repository:** `LegendMaster03/dorks-and-dice-hex-crawl`  
 **Reviewed baseline:** `68a5c231e411a969b52e9dd3cdb23c8452f9735c` on `feature/tile-crawl-phase-20.2-application-persistence`  
 **Baseline CI:** [38196941315](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38196941315), successful (domain, application, HTTP, frontend, PostgreSQL and restart smoke)  
-**Verified review fix:** `fb86c28b65a34a6db5359d045a7ed79779be04fd` ([CI 38200571111](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38200571111); full test and PostgreSQL/container checks passed). The explicit-null-kind migration preflight and rollback theory are verified. No merge, dev migration or deployment is claimed.
+**Verified migration review fix:** `fb86c28b65a34a6db5359d045a7ed79779be04fd` ([CI 38200571111](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38200571111); full test and PostgreSQL/container checks passed). The explicit-null-kind migration preflight and rollback theory are verified.  
+**Verified subsequent self-review fix:** `de3ba8c698caab93e5921c76d5fc96c81bbb474b` ([CI 38201412398](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38201412398), successful). Generalized travel now accepts the same proven-equivalent D-symbol quotients as expedition creation; direct crossing and full-watch regression tests pass. No merge, dev migration or deployment is claimed.
 
 ## Scope and decision precedence
 
@@ -77,7 +78,7 @@ The actual topology response additionally includes the authoritative polygon and
 ## One-time schema-10→11 development migration
 
 - `PostgresSchemaMigrator.UpgradeFrom10Async` runs under one transaction and advisory lock. It preflights state kinds, deletes only V1 spatial `expeditions` and cascading event rows, establishes the V2-only check constraint and inserts version 11. Repeated startup on version 11 is idempotent.
-- V1 records without a `kind` field are intentionally classified as historical `Spatial`; explicitly null `kind` must instead fail closed. Unknown kinds or nonobject state must abort before any deletion. A proposed regression test exercises both `FutureKind` and null kinds and checks the entire transaction rolls back.
+- V1 records without a `kind` field are intentionally classified as historical `Spatial`; explicitly null `kind` must instead fail closed. Unknown kinds or nonobject state must abort before any deletion. The PostgreSQL rollback theory exercises both `FutureKind` and null kinds and checks that the entire transaction rolls back.
 - The migration is **not executed on the development database** by any source commit. Before the coordinated deployment, verify a recoverable PostgreSQL **and map asset** backup, an isolated restore and expected data-kind counts. After the first successful schema-11 development deployment, remove the temporary `UpgradeFrom10Async` startup upgrade code on the following deployment, retaining schema 11 and its constraint.
 - Retained V2/nonspatial data, world definitions, source maps, saved procedures/revisions, linked asset references and account data must not be deleted or silently converted. The one-time intentional V1 expedition deletion has been approved in the authoritative plan.
 
@@ -103,5 +104,7 @@ Do not restore old API routes, V1 persistence codecs, deleted workbench services
 ## Verification and remaining decision gates
 
 **Verified source review:** the pre-review baseline `68a5c231` passed [CI 38196941315](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38196941315). The corrected code `fb86c28b65a34a6db5359d045a7ed79779be04fd` passed [CI 38200571111](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38200571111): domain **227/227**, focused V2 application/migration **17/17**, focused V2 HTTP **3/3**, full application **377/377**, full HTTP integration **190/190**. Frontend/embedded builds, container build, PostgreSQL/filesystem-asset restart, mapless restart, and isolated PostgreSQL/map-asset backup/restore also passed. Phase 15 rendered-review capture was skipped. This is source/CI evidence, not signed-in live UI acceptance or authorization for schema migration.
+
+**Subsequent self-review verification:** code head `de3ba8c698caab93e5921c76d5fc96c81bbb474b` passed [CI 38201412398](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38201412398): domain **229/229**, focused V2 application/migration **17/17**, focused V2 HTTP **3/3**, full application **377/377**, full HTTP integration **190/190**. Frontend, container, PostgreSQL restart/mapless restart and PostgreSQL/map-asset restore checks passed. Equivalent square/checkerboard symmetry quotients are now accepted by the V2 traversal gate when the common translation cover proves equivalence; incompatible symbols are still rejected.
 
 **Outstanding:** Review whether helper generation should bind further plan-dependent pace/navigation/environment semantics; obtain owner authorization for the coordinated 20.3 UI/backend cutover and database migration; perform pre-deployment backup/restore and signed-in verification; complete legacy removal, presentation cleanup, arbitrary-cell test coverage and product naming in 20.4. No live migration, merge or deployed tester acceptance is claimed here.
