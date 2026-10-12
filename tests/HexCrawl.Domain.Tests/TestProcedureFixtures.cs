@@ -190,5 +190,4 @@ internal static class TestProcedureProfiles
         SupportsDeliberateDoubleBack = false
     };
 
-};
 }

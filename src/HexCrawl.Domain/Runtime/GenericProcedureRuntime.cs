@@ -284,8 +284,6 @@ public sealed class GenericProcedureRuntime
 
 }
 
-}
-
 public static class GenericProcedureRuntimeRequirements
 {
     public static bool IsEncounterCheckDue(GenericProcedureRuntime procedure, CrawlSessionRuntimeState state)
