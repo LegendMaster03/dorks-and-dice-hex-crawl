@@ -10,33 +10,89 @@ public sealed partial class HexCrawlService
 {
     // The HTTP contract is not an authority boundary: application callers must
     // independently reject server-owned AutomaticRoll and procedure defaults.
-    private static void RequireClientCellProvenance(ResolutionProvenance? provenance)
+    private static void RequireClientCellProvenance(
+        ResolutionProvenance? provenance, bool verifiedAutomatic = false)
     {
-        if (provenance is null || provenance.Source is not (
-            ResolutionSource.ManualRoll or ResolutionSource.ExternalSystem or ResolutionSource.DmOverride))
+        if (provenance is null || !(provenance.Source is
+            ResolutionSource.ManualRoll or ResolutionSource.ExternalSystem or ResolutionSource.DmOverride
+            || verifiedAutomatic && provenance.Source == ResolutionSource.AutomaticRoll))
             throw new InvalidOperationException(
-                "Server-owned procedure resolution provenance requires a verified persisted V2 helper generation, which is not yet supported.");
+                "Automatic cell resolution provenance requires a verified current server generation.");
         if (provenance.Note is { Length: > 2000 })
             throw new InvalidOperationException("Cell resolution provenance note exceeds 2000 characters.");
     }
 
-    private static void RequireClientCellInputs(CellWatchAdvanceInputs inputs)
+    private static void RequireClientCellInputs(CellWatchAdvanceInputs inputs, bool verifiedAutomatic = false)
     {
         ArgumentNullException.ThrowIfNull(inputs);
         ArgumentNullException.ThrowIfNull(inputs.Travel);
-        RequireClientCellProvenance(inputs.Travel.Provenance);
+        RequireClientCellProvenance(inputs.Travel.Provenance, verifiedAutomatic);
         if (inputs.Navigation is { } navigation
             && !(navigation.Outcome == NavigationCheckOutcome.NotRequired
                 && navigation.Provenance?.Source == ResolutionSource.ProcedureDefault))
-            RequireClientCellProvenance(navigation.Provenance);
+            RequireClientCellProvenance(navigation.Provenance, verifiedAutomatic);
         if (inputs.Encounter is { } encounter
             && !(encounter.Kind == EncounterOutcomeKind.None
                 && encounter.Provenance?.Source == ResolutionSource.ProcedureDefault))
-            RequireClientCellProvenance(encounter.Provenance);
+            RequireClientCellProvenance(encounter.Provenance, verifiedAutomatic);
         if (inputs.BoundaryDecision is { } boundary)
             RequireClientCellProvenance(boundary.Provenance);
         if (inputs.DmOverrideNote is { Length: > 2000 })
             throw new InvalidOperationException("DM override note exceeds 2000 characters.");
+    }
+
+    // A generated result id is a reference to the persisted owner-scoped
+    // aggregate, not a bearer token and never proof by itself. Verify the
+    // complete typed values and their cell-qualified audit event before use.
+    private static GeneratedProcedureResolution? VerifyCellGeneration(
+        StoredExpedition expedition,
+        CellExpeditionState state,
+        long expectedVersion,
+        CellWatchAdvanceInputs inputs,
+        Guid? generationId)
+    {
+        var usesAutomatic = inputs.Travel.Provenance.Source == ResolutionSource.AutomaticRoll
+            || inputs.Navigation?.Provenance.Source == ResolutionSource.AutomaticRoll
+            || inputs.Encounter?.Provenance.Source == ResolutionSource.AutomaticRoll;
+        if (generationId is null)
+        {
+            if (usesAutomatic)
+                throw new InvalidOperationException(
+                    "Automatic cell input requires its persisted generation id.");
+            return null;
+        }
+        if (!usesAutomatic || generationId == Guid.Empty)
+            throw new InvalidOperationException(
+                "A generated resolution id may only be used with its own automatic inputs.");
+        var grant = expedition.GeneratedProcedureResolutions
+            .SingleOrDefault(item => item.Id == generationId.Value);
+        var expectedWatch = state.ActiveWatch?.WatchNumber ?? Math.Max(1, state.CompletedWatches + 1);
+        if (grant is null
+            || grant.SessionId != expedition.Id
+            || grant.Status != GeneratedProcedureResolutionStatus.Available
+            || grant.GeneratedAtVersion != expectedVersion
+            || grant.WatchNumber != expectedWatch
+            || grant.CellTravel is null && grant.CellNavigation is null && grant.CellEncounter is null
+            || grant.Travel is not null || grant.Navigation is not null || grant.Encounter is not null)
+            throw new InvalidOperationException(
+                "This cell helper generation is missing, stale, already used, or belongs to a different session.");
+
+        if (grant.CellTravel is { } travel && travel != inputs.Travel
+            || grant.CellTravel is null && inputs.Travel.Provenance.Source == ResolutionSource.AutomaticRoll
+            || grant.CellNavigation is { } nav && nav != inputs.Navigation
+            || grant.CellNavigation is null && inputs.Navigation?.Provenance.Source == ResolutionSource.AutomaticRoll
+            || grant.CellEncounter is { } encounter && encounter != inputs.Encounter
+            || grant.CellEncounter is null && inputs.Encounter?.Provenance.Source == ResolutionSource.AutomaticRoll)
+            throw new InvalidOperationException(
+                "Submitted automatic cell inputs do not match the exact persisted helper result.");
+
+        var audit = state.History.SingleOrDefault(item => item.Sequence == grant.AuditSequence);
+        if (audit is null
+            || audit.Kind != CrawlRuntimeEventKind.ProcedureResolutionHelperGenerated
+            || audit.Cell != state.Traversal.CurrentCell
+            || !audit.Message.Contains(grant.Id.ToString("D"), StringComparison.Ordinal))
+            throw new InvalidOperationException("Verified cell helper generation audit is absent or inconsistent.");
+        return grant;
     }
 
     // Record which resolution source the client submitted. This is an audit
@@ -120,13 +176,16 @@ public sealed partial class HexCrawlService
         long expectedVersion,
         CellWatchTravelPlan plan,
         CellWatchAdvanceInputs inputs,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Guid? generatedProcedureResolutionId = null)
     {
         var expedition = await GetExpeditionAsync(expeditionId, ownerUserId, cancellationToken);
         RequireVersion(expectedVersion, expedition.Version);
         var state = expedition.Runtime as CellExpeditionState
             ?? throw new InvalidOperationException("This expedition has no generalized cell traversal state.");
-        RequireClientCellInputs(inputs);
+        var verifiedGeneration = VerifyCellGeneration(
+            expedition, state, expectedVersion, inputs, generatedProcedureResolutionId);
+        RequireClientCellInputs(inputs, verifiedGeneration is not null);
         JourneyRuntimeIntegration.EnsureRelevantTravelAllowed(expedition);
         ParticipantActivityPolicyResolver.ValidateAssignments(
             expedition.Party,
@@ -155,6 +214,23 @@ public sealed partial class HexCrawlService
             knowledge = projected.Knowledge;
         }
         updatedState = RecordSubmittedCellProvenance(updatedState, inputs);
+        long? consumedSequence = null;
+        if (verifiedGeneration is not null)
+        {
+            consumedSequence = updatedState.History.Count == 0
+                ? 1 : updatedState.History[^1].Sequence + 1;
+            var consumedEvent = new CrawlRuntimeEvent(
+                consumedSequence.Value,
+                verifiedGeneration.WatchNumber,
+                CrawlRuntimeEventKind.ProcedureResolutionHelperConsumed,
+                updatedState.ElapsedTravelTime, null,
+                $"Verified geometric procedure resolution {verifiedGeneration.Id:D} consumed.")
+            { Cell = updatedState.Traversal.CurrentCell };
+            updatedState = updatedState with
+            {
+                History = [.. updatedState.History, consumedEvent]
+            };
+        }
         var forcedTravel = ForcedTravelAccounting.AccountTravelMutation(
             expedition, state, updatedState, expectedVersion,
             "cell-watch-travel",
@@ -172,7 +248,17 @@ public sealed partial class HexCrawlService
             RemainingWatchTime = result.RemainingWatchTime,
             Survival = forcedTravel.Survival,
             Journey = journey,
-            GeneratedProcedureResolutions = SupersedeCellResolutionGrants(expedition)
+            GeneratedProcedureResolutions = expedition.GeneratedProcedureResolutions.Select(item =>
+                verifiedGeneration is not null && item.Id == verifiedGeneration.Id
+                    ? item with
+                    {
+                        Status = GeneratedProcedureResolutionStatus.Consumed,
+                        ConsumedAtVersion = checked(expectedVersion + 1),
+                        ConsumedAuditSequence = consumedSequence
+                    }
+                    : item.Status == GeneratedProcedureResolutionStatus.Available
+                        ? item with { Status = GeneratedProcedureResolutionStatus.Superseded }
+                        : item).ToArray()
         };
         return await SaveExpeditionAsync(updated, expectedVersion, cancellationToken);
     }

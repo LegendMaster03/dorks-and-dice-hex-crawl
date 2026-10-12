@@ -42,6 +42,7 @@ public sealed class ExpeditionModule : IHexCrawlModule
         api.MapGet("/expeditions/{expeditionId:guid}", GetExpeditionAsync);
         api.MapGet("/expeditions/{expeditionId:guid}/cell-topology", GetCellTopologyAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/cells/advance", AdvanceCellWatchAsync);
+        api.MapPost("/expeditions/{expeditionId:guid}/cells/resolution-helper", ResolveCellProcedureInputsAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/cells/course", ResolveCellCourseAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/cells/reposition", RepositionCellExpeditionAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/cells/encounters/{occurrenceId:guid}/resolve", ResolveCellEncounterAsync);
@@ -168,6 +169,19 @@ public sealed class ExpeditionModule : IHexCrawlModule
         return Results.Ok(CellTraversalContextContract.From(geometry.Tiling, cell));
     }
 
+    private static async Task<IResult> ResolveCellProcedureInputsAsync(
+        Guid expeditionId,
+        ResolveCellProcedureInputsRequest request,
+        HttpContext context,
+        ProcedureResolutionHelperService helper,
+        CancellationToken cancellationToken)
+    {
+        request.Validate();
+        var result = await helper.ResolveCellsAsync(
+            expeditionId, UserId(context), request.ToCommand(), cancellationToken);
+        return Results.Ok(result);
+    }
+
     private static async Task<IResult> AdvanceCellWatchAsync(
         Guid expeditionId,
         AdvanceCellWatchRequest request,
@@ -179,7 +193,8 @@ public sealed class ExpeditionModule : IHexCrawlModule
         var owner = UserId(context);
         var updated = await service.AdvanceCellExpeditionAsync(
             expeditionId, owner, request.ExpectedVersion,
-            request.Plan, request.Inputs, cancellationToken);
+            request.Plan, request.Inputs, cancellationToken,
+            request.GeneratedProcedureResolutionId);
         return Results.Ok(await ContractAsync(updated, owner, service, cancellationToken));
     }
 

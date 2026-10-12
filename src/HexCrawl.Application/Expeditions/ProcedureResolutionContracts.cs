@@ -1,4 +1,5 @@
 using HexCrawl.Domain.Runtime;
+using HexCrawl.Domain.Spatial;
 
 namespace HexCrawl.Application;
 
@@ -24,7 +25,40 @@ public sealed record ProcedureResolutionHelperCommand
     public IReadOnlyList<string> NavigationRiskFactors { get; init; } = [];
     internal string? ExpectedDistanceRulesNote { get; init; }
     internal string? NavigationDifficultyRulesNote { get; init; }
+    // Set only after provider/composition has proved the physical unit.
+    internal DistanceMeasure? ExpectedDistanceQualified { get; init; }
 }
+
+/// <summary>
+/// The geometry-neutral server helper uses explicit physical units and angular
+/// navigation, never an axial step-count or implicit map-distance unit.
+/// </summary>
+public sealed record CellProcedureResolutionHelperCommand
+{
+    public long ExpectedVersion { get; init; }
+    public DistanceMeasure? ExpectedDistance { get; init; }
+    public bool SuppressesNavigationCheck { get; init; }
+    public bool DeliberateDoubleBack { get; init; }
+    public int? NavigationDifficultyClass { get; init; }
+    public int NavigationModifier { get; init; }
+    public double? FailureVeerDegrees { get; init; }
+    public Guid? KeyedLocationId { get; init; }
+    public string? TravelDistanceRule { get; init; }
+    public int? BaseSpeedFeet { get; init; }
+    public string? Terrain { get; init; }
+    public string? Route { get; init; }
+    public IReadOnlyList<string> NavigationRiskFactors { get; init; } = [];
+}
+
+public sealed record CellProcedureResolutionHelperResult(
+    long ExpeditionVersion,
+    Guid? GeneratedResolutionId,
+    long? AuditSequence,
+    ResolvedTravelAmount? Travel,
+    ResolvedCellNavigation? Navigation,
+    ResolvedEncounter? Encounter,
+    IReadOnlyList<ProcedureResolutionRoll> Rolls,
+    IReadOnlyList<string> Notes);
 
 public sealed record ProcedureResolutionRoll(
     string Purpose,
@@ -70,7 +104,14 @@ public sealed record GeneratedProcedureResolution(
     ProcedureResolvedEncounter? Encounter,
     GeneratedProcedureResolutionStatus Status,
     long? ConsumedAtVersion = null,
-    long? ConsumedAuditSequence = null);
+    long? ConsumedAuditSequence = null)
+{
+    // V2 grants are typed and must never be authorized by legacy scalar or
+    // hex-step fields in the positional V1 grant payload.
+    public ResolvedTravelAmount? CellTravel { get; init; }
+    public ResolvedCellNavigation? CellNavigation { get; init; }
+    public ResolvedEncounter? CellEncounter { get; init; }
+}
 
 public sealed record ProcedureResolutionHelperResult(
     long ExpeditionVersion,

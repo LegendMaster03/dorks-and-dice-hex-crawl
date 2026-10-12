@@ -112,7 +112,7 @@ public sealed class ProcedureResolutionProviderEnricher(TravelEnvironmentProvide
         MovementCompositionInput? movementInput,
         CancellationToken cancellationToken)
     {
-        if (expedition.Runtime is not ExpeditionState)
+        if (expedition.Runtime is not (ExpeditionState or CellExpeditionState))
         {
             throw new InvalidOperationException(
                 "Provider-backed travel distance is available only for spatial crawl sessions.");
@@ -284,6 +284,7 @@ public sealed class ProcedureResolutionProviderEnricher(TravelEnvironmentProvide
         return command with
         {
             ExpectedDistance = expected.Value,
+            ExpectedDistanceQualified = expected,
             ExpectedDistanceRulesNote = DescribeComposition(composition)
         };
     }
@@ -314,6 +315,7 @@ public sealed class ProcedureResolutionProviderEnricher(TravelEnvironmentProvide
         return command with
         {
             ExpectedDistance = suggestion.Value,
+            ExpectedDistanceQualified = suggestion,
             ExpectedDistanceRulesNote = DescribeComposition(composition)
         };
     }
