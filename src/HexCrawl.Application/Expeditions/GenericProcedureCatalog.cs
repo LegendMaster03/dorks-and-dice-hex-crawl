@@ -7,7 +7,6 @@ public static class GenericProcedureCatalog
 {
     public const string TimeIntervalModule = "time.interval";
     public const string MovementResolutionModule = "movement.resolution";
-    public const string HexProgressModule = "movement.hex-progress";
     public const string SpatialTurnCostModule = "movement.turn-cost";
     public const string NavigationModule = "navigation.check";
     public const string EncounterCadenceModule = "encounters.cadence";
@@ -28,7 +27,6 @@ public static class GenericProcedureCatalog
 
     public const string FixedIntervalDurationMechanic = "fixed-interval-duration";
     public const string MovementResolutionPolicyMechanic = "movement-resolution-policy";
-    public const string HexProgressPolicyMechanic = "hex-progress-policy";
     public const string SpatialTurnCostPolicyMechanic = "spatial-turn-cost-policy";
     public const string NavigationCheckPolicyMechanic = "navigation-check-policy";
     public const string EncounterCheckCadenceMechanic = "encounter-check-cadence";
@@ -71,7 +69,7 @@ public static class GenericProcedureCatalog
             MovementResolutionModule,
             "Movement",
             "Movement resolution",
-            "Defines whether travel advances by resolved physical distance or whole hex steps.",
+            "Defines whether travel advances by resolved physical distance or whole cell transitions.",
             "movement",
             ["time.interval-duration"],
             ["movement.resolution-mode"],
@@ -82,25 +80,6 @@ public static class GenericProcedureCatalog
                 ("travelResolution", "enum", "Travel resolution mode."),
                 ("actualDistanceResolution", "enum", "Actual-distance resolution mode."),
                 ("tracksIntraHexProgress", "boolean", "Whether physical movement tracks progress inside a hex."))),
-        Module(
-            HexProgressModule,
-            "Movement",
-            "Hex progress",
-            "Defines entry, exit, direction-change, and deliberate-double-back progress behavior.",
-            "movement",
-            ["movement.resolution-mode"],
-            ["movement.hex-progress"],
-            [MovementResolutionModule],
-            [],
-            [HexProgressPolicyMechanic],
-            RequiredMany(
-                ("startingExitProgressFactor", "number", "Starting exit progress factor."),
-                ("nearExitProgressFactor", "number", "Near exit progress factor."),
-                ("farExitProgressFactor", "number", "Far exit progress factor."),
-                ("backExitProgressFactor", "number", "Back exit progress factor."),
-                ("directionChangesCostProgress", "boolean", "Whether changing direction costs progress."),
-                ("directionChangeProgressCostFactor", "number", "Direction-change progress cost factor."),
-                ("supportsDeliberateDoubleBack", "boolean", "Whether deliberate double-back movement is supported."))),
         Module(
             SpatialTurnCostModule,
             "Movement",
@@ -409,22 +388,6 @@ public static class GenericProcedureCatalog
                 ("neighborCenterDistanceFactor", "number", "Nongeometric travel-budget cost relative to a declared neighbor-center reference."),
                 ("supportsDeliberateDoubleBack", "boolean", "Whether deliberate double-back is allowed.")),
             GenericProcedureExecutionHandlers.SpatialTurnCostPolicy,
-            ProcedureAutomationLevel.Automatic),
-        Mechanic(
-            HexProgressPolicyMechanic,
-            "Hex progress policy",
-            "Configures generic progress costs and exit factors for spatial hex traversal.",
-            ["movement.resolution-mode"],
-            ["movement.hex-progress"],
-            RequiredMany(
-                ("startingExitProgressFactor", "number", "Starting exit factor."),
-                ("nearExitProgressFactor", "number", "Near exit factor."),
-                ("farExitProgressFactor", "number", "Far exit factor."),
-                ("backExitProgressFactor", "number", "Back exit factor."),
-                ("directionChangesCostProgress", "boolean", "Direction changes cost progress."),
-                ("directionChangeProgressCostFactor", "number", "Direction-change cost factor."),
-                ("supportsDeliberateDoubleBack", "boolean", "Deliberate double-back support.")),
-            GenericProcedureExecutionHandlers.HexProgressPolicy,
             ProcedureAutomationLevel.Automatic),
         Mechanic(
             NavigationCheckPolicyMechanic,

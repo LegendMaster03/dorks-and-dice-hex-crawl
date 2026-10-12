@@ -40,16 +40,6 @@ internal static class ProcedureComposerCustomProcedureFactory
             GenericProcedureCatalog.SpatialTurnCostPolicyMechanic,
             ("neighborCenterDistanceFactor", "0"),
             ("supportsDeliberateDoubleBack", "false")),
-        GenericProcedureCatalog.HexProgressModule => Select(
-            GenericProcedureCatalog.HexProgressModule,
-            GenericProcedureCatalog.HexProgressPolicyMechanic,
-            ("startingExitProgressFactor", "0.5"),
-            ("nearExitProgressFactor", "0.5"),
-            ("farExitProgressFactor", "1"),
-            ("backExitProgressFactor", "0.5"),
-            ("directionChangesCostProgress", "false"),
-            ("directionChangeProgressCostFactor", "0"),
-            ("supportsDeliberateDoubleBack", "false")),
         GenericProcedureCatalog.NavigationModule => Select(
             GenericProcedureCatalog.NavigationModule,
             GenericProcedureCatalog.NavigationCheckPolicyMechanic,
