@@ -29,8 +29,7 @@ public sealed class NativeGenericProcedureExecutionTests
             "Native cell override", HexOrientation.PointyTop, Context());
         var start = AbstractCellSessionGeometry.CreateNewHexSession(
             Guid.NewGuid(), context, new HexCoordinate(0, 0));
-        var heading = SpatialCourseSelection.FromLegacyHexDirection(
-            start.World, new HexCoordinate(0, 0), new HexDirection(0));
+        var heading = PeriodicCourseFixture.ThroughInterface(start.World, start.Expedition.Traversal.CurrentCell);
         var source = new ResolutionProvenance(ResolutionSource.ManualRoll);
         var result = new CrawlRuntimeEngine().AdvanceCellWatch(
             start.World, revised, start.Expedition,
@@ -195,9 +194,7 @@ public sealed class NativeGenericProcedureExecutionTests
     {
         var cells = Assert.IsType<CellExpeditionState>(expedition.Runtime);
         var geometry = (await service.ResolveCellGeometryAsync(expedition, Owner)).Tiling;
-        var hex = LegacyHexTilingCompatibility.ToHex(cells.Traversal.CurrentCell.Address);
-        var heading = SpatialCourseSelection.FromLegacyHexDirection(
-            geometry, hex, new HexDirection(0));
+        var heading = PeriodicCourseFixture.ThroughInterface(geometry, cells.Traversal.CurrentCell);
         var source = new ResolutionProvenance(ResolutionSource.ManualRoll);
         return await service.AdvanceCellExpeditionAsync(
             expedition.Id, Owner, expedition.Version,

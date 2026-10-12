@@ -33,8 +33,7 @@ public sealed class Phase2ReviewRegressionTests
                 Owner, "Distance resolution", new ProcedureStartSelection(PresetKey: preset),
                 context, start);
         var geometry = (await service.ResolveCellGeometryAsync(created, Owner)).Tiling;
-        var heading = SpatialCourseSelection.FromLegacyHexDirection(
-            geometry, start, new HexDirection(0));
+        var heading = PeriodicCourseFixture.ThroughInterface(geometry, Assert.IsType<CellExpeditionState>(created.Runtime).Traversal.CurrentCell);
         var source = new ResolutionProvenance(ResolutionSource.ManualRoll);
         var plan = new CellWatchTravelPlan(
             heading, false, true, TravelModeSelection.Normal, NavigationAidSelection.None);
@@ -70,8 +69,7 @@ public sealed class Phase2ReviewRegressionTests
                 Owner, "Fixed travel", new ProcedureStartSelection(PresetKey: "simple-fixed-distance"),
                 context, start);
         var geometry = (await service.ResolveCellGeometryAsync(created, Owner)).Tiling;
-        var heading = SpatialCourseSelection.FromLegacyHexDirection(
-            geometry, start, new HexDirection(0));
+        var heading = PeriodicCourseFixture.ThroughInterface(geometry, Assert.IsType<CellExpeditionState>(created.Runtime).Traversal.CurrentCell);
         var plan = new CellWatchTravelPlan(
             heading, false, true, TravelModeSelection.Normal, NavigationAidSelection.None);
         var source = new ResolutionProvenance(ResolutionSource.ManualRoll);

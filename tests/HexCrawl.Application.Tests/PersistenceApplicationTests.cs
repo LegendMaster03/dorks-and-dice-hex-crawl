@@ -340,8 +340,7 @@ public sealed class PersistenceApplicationTests
             database, service, world.World.Id, "Paused watch",
             "simple-fixed-distance", new HexCoordinate(0, 0));
         var original = Assert.IsType<CellExpeditionState>(created.Runtime);
-        var heading = SpatialCourseSelection.FromLegacyHexDirection(
-            world.World.SpatialTiling, new HexCoordinate(0, 0), new HexDirection(0));
+        var heading = PeriodicCourseFixture.ThroughInterface(world.World.SpatialTiling, original.Traversal.CurrentCell);
         var plan = new CellWatchTravelPlan(
             heading, false, false, TravelModeSelection.Normal, NavigationAidSelection.None);
         // A paused watch can have elapsed time without spending any physical
@@ -384,8 +383,7 @@ public sealed class PersistenceApplicationTests
         var start = new HexCoordinate(0, 0);
         var expedition = await StartCellAsync(
             database, service, world.World.Id, "History", "simple-fixed-distance", start);
-        var heading = SpatialCourseSelection.FromLegacyHexDirection(
-            world.World.SpatialTiling, start, new HexDirection(0));
+        var heading = PeriodicCourseFixture.ThroughInterface(world.World.SpatialTiling, Assert.IsType<CellExpeditionState>(expedition.Runtime).Traversal.CurrentCell);
         var plan = new CellWatchTravelPlan(
             heading, false, true, TravelModeSelection.Normal, NavigationAidSelection.None);
         var source = new ResolutionProvenance(ResolutionSource.ManualRoll);
@@ -446,8 +444,7 @@ public sealed class PersistenceApplicationTests
         var loaded = await restarted.GetExpeditionAsync(expedition.Id, "alice");
         var loadedWorld = await restarted.GetOverworldAsync(world.World.Id, "alice");
         var cell = Assert.IsType<CellExpeditionState>(loaded.Runtime);
-        var heading = SpatialCourseSelection.FromLegacyHexDirection(
-            loadedWorld.World.SpatialTiling, start, new HexDirection(0));
+        var heading = PeriodicCourseFixture.ThroughInterface(loadedWorld.World.SpatialTiling, cell.Traversal.CurrentCell);
         var plan = new CellWatchTravelPlan(
             heading, false, true, TravelModeSelection.Normal, NavigationAidSelection.None);
         var source = new ResolutionProvenance(ResolutionSource.ManualRoll);

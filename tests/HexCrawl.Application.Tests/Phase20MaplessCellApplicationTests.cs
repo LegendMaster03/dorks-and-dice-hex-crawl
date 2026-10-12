@@ -71,8 +71,7 @@ public sealed class Phase20MaplessCellApplicationTests
             Context(), startHex);
         var service = new HexCrawlService(store);
         var world = (await service.ResolveCellGeometryAsync(created, "owner")).Tiling;
-        var heading = SpatialCourseSelection.FromLegacyHexDirection(
-            world, startHex, new HexDirection(0));
+        var heading = PeriodicCourseFixture.ThroughInterface(world, Assert.IsType<CellExpeditionState>(created.Runtime).Traversal.CurrentCell);
         var provenance = new ResolutionProvenance(ResolutionSource.ManualRoll);
         var plan = new CellWatchTravelPlan(
             heading, false, false, TravelModeSelection.Normal, NavigationAidSelection.None);

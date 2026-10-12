@@ -35,8 +35,7 @@ public sealed class EncounterHandoffHistoricalContextTests
             world.World.Id, "alice", "Historical location",
             new ProcedureStartSelection(PresetKey: "alexandrian-advanced"),
             startCell.Address, "dm-controlled");
-        var heading = SpatialCourseSelection.FromLegacyHexDirection(
-            world.World.SpatialTiling, start, new HexDirection(0));
+        var heading = PeriodicCourseFixture.ThroughInterface(world.World.SpatialTiling, startCell);
         var source = new ResolutionProvenance(ResolutionSource.ManualRoll);
         expedition = await core.AdvanceCellExpeditionAsync(
             expedition.Id, "alice", expedition.Version,
