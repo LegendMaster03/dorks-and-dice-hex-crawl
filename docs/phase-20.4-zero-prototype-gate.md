@@ -1,62 +1,38 @@
-# Phase 20.4 — zero V1 / zero hex-specific implementation gate
+# Phase 20.4 — zero-prototype source and release gate
 
-**Owner directive (2026-10-12):** the initial hex prototype must leave no executable source trace. Hexagonal worlds and the three existing hex-oriented procedure presets must remain functional **as data-driven instances of the single generalized polygonal tiling engine**, not through hex-specific algorithms, adapters, runtime structures, rendering, start forms, snapshots, or fallback handlers. This requirement supersedes the previous Phase 20.3 readiness assessment.
+**Owner directive, October 12, 2026:** There is one spatial implementation. Delete all prototype axial/hex-specific execution, authoring, rendering, contracts, compatibility selectors, fallbacks and obsolete tests. Hexagonal tilings and the three established spatial presets remain fully supported **as data** for the shared periodic-polygon framework. No V1/V2 runtime choice, production-compatibility shim or dual-authority path is permitted. Procedure/schema revision history is separate and remains legitimate.
 
-**Release status (2026-10-12):** BLOCKED for merge, dev/testing deployment and WorkChat signed-in acceptance. Latest automated green source checkpoint: [fa85acec](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/commit/fa85acec28abc0e4f7e7982137862e992b608a3a) ([CI 38242104666](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38242104666), successful). Axial runtime and V1 movement policy have been deleted, but old spatial UI/controller, mixed API and snapshot contracts, hex-specific world authoring and mapless contexts remain. Rendered Phase 15 acceptance has not been performed.
+**Status: BLOCKED** for merge, development deployment and signed-in WorkChat acceptance. **Last green automated head:** [`707f5667`](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/commit/707f56673fc671b75cf5fd3ead4f5f59c455d847), [CI 38288740680](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38288740680), success. Automated validation does **not** prove source elimination or rendered UI quality. No owner-approved database migration, merge or deployment has happened.
 
-## First implementation slices completed — not the release gate
+## Completed deletion categories
 
-- Deleted the retired browser world-bound hex start methods and `StartExpeditionInput` type. The world editor/home still start through the qualified-cell API.
-- Persisted map grids now render and pick from `PeriodicWorldTiling` server polygon records regardless of the world's legacy grid projection. The old hex preview/registration authoring path still exists and must be replaced.
-- Converted the three existing spatial preset recipes to native mechanic-version-2 cell/distance modules and generic turn-cost modules. Deleted `GeometricNativeProcedureMaterializer.cs`; the generic campaign procedure materializer now accepts any executable version-2 spatial preset data without translating a V1 recipe. The existing preset keys remain **data identifiers**.
-- Removed the obsolete world-start and abstract-hex-state constructors from `ExpeditionStartService`. Nonspatial creation uses `StartNonSpatialAsync`, with the original cell starts remaining separate. Tests that required the V1-only preset materializer or V1 spatial advance were removed or rewritten against V2.
-- Removed redundant V1 application session and context services and old movement/navigation/watch lifecycle engine files. Rewrote the focused browser assistant to retain only nonspatial interval/encounter work and route all spatial sessions into the V2 cell view; removed its V1 hex-steps/direction/forms. [CI 38218781220](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38218781220) passed at code commit `cf05640d`.
-- **The release gate is still blocked**: both V1 runtime state classes, the original browser expedition and watch controller, axial world/authoring, mapless start context, and legacy wire responses still remain. Passing CI on this partial migration is not zero-prototype acceptance. No deploy or merge is authorized.
+The obsolete axial spatial runtime classes, hex-progress mechanics, version-gated execution paths, hex-step travel inputs, legacy axial watch/controller, obsolete spatial UI, and currentHex-style wire placeholders were deleted. World-bound expedition starts now use periodic cell addresses for both older hex-authored and generalized worlds; the unnecessary q/r lookup module was removed. The world editor now selects polygonal cells and edits cell/world/feature scoped facts through one panel, deleting the axial selected-hex UI and helper algorithms. [Implementation checkpoint](phase-20.4-code-removal-checkpoint.md) provides source details.
 
-### Further confirmed source removals (October 12)
+## Open architectural blockers
 
-- Obsolete `HexExited` and `HexEntered` enumerators removed; surviving event ids retain their original numeric values; generalized cell event tests now assert `Cell` identifiers.
-- The no-longer-used V1 `WatchAdvanceResult` domain payload was removed.
-- The unused axial `expedition-watch-ledger.ts` and its V1-only unit tests were removed. Active V2 travel history remains in `periodic-expedition-workbench.ts`.
-- The live branch still contains `ExpeditionState`, `HexTraversalState`, legacy procedure movement and old HTTP state placeholders, an axial mapless constructor, persisted grid/world fallback, dormant V1 expedition page/controller, and hex-only map authoring. **Do not mistake incremental deletion for a passing source gate.**
-- The development database still requires an owner-authorized, verified one-time schema 10→11 migration. Old world snapshots and map registrations additionally need a data-preserving conversion before removing grid readers. No dev database or map-asset migration has been performed.
-
-### Later verified source removals (October 12)
-
-Last automated green code commit: [fa85acec](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/commit/fa85acec28abc0e4f7e7982137862e992b608a3a) ([CI 38242104666](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38242104666), successful).
-
-- V1 movement handlers and execution-version branches, axial runtime/traversal structures and hex-step resolution were deleted.
-- Remaining application and PostgreSQL state processing now operates on generalized cell or nonspatial states. Retained tests use periodic-cell fixtures.
-- The obsolete spatial map and travel panel were deleted from the old browser page. Its unused controller and surrounding old code must still be deleted to satisfy this gate.
-
-## Mandatory removal inventory
-
-| Layer | Known remaining source to eliminate or rewrite | Required replacement |
+| Area | Must be removed or replaced | Acceptance |
 | --- | --- | --- |
-| Domain movement | `Runtime/ExpeditionState.cs`, `HexTraversalState.cs`, `CrawlRuntimeEngine.cs` V1 overloads, `Engine/CrawlRuntimeEngine.Movement.cs`, `Navigation.cs`, `WatchLifecycle.cs`, `CrawlAssistantActions.cs` and `Assistants/*` | One `CellExpeditionState`, `PeriodicCellTraversal`, atomic interface-based navigation, generalized watch/action contracts |
-| Procedure binding | `GenericProcedureRuntime` V1 branches, `TravelResolutionMode.HexSteps`, `ProcedureHexProgressRuntime`, `CrawlProcedureCatalog` and `GeometricNativeProcedureMaterializer` hex-specific recipes | Version-2 generalized movement rules; data-only preset records with periodic D-symbol/realization, no compiled special-case hex constructor |
-| Application | `ExpeditionStartService` V1 stubs/factory, `CrawlSessionService`, `ExpeditionAssistantService`, `HexCrawlService.Expeditions` V1 overloads, `ExpeditionWorldComposition`, V1 part of `EnvironmentContextResolver` | V2 cell starts/advances/helpers/knowledge, shared nonspatial services with no V1 spatial branches |
-| World/spatial authority | `OverworldDefinition.Grid`, `LegacyHexTilingCompatibility`, `HexCoordinate` / `HexGridDefinition` / `HexGeometry` as production source, `AbstractCellSessionGeometry.CreateHexWorld`, `AbstractHexCrawlSessionContext`, axial environment/knowledge scopes | Persisted `PeriodicWorldTiling` and polygon/world-point/qualified-cell addressing everywhere; generalized mapless construction; migrate existing worlds and map registrations to this representation |
-| HTTP/wire | `WorkbenchExpeditionStateContract.CurrentHex/HexProgress`, old V1 advance/assistant request types and methods, hex-specific start requests, any old-route error shim | Only typed V2 spatial and independent nonspatial contracts; no null placeholders for retired fields |
-| Browser | `expedition-view.ts` spatial fallback, `expedition-watch-controller.ts`, hex-focused assistant branch, retired methods in `api.ts`, `types.ts` hex fields and commands | Retain Phase 15 Guided/Compact shell backed only by cell APIs, qualified polygons/interfaces and nonspatial controls |
-| Maps/authoring | `canvas-renderer.ts` axial grid branch, `map-surface.ts` q/r picking, `hex-math.ts`, `hex-grid-analysis.ts`, source-map hex alignment and editor q/r controls | Unified periodic-polygon render/pick/viewport/registration and tiling-agnostic motif analysis, with no second geometry engine |
-| Persistence/migration | Explicit V1-discriminator readers and schema-10→11 startup deletion shim after its one verified dev DB application | V2/nonspatial snapshot codec only; safe data-preserving world/map/procedure migration; schema-11 constraint retained |
-| Tests/docs | V1-only tests and assertions currently sustaining old code | Replace with generalized behavior tests including existing hex worlds and unfamiliar mixed motifs; no tests requiring removed APIs |
+| World model and persistence | `OverworldDefinition.Grid`, `HexCoordinate`, `HexGridDefinition`, `HexGeometry`, `LegacyHexTilingCompatibility`, axial environment annotations and old grid snapshot readers | Existing authored world semantics, terrain, objects, registrations and raster assets are converted and reloaded using only periodic topology and realized geometry |
+| Mapless context | `AbstractHexCrawlSessionContext`, hex-specific `AbstractCellSessionGeometry` constructors, mapless q/r/orientation start requests/forms | A periodic data-defined geometry/context with a qualified start cell; no hex constructor or fixed six-direction assumption |
+| Map rendering and source alignment | Hex drawing/picking/analysis in `canvas-renderer.ts`, `map-surface.ts`, `hex-math.ts`, `hex-grid-analysis.ts`, source-map registration and grid editing | One renderer, picker, preview and registration model for realized periodic cells; existing map registrations retained |
+| Residual contracts | Obsolete hex fields in presentation, environmental, event and browser DTOs, and historical update/start APIs | Only authoritative qualified cells, physical world geometry and independent nonspatial state survive; no null legacy placeholders |
+| Database cutover | Guarded schema 10→11 startup migration and authored-world/scope/registration/procedure data conversion | Transactionally tested migration and backup/restore, explicit owner-authorized development cutover, then deletion of one-time migration scaffolding |
+| Tests/UI | Obsolete source tests; remaining visual checks | Strong behavior tests and held-out mixed motifs, plus rendered Phase 15 Guided/Compact desktop/mobile/embedded checks and signed-in workflows **after** sole spatial path |
 
-This inventory is grounded in the branch-level repository audit, not proof that every affected reference has been enumerated. Before claiming completion perform a **full tracked-source audit** (C#, TypeScript, shaders/scripts, native assets, API descriptions, generated source). Legitimate content or names describing a hexagonal *preset as data* do not exempt compiled hex-specific behavior.
+## Nonnegotiable implementation policy
 
-## Nonnegotiable implementation rules
+- Do not restore deleted prototype code just to satisfy compiler errors or old tests. Convert tests to current periodic behavior; delete tests for intentionally removed behavior.
+- Do not introduce a public nonhex geometry selector or square/triangle presets before the owner's review. This has no bearing on the framework's generic geometry capabilities.
+- Keep existing hexagonal *data* and original preset identities, not hexagon-specific executable algorithms or shape-authoring assumptions.
+- Preserve retained worlds, map images, registration, authored semantics, saved procedure revisions, existing periodic-cell sessions, accounts and nonspatial histories. Short-lived V1 tester expeditions may be disposed of in the owner-authorized cutover.
+- Perform complete source/contract/asset audit at the final head. Source terms referring to a hexagon-shaped **data instance** are allowed; compiled special-case hex behavior is not.
+- Code commits/CI success are not permission to merge, migrate, deploy or launch WorkChat.
 
-- No compatibility shim, deprecated endpoint that throws, duplicate engine, historical runtime serializer, synthetic axial fields, hex progress approximator, six-direction control, or bespoke hex rendering shortcut.
-- Do not introduce square/triangle feature toggles or new public preset families before the owner's geometric system review; this does not justify retaining hex special cases.
-- Preserve retained user-authored worlds, source maps and binaries, map registration, accounts, saved procedure revisions, nonspatial histories and existing V2 sessions through a verified migration. V1 tester expeditions are disposable per owner decision.
-- Clean deletion is preferred to keeping code behind an unreachable `if`. Remove obsolete tests and replace useful semantic coverage. Product branding and repository/service renaming must not be mistaken for actual geometry removal.
-- Do not run the migration/deployment or merge without owner authorization, even when the cleanup is green.
+## Completion checklist
 
-## Verification gate
-
-1. Static code audit shows **no surviving original V1 or hex-specialized compiled implementation**. Hexagon instances exist solely as ordinary periodic polygon data; dedicated geometry and presentation fast paths do not.
-2. API/snapshot/store/wire contracts expose only current cell spatial and independent nonspatial representations; unknown records fail closed, and removed routes are truly absent.
-3. A data-defined hex world and each of the three existing presets behave correctly through the **same** renderer, watch engine, and persistence path as a data-defined square, triangle and held-out mixed-tiling witness.
-4. Full domain, application, HTTP, PostgreSQL/assets and frontend CI, restart/replay, backup/restore and rendered UI acceptance run at an exact reviewed commit. No skipped rendered matrix counts as a pass.
-5. Only after 1–4: owner-controlled dev/testing deployment and WorkChat testing, using `docs/phase-20.3-workchat-dev-test-handoff.md`.
+1. Static tracked-source audit finds **zero** original hex-specific execution, authoring/rendering/registration implementation, V1 selectors, endpoints, fallback codecs, or tests.
+2. Every spatial session uses periodic topology/realized metric geometry, qualified cells and reciprocal interfaces. Nonspatial journeys remain independent. All three hex-origin presets use this same path.
+3. World/map/procedure/asset retained data conversion is rehearsed, fails closed on unsupported inputs, and preserves ownership, revisions, geometry and histories. No original world data is silently discarded.
+4. Full domain/application/PostgreSQL/HTTP/frontend/container CI, restart/replay, and asset recovery succeed on the exact reviewed commit with representative hex, square, triangle and unfamiliar mixed-motif cases.
+5. Phase 15 rendered, keyboard, responsive, Guided/Compact and signed-in behavior is reviewed with WorkChat **only after** the sole workflow is present and the user authorizes the testing.
+6. Owner authorizes merge and development cutover separately; do not infer it from green tests.

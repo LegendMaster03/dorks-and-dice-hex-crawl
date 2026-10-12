@@ -30,10 +30,11 @@ These decisions supersede any older release-gate, data-preservation, or stage-se
 
 ## Phase 20.4 current implementation checkpoint (October 12, 2026)
 
-- **Deployment and merge remain blocked.** The Phase 15-first V2 spatial UI is preserved. V1 `ExpeditionState`, `HexTraversalState`, procedural hex-progress execution, axial mapless context/factory, old wire placeholders, fallback world grids and axial source-map authoring remain and must be removed rather than hidden.
-- Recent incremental removal eliminates the obsolete `HexExited`/`HexEntered` runtime event enumerators while retaining numeric identities of subsequent event kinds, deletes the unused V1 `WatchAdvanceResult`, and removes an unreferenced axial watch-ledger module and its V1-specific tests. These are not proof of generalized correctness; confirm the final commit CI independently.
-- **One-time migration boundary:** schema-10→11 transactional deletion/preflight is still necessary for the development cutover; it has not run against the actual database. Removal of the world `Grid` fallback additionally requires a verified conversion of existing world JSON, environment scopes, and source-map registrations into `PeriodicWorldTiling`-qualified data. Do not delete the conversion boundary before isolated rehearsal, and do not ship permanent V1 readers or a second engine.
-- Preserve three existing hex-oriented preset identities as version-2 procedure **data**; no public nonhex tiling selector is authorized.
+- **Full code deletion remains the release gate.** One generalized spatial executor and one periodic-cell world-authoring/start path are the only target. Hexagonal presets remain data, never a parallel implementation. No production-compatibility strategy is required.
+- **Last fully green automated checkpoint:** [`707f5667`](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/commit/707f56673fc671b75cf5fd3ead4f5f59c455d847), [CI 38288740680](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38288740680), success. All CI does not imply completed architectural or visual review.
+- **Deleted:** axial expedition/traversal state and execution; old movement-version/hex-progress mechanics; V1 assistant/watch and spatial browser UI; axial wire fields; q/r world-bound starts; inferred axial expedition markers; the 549-line old hex-specific cell editor and 184-line helper segment. Preserved generalized polygon local/world/feature authoring and the nonspatial workspace.
+- **Still blocked:** hex-geometry/grid fallback and persisted world data, mapless `AbstractHexCrawlSessionContext` and constructors, hex map preview/alignment and source registration, old environment/snapshot/presentation fields, authored data migration and final source audit. See [code-removal checkpoint](phase-20.4-code-removal-checkpoint.md) and [zero-prototype gate](phase-20.4-zero-prototype-gate.md).
+- **No merge, no deployment, no live development DB migration and no WorkChat acceptance testing have been authorized.** The schema-10→11 transaction and data-preserving conversion of authored worlds, registration/assets, scope annotations and saved revisions must be isolated, reviewed and owner-authorized before actual cutover. Disposable V1 tester expeditions are the explicit exception.
 
 ## Architectural decisions — authoritative for this plan
 
@@ -368,8 +369,8 @@ For any applicable visual and numerical acceptance check, specify expected geome
 | 19 | Rendering, UI and map registration groundwork | Merged to main; separate deployed acceptance evidence remains in Phase 19 follow-up notes |
 | 20.1 | Domain models, generalized traversal, procedure execution | Merged to main |
 | 20.2 | Application services, APIs, one-time persistence migration | V2 backend and full CI green on feature branch; helper hardening, paired UI/deployment acceptance remain; not merged or deployed |
-| 20.3 | Unified Phase 15 UI, map rendering and world authoring | Outstanding; some preexisting V2 client primitives |
-| 20.4 | Removal, regression testing, architectural verification | Partially advanced within 20.2; substantial work remains |
+| 20.3 | Unified Phase 15 UI, map rendering and world authoring | Periodic spatial workbench and world-bound starts unified on feature branch; mapless and hex grid/preview authoring remain; not merged or deployed |
+| 20.4 | Removal, regression testing, architectural verification | Axial runtime and obsolete world-authoring code deleted; data-preserving grid/mapless cutover and final source audit remain |
 
 ### Reference architecture
 
