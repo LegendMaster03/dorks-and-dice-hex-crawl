@@ -4,6 +4,8 @@ import type {
     CellTraversalContext,
     StartCellExpeditionInput,
     CellWatchRequest,
+    CellProcedureResolutionHelperRequest,
+    CellProcedureResolutionHelperResult,
     CellCourseRequest,
     WorldCellGeometry,
     WorldCellId,
@@ -548,6 +550,14 @@ export class HexCrawlApi {
         return this.sendJson("POST",
             `/api/overworlds/${encodeURIComponent(worldId)}/cell-expeditions`,
             input, "Start generalized expedition");
+    }
+
+    public resolveCellProcedureInputs(
+        expeditionId: string, input: CellProcedureResolutionHelperRequest
+    ): Promise<CellProcedureResolutionHelperResult> {
+        return this.sendJson("POST",
+            `/api/expeditions/${encodeURIComponent(expeditionId)}/cells/resolution-helper`,
+            input, "Generate cell procedure resolution");
     }
 
     public advanceCellWatch(expeditionId: string, input: CellWatchRequest): Promise<ExpeditionDetail> {

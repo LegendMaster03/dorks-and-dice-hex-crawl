@@ -106,6 +106,20 @@ test("focused spatial assistants use V2 expedition workbench; nonspatial cadence
     assert.doesNotMatch(entry, /api\.startConfiguredExpedition\(/);
 });
 
+test("V2 cell-workbench helpers generate owner/version-scoped automatic rolls", () => {
+    const view = file("modules","expeditions","periodic-expedition-workbench.ts");
+    const api = file("api.ts");
+    assert.match(api, /\/cells\/resolution-helper/);
+    assert.match(view, /api\.resolveCellProcedureInputs\(runtime\.id/);
+    assert.match(view, /generatedProcedureResolutionId: generated\?\.generatedResolutionId/);
+    assert.match(view, /generated\?\.travel \?\? travel/);
+    assert.match(view, /generated\?\.navigation \?\? nav/);
+    assert.match(view, /generated\?\.encounter \?\? encounter/);
+    assert.match(view, /form\.addEventListener\("input"/);
+    assert.match(view, /form\.addEventListener\("change"/);
+    assert.match(view, /next\.version !== result\.expeditionVersion/);
+});
+
 test("mapless cell workbench does not require a fabricated overworld", () => {
     const view = file("modules","expeditions","expedition-view.ts");
     const periodic = file("modules","expeditions","periodic-expedition-workbench.ts");

@@ -673,6 +673,29 @@ export type CellWatchRequest = {
     };
 };
 
+/** A server-issued, owner/version/watch-bound automatic cell resolution. */
+export type CellProcedureResolutionHelperRequest = {
+    expectedVersion: number;
+    expectedDistance?: DistanceValue;
+    suppressesNavigationCheck: boolean;
+    deliberateDoubleBack: boolean;
+    navigationDifficultyClass?: number;
+    navigationModifier: number;
+    failureVeerDegrees?: number;
+    keyedLocationId?: string;
+};
+
+export type CellProcedureResolutionHelperResult = {
+    expeditionVersion: number;
+    generatedResolutionId: string | null;
+    auditSequence: number | null;
+    travel: CellWatchRequest["inputs"]["travel"] | null;
+    navigation: NonNullable<CellWatchRequest["inputs"]["navigation"]> | null;
+    encounter: NonNullable<CellWatchRequest["inputs"]["encounter"]> | null;
+    rolls: ProcedureResolutionRoll[];
+    notes: string[];
+};
+
 export type CellCourseRequest = {
     expectedVersion: number;
     decision: {

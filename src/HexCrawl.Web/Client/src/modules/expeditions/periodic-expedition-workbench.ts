@@ -2,7 +2,7 @@
 import type { HexCrawlApi } from "../../api";
 import { MapSurface } from "../../map-surface";
 import type {
-    CellTraversalContext, CellWatchRequest, ExpeditionDetail, Overworld,
+    CellTraversalContext, CellProcedureResolutionHelperResult, CellWatchRequest, ExpeditionDetail, Overworld,
     WorldCellId, WorldPoint, ToolHostContext
 } from "../../types";
 import { showUiError, clearUiError } from "../../ui-error";
@@ -33,6 +33,7 @@ export async function renderPeriodicExpeditionWorkbench(
     let selectedExit = topology.selectedExitInterfaceIndex;
     let disposed = false;
     let busy = false;
+    let generated: CellProcedureResolutionHelperResult | null = null;
     let inspectedCell: WorldCellId | null = null;
 
     root.innerHTML = `
@@ -80,6 +81,17 @@ export async function renderPeriodicExpeditionWorkbench(
                                 </select>
                             </label>
                             <label data-veer-row hidden>Failure veer (degrees) <input name="veer" type="number" step="any" value="0"></label>
+                            <details data-helper-section class="hc-optional-reference" hidden>
+                                <summary>Automatic ruleset resolution</summary>
+                                <p class="hc-hint">The server rolls configured ruleset helpers and records their provenance. Adjusting inputs afterward discards this generation; generate again before advancing.</p>
+                                <div class="hc-inline">
+                                    <label>Navigation DC <input name="helperDc" type="number" step="1" placeholder="DM difficulty"></label>
+                                    <label>Navigation modifier <input name="helperModifier" type="number" step="1" value="0"></label>
+                                    <label>Veer on failed check (degrees) <input name="helperVeer" type="number" step="any" placeholder="Required if navigation fails"></label>
+                                </div>
+                                <button type="button" data-generate-helper>Roll available ruleset inputs</button>
+                                <p class="hc-hint" data-helper-result role="status" aria-live="polite"></p>
+                            </details>
                             <details class="hc-optional-reference"><summary>Encounter and continued travel</summary>
                                 <label>Encounter resolution
                                     <select name="encounter"><option value="">No resolution supplied</option>
@@ -271,6 +283,7 @@ export async function renderPeriodicExpeditionWorkbench(
             const updated = await action();
             if (disposed) return;
             runtime = updated;
+            generated = null;
             topology = await api.getCellTopology(runtime.id);
             selectedExit = topology.selectedExitInterfaceIndex;
             render();
@@ -297,6 +310,7 @@ export async function renderPeriodicExpeditionWorkbench(
             ]);
             if (disposed) return;
             runtime = next;
+            generated = null;
             world = nextWorld;
             required<HTMLButtonElement>("[data-world]").hidden = world === null;
             topology = nextTopology;
@@ -380,11 +394,101 @@ export async function renderPeriodicExpeditionWorkbench(
                     }
                 },
                 inputs: {
-                    travel, navigation: nav, encounter, boundaryDecision,
+                    travel: generated?.travel ?? travel,
+                    navigation: generated?.navigation ?? nav,
+                    encounter: generated?.encounter ?? encounter,
+                    boundaryDecision,
                     dmOverrideNote: "DM confirmed generalized watch inputs"
-                }
+                },
+                generatedProcedureResolutionId: generated?.generatedResolutionId ?? undefined
             });
         });
+    });
+    // Any direct change to travel intent or resolution values invalidates the
+    // displayed automatic result. Programmatic helper field fill does not fire
+    // input/change events, so a generation remains usable until a real edit.
+    form.addEventListener("input", event => {
+        if ((event.target as Element).closest("[data-helper-section]")) return;
+        if (generated) invalidateGenerated();
+    });
+    form.addEventListener("change", event => {
+        if ((event.target as Element).closest("[data-helper-section]")) return;
+        if (generated) invalidateGenerated();
+    });
+    const invalidateGenerated = (): void => {
+        generated = null;
+        text("[data-helper-result]", "Travel intent or DM input changed. Generate again to use automatic results.");
+    };
+    required<HTMLButtonElement>("[data-generate-helper]").addEventListener("click", () => {
+        void (async () => {
+            if (busy || disposed) return;
+            busy = true;
+            clearUiError(error);
+            const button = required<HTMLButtonElement>("[data-generate-helper]");
+            button.disabled = true;
+            generated = null;
+            try {
+                const unit = runtime.movementComposition.suggestedExpectedDistance?.unit
+                    ?? runtime.movementComposition.effectiveDistanceUnit
+                    ?? runtime.context.hexCenterDistance?.unit;
+                const dc = input("helperDc").value.trim();
+                const veer = input("helperVeer").value.trim();
+                const result = await api.resolveCellProcedureInputs(runtime.id, {
+                    expectedVersion: runtime.version,
+                    expectedDistance: unit && input("expected").value.trim()
+                        ? { value: readNumber("expected"), unit } : undefined,
+                    suppressesNavigationCheck: currentState().activeSuppressesNavigationCheck,
+                    deliberateDoubleBack: input("doubleBack").checked,
+                    navigationDifficultyClass: dc ? readNumber("helperDc", true) : undefined,
+                    navigationModifier: Number(input("helperModifier").value),
+                    failureVeerDegrees: veer ? Number(veer) : undefined,
+                    keyedLocationId: keyedChoices.value || undefined
+                });
+                if (disposed) return;
+                if (result.generatedResolutionId) {
+                    const next = await api.getExpedition(runtime.id);
+                    if (next.version !== result.expeditionVersion)
+                        throw new Error("The expedition changed while automatic resolution was being generated.");
+                    runtime = next;
+                    generated = result;
+                    if (result.travel?.expectedDistance && result.travel.actualDistance) {
+                        input("expected").value = String(result.travel.expectedDistance.value);
+                        input("actual").value = String(result.travel.actualDistance.value);
+                    }
+                    if (result.navigation) {
+                        choice("navigation").value = result.navigation.outcome === "NotRequired"
+                            ? "" : result.navigation.outcome;
+                        input("veer").value = String(result.navigation.veerDegreesOnFailure ?? 0);
+                        required<HTMLElement>("[data-veer-row]").hidden =
+                            result.navigation.outcome !== "Failed";
+                    }
+                    if (result.encounter) {
+                        choice("encounter").value = result.encounter.kind;
+                        if (result.encounter.locationId) keyedChoices.value = result.encounter.locationId;
+                        input("encounterNote").value = result.encounter.note ?? "";
+                        showKeyedLocation();
+                    }
+                    gameplay.sync();
+                    publishExpeditionRuntimeChanged(root, runtime);
+                }
+                const dice = result.rolls.map(roll =>
+                    `${roll.purpose}: ${roll.formula} = ${roll.total}`).join("; ");
+                text("[data-helper-result]", [dice, ...result.notes,
+                    result.generatedResolutionId ? "Verified automatic inputs ready to submit." :
+                        "No applicable automatic input was generated."].filter(Boolean).join(" · "));
+            } catch (failure) {
+                if (!disposed) {
+                    showUiError(error, failure);
+                    await refresh();
+                }
+            } finally {
+                busy = false;
+                if (!disposed) {
+                    render();
+                    button.disabled = !runtime.procedure.runtime?.resolutionHelpers;
+                }
+            }
+        })();
     });
     choice("navigation").addEventListener("change", () => {
         required<HTMLElement>("[data-veer-row]").hidden = choice("navigation").value !== "Failed";
@@ -445,6 +549,12 @@ export async function renderPeriodicExpeditionWorkbench(
             } else if (selectedExit !== null) selectHeading(selectedExit);
         }
         const resolutions = runtime.procedure.runtime?.travelResolution;
+        const helpers = runtime.procedure.runtime?.resolutionHelpers;
+        required<HTMLElement>("[data-helper-section]").hidden =
+            !helpers || ![helpers.travel, helpers.navigation, helpers.encounter].some(Boolean);
+        required<HTMLButtonElement>("[data-generate-helper]").disabled = busy
+            || !!state.pendingEncounter || state.activeWatchPendingDecision === "CellCourseAdjudicationRequired"
+            || !helpers;
         const isSteps = resolutions === "CellSteps";
         required<HTMLElement>("[data-cell-step-field]").hidden = !isSteps;
         required<HTMLElement>("[data-distance-fields]").hidden = isSteps;
