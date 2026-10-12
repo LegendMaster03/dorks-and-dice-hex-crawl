@@ -56,9 +56,6 @@ public sealed record StoredExpedition(
 
     public Guid Id => Runtime.Id;
 
-    public ExpeditionState State => Runtime as ExpeditionState
-        ?? throw new InvalidOperationException("This crawl session does not have spatial expedition state.");
-
     public NonSpatialSessionState NonSpatialState => Runtime as NonSpatialSessionState
         ?? throw new InvalidOperationException("This crawl session is spatial.");
 
