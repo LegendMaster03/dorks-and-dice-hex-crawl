@@ -79,7 +79,6 @@ public sealed record PendingEncounterOccurrence(
     int WatchNumber,
     EncounterOutcomeKind Outcome,
     TimeSpan ExpeditionElapsedTime,
-    HexCoordinate? Hex,
     Guid? LocationId,
     string? Note,
     ResolutionProvenance Provenance)

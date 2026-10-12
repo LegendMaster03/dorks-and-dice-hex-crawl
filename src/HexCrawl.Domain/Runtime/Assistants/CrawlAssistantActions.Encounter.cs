@@ -48,7 +48,7 @@ public static partial class CrawlAssistantActions
             events.Add(triggered);
             pendingEncounter = new PendingEncounterOccurrence(
                 occurrenceId, triggered.Sequence, watchNumber, input.Outcome,
-                state.ElapsedTime, null, null, input.Note, input.Provenance);
+                state.ElapsedTime, null, input.Note, input.Provenance);
         }
         events.Add(ProvenanceEvent(
             state,

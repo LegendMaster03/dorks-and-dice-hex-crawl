@@ -179,7 +179,7 @@ public sealed class Phase18CellWorldCompositionTests
                 plan, scheduled, true, RuntimePauseReason.EncounterTriggered),
             PendingEncounter = new PendingEncounterOccurrence(
                 occurrenceId, 2, 1, kind, TimeSpan.FromHours(1),
-                null, subjectId, "Encounter", Manual)
+                subjectId, "Encounter", Manual)
             { Cell = current.Id },
             History = [entry, trigger]
         };

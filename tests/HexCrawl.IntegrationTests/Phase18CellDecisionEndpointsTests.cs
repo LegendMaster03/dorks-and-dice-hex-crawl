@@ -491,7 +491,7 @@ public sealed class Phase18CellDecisionEndpointsTests
                     1, duration, half, plan, encounter, true,
                     RuntimePauseReason.EncounterTriggered),
                 PendingEncounter = new PendingEncounterOccurrence(
-                    id, 1, 1, encounter.Kind, half, null,
+                    id, 1, 1, encounter.Kind, half,
                     null, encounter.Note, Manual) { Cell = cell.Id },
                 History = [triggered]
             };

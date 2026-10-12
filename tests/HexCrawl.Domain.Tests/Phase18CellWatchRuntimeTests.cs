@@ -375,7 +375,7 @@ public sealed class Phase18CellWatchRuntimeTests
         var (world, _, state, plan) = Setup("<1:1,1,1:4,4>", calibrated: true);
         var encounter = new PendingEncounterOccurrence(Guid.NewGuid(), 1, 1,
             EncounterOutcomeKind.WanderingEncounter,
-            TimeSpan.Zero, null, null, null, Manual)
+            TimeSpan.Zero, null, null, Manual)
         { Cell = state.Traversal.CurrentCell };
         var current = state with
         {
@@ -389,8 +389,6 @@ public sealed class Phase18CellWatchRuntimeTests
             (current with { PendingEncounter = null }).Validate(world));
         Assert.Throws<InvalidOperationException>(() =>
             (current with { PendingEncounter = encounter with { Cell = null } }).Validate(world));
-        Assert.Throws<InvalidOperationException>(() =>
-            (current with { PendingEncounter = encounter with { Hex = new HexCoordinate(0, 0) } }).Validate(world));
         Assert.Throws<InvalidOperationException>(() =>
             (current with { ActiveWatch = current.ActiveWatch! with { PendingDecision = null } }).Validate(world));
     }
@@ -490,7 +488,6 @@ public sealed class Phase18CellWatchRuntimeTests
         Assert.Equal(RuntimePauseReason.EncounterTriggered, result.PauseReason);
         var pending = Assert.IsType<PendingEncounterOccurrence>(result.Expedition.PendingEncounter);
         Assert.Equal(result.Expedition.Traversal.CurrentCell, pending.Cell);
-        Assert.Null(pending.Hex);
         Assert.Equal(encounter.OccursAt, result.Expedition.ElapsedTravelTime);
         Assert.NotNull(result.Expedition.ActiveWatch);
         Assert.Throws<InvalidOperationException>(() => engine.AdvanceCellWatch(
@@ -579,7 +576,6 @@ public sealed class Phase18CellWatchRuntimeTests
         var pending = Assert.IsType<PendingEncounterOccurrence>(
             recognized.Expedition.PendingEncounter);
         Assert.Equal(recognized.Expedition.Traversal.CurrentCell, pending.Cell);
-        Assert.Null(pending.Hex);
         var triggered = Assert.Single(recognized.Events,
             e => e.Kind == CrawlRuntimeEventKind.EncounterTriggered);
         Assert.Equal(pending.Id, triggered.EncounterOccurrenceId);

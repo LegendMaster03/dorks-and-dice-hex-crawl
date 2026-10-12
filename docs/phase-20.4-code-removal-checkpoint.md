@@ -4,9 +4,11 @@
 
 **Repository:** `LegendMaster03/dorks-and-dice-hex-crawl`  
 **Feature branch (unmerged, undeployed):** `feature/tile-crawl-phase-20.2-application-persistence`  
-**Last fully green automated head:** [`707f5667`](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/commit/707f56673fc671b75cf5fd3ead4f5f59c455d847), [CI 38288740680](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38288740680), **successful**. This is automated validation, **not** completion of the architectural deletion gate or rendered browser acceptance.
+**Last verified green automated head before the latest edits:** [`51f4e8b6`](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/commit/51f4e8b65a00978c23288dcd8cd4af68cfdb64c6), [CI 38290780871](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38290780871), **successful**. This is automated validation, **not** completion of the architectural deletion gate or rendered browser acceptance.
 
 ## Deleted from the feature branch
+
+- The pending-encounter `HexCoordinate`/snapshot `Hex` field and its axial compatibility assertions. Encounter identity, provenance, elapsed time, location id and qualified cell remain intact; spatial watch validation still requires the encounter cell to equal the traversal cell. This deletion is awaiting fresh CI verification.
 
 - Obsolete `ExpeditionState`, `HexTraversalState`, `HexDirection`, axial watch inputs and watch lifecycle/movement/navigation implementation. Current spatial execution uses `CellExpeditionState`, `PeriodicCellTraversal` and realized boundaries; nonspatial sessions have their own state.
 - V1 movement-progress mechanic and runtime binder, `HexSteps` travel primitive, mechanic-version selection overload, compatibility branches, obsolete scalar procedure-resolution/assistant paths, axial knowledge progression and old wire `currentHex`/hex-progress fields.

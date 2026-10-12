@@ -219,7 +219,7 @@ public sealed class Phase18CellExpeditionPersistenceTests
         { Cell = cell.Id };
         var pending = new PendingEncounterOccurrence(
             occurrenceId, 1, 1, EncounterOutcomeKind.ManualCustom,
-            TimeSpan.FromHours(1), null, null, "Encounter pending", provenance)
+            TimeSpan.FromHours(1), null, "Encounter pending", provenance)
         { Cell = cell.Id };
         var active = new CellActiveWatchState(
             1, TimeSpan.FromHours(4), TimeSpan.FromHours(1),
@@ -250,7 +250,6 @@ public sealed class Phase18CellExpeditionPersistenceTests
         var spatial = Assert.IsType<CellExpeditionState>(loaded!.Runtime);
         spatial.Validate(tiling);
         Assert.Null(spatial.DistanceTraveled);
-        Assert.Null(spatial.PendingEncounter!.Hex);
         Assert.Equal(cell.Id, spatial.PendingEncounter.Cell);
         Assert.Equal(occurrenceId, spatial.PendingEncounter.Id);
         Assert.Equal(RuntimePauseReason.EncounterTriggered, spatial.ActiveWatch!.PendingDecision);

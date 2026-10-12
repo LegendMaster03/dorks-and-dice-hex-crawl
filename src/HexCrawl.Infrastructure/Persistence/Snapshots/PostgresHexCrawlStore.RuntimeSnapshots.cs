@@ -148,7 +148,7 @@ public sealed partial class PostgresHexCrawlStore
 
     private sealed record PendingEncounterSnapshot(
         Guid Id, long TriggerSequence, int WatchNumber, EncounterOutcomeKind Outcome,
-        long ExpeditionElapsedTicks, HexCoordinate? Hex, Guid? LocationId, string? Note,
+        long ExpeditionElapsedTicks, Guid? LocationId, string? Note,
         ResolutionSource Source, string? ProvenanceNote)
     {
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -156,13 +156,13 @@ public sealed partial class PostgresHexCrawlStore
 
         public static PendingEncounterSnapshot FromDomain(PendingEncounterOccurrence encounter) => new(
             encounter.Id, encounter.TriggerSequence, encounter.WatchNumber, encounter.Outcome,
-            encounter.ExpeditionElapsedTime.Ticks, encounter.Hex, encounter.LocationId,
+            encounter.ExpeditionElapsedTime.Ticks, encounter.LocationId,
             encounter.Note, encounter.Provenance.Source, encounter.Provenance.Note)
             { Cell = encounter.Cell };
 
         public PendingEncounterOccurrence ToDomain() => new(
             Id, TriggerSequence, WatchNumber, Outcome, TimeSpan.FromTicks(ExpeditionElapsedTicks),
-            Hex, LocationId, Note, new ResolutionProvenance(Source, ProvenanceNote))
+            LocationId, Note, new ResolutionProvenance(Source, ProvenanceNote))
             { Cell = Cell };
     }
 

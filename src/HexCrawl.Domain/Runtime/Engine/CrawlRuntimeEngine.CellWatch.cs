@@ -534,7 +534,7 @@ public sealed partial class CrawlRuntimeEngine
             ActiveWatch = active,
             PendingEncounter = new PendingEncounterOccurrence(
                 occurrenceId, emitted.Sequence, active.WatchNumber, encounter.Kind,
-                state.ElapsedTravelTime, null, encounter.LocationId, encounter.Note, encounter.Provenance)
+                state.ElapsedTravelTime, encounter.LocationId, encounter.Note, encounter.Provenance)
             { Cell = state.Traversal.CurrentCell }
         };
         return FinishCell(state, RuntimePauseReason.EncounterTriggered, active.Remaining, events);
