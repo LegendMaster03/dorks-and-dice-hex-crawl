@@ -1019,26 +1019,39 @@ public static class MovementCapabilityComposer
 
     private static DistanceMeasure? Suggest(StoredExpedition expedition, Quantity quantity)
     {
-        if (expedition.Runtime is not ExpeditionState spatial || !quantity.DistanceUnit.HasValue)
+        // Physical travel suggestions are meaningful for both historical and
+        // generalized spatial sessions, but never for independent nonspatial
+        // bookkeeping or an uncalibrated cell expedition.
+        var traveled = expedition.Runtime switch
         {
+            ExpeditionState legacy => legacy.DistanceTraveled,
+            CellExpeditionState cells => cells.DistanceTraveled,
+            _ => null
+        };
+        if (traveled is not { } distance || !quantity.DistanceUnit.HasValue)
             return null;
-        }
 
         DistanceMeasure converted;
         try
         {
             converted = new DistanceMeasure(quantity.Value, quantity.DistanceUnit.Value)
-                .ConvertTo(spatial.DistanceTraveled.Unit);
+                .ConvertTo(distance.Unit);
         }
         catch (InvalidOperationException)
         {
             return null;
         }
 
+        var remaining = expedition.Runtime switch
+        {
+            ExpeditionState legacy => legacy.ActiveWatch?.Remaining,
+            CellExpeditionState cells => cells.ActiveWatch?.Remaining,
+            _ => null
+        };
         if (string.Equals(quantity.PerUnit, "hour", StringComparison.OrdinalIgnoreCase))
         {
             var interval = FocusedIntervalPolicyResolver.Resolve(expedition.CampaignProcedure);
-            var hours = spatial.ActiveWatch?.Remaining.TotalHours ?? interval.IntervalDuration?.TotalHours;
+            var hours = remaining?.TotalHours ?? interval.IntervalDuration?.TotalHours;
             return hours.HasValue && double.IsFinite(hours.Value) && hours.Value >= 0
                 ? new DistanceMeasure(converted.Value * hours.Value, converted.Unit)
                 : null;
@@ -1046,16 +1059,12 @@ public static class MovementCapabilityComposer
 
         if (string.Equals(quantity.PerUnit, "watch", StringComparison.OrdinalIgnoreCase))
         {
-            if (spatial.ActiveWatch is null)
-            {
+            if (remaining is null)
                 return converted;
-            }
             var interval = FocusedIntervalPolicyResolver.Resolve(expedition.CampaignProcedure);
             if (interval.IntervalDuration is { } duration
-                && NearlyEqual(spatial.ActiveWatch.Remaining.TotalHours, duration.TotalHours))
-            {
+                && NearlyEqual(remaining.Value.TotalHours, duration.TotalHours))
                 return converted;
-            }
         }
 
         return null;
