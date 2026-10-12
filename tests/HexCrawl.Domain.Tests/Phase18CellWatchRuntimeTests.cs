@@ -14,6 +14,7 @@ public sealed class Phase18CellWatchRuntimeTests
     [InlineData("<1:1,1,1:4,4>")]
     [InlineData("<1:1,1,1:6,3>")]
     [InlineData("<10:2 5 4 6 7 8 10,1 4 6 5 9 10,3 5 7 8 9 10:3 3 4,5 5>")]
+    [InlineData("<14:2 5 7 9 11 13 14,1 4 6 8 10 12 14 13,3 5 4 6 7 8 9 14 11 13:6 4,3 4 4 3>")]
     public void CellWatchAdvancesTimeAndEmitsQualifiedReciprocalEvents(string dsSymbol)
     {
         var (world, procedure, state, plan) = Setup(dsSymbol, calibrated: true);
