@@ -23,15 +23,12 @@ public sealed class Phase2ReviewRegressionTests
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = await StoreAsync(database.ConnectionString);
         var service = new HexCrawlService(store);
-        var start = new HexCoordinate(0, 0);
-        var context = new AbstractHexCrawlSessionContext(
-            "Geometric travel test", HexOrientation.PointyTop,
-            new CrawlRuntimeContext(new DistanceMeasure(12, DistanceUnit.Miles)));
+
         var created = await new ExpeditionStartService(
             store, service, new CampaignProcedureService(store))
             .StartStandaloneCellsAsync(
                 Owner, "Distance resolution", new ProcedureStartSelection(PresetKey: preset),
-                context, start);
+                MaplessSessionFixture.Options());
         var geometry = (await service.ResolveCellGeometryAsync(created, Owner)).Tiling;
         var heading = PeriodicCourseFixture.ThroughInterface(geometry, Assert.IsType<CellExpeditionState>(created.Runtime).Traversal.CurrentCell);
         var source = new ResolutionProvenance(ResolutionSource.ManualRoll);
@@ -58,15 +55,12 @@ public sealed class Phase2ReviewRegressionTests
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = await StoreAsync(database.ConnectionString);
         var service = new HexCrawlService(store);
-        var start = new HexCoordinate(0, 0);
-        var context = new AbstractHexCrawlSessionContext(
-            "Fixed distance", HexOrientation.PointyTop,
-            new CrawlRuntimeContext(new DistanceMeasure(12, DistanceUnit.Miles)));
+
         var created = await new ExpeditionStartService(
             store, service, new CampaignProcedureService(store))
             .StartStandaloneCellsAsync(
                 Owner, "Fixed travel", new ProcedureStartSelection(PresetKey: "simple-fixed-distance"),
-                context, start);
+                MaplessSessionFixture.Options());
         var geometry = (await service.ResolveCellGeometryAsync(created, Owner)).Tiling;
         var heading = PeriodicCourseFixture.ThroughInterface(geometry, Assert.IsType<CellExpeditionState>(created.Runtime).Traversal.CurrentCell);
         var plan = new CellWatchTravelPlan(
