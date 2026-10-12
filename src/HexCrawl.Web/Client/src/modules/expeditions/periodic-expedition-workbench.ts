@@ -12,8 +12,8 @@ import { adjacencyForIntent } from "./spatial-adjacency";
 import { guidancePreferenceButton } from "../../ui/guidance";
 import { openWorkspaceDrawer, statAction, textElement, type WorkspaceDrawer } from "../../ui/workspace";
 import { renderPhase15NextAction } from "./phase15-next-action";
+import { nextCellExpeditionAction } from "./phase15-cell-action";
 import { resolveHexStartCell } from "./world-cell-start";
-import type { ExpeditionWorkspaceAction } from "./expedition-workspace-model";
 import { encounterLocationId } from "./keyed-location-encounter";
 import { mountPeriodicGameplayPanels } from "./periodic-gameplay-panels";
 import { publishExpeditionRuntimeChanged } from "./expedition-runtime-events";
@@ -603,52 +603,13 @@ export async function renderPeriodicExpeditionWorkbench(
         const state = currentState();
         const pending = state.pendingEncounter;
         const pause = state.activeWatchPendingDecision ?? runtime.pauseReason;
-        const hasCourse = selectedExit !== null || state.intendedHeading !== null;
-        let action: ExpeditionWorkspaceAction;
-        if (pending || pause === "EncounterTriggered") {
-            action = {
-                kind: "encounter", label: "Resolve encounter",
-                detail: "An encounter interrupted travel. Complete its table resolution before continuing the watch.",
-                urgent: true
-            };
-        } else if (pause === "CellCourseAdjudicationRequired") {
-            action = {
-                kind: "boundary", label: "Resolve boundary course",
-                detail: "Multiple atomic interfaces meet the attempted course. Choose the confirmed exit.",
-                urgent: true
-            };
-        } else if (pause === "LostRecognitionRequired") {
-            action = {
-                kind: "boundary", label: "Resolve lost-party decision",
-                detail: "Decide whether the party recognizes its lost course and reorients.",
-                urgent: true
-            };
-        } else if (pause !== null) {
-            action = {
-                kind: "travel", label: "Review paused travel",
-                detail: "Review the saved watch and its remaining travel before resuming.",
-                urgent: true
-            };
-        } else if (!runtime.procedure.runtime) {
-            action = {
-                kind: "procedure", label: "Review exploration rules",
-                detail: "This saved ruleset has no executable cell movement procedure.",
-                urgent: false
-            };
-        } else if (!hasCourse) {
-            action = {
-                kind: "travel", label: "Choose travel direction",
-                detail: "Select an adjacent atomic boundary in the current-cell navigator. Choosing a course does not move the party.",
-                urgent: false
-            };
-        } else {
-            action = {
-                kind: "travel",
-                label: state.activeWatchNumber === null ? "Continue travel" : `Resume watch ${state.activeWatchNumber}`,
-                detail: "Use the selected course and pace; supply only the DM decisions required by the saved ruleset.",
-                urgent: false
-            };
-        }
+        const action = nextCellExpeditionAction({
+            pendingEncounter: !!pending,
+            pauseReason: pause,
+            executable: !!runtime.procedure.runtime,
+            hasSelectedCourse: selectedExit !== null || state.intendedHeading !== null,
+            activeWatchNumber: state.activeWatchNumber
+        });
         const guide = document.createElement("details");
         guide.className = "hc-guided-action-guide hc-guided-only";
         const summary = document.createElement("summary");

@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { resolveHexStartCell } from "../.test-dist/modules/expeditions/world-cell-start.js";
+import { nextCellExpeditionAction } from "../.test-dist/modules/expeditions/phase15-cell-action.js";
 
 const file = (...segments) => fs.readFileSync(path.join("src", ...segments), "utf8");
 const world = {
@@ -118,6 +119,21 @@ test("V2 cell-workbench helpers generate owner/version-scoped automatic rolls", 
     assert.match(view, /form\.addEventListener\("input"/);
     assert.match(view, /form\.addEventListener\("change"/);
     assert.match(view, /next\.version !== result\.expeditionVersion/);
+});
+
+test("Phase 15 next action respects V2 interrupt, decision and travel precedence", () => {
+    const ready = {
+        pendingEncounter: false, pauseReason: null, executable: true,
+        hasSelectedCourse: false, activeWatchNumber: null
+    };
+    assert.equal(nextCellExpeditionAction(ready).label, "Choose travel direction");
+    assert.equal(nextCellExpeditionAction({ ...ready, hasSelectedCourse: true }).label, "Continue travel");
+    assert.equal(nextCellExpeditionAction({ ...ready, hasSelectedCourse: true, activeWatchNumber: 3 }).label, "Resume watch 3");
+    assert.equal(nextCellExpeditionAction({ ...ready, executable: false }).kind, "procedure");
+    assert.equal(nextCellExpeditionAction({ ...ready, pauseReason: "ConditionsReviewRequired" }).urgent, true);
+    assert.equal(nextCellExpeditionAction({ ...ready, pauseReason: "CellCourseAdjudicationRequired" }).kind, "boundary");
+    assert.equal(nextCellExpeditionAction({ ...ready, pauseReason: "LostRecognitionRequired" }).kind, "boundary");
+    assert.equal(nextCellExpeditionAction({ ...ready, pendingEncounter: true, pauseReason: "CellCourseAdjudicationRequired" }).kind, "encounter");
 });
 
 test("Phase 15 is the shared action, summary, drawer and map-first UI for V2 cells", () => {
