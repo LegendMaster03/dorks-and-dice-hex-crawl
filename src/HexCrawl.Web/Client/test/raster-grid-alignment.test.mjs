@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
     buildRasterGridAlignmentProposal,
-    physicalDistancePerDetectedHex,
     selectPhysicalDistancePerHex,
     transformPoint
 } from "../.test-dist/raster-grid-alignment.js";
@@ -135,31 +134,6 @@ test("authoritative scale overrides saved scale while preserving raster center",
     assert.equal(proposal.worldUnitsPerPixel, 0.3);
     assert.deepEqual(transformPoint(proposal.alignment, center), before);
     assert.ok(Math.abs(proposal.grid.hexRadiusWorldUnits - (40 * 0.3 / Math.sqrt(3))) < 1e-12);
-});
-
-test("verified project scale converts detected Humblewood spacing independently of lattice fit", () => {
-    const distanceMiles = physicalDistancePerDetectedHex({
-        centerSpacingPixels: 80,
-        sourceUnitsPerProjectPixel: 30 / 220,
-        rasterPixelsPerProjectPixel: 1,
-        sourceMetersPerUnit: 1609.344,
-        targetMetersPerUnit: 1609.344
-    });
-
-    assert.ok(Math.abs(distanceMiles - (80 * 30 / 220)) < 1e-12);
-    assert.ok(Math.abs(distanceMiles - 10.909090909090908) < 1e-12);
-});
-
-test("physical-scale conversion accounts for proportional raster exports", () => {
-    const distanceKilometers = physicalDistancePerDetectedHex({
-        centerSpacingPixels: 160,
-        sourceUnitsPerProjectPixel: 10 / 100,
-        rasterPixelsPerProjectPixel: 2,
-        sourceMetersPerUnit: 1000,
-        targetMetersPerUnit: 1000
-    });
-
-    assert.equal(distanceKilometers, 8);
 });
 
 test("whole-mile candidate is selected only when it better reconciles independent scale evidence", () => {

@@ -16,14 +16,6 @@ export type RasterGridAlignmentOptions = {
     authoritativeWorldUnitsPerPixel?: number | null;
 };
 
-export type RasterPhysicalScaleInput = {
-    centerSpacingPixels: number;
-    sourceUnitsPerProjectPixel: number;
-    rasterPixelsPerProjectPixel: number;
-    sourceMetersPerUnit: number;
-    targetMetersPerUnit: number;
-};
-
 export type PhysicalDistanceSelectionInput = {
     directDistancePerHex: number;
     crossCheckDistancePerHex?: number | null;
@@ -46,26 +38,6 @@ type PhysicalDistanceCandidateScore = {
 
 const SQRT3 = Math.sqrt(3);
 const EPSILON = 1e-10;
-
-export function physicalDistancePerDetectedHex(input: RasterPhysicalScaleInput): number {
-    const values = [
-        input.centerSpacingPixels,
-        input.sourceUnitsPerProjectPixel,
-        input.rasterPixelsPerProjectPixel,
-        input.sourceMetersPerUnit,
-        input.targetMetersPerUnit
-    ];
-    if (values.some(value => !Number.isFinite(value) || value <= 0)) {
-        throw new Error("Physical-scale inputs must all be finite and positive.");
-    }
-
-    const sourceUnitsPerRasterPixel =
-        input.sourceUnitsPerProjectPixel / input.rasterPixelsPerProjectPixel;
-    const metersPerHex = input.centerSpacingPixels
-        * sourceUnitsPerRasterPixel
-        * input.sourceMetersPerUnit;
-    return metersPerHex / input.targetMetersPerUnit;
-}
 
 export function selectPhysicalDistancePerHex(
     input: PhysicalDistanceSelectionInput): PhysicalDistanceSelection {
