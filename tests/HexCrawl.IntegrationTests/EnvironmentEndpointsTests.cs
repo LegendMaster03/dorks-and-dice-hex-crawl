@@ -23,17 +23,18 @@ public sealed class EnvironmentEndpointsTests
                 worldId = world.GetProperty("id").GetGuid();
                 var worldVersion = world.GetProperty("version").GetInt64();
 
-                using var startResponse = await client.PostAsJsonAsync($"/api/overworlds/{worldId:D}/expeditions", new
+                using var startResponse = await client.PostAsJsonAsync($"/api/overworlds/{worldId:D}/cell-expeditions", new
                 {
                     name = "Environment HTTP crawl",
-                    procedureKey = "dnd-3-5e",
+                    presetKey = "alexandrian-advanced",
                     presentationKey = "dm-controlled",
-                    startHex = new { q = 0, r = 0 }
+                    startCell = new { motifCellId = "hex", translation = new { u = 0L, v = 0L } }
                 });
                 startResponse.EnsureSuccessStatusCode();
                 var expedition = await startResponse.Content.ReadFromJsonAsync<JsonElement>();
                 expeditionId = expedition.GetProperty("id").GetGuid();
                 var expeditionVersion = expedition.GetProperty("version").GetInt64();
+                var currentCell = expedition.GetProperty("expedition").GetProperty("currentCell");
                 var memberId = Guid.NewGuid();
 
                 using var partyResponse = await client.PutAsJsonAsync($"/api/expeditions/{expeditionId:D}/party", new
@@ -89,13 +90,14 @@ public sealed class EnvironmentEndpointsTests
                             id = Guid.NewGuid(),
                             scope = new
                             {
-                                kind = "Hex",
-                                hex = new { q = 0, r = 0 },
+                                kind = "Cell",
+                                hex = (object?)null,
+                                cell = currentCell,
                                 featureId = (Guid?)null
                             },
                             facts = new[]
                             {
-                                Tag("terrain", "difficult", "authored hex truth")
+                                Tag("terrain", "difficult", "authored cell truth")
                             }
                         }
                     }
@@ -110,8 +112,9 @@ public sealed class EnvironmentEndpointsTests
                 Assert.Equal("difficult", focused.GetProperty("evaluation").GetProperty("terrainKey").GetString());
                 var effective = Assert.Single(focused.GetProperty("effectiveContext").GetProperty("facts").EnumerateArray());
                 Assert.True(effective.GetProperty("effective").GetBoolean());
-                Assert.Equal("Hex", effective.GetProperty("source").GetProperty("kind").GetString());
-                Assert.Equal("authored hex truth", effective.GetProperty("fact").GetProperty("provenance").GetString());
+                Assert.Equal("Cell", effective.GetProperty("source").GetProperty("kind").GetString());
+                Assert.Equal(currentCell.GetRawText(), effective.GetProperty("source").GetProperty("cell").GetRawText());
+                Assert.Equal("authored cell truth", effective.GetProperty("fact").GetProperty("provenance").GetString());
 
                 var canonical = await client.GetFromJsonAsync<JsonElement>($"/api/expeditions/{expeditionId:D}");
                 var movement = canonical.GetProperty("movementComposition");
