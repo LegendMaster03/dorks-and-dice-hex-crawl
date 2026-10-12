@@ -66,7 +66,7 @@ public sealed record PeriodicMotifSourceProjectionEvidence(
     int CheckedRegions,
     int SupportedRegions);
 
-/// <summary>Opt-in investigation: existing hex analysis remains on v2.</summary>
+/// <summary>Analyze raster evidence without assuming the observed periodic cell shape.</summary>
 public interface IPeriodicMotifInvestigationService
 {
     Task<PeriodicMotifInvestigation> InvestigateAsync(
