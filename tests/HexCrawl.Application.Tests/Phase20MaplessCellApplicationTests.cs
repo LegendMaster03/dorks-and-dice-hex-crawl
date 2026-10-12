@@ -162,22 +162,24 @@ public sealed class Phase20MaplessCellApplicationTests
     }
 
     [Fact]
-    public async Task MaplessV2DoesNotConvertPinnedV1OrInventDeclarativeMovement()
+    public async Task MaplessStartsAcceptPinnedNativeProceduresAndRejectNonExecutablePresets()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = new PostgresHexCrawlStore(database.ConnectionString);
         await store.InitializeAsync();
         var procedures = new CampaignProcedureService(store);
         var starter = new ExpeditionStartService(store, new HexCrawlService(store), procedures);
-        var v1 = await procedures.CreateFromPresetAsync("owner", "simple-fixed-distance");
-        await Assert.ThrowsAsync<NotSupportedException>(() => starter.StartStandaloneCellsAsync(
-            "owner", "Preserve V1", new ProcedureStartSelection(
-                ProcedureId: v1.ProcedureId, ProcedureRevision: v1.Revision),
-            Context(), new HexCoordinate(0, 0)));
+        var saved = await procedures.CreateFromPresetAsync("owner", "simple-fixed-distance");
+        var started = await starter.StartStandaloneCellsAsync(
+            "owner", "Native cell session", new ProcedureStartSelection(
+                ProcedureId: saved.ProcedureId, ProcedureRevision: saved.Revision),
+            Context(), new HexCoordinate(0, 0));
+        Assert.IsType<CellExpeditionState>(started.Runtime);
+        Assert.Equal(2, GenericProcedureRuntime.Bind(started.CampaignProcedure).Movement.MechanicVersion);
         await Assert.ThrowsAsync<NotSupportedException>(() => starter.StartStandaloneCellsAsync(
             "owner", "Declarative only", new ProcedureStartSelection(PresetKey: "bx"),
             Context(), new HexCoordinate(0, 0)));
-        Assert.Empty(await store.ListExpeditionsAsync("owner"));
+        Assert.Single(await store.ListExpeditionsAsync("owner"));
         Assert.Single(await procedures.ListLatestAsync("owner"));
     }
 }
