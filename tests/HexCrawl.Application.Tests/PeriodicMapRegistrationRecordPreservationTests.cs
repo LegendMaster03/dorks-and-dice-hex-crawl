@@ -6,10 +6,10 @@ using HexCrawl.Infrastructure.Persistence;
 
 namespace HexCrawl.Application.Tests;
 
-public sealed class RasterGridAlignmentRecordPreservationTests
+public sealed class PeriodicMapRegistrationRecordPreservationTests
 {
     [Fact]
-    public async Task SameProjectReimportDoesNotDuplicateOrRepairAndExplicitRepairPreservesAll2616Records()
+    public async Task SameProjectReimportAndExplicitPeriodicRegistrationPreserveAll2616Records()
     {
         var path = PostgresTestDatabase.CreateConnectionString();
         try
@@ -18,16 +18,15 @@ public sealed class RasterGridAlignmentRecordPreservationTests
             var worlds = new HexCrawlService(store);
             var sourceMaps = new SourceMapApplicationService(store);
 
-            var world = await worlds.CreateOverworldAsync(
-                "alice",
-                new CreateOverworldCommand(
-                    "Humblewood record preservation",
-                    HexOrientation.PointyTop,
-                    new WorldPoint(0, 0),
-                    0,
-                    1,
-                    12,
-                    DistanceUnit.Miles));
+            var realized = DelaneyDressHarmonicMetricRealization.Construct(
+                "<1:1,1,1:6,3>", 1, "world-unit");
+            Assert.Equal("realized", realized.Status);
+            var tiling = new PeriodicWorldTiling(
+                Guid.NewGuid(), realized.Topology!, realized.Realization!,
+                new WorldPoint(0, 0),
+                PhysicalDistancePerWorldUnit: new DistanceMeasure(12, DistanceUnit.Miles));
+            var world = await worlds.CreatePeriodicOverworldAsync(
+                "alice", "Humblewood record preservation", tiling);
 
             world = await sourceMaps.CreateUploadedAsync(
                 world.World.Id,
@@ -112,22 +111,11 @@ public sealed class RasterGridAlignmentRecordPreservationTests
                 0.24,
                 -205,
                 -161);
-            var repairedGrid = world.World.Grid with
-            {
-                Orientation = HexOrientation.FlatTop,
-                Origin = new WorldPoint(41.25, -17.5),
-                RotationDegrees = 0,
-                HexRadiusWorldUnits = 2.75
-            };
-
-            world = await sourceMaps.ApplyRasterGridAlignmentAsync(
-                world.World.Id,
-                mapId,
-                "alice",
-                new ApplyRasterGridAlignmentCommand(
-                    repairedGrid,
-                    repairedAlignment,
-                    world.Version));
+            world = await sourceMaps.RegisterComputedAffineAsync(
+                world.World.Id, mapId, "alice", repairedAlignment, world.Version);
+            Assert.Equal(tiling.Id, world.World.SpatialTiling.Id);
+            Assert.Equal(tiling.Topology.TranslationDsSymbol,
+                world.World.SpatialTiling.Topology.TranslationDsSymbol);
             AssertImportedState(world, mapId, records.Length, repairedAlignment, provenance, archive);
 
             var reloadedStore = await OpenStoreAsync(path);

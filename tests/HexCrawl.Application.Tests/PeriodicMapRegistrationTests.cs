@@ -5,10 +5,10 @@ using HexCrawl.Infrastructure.Persistence;
 
 namespace HexCrawl.Application.Tests;
 
-public sealed class RasterGridAlignmentTests
+public sealed class PeriodicMapRegistrationTests
 {
     [Fact]
-    public async Task AlignmentRepairAtomicallyReplacesGridAndSelectedMapWhilePreservingSourceState()
+    public async Task ComputedAffineRegistrationPreservesGeometryAndIndependentSourceMaps()
     {
         var path = TemporaryDatabasePath();
         try
@@ -17,17 +17,15 @@ public sealed class RasterGridAlignmentTests
             var worlds = new HexCrawlService(store);
             var sourceMaps = new SourceMapApplicationService(store);
 
-            var world = await worlds.CreateOverworldAsync(
-                "alice",
-                new CreateOverworldCommand(
-                    "Grid repair",
-                    HexOrientation.PointyTop,
-                    new WorldPoint(0, 0),
-                    0,
-                    1,
-                    12,
-                    DistanceUnit.Miles));
-            var originalGridId = world.World.Grid.Id;
+            var realized = DelaneyDressHarmonicMetricRealization.Construct(
+                "<1:1,1,1:6,3>", 1, "world-unit");
+            Assert.Equal("realized", realized.Status);
+            var tiling = new PeriodicWorldTiling(
+                Guid.NewGuid(), realized.Topology!, realized.Realization!,
+                new WorldPoint(0, 0),
+                PhysicalDistancePerWorldUnit: new DistanceMeasure(12, DistanceUnit.Miles));
+            var world = await worlds.CreatePeriodicOverworldAsync(
+                "alice", "Registered periodic world", tiling);
 
             world = await worlds.CreateLocationAsync(
                 world.World.Id,
@@ -145,13 +143,6 @@ public sealed class RasterGridAlignmentTests
             var otherMapBefore = world.World.SourceMaps.Single(map => map.Id == otherMapId);
             var versionBeforeRepair = world.Version;
 
-            var replacementGrid = world.World.Grid with
-            {
-                Orientation = HexOrientation.FlatTop,
-                Origin = new WorldPoint(41.25, -17.5),
-                RotationDegrees = 4.25,
-                HexRadiusWorldUnits = 2.75
-            };
             var replacementAlignment = MapRegistrationTransform.Affine(
                 0.24,
                 0,
@@ -160,22 +151,13 @@ public sealed class RasterGridAlignmentTests
                 -205,
                 -161);
 
-            world = await sourceMaps.ApplyRasterGridAlignmentAsync(
-                world.World.Id,
-                repairedMapId,
-                "alice",
-                new ApplyRasterGridAlignmentCommand(
-                    replacementGrid,
-                    replacementAlignment,
-                    world.Version));
+            world = await sourceMaps.RegisterComputedAffineAsync(
+                world.World.Id, repairedMapId, "alice", replacementAlignment, world.Version);
 
             Assert.Equal(versionBeforeRepair + 1, world.Version);
-            Assert.Equal(originalGridId, world.World.Grid.Id);
-            Assert.Equal(HexOrientation.FlatTop, world.World.Grid.Orientation);
-            Assert.Equal(new WorldPoint(41.25, -17.5), world.World.Grid.Origin);
-            Assert.Equal(4.25, world.World.Grid.RotationDegrees, 8);
-            Assert.Equal(2.75, world.World.Grid.HexRadiusWorldUnits, 8);
-            Assert.Equal(12, world.World.Grid.NeighborCenterDistance.Value);
+            Assert.Equal(tiling.Id, world.World.SpatialTiling.Id);
+            Assert.Equal(tiling.Topology.TranslationDsSymbol,
+                world.World.SpatialTiling.Topology.TranslationDsSymbol);
 
             var retainedLocation = Assert.Single(world.World.Locations);
             Assert.Equal(location.Id, retainedLocation.Id);
@@ -207,7 +189,9 @@ public sealed class RasterGridAlignmentTests
             var restarted = new SourceMapApplicationService(restartedStore);
             var reloaded = await restarted.GetOverworldAsync(world.World.Id, "alice");
             Assert.Equal(world.Version, reloaded.Version);
-            Assert.Equal(replacementGrid, reloaded.World.Grid);
+            Assert.Equal(tiling.Id, reloaded.World.SpatialTiling.Id);
+            Assert.Equal(tiling.Topology.TranslationDsSymbol,
+                reloaded.World.SpatialTiling.Topology.TranslationDsSymbol);
             var reloadedMap = reloaded.World.SourceMaps.Single(map => map.Id == repairedMapId);
             Assert.Equal(replacementAlignment, reloadedMap.Alignment);
             Assert.Collection(
@@ -227,7 +211,7 @@ public sealed class RasterGridAlignmentTests
     }
 
     [Fact]
-    public async Task AlignmentRepairRejectsGridGeometryChangeAfterExpeditionWithoutPartialMapMutation()
+    public async Task ActiveExpeditionCanRegisterImagesWithoutChangingItsWorldGeometry()
     {
         var path = TemporaryDatabasePath();
         try
@@ -235,16 +219,15 @@ public sealed class RasterGridAlignmentTests
             var store = await OpenStoreAsync(path);
             var worlds = new HexCrawlService(store);
             var sourceMaps = new SourceMapApplicationService(store);
-            var world = await worlds.CreateOverworldAsync(
-                "alice",
-                new CreateOverworldCommand(
-                    "Active crawl",
-                    HexOrientation.PointyTop,
-                    new WorldPoint(0, 0),
-                    0,
-                    1,
-                    12,
-                    DistanceUnit.Miles));
+            var realized = DelaneyDressHarmonicMetricRealization.Construct(
+                "<1:1,1,1:6,3>", 1, "world-unit");
+            Assert.Equal("realized", realized.Status);
+            var tiling = new PeriodicWorldTiling(
+                Guid.NewGuid(), realized.Topology!, realized.Realization!,
+                new WorldPoint(0, 0),
+                PhysicalDistancePerWorldUnit: new DistanceMeasure(12, DistanceUnit.Miles));
+            var world = await worlds.CreatePeriodicOverworldAsync(
+                "alice", "Active crawl", tiling);
             world = await sourceMaps.CreateUploadedAsync(
                 world.World.Id,
                 "alice",
@@ -266,29 +249,22 @@ public sealed class RasterGridAlignmentTests
                 .StartWorldBoundCellsAsync(
                     world.World.Id, "alice", "Test crawl",
                     new ProcedureStartSelection(PresetKey: "simple-fixed-distance"),
-                    LegacyHexTilingCompatibility.ToAddress(new HexCoordinate(0, 0)));
+                    new PeriodicCellAddress(tiling.Topology.MotifCells[0].Id, new LatticeDisplacement(0, 0)));
 
-            var proposedGrid = world.World.Grid with
-            {
-                Orientation = HexOrientation.FlatTop,
-                Origin = new WorldPoint(2, 3)
-            };
             var proposedAlignment = MapRegistrationTransform.Affine(0.1, 0, 0, 0.1, 5, 6);
+            world = await sourceMaps.RegisterComputedAffineAsync(
+                world.World.Id, map.Id, "alice", proposedAlignment, versionBeforeExpedition);
 
-            await Assert.ThrowsAsync<HexCrawlConflictException>(() =>
-                sourceMaps.ApplyRasterGridAlignmentAsync(
-                    world.World.Id,
-                    map.Id,
-                    "alice",
-                    new ApplyRasterGridAlignmentCommand(
-                        proposedGrid,
-                        proposedAlignment,
-                        versionBeforeExpedition)));
-
+            Assert.Equal(versionBeforeExpedition + 1, world.Version);
+            Assert.Equal(tiling.Id, world.World.SpatialTiling.Id);
+            Assert.Equal(tiling.Topology.TranslationDsSymbol,
+                world.World.SpatialTiling.Topology.TranslationDsSymbol);
+            Assert.Equal(proposedAlignment, Assert.Single(world.World.SourceMaps).Alignment);
             var reopened = await sourceMaps.GetOverworldAsync(world.World.Id, "alice");
-            Assert.Equal(versionBeforeExpedition, reopened.Version);
-            Assert.Equal(world.World.Grid, reopened.World.Grid);
-            Assert.Null(Assert.Single(reopened.World.SourceMaps).Alignment);
+            Assert.Equal(tiling.Id, reopened.World.SpatialTiling.Id);
+            Assert.Equal(tiling.Topology.TranslationDsSymbol,
+                reopened.World.SpatialTiling.Topology.TranslationDsSymbol);
+            Assert.Equal(proposedAlignment, Assert.Single(reopened.World.SourceMaps).Alignment);
         }
         finally
         {

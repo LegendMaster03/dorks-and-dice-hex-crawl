@@ -134,10 +134,3 @@ public sealed record SourceMapRegistrationRequest(
     public RegisterSourceMapCommand ToCommand() => new(ControlPoints.Select(point => point.ToDomain()).ToArray(), ExpectedVersion);
 }
 
-public sealed record RasterGridAlignmentRequest(
-    GridContract Grid,
-    MapRegistrationTransform Alignment,
-    long ExpectedVersion)
-{
-    public ApplyRasterGridAlignmentCommand ToCommand() => new(Grid.ToDomain(), Alignment, ExpectedVersion);
-}

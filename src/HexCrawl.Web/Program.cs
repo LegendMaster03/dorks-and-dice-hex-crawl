@@ -82,16 +82,6 @@ builder.Services
         UseCookies = false
     });
 builder.Services
-    .AddHttpClient<IMapAnalysisService, SurveyorMapAnalysisClient>(client =>
-    {
-        client.Timeout = Timeout.InfiniteTimeSpan;
-    })
-    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
-    {
-        AllowAutoRedirect = false,
-        UseCookies = false
-    });
-builder.Services
     .AddHttpClient<IPeriodicMotifInvestigationService, SurveyorPeriodicMotifInvestigationClient>(client =>
     {
         client.Timeout = Timeout.InfiniteTimeSpan;

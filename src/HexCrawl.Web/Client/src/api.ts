@@ -1,4 +1,3 @@
-import type { SourceMapGridAnalysis } from "./hex-grid-analysis";
 import type { CreateEncounterHandoffRequest, HexCrawlEncounterHandoffV2 } from "./encounter-handoff";
 import type {
     CellTraversalContext,
@@ -463,17 +462,6 @@ export class HexCrawlApi {
 
     public sourceMapAssetUrl(worldId: string, sourceMapId: string): string {
         return `${this.backendBaseUrl}/api/overworlds/${encodeURIComponent(worldId)}/source-maps/${encodeURIComponent(sourceMapId)}/asset`;
-    }
-
-    public async analyzeSourceMapGrid(
-        worldId: string,
-        sourceMapId: string,
-        signal?: AbortSignal): Promise<SourceMapGridAnalysis> {
-        const response = await fetch(
-            `${this.backendBaseUrl}/api/overworlds/${encodeURIComponent(worldId)}/source-maps/${encodeURIComponent(sourceMapId)}/grid-analysis`,
-            { method: "POST", headers: { Accept: "application/json" }, signal });
-        if (!response.ok) throw await apiError(response, "Automatic map analysis");
-        return await response.json() as SourceMapGridAnalysis;
     }
 
     public getProcedurePresets(): Promise<ProcedurePreset[]> {
