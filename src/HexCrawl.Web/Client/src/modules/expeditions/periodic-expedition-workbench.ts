@@ -10,7 +10,7 @@ import { currentPeriodicCellAdjacency } from "./current-cell-topology";
 import { renderCurrentCellNavigator } from "./cell-navigator";
 import { adjacencyForIntent } from "./spatial-adjacency";
 import { guidancePreferenceButton } from "../../ui/guidance";
-import { badge, openWorkspaceDrawer, statAction, textElement, type WorkspaceDrawer } from "../../ui/workspace";
+import { openWorkspaceDrawer, statAction, textElement, type WorkspaceDrawer } from "../../ui/workspace";
 import { renderPhase15NextAction } from "./phase15-next-action";
 import { resolveHexStartCell } from "./world-cell-start";
 import type { ExpeditionWorkspaceAction } from "./expedition-workspace-model";
@@ -365,6 +365,7 @@ export async function renderPeriodicExpeditionWorkbench(
             generated = null;
             topology = await api.getCellTopology(runtime.id);
             selectedExit = topology.selectedExitInterfaceIndex;
+            if (!world) map.centerOn(topology.position);
             render();
             gameplay.sync();
             publishExpeditionRuntimeChanged(root, runtime);
@@ -394,6 +395,7 @@ export async function renderPeriodicExpeditionWorkbench(
             required<HTMLButtonElement>("[data-world]").hidden = world === null;
             topology = nextTopology;
             selectedExit = topology.selectedExitInterfaceIndex;
+            if (!world) map.centerOn(topology.position);
             render();
             gameplay.sync();
             publishExpeditionRuntimeChanged(root, runtime);

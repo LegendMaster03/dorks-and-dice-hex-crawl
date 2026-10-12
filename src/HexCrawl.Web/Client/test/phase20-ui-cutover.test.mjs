@@ -120,12 +120,32 @@ test("V2 cell-workbench helpers generate owner/version-scoped automatic rolls", 
     assert.match(view, /next\.version !== result\.expeditionVersion/);
 });
 
+test("Phase 15 is the shared action, summary, drawer and map-first UI for V2 cells", () => {
+    const legacy = file("modules","expeditions","expedition-view.ts");
+    const periodic = file("modules","expeditions","periodic-expedition-workbench.ts");
+    const action = file("modules","expeditions","phase15-next-action.ts");
+    assert.match(legacy, /renderPhase15NextAction/);
+    assert.match(periodic, /renderPhase15NextAction\(/);
+    assert.match(action, /hc-current-action/);
+    assert.match(periodic, /hc-phase15-expedition/);
+    assert.match(periodic, /hc-phase15-runtime-summary/);
+    assert.match(periodic, /hc-stat-action-grid/);
+    assert.match(periodic, /hc-panel hc-map-panel/);
+    assert.match(periodic, /hc-panel hc-sidebar hc-table-rail/);
+    assert.match(periodic, /openWorkspaceDrawer\(root, "Travel \/ watch"/);
+    assert.match(periodic, /travelDock\.append\(travelContent\)/);
+    assert.match(periodic, /data-gameplay-panels/);
+    assert.match(periodic, /new MapSurface\(/);
+    assert.match(periodic, /currentPeriodicCellAdjacency\(topology\)/);
+    assert.doesNotMatch(periodic, /api\.advanceExpedition\(/);
+});
+
 test("mapless cell workbench does not require a fabricated overworld", () => {
     const view = file("modules","expeditions","expedition-view.ts");
     const periodic = file("modules","expeditions","periodic-expedition-workbench.ts");
     assert.match(view, /runtime\.expedition\.currentCell/);
     assert.doesNotMatch(periodic, /if \(!initialWorld \|\|/);
     assert.match(periodic, /world \? api\.getOverworld\(world\.id\) : Promise\.resolve\(null\)/);
-    assert.match(periodic, /"Mapless cell travel"/);
+    assert.match(periodic, /world \? "Expedition map" : "Mapless exploration"/);
     assert.match(periodic, /world\?\.locations \?\? \[\]/);
 });

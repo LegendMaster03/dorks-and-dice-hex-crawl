@@ -283,7 +283,10 @@ test("Phase 15 expedition workspace is one procedure-driven surface instead of m
     assert.match(model, /journey\?\.activeProcesses\.find/);
     assert.match(model, /canUseFocusedNonSpatialWatch/);
     assert.match(model, /expeditionWorkspaceCapabilities/);
-    assert.match(view, /hc-current-action/);
+    const sharedAction = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/phase15-next-action.ts"), "utf8");
+    assert.match(view, /renderPhase15NextAction/);
+    assert.match(sharedAction, /hc-current-action/);
     assert.match(view, /runtime\.expedition\.isSpatial/);
     assert.match(view, /Journey \/ challenge/);
     assert.match(view, /GM Tools/);
@@ -677,7 +680,10 @@ test("normal spatial travel has one primary continuation path and focused unreso
         path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
         "utf8");
 
-    assert.match(view, /const primary = button\(copy\.label, \(\) => activateAction\(action.kind\)\)/);
+    const sharedAction = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/phase15-next-action.ts"), "utf8");
+    assert.match(view, /\(\) => activateAction\(action.kind\)/);
+    assert.match(sharedAction, /primary\.addEventListener\("click", activate\)/);
     assert.doesNotMatch(view, /const continueControl = button\("Continue travel"/);
     assert.match(view, /if \(paceEditor && pace\)[\s\S]*actions\.append\(changePace\)/);
     assert.match(view, /actions\.append\(more\)/);
@@ -1287,7 +1293,9 @@ test("Phase 15.1 Guided layers beginner help over existing Compact and runtime a
     assert.match(procedure, /ProcedureAuthoringMode = "compact" \| "advanced" \| "json"/);
     assert.match(procedure, /How to use Compact/);
     assert.match(procedure, /guidedDisclosure\(/);
-    assert.match(expedition, /Why is this next\?/);
+    const sharedAction = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/phase15-next-action.ts"), "utf8");
+    assert.match(sharedAction, /Why is this next\?/);
     assert.match(expedition, /guidedActionExplanation/);
     assert.match(expedition, /guidedActionInput/);
     assert.match(expedition, /guidedActionResult/);
