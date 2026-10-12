@@ -388,9 +388,6 @@ export class MapSurface {
     private updateAccessibilityLabel(): void {
         const world = this.getWorld();
         const parts = ["Interactive world map"];
-        if (this.renderer.expeditionHex) {
-            parts.push(`Current expedition hex q ${this.renderer.expeditionHex.q}, r ${this.renderer.expeditionHex.r}`);
-        }
         if (this.renderer.selectedHex) {
             parts.push(`Selected hex q ${this.renderer.selectedHex.q}, r ${this.renderer.selectedHex.r}`);
         }

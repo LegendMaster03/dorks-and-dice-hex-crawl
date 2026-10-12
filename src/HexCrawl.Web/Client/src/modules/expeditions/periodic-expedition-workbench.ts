@@ -975,7 +975,6 @@ export async function renderPeriodicExpeditionWorkbench(
         };
         map.renderer.expeditionPosition = { ...mapPoint };
         map.renderer.discoveredSubjectIds = discoveredSubjectIds(runtime);
-        if (world?.grid) map.renderer.expeditionHex = null;
         if (inspectedGeometry
             && (inspectedGeometry.id.tilingId !== topology.currentCell.tilingId
                 || inspectedTilingRevision !== (world?.tiling?.revision ?? null))) {

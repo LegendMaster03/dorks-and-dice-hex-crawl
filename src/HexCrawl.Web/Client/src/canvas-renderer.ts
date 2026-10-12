@@ -22,7 +22,6 @@ export class CanvasMapRenderer {
     public currentWorldCell: WorldCellGeometry | null = null;
     public visibleWorldCells: WorldCellGeometry[] = [];
     public expeditionPosition: WorldPoint | null = null;
-    public expeditionHex: HexCoordinate | null = null;
     public discoveredSubjectIds = new Set<string>();
     public hiddenSourceMapIds = new Set<string>();
     public registrationPreview: { sourceMapId: string; transform: MapRegistrationTransform } | null = null;
@@ -400,9 +399,8 @@ export class CanvasMapRenderer {
             ctx.stroke();
             ctx.restore();
         }
-        if (!this.expeditionPosition && (!this.expeditionHex || !world?.grid)) return;
-        const position = this.expeditionPosition ?? hexToWorld(world!.grid!, this.expeditionHex!);
-        const point = this.toScreen(position, width, height);
+        if (!this.expeditionPosition) return;
+        const point = this.toScreen(this.expeditionPosition, width, height);
         ctx.beginPath();
         ctx.arc(point.x, point.y, 10, 0, Math.PI * 2);
         ctx.fillStyle = "#b22626";
