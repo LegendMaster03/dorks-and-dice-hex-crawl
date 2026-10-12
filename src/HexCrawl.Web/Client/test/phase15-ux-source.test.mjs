@@ -406,17 +406,6 @@ test("Compact authoring offers generic one-click dependency repair", () => {
 });
 
 
-test("persisted browser travel preferences do not own course direction or hardcode topology", () => {
-    const intent = fs.readFileSync(
-        path.join(sourceDir, "modules/expeditions/expedition-travel-intent.ts"),
-        "utf8");
-
-    assert.match(intent, /direction: fallback\.direction/);
-    assert.match(intent, /JSON\.stringify\(\{ pace: preferences\.pace \}\)/);
-    assert.doesNotMatch(intent, /parsed\.direction/);
-    assert.doesNotMatch(intent, /direction\s*[<>]=?\s*[56]/);
-});
-
 test("current-cell navigator stays orientation-neutral unless authoritative compass metadata exists", () => {
     const adjacency = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/spatial-adjacency.ts"),
@@ -993,4 +982,13 @@ test("nonspatial Phase 15 retains guided actions, editable supporting tools and 
     assert.match(view, /recordWatchAssistant/);
     assert.match(view, /createEncounterHandoff/);
     assert.doesNotMatch(view, /ExpeditionWatchController|openTravelWorkspace|currentHex/);
+});
+
+test("the active polygonal workbench resolves pace without browser-stored axial direction", () => {
+    const periodic = fs.readFileSync(path.join(sourceDir, "modules/expeditions/periodic-expedition-workbench.ts"), "utf8");
+    const pace = fs.readFileSync(path.join(sourceDir, "modules/expeditions/periodic-travel-pace.ts"), "utf8");
+    assert.match(periodic, /resolvePeriodicPace/);
+    assert.match(pace, /activePace\?\.trim\(\) \|\| "normal"/);
+    assert.match(pace, /keys\.includes\(selected\)/);
+    assert.doesNotMatch(periodic, /loadTravelPreferences|mergeRuntimeTravelPreferences|normalizeTravelDirectionPreference/);
 });
