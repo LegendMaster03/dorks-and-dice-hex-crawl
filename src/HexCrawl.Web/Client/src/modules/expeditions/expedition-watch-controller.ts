@@ -297,11 +297,6 @@ export class ExpeditionWatchController {
         this.syncEncounterFields();
         this.syncResolutionHelperVisibility(runtime);
 
-        const directionHelp = execution.directionChangesCostProgress
-            ? "Changing travel direction can consume progress through the current cell under this ruleset. The saved rules determine the cost."
-            : "Changing travel direction does not consume additional progress under this ruleset.";
-        required<HTMLElement>(this.form, "[data-direction-hint]").textContent =
-            `${directionHelp} The selected adjacent cell indicates intended travel; the ruleset determines actual movement.`;
     }
 
     public dispose(): void {
