@@ -89,7 +89,6 @@ public sealed record WorldEnvironmentContract(
 public sealed record EnvironmentFactSourceContract(
     EnvironmentFactSourceKind Kind,
     Guid? AnnotationId,
-    HexCoordinate? Hex,
     Guid? FeatureId,
     string? FeatureName)
 {
@@ -97,7 +96,7 @@ public sealed record EnvironmentFactSourceContract(
     public WorldCellId? Cell { get; init; }
 
     public static EnvironmentFactSourceContract From(EnvironmentFactSource value) => new(
-        value.Kind, value.AnnotationId, value.Hex, value.FeatureId, value.FeatureName)
+        value.Kind, value.AnnotationId, value.FeatureId, value.FeatureName)
     { Cell = value.Cell };
 }
 

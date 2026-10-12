@@ -36,60 +36,6 @@ public sealed class EnvironmentContextTests
     }
 
     [Fact]
-    public void WorldHexRegionAndLineFactsResolveButCategoryAloneDoesNot()
-    {
-        var region = new RegionFeature(Guid.NewGuid(), "Blackwood", "forest-looking-category",
-        [
-            new WorldPoint(-0.4, -0.4), new WorldPoint(0.4, -0.4),
-            new WorldPoint(0.4, 0.4), new WorldPoint(-0.4, 0.4)
-        ]);
-        var road = new LinearFeature(Guid.NewGuid(), "King's Road", "road",
-            [new WorldPoint(-0.6, 0), new WorldPoint(0.6, 0)]);
-        var far = new LinearFeature(Guid.NewGuid(), "Far Trail", "road",
-            [new WorldPoint(100, 100), new WorldPoint(101, 101)]);
-        var world = World([region, road, far],
-        [
-            Annotation(WorldScope(), Tag("weather", "clear")),
-            Annotation(HexScope(0, 0), Tag("terrain", "hills")),
-            Annotation(FeatureScope(region.Id), Tag("terrain", "forest")),
-            Annotation(FeatureScope(road.Id), Tag("route", "good-road")),
-            Annotation(FeatureScope(far.Id), Tag("route", "far-road"))
-        ]);
-        var expedition = WorldExpedition(world, State(0, 0));
-
-        var context = EnvironmentContextResolver.Resolve(expedition, world);
-        var effective = EffectiveTags(context);
-
-        Assert.Contains(("weather", "clear"), effective);
-        Assert.Contains(("terrain", "hills"), effective);
-        Assert.Contains(("terrain", "forest"), effective);
-        Assert.Contains(("route", "good-road"), effective);
-        Assert.DoesNotContain(("route", "far-road"), effective);
-        Assert.DoesNotContain(effective, value => value.Item2 == "road");
-        Assert.Equal(EnvironmentContextStatus.Resolved, context.Status);
-    }
-
-    [Fact]
-    public void MovingHexRecomputesWorldTruthInsteadOfCopyingItIntoExpeditionState()
-    {
-        var world = World([], [
-            Annotation(HexScope(0, 0), Tag("terrain", "forest")),
-            Annotation(HexScope(1, 0), Tag("terrain", "swamp"))
-        ]);
-        var a = WorldExpedition(world, State(0, 0));
-        var b = a with { Runtime = State(1, 0) };
-
-        var first = EffectiveTags(EnvironmentContextResolver.Resolve(a, world));
-        var second = EffectiveTags(EnvironmentContextResolver.Resolve(b, world));
-
-        Assert.Contains(("terrain", "forest"), first);
-        Assert.DoesNotContain(("terrain", "swamp"), first);
-        Assert.Contains(("terrain", "swamp"), second);
-        Assert.Empty(a.Environment.CurrentFacts);
-        Assert.Empty(a.Environment.Overrides);
-    }
-
-    [Fact]
     public void AbstractAndNonSpatialContextsUseCurrentEnvironmentWithoutOverworldOrProvider()
     {
         var abstractExpedition = AbstractExpedition(Procedure(CrawlProcedureCatalog.Dnd35PresetKey)) with

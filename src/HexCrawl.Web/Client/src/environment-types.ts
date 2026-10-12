@@ -3,7 +3,7 @@ import type { HexCoordinate, MovementCapabilityComposition, WorldCellId } from "
 export type EnvironmentValueKind = "Tag" | "Measurement";
 export type EnvironmentAnnotationScopeKind = "World" | "Hex" | "SpatialFeature" | "Cell";
 export type EnvironmentContextStatus = "Resolved" | "RequiresAdjudication" | "Unavailable";
-export type EnvironmentFactSourceKind = "World" | "Hex" | "SpatialFeature" | "ExpeditionCurrent" | "DmOverride" | "Cell";
+export type EnvironmentFactSourceKind = "World" | "SpatialFeature" | "ExpeditionCurrent" | "DmOverride" | "Cell";
 export type EnvironmentProcedureEvaluationStatus = "Resolved" | "Partial" | "RequiresAdjudication";
 
 export type EnvironmentMeasurement = {
@@ -44,7 +44,6 @@ export type WorldEnvironment = {
 export type EnvironmentFactSource = {
     kind: EnvironmentFactSourceKind;
     annotationId: string | null;
-    hex: HexCoordinate | null;
     featureId: string | null;
     featureName: string | null;
     /** Qualified source cell, never substituted with a hex coordinate. */
