@@ -206,8 +206,13 @@ export async function renderPeriodicExpeditionWorkbench(
         disclosure.open = true;
         disclosure.scrollIntoView({ block: "nearest" });
     });
+    const canReposition = (): boolean => {
+        const state = currentState();
+        return !busy && !!inspectedGeometry
+            && state.activeWatchNumber === null && state.pendingEncounter === null;
+    };
     const openRepositionDrawer = (): void => {
-        if (!inspectedGeometry || busy) return;
+        if (!canReposition() || !inspectedGeometry) return;
         const target = inspectedGeometry;
         openWorkspaceDrawer(root, "Teleport party", (body, close) => {
             body.append(textElement("p",
@@ -783,8 +788,7 @@ export async function renderPeriodicExpeditionWorkbench(
     function renderSelectedCellDetails(): void {
         const panel = required<HTMLElement>("[data-cell-details]");
         panel.replaceChildren();
-        required<HTMLButtonElement>("[data-gm-reposition]").disabled =
-            busy || !inspectedGeometry;
+        required<HTMLButtonElement>("[data-gm-reposition]").disabled = !canReposition();
         if (!inspectedGeometry || !world) return;
         const selected = inspectedGeometry;
         const row = document.createElement("div");
@@ -792,10 +796,14 @@ export async function renderPeriodicExpeditionWorkbench(
         const teleport = document.createElement("button");
         teleport.type = "button";
         teleport.textContent = "Teleport party here";
-        teleport.disabled = busy;
+        teleport.disabled = !canReposition();
         teleport.addEventListener("click", openRepositionDrawer);
         row.append(teleport);
         panel.append(row);
+        if (currentState().activeWatchNumber !== null || currentState().pendingEncounter !== null)
+            panel.append(textElement("p",
+                "Resolve the active watch or pending encounter before teleporting the party.",
+                "hc-muted"));
         const known = discoveredSubjectIds(runtime);
         const subjects = [
             ...world.locations.flatMap(location =>

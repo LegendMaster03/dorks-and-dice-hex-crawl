@@ -142,6 +142,7 @@ test("V2 cell GM tools use server-qualified position and manual discovery, never
     const api = file("api.ts");
     assert.match(view, /api\.resolveWorldCell\(current\.id/);
     assert.match(view, /api\.repositionCellExpedition\(runtime\.id/);
+    assert.match(view, /state\.activeWatchNumber === null && state\.pendingEncounter === null/);
     assert.match(view, /api\.discover\(runtime\.id, runtime\.version/);
     assert.match(view, /polygonContainsSubject\(selected\.polygon/);
     assert.match(view, /uniquelyAdjacentInterface\(geometry\.id, topology\.interfaces\)/);
