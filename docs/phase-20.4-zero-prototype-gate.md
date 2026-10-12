@@ -2,7 +2,7 @@
 
 **Owner directive (2026-10-12):** the initial hex prototype must leave no executable source trace. Hexagonal worlds and the three existing hex-oriented procedure presets must remain functional **as data-driven instances of the single generalized polygonal tiling engine**, not through hex-specific algorithms, adapters, runtime structures, rendering, start forms, snapshots, or fallback handlers. This requirement supersedes the previous Phase 20.3 readiness assessment.
 
-**Release status (2026-10-12):** BLOCKED for merge, dev/testing deployment, and WorkChat signed-in acceptance. Last fully green code baseline: `d20a71867bdd8cf98042fe771d1f256f9cf7832d` ([CI 38231135438](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38231135438), successful). Later removal head: `3e12d18c6c333f58789772ecdb12a7888ae5849b` ([CI 38232849985](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38232849985), awaiting final result). The CI renderer still skips Phase 15 visual acceptance, and the zero-V1 source audit still fails.
+**Release status (2026-10-12):** BLOCKED for merge, dev/testing deployment and WorkChat signed-in acceptance. Latest automated green source checkpoint: [fa85acec](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/commit/fa85acec28abc0e4f7e7982137862e992b608a3a) ([CI 38242104666](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38242104666), successful). Axial runtime and V1 movement policy have been deleted, but old spatial UI/controller, mixed API and snapshot contracts, hex-specific world authoring and mapless contexts remain. Rendered Phase 15 acceptance has not been performed.
 
 ## First implementation slices completed — not the release gate
 
@@ -20,6 +20,14 @@
 - The unused axial `expedition-watch-ledger.ts` and its V1-only unit tests were removed. Active V2 travel history remains in `periodic-expedition-workbench.ts`.
 - The live branch still contains `ExpeditionState`, `HexTraversalState`, legacy procedure movement and old HTTP state placeholders, an axial mapless constructor, persisted grid/world fallback, dormant V1 expedition page/controller, and hex-only map authoring. **Do not mistake incremental deletion for a passing source gate.**
 - The development database still requires an owner-authorized, verified one-time schema 10→11 migration. Old world snapshots and map registrations additionally need a data-preserving conversion before removing grid readers. No dev database or map-asset migration has been performed.
+
+### Later verified source removals (October 12)
+
+Last automated green code commit: [fa85acec](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/commit/fa85acec28abc0e4f7e7982137862e992b608a3a) ([CI 38242104666](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38242104666), successful).
+
+- V1 movement handlers and execution-version branches, axial runtime/traversal structures and hex-step resolution were deleted.
+- Remaining application and PostgreSQL state processing now operates on generalized cell or nonspatial states. Retained tests use periodic-cell fixtures.
+- The obsolete spatial map and travel panel were deleted from the old browser page. Its unused controller and surrounding old code must still be deleted to satisfy this gate.
 
 ## Mandatory removal inventory
 

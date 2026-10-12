@@ -4,7 +4,7 @@
 
 **Repository:** `LegendMaster03/dorks-and-dice-hex-crawl`  
 **Unmerged, undeployed feature branch:** `feature/tile-crawl-phase-20.2-application-persistence`  
-**Last fully green code head:** `d20a71867bdd8cf98042fe771d1f256f9cf7832d` ([CI 38231135438](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38231135438), successful). **Subsequent code head:** `3e12d18c6c333f58789772ecdb12a7888ae5849b` ([CI 38232849985](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38232849985), awaiting final result); recheck latest full CI before proceeding. Rendered Phase 15 acceptance has not run.
+**Last fully green code head:** [fa85acec](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/commit/fa85acec28abc0e4f7e7982137862e992b608a3a) ([CI 38242104666](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38242104666), successful). The full source-level architectural gate and rendered Phase 15 acceptance remain incomplete.  
 **Release gate:** `docs/phase-20.4-zero-prototype-gate.md`  
 **Authoritative plan:** `docs/tile-crawl-development-plan.md`
 
@@ -64,6 +64,17 @@ The following changes are committed on the same branch. Passing a compilation/CI
 **CI precision:** `3e12d18c` is the latest code head and [CI 38232849985](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38232849985) was still running when this checkpoint was authored. Earlier intermediate runs were cancelled or failed on issues subsequently corrected; do not describe the latest code as verified green until its own CI completes. No signed-in Phase 15 browser review was performed.
 
 **Next coupled removals:** retire `GenericProcedureRuntime` mechanic-version-1 and `ProcedureHexProgressRuntime` branches together with old domain fixtures; finish removing V1 runtime/wire state, mapless axial constructor, `OverworldDefinition.Grid` and other persisted world/asset migration dependencies, then remove the dormant expedition UI/watch controller and shape-specific authoring. Keep the migration safety boundary and the three established hex-origin procedure preset identities as data. Do not reintroduce V1 to make old tests pass.
+
+## Later October 12 code-deletion checkpoint (verified)
+
+**Automated CI:** [fa85acec](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/commit/fa85acec28abc0e4f7e7982137862e992b608a3a) ([CI 38242104666](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38242104666), successful). This is not an architectural release approval.
+
+- Removed the retired V1 hex-progress execution handler, policy, movement-version selector/gates, authoring parameters and hex-step travel primitive. The generalized runtime uses physical distances or boundary-count cell transitions.
+- Removed the axial ExpeditionState, HexTraversalState, HexDirection, retired watch input types and old persistence accessor. Replaced axial branches in journeys, effects/consequences, forced travel, movement composition and PostgreSQL expedition loading.
+- Converted meaningful application/environment/movement tests to periodic-cell fixtures and removed old axial wire assertions. Generalized cell authority is covered without restoring prototype models.
+- Removed the dormant spatial map/travel pane, adjacency navigator and current-travel panel from the superseded Phase 15 client page (151 lines). Current spatial pages route directly to the periodic-cell workbench.
+
+**Still mandatory:** Delete the rest of the dormant spatial page/controller and source-based V1 tests; remove old currentHex/knownHexes/Hex event fields from API, persistence and browser contracts; replace axial world/map authoring and legacy grid conversion; remove mapless hex-specific context and geometry constructors. Preserve existing authored content as data, not retired behavior. Do not merge, deploy, run real DB migrations or start WorkChat acceptance before the gate passes.
 
 ## Remaining mandatory work
 
