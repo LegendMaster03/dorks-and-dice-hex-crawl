@@ -10,7 +10,6 @@ import {
     readProcedureStartChoice,
     startChoiceSummary
 } from "./procedure-start-selection";
-import { resolveHexStartCell } from "./world-cell-start";
 
 export async function enhanceExpeditionSetup(
     root: HTMLElement,
@@ -27,6 +26,9 @@ export async function enhanceExpeditionSetup(
         api.getPresentationProfiles(),
         composerApi.listProcedures()
     ]);
+    const tiling = world.tiling;
+    if (!tiling || tiling.topology.motifCells.length === 0)
+        throw new Error("The world requires authoritative periodic cell geometry before an expedition can start.");
     const form = document.createElement("form");
     form.className = "hc-form";
     form.dataset.expeditionForm = "";
@@ -37,19 +39,25 @@ export async function enhanceExpeditionSetup(
         <details class="hc-optional-reference"><summary>Ruleset details</summary><ul data-procedure-mechanics></ul></details>
         <label>Map presentation <select name="presentation"></select></label>
         <p class="hc-hint" data-presentation-summary></p>
-        <div class="hc-inline"><label>Start q <input name="q" type="number" step="1" value="0"></label><label>Start r <input name="r" type="number" step="1" value="0"></label></div>
+        <div class="hc-inline">
+            <label>Starting cell type <select name="motifCellId"></select></label>
+            <label>East/west repeat <input name="u" type="number" step="1" value="0" required></label>
+            <label>North/south repeat <input name="v" type="number" step="1" value="0" required></label>
+        </div>
         <p class="hc-hint">Saved rulesets use the selected revision. A preset saves an editable campaign copy when play begins.</p>
         <button type="submit" class="hc-primary-action">Start expedition</button>`;
     previous.replaceWith(form);
 
     const procedure = select(form, "procedure");
     const geometricPresets = presets.filter(value =>
-        ["alexandrian-advanced", "simple-fixed-distance", "simple-hex-step"].includes(value.presetKey));
-    populateProcedureStartChoices(procedure, savedProcedures, world.grid ? geometricPresets : []);
-    if (world.grid && geometricPresets.length > 0)
+        ["alexandrian-advanced", "simple-fixed-distance", "simple-hex-step"].includes(value.presetKey)
+        && value.procedure.isExecutable
+        && value.procedure.tilingDsSymbol === tiling.topology.quotientDsSymbol);
+    populateProcedureStartChoices(procedure, savedProcedures, geometricPresets);
+    if (geometricPresets.length > 0)
         procedure.value = `preset:${geometricPresets[0].presetKey}`;
     let createCellRulesetButton: HTMLButtonElement | null = null;
-    if (!world.grid) {
+    if (geometricPresets.length === 0) {
         createCellRulesetButton = document.createElement("button");
         createCellRulesetButton.type = "button";
         createCellRulesetButton.textContent = "Create a compatible cell-travel ruleset";
@@ -59,44 +67,24 @@ export async function enhanceExpeditionSetup(
         required<HTMLElement>(form, "[data-procedure-summary]").after(createCellRulesetButton);
     }
 
-    if (!world.grid) {
-        const start = form.querySelector<HTMLElement>(".hc-inline");
-        const cells = world.tiling?.topology.motifCells ?? [];
-        if (!start || cells.length === 0) throw new Error("The accepted world has no selectable cells.");
-        start.innerHTML = `
-            <label>Starting cell type <select name="motifCellId"></select></label>
-            <label>East/west repeat <input name="u" type="number" step="1" value="0" required></label>
-            <label>North/south repeat <input name="v" type="number" step="1" value="0" required></label>`;
-        const selectCell = select(start, "motifCellId");
-        cells.forEach((cell, index) => selectCell.append(option(cell.id, `Cell shape ${index + 1}`)));
-        const selectionHint = document.createElement("p");
-        selectionHint.className = "hc-hint";
-        selectionHint.textContent =
-            "Click a cell on the map to choose the expedition start, or enter the repeating cell position directly.";
-        start.after(selectionHint);
-        const info = form.querySelector<HTMLElement>(".hc-hint:last-of-type");
-        if (info) info.textContent =
-            "Generalized expeditions require a saved, executable ruleset revision compatible with this world. Starting cells are identified by their repeating position, not axial hex coordinates.";
-    }
+    const selectCell = select(form, "motifCellId");
+    tiling.topology.motifCells.forEach((cell, index) =>
+        selectCell.append(option(cell.id, `Cell shape ${index + 1}`)));
+    const selectionHint = document.createElement("p");
+    selectionHint.className = "hc-hint";
+    selectionHint.textContent =
+        "Click a cell on the map to choose the expedition start, or enter its repeating cell position directly.";
+    form.querySelector<HTMLElement>(".hc-inline")?.after(selectionHint);
     const acceptMapCell = (event: Event): void => {
-        if (world.grid || !world.tiling) return;
         const cell = (event as CustomEvent<WorldCellId>).detail;
-        if (!cell || cell.tilingId !== world.tiling.id) return;
+        if (!cell || cell.tilingId !== tiling.id) return;
         const selectCell = select(form, "motifCellId");
         if (![...selectCell.options].some(item => item.value === cell.address.motifCellId)) return;
         selectCell.value = cell.address.motifCellId;
         input(form, "u").value = String(cell.address.translation.u);
         input(form, "v").value = String(cell.address.translation.v);
     };
-    if (!world.grid) root.addEventListener("hex-crawl:world-cell-selected", acceptMapCell);
-    const acceptMapHex = (event: Event): void => {
-        if (!world.grid) return;
-        const selected = (event as CustomEvent<{ q: number; r: number }>).detail;
-        if (!selected || !Number.isSafeInteger(selected.q) || !Number.isSafeInteger(selected.r)) return;
-        input(form, "q").value = String(selected.q);
-        input(form, "r").value = String(selected.r);
-    };
-    if (world.grid) root.addEventListener("hex-crawl:world-hex-selected", acceptMapHex);
+    root.addEventListener("hex-crawl:world-cell-selected", acceptMapCell);
     const presentation = select(form, "presentation");
     for (const policy of presentations) presentation.append(option(policy.key, policy.name));
     if (presentations.some(policy => policy.key === "exploration-map")) presentation.value = "exploration-map";
@@ -125,7 +113,7 @@ export async function enhanceExpeditionSetup(
         }
     };
     const renderPresentationSummary = (policy: PresentationProfile): void => {
-        const automation = policy.automationMode === "DmControlled" ? "DM controls every reveal" : policy.markEnteredHexKnown ? "explored hexes become known" : "no travel-based reveal";
+        const automation = policy.automationMode === "DmControlled" ? "DM controls every reveal" : policy.markEnteredHexKnown ? "entered cells become known" : "no travel-based reveal";
         required<HTMLElement>(form, "[data-presentation-summary]").textContent =
             `${policy.playerGrid.toLowerCase()} player grid · terrain ${policy.terrainMode.replace(/([A-Z])/g, " $1").trim().toLowerCase()} · ${automation}`;
     };
@@ -157,7 +145,7 @@ export async function enhanceExpeditionSetup(
         }
         const selected = readProcedureStartChoice(value);
         if (selected.kind === "preset") {
-            if (world.grid && geometricPresets.some(item => item.presetKey === selected.presetKey)) {
+            if (geometricPresets.some(item => item.presetKey === selected.presetKey)) {
                 readySavedSelection = value;
                 compatibilityStatus.textContent =
                     "This preset creates a native geometric ruleset. Movement uses authoritative world cells.";
@@ -231,19 +219,13 @@ export async function enhanceExpeditionSetup(
         void (async () => {
             try {
                 const choice = readProcedureStartChoice(procedure.value);
-                const startCell = world.grid
-                    ? await resolveHexStartCell(api, world, {
-                        q: integer(numberInput(form, "q")), r: integer(numberInput(form, "r"))
-                    })
-                    : {
-                        motifCellId: select(form, "motifCellId").value,
-                        translation: {
-                            u: integer(numberInput(form, "u")),
-                            v: integer(numberInput(form, "v"))
-                        }
-                    };
-                if (!world.grid && choice.kind !== "saved")
-                    throw new Error("Choose a compatible saved ruleset for this generalized world.");
+                const startCell = {
+                    motifCellId: select(form, "motifCellId").value,
+                    translation: {
+                        u: integer(numberInput(form, "u")),
+                        v: integer(numberInput(form, "v"))
+                    }
+                };
                 const expedition = await api.startCellExpedition(worldId, applyCellProcedureChoice({
                     name: input(form, "name").value.trim(),
                     presentationKey: presentation.value,
@@ -263,7 +245,6 @@ export async function enhanceExpeditionSetup(
     return () => {
         compatibilityGeneration++;
         root.removeEventListener("hex-crawl:world-cell-selected", acceptMapCell);
-        root.removeEventListener("hex-crawl:world-hex-selected", acceptMapHex);
         form.remove();
     };
 }

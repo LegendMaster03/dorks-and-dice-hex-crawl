@@ -154,7 +154,7 @@ export type Overworld = {
     updatedAt: string;
     grid: GridDefinition | null;
     /** Authoritative world topology/metric witness remains on the server. */
-    tiling: { id: string; revision: number; origin: WorldPoint; topology: { motifCells: { id: string }[] } } | null;
+    tiling: { id: string; revision: number; origin: WorldPoint; topology: { motifCells: { id: string }[]; quotientDsSymbol: string } } | null;
     features: SpatialFeature[];
     locations: Location[];
     sourceMaps: SourceMapRepresentation[];

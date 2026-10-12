@@ -198,13 +198,7 @@ export async function renderWorldEditor(
 
                     </details>
                     <details><summary>Expeditions using this world</summary><div data-expedition-list></div>
-                        <form class="hc-form" data-expedition-form>
-                            <label>Name <input name="name" required value="Expedition"></label>
-                            <label>Exploration ruleset <select name="procedure"></select></label>
-                            <div class="hc-inline"><label>Start hex q <input name="q" type="number" step="1" value="0"></label><label>Start hex r <input name="r" type="number" step="1" value="0"></label></div>
-                            <p class="hc-hint">Hex coordinates are a starting-point convenience; the expedition stores an authoritative world cell.</p>
-                            <button type="submit" class="hc-primary-action">Start expedition</button>
-                        </form>
+                        <form class="hc-form" data-expedition-form></form>
                     </details>
                     <details><summary>Source-map metadata</summary><p data-source-maps></p></details>
                 </aside>
