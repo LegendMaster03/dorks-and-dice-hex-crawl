@@ -46,6 +46,8 @@ export async function enhanceExpeditionSetup(
     const geometricPresets = presets.filter(value =>
         ["alexandrian-advanced", "simple-fixed-distance", "simple-hex-step"].includes(value.presetKey));
     populateProcedureStartChoices(procedure, savedProcedures, world.grid ? geometricPresets : []);
+    if (world.grid && geometricPresets.length > 0)
+        procedure.value = `preset:${geometricPresets[0].presetKey}`;
     let createCellRulesetButton: HTMLButtonElement | null = null;
     if (!world.grid) {
         createCellRulesetButton = document.createElement("button");
@@ -128,18 +130,15 @@ export async function enhanceExpeditionSetup(
 
     const error = root.querySelector<HTMLElement>("[data-error]");
     const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
-    let readySavedSelection: string | null = world.grid ? procedure.value : null;
+    let readySavedSelection: string | null = null;
     let compatibilityGeneration = 0;
     const compatibilityStatus = document.createElement("p");
     compatibilityStatus.className = "hc-hint";
     compatibilityStatus.setAttribute("role", "status");
-    if (!world.grid) {
-        required<HTMLElement>(form, "[data-procedure-summary]").after(compatibilityStatus);
-    }
+    required<HTMLElement>(form, "[data-procedure-summary]").after(compatibilityStatus);
     const canStart = (): boolean => !!procedure.value
-        && (!!world.grid || procedure.value === readySavedSelection);
+        && procedure.value === readySavedSelection;
     const checkCompatibility = async (): Promise<void> => {
-        if (world.grid) return;
         const generation = ++compatibilityGeneration;
         const value = procedure.value;
         readySavedSelection = null;
@@ -149,9 +148,16 @@ export async function enhanceExpeditionSetup(
             return;
         }
         const selected = readProcedureStartChoice(value);
-        if (selected.kind !== "saved") {
-            compatibilityStatus.textContent =
-                "Generalized worlds require a pinned saved ruleset. Create a compatible cell-travel ruleset.";
+        if (selected.kind === "preset") {
+            if (world.grid && geometricPresets.some(item => item.presetKey === selected.presetKey)) {
+                readySavedSelection = value;
+                compatibilityStatus.textContent =
+                    "This preset creates a native geometric ruleset. Movement uses authoritative world cells.";
+            } else {
+                compatibilityStatus.textContent =
+                    "Choose a compatible saved cell-travel ruleset for this world.";
+            }
+            submit.disabled = !canStart();
             return;
         }
         compatibilityStatus.textContent = "Checking ruleset compatibility…";
@@ -171,10 +177,8 @@ export async function enhanceExpeditionSetup(
                 submit.disabled = !canStart();
         }
     };
-    if (!world.grid) {
-        procedure.addEventListener("change", () => void checkCompatibility());
-        void checkCompatibility();
-    }
+    procedure.addEventListener("change", () => void checkCompatibility());
+    await checkCompatibility();
     submit.disabled = !canStart();
     createCellRulesetButton?.addEventListener("click", () => {
         if (!createCellRulesetButton || createCellRulesetButton.disabled) return;

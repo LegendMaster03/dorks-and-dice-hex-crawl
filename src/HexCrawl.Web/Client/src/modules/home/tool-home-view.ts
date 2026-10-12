@@ -276,6 +276,7 @@ export async function renderToolHome(
         const generation = ++worldSelectionGeneration;
         selectedWorld = null;
         syncContext();
+        refreshAvailableProcedures();
         if (!context.value || context.value === ABSTRACT_CONTEXT
             || context.value === NON_SPATIAL_CONTEXT) return;
         try {
@@ -288,6 +289,7 @@ export async function renderToolHome(
             loaded.tiling.topology.motifCells.forEach((cell, index) =>
                 motif.append(option(cell.id, `Cell shape ${index + 1}`)));
             syncContext();
+            refreshAvailableProcedures();
         } catch (failure) {
             if (!disposed && generation === worldSelectionGeneration)
                 showUiError(error, failure);
@@ -327,6 +329,21 @@ export async function renderToolHome(
         }
     };
 
+    const refreshAvailableProcedures = (): void => {
+        const previous = procedure.value;
+        const geometric = presets.filter(value =>
+            ["alexandrian-advanced", "simple-fixed-distance", "simple-hex-step"].includes(value.presetKey));
+        const available = context.value === NON_SPATIAL_CONTEXT
+            ? presets
+            : selectedWorld && !selectedWorld.grid ? [] : geometric;
+        populateProcedureStartChoices(procedure, savedProcedures, available);
+        if ([...procedure.options].some(option => option.value === previous))
+            procedure.value = previous;
+        void syncProcedure().catch(failure => {
+            if (!disposed) showUiError(error, failure);
+        });
+    };
+
     try {
         const [expeditions, worlds, procedurePresets, procedures] = await Promise.all([
             api.listExpeditions(),
@@ -338,8 +355,7 @@ export async function renderToolHome(
 
         presets = procedurePresets;
         savedProcedures = procedures;
-        populateProcedureStartChoices(procedure, savedProcedures, presets.filter(value =>
-            ["alexandrian-advanced", "simple-fixed-distance", "simple-hex-step"].includes(value.presetKey)));
+        refreshAvailableProcedures();
         context.append(option("", "Choose map or travel setup"));
         for (const world of worlds) context.append(option(world.id, `Use map: ${world.name}`));
         context.append(
@@ -416,6 +432,12 @@ export async function renderToolHome(
                         };
                     if (!world.grid && choice.kind === "preset")
                         throw new Error("Generalized worlds require a compatible saved cell-travel ruleset.");
+                    if (choice.kind === "saved") {
+                        const compatibility = await api.assessCellProcedure(
+                            world.id, choice.procedureId, choice.revision);
+                        if (compatibility.status !== "ready")
+                            throw new Error(compatibility.explanation);
+                    }
                     expedition = await api.startCellExpedition(world.id, applyCellProcedureChoice({
                         name, presentationKey: "dm-controlled", startCell
                     }, choice));

@@ -309,7 +309,8 @@ export async function renderPeriodicExpeditionWorkbench(
             const resolution = runtime.procedure.runtime?.travelResolution;
             if (!resolution) throw new Error("This expedition has no executable movement rules.");
             const unit = runtime.movementComposition.suggestedExpectedDistance?.unit
-                ?? runtime.movementComposition.effectiveDistanceUnit;
+                ?? runtime.movementComposition.effectiveDistanceUnit
+                ?? runtime.context.hexCenterDistance?.unit;
             const travel: CellWatchRequest["inputs"]["travel"] = {
                 provenance: { source: "DmOverride", note: "DM-confirmed travel resolution" }
             };
@@ -438,7 +439,8 @@ export async function renderPeriodicExpeditionWorkbench(
         required<HTMLElement>("[data-cell-step-field]").hidden = !isSteps;
         required<HTMLElement>("[data-distance-fields]").hidden = isSteps;
         const units = runtime.movementComposition.suggestedExpectedDistance?.unit
-            ?? runtime.movementComposition.effectiveDistanceUnit;
+            ?? runtime.movementComposition.effectiveDistanceUnit
+            ?? runtime.context.hexCenterDistance?.unit;
         text("[data-distance-unit]", isSteps ? "Cell transitions are resolved by the server."
             : units ? `Distance is entered in ${units.symbol}; the server resolves actual movement.`
                 : "This procedure requires a calibrated distance unit before travel can be resolved.");
