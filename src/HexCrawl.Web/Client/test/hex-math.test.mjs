@@ -12,9 +12,6 @@ const grid = orientation => ({
     neighborCenterDistance: { value: 12, unit: { kind: "Mile", symbol: "mi", metersPerUnit: 1609.344 } }
 });
 
-test("axial distance is deterministic", () => {
-});
-
 for (const orientation of ["PointyTop", "FlatTop"]) {
     test(`${orientation} projection round-trips stable coordinates`, () => {
         for (const hex of [{ q: 0, r: 0 }, { q: 4, r: -3 }, { q: -5, r: 2 }, { q: 7, r: 6 }]) {
