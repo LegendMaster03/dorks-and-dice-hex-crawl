@@ -1,6 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using HexCrawl.Application;
+using HexCrawl.Domain.Runtime;
+using HexCrawl.Domain.Spatial;
+using HexCrawl.Web.Api;
 
 namespace HexCrawl.IntegrationTests;
 
@@ -106,97 +111,65 @@ public sealed class RuntimeEndpointsTests
     }
 
     [Fact]
-    public async Task CourseIntentEndpointIsDurableOwnerScopedAndOptimisticallyConcurrent()
+    public async Task CellAdvanceIsOwnerScopedVersionedAndDoesNotFabricateAxialState()
     {
         var database = TestWebHost.NewDatabasePath();
         try
         {
             Guid expeditionId;
-            long versionA;
+            long initialVersion;
+            long advancedVersion;
             using (var ownerFactory = TestWebHost.Create(database, "alice"))
-            using (var ownerClient = ownerFactory.CreateClient())
+            using (var owner = ownerFactory.CreateClient())
             {
-                var world = await CreateWorld(ownerClient, "Course authority");
-                var worldId = world.GetProperty("id").GetGuid();
-                using var startResponse = await ownerClient.PostAsJsonAsync(
-                    $"/api/overworlds/{worldId:D}/expeditions",
-                    new
-                    {
-                        name = "Course authority",
-                        procedureKey = "alexandrian-advanced",
-                        startHex = new { q = 1, r = -1 }
-                    });
-                startResponse.EnsureSuccessStatusCode();
-                var started = await startResponse.Content.ReadFromJsonAsync<JsonElement>();
+                var world = await CreateWorld(owner, "Cell travel authority");
+                var id = world.GetProperty("id").GetGuid();
+                var started = await StartCellAsync(owner, id, "Cell travel authority", 1, -1);
                 expeditionId = started.GetProperty("id").GetGuid();
-                var initialVersion = started.GetProperty("version").GetInt64();
-                var before = started.GetProperty("expedition");
+                initialVersion = started.GetProperty("version").GetInt64();
 
-                using var setAResponse = await ownerClient.PutAsJsonAsync(
-                    $"/api/expeditions/{expeditionId:D}/course-intent",
-                    new { expectedVersion = initialVersion, intendedDirection = 0 });
-                setAResponse.EnsureSuccessStatusCode();
-                var withA = await setAResponse.Content.ReadFromJsonAsync<JsonElement>();
-                versionA = withA.GetProperty("version").GetInt64();
+                var request = await AdvanceRequestAsync(owner, expeditionId, initialVersion);
+                using var first = await owner.PostAsJsonAsync(
+                    $"/api/expeditions/{expeditionId:D}/cells/advance", request, CellJson);
+                first.EnsureSuccessStatusCode();
+                var advanced = await first.Content.ReadFromJsonAsync<JsonElement>();
+                advancedVersion = advanced.GetProperty("version").GetInt64();
+                Assert.True(advancedVersion > initialVersion);
+                Assert.Equal(JsonValueKind.Null, advanced.GetProperty("expedition").GetProperty("currentHex").ValueKind);
+                Assert.Equal(1, advanced.GetProperty("expedition").GetProperty("completedWatches").GetInt32());
+                Assert.Equal(0.25, advanced.GetProperty("expedition")
+                    .GetProperty("distanceTraveled").GetProperty("value").GetDouble(), 6);
 
-                using var setBResponse = await ownerClient.PutAsJsonAsync(
-                    $"/api/expeditions/{expeditionId:D}/course-intent",
-                    new { expectedVersion = versionA, intendedDirection = 2 });
-                setBResponse.EnsureSuccessStatusCode();
-                var withB = await setBResponse.Content.ReadFromJsonAsync<JsonElement>();
-                var after = withB.GetProperty("expedition");
-                var versionB = withB.GetProperty("version").GetInt64();
-
-                Assert.Equal(2, after.GetProperty("intendedDirection").GetInt32());
-                Assert.Equal(before.GetProperty("currentHex").GetRawText(), after.GetProperty("currentHex").GetRawText());
-                Assert.Equal(before.GetProperty("hexProgress").GetRawText(), after.GetProperty("hexProgress").GetRawText());
-                Assert.Equal(before.GetProperty("distanceTraveled").GetRawText(), after.GetProperty("distanceTraveled").GetRawText());
-                Assert.Equal(before.GetProperty("elapsedTravelHours").GetDouble(), after.GetProperty("elapsedTravelHours").GetDouble());
-                Assert.Equal(before.GetProperty("completedWatches").GetInt32(), after.GetProperty("completedWatches").GetInt32());
-                Assert.Equal(started.GetProperty("history").GetArrayLength(), withB.GetProperty("history").GetArrayLength());
-
-                var reloaded = await ownerClient.GetFromJsonAsync<JsonElement>($"/api/expeditions/{expeditionId:D}");
-                Assert.Equal(2, reloaded.GetProperty("expedition").GetProperty("intendedDirection").GetInt32());
-
-                using var invalidDirection = await ownerClient.PutAsJsonAsync(
-                    $"/api/expeditions/{expeditionId:D}/course-intent",
-                    new { expectedVersion = versionB, intendedDirection = 99 });
-                Assert.Equal(HttpStatusCode.BadRequest, invalidDirection.StatusCode);
-
-                using var nonSpatialStart = await ownerClient.PostAsJsonAsync(
-                    "/api/expeditions",
-                    new
-                    {
-                        name = "Nonspatial course rejection",
-                        procedureKey = "the-one-ring-2e",
-                        context = new { kind = "NonSpatial", name = "Journey state" }
-                    });
-                nonSpatialStart.EnsureSuccessStatusCode();
-                var nonSpatial = await nonSpatialStart.Content.ReadFromJsonAsync<JsonElement>();
-                using var nonSpatialCourse = await ownerClient.PutAsJsonAsync(
-                    $"/api/expeditions/{nonSpatial.GetProperty("id").GetGuid():D}/course-intent",
-                    new
-                    {
-                        expectedVersion = nonSpatial.GetProperty("version").GetInt64(),
-                        intendedDirection = 2
-                    });
-                Assert.Equal(HttpStatusCode.BadRequest, nonSpatialCourse.StatusCode);
-
-                using var stale = await ownerClient.PutAsJsonAsync(
-                    $"/api/expeditions/{expeditionId:D}/course-intent",
-                    new { expectedVersion = versionA, intendedDirection = 4 });
+                using var stale = await owner.PostAsJsonAsync(
+                    $"/api/expeditions/{expeditionId:D}/cells/advance", request, CellJson);
                 Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
 
-                var afterStale = await ownerClient.GetFromJsonAsync<JsonElement>($"/api/expeditions/{expeditionId:D}");
-                Assert.Equal(2, afterStale.GetProperty("expedition").GetProperty("intendedDirection").GetInt32());
+                var unchanged = await owner.GetFromJsonAsync<JsonElement>(
+                    $"/api/expeditions/{expeditionId:D}");
+                Assert.Equal(advancedVersion, unchanged.GetProperty("version").GetInt64());
+                Assert.Equal(1, unchanged.GetProperty("expedition").GetProperty("completedWatches").GetInt32());
             }
 
-            using var otherFactory = TestWebHost.Create(database, "bob");
-            using var otherClient = otherFactory.CreateClient();
-            using var foreign = await otherClient.PutAsJsonAsync(
-                $"/api/expeditions/{expeditionId:D}/course-intent",
-                new { expectedVersion = versionA + 1, intendedDirection = 3 });
-            Assert.Equal(HttpStatusCode.NotFound, foreign.StatusCode);
+            using (var otherFactory = TestWebHost.Create(database, "bob"))
+            using (var other = otherFactory.CreateClient())
+            {
+                var foreignRequest = new AdvanceCellWatchRequest(
+                    advancedVersion,
+                    new CellWatchTravelPlan(new WorldPoint(1, 0), false, false,
+                        TravelModeSelection.Normal, NavigationAidSelection.None),
+                    Inputs(0.25));
+                using var foreign = await other.PostAsJsonAsync(
+                    $"/api/expeditions/{expeditionId:D}/cells/advance",
+                    foreignRequest, CellJson);
+                Assert.Equal(HttpStatusCode.NotFound, foreign.StatusCode);
+            }
+
+            using var restartedFactory = TestWebHost.Create(database, "alice");
+            using var reopened = restartedFactory.CreateClient();
+            var persisted = await reopened.GetFromJsonAsync<JsonElement>(
+                $"/api/expeditions/{expeditionId:D}");
+            Assert.Equal(advancedVersion, persisted.GetProperty("version").GetInt64());
+            Assert.Equal(JsonValueKind.Null, persisted.GetProperty("expedition").GetProperty("currentHex").ValueKind);
         }
         finally
         {
@@ -247,77 +220,107 @@ public sealed class RuntimeEndpointsTests
     }
 
     [Fact]
-    public async Task ExpeditionStateSurvivesApplicationRestartAndContinues()
+    public async Task CellExpeditionPersistsAcrossApplicationRestartAndContinues()
     {
         var database = TestWebHost.NewDatabasePath();
         try
         {
             Guid expeditionId;
             long savedVersion;
-            using (var firstFactory = TestWebHost.Create(database))
-            using (var firstClient = firstFactory.CreateClient())
+            using (var factory = TestWebHost.Create(database, "alice"))
+            using (var client = factory.CreateClient())
             {
-                var world = await CreateWorld(firstClient, "Runtime");
-                var worldId = world.GetProperty("id").GetGuid();
-                using var startResponse = await firstClient.PostAsJsonAsync($"/api/overworlds/{worldId:D}/expeditions", new
-                {
-                    name = "Persistent expedition",
-                    procedureKey = "simple-fixed-distance",
-                    startHex = new { q = 0, r = 0 }
-                });
-                startResponse.EnsureSuccessStatusCode();
-                var started = await startResponse.Content.ReadFromJsonAsync<JsonElement>();
+                var world = await CreateWorld(client, "Cell runtime restart");
+                var started = await StartCellAsync(
+                    client, world.GetProperty("id").GetGuid(), "Persistent cell expedition", 0, 0);
                 expeditionId = started.GetProperty("id").GetGuid();
-                var version = started.GetProperty("version").GetInt64();
-
-                using var advanceResponse = await firstClient.PostAsJsonAsync($"/api/expeditions/{expeditionId:D}/advance", new
-                {
-                    expectedVersion = version,
-                    intendedDirection = 0,
-                    paceKey = "normal",
-                    activities = Array.Empty<string>(),
-                    navigationAidKey = "none",
-                    expectedDistance = 12,
-                    actualDistance = 12,
-                    resolutionSource = "ManualRoll",
-                    deliberateDoubleBack = false,
-                    continueAcrossBoundaries = false
-                });
-                advanceResponse.EnsureSuccessStatusCode();
-                var advanced = await advanceResponse.Content.ReadFromJsonAsync<JsonElement>();
-                savedVersion = advanced.GetProperty("version").GetInt64();
-                Assert.Equal("ConditionsReviewRequired", advanced.GetProperty("pauseReason").GetString());
-                Assert.Equal(2, advanced.GetProperty("remainingWatchHours").GetDouble());
+                var initialVersion = started.GetProperty("version").GetInt64();
+                var input = await AdvanceRequestAsync(client, expeditionId, initialVersion);
+                using var response = await client.PostAsJsonAsync(
+                    $"/api/expeditions/{expeditionId:D}/cells/advance", input, CellJson);
+                response.EnsureSuccessStatusCode();
+                var completed = await response.Content.ReadFromJsonAsync<JsonElement>();
+                savedVersion = completed.GetProperty("version").GetInt64();
+                Assert.Equal(1, completed.GetProperty("expedition").GetProperty("completedWatches").GetInt32());
+                Assert.Equal(0.25, completed.GetProperty("expedition")
+                    .GetProperty("distanceTraveled").GetProperty("value").GetDouble(), 6);
             }
 
-            using var restartedFactory = TestWebHost.Create(database);
-            using var restartedClient = restartedFactory.CreateClient();
-            var loaded = await restartedClient.GetFromJsonAsync<JsonElement>($"/api/expeditions/{expeditionId:D}");
-            Assert.Equal(savedVersion, loaded.GetProperty("version").GetInt64());
-            Assert.Equal(6, loaded.GetProperty("expedition").GetProperty("distanceTraveled").GetProperty("value").GetDouble());
-            Assert.True(loaded.GetProperty("history").GetArrayLength() > 0);
+            using var restartedFactory = TestWebHost.Create(database, "alice");
+            using var restarted = restartedFactory.CreateClient();
+            var before = await restarted.GetFromJsonAsync<JsonElement>(
+                $"/api/expeditions/{expeditionId:D}");
+            Assert.Equal(savedVersion, before.GetProperty("version").GetInt64());
+            Assert.Equal(1, before.GetProperty("expedition").GetProperty("completedWatches").GetInt32());
 
-            using var continueResponse = await restartedClient.PostAsJsonAsync($"/api/expeditions/{expeditionId:D}/advance", new
-            {
-                expectedVersion = savedVersion,
-                intendedDirection = 0,
-                paceKey = "normal",
-                activities = Array.Empty<string>(),
-                navigationAidKey = "none",
-                expectedDistance = 6,
-                actualDistance = 6,
-                resolutionSource = "ManualRoll",
-                deliberateDoubleBack = false,
-                continueAcrossBoundaries = true
-            });
-            continueResponse.EnsureSuccessStatusCode();
-            var continued = await continueResponse.Content.ReadFromJsonAsync<JsonElement>();
+            var next = await AdvanceRequestAsync(restarted, expeditionId, savedVersion);
+            using var continuedResponse = await restarted.PostAsJsonAsync(
+                $"/api/expeditions/{expeditionId:D}/cells/advance", next, CellJson);
+            continuedResponse.EnsureSuccessStatusCode();
+            var continued = await continuedResponse.Content.ReadFromJsonAsync<JsonElement>();
             Assert.True(continued.GetProperty("version").GetInt64() > savedVersion);
+            Assert.Equal(2, continued.GetProperty("expedition").GetProperty("completedWatches").GetInt32());
+            Assert.Equal(0.5, continued.GetProperty("expedition")
+                .GetProperty("distanceTraveled").GetProperty("value").GetDouble(), 6);
+            Assert.NotEmpty(continued.GetProperty("history").EnumerateArray());
         }
         finally
         {
             TestWebHost.DeleteDatabase(database);
         }
+    }
+
+    private static readonly JsonSerializerOptions CellJson = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter(allowIntegerValues: false) }
+    };
+
+    private static CellWatchAdvanceInputs Inputs(double miles)
+    {
+        var source = new ResolutionProvenance(ResolutionSource.ManualRoll);
+        return new CellWatchAdvanceInputs(
+            ResolvedTravelAmount.Distance(
+                new DistanceMeasure(miles, DistanceUnit.Miles),
+                new DistanceMeasure(miles, DistanceUnit.Miles), source),
+            new ResolvedCellNavigation(NavigationCheckOutcome.Succeeded, null, source),
+            ResolvedEncounter.None);
+    }
+
+    private static async Task<AdvanceCellWatchRequest> AdvanceRequestAsync(
+        HttpClient client, Guid expeditionId, long version)
+    {
+        var topology = await client.GetFromJsonAsync<JsonElement>(
+            $"/api/expeditions/{expeditionId:D}/cell-topology");
+        var center = topology.GetProperty("center");
+        var boundary = topology.GetProperty("interfaces")[0];
+        var midpointX = (boundary.GetProperty("start").GetProperty("x").GetDouble()
+                         + boundary.GetProperty("end").GetProperty("x").GetDouble()) / 2;
+        var midpointY = (boundary.GetProperty("start").GetProperty("y").GetDouble()
+                         + boundary.GetProperty("end").GetProperty("y").GetDouble()) / 2;
+        var heading = new WorldPoint(
+            midpointX - center.GetProperty("x").GetDouble(),
+            midpointY - center.GetProperty("y").GetDouble());
+        return new AdvanceCellWatchRequest(
+            version,
+            new CellWatchTravelPlan(heading, false, false,
+                TravelModeSelection.Normal, NavigationAidSelection.None),
+            Inputs(0.25));
+    }
+
+    private static async Task<JsonElement> StartCellAsync(
+        HttpClient client, Guid worldId, string name, long u, long v)
+    {
+        using var response = await client.PostAsJsonAsync(
+            $"/api/overworlds/{worldId:D}/cell-expeditions",
+            new
+            {
+                name,
+                presetKey = "simple-fixed-distance",
+                presentationKey = "dm-controlled",
+                startCell = new { motifCellId = "hex", translation = new { u, v } }
+            });
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<JsonElement>();
     }
 
     private static async Task<JsonElement> CreateWorld(HttpClient client, string name)
