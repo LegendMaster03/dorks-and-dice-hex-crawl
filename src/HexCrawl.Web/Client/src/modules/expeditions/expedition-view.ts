@@ -9,7 +9,7 @@ import { formatHours } from "../../runtime-view";
 import { SurvivalResourcesApi } from "../../survival-api";
 import type { SurvivalResources } from "../../survival-types";
 import { canonicalExpeditionRoute } from "../../tool-route";
-import type { ExpeditionDetail, ToolHostContext } from "../../types";
+import type { ExpeditionDetail, Overworld, ToolHostContext } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
 import { badge, disclosure, openWorkspaceDrawer, statAction, textElement, type WorkspaceDrawer } from "../../ui/workspace";
 import { applyGuidedExperience, guidancePreferenceButton } from "../../ui/guidance";
