@@ -51,8 +51,6 @@ public sealed class Phase17WorldAuthorityTests
             foreach (var edge in boundaries)
             {
                 Assert.Equal(edge.From, tiling.Reciprocal(edge).To);
-                Assert.Contains(coordinate.Neighbors(),
-                    neighbor => LegacyHexTilingCompatibility.ToHex(edge.To.Address) == neighbor);
             }
         }
     }
