@@ -1180,14 +1180,17 @@ test("readability presentation uses structured procedure groups without hiding e
     assert.match(reference, /procedurePresentationSections/);
 });
 
-test("active play exposes authoritative cell and journey progress visually", () => {
+test("active play exposes generalized cell navigation and journey progress visually", () => {
     const view = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
         "utf8");
+    const cells = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/periodic-expedition-workbench.ts"),
+        "utf8");
 
-    assert.match(view, /cellProgressIndicator\(runtime\)/);
-    assert.match(view, /data\.cellProgress|dataset\.cellProgress/);
-    assert.match(view, /Progress through the current cell/);
+    assert.match(cells, /topology\.currentCell\.address/);
+    assert.match(cells, /data-cell-navigator/);
+    assert.doesNotMatch(view, /cellProgressIndicator/);
     assert.match(view, /journeyStageSequence\(activeJourney\)/);
     assert.match(view, /hc-stage-sequence/);
     assert.match(view, /process\.execution\.progressFloor/);
