@@ -183,7 +183,6 @@ public sealed partial class PostgresHexCrawlStore
         var events = await ReadEventsAsync(connection, expeditionId, cancellationToken);
         runtime = runtime switch
         {
-            ExpeditionState spatial => spatial with { History = events },
             CellExpeditionState cellSpatial => cellSpatial with { History = events },
             NonSpatialSessionState nonSpatial => nonSpatial with { History = events },
             _ => throw new InvalidDataException("Persisted crawl session runtime kind is not supported.")
