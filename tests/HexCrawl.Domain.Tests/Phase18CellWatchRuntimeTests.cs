@@ -181,7 +181,7 @@ public sealed class Phase18CellWatchRuntimeTests
     public void DeliberateReverseAtTerminalBoundaryCompletesWithoutStrandedPause()
     {
         var (world, procedure, initial, plan) = Setup(
-            "<1:1,1,1:4,4>", calibrated: true);
+            "<1:1,1,1:4,4>", calibrated: true, allowDoubleBack: true);
         var engine = new CrawlRuntimeEngine();
         var paused = engine.AdvanceCellWatch(world, procedure, initial, plan, Inputs(2));
         Assert.Equal(RuntimePauseReason.ConditionsReviewRequired, paused.PauseReason);
@@ -621,7 +621,7 @@ public sealed class Phase18CellWatchRuntimeTests
 
     private static (PeriodicWorldTiling World, CampaignProcedure Procedure, CellExpeditionState State,
         CellWatchTravelPlan Plan) Setup(string symbol, bool calibrated, bool advanced = false,
-        TravelResolutionMode mode = TravelResolutionMode.CellSteps)
+        TravelResolutionMode mode = TravelResolutionMode.CellSteps, bool allowDoubleBack = false)
     {
         var generated = DelaneyDressHarmonicMetricRealization.Construct(symbol, 1.5, "world-unit");
         Assert.Equal("realized", generated.Status);
@@ -635,12 +635,21 @@ public sealed class Phase18CellWatchRuntimeTests
         var modules = original.Modules
             .Select(m =>
             {
+                if (m.Mechanic.ExecutionHandler == GenericProcedureExecutionHandlers.SpatialTurnCostPolicy)
+                {
+                    var turn = m.Parameters.ToDictionary(x => x.Key, x => x.Value);
+                    if (mode == TravelResolutionMode.CellSteps)
+                        turn["neighborCenterDistanceFactor"] = "0";
+                    if (allowDoubleBack)
+                        turn["supportsDeliberateDoubleBack"] = "true";
+                    return m with { Parameters = turn };
+                }
                 if (m.Mechanic.ExecutionHandler != GenericProcedureExecutionHandlers.MovementResolutionPolicy)
                     return m;
                 var parameters = m.Parameters.ToDictionary(x => x.Key, x => x.Value);
                 parameters["travelResolution"] = mode.ToString();
                 parameters["actualDistanceResolution"] = ActualDistanceResolutionMode.Fixed.ToString();
-                return m with { Mechanic = m.Mechanic with { Version = 2 }, Parameters = parameters };
+                return m with { Parameters = parameters };
             }).ToArray();
         var procedure = original with
         {
