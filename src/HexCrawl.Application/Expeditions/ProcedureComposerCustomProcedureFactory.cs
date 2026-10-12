@@ -31,7 +31,7 @@ internal static class ProcedureComposerCustomProcedureFactory
             ("durationTicks", TimeSpan.FromHours(4).Ticks.ToString(CultureInfo.InvariantCulture))),
         GenericProcedureCatalog.MovementResolutionModule => Select(
             GenericProcedureCatalog.MovementResolutionModule,
-            GenericProcedureCatalog.MovementResolutionPolicyMechanic, 2,
+            GenericProcedureCatalog.MovementResolutionPolicyMechanic,
             ("travelResolution", TravelResolutionMode.ContinuousDistance.ToString()),
             ("actualDistanceResolution", ActualDistanceResolutionMode.Fixed.ToString()),
             ("tracksIntraHexProgress", "false")),
@@ -162,19 +162,6 @@ internal static class ProcedureComposerCustomProcedureFactory
         _ => throw new InvalidOperationException(
             $"Module '{moduleKey}' does not have a generic Composer default selection.")
     };
-
-    private static MaterializedProcedureModule Select(
-        string moduleKey,
-        string mechanicKey,
-        int mechanicVersion,
-        params (string Key, string Value)[] parameters)
-    {
-        var module = JourneyProcedureContractSchema.ExtendModule(
-            GenericProcedureCatalog.ResolveModule(moduleKey));
-        var mechanic = JourneyProcedureContractSchema.ExtendMechanic(
-            moduleKey, GenericProcedureCatalog.ResolveMechanic(mechanicKey, mechanicVersion));
-        return Select(module, mechanic, parameters);
-    }
 
     private static MaterializedProcedureModule Select(
         string moduleKey,
