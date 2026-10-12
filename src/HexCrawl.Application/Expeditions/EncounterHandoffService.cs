@@ -334,7 +334,7 @@ public sealed class EncounterHandoffService(HexCrawlService coreService)
                 elapsed.TotalHours),
             new EncounterHandoffWorldContext(
                 overworldId,
-                location) { Cell = cell }
+                location) { Cell = cell },
             new EncounterHandoffEncounter(outcome, summary, dmNote),
             [],
             circumstances,
