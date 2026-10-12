@@ -156,6 +156,16 @@ test("Phase 15 is the shared action, summary, drawer and map-first UI for V2 cel
     assert.doesNotMatch(periodic, /api\.advanceExpedition\(/);
 });
 
+test("V2 preserved Phase 15 tactical handoff remains separate from encounter resolution", () => {
+    const periodic = file("modules","expeditions","periodic-expedition-workbench.ts");
+    assert.match(periodic, /data-handoff-encounter/);
+    assert.match(periodic, /api\.createEncounterHandoff\(runtime\.id/);
+    assert.match(periodic, /runtimeEncounterSequence: pending\.triggerSequence/);
+    assert.match(periodic, /blockInitiativeHandoffHref\(handoff\)/);
+    assert.match(periodic, /api\.resolveCellEncounter\(/);
+    assert.doesNotMatch(periodic, /api\.resolveEncounter\(/);
+});
+
 test("mapless cell workbench does not require a fabricated overworld", () => {
     const view = file("modules","expeditions","expedition-view.ts");
     const periodic = file("modules","expeditions","periodic-expedition-workbench.ts");

@@ -1,6 +1,7 @@
 
 import type { HexCrawlApi } from "../../api";
 import { MapSurface } from "../../map-surface";
+import { blockInitiativeHandoffHref } from "../../encounter-handoff";
 import type {
     CellTraversalContext, CellProcedureResolutionHelperResult, CellWatchRequest, ExpeditionDetail, Overworld,
     WorldCellId, WorldPoint, ToolHostContext
@@ -151,7 +152,10 @@ export async function renderPeriodicExpeditionWorkbench(
                             <button type="button" data-confirm-course>Resolve selected exit</button></div>
                         <div data-encounter-decision hidden><p data-encounter-description></p>
                             <label>Resolution note <input data-encounter-result></label>
-                            <button type="button" data-resolve-encounter>Resolve pending encounter</button></div>
+                            <div class="hc-button-row">
+                                <button type="button" data-handoff-encounter>Open in Block Initiative</button>
+                                <button type="button" data-resolve-encounter>Mark encounter resolved</button>
+                            </div></div>
                 </section>
             </div>
         </section>`;
@@ -586,6 +590,35 @@ export async function renderPeriodicExpeditionWorkbench(
                 }
             });
         }));
+    required<HTMLButtonElement>("[data-handoff-encounter]").addEventListener("click", () => {
+        const pending = currentState().pendingEncounter;
+        if (!pending || busy) return;
+        const handoffControl = required<HTMLButtonElement>("[data-handoff-encounter]");
+        void (async () => {
+            busy = true;
+            handoffControl.disabled = true;
+            clearUiError(error);
+            try {
+                const pathname = window.location.pathname;
+                const returnPath = pathname === "/tools/hex-crawl"
+                    || pathname.startsWith("/tools/hex-crawl/")
+                    ? `${pathname}${window.location.search}${window.location.hash}` : null;
+                const handoff = await api.createEncounterHandoff(runtime.id, {
+                    expectedVersion: runtime.version,
+                    handoffId: crypto.randomUUID(),
+                    returnPath,
+                    runtimeEncounterSequence: pending.triggerSequence,
+                    journeyEventOccurrenceId: null
+                });
+                if (!disposed) window.location.assign(blockInitiativeHandoffHref(handoff));
+            } catch (failure) {
+                if (!disposed) showUiError(error, failure);
+            } finally {
+                busy = false;
+                if (!disposed) render();
+            }
+        })();
+    });
     required<HTMLButtonElement>("[data-resolve-encounter]").addEventListener("click", () => void progress(
         () => {
             const pending = currentState().pendingEncounter;
@@ -778,6 +811,8 @@ export async function renderPeriodicExpeditionWorkbench(
         required<HTMLButtonElement>("[data-confirm-course]").disabled =
             busy || !pausedForCourse || selectedExit === null;
         required<HTMLButtonElement>("[data-resolve-encounter]").disabled =
+            busy || !pendingEncounter;
+        required<HTMLButtonElement>("[data-handoff-encounter]").disabled =
             busy || !pendingEncounter;
         const mapPoint = topology.position;
         map.renderer.currentWorldCell = {
