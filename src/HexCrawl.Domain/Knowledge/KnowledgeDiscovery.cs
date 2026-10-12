@@ -35,13 +35,4 @@ public static class KnowledgeDiscovery
             : knowledge with { KnownCells = [.. known, cell] };
     }
 
-    public static PlayerKnowledgeState KnowHex(PlayerKnowledgeState knowledge, HexCoordinate hex)
-    {
-        if (knowledge.KnownHexes.Contains(hex))
-        {
-            return knowledge;
-        }
-
-        return knowledge with { KnownHexes = [.. knowledge.KnownHexes, hex] };
-    }
 }
