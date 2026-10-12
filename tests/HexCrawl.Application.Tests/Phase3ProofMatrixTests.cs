@@ -217,8 +217,28 @@ public sealed class Phase3ProofMatrixTests
             Assert.DoesNotContain(forbiddenTokens, token => ContainsToken(mechanic.ExecutionHandler, token));
         }
 
+        // Edition names are permitted only in declarative preset definition classes.
+        // Runtime engines, services, and generic procedure mechanics remain system neutral.
+        var applicationTypes = typeof(CrawlProcedureCatalog).Assembly.GetTypes();
+        var presetDefinitions = applicationTypes
+            .Where(type => string.Equals(type.Namespace, "HexCrawl.Application.Presets", StringComparison.Ordinal))
+            .ToArray();
+        Assert.Equal(CrawlProcedureCatalog.Catalog.Count, presetDefinitions.Length);
+        Assert.All(presetDefinitions, type =>
+        {
+            Assert.True(type.IsClass && type.IsAbstract && type.IsSealed);
+            Assert.EndsWith("Preset", type.Name);
+            Assert.Contains(type.GetMethods(
+                    System.Reflection.BindingFlags.Static
+                    | System.Reflection.BindingFlags.Public
+                    | System.Reflection.BindingFlags.NonPublic),
+                method => method.Name == "Create"
+                    && method.ReturnType == typeof(CrawlProcedurePresetDefinition));
+        });
+
         var implementationTypes = typeof(GenericProcedureRuntime).Assembly.GetTypes()
-            .Concat(typeof(CrawlProcedureCatalog).Assembly.GetTypes())
+            .Concat(applicationTypes.Where(type =>
+                !string.Equals(type.Namespace, "HexCrawl.Application.Presets", StringComparison.Ordinal)))
             .Select(type => type.FullName ?? type.Name)
             .ToArray();
         Assert.DoesNotContain(implementationTypes, typeName =>

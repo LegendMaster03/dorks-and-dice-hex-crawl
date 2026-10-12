@@ -2,7 +2,7 @@ using HexCrawl.Domain.Procedure;
 using static HexCrawl.Application.CrawlProcedurePresetFactory;
 using static HexCrawl.Application.CrawlProcedureCatalog;
 
-namespace HexCrawl.Application;
+namespace HexCrawl.Application.Presets;
 
 internal static class SimpleHexStepPreset
 {
