@@ -243,7 +243,7 @@ jobs:
           assert d["expedition"]["completedWatches"] == 1, d
           assert d["expedition"]["distanceTraveled"]["value"] == 2.0, d
           assert d["expedition"]["currentCell"]["address"]["motifCellId"] == "hex", d
-          assert d["expedition"]["currentHex"] is None, d
+          assert "currentHex" not in d["expedition"], d
           PY
           curl -fsS "http://127.0.0.1:18092/api/overworlds/$world_id/source-maps/$source_map_id/asset" -o "$response_dir/map-after-restart.png"
           cmp "$response_dir/tiny.png" "$response_dir/map-after-restart.png"
@@ -303,7 +303,7 @@ jobs:
           assert d["context"]["orientation"] == "FlatTop", d
           assert d["expedition"]["currentCell"]["address"]["motifCellId"] == "hex", d
           assert d["expedition"]["currentCell"]["address"]["translation"] == {"u": 2, "v": -1}, d
-          assert d["expedition"]["currentHex"] is None, d
+          assert "currentHex" not in d["expedition"], d
           assert d["procedure"]["key"] == "simple-fixed-distance", d
           PY
 
