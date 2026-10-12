@@ -365,26 +365,10 @@ public static class GenericProcedureRuntimeRequirements
         ArgumentNullException.ThrowIfNull(state);
         return state switch
         {
-            ExpeditionState spatial => IsEncounterCheckDue(procedure, spatial),
             CellExpeditionState cells => IsEncounterCheckDue(procedure, cells),
             NonSpatialSessionState nonSpatial => IsEncounterCheckDue(procedure, nonSpatial),
             _ => throw new ArgumentOutOfRangeException(nameof(state))
         };
-    }
-
-    public static bool IsEncounterCheckDue(GenericProcedureRuntime procedure, ExpeditionState state)
-    {
-        ArgumentNullException.ThrowIfNull(procedure);
-        ArgumentNullException.ThrowIfNull(state);
-        if (state.ActiveWatch is not null)
-        {
-            return false;
-        }
-        return IsEncounterCheckDue(
-            procedure.Encounters.Cadence,
-            state.History,
-            Math.Max(1, state.CompletedWatches + 1),
-            state.ElapsedTravelTime);
     }
 
     public static bool IsEncounterCheckDue(GenericProcedureRuntime procedure, CellExpeditionState state)
@@ -407,20 +391,6 @@ public static class GenericProcedureRuntimeRequirements
             state.History,
             state.ActiveWatch?.WatchNumber ?? Math.Max(1, state.CompletedWatches + 1),
             state.ElapsedTime);
-    }
-
-    public static bool IsNavigationResolutionPotentiallyRequired(GenericProcedureRuntime procedure, ExpeditionState state)
-    {
-        ArgumentNullException.ThrowIfNull(procedure);
-        ArgumentNullException.ThrowIfNull(state);
-        if (state.ActiveWatch is not null || !procedure.Navigation.UsesNavigationChecks)
-        {
-            return false;
-        }
-        var watchNumber = Math.Max(1, state.CompletedWatches + 1);
-        return !state.History.Any(runtimeEvent =>
-            runtimeEvent.Kind == CrawlRuntimeEventKind.NavigationCheckResolved
-            && runtimeEvent.WatchNumber == watchNumber);
     }
 
     private static bool IsEncounterCheckDue(
