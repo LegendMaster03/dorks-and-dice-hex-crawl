@@ -2,21 +2,10 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
-import { resolveHexStartCell } from "../.test-dist/modules/expeditions/world-cell-start.js";
 import { nextCellExpeditionAction } from "../.test-dist/modules/expeditions/phase15-cell-action.js";
 import { polygonContainsSubject, uniquelyAdjacentInterface } from "../.test-dist/modules/expeditions/phase20-cell-ui-policy.js";
 
 const file = (...segments) => fs.readFileSync(path.join("src", ...segments), "utf8");
-const world = {
-    id: "world-1",
-    tiling: { id: "tiling-1" },
-    grid: {
-        origin: { x: 2, y: -3 },
-        hexRadiusWorldUnits: 5,
-        orientation: "PointyTop",
-        rotationDegrees: 30
-    }
-};
 const id = (tilingId = "tiling-1") => ({
     tilingId,
     address: { motifCellId: "accepted-hex-motif", translation: { u: 7, v: -4 } }
@@ -49,44 +38,23 @@ test("authored subjects are listed only inside the selected server cell polygon"
     assert.equal(polygonContainsSubject(concave,{x:2,y:2}),false);
 });
 
-test("hex q/r start resolves one authoritative server cell without guessing motif identity", async () => {
-    let captured;
-    const address = await resolveHexStartCell({
-        lookupWorldCell: async (worldId, point) => {
-            captured = { worldId, point };
-            return { status: "Unique", candidates: [id()] };
-        }
-    }, world, { q: 7, r: -4 });
-    assert.equal(captured.worldId, world.id);
-    assert.ok(Number.isFinite(captured.point.x) && Number.isFinite(captured.point.y));
-    assert.deepEqual(address, id().address);
+test("world starts use qualified cell addresses without axial translation", () => {
+    const setup = file("modules", "expeditions", "expedition-setup.ts");
+    const worldContract = file("..", "..", "HexCrawl.Web", "Modules", "Worlds", "WorldApiContracts.cs");
+    assert.match(setup, /const startCell = \\{/);
+    assert.match(setup, /motifCellId: select\\(form, "motifCellId"\\)\\.value/);
+    assert.match(setup, /u: integer\\(numberInput\\(form, "u"\\)\\)/);
+    assert.match(setup, /v: integer\\(numberInput\\(form, "v"\\)\\)/);
+    assert.doesNotMatch(setup, /resolveHexStartCell|acceptMapHex|world\\.grid|name="q"|name="r"/);
+    assert.match(worldContract, /world\\.World\\.SpatialTiling/);
 });
 
-test("cell start rejects absent, ambiguous and foreign tiling selections", async () => {
-    for (const lookup of [
-        { status: "NotFound", candidates: [] },
-        { status: "Ambiguous", candidates: [id(), id()] },
-        { status: "Unique", candidates: [id("other-tiling")] }
-    ]) {
-        await assert.rejects(
-            resolveHexStartCell({ lookupWorldCell: async () => lookup }, world, { q: 0, r: 0 }),
-            /authoritative|current world/);
-    }
-    await assert.rejects(
-        resolveHexStartCell({ lookupWorldCell: async () => {
-            assert.fail("invalid coordinates should never trigger a lookup");
-        } }, world, { q: Number.MAX_SAFE_INTEGER + 1, r: 0 }),
-        /safe integers/);
-});
-
-test("world authoring map selections feed the single shared V2 cell-start form", () => {
+test("world authoring map selections feed the sole periodic cell-start form", () => {
     const editor = file("modules","worlds","world-editor-view.ts");
     const setup = file("modules","expeditions","expedition-setup.ts");
-    assert.match(editor, /new CustomEvent\("hex-crawl:world-hex-selected"/);
     assert.match(editor, /new CustomEvent\("hex-crawl:world-cell-selected"/);
-    assert.match(setup, /root\.addEventListener\("hex-crawl:world-hex-selected", acceptMapHex\)/);
     assert.match(setup, /root\.addEventListener\("hex-crawl:world-cell-selected", acceptMapCell\)/);
-    assert.match(setup, /root\.removeEventListener\("hex-crawl:world-hex-selected", acceptMapHex\)/);
+    assert.doesNotMatch(setup, /root\.addEventListener\("hex-crawl:world-hex-selected"/);
 });
 
 test("active expedition start entry points use cell APIs and no retired V1 starts", () => {
