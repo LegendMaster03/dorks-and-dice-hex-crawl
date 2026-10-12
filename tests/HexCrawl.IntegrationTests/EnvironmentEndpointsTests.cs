@@ -7,7 +7,7 @@ namespace HexCrawl.IntegrationTests;
 public sealed class EnvironmentEndpointsTests
 {
     [Fact]
-    public async Task WorldEnvironmentFeedsCanonicalExpeditionMovementAndSurvivesRestart()
+    public async Task WorldCellEnvironmentPreservesFactsAndRequiresAdjudicationWithoutTerrainMechanic()
     {
         var database = TestWebHost.NewDatabasePath();
         Guid worldId;
@@ -109,7 +109,13 @@ public sealed class EnvironmentEndpointsTests
 
                 var focused = await client.GetFromJsonAsync<JsonElement>($"/api/expeditions/{expeditionId:D}/environment");
                 Assert.Equal("Resolved", focused.GetProperty("effectiveContext").GetProperty("status").GetString());
-                Assert.Equal("difficult", focused.GetProperty("evaluation").GetProperty("terrainKey").GetString());
+                // Alexandrian geometric travel has no movement.terrain mechanic.
+                // The selected cell's terrain remains effective but must not
+                // acquire a fabricated 50% slowdown from another preset.
+                Assert.Equal("RequiresAdjudication",
+                    focused.GetProperty("evaluation").GetProperty("status").GetString());
+                Assert.Equal(JsonValueKind.Null,
+                    focused.GetProperty("evaluation").GetProperty("terrainKey").ValueKind);
                 var effective = Assert.Single(focused.GetProperty("effectiveContext").GetProperty("facts").EnumerateArray());
                 Assert.True(effective.GetProperty("effective").GetBoolean());
                 Assert.Equal("Cell", effective.GetProperty("source").GetProperty("kind").GetString());
@@ -118,11 +124,10 @@ public sealed class EnvironmentEndpointsTests
 
                 var canonical = await client.GetFromJsonAsync<JsonElement>($"/api/expeditions/{expeditionId:D}");
                 var movement = canonical.GetProperty("movementComposition");
-                Assert.Equal("Resolved", movement.GetProperty("status").GetString());
-                Assert.Equal(1.5, movement.GetProperty("effectiveValue").GetDouble());
+                Assert.NotEqual("Resolved", movement.GetProperty("status").GetString());
                 Assert.Contains(
-                    movement.GetProperty("provenance").EnumerateArray(),
-                    value => value.GetString()?.Contains("terrain difficult", StringComparison.OrdinalIgnoreCase) == true);
+                    movement.GetProperty("diagnostics").EnumerateArray(),
+                    value => value.GetString()?.Contains("terrain", StringComparison.OrdinalIgnoreCase) == true);
             }
 
             using (var restartedFactory = TestWebHost.Create(database))
@@ -134,7 +139,13 @@ public sealed class EnvironmentEndpointsTests
                 Assert.Equal("difficult", Assert.Single(annotation.GetProperty("facts").EnumerateArray()).GetProperty("tag").GetString());
 
                 var focused = await restartedClient.GetFromJsonAsync<JsonElement>($"/api/expeditions/{expeditionId:D}/environment");
-                Assert.Equal("difficult", focused.GetProperty("evaluation").GetProperty("terrainKey").GetString());
+                Assert.Contains(
+                    focused.GetProperty("effectiveContext").GetProperty("facts").EnumerateArray(),
+                    fact => fact.GetProperty("effective").GetBoolean()
+                        && fact.GetProperty("fact").GetProperty("tag").GetString() == "difficult"
+                        && fact.GetProperty("source").GetProperty("kind").GetString() == "Cell");
+                Assert.Equal(JsonValueKind.Null,
+                    focused.GetProperty("evaluation").GetProperty("terrainKey").ValueKind);
             }
         }
         finally
