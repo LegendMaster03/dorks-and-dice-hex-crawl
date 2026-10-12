@@ -110,8 +110,7 @@ public sealed class ProcedureResolutionHelperTests
     [Fact]
     public void GeometricHelperKeepsExplicitDistanceUnitsAndAngularFailureVeer()
     {
-        var procedure = GeometricNativeProcedureMaterializer.Materialize(
-            "alexandrian-advanced").Procedure;
+        var procedure = CampaignProcedureMaterializer.MaterializeExecutableSpatial(CrawlProcedureCatalog.Resolve("alexandrian-advanced")).Procedure;
         var runtime = GenericProcedureRuntime.Bind(procedure);
         var mapless = Context();
         var state = AbstractCellSessionGeometry.CreateNewHexSession(
@@ -144,8 +143,7 @@ public sealed class ProcedureResolutionHelperTests
     [Fact]
     public void GeometricHelperRejectsFailedNavigationWithoutConfirmedAngularError()
     {
-        var procedure = GeometricNativeProcedureMaterializer.Materialize(
-            "alexandrian-advanced").Procedure;
+        var procedure = CampaignProcedureMaterializer.MaterializeExecutableSpatial(CrawlProcedureCatalog.Resolve("alexandrian-advanced")).Procedure;
         var mapless = Context();
         var state = AbstractCellSessionGeometry.CreateNewHexSession(
             Guid.NewGuid(), mapless, new HexCoordinate(0, 0)).Expedition;

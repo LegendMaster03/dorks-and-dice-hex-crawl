@@ -92,8 +92,7 @@ public sealed class ExpeditionStartServiceTests
         };
         var now = DateTimeOffset.UtcNow;
         await store.CreateOverworldAsync(new StoredOverworld(world, "alice", 1, now, now));
-        var native = GeometricNativeProcedureMaterializer
-            .Materialize("simple-fixed-distance").Procedure;
+        var native = CampaignProcedureMaterializer.MaterializeExecutableSpatial(CrawlProcedureCatalog.Resolve("simple-fixed-distance")).Procedure;
         var equivalent = native with
         {
             ProcedureId = Guid.NewGuid(), TilingDsSymbol = "<1: 1,1,1:6,3>"
@@ -123,7 +122,7 @@ public sealed class ExpeditionStartServiceTests
     }
 
     [Fact]
-    public async Task RetiredLegacyStartsRejectBothProcedureVersionsWhileNativeCellStartsAcceptV2()
+    public async Task SavedNativeProcedureRevisionsStartThroughTheOnlyCellRuntime()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = new PostgresHexCrawlStore(database.ConnectionString);
@@ -132,7 +131,7 @@ public sealed class ExpeditionStartServiceTests
         var starter = new ExpeditionStartService(store, new HexCrawlService(store), procedures);
         var world = new OverworldDefinition
         {
-            Id = Guid.NewGuid(), Name = "Native runtime version gate",
+            Id = Guid.NewGuid(), Name = "Pinned native world",
             Grid = new HexGridDefinition
             {
                 Id = Guid.NewGuid(), HexRadiusWorldUnits = 2,
@@ -141,34 +140,30 @@ public sealed class ExpeditionStartServiceTests
         };
         var now = DateTimeOffset.UtcNow;
         await store.CreateOverworldAsync(new StoredOverworld(world, "alice", 1, now, now));
-        var v1 = CrawlProcedureCatalog.Resolve("simple-fixed-distance").MaterializeGeneric().Procedure;
-        var v2 = GeometricNativeProcedureMaterializer.Materialize("simple-fixed-distance").Procedure;
-        await procedures.CreateAsync("alice", v1, null);
-        await procedures.CreateAsync("alice", v2, null);
-        var v1Choice = new ProcedureStartSelection(ProcedureId: v1.ProcedureId, ProcedureRevision: v1.Revision);
-        var v2Choice = new ProcedureStartSelection(ProcedureId: v2.ProcedureId, ProcedureRevision: v2.Revision);
+        var catalogProcedure = CrawlProcedureCatalog.Resolve("simple-fixed-distance").MaterializeGeneric().Procedure;
+        var sessionProcedure = CampaignProcedureMaterializer.MaterializeExecutableSpatial(
+            CrawlProcedureCatalog.Resolve("simple-fixed-distance")).Procedure;
+        await procedures.CreateAsync("alice", catalogProcedure, null);
+        await procedures.CreateAsync("alice", sessionProcedure, null);
         var start = new HexCoordinate(0, 0);
         var abstractContext = new AbstractHexCrawlSessionContext(
-            "Abstract hex", HexOrientation.PointyTop,
+            "Mapless cell session", HexOrientation.PointyTop,
             new CrawlRuntimeContext(new DistanceMeasure(12, DistanceUnit.Miles)));
-        foreach (var selection in new[] { v1Choice, v2Choice })
-        {
-            await Assert.ThrowsAsync<NotSupportedException>(() =>
-                starter.StartWorldBoundAsync(
-                    world.Id, "alice", "Retired hex start", selection, "exploration-map", start));
-            await Assert.ThrowsAsync<NotSupportedException>(() =>
-                starter.StartStandaloneAsync("alice", "Retired mapless start", selection, abstractContext, start));
-        }
         var address = LegacyHexTilingCompatibility.ToAddress(start);
-        await Assert.ThrowsAsync<NotSupportedException>(() =>
-            starter.StartWorldBoundCellsAsync(world.Id, "alice", "No V1 conversion", v1Choice, address));
-        var geometricWorld = await starter.StartWorldBoundCellsAsync(
-            world.Id, "alice", "Native V2 world", v2Choice, address);
-        var geometricMapless = await starter.StartStandaloneCellsAsync(
-            "alice", "Native V2 mapless", v2Choice, abstractContext, start);
-        Assert.IsType<CellExpeditionState>(geometricWorld.Runtime);
-        Assert.IsType<CellExpeditionState>(geometricMapless.Runtime);
-        Assert.Equal(2, (await store.ListExpeditionsAsync("alice")).Count);
+        foreach (var procedure in new[] { catalogProcedure, sessionProcedure })
+        {
+            var pinned = new ProcedureStartSelection(
+                ProcedureId: procedure.ProcedureId, ProcedureRevision: procedure.Revision);
+            var inWorld = await starter.StartWorldBoundCellsAsync(
+                world.Id, "alice", "World cells", pinned, address, "dm-controlled");
+            var mapless = await starter.StartStandaloneCellsAsync(
+                "alice", "Mapless cells", pinned, abstractContext, start);
+            Assert.IsType<CellExpeditionState>(inWorld.Runtime);
+            Assert.IsType<CellExpeditionState>(mapless.Runtime);
+            Assert.Equal(2, GenericProcedureRuntime.Bind(inWorld.CampaignProcedure).Movement.MechanicVersion);
+            Assert.Equal(2, GenericProcedureRuntime.Bind(mapless.CampaignProcedure).Movement.MechanicVersion);
+        }
+        Assert.Equal(4, (await store.ListExpeditionsAsync("alice")).Count);
     }
 
     [Theory]

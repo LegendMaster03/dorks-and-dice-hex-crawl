@@ -143,7 +143,7 @@ internal static class SyntheticProcedureApiFixture
     {
         var store = new PostgresHexCrawlStore(connectionString);
         await store.InitializeAsync();
-        var native = GeometricNativeProcedureMaterializer.Materialize("simple-fixed-distance").Procedure;
+        var native = CampaignProcedureMaterializer.MaterializeExecutableSpatial(CrawlProcedureCatalog.Resolve("simple-fixed-distance")).Procedure;
         var budget = new MaterializedProcedureModule(
             GenericProcedureCatalog.ResolveModule(GenericProcedureCatalog.MovementBudgetModule),
             GenericProcedureCatalog.ResolveMechanic(GenericProcedureCatalog.MovementBudgetMechanic),

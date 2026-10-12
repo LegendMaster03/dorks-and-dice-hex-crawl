@@ -168,7 +168,7 @@ public sealed class EnvironmentPersistenceTests
             },
             new WorldBoundCrawlSessionContext(world.Id),
             null,
-            GeometricNativeProcedureMaterializer.Materialize("simple-fixed-distance").Procedure,
+            CampaignProcedureMaterializer.MaterializeExecutableSpatial(CrawlProcedureCatalog.Resolve("simple-fixed-distance")).Procedure,
             null,
             TimeSpan.FromHours(1),
             "owner",

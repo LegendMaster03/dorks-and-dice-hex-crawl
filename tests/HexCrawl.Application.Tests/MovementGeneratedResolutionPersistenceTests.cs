@@ -15,8 +15,7 @@ public sealed class MovementGeneratedResolutionPersistenceTests
         await store.InitializeAsync();
 
         var now = DateTimeOffset.UtcNow;
-        var procedure = GeometricNativeProcedureMaterializer
-            .Materialize("simple-fixed-distance").Procedure;
+        var procedure = CampaignProcedureMaterializer.MaterializeExecutableSpatial(CrawlProcedureCatalog.Resolve("simple-fixed-distance")).Procedure;
         var context = new AbstractHexCrawlSessionContext(
             "Movement history",
             HexOrientation.PointyTop,

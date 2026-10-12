@@ -124,7 +124,7 @@ public sealed class Phase17PostgresWorldTests
                 History = [evt]
             },
             new WorldBoundCrawlSessionContext(world.Id), null,
-            GeometricNativeProcedureMaterializer.Materialize("simple-fixed-distance").Procedure,
+            CampaignProcedureMaterializer.MaterializeExecutableSpatial(CrawlProcedureCatalog.Resolve("simple-fixed-distance")).Procedure,
             null, TimeSpan.Zero, "owner", 1, now, now);
         await store.CreateExpeditionAsync(expedition);
 
