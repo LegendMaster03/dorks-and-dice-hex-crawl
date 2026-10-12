@@ -339,6 +339,8 @@ export async function renderToolHome(
         populateProcedureStartChoices(procedure, savedProcedures, available);
         if ([...procedure.options].some(option => option.value === previous))
             procedure.value = previous;
+        else if (available.length > 0 && context.value !== NON_SPATIAL_CONTEXT)
+            procedure.value = `preset:${available[0].presetKey}`;
         void syncProcedure().catch(failure => {
             if (!disposed) showUiError(error, failure);
         });

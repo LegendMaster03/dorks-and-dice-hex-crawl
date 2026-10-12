@@ -163,8 +163,16 @@ export async function renderPeriodicExpeditionWorkbench(
     updateKeyedLocations();
     const showKeyedLocation = (): void => {
         required<HTMLElement>("[data-keyed-location-row]").hidden =
-            choice("encounter").value !== "KeyedLocationDiscovery";
+            !world || choice("encounter").value !== "KeyedLocationDiscovery";
     };
+    // Mapless sessions have no authored locations and must not offer a
+    // discovery result that the cell application service cannot accept.
+    const keyedEncounterOption = choice("encounter")
+        .querySelector<HTMLOptionElement>('option[value="KeyedLocationDiscovery"]');
+    if (keyedEncounterOption && !world) {
+        keyedEncounterOption.disabled = true;
+        keyedEncounterOption.hidden = true;
+    }
     choice("encounter").addEventListener("change", showKeyedLocation);
     showKeyedLocation();
 

@@ -87,6 +87,13 @@ test("renderer shows actual cell polygon and party in mapless and legacy hex wor
     assert.match(periodic, /if \(!world\) map\.centerOn\(topology\.position\)/);
 });
 
+test("mapless encounter choices do not offer authored world discoveries", () => {
+    const periodic = file("modules","expeditions","periodic-expedition-workbench.ts");
+    assert.match(periodic, /keyedEncounterOption\.disabled = true/);
+    assert.match(periodic, /keyedEncounterOption\.hidden = true/);
+    assert.match(periodic, /!world \|\| choice\("encounter"\)\.value !== "KeyedLocationDiscovery"/);
+});
+
 test("mapless cell workbench does not require a fabricated overworld", () => {
     const view = file("modules","expeditions","expedition-view.ts");
     const periodic = file("modules","expeditions","periodic-expedition-workbench.ts");
