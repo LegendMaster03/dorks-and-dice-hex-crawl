@@ -404,7 +404,7 @@ test("procedure mechanics use shared presentation policy and the unified expedit
     assert.match(home, /campaignProcedureSummary/);
     assert.match(expedition, /Ruleset reference/);
     assert.match(expedition, /\/procedures\/\$\{encodeURIComponent\(runtime\.procedure\.procedureId\)\}\/revisions\/\$\{runtime\.procedure\.revision\}\/reference/);
-    assert.match(campaignProcedureView, /exit factors start/);
+    assert.match(campaignProcedureView, /discrete cell-boundary transitions/);
     assert.match(campaignProcedureView, /actual distance = expected distance/);
     assert.match(campaignProcedureView, /situational modifier vs\. the DM-confirmed DC/);
     assert.match(campaignProcedureView, /encounter time uses 1d/);
