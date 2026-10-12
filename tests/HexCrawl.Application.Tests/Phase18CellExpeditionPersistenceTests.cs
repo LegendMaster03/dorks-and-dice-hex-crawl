@@ -350,7 +350,7 @@ public sealed class Phase18CellExpeditionPersistenceTests
         Assert.Equal(1, moved.CompletedWatches);
         Assert.Equal(1, moved.History.Count(e => e.Kind == CrawlRuntimeEventKind.CellEntered));
         Assert.True(saved.Version > initial.Version);
-        Assert.Equal(exit.To, Assert.Single(saved.Knowledge.KnownCells!));
+        Assert.Equal(exit.To, Assert.Single(saved.Knowledge!.KnownCells!));
 
         await Assert.ThrowsAsync<HexCrawlConcurrencyException>(() =>
             service.AdvanceCellExpeditionAsync(initial.Id, "alice", 1, plan, inputs));
