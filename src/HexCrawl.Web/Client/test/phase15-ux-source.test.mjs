@@ -468,9 +468,6 @@ test("encounter resume requires an explicit resolved-at-table acknowledgement", 
     const view = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
         "utf8");
-    const controller = fs.readFileSync(
-        path.join(sourceDir, "modules/expeditions/expedition-watch-controller.ts"),
-        "utf8");
 
     assert.match(view, /api\.resolveEncounter/);
     assert.match(view, /pending\.triggerSequence/);
