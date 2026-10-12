@@ -596,7 +596,7 @@ test("nonspatial GM utilities do not expose spatial repositioning or travel-orde
 
     assert.match(view, /button\("Party & roles", openPartyWorkspace\)/);
     assert.doesNotMatch(view, /Teleport party|openRepositionWorkspace/);
-    assert.match(view, /if \(presentation\.capabilities\.journey\) \{\s*row\.append\(button\("Journey"/);
+    assert.match(view, /if \(presentation\.capabilities\.journey\)\s*row\.append\(button\("Journey"/);
 });
 
 test("nonspatial summary only renders movement when the materialized procedure exposes travel capability", () => {
