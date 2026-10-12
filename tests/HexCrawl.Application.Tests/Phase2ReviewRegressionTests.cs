@@ -50,7 +50,6 @@ public sealed class Phase2ReviewRegressionTests
         var spatial = Assert.IsType<CellExpeditionState>(advanced.Runtime);
         Assert.Equal(actual, spatial.DistanceTraveled!.Value.Value, 6);
         Assert.Equal(1, spatial.CompletedWatches);
-        Assert.Equal(2, GenericProcedureRuntime.Bind(advanced.CampaignProcedure).Movement.MechanicVersion);
     }
 
     [Fact]

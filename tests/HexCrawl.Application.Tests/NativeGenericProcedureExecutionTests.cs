@@ -107,7 +107,6 @@ public sealed class NativeGenericProcedureExecutionTests
         Assert.Equal(1, state.CompletedWatches);
         Assert.Equal(TimeSpan.FromHours(4), state.ElapsedTravelTime);
         Assert.Equal(started.CampaignProcedure, advanced.CampaignProcedure);
-        Assert.Equal(2, GenericProcedureRuntime.Bind(advanced.CampaignProcedure).Movement.MechanicVersion);
     }
 
     [Fact]

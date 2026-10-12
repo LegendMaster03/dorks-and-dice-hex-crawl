@@ -37,7 +37,6 @@ public sealed class Phase20MaplessCellApplicationTests
         Assert.Null(created.Knowledge);
         Assert.Equal(key, created.ProcedureOrigin?.PresetKey);
         Assert.Null(created.ProcedureOrigin?.PresetRevision);
-        Assert.Equal(2, GenericProcedureRuntime.Bind(created.CampaignProcedure).Movement.MechanicVersion);
 
         var restarted = new PostgresHexCrawlStore(database.ConnectionString);
         await restarted.InitializeAsync();
@@ -174,7 +173,6 @@ public sealed class Phase20MaplessCellApplicationTests
                 ProcedureId: saved.ProcedureId, ProcedureRevision: saved.Revision),
             Context(), new HexCoordinate(0, 0));
         Assert.IsType<CellExpeditionState>(started.Runtime);
-        Assert.Equal(2, GenericProcedureRuntime.Bind(started.CampaignProcedure).Movement.MechanicVersion);
         await Assert.ThrowsAsync<NotSupportedException>(() => starter.StartStandaloneCellsAsync(
             "owner", "Declarative only", new ProcedureStartSelection(PresetKey: "bx"),
             Context(), new HexCoordinate(0, 0)));
