@@ -527,7 +527,7 @@ public sealed partial class CrawlRuntimeEngine
         var encounter = active.Encounter;
         var emitted = RecordEncounterTrigger(
             state.Id, active.WatchNumber, state.ElapsedTravelTime,
-            null, state.Traversal.CurrentCell, encounter, events,
+            state.Traversal.CurrentCell, encounter, events,
             encounter.Note ?? $"{encounter.Kind} triggered.");
         var occurrenceId = emitted.EncounterOccurrenceId!.Value;
         active = active with { EncounterHandled = true, PendingDecision = RuntimePauseReason.EncounterTriggered };
