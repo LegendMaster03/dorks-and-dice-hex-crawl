@@ -118,6 +118,8 @@ test("V2 cell-workbench helpers generate owner/version-scoped automatic rolls", 
     assert.match(view, /generated\?\.encounter \?\? encounter/);
     assert.match(view, /form\.addEventListener\("input"/);
     assert.match(view, /form\.addEventListener\("change"/);
+    assert.match(view, /onToggle: edge => \{[\s\S]*if \(generated\) invalidateGenerated\(\)/);
+    assert.match(view, /runtime = next;\s*generated = null/);
     assert.match(view, /next\.version !== result\.expeditionVersion/);
 });
 

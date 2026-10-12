@@ -328,6 +328,7 @@ export async function renderPeriodicExpeditionWorkbench(
         next => {
             if (disposed) return;
             runtime = next;
+            generated = null; // Any other aggregate mutation supersedes this version-bound grant.
             publishExpeditionRuntimeChanged(root, runtime);
         },
         async (control, action) => {
@@ -735,6 +736,9 @@ export async function renderPeriodicExpeditionWorkbench(
             selectable: !busy,
             actualIntent: topology.selectedExitInterfaceIndex,
             onToggle: edge => {
+                // The navigator is outside the travel form. A new atomic
+                // course still invalidates all previously generated rolls.
+                if (generated) invalidateGenerated();
                 selectHeading(edge.intentValue === selectedExit ? null : edge.intentValue);
                 render();
             }
