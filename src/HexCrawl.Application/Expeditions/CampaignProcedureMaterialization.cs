@@ -127,7 +127,7 @@ public static class CampaignProcedureMaterializer
     }
 
     /// <summary>
-    /// Materialize a version-2 executable spatial preset verbatim. No procedure
+    /// Materialize an executable spatial preset verbatim. No procedure
     /// rewrite or shape-specific execution code is involved.
     /// </summary>
     public static MaterializedCampaignProcedure MaterializeExecutableSpatial(
@@ -138,12 +138,12 @@ public static class CampaignProcedureMaterializer
             item.ModuleKey == GenericProcedureCatalog.MovementResolutionModule);
         var turns = preset.Recipe.ModuleSelections.SingleOrDefault(item =>
             item.ModuleKey == GenericProcedureCatalog.SpatialTurnCostModule);
-        if (movement?.MechanicVersion != 2 || turns is null)
+        if (movement is null || turns is null)
             throw new NotSupportedException(
                 "The selected preset has no executable generalized spatial procedure.");
         var result = Materialize(preset, procedureId);
         var bound = GenericProcedureRuntime.Bind(result.Procedure);
-        if (bound.Movement.MechanicVersion != 2 || bound.TurnPolicy is null)
+        if (bound.TurnPolicy is null)
             throw new InvalidOperationException(
                 "The spatial preset did not bind its generalized movement policy.");
         return result with

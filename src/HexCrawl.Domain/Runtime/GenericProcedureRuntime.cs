@@ -73,10 +73,7 @@ public sealed record ProcedureTimeRuntime(TimeSpan IntervalDuration);
 
 public sealed record ProcedureMovementRuntime(
     TravelResolutionMode TravelResolution,
-    ActualDistanceResolutionMode ActualDistanceResolution)
-{
-    public int MechanicVersion { get; init; } = 2;
-}
+    ActualDistanceResolutionMode ActualDistanceResolution);
 
 /// <summary>
 /// Nongeometric budget charges are distinct from cursor displacement.
@@ -156,10 +153,7 @@ public sealed class GenericProcedureRuntime
             new ProcedureTimeRuntime(TimeSpan.FromTicks(Long(time, "durationTicks"))),
             new ProcedureMovementRuntime(
                 EnumValue<TravelResolutionMode>(movement, "travelResolution"),
-                EnumValue<ActualDistanceResolutionMode>(movement, "actualDistanceResolution"))
-            {
-                MechanicVersion = movement.Mechanic.Version
-            },
+                EnumValue<ActualDistanceResolutionMode>(movement, "actualDistanceResolution")),
             turning is null ? null : new ProcedureSpatialTurnRuntime(
                 Double(turning, "neighborCenterDistanceFactor"),
                 Boolean(turning, "supportsDeliberateDoubleBack")),

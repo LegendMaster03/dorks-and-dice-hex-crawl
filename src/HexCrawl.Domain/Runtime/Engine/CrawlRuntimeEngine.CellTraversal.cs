@@ -24,10 +24,6 @@ public sealed partial class CrawlRuntimeEngine
         ArgumentNullException.ThrowIfNull(travel);
 
         var policy = GenericProcedureRuntime.Bind(procedure).Movement;
-        if (policy.MechanicVersion != 2)
-            throw new NotSupportedException(
-                "Legacy hex movement semantics are not applicable to generalized world geometry. An explicit version 2 movement procedure is required.");
-
         // A valid ruleset can name a smaller symmetry quotient than the
         // world's realized translation cover. Creation accepts equivalence
         // proven by that cover; execution must apply the same requirement.
@@ -56,7 +52,7 @@ public sealed partial class CrawlRuntimeEngine
                     || travel.HexSteps is not null || travel.ExpectedDistance is not null
                     || travel.ActualDistance is not null)
                     throw new InvalidOperationException(
-                        "Version 2 cell-step travel requires one resolved, non-negative boundary-transition count.");
+                        "Cell-step travel requires one resolved, non-negative boundary-transition count.");
                 return PeriodicTraversalExecution.AdvanceCellSteps(
                     world, traversal, steps, continueAcrossBoundaries);
 

@@ -48,8 +48,6 @@ public sealed partial class CrawlRuntimeEngine
             throw new InvalidOperationException("Resolve the pending encounter before continuing travel.");
 
         var runtime = GenericProcedureRuntime.Bind(procedure);
-        if (runtime.Movement.MechanicVersion != 2)
-            throw new NotSupportedException("Cell watches require an explicit version-2 movement procedure.");
         expedition.Validate(world);
         ValidateCellPlan(plan);
         ValidateCellTravel(runtime.Movement, inputs.Travel);

@@ -97,9 +97,7 @@ public sealed class ExpeditionStartService(
             ? await ResolveProcedureAsync(owner, selection, cancellationToken)
             : null;
         var procedure = geometricPreset?.Procedure ?? selected!.Procedure;
-        var bound = GenericProcedureRuntime.Bind(procedure);
-        if (bound.Movement.MechanicVersion != 2)
-            throw new NotSupportedException("Generalized world traversal requires movement version 2.");
+        GenericProcedureRuntime.Bind(procedure);
 
         // Alternative legitimate symmetry quotients must not be rejected only
         // because their canonical strings differ. The world's independently
@@ -197,9 +195,7 @@ public sealed class ExpeditionStartService(
             ? await ResolveProcedureAsync(owner, selection, cancellationToken)
             : null;
         var procedure = geometricPreset?.Procedure ?? selected!.Procedure;
-        var movement = GenericProcedureRuntime.Bind(procedure).Movement;
-        if (movement.MechanicVersion != 2)
-            throw new NotSupportedException("Geometric mapless travel requires a version 2 movement procedure.");
+        GenericProcedureRuntime.Bind(procedure);
         var comparison = DelaneyDressTopology.Compare(
             procedure.TilingDsSymbol,
             geometry.World.Topology.QuotientDsSymbol,
