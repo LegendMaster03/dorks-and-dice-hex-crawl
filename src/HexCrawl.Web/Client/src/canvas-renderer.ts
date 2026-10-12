@@ -353,7 +353,7 @@ export class CanvasMapRenderer {
     }
 
     private drawSelection(ctx: CanvasRenderingContext2D, world: DemoWorld, width: number, height: number): void {
-        if (this.selectedWorldCell && world.tiling && !world.grid) {
+        if (this.selectedWorldCell && world.tiling) {
             const cell = this.selectedWorldCell;
             if (cell.id.tilingId !== world.tiling.id || cell.polygon.length < 3) return;
             const points = cell.polygon.map(point => this.toScreen(point, width, height));

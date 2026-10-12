@@ -289,6 +289,10 @@ export class MapSurface {
             const grid = this.renderer.gridPreview ?? world.grid;
             if (!grid) return;
             const selected = worldToHex(grid, point);
+            // An exact world-cell lookup follows asynchronously in the V2
+            // workspace. Never leave an older qualified selection highlighted
+            // while a new grid-click selection is being resolved.
+            this.renderer.selectedWorldCell = null;
             this.renderer.selectedHex = selected;
             this.accessibilityStatus.textContent = `Selected hex q ${selected.q}, r ${selected.r}.`;
             this.hexSelectionHandler?.(selected);

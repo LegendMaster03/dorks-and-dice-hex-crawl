@@ -112,6 +112,8 @@ test("renderer shows actual cell polygon and party in mapless and legacy hex wor
     assert.doesNotMatch(renderer, /if \(!ctx \|\| !world\) return/);
     assert.match(renderer, /this\.drawExpedition\(ctx, world, width, height\)/);
     assert.match(renderer, /!world \|\| world\.tiling\?\.id === this\.currentWorldCell\.id\.tilingId/);
+    assert.match(renderer, /if \(this\.selectedWorldCell && world\.tiling\) \{/);
+    assert.doesNotMatch(renderer, /if \(this\.selectedWorldCell && world\.tiling && !world\.grid\)/);
     assert.match(map, /public centerOn\(point: WorldPoint\)/);
     assert.match(periodic, /if \(!world\) map\.centerOn\(topology\.position\)/);
 });
