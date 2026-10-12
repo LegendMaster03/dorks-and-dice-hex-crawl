@@ -135,7 +135,7 @@ public sealed class RuntimeEndpointsTests
                 var advanced = await first.Content.ReadFromJsonAsync<JsonElement>();
                 advancedVersion = advanced.GetProperty("version").GetInt64();
                 Assert.True(advancedVersion > initialVersion);
-                Assert.Equal(JsonValueKind.Null, advanced.GetProperty("expedition").GetProperty("currentHex").ValueKind);
+                Assert.False(advanced.GetProperty("expedition").TryGetProperty("currentHex", out _));
                 Assert.Equal(1, advanced.GetProperty("expedition").GetProperty("completedWatches").GetInt32());
                 Assert.Equal(0.25, advanced.GetProperty("expedition")
                     .GetProperty("distanceTraveled").GetProperty("value").GetDouble(), 6);
@@ -169,7 +169,7 @@ public sealed class RuntimeEndpointsTests
             var persisted = await reopened.GetFromJsonAsync<JsonElement>(
                 $"/api/expeditions/{expeditionId:D}");
             Assert.Equal(advancedVersion, persisted.GetProperty("version").GetInt64());
-            Assert.Equal(JsonValueKind.Null, persisted.GetProperty("expedition").GetProperty("currentHex").ValueKind);
+            Assert.False(persisted.GetProperty("expedition").TryGetProperty("currentHex", out _));
         }
         finally
         {

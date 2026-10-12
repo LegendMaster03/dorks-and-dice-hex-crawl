@@ -55,8 +55,8 @@ public sealed class Phase20MaplessCellHttpTests
                 id = created.GetProperty("id").GetGuid();
                 version = created.GetProperty("version").GetInt64();
                 var initial = created.GetProperty("expedition");
-                Assert.Equal(JsonValueKind.Null, initial.GetProperty("currentHex").ValueKind);
-                Assert.Equal(JsonValueKind.Null, initial.GetProperty("hexProgress").ValueKind);
+                Assert.False(initial.TryGetProperty("currentHex", out _));
+                Assert.False(initial.TryGetProperty("hexProgress", out _));
                 Assert.True(initial.GetProperty("isSpatial").GetBoolean());
                 Assert.NotEqual(Guid.Empty,
                     initial.GetProperty("currentCell").GetProperty("tilingId").GetGuid());
@@ -135,8 +135,7 @@ public sealed class Phase20MaplessCellHttpTests
                 Assert.Equal(HttpStatusCode.OK, advancedResponse.StatusCode);
                 var advanced = await advancedResponse.Content.ReadFromJsonAsync<JsonElement>();
                 Assert.True(advanced.GetProperty("version").GetInt64() > version);
-                Assert.Equal(JsonValueKind.Null,
-                    advanced.GetProperty("expedition").GetProperty("currentHex").ValueKind);
+                Assert.False(advanced.GetProperty("expedition").TryGetProperty("currentHex", out _));
                 Assert.Equal(1, advanced.GetProperty("expedition").GetProperty("completedWatches").GetInt32());
 
                 using var stale = await client.PostAsJsonAsync(
@@ -224,12 +223,12 @@ public sealed class Phase20MaplessCellHttpTests
             var updated = await accepted.Content.ReadFromJsonAsync<JsonElement>();
             Assert.Equal(version + 1, updated.GetProperty("version").GetInt64());
             var spatial = updated.GetProperty("expedition");
-            Assert.Equal(JsonValueKind.Null, spatial.GetProperty("currentHex").ValueKind);
+            Assert.False(spatial.TryGetProperty("currentHex", out _));
             Assert.Equal(targetCell, JsonSerializer.Deserialize<WorldCellId>(
                 spatial.GetProperty("currentCell").GetRawText(), ApiJson));
             var ev = Assert.Single(updated.GetProperty("history").EnumerateArray());
             Assert.Equal("DmOverrideApplied", ev.GetProperty("kind").GetString());
-            Assert.Equal(JsonValueKind.Null, ev.GetProperty("hex").ValueKind);
+            Assert.False(ev.TryGetProperty("hex", out _));
             Assert.Equal(targetCell, JsonSerializer.Deserialize<WorldCellId>(
                 ev.GetProperty("cell").GetRawText(), ApiJson));
 
@@ -292,8 +291,7 @@ public sealed class Phase20MaplessCellHttpTests
             using var started = await client.PostAsJsonAsync(route, request, ApiJson);
             Assert.Equal(HttpStatusCode.Created, started.StatusCode);
             var geometric = await started.Content.ReadFromJsonAsync<JsonElement>();
-            Assert.Equal(JsonValueKind.Null,
-                geometric.GetProperty("expedition").GetProperty("currentHex").ValueKind);
+            Assert.False(geometric.GetProperty("expedition").TryGetProperty("currentHex", out _));
             Assert.NotEqual(Guid.Empty,
                 geometric.GetProperty("expedition").GetProperty("currentCell")
                     .GetProperty("tilingId").GetGuid());
@@ -311,8 +309,7 @@ public sealed class Phase20MaplessCellHttpTests
             var corrected = await reposition.Content.ReadFromJsonAsync<JsonElement>();
             Assert.Equal(neighbor, JsonSerializer.Deserialize<WorldCellId>(
                 corrected.GetProperty("expedition").GetProperty("currentCell").GetRawText(), ApiJson));
-            Assert.Equal(JsonValueKind.Null,
-                corrected.GetProperty("expedition").GetProperty("currentHex").ValueKind);
+            Assert.False(corrected.GetProperty("expedition").TryGetProperty("currentHex", out _));
 
             // Removed prototype routes do not remain in the new API surface.
             using var oldClient = await client.PostAsJsonAsync(

@@ -127,7 +127,7 @@ public sealed class ExpeditionWorkbenchEndpointsTests
                 var state = moved.GetProperty("expedition");
 
                 Assert.Equal(targetCell, state.GetProperty("currentCell").GetRawText());
-                Assert.Equal(JsonValueKind.Null, state.GetProperty("currentHex").ValueKind);
+                Assert.False(state.TryGetProperty("currentHex", out _));
                 Assert.Equal(0, state.GetProperty("distanceTraveled").GetProperty("value").GetDouble());
                 Assert.Equal(0, state.GetProperty("elapsedTravelHours").GetDouble());
                 Assert.False(state.GetProperty("isLost").GetBoolean());
@@ -149,7 +149,7 @@ public sealed class ExpeditionWorkbenchEndpointsTests
                 var state = reloaded.GetProperty("expedition");
                 Assert.Equal(targetCell, state.GetProperty("currentCell").GetRawText());
                 Assert.Equal(0, state.GetProperty("distanceTraveled").GetProperty("value").GetDouble());
-                Assert.Equal(JsonValueKind.Null, state.GetProperty("currentHex").ValueKind);
+                Assert.False(state.TryGetProperty("currentHex", out _));
             }
         }
         finally
@@ -401,7 +401,7 @@ public sealed class ExpeditionWorkbenchEndpointsTests
                 Assert.Equal("FlatTop", session.GetProperty("context").GetProperty("orientation").GetString());
                 var spatial = session.GetProperty("expedition");
                 Assert.True(spatial.GetProperty("isSpatial").GetBoolean());
-                Assert.Equal(JsonValueKind.Null, spatial.GetProperty("currentHex").ValueKind);
+                Assert.False(spatial.TryGetProperty("currentHex", out _));
                 var currentCell = spatial.GetProperty("currentCell").GetProperty("address");
                 Assert.Equal("hex", currentCell.GetProperty("motifCellId").GetString());
                 Assert.Equal(2L, currentCell.GetProperty("translation").GetProperty("u").GetInt64());
@@ -435,8 +435,7 @@ public sealed class ExpeditionWorkbenchEndpointsTests
                 session = await advanceResponse.Content.ReadFromJsonAsync<JsonElement>();
                 Assert.Equal(3, session.GetProperty("expedition")
                     .GetProperty("distanceTraveled").GetProperty("value").GetDouble(), 6);
-                Assert.Equal(JsonValueKind.Null,
-                    session.GetProperty("expedition").GetProperty("currentHex").ValueKind);
+                Assert.False(session.GetProperty("expedition").TryGetProperty("currentHex", out _));
                 var worldsAfter = await client.GetFromJsonAsync<JsonElement>("/api/overworlds");
                 Assert.Equal(0, worldsAfter.GetArrayLength());
             }
@@ -525,7 +524,7 @@ public sealed class ExpeditionWorkbenchEndpointsTests
                 Assert.Equal("NonSpatial", session.GetProperty("context").GetProperty("kind").GetString());
                 var runtime = session.GetProperty("expedition");
                 Assert.False(runtime.GetProperty("isSpatial").GetBoolean());
-                Assert.Equal(JsonValueKind.Null, runtime.GetProperty("currentHex").ValueKind);
+                Assert.False(runtime.TryGetProperty("currentHex", out _));
                 Assert.Equal(JsonValueKind.Null, runtime.GetProperty("distanceTraveled").ValueKind);
                 Assert.Equal(JsonValueKind.Null, runtime.GetProperty("activeWatchNumber").ValueKind);
 
@@ -553,7 +552,7 @@ public sealed class ExpeditionWorkbenchEndpointsTests
                 Assert.Contains(
                     session.GetProperty("history").EnumerateArray(),
                     item => item.GetProperty("kind").GetString() == "WatchStarted"
-                        && item.GetProperty("hex").ValueKind == JsonValueKind.Null);
+                        && !item.TryGetProperty("hex", out _));
                 Assert.Contains(
                     session.GetProperty("history").EnumerateArray(),
                     item => item.GetProperty("kind").GetString() == "WatchTimeAdvanced"
@@ -574,7 +573,7 @@ public sealed class ExpeditionWorkbenchEndpointsTests
                     session.GetProperty("history").EnumerateArray(),
                     item => item.GetProperty("kind").GetString() == "EncounterCheckPerformed"
                         && item.GetProperty("watchNumber").GetInt32() == 1
-                        && item.GetProperty("hex").ValueKind == JsonValueKind.Null);
+                        && !item.TryGetProperty("hex", out _));
 
                 var worlds = await client.GetFromJsonAsync<JsonElement>("/api/overworlds");
                 Assert.Equal(0, worlds.GetArrayLength());

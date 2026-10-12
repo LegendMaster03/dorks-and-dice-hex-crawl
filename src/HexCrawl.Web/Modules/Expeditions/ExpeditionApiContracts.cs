@@ -38,7 +38,6 @@ public sealed record PendingEncounterContract(
     int WatchNumber,
     EncounterOutcomeKind Outcome,
     double ExpeditionElapsedHours,
-    HexCoordinate? Hex,
     Guid? LocationId,
     string? Note)
 {
@@ -48,7 +47,7 @@ public sealed record PendingEncounterContract(
     public static PendingEncounterContract? From(PendingEncounterOccurrence? occurrence) =>
         occurrence is null ? null : new PendingEncounterContract(
             occurrence.Id, occurrence.TriggerSequence, occurrence.WatchNumber, occurrence.Outcome,
-            occurrence.ExpeditionElapsedTime.TotalHours, occurrence.Hex, occurrence.LocationId, occurrence.Note)
+            occurrence.ExpeditionElapsedTime.TotalHours, occurrence.LocationId, occurrence.Note)
         { Cell = occurrence.Cell };
 }
 

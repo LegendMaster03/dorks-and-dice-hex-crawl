@@ -291,7 +291,6 @@ export type PendingEncounter = {
     watchNumber: number;
     outcome: "WanderingEncounter" | "KeyedLocationDiscovery" | "ManualCustom";
     expeditionElapsedHours: number;
-    hex: HexCoordinate | null;
     locationId: string | null;
     note: string | null;
 };
@@ -300,7 +299,7 @@ export type SpatialRuntimeExpedition = {
     id: string;
     isSpatial: true;
     position: WorldPoint | null;
-    positionPrecision: "Exact" | "HexAnchor" | null;
+    positionPrecision: "Exact" | null;
     isLost: boolean;
     veerDegrees: number;
     distanceTraveled: DistanceValue;
@@ -381,7 +380,6 @@ export type RuntimeEvent = {
     watchNumber: number;
     kind: string;
     expeditionElapsedHours: number;
-    hex: HexCoordinate | null;
     message: string;
     distanceValue: number | null;
     distanceUnit: string | null;
