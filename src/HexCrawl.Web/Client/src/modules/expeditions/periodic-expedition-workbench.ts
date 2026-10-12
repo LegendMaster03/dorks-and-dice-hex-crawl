@@ -12,6 +12,7 @@ import { adjacencyForIntent } from "./spatial-adjacency";
 import { guidancePreferenceButton } from "../../ui/guidance";
 import { badge, openWorkspaceDrawer, statAction, textElement, type WorkspaceDrawer } from "../../ui/workspace";
 import { renderPhase15NextAction } from "./phase15-next-action";
+import { resolveHexStartCell } from "./world-cell-start";
 import type { ExpeditionWorkspaceAction } from "./expedition-workspace-model";
 import { encounterLocationId } from "./keyed-location-encounter";
 import { mountPeriodicGameplayPanels } from "./periodic-gameplay-panels";
@@ -164,6 +165,41 @@ export async function renderPeriodicExpeditionWorkbench(
     };
     const error = required<HTMLElement>("[data-error]");
     const form = required<HTMLFormElement>("[data-travel-form]");
+    const travelContent = required<HTMLElement>("[data-travel-content]");
+    const travelDock = required<HTMLElement>("[data-travel-staging]");
+    let travelDrawer: WorkspaceDrawer | null = null;
+    const openTravelDrawer = (focus?: "encounter" | "course"): void => {
+        if (!travelDrawer) {
+            travelDrawer = openWorkspaceDrawer(root, "Travel / watch",
+                body => { body.append(travelContent); },
+                document.activeElement instanceof HTMLElement ? document.activeElement : null,
+                () => {
+                    travelDock.append(travelContent);
+                    travelDrawer = null;
+                });
+        }
+        const target = focus === "encounter" ? required<HTMLButtonElement>("[data-resolve-encounter]")
+            : focus === "course" ? required<HTMLButtonElement>("[data-confirm-course]")
+                : required<HTMLButtonElement>("[data-advance]");
+        target.focus();
+    };
+    required<HTMLButtonElement>("[data-open-travel]").addEventListener("click",
+        () => openTravelDrawer());
+    required<HTMLButtonElement>("[data-gm-travel]").addEventListener("click",
+        () => openTravelDrawer());
+    required<HTMLButtonElement>("[data-gm-party]").addEventListener("click", () => {
+        const disclosure = required<HTMLDetailsElement>("[data-gameplay-disclosure]");
+        disclosure.open = true;
+        disclosure.scrollIntoView({ block: "nearest" });
+    });
+    required<HTMLButtonElement>("[data-gm-history]").addEventListener("click", () => {
+        const disclosure = required<HTMLDetailsElement>("[data-history-disclosure]");
+        disclosure.open = true;
+        disclosure.scrollIntoView({ block: "nearest" });
+    });
+    required<HTMLButtonElement>("[data-home]").addEventListener("click", () => navigate("/"));
+    required<HTMLButtonElement>("[data-ruleset]").addEventListener("click", () =>
+        navigate(`/procedures/${encodeURIComponent(runtime.procedure.procedureId)}/revisions/${runtime.procedure.revision}/reference`));
     const input = (name: string): HTMLInputElement => {
         const element = form.querySelector<HTMLInputElement>(`input[name="${name}"]`);
         if (!element) throw new Error(`Missing travel field ${name}.`);
@@ -221,6 +257,25 @@ export async function renderPeriodicExpeditionWorkbench(
         if (world) navigate(`/worlds/${world.id}`);
     });
     required<HTMLButtonElement>("[data-reload]").addEventListener("click", () => void refresh());
+    let hexInspectionGeneration = 0;
+    map.setHexSelectionHandler(hex => {
+        // Legacy q/r is only an editor gesture; identify the selected cell
+        // using the server's accepted geometry, never by fabricating V1 state.
+        if (!world?.grid || !hex) return;
+        const current = world;
+        const generation = ++hexInspectionGeneration;
+        void (async () => {
+            try {
+                const address = await resolveHexStartCell(api, current, hex);
+                if (disposed || generation !== hexInspectionGeneration) return;
+                inspectedCell = { tilingId: current.tiling!.id, address };
+                text("[data-inspection]",
+                    `Selected cell via grid ${hex.q}, ${hex.r}. Inspection does not move the party.`);
+            } catch (cause) {
+                if (!disposed && generation === hexInspectionGeneration) showUiError(error, cause);
+            }
+        })();
+    });
     map.setCellSelectionHandler(cell => {
         inspectedCell = cell?.id ?? null;
         text("[data-inspection]", cell
@@ -541,8 +596,9 @@ export async function renderPeriodicExpeditionWorkbench(
         if (disposed) return;
         const state = currentState();
         text("[data-title]", runtime.name);
-        text("[data-context-label]", world
-            ? "World-bound travel and discovery" : "Mapless cell travel");
+        text("[data-context-label]",
+            `${runtime.context.name} · ${runtime.procedure.name}`);
+        text("[data-map-title]", world ? "Expedition map" : "Mapless exploration");
         const place = state.position;
         text("[data-status]", `Day ${state.currentDay}, ${state.completedWatches} completed watches · ${state.activeWatchNumber === null ? "Ready for next watch" : `Watch ${state.activeWatchNumber} in progress`}`);
         text("[data-actual]", place
@@ -563,6 +619,7 @@ export async function renderPeriodicExpeditionWorkbench(
         });
         required<HTMLElement>("[data-cell-navigator]").replaceChildren(navigation);
         const selectedEdge = topology.interfaces.find(edge => edge.interfaceIndex === selectedExit);
+        renderPhase15Chrome();
         text("[data-course]", selectedEdge
             ? `Intended boundary ${selectedExit! + 1}; adjacent cell selected. Travel has not been resolved.`
             : "Select an adjacent boundary for intended travel. This does not move the party.");
@@ -666,6 +723,7 @@ export async function renderPeriodicExpeditionWorkbench(
     gameplay.sync();
     return () => {
         disposed = true;
+        travelDrawer?.close();
         gameplay.dispose();
         map.dispose();
         root.classList.remove("hc-phase15");
