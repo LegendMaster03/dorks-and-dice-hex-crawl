@@ -104,7 +104,7 @@ public sealed class ExpeditionStartService(
         // Validate the recipe before storing a new campaign revision so an
         // incompatible preset does not create an orphan revision.
         var geometricPreset = !string.IsNullOrWhiteSpace(selection.PresetKey)
-            ? GeometricNativeProcedureMaterializer.Materialize(selection.PresetKey!)
+            ? CampaignProcedureMaterializer.MaterializeExecutableSpatial(CrawlProcedureCatalog.Resolve(selection.PresetKey!))
             : null;
         var selected = geometricPreset is null
             ? await ResolveProcedureAsync(owner, selection, cancellationToken)
@@ -204,7 +204,7 @@ public sealed class ExpeditionStartService(
         // Saved revisions are never rematerialized. Only explicitly selected
         // catalog presets use the new geometric creation recipe.
         var geometricPreset = selection.PresetKey is { } presetKey
-            ? GeometricNativeProcedureMaterializer.Materialize(presetKey)
+            ? CampaignProcedureMaterializer.MaterializeExecutableSpatial(CrawlProcedureCatalog.Resolve(presetKey))
             : null;
         var selected = geometricPreset is null
             ? await ResolveProcedureAsync(owner, selection, cancellationToken)

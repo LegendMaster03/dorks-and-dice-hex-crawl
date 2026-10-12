@@ -1,4 +1,5 @@
 using HexCrawl.Domain.Procedure;
+using HexCrawl.Domain.Runtime;
 
 namespace HexCrawl.Application;
 
@@ -123,6 +124,32 @@ public static class CampaignProcedureMaterializer
         var revision = ApplyChanges(current, moduleSelections, overrides, checked(current.Revision + 1));
         revision.Validate();
         return revision;
+    }
+
+    /// <summary>
+    /// Materialize a version-2 executable spatial preset verbatim. No procedure
+    /// rewrite or shape-specific execution code is involved.
+    /// </summary>
+    public static MaterializedCampaignProcedure MaterializeExecutableSpatial(
+        CrawlProcedurePresetDefinition preset, Guid? procedureId = null)
+    {
+        ArgumentNullException.ThrowIfNull(preset);
+        var movement = preset.Recipe.ModuleSelections.SingleOrDefault(item =>
+            item.ModuleKey == GenericProcedureCatalog.MovementResolutionModule);
+        var turns = preset.Recipe.ModuleSelections.SingleOrDefault(item =>
+            item.ModuleKey == GenericProcedureCatalog.SpatialTurnCostModule);
+        if (movement?.MechanicVersion != 2 || turns is null)
+            throw new NotSupportedException(
+                "The selected preset has no executable generalized spatial procedure.");
+        var result = Materialize(preset, procedureId);
+        var bound = GenericProcedureRuntime.Bind(result.Procedure);
+        if (bound.Movement.MechanicVersion != 2 || bound.TurnPolicy is null)
+            throw new InvalidOperationException(
+                "The spatial preset did not bind its generalized movement policy.");
+        return result with
+        {
+            Origin = new ProcedureOriginMetadata(preset.PresetKey, preset.DisplayName, null)
+        };
     }
 
     private static void ValidateComposableSource(CampaignProcedure current)
