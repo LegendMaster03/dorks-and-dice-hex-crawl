@@ -25,8 +25,8 @@ export async function renderPeriodicExpeditionWorkbench(
     initialWorld: Overworld | null, navigate: (route: string, replace?: boolean) => void,
     toolContext: ToolHostContext | null = null
 ): Promise<() => void> {
-    if (!initialWorld || !initial.expedition.isSpatial || !initial.expedition.currentCell)
-        throw new Error("A generalized expedition requires an authoritative world and current cell.");
+    if (!initial.expedition.isSpatial || !initial.expedition.currentCell)
+        throw new Error("A generalized expedition requires authoritative current-cell state.");
     let world = initialWorld;
     let runtime = initial;
     let topology = await api.getCellTopology(initial.id);
@@ -39,7 +39,7 @@ export async function renderPeriodicExpeditionWorkbench(
         <section class="hc-page hc-workspace hc-expedition hc-periodic-expedition">
             <header class="hc-page-header">
                 <div><span class="hc-sheet-kicker">Expedition</span>
-                    <h1 data-title></h1><p>World-bound travel and discovery</p></div>
+                    <h1 data-title></h1><p data-context-label></p></div>
                 <nav class="hc-button-row">
                     <button type="button" data-world>World map</button>
                     <button type="button" data-reload>Reload expedition</button>
@@ -147,17 +147,17 @@ export async function renderPeriodicExpeditionWorkbench(
         keyedChoices.replaceChildren();
         const placeholder = document.createElement("option");
         placeholder.value = "";
-        placeholder.textContent = world.locations.length
+        placeholder.textContent = (world?.locations.length ?? 0)
             ? "Choose a saved world location"
             : "No saved locations — add one in the world editor";
         keyedChoices.append(placeholder);
-        for (const location of world.locations) {
+        for (const location of world?.locations ?? []) {
             const option = document.createElement("option");
             option.value = location.id;
             option.textContent = `${location.name} · ${location.category}`;
             keyedChoices.append(option);
         }
-        if (world.locations.some(location => location.id === selected))
+        if (world?.locations.some(location => location.id === selected))
             keyedChoices.value = selected;
     };
     updateKeyedLocations();
@@ -169,9 +169,11 @@ export async function renderPeriodicExpeditionWorkbench(
     showKeyedLocation();
 
     const map = new MapSurface(required<HTMLElement>("[data-map]"), () => world, undefined, api);
+    required<HTMLButtonElement>("[data-world]").hidden = world === null;
     required<HTMLElement>("[data-guidance-controls]").append(guidancePreferenceButton(root));
-    required<HTMLButtonElement>("[data-world]").addEventListener("click",
-        () => navigate(`/worlds/${world.id}`));
+    required<HTMLButtonElement>("[data-world]").addEventListener("click", () => {
+        if (world) navigate(`/worlds/${world.id}`);
+    });
     required<HTMLButtonElement>("[data-reload]").addEventListener("click", () => void refresh());
     map.setCellSelectionHandler(cell => {
         inspectedCell = cell?.id ?? null;
@@ -281,11 +283,12 @@ export async function renderPeriodicExpeditionWorkbench(
         try {
             const [next, nextTopology, nextWorld] = await Promise.all([
                 api.getExpedition(runtime.id), api.getCellTopology(runtime.id),
-                api.getOverworld(world.id)
+                world ? api.getOverworld(world.id) : Promise.resolve(null)
             ]);
             if (disposed) return;
             runtime = next;
             world = nextWorld;
+            required<HTMLButtonElement>("[data-world]").hidden = world === null;
             topology = nextTopology;
             selectedExit = topology.selectedExitInterfaceIndex;
             render();
@@ -336,7 +339,7 @@ export async function renderPeriodicExpeditionWorkbench(
                     occursAt: encounterChoice === "None"
                         ? null : timespanFromHours(readNumber("encounterHours")),
                     locationId: encounterLocationId(
-                        encounterChoice, keyedChoices.value, world.locations),
+                        encounterChoice, keyedChoices.value, world?.locations ?? []),
                     note: input("encounterNote").value.trim() || null,
                     provenance: { source: "DmOverride" as const, note: "DM-resolved encounter" }
                 }
@@ -399,6 +402,8 @@ export async function renderPeriodicExpeditionWorkbench(
         if (disposed) return;
         const state = currentState();
         text("[data-title]", runtime.name);
+        text("[data-context-label]", world
+            ? "World-bound travel and discovery" : "Mapless cell travel");
         const place = state.position;
         text("[data-status]", `Day ${state.currentDay}, ${state.completedWatches} completed watches · ${state.activeWatchNumber === null ? "Ready for next watch" : `Watch ${state.activeWatchNumber} in progress`}`);
         text("[data-actual]", place
