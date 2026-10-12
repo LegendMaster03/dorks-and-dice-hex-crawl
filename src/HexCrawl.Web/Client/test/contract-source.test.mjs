@@ -326,14 +326,14 @@ test("triggered encounters expose a Block Initiative handoff without loading ano
     assert.match(handoff, /combatants: EncounterHandoffCombatant\[\]/);
 });
 
-test("world-bound unified workspace keeps the map primary and stacks cleanly on narrower layouts", () => {
+test("spatial sessions use only the periodic-cell workbench while nonspatial sessions keep their own page", () => {
     const view = read("modules/expeditions/expedition-view.ts");
-    const styles = read("phase15-styles.ts");
-    assert.match(view, /section\.className = world \? "hc-workspace-grid" : "hc-nonspatial-primary"/);
-    assert.match(view, /primary\.className = "hc-panel hc-map-panel"/);
-    assert.match(view, /host\.className = "hc-map-host"/);
-    assert.match(styles, /\.hc-phase15-expedition \.hc-workspace-grid \{ grid-template-columns:minmax\(0,1fr\) minmax\(18rem,23rem\); align-items:start; \}/);
-    assert.match(styles, /@media \(max-width: 1040px\)[\s\S]*\.hc-phase15-expedition \.hc-workspace-grid,[\s\S]*grid-template-columns:1fr/);
+    const periodic = read("modules/expeditions/periodic-expedition-workbench.ts");
+    assert.match(view, /return renderPeriodicExpeditionWorkbench/);
+    assert.match(view, /page\.append\(renderNonSpatialWorkspace\(\)\)/);
+    assert.match(periodic, /hc-workspace-grid/);
+    assert.match(periodic, /hc-panel hc-map-panel/);
+    assert.doesNotMatch(view, /renderSpatialWorkspace|renderCurrentTravel|renderAdjacencyNavigator/);
 });
 
 test("expedition setup accepts saved revisions and materializes preset selections through one start contract", () => {

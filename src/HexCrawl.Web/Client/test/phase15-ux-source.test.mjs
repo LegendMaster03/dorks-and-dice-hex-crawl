@@ -723,45 +723,6 @@ test("narrow hierarchy keeps the map primary while rail context stacks without d
     assert.match(fixture, /currentTravelInRail:/);
 });
 
-test("desktop hierarchy moves current travel into the actionable rail so the map begins higher", () => {
-    const view = fs.readFileSync(
-        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
-        "utf8");
-    const styles = fs.readFileSync(path.join(sourceDir, "phase15-styles.ts"), "utf8");
-
-    const mapPanel = view.slice(
-        view.indexOf('primary.className = "hc-panel hc-map-panel"'),
-        view.indexOf('const secondary = document.createElement("aside")'));
-    assert.match(mapPanel, /if \(!world\) primary\.append\(renderCurrentTravel\(\)\)/);
-    assert.equal((mapPanel.match(/renderCurrentTravel\(\)/g) ?? []).length, 1);
-    assert.match(view, /if \(world\) secondary\.append\(renderCurrentTravel\(\)\)/);
-    assert.match(view, /partyRailContext\(runtime\)/);
-    assert.match(view, /environmentRailDetail\(survival\)/);
-    assert.doesNotMatch(view, /railAction\("Party & activities"/);
-    assert.match(styles, /@media \(min-width: 1041px\)[\s\S]*\.hc-table-rail \.hc-current-travel \{ grid-template-columns:1fr/);
-    assert.match(styles, /\.hc-table-rail > \.hc-current-travel \{ min-width:0; \}/);
-});
-
-test("current travel stays beside the map while selection detail is contextual overlay", () => {
-    const view = fs.readFileSync(
-        path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
-        "utf8");
-    const styles = fs.readFileSync(path.join(sourceDir, "phase15-styles.ts"), "utf8");
-
-    assert.match(view, /context\.className = "hc-map-context-overlay"/);
-    assert.match(view, /context\.hidden = true/);
-    assert.match(view, /frame\.append\(host, renderAdjacencyNavigator\(\), context\)/);
-    assert.match(view, /if \(!selectedHex\) \{\s*host\.hidden = true;/);
-    assert.match(view, /host\.hidden = false;\s*host\.append\(textElement\("h3", "Selected map cell"\)\)/);
-    assert.match(view, /section\.className = "hc-current-travel"/);
-    assert.match(view, /Current travel/);
-    assert.match(view, /Change pace/);
-    assert.match(styles, /\.hc-map-context-overlay \{ position:absolute/);
-    assert.match(styles, /\.hc-phase15-expedition \.hc-map-host \{ height:clamp\(28rem,58vh,46rem\); min-height:0; \}/);
-    assert.match(styles, /\.hc-phase15-expedition\.hc-page \{ max-width:none; \}/);
-    assert.match(styles, /\.hc-rail-action/);
-});
-
 test("course selection immediately updates the Next action copy without moving the party", () => {
     const view = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/expedition-view.ts"),
