@@ -49,7 +49,7 @@ public sealed partial class CrawlRuntimeEngine
 
             case TravelResolutionMode.CellSteps:
                 if (travel.CellSteps is not { } steps || steps < 0
-                    || travel.HexSteps is not null || travel.ExpectedDistance is not null
+                    || travel.ExpectedDistance is not null
                     || travel.ActualDistance is not null)
                     throw new InvalidOperationException(
                         "Cell-step travel requires one resolved, non-negative boundary-transition count.");

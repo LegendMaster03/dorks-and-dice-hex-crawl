@@ -12,7 +12,6 @@ public enum EncounterCheckCadence
 public enum TravelResolutionMode
 {
     ContinuousDistance,
-    HexSteps,
     CellSteps
 }
 

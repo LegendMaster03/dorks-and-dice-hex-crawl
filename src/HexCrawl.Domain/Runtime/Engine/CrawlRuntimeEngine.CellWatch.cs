@@ -479,9 +479,9 @@ public sealed partial class CrawlRuntimeEngine
     {
         if (policy.TravelResolution == TravelResolutionMode.CellSteps)
         {
-            if (travel.CellSteps is null or < 0 || travel.HexSteps is not null
+            if (travel.CellSteps is null or < 0
                 || travel.ExpectedDistance is not null || travel.ActualDistance is not null)
-                throw new InvalidOperationException("Cell steps require one nonnegative count, without legacy hex steps or distances.");
+                throw new InvalidOperationException("Cell steps require one nonnegative count without distance values.");
         }
         else
         {
