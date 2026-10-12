@@ -1,13 +1,23 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using HexCrawl.Application;
+using HexCrawl.Domain.Runtime;
+using HexCrawl.Domain.Spatial;
+using HexCrawl.Web.Api;
 
 namespace HexCrawl.IntegrationTests;
 
 public sealed class EncounterHandoffEndpointsTests
 {
+    private static readonly JsonSerializerOptions CellJson = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter(allowIntegerValues: false) }
+    };
+
     [Fact]
-    public async Task RuntimeHandoffUsesRecordedHistoricalContextAndDoesNotMutateExpedition()
+    public async Task RuntimeHandoffRetainsRecordedQualifiedCellAfterLaterRepositionAndDoesNotMutateExpedition()
     {
         var database = TestWebHost.NewDatabasePath();
         try
@@ -16,83 +26,106 @@ public sealed class EncounterHandoffEndpointsTests
             using var client = factory.CreateClient();
             var world = await CreateWorldAsync(client);
             var worldId = world.GetProperty("id").GetGuid();
+            var start = await StartWorldExpeditionAsync(
+                client, worldId, "Historical V2 encounter", "alexandrian-advanced", 0, 0);
+            var expeditionId = start.GetProperty("id").GetGuid();
+            var startingCell = start.GetProperty("expedition").GetProperty("currentCell");
+            var startingCellText = startingCell.GetRawText();
 
-            var expedition = await StartWorldExpeditionAsync(
-                client, worldId, "Historical encounter", "simple-fixed-distance", 0, 0);
-            var expeditionId = expedition.GetProperty("id").GetGuid();
+            var topology = await client.GetFromJsonAsync<JsonElement>(
+                $"/api/expeditions/{expeditionId:D}/cell-topology");
+            var center = topology.GetProperty("center");
+            var firstInterface = topology.GetProperty("interfaces")[0];
+            var heading = new WorldPoint(
+                (firstInterface.GetProperty("start").GetProperty("x").GetDouble()
+                 + firstInterface.GetProperty("end").GetProperty("x").GetDouble()) / 2
+                 - center.GetProperty("x").GetDouble(),
+                (firstInterface.GetProperty("start").GetProperty("y").GetDouble()
+                 + firstInterface.GetProperty("end").GetProperty("y").GetDouble()) / 2
+                 - center.GetProperty("y").GetDouble());
+            var manual = new ResolutionProvenance(ResolutionSource.ManualRoll);
+            var plan = new CellWatchTravelPlan(heading, false, false,
+                TravelModeSelection.Normal, NavigationAidSelection.None);
+            var watch = new CellWatchAdvanceInputs(
+                ResolvedTravelAmount.Distance(
+                    new DistanceMeasure(0.25, DistanceUnit.Miles),
+                    new DistanceMeasure(0.25, DistanceUnit.Miles), manual),
+                new ResolvedCellNavigation(NavigationCheckOutcome.Succeeded, null, manual),
+                new ResolvedEncounter(
+                    EncounterOutcomeKind.WanderingEncounter, TimeSpan.Zero, null,
+                    "Encounter recorded at original cell", manual));
 
-            using (var encounterResponse = await client.PostAsJsonAsync(
-                       $"/api/expeditions/{expeditionId:D}/assistants/encounters",
-                       new
-                       {
-                           expectedVersion = expedition.GetProperty("version").GetInt64(),
-                           outcome = "WanderingEncounter",
-                           resolutionSource = "ManualRoll",
-                           note = "recorded at the original hex"
-                       }))
-            {
-                encounterResponse.EnsureSuccessStatusCode();
-                expedition = await encounterResponse.Content.ReadFromJsonAsync<JsonElement>();
-            }
+            using var triggerResponse = await client.PostAsJsonAsync(
+                $"/api/expeditions/{expeditionId:D}/cells/advance",
+                new AdvanceCellWatchRequest(start.GetProperty("version").GetInt64(), plan, watch),
+                CellJson);
+            triggerResponse.EnsureSuccessStatusCode();
+            var expedition = await triggerResponse.Content.ReadFromJsonAsync<JsonElement>();
 
             var encounterEvent = expedition.GetProperty("history").EnumerateArray()
                 .Single(value => value.GetProperty("kind").GetString() == "EncounterTriggered");
             var encounterSequence = encounterEvent.GetProperty("sequence").GetInt64();
             var occurrenceId = encounterEvent.GetProperty("encounterOccurrenceId").GetGuid();
+            Assert.Equal(startingCellText, encounterEvent.GetProperty("cell").GetRawText());
+            Assert.Equal(JsonValueKind.Null, encounterEvent.GetProperty("hex").ValueKind);
             Assert.Equal("WanderingEncounter", encounterEvent.GetProperty("encounterOutcome").GetString());
-            Assert.Equal(0, encounterEvent.GetProperty("hex").GetProperty("q").GetInt32());
-            Assert.Equal(0, encounterEvent.GetProperty("hex").GetProperty("r").GetInt32());
 
             var pendingHandoffId = Guid.NewGuid();
-            var pendingVersion = expedition.GetProperty("version").GetInt64();
             var pendingHandoff = await CreateRuntimeHandoffAsync(
-                client, expeditionId, pendingVersion, pendingHandoffId, encounterSequence);
-            Assert.Equal($"runtime:{occurrenceId:D}", pendingHandoff.GetProperty("identity").GetProperty("encounterOccurrenceId").GetString());
+                client, expeditionId, expedition.GetProperty("version").GetInt64(),
+                pendingHandoffId, encounterSequence);
+            Assert.Equal($"runtime:{occurrenceId:D}",
+                pendingHandoff.GetProperty("identity").GetProperty("encounterOccurrenceId").GetString());
 
-            using (var resolveResponse = await client.PostAsJsonAsync(
-                $"/api/expeditions/{expeditionId:D}/encounters/{occurrenceId:D}/resolve",
+            using var resolvedResponse = await client.PostAsJsonAsync(
+                $"/api/expeditions/{expeditionId:D}/cells/encounters/{occurrenceId:D}/resolve",
                 new
                 {
                     expectedVersion = expedition.GetProperty("version").GetInt64(),
-                    resolutionSource = "DmOverride",
-                    resolutionNote = "resolved before later travel"
-                }))
-            {
-                resolveResponse.EnsureSuccessStatusCode();
-                expedition = await resolveResponse.Content.ReadFromJsonAsync<JsonElement>();
-            }
+                    resultNote = "resolved before later travel"
+                });
+            resolvedResponse.EnsureSuccessStatusCode();
+            expedition = await resolvedResponse.Content.ReadFromJsonAsync<JsonElement>();
 
-            using (var travelResponse = await client.PostAsJsonAsync(
-                       $"/api/expeditions/{expeditionId:D}/assistants/travel",
-                       new
-                       {
-                           expectedVersion = expedition.GetProperty("version").GetInt64(),
-                           elapsedHours = 1,
-                           distance = 6,
-                           resultingHex = new { q = 1, r = 0 },
-                           hexProgress = 0,
-                           intendedDirection = 0,
-                           completeWatch = false,
-                           resolutionSource = "ManualRoll",
-                           resolutionNote = "moved after the recorded encounter"
-                       }))
-            {
-                travelResponse.EnsureSuccessStatusCode();
-                expedition = await travelResponse.Content.ReadFromJsonAsync<JsonElement>();
-            }
-            Assert.Equal(1, expedition.GetProperty("expedition").GetProperty("currentHex").GetProperty("q").GetInt32());
+            using var finishResponse = await client.PostAsJsonAsync(
+                $"/api/expeditions/{expeditionId:D}/cells/advance",
+                new AdvanceCellWatchRequest(
+                    expedition.GetProperty("version").GetInt64(), plan,
+                    watch with { Encounter = ResolvedEncounter.None }),
+                CellJson);
+            finishResponse.EnsureSuccessStatusCode();
+            expedition = await finishResponse.Content.ReadFromJsonAsync<JsonElement>();
+
+            var destination = await client.GetFromJsonAsync<JsonElement>(
+                $"/api/overworlds/{worldId:D}/cells/resolve?motifCellId=hex&u=1&v=0");
+            var destinationId = destination.GetProperty("id");
+            using var repositionResponse = await client.PostAsJsonAsync(
+                $"/api/expeditions/{expeditionId:D}/cells/reposition",
+                new
+                {
+                    expectedVersion = expedition.GetProperty("version").GetInt64(),
+                    targetCell = destinationId,
+                    position = destination.GetProperty("center"),
+                    note = "Moved after the original encounter"
+                });
+            repositionResponse.EnsureSuccessStatusCode();
+            expedition = await repositionResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(destinationId.GetRawText(),
+                expedition.GetProperty("expedition").GetProperty("currentCell").GetRawText());
 
             var handoffId = Guid.NewGuid();
             var version = expedition.GetProperty("version").GetInt64();
-            var handoff = await CreateRuntimeHandoffAsync(client, expeditionId, version, handoffId, encounterSequence);
+            var handoff = await CreateRuntimeHandoffAsync(
+                client, expeditionId, version, handoffId, encounterSequence);
 
             Assert.Equal(2, handoff.GetProperty("version").GetInt32());
             Assert.Equal("hex-crawl", handoff.GetProperty("sourceTool").GetString());
             Assert.Equal(handoffId, handoff.GetProperty("identity").GetProperty("handoffId").GetGuid());
-            Assert.Equal($"runtime:{occurrenceId:D}", handoff.GetProperty("identity").GetProperty("encounterOccurrenceId").GetString());
+            Assert.Equal($"runtime:{occurrenceId:D}",
+                handoff.GetProperty("identity").GetProperty("encounterOccurrenceId").GetString());
             Assert.Equal("WanderingEncounter", handoff.GetProperty("encounter").GetProperty("outcome").GetString());
-            Assert.Equal(0, handoff.GetProperty("worldContext").GetProperty("hex").GetProperty("q").GetInt32());
-            Assert.Equal(0, handoff.GetProperty("worldContext").GetProperty("hex").GetProperty("r").GetInt32());
+            Assert.Equal(JsonValueKind.Null, handoff.GetProperty("worldContext").GetProperty("hex").ValueKind);
+            Assert.Equal(startingCellText, handoff.GetProperty("worldContext").GetProperty("cell").GetRawText());
             Assert.Equal(worldId, handoff.GetProperty("worldContext").GetProperty("overworldId").GetGuid());
 
             var replay = await CreateRuntimeHandoffAsync(client, expeditionId, version, handoffId, encounterSequence);
@@ -100,9 +133,11 @@ public sealed class EncounterHandoffEndpointsTests
             Assert.Equal(handoff.GetProperty("identity").GetProperty("encounterOccurrenceId").GetString(),
                 replay.GetProperty("identity").GetProperty("encounterOccurrenceId").GetString());
 
-            var after = await client.GetFromJsonAsync<JsonElement>($"/api/expeditions/{expeditionId:D}");
+            var after = await client.GetFromJsonAsync<JsonElement>(
+                $"/api/expeditions/{expeditionId:D}");
             Assert.Equal(version, after.GetProperty("version").GetInt64());
-            Assert.Equal(1, after.GetProperty("expedition").GetProperty("currentHex").GetProperty("q").GetInt32());
+            Assert.Equal(destinationId.GetRawText(),
+                after.GetProperty("expedition").GetProperty("currentCell").GetRawText());
 
             using var stale = await client.PostAsJsonAsync(
                 $"/api/expeditions/{expeditionId:D}/encounter-handoff",
@@ -548,13 +583,14 @@ public sealed class EncounterHandoffEndpointsTests
         int q,
         int r)
     {
-        using var response = await client.PostAsJsonAsync($"/api/overworlds/{worldId:D}/expeditions", new
-        {
-            name,
-            procedureKey,
-            presentationKey = "dm-controlled",
-            startHex = new { q, r }
-        });
+        using var response = await client.PostAsJsonAsync(
+            $"/api/overworlds/{worldId:D}/cell-expeditions", new
+            {
+                name,
+                presetKey = procedureKey,
+                presentationKey = "dm-controlled",
+                startCell = new { motifCellId = "hex", translation = new { u = (long)q, v = (long)r } }
+            });
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<JsonElement>();
     }
