@@ -2,7 +2,7 @@
 
 **Owner directive (2026-10-12):** the initial hex prototype must leave no executable source trace. Hexagonal worlds and the three existing hex-oriented procedure presets must remain functional **as data-driven instances of the single generalized polygonal tiling engine**, not through hex-specific algorithms, adapters, runtime structures, rendering, start forms, snapshots, or fallback handlers. This requirement supersedes the previous Phase 20.3 readiness assessment.
 
-**Release status (2026-10-12):** BLOCKED for dev/testing deployment, merge and WorkChat signed-in acceptance. The last verified successful baseline is `cc79753e` ([CI 38219426704](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38219426704)). The current incremental cleanup has not passed the architectural gate, and its final CI must be independently checked.
+**Release status (2026-10-12):** BLOCKED for dev/testing deployment, merge and WorkChat signed-in acceptance. The latest verified test head is `46b2dfb3` ([CI 38223394247](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38223394247), successful); the CI explicitly skipped rendered Phase 15 acceptance. Passing automated tests does not pass the architectural source gate.
 
 ## First implementation slices completed — not the release gate
 

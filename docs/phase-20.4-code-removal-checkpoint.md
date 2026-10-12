@@ -4,7 +4,7 @@
 
 **Repository:** `LegendMaster03/dorks-and-dice-hex-crawl`  
 **Unmerged, undeployed feature branch:** `feature/tile-crawl-phase-20.2-application-persistence`  
-**Last green baseline:** `cc79753e25549d73e88677d423e8f9c8d05f9d41`, [CI 38219426704](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38219426704). **Last source-cleanup commit before documentation updates:** `bd7d6940ffc3ef57830b32cb6b42249670bb687e`; its CI and the final documentation-inclusive head are not yet verified. Verify latest branch ref and CI before further work.
+**Last verified source/test head:** `46b2dfb34b9e03bcf179c22c6e7b0efbe3730c1c`, [CI 38223394247](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38223394247) successful. Frontend, .NET, PostgreSQL and isolated backup/restore checks passed; rendered Phase 15 review was skipped. Recheck any later documentation or code commit CI independently.
 **Release gate:** `docs/phase-20.4-zero-prototype-gate.md`  
 **Authoritative plan:** `docs/tile-crawl-development-plan.md`
 
@@ -17,7 +17,7 @@ Source commits on this feature branch after the last green baseline:
 - `e02dea65`: delete unused `WatchAdvanceResult`, whose payload referenced the V1 `ExpeditionState` type.
 - `b5cc652c`, `bd7d6940`: remove the unreferenced axial `expedition-watch-ledger.ts` module and its tests. That module read legacy `event.hex.q/r`; the active V2 view maintains its own event history.
 
-**CI:** The previous successful check is [38219426704](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38219426704) at `cc79753e`; do not label cleanup commits green without checking [the latest branch runs](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions). No local .NET or browser acceptance run is claimed.
+**CI:** [38223394247](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38223394247) passed at `46b2dfb3` after correcting the frontend test script in `package.json` to omit deleted ledger sources/tests. Frontend, .NET, PostgreSQL and asset backup/restore checks passed; Phase 15 rendered review was skipped. No local .NET or signed-in browser acceptance run is claimed.
 
 Confirmed source coupling requiring coordinated edits:
 
