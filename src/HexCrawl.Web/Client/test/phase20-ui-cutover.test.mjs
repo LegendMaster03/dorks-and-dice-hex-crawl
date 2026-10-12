@@ -141,6 +141,9 @@ test("V2 cell GM tools use server-qualified position and manual discovery, never
     const view = file("modules","expeditions","periodic-expedition-workbench.ts");
     const api = file("api.ts");
     assert.match(view, /api\.resolveWorldCell\(current\.id/);
+    assert.match(view, /map\.setClickInterceptor\(point => \{/);
+    assert.match(view, /api\.lookupWorldCell\(current\.id, point\)/);
+    assert.doesNotMatch(view, /map\.setHexSelectionHandler\(/);
     assert.match(view, /api\.repositionCellExpedition\(runtime\.id/);
     assert.match(view, /state\.activeWatchNumber === null && state\.pendingEncounter === null/);
     assert.match(view, /api\.discover\(runtime\.id, runtime\.version/);

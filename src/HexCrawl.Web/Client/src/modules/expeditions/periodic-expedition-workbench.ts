@@ -14,7 +14,6 @@ import { guidancePreferenceButton } from "../../ui/guidance";
 import { openWorkspaceDrawer, statAction, textElement, type WorkspaceDrawer } from "../../ui/workspace";
 import { renderPhase15NextAction } from "./phase15-next-action";
 import { nextCellExpeditionAction } from "./phase15-cell-action";
-import { resolveHexStartCell } from "./world-cell-start";
 import { polygonContainsSubject, uniquelyAdjacentInterface } from "./phase20-cell-ui-policy";
 import { discoveredSubjectIds } from "../../runtime-view";
 import { encounterLocationId } from "./keyed-location-encounter";
@@ -325,31 +324,34 @@ export async function renderPeriodicExpeditionWorkbench(
         renderSelectedCellDetails();
         map.requestRender();
     };
-    let hexInspectionGeneration = 0;
-    map.setHexSelectionHandler(hex => {
-        // Legacy q/r is only an editor gesture; identify the selected cell
-        // using the server's accepted geometry, never by fabricating V1 state.
-        if (!world?.grid || !hex) return;
+    let cellInspectionGeneration = 0;
+    map.setClickInterceptor(point => {
+        // On older authored hex worlds, the grid is an editing convenience.
+        // Select the exact clicked world point through the server tiling,
+        // never the center of a synthesized q/r hex.
+        if (!world?.grid || !world.tiling) return false;
         const current = world;
-        const generation = ++hexInspectionGeneration;
+        const generation = ++cellInspectionGeneration;
         setInspectedGeometry(null);
         void (async () => {
             try {
-                const address = await resolveHexStartCell(api, current, hex);
-                const geometry = await api.resolveWorldCell(current.id, {
-                    tilingId: current.tiling!.id, address
-                });
-                if (disposed || generation !== hexInspectionGeneration
+                const lookup = await api.lookupWorldCell(current.id, point);
+                if (lookup.status !== "Unique" || lookup.candidates.length !== 1
+                    || lookup.candidates[0].tilingId !== current.tiling?.id)
+                    throw new Error("Choose a point inside exactly one accepted world cell.");
+                const geometry = await api.resolveWorldCell(current.id, lookup.candidates[0]);
+                if (disposed || generation !== cellInspectionGeneration
                     || world?.tiling?.id !== geometry.id.tilingId
                     || world?.tiling?.revision !== current.tiling?.revision) return;
                 setInspectedGeometry(geometry);
             } catch (cause) {
-                if (!disposed && generation === hexInspectionGeneration) showUiError(error, cause);
+                if (!disposed && generation === cellInspectionGeneration) showUiError(error, cause);
             }
         })();
+        return true;
     });
     map.setCellSelectionHandler(cell => {
-        hexInspectionGeneration++;
+        cellInspectionGeneration++;
         setInspectedGeometry(cell);
     });
 
