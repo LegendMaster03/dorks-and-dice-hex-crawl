@@ -295,36 +295,20 @@ public sealed class EnvironmentContextTests
     };
 
     private static EnvironmentAnnotationScope WorldScope() => new() { Kind = EnvironmentAnnotationScopeKind.World };
-    private static EnvironmentAnnotationScope HexScope(int q, int r) => new()
-    {
-        Kind = EnvironmentAnnotationScopeKind.Hex, Hex = new HexCoordinate(q, r)
-    };
-    private static EnvironmentAnnotationScope FeatureScope(Guid id) => new()
-    {
-        Kind = EnvironmentAnnotationScopeKind.SpatialFeature, FeatureId = id
-    };
 
     private static OverworldDefinition World(IReadOnlyList<SpatialFeature> features, IReadOnlyList<EnvironmentAnnotation> annotations) => new()
     {
         Id = Guid.NewGuid(),
         Name = "Environment test world",
-        Grid = new HexGridDefinition
-        {
-            Id = Guid.NewGuid(),
-            Orientation = HexOrientation.PointyTop,
-            Origin = new WorldPoint(0, 0),
-            RotationDegrees = 0,
-            HexRadiusWorldUnits = 1,
-            NeighborCenterDistance = new DistanceMeasure(12, DistanceUnit.Miles)
-        },
+        Tiling = Tiling(),
         Features = features,
         EnvironmentAnnotations = annotations
     };
 
-    private static StoredExpedition WorldExpedition(OverworldDefinition world, ExpeditionState? state = null)
+    private static StoredExpedition WorldExpedition(OverworldDefinition world, CellExpeditionState? state = null)
     {
         var now = DateTimeOffset.UtcNow;
-        return new StoredExpedition("World environment test", state ?? State(0, 0),
+        return new StoredExpedition("World environment test", state ?? State(world.SpatialTiling),
             new WorldBoundCrawlSessionContext(world.Id), null, Procedure(CrawlProcedureCatalog.Dnd35PresetKey),
             null, TimeSpan.FromHours(1), "owner", 1, now, now);
     }
@@ -332,7 +316,7 @@ public sealed class EnvironmentContextTests
     private static StoredExpedition AbstractExpedition(CampaignProcedure procedure, CrawlPartySheet? party = null)
     {
         var now = DateTimeOffset.UtcNow;
-        return new StoredExpedition("Abstract environment test", State(0, 0),
+        return new StoredExpedition("Abstract environment test", State(Tiling()),
             new AbstractHexCrawlSessionContext("Abstract", HexOrientation.PointyTop,
                 new CrawlRuntimeContext(new DistanceMeasure(12, DistanceUnit.Miles))),
             null, procedure, null, TimeSpan.FromHours(1), "owner", 1, now, now)
@@ -347,12 +331,30 @@ public sealed class EnvironmentContextTests
             "owner", 1, now, now);
     }
 
-    private static ExpeditionState State(int q, int r) => new()
+    private static CellExpeditionState State(PeriodicWorldTiling tiling)
     {
-        Id = Guid.NewGuid(),
-        Traversal = HexTraversalState.StartingIn(new HexCoordinate(q, r), DistanceUnit.Miles),
-        DistanceTraveled = new DistanceMeasure(0, DistanceUnit.Miles)
-    };
+        var cell = tiling.Resolve(new PeriodicCellAddress(
+            tiling.Topology.MotifCells[0].Id, new LatticeDisplacement(0, 0)));
+        return new CellExpeditionState
+        {
+            Id = Guid.NewGuid(),
+            Traversal = new PeriodicCellTraversal { CurrentCell = cell.Id, Position = cell.Center },
+            DistanceTraveled = new DistanceMeasure(0, DistanceUnit.Miles)
+        };
+    }
+
+    private static PeriodicWorldTiling Tiling()
+    {
+        var realized = DelaneyDressHarmonicMetricRealization.Construct(
+            "<1:1,1,1:4,4>", 1.5, "world-unit");
+        Assert.Equal("realized", realized.Status);
+        var tiling = new PeriodicWorldTiling(
+            Guid.NewGuid(), realized.Topology!, realized.Realization!,
+            new WorldPoint(0, 0),
+            PhysicalDistancePerWorldUnit: new DistanceMeasure(12, DistanceUnit.Miles));
+        tiling.Validate();
+        return tiling;
+    }
 
     private static CampaignProcedure Procedure(string presetKey) =>
         CrawlProcedureCatalog.Resolve(presetKey).MaterializeGeneric().Procedure;
