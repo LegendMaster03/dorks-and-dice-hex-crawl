@@ -633,7 +633,6 @@ public sealed class Phase18CellWatchRuntimeTests
         world.Validate();
         var original = (advanced ? TestProcedureProfiles.AdvancedContinuous() : TestProcedureProfiles.FixedDistance()).Materialize();
         var modules = original.Modules
-            .Where(m => m.Mechanic.ExecutionHandler != GenericProcedureExecutionHandlers.HexProgressPolicy)
             .Select(m =>
             {
                 if (m.Mechanic.ExecutionHandler != GenericProcedureExecutionHandlers.MovementResolutionPolicy)
@@ -641,7 +640,6 @@ public sealed class Phase18CellWatchRuntimeTests
                 var parameters = m.Parameters.ToDictionary(x => x.Key, x => x.Value);
                 parameters["travelResolution"] = mode.ToString();
                 parameters["actualDistanceResolution"] = ActualDistanceResolutionMode.Fixed.ToString();
-                parameters["tracksIntraHexProgress"] = "false";
                 return m with { Mechanic = m.Mechanic with { Version = 2 }, Parameters = parameters };
             }).ToArray();
         var procedure = original with

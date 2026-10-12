@@ -17,7 +17,6 @@ public sealed class Phase18NativeCellProcedureTests
         var procedure = Version2Procedure(world, TravelResolutionMode.CellSteps);
         var runtime = GenericProcedureRuntime.Bind(procedure);
         Assert.Equal(2, runtime.Movement.MechanicVersion);
-        Assert.Throws<InvalidOperationException>(() => _ = runtime.HexProgress);
 
         var cursor = Start(world);
         var result = new CrawlRuntimeEngine().ResolveCellTravel(
@@ -67,19 +66,6 @@ public sealed class Phase18NativeCellProcedureTests
     }
 
     [Fact]
-    public void Version1HexPolicyIsNotReinterpretedAsGeneralizedMovement()
-    {
-        var world = CreateWorld("<1:1,1,1:6,3>");
-        var procedure = TestProcedureProfiles.HexStep().Materialize();
-        var runtime = GenericProcedureRuntime.Bind(procedure);
-        Assert.Equal(1, runtime.Movement.MechanicVersion);
-        var legacy = new CrawlRuntimeEngine();
-        Assert.Throws<NotSupportedException>(() => legacy.ResolveCellTravel(
-            world, procedure, Start(world),
-            ResolvedTravelAmount.Steps(1, ResolutionProvenance.ProcedureDefault), true));
-    }
-
-    [Fact]
     public void PinnedTilingIdentityIsCheckedBeforeCrossing()
     {
         var world = CreateWorld("<1:1,1,1:4,4>");
@@ -90,40 +76,17 @@ public sealed class Phase18NativeCellProcedureTests
             ResolvedTravelAmount.CellTransitions(1, ResolutionProvenance.ProcedureDefault), true));
     }
 
-    [Fact]
-    public void HexStepsAreNotAcceptedAsCellStepInput()
-    {
-        var world = CreateWorld("<1:1,1,1:4,4>");
-        var procedure = Version2Procedure(world, TravelResolutionMode.CellSteps);
-        Assert.Throws<InvalidOperationException>(() => new CrawlRuntimeEngine().ResolveCellTravel(
-            world, procedure, Start(world),
-            ResolvedTravelAmount.Steps(1, ResolutionProvenance.ProcedureDefault), true));
-    }
-
-    [Fact]
-    public void GeneralizedContinuousDistanceDoesNotAcceptHexProgressPolicy()
-    {
-        var world = CreateWorld("<1:1,1,1:4,4>");
-        var valid = Version2Procedure(world, TravelResolutionMode.ContinuousDistance);
-        var legacyHexProgress = TestProcedureProfiles.FixedDistance().Materialize().Modules.Single(x =>
-            x.Mechanic.ExecutionHandler == GenericProcedureExecutionHandlers.HexProgressPolicy);
-        var invalid = valid with { Modules = [.. valid.Modules, legacyHexProgress] };
-        Assert.Throws<InvalidOperationException>(() => GenericProcedureRuntime.Bind(invalid));
-    }
-
     private static CampaignProcedure Version2Procedure(
         PeriodicWorldTiling world, TravelResolutionMode mode)
     {
         var original = TestProcedureProfiles.FixedDistance().Materialize();
         var modules = original.Modules
-            .Where(m => m.Mechanic.ExecutionHandler != GenericProcedureExecutionHandlers.HexProgressPolicy)
             .Select(m =>
             {
                 if (m.Mechanic.ExecutionHandler != GenericProcedureExecutionHandlers.MovementResolutionPolicy)
                     return m;
                 var parameters = m.Parameters.ToDictionary(x => x.Key, x => x.Value);
                 parameters["travelResolution"] = mode.ToString();
-                parameters["tracksIntraHexProgress"] = "false";
                 return m with { Mechanic = m.Mechanic with { Version = 2 }, Parameters = parameters };
             }).ToArray();
         var procedure = original with
