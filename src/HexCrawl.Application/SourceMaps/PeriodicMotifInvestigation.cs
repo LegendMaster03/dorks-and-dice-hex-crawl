@@ -1,5 +1,9 @@
 namespace HexCrawl.Application;
 
+public sealed record MapAnalysisPoint(double X, double Y);
+public sealed record MapAnalysisSource(int Width, int Height, string MediaType);
+public sealed record MapAnalysisRaster(int Width, int Height, double Scale, bool SourceResolutionVerified);
+
 /// <summary>
 /// Experimental raster observation, never an accepted world tiling, stored
 /// map registration, or proof that measured polygons form a metric tiling.
