@@ -2,18 +2,19 @@ import type { HexCrawlApi } from "../../api";
 import { ProcedureComposerApi } from "../../procedure-composer-api";
 import { customUnitFieldsVisible } from "../worlds/world-form";
 import type { DistanceUnitKind } from "../worlds/world-form";
-import type { ExpeditionSummary, OverworldSummary, ProcedurePreset, StartStandaloneCrawlSessionInput } from "../../types";
+import type { ExpeditionSummary, Overworld, OverworldSummary, ProcedurePreset, StartStandaloneCrawlSessionInput } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
 import { campaignProcedureSummary, renderProcedureMechanicList } from "../../campaign-procedure-view";
 import { input, integer, numeric, option, required, select } from "../../ui/dom";
 import { applyGuidedExperience, attachFieldHelp, guidedExperienceEnabled, guidancePreferenceButton } from "../../ui/guidance";
 import {
     applyStandaloneProcedureChoice,
-    applyWorldProcedureChoice,
+    applyCellProcedureChoice,
     populateProcedureStartChoices,
     readProcedureStartChoice,
     startChoiceSummary
 } from "../expeditions/procedure-start-selection";
+import { resolveHexStartCell } from "../expeditions/world-cell-start";
 
 const ABSTRACT_CONTEXT = "__abstract__";
 const NON_SPATIAL_CONTEXT = "__nonspatial__";
@@ -105,6 +106,14 @@ export async function renderToolHome(
                                         <label>Cell coordinate r <input name="r" type="number" step="1" value="0"></label>
                                     </div>
                                 </details>
+                            </div>
+                            <div data-periodic-start hidden class="hc-form">
+                                <label>Starting cell type <select name="motifCellId"></select></label>
+                                <div class="hc-inline">
+                                    <label>East/west repeat <input name="u" type="number" step="1" value="0"></label>
+                                    <label>North/south repeat <input name="v" type="number" step="1" value="0"></label>
+                                </div>
+                                <p class="hc-hint">Choose an authoritative motif cell and repeat position. No hex q/r conversion is used for this world.</p>
                             </div>
                             <div data-nonspatial-context hidden>
                                 <label>Setup name <input name="nonSpatialName" value="Journey" autocomplete="off"></label>
@@ -231,20 +240,27 @@ export async function renderToolHome(
         "For a custom distance unit, this conversion tells Hex Crawl how large one custom unit is in meters. Leave it alone unless you selected Custom.");
     let presets: ProcedurePreset[] = [];
     let savedProcedures = await Promise.resolve([] as Awaited<ReturnType<ProcedureComposerApi["listProcedures"]>>);
+    let selectedWorld: Overworld | null = null;
+    let worldSelectionGeneration = 0;
     const composerApi = await ProcedureComposerApi.create(root);
 
+    const periodicStart = required<HTMLElement>(form, "[data-periodic-start]");
     const syncContext = (): void => {
         const abstract = context.value === ABSTRACT_CONTEXT;
         const nonSpatial = context.value === NON_SPATIAL_CONTEXT;
         abstractContext.hidden = !abstract;
         nonSpatialContext.hidden = !nonSpatial;
         const spatial = Boolean(context.value) && !nonSpatial;
-        spatialStart.hidden = !spatial;
+        spatialStart.hidden = !(abstract || spatial && !!selectedWorld?.grid);
+        periodicStart.hidden = !(spatial && selectedWorld !== null && !selectedWorld.grid);
         input(form, "contextName").required = abstract;
         input(form, "scale").required = abstract;
         unit.required = abstract;
-        input(form, "q").required = spatial;
-        input(form, "r").required = spatial;
+        input(form, "q").required = !spatialStart.hidden;
+        input(form, "r").required = !spatialStart.hidden;
+        select(form, "motifCellId").required = !periodicStart.hidden;
+        input(form, "u").required = !periodicStart.hidden;
+        input(form, "v").required = !periodicStart.hidden;
         input(form, "nonSpatialName").required = nonSpatial;
         contextNext.disabled = !context.value;
         required<HTMLElement>(form, "[data-context-summary]").textContent = nonSpatial
@@ -255,6 +271,27 @@ export async function renderToolHome(
                     ? "Use an authored map. The selected ruleset still decides which travel, navigation, and journey mechanics apply."
                     : "Choose how this expedition relates to a map.";
         syncUnit();
+    };
+    const syncSelectedWorld = async (): Promise<void> => {
+        const generation = ++worldSelectionGeneration;
+        selectedWorld = null;
+        syncContext();
+        if (!context.value || context.value === ABSTRACT_CONTEXT
+            || context.value === NON_SPATIAL_CONTEXT) return;
+        try {
+            const loaded = await api.getOverworld(context.value);
+            if (disposed || generation !== worldSelectionGeneration || context.value !== loaded.id) return;
+            if (!loaded.tiling) throw new Error("The selected world has no accepted cell topology.");
+            selectedWorld = loaded;
+            const motif = select(form, "motifCellId");
+            motif.replaceChildren();
+            loaded.tiling.topology.motifCells.forEach((cell, index) =>
+                motif.append(option(cell.id, `Cell shape ${index + 1}`)));
+            syncContext();
+        } catch (failure) {
+            if (!disposed && generation === worldSelectionGeneration)
+                showUiError(error, failure);
+        }
     };
     const syncUnit = (): void => {
         const custom = context.value === ABSTRACT_CONTEXT && customUnitFieldsVisible(unit.value as DistanceUnitKind);
@@ -301,7 +338,8 @@ export async function renderToolHome(
 
         presets = procedurePresets;
         savedProcedures = procedures;
-        populateProcedureStartChoices(procedure, savedProcedures, presets);
+        populateProcedureStartChoices(procedure, savedProcedures, presets.filter(value =>
+            ["alexandrian-advanced", "simple-fixed-distance", "simple-hex-step"].includes(value.presetKey)));
         context.append(option("", "Choose map or travel setup"));
         for (const world of worlds) context.append(option(world.id, `Use map: ${world.name}`));
         context.append(
@@ -320,7 +358,7 @@ export async function renderToolHome(
         if (!disposed) showUiError(error, value);
     }
 
-    context.addEventListener("change", syncContext);
+    context.addEventListener("change", () => void syncSelectedWorld());
     unit.addEventListener("change", syncUnit);
     procedure.addEventListener("change", () => void syncProcedure());
 
@@ -352,7 +390,7 @@ export async function renderToolHome(
                             r: integer(input(form, "r"))
                         }
                     };
-                    expedition = await api.startStandaloneSession(applyStandaloneProcedureChoice(base, choice));
+                    expedition = await api.startStandaloneCellSession(applyStandaloneProcedureChoice(base, choice));
                 } else if (context.value === NON_SPATIAL_CONTEXT) {
                     expedition = await api.startStandaloneSession(applyStandaloneProcedureChoice({
                         name,
@@ -363,13 +401,23 @@ export async function renderToolHome(
                     }, choice));
                 } else {
                     if (!context.value) throw new Error("A map or travel setup is required.");
-                    expedition = await api.startConfiguredExpedition(context.value, applyWorldProcedureChoice({
-                        name,
-                        presentationKey: "dm-controlled",
-                        startHex: {
-                            q: integer(input(form, "q")),
-                            r: integer(input(form, "r"))
-                        }
+                    const world = selectedWorld;
+                    if (!world || world.id !== context.value)
+                        throw new Error("The selected world topology is not loaded. Select it again.");
+                    const startCell = world.grid
+                        ? await resolveHexStartCell(api, world, {
+                            q: integer(input(form, "q")), r: integer(input(form, "r"))
+                        })
+                        : {
+                            motifCellId: select(form, "motifCellId").value,
+                            translation: {
+                                u: integer(input(form, "u")), v: integer(input(form, "v"))
+                            }
+                        };
+                    if (!world.grid && choice.kind === "preset")
+                        throw new Error("Generalized worlds require a compatible saved cell-travel ruleset.");
+                    expedition = await api.startCellExpedition(world.id, applyCellProcedureChoice({
+                        name, presentationKey: "dm-controlled", startCell
                     }, choice));
                 }
                 if (!disposed) navigate(`/expeditions/${expedition.id}`);
@@ -385,7 +433,7 @@ export async function renderToolHome(
         })();
     });
 
-    return () => { disposed = true; };
+    return () => { disposed = true; worldSelectionGeneration++; };
 }
 
 function renderExpeditions(

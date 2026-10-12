@@ -2,6 +2,7 @@ import { HexCrawlApiError, type HexCrawlApi } from "../../api";
 import type { EnvironmentAnnotation, EnvironmentFact, WorldEnvironment } from "../../environment-types";
 import { hexToWorld, worldToHex } from "../../hex-math";
 import { MapSurface } from "../../map-surface";
+import { enhanceExpeditionSetup } from "../expeditions/expedition-setup";
 import { SourceMapWorkspace } from "./source-map-workspace";
 import type { HexCoordinate, Location, Overworld, SpatialFeature, WorldPoint, WorldCellGeometry, WorldCellId } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
@@ -35,10 +36,9 @@ export async function renderWorldEditor(
     api: HexCrawlApi,
     worldId: string,
     navigate: (route: string, replace?: boolean) => void): Promise<() => void> {
-    const [initialWorld, initialWorldEnvironment, procedurePresets, initialExpeditions] = await Promise.all([
+    const [initialWorld, initialWorldEnvironment, initialExpeditions] = await Promise.all([
         api.getOverworld(worldId),
         api.getWorldEnvironment(worldId),
-        api.getProcedurePresets(),
         api.listExpeditions(worldId)
     ]);
     let world = initialWorld;
@@ -202,7 +202,7 @@ export async function renderWorldEditor(
                             <label>Name <input name="name" required value="Expedition"></label>
                             <label>Exploration ruleset <select name="procedure"></select></label>
                             <div class="hc-inline"><label>Start hex q <input name="q" type="number" step="1" value="0"></label><label>Start hex r <input name="r" type="number" step="1" value="0"></label></div>
-                            <p class="hc-hint">Advanced: q/r are axial hex coordinates and remain the persisted coordinate format.</p>
+                            <p class="hc-hint">Hex coordinates are a starting-point convenience; the expedition stores an authoritative world cell.</p>
                             <button type="submit" class="hc-primary-action">Start expedition</button>
                         </form>
                     </details>
@@ -218,8 +218,7 @@ export async function renderWorldEditor(
     const gridForm = required<HTMLFormElement>(root, "[data-grid-form]");
     const locationForm = required<HTMLFormElement>(root, "[data-location-form]");
     const featureForm = required<HTMLFormElement>(root, "[data-feature-form]");
-    const expeditionForm = required<HTMLFormElement>(root, "[data-expedition-form]");
-    const draftLabel = required<HTMLElement>(root, "[data-draft]");
+     const draftLabel = required<HTMLElement>(root, "[data-draft]");
     const unitKindSelect = select(gridForm, "unitKind");
     const customUnitFields = required<HTMLElement>(gridForm, "[data-custom-unit]");
     const unitSymbolInput = input(gridForm, "unitSymbol");
@@ -1157,21 +1156,13 @@ export async function renderWorldEditor(
         });
     });
 
-    const procedure = select(expeditionForm, "procedure");
-    for (const preset of procedurePresets) {
-        const option = document.createElement("option");
-        option.value = preset.presetKey;
-        option.textContent = preset.displayName;
-        procedure.append(option);
-    }
-
-    const expeditionHost = required<HTMLElement>(root, "[data-expedition-list]");
+     const expeditionHost = required<HTMLElement>(root, "[data-expedition-list]");
     const renderExpeditions = (expeditions = initialExpeditions): void => {
         expeditionHost.replaceChildren();
         if (expeditions.length === 0) {
             expeditionHost.append(emptyState(
                 "No expeditions yet.",
-                "Choose a procedure and starting hex below to begin the first expedition in this world."));
+                "Choose an exploration ruleset and starting cell below to begin the first expedition in this world."));
             return;
         }
         for (const expedition of expeditions) {
@@ -1181,19 +1172,7 @@ export async function renderWorldEditor(
     };
     renderExpeditions();
 
-    expeditionForm.addEventListener("submit", event => {
-        event.preventDefault();
-        void run(expeditionForm, async () => {
-            const expedition = await api.startExpedition(
-                world.id,
-                input(expeditionForm, "name").value,
-                procedure.value,
-                { q: integer(input(expeditionForm, "q")), r: integer(input(expeditionForm, "r")) });
-            navigate(`/expeditions/${expedition.id}`);
-        });
-    });
-
-    const sourceMapPlaceholder = required<HTMLElement>(root, "[data-source-maps]");
+     const sourceMapPlaceholder = required<HTMLElement>(root, "[data-source-maps]");
     const sourceMapDetails = sourceMapPlaceholder.closest("details");
     if (!(sourceMapDetails instanceof HTMLDetailsElement)) throw new Error("Source-map workspace requires a details container.");
     sourceMapWorkspace = new SourceMapWorkspace(
@@ -1205,12 +1184,16 @@ export async function renderWorldEditor(
         mapHint,
         error);
     await sourceMapWorkspace.initialize();
+    // Existing hex worlds and new periodic worlds share a cell-authoritative
+    // ruleset selection and start form; the retired start route is unused.
+    const disposeExpeditionSetup = await enhanceExpeditionSetup(root, api, worldId, navigate);
 
     updatePointFieldVisibility();
     applyWorld(world);
     return () => {
         disposed = true;
         sourceMapWorkspace?.dispose();
+        disposeExpeditionSetup();
         mapSurface.dispose();
     };
 }
