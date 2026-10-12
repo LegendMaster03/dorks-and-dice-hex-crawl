@@ -4,7 +4,7 @@
 
 **Repository:** `LegendMaster03/dorks-and-dice-hex-crawl`  
 **Unmerged, undeployed feature branch:** `feature/tile-crawl-phase-20.2-application-persistence`  
-**Last verified source/test head:** `46b2dfb34b9e03bcf179c22c6e7b0efbe3730c1c`, [CI 38223394247](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38223394247) successful. Frontend, .NET, PostgreSQL and isolated backup/restore checks passed; rendered Phase 15 review was skipped. Recheck any later documentation or code commit CI independently.
+**Last fully green code head:** `d20a71867bdd8cf98042fe771d1f256f9cf7832d` ([CI 38231135438](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38231135438), successful). **Subsequent code head:** `3e12d18c6c333f58789772ecdb12a7888ae5849b` ([CI 38232849985](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38232849985), awaiting final result); recheck latest full CI before proceeding. Rendered Phase 15 acceptance has not run.
 **Release gate:** `docs/phase-20.4-zero-prototype-gate.md`  
 **Authoritative plan:** `docs/tile-crawl-development-plan.md`
 
@@ -47,6 +47,23 @@ Confirmed source coupling requiring coordinated edits:
 - Further verified removals: `CrawlSessionService.cs`, `CrawlSessionContextResolver.cs`, `ExpeditionWorldComposition.cs`, the V1 movement/navigation/watch lifecycle engine files and V1 spatial assistant navigation source. These are absent on current feature-branch tree; the surviving engine and assistant paths retain generalized cells and independent nonspatial capabilities.
 - Focused browser assistant `expedition-assistant-view.ts` is now nonspatial-only. It routes **every spatial session** into the generalized expedition page; V1 six-direction navigation, hex-travel, veer-step, progress and resulting-hex forms have been deleted. Nonspatial interval, encounter cadence, provenance, history and Block Initiative handoff remain. Frontend source tests were updated to test the current contract. Code commit `cf05640d` passed full CI.
 - **The zero-prototype gate remains blocked.** `ExpeditionState.cs`, `HexTraversalState.cs`, old browser `expedition-view.ts` and `expedition-watch-controller.ts`, old world grid/authoring, mapless context and V1 wire fields remain. No deployment or merge was authorized.
+
+## Later October 12 code-removal checkpoint
+
+The following changes are committed on the same branch. Passing a compilation/CI run is **not** permission to deploy or merge.
+
+- `9cbdd448`, `ad340b23`: removed the six-direction `SpatialCourseSelection.FromLegacyHexDirection` production adapter; changed the affected domain, application, persistence, encounter and mapless tests to construct courses from periodic neighbor/interface authority. `d3ce2d9d` added a held-out mixed-motif cell-watch regression.
+- `c55f2cd6`: deleted the legacy axial `PresentationKnowledgeProjection.Initialize`, `ApplyEnteredHexes` and `KnowledgeDiscovery.KnowHex` mutation paths. The actual cell-identity knowledge projection remains.
+- `ea82a1fa`, `272b0771`, `ef5db081`: removed the unmapped V1 procedure-resolution service, old scalar travel/step-veer generation and V1 procedure requirement overloads; V2 cell results now carry typed encounter outcomes. The old provider carrier and persisted grant legacy payload are **not** yet removed.
+- `c9193689`, `d9d73813`: retained provider-source notes for V2 distance/navigation resolution without making those notes public wire input fields; application tests inspect them.
+- `d20a7186`: fixed the production `MovementCapabilityComposer.Suggest` to derive physical watch-distance suggestions from authoritative `CellExpeditionState` and remaining watch time. [CI 38231135438](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38231135438) succeeded; later `2931fc78` adds direct tests for partial watches, uncalibrated cells and nonspatial bookkeeping.
+- `0e488c49`, `d2cd6efa`: provider-backed physical-distance resolution rejects non-cell runtime; converted associated composition/environment test fixtures to cell state.
+- `4fbcb9e3`, `6b5a0dc0`, `20721090`, `3e12d18c`: blank custom movement authoring now selects version-2 generalized cell movement and never opts into hex-progress. Synthetic mixed-procedure fixtures no longer select the hex-progress module. Deleted the old hex-progress module/mechanic from the authoring catalog, followed by the version-1 movement registration. The underlying V1 runtime binder still requires deletion, with its old tests rewritten.
+- `0811e56a`: removed the unmapped scalar/step-veer HTTP procedure-resolution request. The live qualified cell endpoint remains.
+
+**CI precision:** `3e12d18c` is the latest code head and [CI 38232849985](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38232849985) was still running when this checkpoint was authored. Earlier intermediate runs were cancelled or failed on issues subsequently corrected; do not describe the latest code as verified green until its own CI completes. No signed-in Phase 15 browser review was performed.
+
+**Next coupled removals:** retire `GenericProcedureRuntime` mechanic-version-1 and `ProcedureHexProgressRuntime` branches together with old domain fixtures; finish removing V1 runtime/wire state, mapless axial constructor, `OverworldDefinition.Grid` and other persisted world/asset migration dependencies, then remove the dormant expedition UI/watch controller and shape-specific authoring. Keep the migration safety boundary and the three established hex-origin procedure preset identities as data. Do not reintroduce V1 to make old tests pass.
 
 ## Remaining mandatory work
 
