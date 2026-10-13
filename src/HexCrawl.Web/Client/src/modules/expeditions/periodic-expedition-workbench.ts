@@ -44,6 +44,7 @@ export async function renderPeriodicExpeditionWorkbench(
     let selectedExit = topology.selectedExitInterfaceIndex;
     let disposed = false;
     let busy = false;
+    let refreshGeneration = 0;
     let generated: CellProcedureResolutionHelperResult | null = null;
     let displayedWatchNumber: number | null | undefined = undefined;
     let inspectedGeometry: WorldCellGeometry | null = null;
@@ -188,11 +189,27 @@ export async function renderPeriodicExpeditionWorkbench(
     const travelContent = required<HTMLElement>("[data-travel-content]");
     const travelDock = required<HTMLElement>("[data-travel-staging]");
     let travelDrawer: WorkspaceDrawer | null = null;
+    let historyDrawer: WorkspaceDrawer | null = null;
+    const captureReturnFocus = (): (() => HTMLElement | null) => {
+        const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        const statLabel = opener?.querySelector(".hc-stat-action-label")?.textContent;
+        const action = opener?.hasAttribute("data-current-action-button");
+        const interfaceId = opener?.dataset.adjacencyInterfaceId;
+        return () => {
+            if (opener?.isConnected) return opener;
+            if (action) return root.querySelector<HTMLElement>("[data-current-action-button]");
+            if (statLabel) return [...root.querySelectorAll<HTMLElement>(".hc-stat-action")]
+                .find(button => button.querySelector(".hc-stat-action-label")?.textContent === statLabel) ?? null;
+            if (interfaceId) return [...root.querySelectorAll<HTMLElement>("[data-adjacency-interface-id]")]
+                .find(button => button.dataset.adjacencyInterfaceId === interfaceId) ?? null;
+            return null;
+        };
+    };
     const openTravelDrawer = (focus?: "encounter" | "course" | "lost" | "navigation"): void => {
         if (!travelDrawer) {
             travelDrawer = openWorkspaceDrawer(root, "Travel / watch",
                 body => { body.append(travelContent); },
-                document.activeElement instanceof HTMLElement ? document.activeElement : null,
+                captureReturnFocus(),
                 () => {
                     travelDock.append(travelContent);
                     travelDrawer = null;
@@ -232,9 +249,13 @@ export async function renderPeriodicExpeditionWorkbench(
         openGameplayPanel("[data-journey-panel]"));
     const openHistory = (): void => {
         const disclosure = required<HTMLDetailsElement>("[data-history-disclosure]");
-        disclosure.open = true;
-        disclosure.scrollIntoView({ block: "nearest" });
-        disclosure.querySelector<HTMLElement>("summary")?.focus();
+        const history = required<HTMLOListElement>("[data-history]");
+        if (!historyDrawer) historyDrawer = openWorkspaceDrawer(root, "Expedition history",
+            body => { body.append(history); }, captureReturnFocus(), () => {
+                disclosure.append(history);
+                historyDrawer = null;
+            });
+        historyDrawer.element.querySelector<HTMLElement>("button")?.focus();
     };
     required<HTMLButtonElement>("[data-gm-history]").addEventListener("click", openHistory);
     const canReposition = (): boolean => {
@@ -413,16 +434,17 @@ export async function renderPeriodicExpeditionWorkbench(
         async (control, action) => {
             if (busy || disposed) return;
             busy = true;
+            refreshGeneration++;
             if (control) control.disabled = true;
             clearUiError(error);
             try {
                 await action();
-                if (!disposed) await refresh();
+                if (!disposed) await refresh(true);
             } catch (failure) {
                 if (!disposed) {
                     showUiError(error, failure);
                     if (failure instanceof Error && /version|conflict|stale/i.test(failure.message))
-                        await refresh();
+                        await refresh(true);
                 }
             } finally {
                 busy = false;
@@ -447,6 +469,7 @@ export async function renderPeriodicExpeditionWorkbench(
     const progress = async (action: () => Promise<ExpeditionDetail>): Promise<void> => {
         if (busy || disposed) return;
         busy = true;
+        refreshGeneration++;
         clearUiError(error);
         form.querySelectorAll<HTMLButtonElement>("button").forEach(button => button.disabled = true);
         try {
@@ -467,7 +490,7 @@ export async function renderPeriodicExpeditionWorkbench(
             if (disposed) return;
             showUiError(error, failure);
             if (failure instanceof Error && /version|conflict|stale/i.test(failure.message)) {
-                await refresh();
+                await refresh(true);
             }
         } finally {
             busy = false;
@@ -476,13 +499,15 @@ export async function renderPeriodicExpeditionWorkbench(
             if (!disposed) render();
         }
     };
-    const refresh = async (): Promise<void> => {
+    const refresh = async (duringMutation = false): Promise<void> => {
+        if (disposed || busy && !duringMutation) return;
+        const generation = ++refreshGeneration;
         try {
             const [next, nextTopology, nextWorld] = await Promise.all([
                 api.getExpedition(runtime.id), api.getCellTopology(runtime.id),
                 world ? api.getOverworld(world.id) : Promise.resolve(null)
             ]);
-            if (disposed) return;
+            if (disposed || generation !== refreshGeneration) return;
             runtime = next;
             generated = null;
             attentionStatus = "loading";
@@ -497,7 +522,7 @@ export async function renderPeriodicExpeditionWorkbench(
             gameplay.sync();
             publishExpeditionRuntimeChanged(root, runtime);
         } catch (failure) {
-            if (!disposed) showUiError(error, failure);
+            if (!disposed && generation === refreshGeneration) showUiError(error, failure);
         }
     };
 
@@ -599,6 +624,7 @@ export async function renderPeriodicExpeditionWorkbench(
         void (async () => {
             if (busy || disposed) return;
             busy = true;
+            refreshGeneration++;
             clearUiError(error);
             const button = required<HTMLButtonElement>("[data-generate-helper]");
             button.disabled = true;
@@ -655,7 +681,7 @@ export async function renderPeriodicExpeditionWorkbench(
             } catch (failure) {
                 if (!disposed) {
                     showUiError(error, failure);
-                    await refresh();
+                    await refresh(true);
                 }
             } finally {
                 busy = false;
@@ -1062,7 +1088,9 @@ export async function renderPeriodicExpeditionWorkbench(
     gameplay.sync();
     return () => {
         disposed = true;
+        refreshGeneration++;
         travelDrawer?.close();
+        historyDrawer?.close();
         gameplay.dispose();
         map.dispose();
         root.classList.remove("hc-phase15");

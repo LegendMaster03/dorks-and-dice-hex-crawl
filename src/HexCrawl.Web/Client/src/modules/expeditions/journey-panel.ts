@@ -19,6 +19,7 @@ export class ExpeditionJourneyPanel {
     private readonly body: HTMLElement;
     private state: ExpeditionJourneyState | null = null;
     private disposed = false;
+    private syncGeneration = 0;
 
     public constructor(
         root: HTMLElement,
@@ -41,14 +42,18 @@ export class ExpeditionJourneyPanel {
     }
 
     public async sync(): Promise<ExpeditionJourneyState> {
+        const generation = ++this.syncGeneration;
         const state = await this.api.get(this.expeditionId);
-        this.state = state;
-        if (!this.disposed) this.render();
+        if (!this.disposed && generation === this.syncGeneration) {
+            this.state = state;
+            this.render();
+        }
         return state;
     }
 
     public dispose(): void {
         this.disposed = true;
+        this.syncGeneration++;
         this.panel.remove();
     }
 
@@ -660,8 +665,10 @@ export class ExpeditionJourneyPanel {
     }
 
     private apply(next: ExpeditionJourneyState): void {
+        this.syncGeneration++;
+        if (this.disposed) return;
         this.state = next;
-        if (!this.disposed) this.render();
+        this.render();
     }
 
     private requireState(): ExpeditionJourneyState {

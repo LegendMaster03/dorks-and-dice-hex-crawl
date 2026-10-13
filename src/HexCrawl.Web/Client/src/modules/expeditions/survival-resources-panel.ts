@@ -28,6 +28,7 @@ export class ExpeditionSurvivalResourcesPanel {
     private readonly body: HTMLElement;
     private state: SurvivalResources | null = null;
     private disposed = false;
+    private syncGeneration = 0;
 
     public constructor(
         root: HTMLElement,
@@ -51,14 +52,18 @@ export class ExpeditionSurvivalResourcesPanel {
     }
 
     public async sync(): Promise<SurvivalResources> {
+        const generation = ++this.syncGeneration;
         const state = await this.api.get(this.expeditionId);
-        this.state = state;
-        if (!this.disposed) this.render();
+        if (!this.disposed && generation === this.syncGeneration) {
+            this.state = state;
+            this.render();
+        }
         return state;
     }
 
     public dispose(): void {
         this.disposed = true;
+        this.syncGeneration++;
         this.panel.remove();
     }
 
@@ -972,8 +977,10 @@ export class ExpeditionSurvivalResourcesPanel {
     }
 
     private apply(state: SurvivalResources): void {
+        this.syncGeneration++;
+        if (this.disposed) return;
         this.state = state;
-        if (!this.disposed) this.render();
+        this.render();
     }
 }
 

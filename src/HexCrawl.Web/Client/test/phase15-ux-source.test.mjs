@@ -369,7 +369,8 @@ test("Phase 15 focused editing uses accessible drawers and keeps secondary tools
     assert.match(workspace, /aria-modal/);
     assert.match(workspace, /Escape/);
     assert.match(workspace, /onClose\?\.\(\)/);
-    assert.match(workspace, /returnFocus\?\.isConnected/);
+    assert.match(workspace, /typeof returnFocus === "function" \? returnFocus\(\) : returnFocus/);
+    assert.match(workspace, /target\?\.isConnected/);
     assert.match(styles, /hc-focus-workspace/);
     assert.match(styles, /@media \(max-width: 760px\)/);
 });

@@ -2161,6 +2161,9 @@ if (stateName === "course-change-reload") {
     await waitForCondition(
         () => root.querySelector('[data-adjacency-interface-id$=":1"]')?.getAttribute("aria-pressed") === "true",
         "fresh client restored saved course rather than uncommitted draft");
+    await waitForCondition(
+        () => root.querySelector('[data-current-action-label]')?.textContent === "Continue travel",
+        "fresh client loaded gameplay requirements before choosing its next action");
 } else if (stateName === "map-selected" || stateName === "map-nonadjacent") {
     const canvas = root.querySelector("canvas");
     if (canvas) {

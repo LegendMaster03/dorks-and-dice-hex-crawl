@@ -184,7 +184,7 @@ export function ensurePhase15Styles(): void {
             .hc-table-rail .hc-current-travel-pace-editor { grid-column:1; grid-row:auto; }
             .hc-table-rail .hc-current-travel-facts { grid-template-columns:auto minmax(0,1fr); }
             .hc-table-rail .hc-current-travel-actions { justify-content:flex-start; flex-wrap:wrap; }
-            .hc-phase15-expedition .hc-stat-action-grid { grid-template-columns:repeat(8,minmax(0,1fr)); }
+            .hc-phase15-expedition .hc-stat-action-grid { grid-template-columns:repeat(auto-fill,minmax(min(100%,11.5rem),1fr)); }
             .hc-phase15-expedition .hc-stat-action { padding:.58rem .62rem; }
             .hc-phase15-expedition .hc-stat-action-detail { font-size:.73rem; }
         }

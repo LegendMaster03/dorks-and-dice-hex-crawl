@@ -10,6 +10,7 @@ export class ExpeditionEffectsPanel {
     private readonly body: HTMLElement;
     private state: ExpeditionEffectState | null = null;
     private disposed = false;
+    private syncGeneration = 0;
 
     public constructor(
         root: HTMLElement,
@@ -30,12 +31,17 @@ export class ExpeditionEffectsPanel {
     }
 
     public async sync(): Promise<void> {
-        this.state = await this.api.get(this.expeditionId);
-        if (!this.disposed) this.render();
+        const generation = ++this.syncGeneration;
+        const state = await this.api.get(this.expeditionId);
+        if (!this.disposed && generation === this.syncGeneration) {
+            this.state = state;
+            this.render();
+        }
     }
 
     public dispose(): void {
         this.disposed = true;
+        this.syncGeneration++;
         this.panel.remove();
     }
 

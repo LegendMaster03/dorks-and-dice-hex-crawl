@@ -12,6 +12,8 @@ export type WorkspaceDrawerOptions = {
     onClose?: () => void;
 };
 
+type ReturnFocus = HTMLElement | (() => HTMLElement | null) | null;
+
 export function textElement<K extends keyof HTMLElementTagNameMap>(
     tag: K,
     text: string,
@@ -48,7 +50,7 @@ export function openWorkspaceDrawer(
     root: HTMLElement,
     title: string,
     build: (body: HTMLElement, close: () => void) => void,
-    returnFocus?: HTMLElement | null,
+    returnFocus?: ReturnFocus,
     onClose?: () => void): WorkspaceDrawer;
 export function openWorkspaceDrawer(
     root: HTMLElement,
@@ -57,7 +59,7 @@ export function openWorkspaceDrawer(
     root: HTMLElement,
     titleOrOptions: string | WorkspaceDrawerOptions,
     build?: (body: HTMLElement, close: () => void) => void,
-    returnFocus: HTMLElement | null = document.activeElement instanceof HTMLElement ? document.activeElement : null,
+    returnFocus: ReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null,
     onClose?: () => void): WorkspaceDrawer {
     const options = typeof titleOrOptions === "string"
         ? { title: titleOrOptions, description: null, onClose }
@@ -104,7 +106,8 @@ export function openWorkspaceDrawer(
         drawerClosers.delete(panel);
         options.onClose?.();
         panel.remove();
-        if (returnFocus?.isConnected) returnFocus.focus();
+        const target = typeof returnFocus === "function" ? returnFocus() : returnFocus;
+        if (target?.isConnected) target.focus();
     };
 
     drawerClosers.set(panel, close);
