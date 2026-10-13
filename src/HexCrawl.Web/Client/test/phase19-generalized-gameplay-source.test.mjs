@@ -36,7 +36,8 @@ test("generalized environment fact editing uses qualified Cell rather than fake 
     assert.match(panel, /const inCell = runtime\.expedition\.isSpatial && !!runtime\.expedition\.currentCell/);
     assert.match(panel, /if \(inCell\) scope\.value = "Cell"/);
     assert.doesNotMatch(panel, /<option value="Hex">/);
-    assert.match(panel, /cell: selectedScope === "Cell" \? currentCell : null/);
+    assert.match(panel, /cell: selectedScope === "Cell" \? currentCell \?\? null : null/);
+    assert.doesNotMatch(panel, /hex: null|annotation\.scope\.hex/);
     assert.match(panel, /selectedScope === "Cell" && !currentCell/);
 });
 
