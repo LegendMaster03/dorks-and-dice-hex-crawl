@@ -6,35 +6,13 @@ public sealed record OverworldDefinition
 {
     public required Guid Id { get; init; }
     public required string Name { get; init; }
-    // Grid is an explicit Phase 18 hex-runtime adapter, not generalized authority.
-    // Existing callers receive an actionable rejection for a nonhex world rather
-    // than a fabricated grid or a silent reinterpretation of coordinates.
-    private HexGridDefinition? _legacyGrid;
-    public HexGridDefinition Grid
-    {
-        get => _legacyGrid ?? throw new NotSupportedException(
-            "This world has no hex grid. Generalized movement is gated until Phase 18.");
-        init => _legacyGrid = value;
-    }
-    public bool HasLegacyHexGrid => _legacyGrid is not null;
     public PeriodicWorldTiling? Tiling { get; init; }
 
     public PeriodicWorldTiling SpatialTiling =>
-        Tiling ?? LegacyHexTilingCompatibility.FromGrid(Grid);
+        Tiling ?? throw new InvalidOperationException(
+            "An overworld requires authoritative periodic geometry.");
 
-    public void ValidateSpatialAuthority()
-    {
-        if (Tiling is null && _legacyGrid is null)
-            throw new InvalidOperationException("An overworld requires spatial authority.");
-        if (Tiling is not null)
-        {
-            Tiling.Validate();
-            if (_legacyGrid is not null && !LegacyHexTilingCompatibility.Matches(Tiling, _legacyGrid))
-                throw new InvalidOperationException(
-                    "Legacy grid projection does not match authoritative periodic geometry.");
-        }
-        else _legacyGrid!.Validate();
-    }
+    public void ValidateSpatialAuthority() => SpatialTiling.Validate();
 
     public IReadOnlyList<SpatialFeature> FeaturesIntersecting(PeriodicCellAddress address)
     {

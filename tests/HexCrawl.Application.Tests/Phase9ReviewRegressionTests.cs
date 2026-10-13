@@ -14,15 +14,7 @@ public sealed class Phase9ReviewRegressionTests
         {
             Id = Guid.NewGuid(),
             Name = "Trimmed dimension world",
-            Grid = new HexGridDefinition
-            {
-                Id = Guid.NewGuid(),
-                Orientation = HexOrientation.PointyTop,
-                Origin = new WorldPoint(0, 0),
-                RotationDegrees = 0,
-                HexRadiusWorldUnits = 1,
-                NeighborCenterDistance = new DistanceMeasure(12, DistanceUnit.Miles)
-            },
+            Tiling = MaplessSessionFixture.Start().World,
             EnvironmentAnnotations =
             [
                 new EnvironmentAnnotation
@@ -161,15 +153,7 @@ public sealed class Phase9ReviewRegressionTests
         {
             Id = Guid.NewGuid(),
             Name = "Phase 9 review world",
-            Grid = new HexGridDefinition
-            {
-                Id = Guid.NewGuid(),
-                Orientation = HexOrientation.PointyTop,
-                Origin = new WorldPoint(0, 0),
-                RotationDegrees = 0,
-                HexRadiusWorldUnits = 1,
-                NeighborCenterDistance = new DistanceMeasure(12, DistanceUnit.Miles)
-            }
+            Tiling = MaplessSessionFixture.Start().World
         };
         var now = DateTimeOffset.UtcNow;
         var procedure = CrawlProcedureCatalog.Resolve(procedureKey).MaterializeGeneric().Procedure;

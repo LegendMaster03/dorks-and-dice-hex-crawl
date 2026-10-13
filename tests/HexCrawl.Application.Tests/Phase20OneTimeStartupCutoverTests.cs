@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using HexCrawl.Application.Persistence;
 using HexCrawl.Domain.Spatial;
 using HexCrawl.Domain.World;
@@ -38,7 +39,8 @@ public sealed class Phase20OneTimeStartupCutoverTests
             100, 100, "image/png", "original.png");
         var world = new OverworldDefinition
         {
-            Id = Guid.NewGuid(), Name = "Persisted authored world", Grid = grid,
+            Id = Guid.NewGuid(), Name = "Persisted authored world",
+            Tiling = LegacyHexTilingCompatibility.Create(grid),
             Features = [feature],
             SourceMaps = [map],
             EnvironmentAnnotations =
@@ -69,11 +71,15 @@ public sealed class Phase20OneTimeStartupCutoverTests
                 -- Recreate the persisted pre-cutover scope as raw archived JSON.
                 -- The current domain intentionally has no axial environment scope.
                 UPDATE overworlds SET world_json = jsonb_set(
-                    world_json, '{environmentAnnotations,0,scope}',
+                    jsonb_set(
+                        jsonb_set(world_json, '{grid}', @archivedGrid::jsonb),
+                        '{formatVersion}', '2'::jsonb),
+                    '{environmentAnnotations,0,scope}',
                     '{"kind":"Hex","hex":{"q":2,"r":-1}}'::jsonb)
                 WHERE id = @legacyWorld;
                 """;
             downgrade.Parameters.AddWithValue("legacyWorld", world.Id);
+            downgrade.Parameters.AddWithValue("archivedGrid", NpgsqlTypes.NpgsqlDbType.Jsonb, ArchivedGridJson(grid));
             await downgrade.ExecuteNonQueryAsync();
         }
 
@@ -127,18 +133,22 @@ public sealed class Phase20OneTimeStartupCutoverTests
         var store = new PostgresHexCrawlStore(database.ConnectionString);
         await store.InitializeAsync();
 
-        static OverworldDefinition World(string name) => new()
+        static (OverworldDefinition World, HexGridDefinition Grid) MakeWorld(string name)
         {
-            Id = Guid.NewGuid(), Name = name,
-            Grid = new HexGridDefinition
+            var grid = new HexGridDefinition
             {
                 Id = Guid.NewGuid(),
                 HexRadiusWorldUnits = 1,
                 NeighborCenterDistance = new DistanceMeasure(6, DistanceUnit.Miles)
-            }
-        };
-        var valid = World("Valid authored world");
-        var invalid = World("Unrecognized authored format");
+            };
+            return (new OverworldDefinition
+            {
+                Id = Guid.NewGuid(), Name = name,
+                Tiling = LegacyHexTilingCompatibility.Create(grid)
+            }, grid);
+        }
+        var (valid, validGrid) = MakeWorld("Valid authored world");
+        var (invalid, _) = MakeWorld("Unrecognized authored format");
         var timestamp = DateTimeOffset.UtcNow;
         await store.CreateOverworldAsync(new StoredOverworld(valid, "owner", 1, timestamp, timestamp));
         await store.CreateOverworldAsync(new StoredOverworld(invalid, "owner", 2, timestamp, timestamp));
@@ -150,10 +160,16 @@ public sealed class Phase20OneTimeStartupCutoverTests
             downgrade.CommandText = """
                 ALTER TABLE expeditions RENAME CONSTRAINT ck_expeditions_runtime_kind TO ck_expeditions_runtime_v2_only;
                 UPDATE hex_crawl_schema_migrations SET version = 11 WHERE version = 12;
+                UPDATE overworlds SET world_json = jsonb_set(
+                    jsonb_set(world_json, '{grid}', @validGrid::jsonb),
+                    '{formatVersion}', '2'::jsonb)
+                WHERE id = @valid;
                 UPDATE overworlds
                 SET world_json = jsonb_set(world_json, '{formatVersion}', '99'::jsonb)
                 WHERE id = @invalid;
                 """;
+            downgrade.Parameters.AddWithValue("valid", valid.Id);
+            downgrade.Parameters.AddWithValue("validGrid", NpgsqlTypes.NpgsqlDbType.Jsonb, ArchivedGridJson(validGrid));
             downgrade.Parameters.AddWithValue("invalid", invalid.Id);
             await downgrade.ExecuteNonQueryAsync();
         }
@@ -204,6 +220,13 @@ public sealed class Phase20OneTimeStartupCutoverTests
         command.Parameters.AddWithValue("state", NpgsqlTypes.NpgsqlDbType.Jsonb, snapshot);
         var error = await Assert.ThrowsAsync<PostgresException>(() => command.ExecuteNonQueryAsync());
         Assert.Equal("23514", error.SqlState);
+    }
+
+    private static string ArchivedGridJson(HexGridDefinition grid)
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        options.Converters.Add(new JsonStringEnumConverter(allowIntegerValues: false));
+        return JsonSerializer.Serialize(grid, options);
     }
 
 }

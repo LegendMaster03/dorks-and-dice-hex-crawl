@@ -36,13 +36,12 @@ public sealed partial class PostgresHexCrawlStore
     private sealed record WorldSnapshot(
         Guid Id,
         string Name,
-        HexGridDefinition? Grid,
         IReadOnlyList<FeatureSnapshot> Features,
         IReadOnlyList<Location> Locations,
         IReadOnlyList<SourceMapRepresentation> SourceMaps,
         IReadOnlyList<EnvironmentAnnotation> EnvironmentAnnotations,
-        PeriodicWorldTiling? Tiling = null,
-        int FormatVersion = 1)
+        PeriodicWorldTiling Tiling,
+        int FormatVersion = 3)
     {
         public static WorldSnapshot FromDomain(OverworldDefinition world)
         {
@@ -50,28 +49,22 @@ public sealed partial class PostgresHexCrawlStore
             return new WorldSnapshot(
                 world.Id,
                 world.Name,
-                world.HasLegacyHexGrid ? world.Grid : null,
                 world.Features.Select(FeatureSnapshot.FromDomain).ToArray(),
                 world.Locations,
                 world.SourceMaps,
                 world.EnvironmentAnnotations,
-                world.SpatialTiling,
-                world.HasLegacyHexGrid ? 2 : 3);
+                world.SpatialTiling);
         }
 
         public OverworldDefinition ToDomain()
         {
-            if ((FormatVersion == 1 && (Grid is null || Tiling is not null))
-                || (FormatVersion == 2 && Tiling is null)
-                || (FormatVersion == 3 && (Grid is not null || Tiling is null))
-                || FormatVersion is < 1 or > 3)
+            if (FormatVersion != 3 || Tiling is null)
                 throw new InvalidDataException(
-                    "Unsupported or inconsistent persisted world format. The original record has been preserved.");
+                    "Persisted world has no authoritative periodic geometry. Its original record was preserved.");
             var world = new OverworldDefinition
             {
                 Id = Id,
                 Name = Name,
-                Grid = Grid!,
                 Tiling = Tiling,
                 Features = Features.Select(item => item.ToDomain()).ToArray(),
                 Locations = Locations.ToArray(),
@@ -82,4 +75,5 @@ public sealed partial class PostgresHexCrawlStore
             return world;
         }
     }
+
 }
