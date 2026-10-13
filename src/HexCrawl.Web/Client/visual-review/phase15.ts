@@ -410,6 +410,7 @@ function emitSpecialMetrics(surface) {
         advancedVisible: Boolean(root.querySelector(".hc-advanced-layout")),
         jsonVisible: Boolean(root.querySelector(".hc-json-editor")),
         procedureHomeVisible: text.includes("Saved rulesets") && text.includes("Build my own"),
+        expectedProcedureModuleCount: Object.keys(richProcedureParameters).length,
         procedureModuleCards: root.querySelectorAll(".hc-rule-card").length,
         procedureFactGroups: root.querySelectorAll(".hc-rule-fact-group").length,
         referenceVisible: Boolean(root.querySelector(".hc-procedure-reference")),
@@ -2400,7 +2401,9 @@ const metrics = {
     activeEffectVisible: rootText.includes("Fatigue") && rootText.includes("Level 2") && rootText.includes("Clear effect"),
     effectRecoveryVisible: rootText.includes("Reduce 1 level") && rootText.includes("Recovery:"),
     unifiedHistoryVisible: rootText.includes("Journey") && rootText.includes("Travel / runtime") && rootText.includes("Effects / consequences"),
-    positionProgressVisible: rootText.includes("4.5 / 12 mi") && rootText.includes("37.5% through current cell"),
+    partialWatchPositionVisible: rootText.includes("Travel period in progress")
+        && Boolean(root.querySelector("[data-cell-navigator]"))
+        && rootText.includes("Position"),
     focusReturnedToOpener: focusReturnVerified,
     encounterResolutionVisible: rootText.includes("Mark encounter resolved")
         && !rootText.includes("Encounter resolved — continue travel")

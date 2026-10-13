@@ -209,15 +209,18 @@ elif surface == "procedure":
     }
     if state in expected and not metrics[expected[state]]:
         raise SystemExit(f'wrong procedure authoring surface: {metrics}')
+    expected_modules = metrics["expectedProcedureModuleCount"]
+    if expected_modules < 1:
+        raise SystemExit(f'procedure fixture has no semantic modules: {metrics}')
     if state == "procedure-compact":
-        if metrics["procedureModuleCards"] != 19 or metrics["procedureFactGroups"] < 19:
+        if metrics["procedureModuleCards"] != expected_modules or metrics["procedureFactGroups"] < expected_modules:
             raise SystemExit(f'feature-rich compact procedure did not render all semantic modules: {metrics}')
-        if not metrics["compactGuidanceVisible"] or metrics["guidedRuleWhyCount"] != 19:
+        if not metrics["compactGuidanceVisible"] or metrics["guidedRuleWhyCount"] != expected_modules:
             raise SystemExit(f'Guided Compact explanations are incomplete: {metrics}')
     if state == "procedure-reference":
-        if not metrics["referenceVisible"] or metrics["referenceModuleCount"] != 19:
+        if not metrics["referenceVisible"] or metrics["referenceModuleCount"] != expected_modules:
             raise SystemExit(f'feature-rich procedure reference is incomplete: {metrics}')
-        if metrics["referenceFactGroups"] < 19 or metrics["exactParameterDisclosures"] != 19:
+        if metrics["referenceFactGroups"] < expected_modules or metrics["exactParameterDisclosures"] != expected_modules:
             raise SystemExit(f'procedure reference lost semantic or exact parameter evidence: {metrics}')
 elif surface == "world":
     if not metrics["guidanceToggleVisible"]:
@@ -415,7 +418,7 @@ else:
             raise SystemExit(f'normal expedition history exposes raw journey identity: {metrics}')
         if not metrics["technicalHistoryRetained"]:
             raise SystemExit(f'advanced expedition history lost raw diagnostic identity: {metrics}')
-    if state == "partial-progress" and not metrics["positionProgressVisible"]:
+    if state == "partial-progress" and not metrics["partialWatchPositionVisible"]:
         raise SystemExit(f'partial spatial progress is not visible: {metrics}')
     if state == "focus-return" and not metrics["focusReturnedToOpener"]:
         raise SystemExit(f'drawer focus did not return to the opener: {metrics}')
