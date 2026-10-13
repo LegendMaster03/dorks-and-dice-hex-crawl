@@ -17,9 +17,9 @@ public sealed class PersistenceApplicationTests
         await using var database = await TestDatabase.CreateAsync();
         var alice = await database.ServiceAsync();
         var bob = await database.ServiceAsync();
-        var first = await alice.CreateOverworldAsync("alice", WorldCommand("First"));
-        _ = await alice.CreateOverworldAsync("alice", WorldCommand("Second"));
-        _ = await bob.CreateOverworldAsync("bob", WorldCommand("Bob world"));
+        var first = await alice.CreatePeriodicOverworldAsync("alice", "First", MaplessSessionFixture.Start().World);
+        _ = await alice.CreatePeriodicOverworldAsync("alice", "Second", MaplessSessionFixture.Start().World);
+        _ = await bob.CreatePeriodicOverworldAsync("bob", "Bob world", MaplessSessionFixture.Start().World);
 
         Assert.Equal(2, (await alice.ListOverworldsAsync("alice")).Count);
         Assert.Single(await bob.ListOverworldsAsync("bob"));
@@ -27,38 +27,28 @@ public sealed class PersistenceApplicationTests
     }
 
     [Fact]
-    public async Task GridAndCustomScaleRoundTripAcrossStoreRestart()
+    public async Task PeriodicWorldAndCustomScaleRoundTripAcrossStoreRestart()
     {
         await using var database = await TestDatabase.CreateAsync();
         var service = await database.ServiceAsync();
         var custom = DistanceUnit.Custom("league", 4828.032);
-        var created = await service.CreateOverworldAsync("alice", new CreateOverworldCommand(
-            "Custom grid",
-            HexOrientation.FlatTop,
-            new WorldPoint(4.5, -2),
-            12.5,
-            2.25,
-            3,
-            custom));
-        var changedGrid = created.World.Grid with
+        var tiling = MaplessSessionFixture.Start().World with
         {
             Origin = new WorldPoint(8, 9),
-            RotationDegrees = 20,
-            NeighborCenterDistance = new DistanceMeasure(4, custom)
+            PhysicalDistancePerWorldUnit = new DistanceMeasure(4, custom)
         };
-        _ = await service.UpdateOverworldAsync(
-            created.World.Id,
-            "alice",
-            new UpdateOverworldCommand("Renamed", changedGrid, created.Version));
-
+        var created = await service.CreatePeriodicOverworldAsync("alice", "Custom units", tiling);
+        _ = await service.RenameOverworldAsync(
+            created.World.Id, "alice", "Renamed", created.Version);
         var restarted = await database.ServiceAsync();
         var loaded = await restarted.GetOverworldAsync(created.World.Id, "alice");
         Assert.Equal("Renamed", loaded.World.Name);
-        Assert.Equal(HexOrientation.FlatTop, loaded.World.Grid.Orientation);
-        Assert.Equal(new WorldPoint(8, 9), loaded.World.Grid.Origin);
-        Assert.Equal(4, loaded.World.Grid.NeighborCenterDistance.Value);
-        Assert.Equal("league", loaded.World.Grid.NeighborCenterDistance.Unit.Symbol);
-        Assert.Equal(4828.032, loaded.World.Grid.NeighborCenterDistance.Unit.MetersPerUnit);
+        Assert.Equal(tiling.Id, loaded.World.SpatialTiling.Id);
+        Assert.Equal(new WorldPoint(8, 9), loaded.World.SpatialTiling.Origin);
+        var calibration = Assert.IsType<DistanceMeasure>(loaded.World.SpatialTiling.PhysicalDistancePerWorldUnit);
+        Assert.Equal(4, calibration.Value);
+        Assert.Equal("league", calibration.Unit.Symbol);
+        Assert.Equal(4828.032, calibration.Unit.MetersPerUnit);
     }
 
     [Fact]
@@ -66,7 +56,7 @@ public sealed class PersistenceApplicationTests
     {
         await using var database = await TestDatabase.CreateAsync();
         var service = await database.ServiceAsync();
-        var world = await service.CreateOverworldAsync("alice", WorldCommand());
+        var world = await service.CreatePeriodicOverworldAsync("alice", "World", MaplessSessionFixture.Start().World);
         world = await service.CreateLocationAsync(world.World.Id, "alice", new CreateLocationCommand(
             "Ruin", "ruin", new WorldPoint(.25, .75), LocationDiscoverability.Hidden, world.Version));
         var location = Assert.Single(world.World.Locations);
@@ -88,7 +78,7 @@ public sealed class PersistenceApplicationTests
     {
         await using var database = await TestDatabase.CreateAsync();
         var service = await database.ServiceAsync();
-        var world = await service.CreateOverworldAsync("alice", WorldCommand());
+        var world = await service.CreatePeriodicOverworldAsync("alice", "World", MaplessSessionFixture.Start().World);
         world = await service.CreateFeatureAsync(world.World.Id, "alice", new CreateFeatureCommand(
             "Spring", "spring", SpatialFeatureKind.Point, new WorldPoint(1.2, 2.3), null, null, world.Version));
         var feature = Assert.IsType<PointFeature>(Assert.Single(world.World.Features));
@@ -108,7 +98,7 @@ public sealed class PersistenceApplicationTests
     {
         await using var database = await TestDatabase.CreateAsync();
         var service = await database.ServiceAsync();
-        var world = await service.CreateOverworldAsync("alice", WorldCommand());
+        var world = await service.CreatePeriodicOverworldAsync("alice", "World", MaplessSessionFixture.Start().World);
         WorldPoint[] path = [new(0, 0), new(.25, 1.75), new(4.5, 3)];
         world = await service.CreateFeatureAsync(world.World.Id, "alice", new CreateFeatureCommand(
             "North road", "road", SpatialFeatureKind.Line, null, path, null, world.Version));
@@ -123,7 +113,7 @@ public sealed class PersistenceApplicationTests
     {
         await using var database = await TestDatabase.CreateAsync();
         var service = await database.ServiceAsync();
-        var world = await service.CreateOverworldAsync("alice", WorldCommand());
+        var world = await service.CreatePeriodicOverworldAsync("alice", "World", MaplessSessionFixture.Start().World);
         WorldPoint[] boundary = [new(0, 0), new(4, 0), new(2, 3)];
         world = await service.CreateFeatureAsync(world.World.Id, "alice", new CreateFeatureCommand(
             "Crystal marsh", "crystal-marsh", SpatialFeatureKind.Region, null, null, boundary, world.Version));
@@ -140,7 +130,7 @@ public sealed class PersistenceApplicationTests
     {
         await using var database = await TestDatabase.CreateAsync();
         var service = await database.ServiceAsync();
-        var world = await service.CreateOverworldAsync("alice", WorldCommand());
+        var world = await service.CreatePeriodicOverworldAsync("alice", "World", MaplessSessionFixture.Start().World);
         var originalVersion = world.Version;
 
         world = await service.ImportWorldObjectsAsync(
@@ -195,7 +185,7 @@ public sealed class PersistenceApplicationTests
     {
         await using var database = await TestDatabase.CreateAsync();
         var service = await database.ServiceAsync();
-        var world = await service.CreateOverworldAsync("alice", WorldCommand());
+        var world = await service.CreatePeriodicOverworldAsync("alice", "World", MaplessSessionFixture.Start().World);
         world = await service.CreateSourceMapAsync(world.World.Id, "alice", new CreateSourceMapCommand(
             "northlands",
             "Northlands GM gridless",
@@ -218,7 +208,7 @@ public sealed class PersistenceApplicationTests
     {
         await using var database = await TestDatabase.CreateAsync();
         var legacy = await database.ServiceAsync();
-        var world = await legacy.CreateOverworldAsync("alice", WorldCommand());
+        var world = await legacy.CreatePeriodicOverworldAsync("alice", "World", MaplessSessionFixture.Start().World);
 
         var store = new PostgresHexCrawlStore(database.ConnectionString);
         await store.InitializeAsync();
@@ -299,7 +289,7 @@ public sealed class PersistenceApplicationTests
     {
         await using var database = await TestDatabase.CreateAsync();
         var service = await database.ServiceAsync();
-        var world = await service.CreateOverworldAsync("alice", WorldCommand());
+        var world = await service.CreatePeriodicOverworldAsync("alice", "World", MaplessSessionFixture.Start().World);
         _ = await service.CreateLocationAsync(world.World.Id, "alice", new CreateLocationCommand(
             "A", "site", new WorldPoint(0, 0), LocationDiscoverability.Obvious, world.Version));
 
@@ -314,16 +304,18 @@ public sealed class PersistenceApplicationTests
     {
         await using var database = await TestDatabase.CreateAsync();
         var service = await database.ServiceAsync();
-        var world = await service.CreateOverworldAsync("alice", WorldCommand());
+        var world = await service.CreatePeriodicOverworldAsync("alice", "World", MaplessSessionFixture.Start().World);
         var expedition = await StartCellAsync(
-            database, service, world.World.Id, "Survey", "alexandrian-advanced", new HexCoordinate(2, -1));
+            database, service, world.World.Id, "Survey", "alexandrian-advanced", new LatticeDisplacement(2, -1));
 
         var restarted = await database.ServiceAsync();
         var loaded = await restarted.GetExpeditionAsync(expedition.Id, "alice");
         var loadedRuntime = GenericProcedureRuntime.Bind(loaded.CampaignProcedure);
         var cells = Assert.IsType<CellExpeditionState>(loaded.Runtime);
         Assert.Equal(world.World.SpatialTiling.Resolve(
-            LegacyHexTilingCompatibility.ToAddress(new HexCoordinate(2, -1))).Id,
+            new PeriodicCellAddress(
+                world.World.SpatialTiling.Topology.MotifCells[0].Id,
+                new LatticeDisplacement(2, -1))).Id,
             cells.Traversal.CurrentCell);
         Assert.Equal("alexandrian-advanced", loaded.CampaignProcedure.Key);
         Assert.True(loadedRuntime.Navigation.UsesPersistentVeer);
@@ -335,10 +327,10 @@ public sealed class PersistenceApplicationTests
     {
         await using var database = await TestDatabase.CreateAsync();
         var service = await database.ServiceAsync();
-        var world = await service.CreateOverworldAsync("alice", WorldCommand());
+        var world = await service.CreatePeriodicOverworldAsync("alice", "World", MaplessSessionFixture.Start().World);
         var created = await StartCellAsync(
             database, service, world.World.Id, "Paused watch",
-            "simple-fixed-distance", new HexCoordinate(0, 0));
+            "simple-fixed-distance", new LatticeDisplacement(0, 0));
         var original = Assert.IsType<CellExpeditionState>(created.Runtime);
         var heading = PeriodicCourseFixture.ThroughInterface(world.World.SpatialTiling, original.Traversal.CurrentCell);
         var plan = new CellWatchTravelPlan(
@@ -379,8 +371,8 @@ public sealed class PersistenceApplicationTests
     {
         await using var database = await TestDatabase.CreateAsync();
         var service = await database.ServiceAsync();
-        var world = await service.CreateOverworldAsync("alice", WorldCommand());
-        var start = new HexCoordinate(0, 0);
+        var world = await service.CreatePeriodicOverworldAsync("alice", "World", MaplessSessionFixture.Start().World);
+        var start = new LatticeDisplacement(0, 0);
         var expedition = await StartCellAsync(
             database, service, world.World.Id, "History", "simple-fixed-distance", start);
         var heading = PeriodicCourseFixture.ThroughInterface(world.World.SpatialTiling, Assert.IsType<CellExpeditionState>(expedition.Runtime).Traversal.CurrentCell);
@@ -412,7 +404,7 @@ public sealed class PersistenceApplicationTests
     {
         await using var database = await TestDatabase.CreateAsync();
         var service = await database.ServiceAsync();
-        var world = await service.CreateOverworldAsync("alice", WorldCommand());
+        var world = await service.CreatePeriodicOverworldAsync("alice", "World", MaplessSessionFixture.Start().World);
         world = await service.CreateLocationAsync(world.World.Id, "alice", new CreateLocationCommand(
             "Hidden ruin", "ruin", new WorldPoint(.1, .1), LocationDiscoverability.Hidden, world.Version));
         var location = Assert.Single(world.World.Locations);
@@ -420,7 +412,7 @@ public sealed class PersistenceApplicationTests
             "Spring", "spring", SpatialFeatureKind.Point, new WorldPoint(.2, .2), null, null, world.Version));
         var feature = Assert.Single(world.World.Features);
         var expedition = await StartCellAsync(
-            database, service, world.World.Id, "Knowledge", "simple-fixed-distance", new HexCoordinate(0, 0));
+            database, service, world.World.Id, "Knowledge", "simple-fixed-distance", new LatticeDisplacement(0, 0));
         expedition = await service.DiscoverAsync(expedition.Id, "alice", new DiscoverSubjectCommand(
             expedition.Version, location.Id, KnowledgeSubjectType.Location, "test"));
 
@@ -436,8 +428,8 @@ public sealed class PersistenceApplicationTests
     {
         await using var database = await TestDatabase.CreateAsync();
         var service = await database.ServiceAsync();
-        var world = await service.CreateOverworldAsync("alice", WorldCommand());
-        var start = new HexCoordinate(0, 0);
+        var world = await service.CreatePeriodicOverworldAsync("alice", "World", MaplessSessionFixture.Start().World);
+        var start = new LatticeDisplacement(0, 0);
         var expedition = await StartCellAsync(
             database, service, world.World.Id, "Replay", "simple-fixed-distance", start);
         var restarted = await database.ServiceAsync();
@@ -472,7 +464,7 @@ public sealed class PersistenceApplicationTests
     {
         await using var database = await TestDatabase.CreateAsync();
         var service = await database.ServiceAsync();
-        var world = await service.CreateOverworldAsync("alice", WorldCommand());
+        var world = await service.CreatePeriodicOverworldAsync("alice", "World", MaplessSessionFixture.Start().World);
         world = await service.CreateLocationAsync(world.World.Id, "alice", new CreateLocationCommand(
             "Keep", "site", new WorldPoint(0, 0), LocationDiscoverability.Obvious, world.Version));
         var location = Assert.Single(world.World.Locations);
@@ -480,16 +472,12 @@ public sealed class PersistenceApplicationTests
             "Keep feature", "road", SpatialFeatureKind.Line, null, [new(0, 0), new(1, 1)], null, world.Version));
         var feature = Assert.Single(world.World.Features);
         _ = await StartCellAsync(
-            database, service, world.World.Id, "Active", "simple-fixed-distance", new HexCoordinate(0, 0));
+            database, service, world.World.Id, "Active", "simple-fixed-distance", new LatticeDisplacement(0, 0));
 
         await Assert.ThrowsAsync<HexCrawlConflictException>(() => service.DeleteLocationAsync(
             world.World.Id, location.Id, "alice", world.Version));
         await Assert.ThrowsAsync<HexCrawlConflictException>(() => service.DeleteFeatureAsync(
             world.World.Id, feature.Id, "alice", world.Version));
-        await Assert.ThrowsAsync<HexCrawlConflictException>(() => service.UpdateOverworldAsync(
-            world.World.Id,
-            "alice",
-            new UpdateOverworldCommand(world.World.Name, world.World.Grid with { Origin = new WorldPoint(5, 5) }, world.Version)));
     }
 
     [Fact]
@@ -502,25 +490,18 @@ public sealed class PersistenceApplicationTests
         Assert.Empty(await store.ListOverworldsAsync("nobody"));
     }
 
-    private static CreateOverworldCommand WorldCommand(string name = "World") => new(
-        name,
-        HexOrientation.PointyTop,
-        new WorldPoint(0, 0),
-        0,
-        1,
-        12,
-        DistanceUnit.Miles);
-
-    private static Task<StoredExpedition> StartCellAsync(
+    private static async Task<StoredExpedition> StartCellAsync(
         TestDatabase database, HexCrawlService core, Guid worldId,
-        string name, string presetKey, HexCoordinate start)
+        string name, string presetKey, LatticeDisplacement translation)
     {
+        var stored = await core.GetOverworldAsync(worldId, "alice");
+        var start = new PeriodicCellAddress(
+            stored.World.SpatialTiling.Topology.MotifCells[0].Id, translation);
         var store = new PostgresHexCrawlStore(database.ConnectionString);
-        return new ExpeditionStartService(store, core, new CampaignProcedureService(store))
+        return await new ExpeditionStartService(store, core, new CampaignProcedureService(store))
             .StartWorldBoundCellsAsync(
                 worldId, "alice", name,
-                new ProcedureStartSelection(PresetKey: presetKey),
-                LegacyHexTilingCompatibility.ToAddress(start));
+                new ProcedureStartSelection(PresetKey: presetKey), start);
     }
 
     private sealed class TestDatabase : IAsyncDisposable

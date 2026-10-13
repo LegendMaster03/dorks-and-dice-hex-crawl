@@ -349,7 +349,7 @@ jobs:
                     (SELECT count(*) FROM smoke_world.expedition_events)::text || ':' || \
                     (SELECT max(version) FROM smoke_world.hex_crawl_schema_migrations)::text")"
           test "$original" = "$restored"
-          test "$original" = "1:1:$(echo "$original" | cut -d: -f3):11"
+          test "$original" = "1:1:$(echo "$original" | cut -d: -f3):12"
           mkdir -p "$backup_dir/asset-restore"
           tar -xzf "$backup_dir/assets.tar.gz" -C "$backup_dir/asset-restore"
           diff -qr "$asset_parent/assets" "$backup_dir/asset-restore/assets"
