@@ -283,10 +283,10 @@ else:
         if state == "journey-pending" and metrics["journeyPendingRawInternalsVisible"]:
             raise SystemExit(f'normal pending journey presentation exposes raw event internals: {metrics}')
     elif abstract_spatial:
-        if metrics["navigatorButtons"] != 0 or metrics["mapHeight"] != 0:
-            raise SystemExit(f'abstract spatial fixture fabricated an authored map: {metrics}')
+        if metrics["navigatorButtons"] < 3 or metrics["mapHeight"] < 250:
+            raise SystemExit(f'mapless periodic geometry did not render its cell navigator: {metrics}')
         if not metrics["currentTravelVisible"] or not metrics["abstractSpatialCourseReused"]:
-            raise SystemExit(f'abstract spatial course was not reused through focused navigation: {metrics}')
+            raise SystemExit(f'mapless spatial course was not reused through watch resolution: {metrics}')
     else:
         if metrics["navigatorButtons"] != 6:
             raise SystemExit(f'navigator edge count: {metrics}')
@@ -313,40 +313,28 @@ else:
         raise SystemExit(f'expected exactly one selected edge: {metrics}')
     if state == "persisted-course":
         if metrics["primaryAction"] != "Continue travel" or not metrics["currentTravelVisible"]:
-            raise SystemExit(f'persisted course did not restore the shared travel projection: {metrics}')
-        if metrics["selectedDirection"] != "2" or metrics["runtimeIntendedDirection"] != 2:
-            raise SystemExit(f'browser-stale direction overrode authoritative persisted course: {metrics}')
-        stored = json.loads(metrics["storedTravelPreferences"] or "{}")
-        if "direction" in stored or stored.get("pace") != "fast":
-            raise SystemExit(f'browser travel storage is not pace-only after authoritative rebind: {metrics}')
+            raise SystemExit(f'persistent qualified-cell course failed to resume: {metrics}')
+        if not (metrics["selectedInterfaceIndex"] or "").endswith(":2") or metrics["runtimeIntendedHeading"] is None:
+            raise SystemExit(f'persisted course differs from authoritative cell interface: {metrics}')
     if state == "course-change-reload":
-        if metrics["selectedDirection"] != "5" or metrics["runtimeIntendedDirection"] != 5:
-            raise SystemExit(f'changed course did not survive a fresh-client render: {metrics}')
-        if metrics["runtimeActualDirection"] != 1:
-            raise SystemExit(f'course selection overwrote previously resolved actual direction: {metrics}')
-        if metrics["currentTravelCourseText"] != "lower-right boundary":
-            raise SystemExit(f'Current travel disagrees with changed authoritative course: {metrics}')
-        if "Intended lower-right boundary" not in (metrics["navigationStatText"] or ""):
-            raise SystemExit(f'Navigation summary disagrees with changed authoritative course: {metrics}')
-        if "Intended travel direction: lower-right boundary" not in (metrics["focusedNavigationText"] or ""):
-            raise SystemExit(f'focused Navigation disagrees with changed authoritative course: {metrics}')
-        if metrics["drawerCount"] != 1 or metrics["focusedTitle"] != "Navigation":
-            raise SystemExit(f'changed-course reload did not reach focused Navigation: {metrics}')
-        stored = json.loads(metrics["storedTravelPreferences"] or "{}")
-        if "direction" in stored:
-            raise SystemExit(f'fresh client retained browser direction authority: {metrics}')
+        if not (metrics["selectedInterfaceIndex"] or "").endswith(":5") or metrics["runtimeIntendedHeading"] is None:
+            raise SystemExit(f'changed qualified-cell course was not persisted across a fresh client: {metrics}')
+        if metrics["runtimeIntendedHeading"] == metrics["runtimeActualHeading"]:
+            raise SystemExit(f'changing intended course incorrectly replaced actual travel heading: {metrics}')
+        if "boundary 6" not in (metrics["currentTravelCourseText"] or ""):
+            raise SystemExit(f'current travel disagrees with the stored cell interface: {metrics}')
+        if metrics["drawerCount"] != 1 or metrics["focusedTitle"] != "Travel / watch":
+            raise SystemExit(f'fresh client did not expose the current travel workflow: {metrics}')
     if state == "course-clear-reload":
-        if metrics["selectedEdges"] != 0 or metrics["runtimeIntendedDirection"] is not None:
-            raise SystemExit(f'explicitly cleared course resurrected after fresh-client render: {metrics}')
-        if metrics["currentTravelCourseText"] != "No direction selected":
-            raise SystemExit(f'Current travel did not retain explicit no-course state: {metrics}')
+        if metrics["selectedEdges"] != 0 or metrics["runtimeIntendedHeading"] is not None:
+            raise SystemExit(f'explicitly cleared qualified-cell course returned after a fresh client: {metrics}')
         if metrics["primaryAction"] != "Choose travel direction":
-            raise SystemExit(f'cleared course did not return workflow to course selection: {metrics}')
-        stored = json.loads(metrics["storedTravelPreferences"] or "{}")
-        if "direction" in stored:
-            raise SystemExit(f'course clear survived only in browser direction state: {metrics}')
+            raise SystemExit(f'cleared course did not return to cell selection: {metrics}')
     if state == "map-nonadjacent" and not metrics["teleportContextVisible"]:
-        raise SystemExit(f'non-adjacent inspection did not expose deliberate teleport authority: {metrics}')
+        raise SystemExit(f'distant cell inspection did not expose an explicit GM teleport action: {metrics}')
+    if state == "teleport-workspace":
+        if metrics["drawerCount"] != 1 or metrics["focusedTitle"] != "Teleport party":
+            raise SystemExit(f'GM teleport did not open with a qualified cell target: {metrics}')
     if state == "movement-validation-retry":
         if not metrics["movementUnitVisible"] or not metrics["movementValidationVerified"] or not metrics["movementRetryVerified"] or metrics["movementRetryCalls"] != 1:
             raise SystemExit(f'rendered movement validation/retry failed: {metrics}')
@@ -406,10 +394,8 @@ else:
         if not metrics["journeyEffectTechnicalRetained"]:
             raise SystemExit(f'journey-generated effect diagnostics were lost from Technical details: {metrics}')
     if state == "effects-workspace":
-        if metrics["drawerCount"] != 1 or metrics["focusedTitle"] != "Resources & effects":
-            raise SystemExit(f'effects workspace did not open correctly: {metrics}')
-        if not metrics["activeEffectVisible"] or not metrics["effectRecoveryVisible"]:
-            raise SystemExit(f'active effect or recovery controls missing: {metrics}')
+        if not metrics["activeEffectVisible"] or not metrics["effectRecoveryVisible"] or metrics["effectLedgerRows"] < 1:
+            raise SystemExit(f'shared gameplay panel lost active effects or recovery controls: {metrics}')
     if state == "history-workspace":
         if metrics["drawerCount"] != 1 or metrics["focusedTitle"] != "Expedition history":
             raise SystemExit(f'history workspace did not open correctly: {metrics}')
@@ -426,35 +412,28 @@ else:
     if state == "encounter-pending" and not metrics["encounterResolutionVisible"]:
         raise SystemExit(f'encounter drawer does not expose authoritative resolution: {metrics}')
     if state == "fixed-pace":
-        if metrics["changePaceButtons"] != 0 or metrics["paceTextInputs"] != 0:
-            raise SystemExit(f'fixed pace exposed an arbitrary normal-user editor: {metrics}')
+        if metrics["paceOptionCount"] != 1 or metrics["paceTextInputs"] != 0:
+            raise SystemExit(f'fixed pace did not stay restricted to one server-provided option: {metrics}')
     if state == "selected-edge":
-        if metrics["changePaceButtons"] != 1 or metrics["paceSelects"] < 1:
-            raise SystemExit(f'finite travel modes did not expose a bounded pace choice: {metrics}')
+        if metrics["paceOptionCount"] < 2:
+            raise SystemExit(f'finite travel modes did not offer bounded named pace options: {metrics}')
+    if state == "more-options-open" and not metrics["gmToolsOpen"]:
+        raise SystemExit(f'GM tools disclosure did not expose advanced operations: {metrics}')
     if state == "empty-party" and not metrics["partySetupVisible"]:
         raise SystemExit(f'empty party did not expose a useful setup action: {metrics}')
 
+    # The only spatial watch executor has one travel/watch drawer. Gameplay
+    # and GM utilities are shared panels, not separate prototype drawers.
     expected_titles = {
-        "navigation-pending": "Navigation",
-        "movement-input-pending": "Movement resolution",
-        "boundary-pending": "Boundary crossing",
-        "encounter-pending": "Encounter",
-        "forced-travel-pending": "Forced travel",
-        "forced-travel-one-participant": "Forced travel",
-        "forced-travel-zero-participants": "Forced travel",
-        "forced-travel-party-scope": "Forced travel",
-        "forced-travel-mount": "Forced travel",
-        "forced-travel-vehicle": "Forced travel",
-        "more-options-open": "Advanced travel controls",
-        "teleport-workspace": "Teleport party",
-        "abstract-spatial-course": "Navigation",
-        "effects-journey-source": "Resources & effects",
-        "journey-pending": "Journey / challenge"
+        "navigation-pending": "Travel / watch",
+        "movement-input-pending": "Travel / watch",
+        "encounter-pending": "Travel / watch",
+        "journey-pending": "Journey / challenge",
+        "abstract-spatial-course": "Travel / watch",
     }
     if state in expected_titles:
         if metrics["drawerCount"] != 1 or metrics["focusedTitle"] != expected_titles[state]:
-            raise SystemExit(f'wrong focused workflow: {metrics}')
-
+            raise SystemExit(f'unified workspace did not open the expected action: {metrics}')
     if state == "selected-edge" and metrics["reviewWidth"] <= 392:
         if metrics["mapTop"] is None or metrics["mapTop"] >= metrics["viewportHeight"]:
             raise SystemExit(f'narrow map does not begin in the initial viewport: {metrics}')

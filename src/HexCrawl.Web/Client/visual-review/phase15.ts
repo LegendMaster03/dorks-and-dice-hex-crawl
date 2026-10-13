@@ -2023,13 +2023,23 @@ const api = new Proxy({
         center: { x: 0, y: 0 }
     }],
     lookupWorldCell: async () => ({
-        status: "Unique", candidates: [runtime.expedition.currentCell]
+        status: "Unique",
+        candidates: [["map-nonadjacent", "teleport-workspace"].includes(stateName)
+            ? visualCell(20, 0) : runtime.expedition.currentCell]
     }),
-    resolveWorldCell: async () => ({
-        id: runtime.expedition.currentCell,
-        polygon: visualPolygon,
-        center: { x: 0, y: 0 }
-    }),
+    resolveWorldCell: async () => {
+        const distant = ["map-nonadjacent", "teleport-workspace"].includes(stateName);
+        return distant
+            ? {
+                id: visualCell(20, 0), center: { x: 20, y: 0 },
+                polygon: visualPolygon.map(point => ({ x: point.x + 20, y: point.y }))
+            }
+            : {
+                id: runtime.expedition.currentCell,
+                polygon: visualPolygon,
+                center: { x: 0, y: 0 }
+            };
+    },
     resolveCellCourse: async (_expeditionId, input) => {
         if (input.expectedVersion !== runtime.version)
             throw new Error("Visual review stale course mutation.");
@@ -2100,24 +2110,24 @@ let movementValidationVerified = false;
 let movementRetryVerified = false;
 
 if (stateName === "course-change-reload") {
-    const changedEdge = root.querySelector('[data-adjacency-interface-id="adjacency-5"]');
+    const changedEdge = root.querySelector('[data-adjacency-interface-id$=":5"]');
     changedEdge?.click();
     await waitForCondition(
         () => runtime.expedition.cellTraversal?.selectedExitInterfaceIndex === 5
-            && root.querySelector('[data-adjacency-interface-id="adjacency-5"]')?.getAttribute("aria-pressed") === "true",
+            && root.querySelector('[data-adjacency-interface-id$=":5"]')?.getAttribute("aria-pressed") === "true",
         "server-authoritative changed course");
 
     disposeExpedition();
     root.replaceChildren();
     disposeExpedition = await renderExpedition(root, api, runtime.id, () => {}, undefined, null);
     await waitForCondition(
-        () => root.querySelector('[data-adjacency-interface-id="adjacency-5"]')?.getAttribute("aria-pressed") === "true",
+        () => root.querySelector('[data-adjacency-interface-id$=":5"]')?.getAttribute("aria-pressed") === "true",
         "fresh client restored changed course");
 
-    findButton("Resolve navigation")?.click();
+    findButton("Resolve travel / watch")?.click();
     await waitForRootText("Intended travel direction:");
 } else if (stateName === "course-clear-reload") {
-    const selectedEdge = root.querySelector('[data-adjacency-interface-id="adjacency-1"]');
+    const selectedEdge = root.querySelector('[data-adjacency-interface-id$=":1"]');
     selectedEdge?.click();
     await waitForCondition(
         () => runtime.expedition.cellTraversal?.selectedExitInterfaceIndex === null
@@ -2142,44 +2152,45 @@ if (stateName === "course-change-reload") {
         }));
     }
 } else if (stateName === "navigation-pending" || stateName === "abstract-spatial-course") {
-    findButton("Resolve navigation")?.click();
+    findButton("Resolve travel / watch")?.click();
 } else if (stateName === "movement-input-pending" || stateName === "movement-validation-retry") {
     findButton("Continue travel")?.click();
     await waitForCondition(() => Boolean(root.querySelector('[data-phase15-drawer] [data-advance]')), "rendered movement form");
     if (stateName === "movement-validation-retry") {
-        const form = root.querySelector('[data-phase15-drawer] [data-advance]');
-        const hint = root.querySelector('[data-phase15-drawer] [data-travel-resolution] .hc-hint');
-        const effective = form.querySelector('[name="effectiveDistance"]');
-        const source = form.querySelector('[name="travelSource"]');
-        const initialHint = root.querySelector('[data-phase15-drawer]')?.textContent || "";
-        if (!initialHint.includes("Effective distance (mi)") || !initialHint.includes("travel period")
-            || initialHint.includes("runtime can not derive")) {
-            throw new Error("Rendered movement hint lost the field, period, or unit.");
-        }
-        const originalActionLabel = form.querySelector("[data-advance-button]")?.textContent?.trim();
-        if (originalActionLabel !== "Resolve movement and continue") throw new Error(`Unexpected movement action: ${originalActionLabel}`);
-        effective.value = "";
-        source.value = "DmOverride";
+        const form = root.querySelector('[data-phase15-drawer] [data-travel-form]');
+        const actual = form?.querySelector('[name="actual"]');
+        const expected = form?.querySelector('[name="expected"]');
+        const unitLabel = root.querySelector('[data-phase15-drawer] [data-distance-unit]')?.textContent || "";
+        if (!form || !actual || !expected || !unitLabel.includes("Distance is entered in mi"))
+            throw new Error("Unified travel/watch form lost physical travel inputs or their unit.");
+        if (!expected.value) expected.value = "2";
+        actual.value = "";
         form.requestSubmit();
-        await waitForCondition(() => Boolean(root.querySelector('[data-watch-advance-error]')), "blank-distance validation");
-        const validation = root.querySelector('[data-watch-advance-error]')?.textContent || "";
-        movementValidationVerified = validation.includes("Effective distance (mi)")
-            && validation.includes("travel period") && !validation.includes("effectiveDistance requires a number");
-        if (!movementValidationVerified || movementRetryCalls !== 0) throw new Error("Blank movement validation did not block travel with plain-language context.");
-        await waitForCondition(() => !form.querySelector("[data-advance-button]").disabled, "validation returned control");
-        if (form.querySelector("[data-advance-button]")?.textContent?.trim() !== originalActionLabel) throw new Error("Movement action label changed after validation.");
-        effective.value = "2";
+        await waitForCondition(
+            () => (root.querySelector('[data-error]')?.textContent || "").includes("Enter a valid finite actual value."),
+            "blank resolved-distance validation");
+        movementValidationVerified = movementRetryCalls === 0;
+        if (!movementValidationVerified)
+            throw new Error("Invalid resolved distance incorrectly advanced the spatial watch.");
+        actual.value = "2";
         form.requestSubmit();
-        await waitForCondition(() => movementRetryCalls === 1, "retry reached authoritative advance");
-        movementRetryVerified = !root.querySelector('[data-watch-advance-error]')
-            && form.querySelector("[data-advance-button]")?.textContent?.trim() === originalActionLabel;
-        if (!movementRetryVerified) throw new Error("Retry did not clear the validation error.");
+        await waitForCondition(() => movementRetryCalls === 1, "corrected watch reached authoritative advance");
+        movementRetryVerified = !(root.querySelector('[data-error]')?.textContent || "").trim();
+        if (!movementRetryVerified)
+            throw new Error("Corrected watch retained its previous validation error.");
     }
 } else if (stateName === "movement-composition" || stateName === "nonspatial-movement-composition") {
-    findStatAction("Movement")?.click();
+    if (stateName === "movement-composition") {
+        const disclosure = root.querySelector("[data-movement]")?.closest("details");
+        if (disclosure) disclosure.open = true;
+    } else {
+        findStatAction("Movement")?.click();
+    }
     await waitForRootText("Movement composition contributors");
 } else if (["encounter-schedule", "encounter-schedule-day", "encounter-contextual-schedule"].includes(stateName)) {
-    findButtonContaining("Encounter schedule")?.click();
+    findButton("Resolve travel / watch")?.click();
+    const details = root.querySelector("[data-encounter-cadence]")?.closest("details");
+    if (details) details.open = true;
     await waitForRootText("Encounter check schedule");
 } else if (stateName === "encounter-pending") {
     findButton("Resolve encounter")?.click();
@@ -2189,7 +2200,8 @@ if (stateName === "course-change-reload") {
     || stateName === "forced-travel-party-scope"
     || stateName === "forced-travel-mount"
     || stateName === "forced-travel-vehicle") {
-    findButton("Resolve forced travel")?.click();
+    const gameplay = root.querySelector("[data-gameplay-disclosure]");
+    if (gameplay) gameplay.open = true;
     await waitForRootText("Current requirement");
     const checkbox = Array.from(root.querySelectorAll("label"))
         .find(label => label.textContent?.includes("Check succeeded"))
@@ -2203,14 +2215,31 @@ if (stateName === "course-change-reload") {
 }
 
 if (stateName === "more-options-open") {
-    findButton("More options")?.click();
+    const gm = root.querySelector(".hc-gm-tools details");
+    if (gm) gm.open = true;
 } else if (stateName === "teleport-workspace") {
-    findButton("Teleport party")?.click();
+    const gm = root.querySelector(".hc-gm-tools details");
+    if (gm) gm.open = true;
+    const canvas = root.querySelector("canvas");
+    if (canvas) {
+        const rect = canvas.getBoundingClientRect();
+        canvas.dispatchEvent(new MouseEvent("click", {
+            bubbles: true, button: 0,
+            clientX: rect.left + rect.width / 2,
+            clientY: rect.top + rect.height / 2
+        }));
+    }
+    await waitForCondition(
+        () => !root.querySelector("[data-gm-reposition]")?.disabled,
+        "inspected cell enables explicit GM reposition");
+    root.querySelector("[data-gm-reposition]")?.click();
 } else if (stateName === "journey-pending") {
     findButton("Resolve journey event")?.click();
     await waitForRootText("Pending journey event");
 } else if (stateName === "effects-workspace" || stateName === "effects-journey-source" || stateName === "readability-workspace" || stateName === "guided-pending-consequence") {
-    findButtonContaining("Resources & effects")?.click();
+    const gameplay = root.querySelector("[data-gameplay-disclosure]");
+    if (gameplay) gameplay.open = true;
+    else findButtonContaining("Resources & effects")?.click();
     await waitForRootText("Active effects");
 } else if (stateName === "history-workspace") {
     findStatAction("Time")?.click();
@@ -2306,8 +2335,10 @@ const metrics = {
     changePaceButtons: buttons.filter(button => isVisible(button) && button.textContent?.trim() === "Change pace").length,
     paceTextInputs: root.querySelectorAll('input[name="pace"][type="text"]').length,
     paceSelects: root.querySelectorAll(".hc-current-travel-pace-editor select").length,
+    paceOptionCount: root.querySelectorAll('[data-travel-form] select[name="pace"] option').length,
+    gmToolsOpen: Boolean(root.querySelector(".hc-gm-tools details[open]")),
     partyActivitiesRailButtons: buttons.filter(button => isVisible(button) && button.textContent?.includes("Party & activities")).length,
-    partySetupVisible: rootText.includes("Party not configured"),
+    partySetupVisible: rootText.includes("No party members assigned.") && Boolean(root.querySelector("[data-gameplay-disclosure]")),
     primaryAction: root.querySelector(".hc-current-action-primary")?.textContent?.trim() || null,
     guidedNextActionWhyVisible: Array.from(root.querySelectorAll("summary"))
         .some(summary => summary.textContent?.trim() === "Why is this next?"),
@@ -2356,18 +2387,19 @@ const metrics = {
     journeyNoPendingConsequencesVisible: journeyPrimaryText.includes("No pending consequences"),
     journeyPendingRawInternalsVisible: stateName === "journey-pending"
         && /ProcessProgress|journey-event-opportunity|event-1:pass:progress/.test(normalJourneyText),
-    movementUnitVisible: rootText.includes("Effective distance (mi)"),
+    movementUnitVisible: rootText.includes("Distance is entered in mi"),
     movementValidationVerified,
     movementRetryVerified,
     movementRetryCalls,
     navigationCourseReadOnly: !["navigation-pending", "abstract-spatial-course"].includes(stateName) || (
-        rootText.includes("Intended travel direction:")
-        && !root.querySelector('[data-phase15-drawer] select[name="intendedHeading"]')
+        Boolean(root.querySelector('[data-phase15-drawer] input[name="headingX"]'))
+        && !root.querySelector('[data-phase15-drawer] select[name="direction"]')
     ),
     abstractSpatialCourseReused: stateName !== "abstract-spatial-course" || (
         runtime.context.kind === "MaplessSpatial"
-        && root.querySelector("[data-adjacency-select]")?.value === "2"
-        && !root.querySelector('[data-phase15-drawer] select[name="intendedHeading"]')
+        && runtime.expedition.cellTraversal?.selectedExitInterfaceIndex === 2
+        && Boolean(root.querySelector('[data-phase15-drawer] input[name="headingX"]'))
+        && !root.querySelector('[data-phase15-drawer] select[name="direction"]')
     ),
     forcedTravelPrimaryDomainFacing: rootText.includes("Current requirement") && rootText.includes("Failure consequence:"),
     forcedTravelNamedTargetVisible: !stateName.startsWith("forced-travel-") || (

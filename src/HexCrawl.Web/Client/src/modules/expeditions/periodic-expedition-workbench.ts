@@ -20,6 +20,8 @@ import { encounterLocationId } from "./keyed-location-encounter";
 import { mountPeriodicGameplayPanels } from "./periodic-gameplay-panels";
 import { publishExpeditionRuntimeChanged } from "./expedition-runtime-events";
 import { resolvePeriodicPace } from "./periodic-travel-pace";
+import { movementCompositionLedger } from "./expedition-movement-composition-view";
+import { encounterScheduleConfiguration } from "./encounter-schedule-presentation";
 
 /**
  * Generalized view of the same expedition entity and authoritative watch runtime.
@@ -900,11 +902,26 @@ export async function renderPeriodicExpeditionWorkbench(
         if (cadence === "None") encounterControl.value = "";
         encounterControl.disabled = busy || cadence === "None"
             || state.activeWatchNumber !== null;
-        text("[data-encounter-cadence]", cadence === "None"
-            ? "This pinned ruleset does not schedule encounter checks. Resolve travel without an encounter result."
+        const contextualSchedule = encounterScheduleConfiguration(runtime.procedure);
+        const cadenceLabel = cadence === "PerWatch" ? "Every watch"
+            : cadence === "PerDay" ? "Every day" : "None";
+        const humanize = (value: string): string =>
+            value.replace(/[-_]/g, " ").replace(/\\b\\w/g, letter => letter.toUpperCase());
+        const contextualLabel = contextualSchedule
+            ? " Contextual schedule: "
+                + humanize(contextualSchedule.scheduleModel ?? "unspecified")
+                + "; " + (contextualSchedule.travelChecksPerInterval ?? "unspecified") + " per interval"
+                + "; Camp check: " + (contextualSchedule.campCheck === null ? "unspecified" : contextualSchedule.campCheck ? "Yes" : "No")
+                + "; " + humanize(contextualSchedule.terrainProbabilityModel ?? "unspecified")
+                + ". Contextual schedule does not imply an automatic encounter cadence."
+            : "";
+        const instruction = cadence === "None"
+            ? "This pinned ruleset does not schedule automatic encounter checks. Resolve travel without an automatic encounter result."
             : state.activeWatchNumber !== null
                 ? "The encounter decision was captured when the watch started. Complete or resolve the current watch first."
-                : "An encounter result is used only when the pinned ruleset calls for a check in this watch.");
+                : "Supply an encounter result only when the pinned ruleset calls for a check in this watch.";
+        text("[data-encounter-cadence]",
+            `Encounter check schedule: Automatic cadence: ${cadenceLabel}.${contextualLabel} ${instruction}`);
         showKeyedLocation();
         const modes = runtime.movementComposition.policy.travelModeKeys;
         const pace = choice("pace");
@@ -963,10 +980,8 @@ export async function renderPeriodicExpeditionWorkbench(
         heading.textContent = runtime.party.members.length === 0
             ? "No party members assigned." : runtime.party.members.map(member => member.name).join(", ");
         party.append(heading);
-        text("[data-movement]",
-            `Movement: ${runtime.movementComposition.status.toLowerCase()}`
-            + (runtime.movementComposition.effectiveValue === null ? "" :
-                ` · ${runtime.movementComposition.effectiveValue} ${runtime.movementComposition.effectiveUnit ?? ""}`));
+        const movement = required<HTMLElement>("[data-movement]");
+        movement.replaceChildren(movementCompositionLedger(runtime));
         const history = required<HTMLElement>("[data-history]");
         history.replaceChildren();
         for (const entry of runtime.history.slice(-30).reverse()) {
