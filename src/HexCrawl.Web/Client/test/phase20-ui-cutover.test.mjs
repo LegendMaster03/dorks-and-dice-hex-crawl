@@ -114,12 +114,14 @@ test("focused spatial assistants use V2 expedition workbench; nonspatial cadence
     assert.doesNotMatch(entry, /api\.startConfiguredExpedition\(/);
 });
 
-test("V2 cell GM tools use server-qualified position and manual discovery, never q/r state", () => {
+test("periodic cell GM tools use server-qualified position and manual discovery, never q/r state", () => {
     const view = file("modules","expeditions","periodic-expedition-workbench.ts");
+    const surface = file("map-surface.ts");
     const api = file("api.ts");
-    assert.match(view, /api\.resolveWorldCell\(current\.id/);
-    assert.match(view, /map\.setClickInterceptor\(point => \{/);
-    assert.match(view, /api\.lookupWorldCell\(current\.id, point\)/);
+    assert.match(view, /map\.setCellSelectionHandler\(cell =>/);
+    assert.doesNotMatch(view, /setClickInterceptor/);
+    assert.match(surface, /lookupWorldCell\(worldId, point\)/);
+    assert.match(surface, /resolveWorldCell\(worldId, id\)/);
     assert.doesNotMatch(view, /map\.setHexSelectionHandler\(/);
     assert.match(view, /api\.repositionCellExpedition\(runtime\.id/);
     assert.match(view, /state\.activeWatchNumber === null && state\.pendingEncounter === null/);

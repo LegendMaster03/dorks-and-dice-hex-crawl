@@ -960,7 +960,8 @@ test("the Phase 15 spatial entry delegates all movement to the native polygonal 
     assert.match(entry, /return renderPeriodicExpeditionWorkbench/);
     assert.match(spatial, /api\.advanceCellWatch/);
     assert.match(spatial, /api\.repositionCellExpedition/);
-    assert.match(spatial, /map\.setClickInterceptor/);
+    assert.match(spatial, /map\.setCellSelectionHandler/);
+    assert.doesNotMatch(spatial, /map\.setClickInterceptor/);
     assert.doesNotMatch(entry, /ExpeditionWatchController|setHexSelectionHandler|HexCoordinate|selectedHex/);
     assert.doesNotMatch(spatial, /api\.advanceExpedition|name="hexSteps"/);
 });

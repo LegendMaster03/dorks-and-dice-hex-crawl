@@ -348,10 +348,12 @@ test("procedure mechanics use shared presentation policy and the unified expedit
 test("spatial mutation and discovery use only qualified cell interfaces", () => {
     const route = read("modules/expeditions/expedition-view.ts");
     const periodic = read("modules/expeditions/periodic-expedition-workbench.ts");
+    const surface = read("map-surface.ts");
     assert.match(route, /if \(!runtime\.expedition\.currentCell\)/);
     assert.match(route, /return renderPeriodicExpeditionWorkbench/);
     assert.match(periodic, /api\.repositionCellExpedition\(runtime\.id/);
-    assert.match(periodic, /api\.lookupWorldCell\(current\.id, point\)/);
+    assert.match(periodic, /map\.setCellSelectionHandler\(cell =>/);
+    assert.match(surface, /lookupWorldCell\(worldId, point\)/);
     assert.match(periodic, /api\.advanceCellWatch/);
     assert.doesNotMatch(route, /ExpeditionWatchController|advanceExpedition|repositionExpedition|selectedHex|currentHex/);
     assert.doesNotMatch(periodic, /api\.advanceExpedition|setHexSelectionHandler/);
