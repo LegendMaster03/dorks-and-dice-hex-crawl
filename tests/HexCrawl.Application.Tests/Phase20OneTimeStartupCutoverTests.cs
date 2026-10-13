@@ -250,7 +250,9 @@ public sealed class Phase20OneTimeStartupCutoverTests
         Assert.Equal(11L, reader.GetInt64(0));
         using var original = JsonDocument.Parse(reader.GetString(1));
         using var submitted = JsonDocument.Parse(coordinates);
-        Assert.Equal(submitted.RootElement.GetRawText(), original.RootElement.GetRawText());
+        Assert.Equal(
+            JsonSerializer.Serialize(submitted.RootElement),
+            JsonSerializer.Serialize(original.RootElement));
         Assert.True(reader.GetBoolean(2));
     }
 
