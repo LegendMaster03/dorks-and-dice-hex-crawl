@@ -48,7 +48,7 @@ public sealed class ExpeditionDeletionTests
     {
         await using var database = await TestDatabase.CreateAsync();
         var service = database.Service;
-        var world = await service.CreatePeriodicOverworldAsync("alice", , MaplessSessionFixture.Start().World);
+        var world = await service.CreatePeriodicOverworldAsync("alice", "Owner isolation", MaplessSessionFixture.Start().World);
         var expedition = await StartCellAsync(database, world.World.Id, "Alice session");
 
         await Assert.ThrowsAsync<HexCrawlNotFoundException>(() =>
@@ -62,7 +62,7 @@ public sealed class ExpeditionDeletionTests
     {
         await using var database = await TestDatabase.CreateAsync();
         var service = database.Service;
-        var world = await service.CreatePeriodicOverworldAsync("alice", , MaplessSessionFixture.Start().World);
+        var world = await service.CreatePeriodicOverworldAsync("alice", "Version conflict", MaplessSessionFixture.Start().World);
         var expedition = await StartCellAsync(database, world.World.Id, "Versioned session");
         var saved = await database.Store.SaveExpeditionAsync(
             expedition with { Name = "Updated version" },
@@ -85,7 +85,10 @@ public sealed class ExpeditionDeletionTests
         .StartWorldBoundCellsAsync(
             worldId, "alice", name,
             new ProcedureStartSelection(PresetKey: "simple-fixed-distance"),
-            new PeriodicCellAddress("face-0", new LatticeDisplacement(0, 0)));
+            new PeriodicCellAddress(
+                database.Service.GetOverworldAsync(worldId, "alice").GetAwaiter().GetResult()
+                    .World.SpatialTiling.Topology.MotifCells[0].Id,
+                new LatticeDisplacement(0, 0)));
 
     private sealed class TestDatabase : IAsyncDisposable
     {
