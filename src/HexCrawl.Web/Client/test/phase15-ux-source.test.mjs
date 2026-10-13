@@ -782,7 +782,8 @@ test("encounter schedule presentation distinguishes contextual procedure from au
     assert.match(view, /Terrain influence/);
     assert.match(view, /does not imply an automatic encounter cadence/);
     assert.match(schedule, /moduleKey === "encounters\.schedule"/);
-    assert.match(styles, /overflow-wrap:normal; word-break:normal/);
+    assert.match(styles, /overflow-wrap:anywhere; word-break:normal/);
+    assert.match(styles, /\.hc-ledger-table-scroll[^}]*overflow-x:auto/);
     assert.match(styles, /\.hc-readable-table thead th[^}]*white-space:nowrap/);
     assert.match(styles, /\.hc-movement-ledger-table thead th[^}]*white-space:nowrap/);
 });
