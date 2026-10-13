@@ -230,11 +230,13 @@ export async function renderPeriodicExpeditionWorkbench(
         openGameplayPanel("[data-survival-resources-panel]"));
     required<HTMLButtonElement>("[data-gm-journey]").addEventListener("click", () =>
         openGameplayPanel("[data-journey-panel]"));
-    required<HTMLButtonElement>("[data-gm-history]").addEventListener("click", () => {
+    const openHistory = (): void => {
         const disclosure = required<HTMLDetailsElement>("[data-history-disclosure]");
         disclosure.open = true;
         disclosure.scrollIntoView({ block: "nearest" });
-    });
+        disclosure.querySelector<HTMLElement>("summary")?.focus();
+    };
+    required<HTMLButtonElement>("[data-gm-history]").addEventListener("click", openHistory);
     const canReposition = (): boolean => {
         const state = currentState();
         return !busy && !!inspectedGeometry
@@ -453,6 +455,8 @@ export async function renderPeriodicExpeditionWorkbench(
             runtime = updated;
             generated = null;
             attentionStatus = "loading";
+            survivalAttention = null;
+            journeyAttention = null;
             topology = await api.getCellTopology(runtime.id);
             selectedExit = topology.selectedExitInterfaceIndex;
             if (!world) map.centerOn(topology.position);
@@ -482,6 +486,8 @@ export async function renderPeriodicExpeditionWorkbench(
             runtime = next;
             generated = null;
             attentionStatus = "loading";
+            survivalAttention = null;
+            journeyAttention = null;
             world = nextWorld;
             required<HTMLButtonElement>("[data-world]").hidden = world === null;
             topology = nextTopology;
@@ -779,18 +785,14 @@ export async function renderPeriodicExpeditionWorkbench(
 
         const address = topology.currentCell.address;
         const position = `Cell ${address.motifCellId} · ${address.translation.u}, ${address.translation.v}`;
-        const openParty = (): void => {
-            const panel = required<HTMLDetailsElement>("[data-gameplay-disclosure]");
-            panel.open = true;
-            panel.scrollIntoView({ block: "nearest" });
-        };
+        const openParty = (): void => openGameplayPanel("[data-periodic-party]");
         const stats = [
             statAction("Time",
                 state.activeWatchNumber === null
                     ? `Day ${state.currentDay} · ${state.completedWatches} watches complete`
                     : `Day ${state.currentDay} · watch ${state.activeWatchNumber}`,
                 state.activeWatchNumber === null ? "Ready for next watch" : "Travel period in progress",
-                () => required<HTMLDetailsElement>("[data-history-disclosure]").open = true),
+                openHistory),
             statAction("Position", position,
                 world ? "Mapped spatial position" : "Mapless spatial position",
                 () => root.querySelector<HTMLElement>("[data-cell-navigator] button")?.focus(),
@@ -808,7 +810,8 @@ export async function renderPeriodicExpeditionWorkbench(
             stats.push(statAction("Navigation",
                 state.isLost ? "Lost / off course" : "Course known",
                 pause === "LostRecognitionRequired" ? "Recognition decision required" : null,
-                () => openTravelDrawer(), state.isLost ? "warning" : "neutral"));
+                () => openTravelDrawer(pause === "LostRecognitionRequired" ? "lost" : "navigation"),
+                state.isLost ? "warning" : "neutral"));
         if (pending)
             stats.push(statAction("Encounters", "Encounter active",
                 "Resolve before more movement", () => openTravelDrawer("encounter"), "danger"));

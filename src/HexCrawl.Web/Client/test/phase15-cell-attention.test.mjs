@@ -31,6 +31,8 @@ for (const [name, state, kind, label] of [
     ['journey process', { journey: journey([], [{ status: 'ResolutionRequired', pendingActions: [], definition: { displayName: 'Journey' } }]) }, 'journey', 'Resolve journey stage'],
     ['journey stage pending action', { journey: journey([], [{ status: 'Active', pendingActions: [{ detail: 'Pick an approach' }], definition: { displayName: 'Challenge' } }]) }, 'journey', 'Resolve journey stage'],
     ['navigation due', { navigationDue: true }, 'navigation', 'Resolve navigation'],
+    ['navigation before course selection', { navigationDue: true, hasSelectedCourse: false }, 'navigation', 'Resolve navigation'],
+    ['survival before unavailable movement rules', { survival: survival(true), executable: false }, 'survival', 'Resolve forced travel'],
     ['travel direction', { hasSelectedCourse: false }, 'travel', 'Choose travel direction'],
     ['encounter precedence', { pendingEncounter: true, survival: survival(true) }, 'encounter', 'Resolve encounter'],
     ['course precedence', { pauseReason: 'CellCourseAdjudicationRequired', survival: survival(true) }, 'boundary', 'Resolve boundary course'],

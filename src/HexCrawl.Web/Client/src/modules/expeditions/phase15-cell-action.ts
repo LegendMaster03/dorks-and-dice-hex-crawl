@@ -38,11 +38,6 @@ export function nextCellExpeditionAction(state: {
         detail: "Review the saved watch and its remaining travel before resuming.",
         urgent: true
     };
-    if (!state.executable) return {
-        kind: "procedure", label: "Review exploration rules",
-        detail: "This saved ruleset has no executable cell movement procedure.",
-        urgent: false
-    };
     if (state.attentionStatus !== "ready") return {
         kind: "travel",
         label: state.attentionStatus === "loading" ? "Loading gameplay state" : "Review gameplay state",
@@ -74,15 +69,20 @@ export function nextCellExpeditionAction(state: {
             : `${process.definition.displayName}: a stage resolution is required.`,
         urgent: true
     };
-    if (!state.hasSelectedCourse) return {
-        kind: "travel", label: "Choose travel direction",
-        detail: "Select an adjacent atomic boundary in the current-cell navigator. Choosing a course does not move the party.",
+    if (!state.executable) return {
+        kind: "procedure", label: "Review exploration rules",
+        detail: "This saved ruleset has no executable cell movement procedure.",
         urgent: false
     };
     if (state.navigationDue) return {
         kind: "navigation", label: "Resolve navigation",
         detail: "Record the due navigation result in the travel/watch form before advancing.",
         urgent: true
+    };
+    if (!state.hasSelectedCourse) return {
+        kind: "travel", label: "Choose travel direction",
+        detail: "Select an adjacent atomic boundary in the current-cell navigator. Choosing a course does not move the party.",
+        urgent: false
     };
     return {
         kind: "travel",
