@@ -227,7 +227,7 @@ export class ExpeditionEnvironmentPanel {
                 id: crypto.randomUUID(),
                 scope: {
                     kind: selectedScope,
-                            cell: selectedScope === "Cell" ? currentCell : null,
+                    cell: selectedScope === "Cell" ? currentCell ?? null : null,
                     featureId: selectedScope === "SpatialFeature" ? feature.value : null
                 },
                 facts: [fact]
