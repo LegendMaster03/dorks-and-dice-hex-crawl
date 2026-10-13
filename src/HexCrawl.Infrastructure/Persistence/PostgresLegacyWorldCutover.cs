@@ -9,7 +9,7 @@ using NpgsqlTypes;
 namespace HexCrawl.Infrastructure.Persistence;
 
 /// <summary>
-/// One-time, transactional authored-world cutover for schema 10 databases.
+/// One-time, transactional authored-world cutover from schema 11 to schema 12.
 /// Remove this temporary converter after the authorized development cutover.
 /// It is never used by ordinary world reads, writes, or spatial execution.
 /// </summary>
