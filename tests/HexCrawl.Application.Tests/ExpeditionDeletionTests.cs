@@ -78,17 +78,20 @@ public sealed class ExpeditionDeletionTests
         Assert.Equal("Updated version", reloaded.Name);
     }
 
-    private static Task<StoredExpedition> StartCellAsync(
-        TestDatabase database, Guid worldId, string name) =>
-        new ExpeditionStartService(
+    private static async Task<StoredExpedition> StartCellAsync(
+        TestDatabase database, Guid worldId, string name)
+    {
+        var world = await database.Service.GetOverworldAsync(worldId, "alice");
+        var start = new PeriodicCellAddress(
+            world.World.SpatialTiling.Topology.MotifCells[0].Id,
+            new LatticeDisplacement(0, 0));
+        return await new ExpeditionStartService(
             database.Store, database.Service, new CampaignProcedureService(database.Store))
-        .StartWorldBoundCellsAsync(
-            worldId, "alice", name,
-            new ProcedureStartSelection(PresetKey: "simple-fixed-distance"),
-            new PeriodicCellAddress(
-                database.Service.GetOverworldAsync(worldId, "alice").GetAwaiter().GetResult()
-                    .World.SpatialTiling.Topology.MotifCells[0].Id,
-                new LatticeDisplacement(0, 0)));
+            .StartWorldBoundCellsAsync(
+                worldId, "alice", name,
+                new ProcedureStartSelection(PresetKey: "simple-fixed-distance"),
+                start);
+    }
 
     private sealed class TestDatabase : IAsyncDisposable
     {
