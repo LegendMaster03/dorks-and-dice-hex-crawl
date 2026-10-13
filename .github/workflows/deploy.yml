@@ -75,8 +75,9 @@ jobs:
             -f src/HexCrawl.Web/Dockerfile .
 
       - name: Start smoke-test PostgreSQL
-        timeout-minutes: 3
+        timeout-minutes: 5
         run: |
+          set -euo pipefail
           docker rm -f dorks-and-dice-hex-crawl-test-postgres 2>/dev/null || true
           docker network create dorks-and-dice-hex-crawl-test 2>/dev/null || true
           docker run -d --name dorks-and-dice-hex-crawl-test-postgres \
@@ -85,10 +86,10 @@ jobs:
             -e POSTGRES_USER=hex_crawl_test \
             -e POSTGRES_PASSWORD=hex_crawl_test \
             postgres:18 >/dev/null
-          sleep 10
           consecutive=0
-          for i in {1..30}; do
-            result=$(docker exec dorks-and-dice-hex-crawl-test-postgres \
+          deadline=$((SECONDS + 180))
+          while [ "$SECONDS" -lt "$deadline" ]; do
+            result=$(timeout 5s docker exec -e PGCONNECT_TIMEOUT=3 dorks-and-dice-hex-crawl-test-postgres \
               psql -v ON_ERROR_STOP=1 -U hex_crawl_test -d hex_crawl_test -tAc 'SELECT 1' 2>/dev/null || true)
             if [ "$(echo "$result" | tr -d '[:space:]')" = "1" ]; then
               consecutive=$((consecutive + 1))
@@ -99,6 +100,7 @@ jobs:
             sleep 1
           done
           if [ "$consecutive" -lt 3 ]; then
+            echo 'Smoke-test PostgreSQL did not pass three consecutive database queries within 180 seconds.' >&2
             docker logs dorks-and-dice-hex-crawl-test-postgres || true
             exit 1
           fi
