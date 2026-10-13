@@ -670,7 +670,7 @@ test("remediation review matrix exercises effects, history, encounter, journey, 
     assert.match(capture, /500\|844\|390/);
     assert.match(capture, /activeEffectVisible/);
     assert.match(capture, /unifiedHistoryVisible/);
-    assert.match(capture, /positionProgressVisible/);
+    assert.match(capture, /partialWatchPositionVisible/);
     assert.match(fixture, /pendingEncounter/);
     assert.match(fixture, /effectsFixture/);
 });
