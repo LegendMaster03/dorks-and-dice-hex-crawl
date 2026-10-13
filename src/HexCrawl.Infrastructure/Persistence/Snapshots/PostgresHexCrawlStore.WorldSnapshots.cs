@@ -56,14 +56,15 @@ public sealed partial class PostgresHexCrawlStore
                 world.SourceMaps,
                 world.EnvironmentAnnotations,
                 world.SpatialTiling,
-                2);
+                world.HasLegacyHexGrid ? 2 : 3);
         }
 
         public OverworldDefinition ToDomain()
         {
             if ((FormatVersion == 1 && (Grid is null || Tiling is not null))
                 || (FormatVersion == 2 && Tiling is null)
-                || FormatVersion is < 1 or > 2)
+                || (FormatVersion == 3 && (Grid is not null || Tiling is null))
+                || FormatVersion is < 1 or > 3)
                 throw new InvalidDataException(
                     "Unsupported or inconsistent persisted world format. The original record has been preserved.");
             var world = new OverworldDefinition

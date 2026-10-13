@@ -1,3 +1,7 @@
+using System.Text.Json;
+using HexCrawl.Application.Persistence;
+using HexCrawl.Domain.Spatial;
+using HexCrawl.Domain.World;
 using HexCrawl.Infrastructure.Persistence;
 using Npgsql;
 
@@ -5,6 +9,109 @@ namespace HexCrawl.Application.Tests;
 
 public sealed class Phase20OneTimeStartupCutoverTests
 {
+    [Fact]
+    public async Task Schema10UpgradeConvertsAuthoredHexWorldWithoutLosingAssetsOrFacts()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var store = new PostgresHexCrawlStore(database.ConnectionString);
+        await store.InitializeAsync();
+        var grid = new HexGridDefinition
+        {
+            Id = Guid.NewGuid(),
+            HexRadiusWorldUnits = 2,
+            NeighborCenterDistance = new DistanceMeasure(6, DistanceUnit.Miles)
+        };
+        var feature = new PointFeature(Guid.NewGuid(), "Ancient tower", "structure",
+            new WorldPoint(14, -7));
+        var fact = new EnvironmentFact
+        {
+            Id = Guid.NewGuid(), Dimension = "terrain",
+            ValueKind = EnvironmentValueKind.Tag, Tag = "woodland",
+            Provenance = "owner-authored"
+        };
+        var map = new SourceMapRepresentation(
+            Guid.NewGuid(), "region-a", "Registered map",
+            SourceMapRole.Gm, "owned/maps/asset.png", true,
+            MapRegistrationTransform.Affine(2, 0, 0, 2, 12, -3),
+            [new WorldPoint(0, 0), new WorldPoint(50, 0),
+             new WorldPoint(50, 50), new WorldPoint(0, 50)],
+            100, 100, "image/png", "original.png");
+        var world = new OverworldDefinition
+        {
+            Id = Guid.NewGuid(), Name = "Persisted authored world", Grid = grid,
+            Features = [feature],
+            SourceMaps = [map],
+            EnvironmentAnnotations =
+            [
+                new EnvironmentAnnotation
+                {
+                    Id = Guid.NewGuid(),
+                    Scope = new EnvironmentAnnotationScope
+                    {
+                        Kind = EnvironmentAnnotationScopeKind.Hex,
+                        Hex = new HexCoordinate(2, -1)
+                    },
+                    Facts = [fact]
+                }
+            ]
+        };
+        var createdAt = DateTimeOffset.UtcNow;
+        await store.CreateOverworldAsync(new StoredOverworld(
+            world, "owner", 7, createdAt, createdAt));
+        await using var connection = new NpgsqlConnection(database.ConnectionString);
+        await connection.OpenAsync();
+        await using (var downgrade = connection.CreateCommand())
+        {
+            downgrade.CommandText = """
+                ALTER TABLE expeditions DROP CONSTRAINT ck_expeditions_runtime_v2_only;
+                UPDATE hex_crawl_schema_migrations SET version = 10 WHERE version = 11;
+                """;
+            await downgrade.ExecuteNonQueryAsync();
+        }
+
+        var migrator = new PostgresSchemaMigrator(database.ConnectionString);
+        await migrator.MigrateAsync();
+        await migrator.MigrateAsync();
+        await using (var verify = connection.CreateCommand())
+        {
+            verify.CommandText = """
+                SELECT world_json::text, owner_user_id, version, created_at
+                FROM overworlds WHERE id = @id;
+                """;
+            verify.Parameters.AddWithValue("id", world.Id);
+            await using var reader = await verify.ExecuteReaderAsync();
+            Assert.True(await reader.ReadAsync());
+            using var json = JsonDocument.Parse(reader.GetString(0));
+            var root = json.RootElement;
+            Assert.False(root.TryGetProperty("grid", out _));
+            Assert.Equal(3, root.GetProperty("formatVersion").GetInt32());
+            Assert.NotEqual(JsonValueKind.Null, root.GetProperty("tiling").ValueKind);
+            var scope = root.GetProperty("environmentAnnotations")[0].GetProperty("scope");
+            Assert.Equal("Cell", scope.GetProperty("kind").GetString());
+            Assert.False(scope.TryGetProperty("hex", out _));
+            Assert.Equal(grid.Id, scope.GetProperty("cell").GetProperty("tilingId").GetGuid());
+            Assert.Equal("owner", reader.GetString(1));
+            Assert.Equal(7L, reader.GetInt64(2));
+            Assert.Equal(createdAt.ToUnixTimeSeconds(),
+                new DateTimeOffset(reader.GetFieldValue<DateTime>(3)).ToUnixTimeSeconds());
+        }
+
+        var reloaded = await new PostgresHexCrawlStore(database.ConnectionString)
+            .GetOverworldAsync(world.Id, "owner");
+        Assert.NotNull(reloaded);
+        Assert.Equal(grid.Id, reloaded!.World.SpatialTiling.Id);
+        Assert.Equal(map.AssetKey, Assert.Single(reloaded.World.SourceMaps).AssetKey);
+        Assert.Equal(map.Alignment, Assert.Single(reloaded.World.SourceMaps).Alignment);
+        Assert.Equal(feature.Id, Assert.Single(reloaded.World.Features).Id);
+        var annotation = Assert.Single(reloaded.World.EnvironmentAnnotations);
+        Assert.Equal(EnvironmentAnnotationScopeKind.Cell, annotation.Scope.Kind);
+        Assert.Equal(new WorldCellId(grid.Id,
+            new PeriodicCellAddress("hex", new LatticeDisplacement(2, -1))),
+            annotation.Scope.Cell);
+        Assert.Equal(fact.Id, Assert.Single(annotation.Facts).Id);
+        Assert.Equal(fact.Provenance, annotation.Facts[0].Provenance);
+    }
+
     [Fact]
     public async Task StartupUpgradeRemovesV1AndItsEventsButPreservesOtherKindsAndUnrelatedRows()
     {

@@ -79,7 +79,7 @@ public sealed class PostgresSchemaMigrator(string connectionString)
     /// Temporary schema 10 → 11 dev/test cutover. Historic V1 partial progress
     /// cannot be reconstructed as an exact geometric cursor. Remove those
     /// short-lived session records rather than fabricating coordinates or
-    /// retaining a second runtime. World and procedure tables are not touched.
+    /// retaining a second runtime. Authored worlds are converted; map assets,\n    /// world ownership and procedure revisions are not changed.
     /// The entire change commits or rolls back atomically.
     /// </summary>
     private static async Task UpgradeFrom10Async(
@@ -106,6 +106,11 @@ public sealed class PostgresSchemaMigrator(string connectionString)
                     $"Phase 20.2 found {unknown} unknown runtime snapshots. " +
                     "No tester records were changed; inspect them before upgrading.");
         }
+
+        // Authored worlds, assets and per-cell facts are preserved through
+        // a verified geometry conversion before disposable V1 sessions go.
+        await PostgresLegacyWorldCutover.ConvertAsync(
+            connection, transaction, cancellationToken);
 
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
