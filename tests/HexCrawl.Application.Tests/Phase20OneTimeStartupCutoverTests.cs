@@ -180,6 +180,81 @@ public sealed class Phase20OneTimeStartupCutoverTests
     }
 
     [Theory]
+    [InlineData("{\"q\":2}")]
+    [InlineData("{\"r\":-1}")]
+    [InlineData("{\"q\":2.5,\"r\":-1}")]
+    public async Task IncompleteArchivedAxialScopeRollsBackWithoutChangingAuthoredWorld(string coordinates)
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var store = new PostgresHexCrawlStore(database.ConnectionString);
+        await store.InitializeAsync();
+        var world = new OverworldDefinition
+        {
+            Id = Guid.NewGuid(),
+            Name = "Authored scope must not move",
+            Tiling = CurrentPeriodicFixture(),
+            EnvironmentAnnotations =
+            [
+                new EnvironmentAnnotation
+                {
+                    Id = Guid.NewGuid(),
+                    Scope = new EnvironmentAnnotationScope { Kind = EnvironmentAnnotationScopeKind.World },
+                    Facts =
+                    [
+                        new EnvironmentFact
+                        {
+                            Id = Guid.NewGuid(), Dimension = "terrain",
+                            ValueKind = EnvironmentValueKind.Tag, Tag = "forest",
+                            Provenance = "authored"
+                        }
+                    ]
+                }
+            ]
+        };
+        var now = DateTimeOffset.UtcNow;
+        await store.CreateOverworldAsync(new StoredOverworld(world, "owner", 1, now, now));
+        await using var connection = new NpgsqlConnection(database.ConnectionString);
+        await connection.OpenAsync();
+        await using (var downgrade = connection.CreateCommand())
+        {
+            downgrade.CommandText = """
+                ALTER TABLE expeditions RENAME CONSTRAINT ck_expeditions_runtime_kind TO ck_expeditions_runtime_v2_only;
+                UPDATE hex_crawl_schema_migrations SET version = 11 WHERE version = 12;
+                UPDATE overworlds SET world_json = jsonb_set(
+                    jsonb_set(
+                        jsonb_set(world_json - 'tiling', '{grid}', @grid::jsonb),
+                        '{formatVersion}', '1'::jsonb),
+                    '{environmentAnnotations,0,scope}', @scope::jsonb)
+                WHERE id = @id;
+                """;
+            downgrade.Parameters.AddWithValue("id", world.Id);
+            downgrade.Parameters.AddWithValue("grid", NpgsqlTypes.NpgsqlDbType.Jsonb,
+                ArchivedGridJson(Guid.NewGuid(), 2, 6));
+            downgrade.Parameters.AddWithValue("scope", NpgsqlTypes.NpgsqlDbType.Jsonb,
+                "{\"kind\":\"Hex\",\"hex\":" + coordinates + "}");
+            await downgrade.ExecuteNonQueryAsync();
+        }
+
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            new PostgresSchemaMigrator(database.ConnectionString).MigrateAsync());
+        await using var check = connection.CreateCommand();
+        check.CommandText = """
+            SELECT (SELECT max(version) FROM hex_crawl_schema_migrations),
+                   world_json->'environmentAnnotations'->0->'scope'->'hex',
+                   world_json ? 'grid'
+            FROM overworlds WHERE id = @id;
+            """;
+        check.Parameters.AddWithValue("id", world.Id);
+        await using var reader = await check.ExecuteReaderAsync();
+        Assert.True(await reader.ReadAsync());
+        Assert.Equal(11L, reader.GetInt64(0));
+        using var original = JsonDocument.Parse(reader.GetString(1));
+        using var submitted = JsonDocument.Parse(coordinates);
+        Assert.Equal(submitted.RootElement.GetRawText(), original.RootElement.GetRawText());
+        Assert.True(reader.GetBoolean(2));
+    }
+
+    [Theory]
     [InlineData("{}")]
     [InlineData("{\"kind\":null}")]
     [InlineData("{\"kind\":\"UnrecognizedKind\"}")]

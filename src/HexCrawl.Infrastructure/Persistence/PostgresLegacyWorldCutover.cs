@@ -104,8 +104,16 @@ internal static class PostgresLegacyWorldCutover
             {
                 if (gridNode is null || scope["hex"] is not JsonObject coordinates)
                     throw new InvalidDataException("Axial environment scope has no originating grid.");
-                var hex = coordinates.Deserialize<ArchivedAxialCoordinate>(Json);
-                var address = ArchivedGridCutoverGeometry.ToAddress(hex);
+                // Archived record structs default omitted q/r members to zero.
+                // Reject incomplete saved addresses rather than silently moving
+                // owner-authored facts to a different cell during conversion.
+                if (coordinates["q"] is null || coordinates["r"] is null
+                    || !int.TryParse(coordinates["q"]!.ToString(), out var q)
+                    || !int.TryParse(coordinates["r"]!.ToString(), out var r))
+                    throw new InvalidDataException(
+                        "Archived axial environment scope requires complete integer q/r coordinates.");
+                var address = ArchivedGridCutoverGeometry.ToAddress(
+                    new ArchivedAxialCoordinate(q, r));
                 tiling.Resolve(address);
                 scope["kind"] = "Cell";
                 scope["cell"] = JsonSerializer.SerializeToNode(
