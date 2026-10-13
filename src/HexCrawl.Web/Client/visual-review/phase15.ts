@@ -40,6 +40,13 @@ const visualCell = (u = 0, v = 0) => ({
     tilingId: "visual-tiling",
     address: { motifCellId: "visual-motif", translation: { u, v } }
 });
+const visualTiling = {
+    id: "visual-tiling",
+    revision: 1,
+    origin: { x: 0, y: 0 },
+    topology: { motifCells: [{ id: "visual-motif" }], quotientDsSymbol: "<1:1,1,1:6,3>" },
+    physicalDistancePerWorldUnit: distance(12)
+};
 const richProcedureParameters = {
     "time.interval": { durationTicks: "144000000000" },
     "party.activities": { assignmentScope: "participant", roleKeys: "navigator;scout", activityBudgetModel: "one-per-watch", activityKeys: "navigate;scout;forage" },
@@ -220,14 +227,6 @@ function visualPreset() {
                 encounterCadence: "PerWatch",
                 usesNavigationChecks: true,
                 usesPersistentVeer: true,
-                tracksIntraHexProgress: false,
-                directionChangesCostProgress: false,
-                supportsDeliberateDoubleBack: true,
-                startingExitProgressFactor: 0,
-                nearExitProgressFactor: 0.5,
-                farExitProgressFactor: 1,
-                backExitProgressFactor: 1,
-                directionChangeProgressCostFactor: 0,
                 resolutionHelpers: null
             },
             focusedIntervalPolicy: {
@@ -299,7 +298,6 @@ function representativeCatalogPresets() {
     const simpleModules = [
         item("time.interval", { durationTicks: "144000000000" }, "Automatic"),
         item("movement.resolution", { travelResolution: "ContinuousDistance", actualDistanceResolution: "Fixed" }, "Automatic"),
-        item("movement.hex-progress", { tracksIntraHexProgress: "true" }, "Automatic"),
         item("navigation.check", { usesNavigationChecks: "false", usesPersistentVeer: "false" }, "Automatic"),
         item("encounters.cadence", { cadence: "None" }, "Automatic")
     ];
@@ -566,22 +564,13 @@ if (stateName === "home") {
     emitSpecialMetrics("procedure");
     restoreFetch();
 } else if (stateName === "world-selected-cell") {
-    const worldMile = { kind: "Mile", symbol: "mi", metersPerUnit: 1609.344 };
     const worldFixture = {
         id: "visual-world",
         name: "The Shattered Marches",
         version: 12,
         createdAt: "2026-10-01T12:00:00Z",
         updatedAt: "2026-10-07T05:00:00Z",
-        grid: {
-            id: "visual-grid",
-            orientation: "PointyTop",
-            coordinateConvention: "AxialQr",
-            origin: { x: 0, y: 0 },
-            rotationDegrees: 18,
-            hexRadiusWorldUnits: 1,
-            neighborCenterDistance: { value: 12, unit: worldMile }
-        },
+        tiling: visualTiling,
         features: [{
             id: "road-1",
             name: "Old King's Road",
@@ -612,8 +601,8 @@ if (stateName === "home") {
         overworldId: worldFixture.id,
         version: worldFixture.version,
         annotations: [{
-            id: "hex-environment",
-            scope: { kind: "Cell", cell: { tilingId: "visual-tiling", address: { motifCellId: "hex", translation: { u: 0, v: 0 } } }, featureId: null },
+            id: "cell-environment",
+            scope: { kind: "Cell", cell: { tilingId: "visual-tiling", address: { motifCellId: "visual-motif", translation: { u: 0, v: 0 } } }, featureId: null },
             facts: [{
                 id: "terrain-1",
                 dimension: "terrain",
@@ -679,13 +668,7 @@ const world = {
     version: 8,
     createdAt: "2026-10-01T12:00:00Z",
     updatedAt: "2026-10-06T04:00:00Z",
-    tiling: {
-        id: "visual-tiling",
-        revision: 1,
-        origin: { x: 0, y: 0 },
-        topology: { motifCells: [{ id: "visual-motif" }], quotientDsSymbol: "<1:1,1,1:6,3>" },
-        physicalDistancePerWorldUnit: distance(12)
-    },
+    tiling: visualTiling,
     features: [{
         id: "feature-ridge",
         name: "Ashen Ridge",
@@ -1557,7 +1540,6 @@ switch (stateName) {
             watchNumber: 4,
             outcome: "WanderingEncounter",
             expeditionElapsedHours: 13.5,
-            hex: { q: 0, r: 0 },
             locationId: null,
             note: "A wandering encounter interrupts the expedition."
         };
@@ -1566,7 +1548,6 @@ switch (stateName) {
             watchNumber: 4,
             kind: "EncounterTriggered",
             expeditionElapsedHours: 13.5,
-            hex: { q: 0, r: 0 },
             message: "A wandering encounter interrupts the expedition.",
             distanceValue: null,
             distanceUnit: null,
@@ -1721,7 +1702,7 @@ switch (stateName) {
             { id: "supplies", resourceKey: "supplies", target: { scope: "Party", targetId: null }, inventoryModel: "SupplyDie", quantity: null, unit: null, symbolicState: null, supplyDieSides: 8, isDepleted: false, note: null },
             { id: "special-stock", resourceKey: "special-stock", target: { scope: "Expedition", targetId: null }, inventoryModel: "ExternalManual", quantity: null, unit: null, symbolicState: null, supplyDieSides: null, isDepleted: false, note: "Tracked by the table" });
         survival.environmentFacts = [
-            { id: "heat", dimension: "temperature", valueKind: "Measurement", value: "96 °F", effective: true, sourceKind: "Hex" },
+            { id: "heat", dimension: "temperature", valueKind: "Measurement", value: "96 °F", effective: true, sourceKind: "Cell" },
             { id: "rain", dimension: "precipitation", valueKind: "Tag", value: "heavy rain", effective: true, sourceKind: "Weather" }
         ];
         survival.camp = {
@@ -1971,18 +1952,6 @@ switch (stateName) {
         throw new Error("Unknown visual state: " + stateName);
 }
 
-localStorage.removeItem("hex-crawl.expedition." + runtime.id + ".travel-intent");
-if (stateName === "persisted-course") {
-    localStorage.setItem(
-        "hex-crawl.expedition." + runtime.id + ".travel-intent",
-        JSON.stringify({ direction: 4, pace: "fast" }));
-}
-if (stateName === "course-change-reload" || stateName === "course-clear-reload") {
-    localStorage.setItem(
-        "hex-crawl.expedition." + runtime.id + ".travel-intent",
-        JSON.stringify({ direction: 1, pace: "normal" }));
-}
-
 const originalFetch = window.fetch.bind(window);
 window.fetch = async input => {
     const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
@@ -1998,8 +1967,16 @@ window.fetch = async input => {
 let movementRetryCalls = 0;
 const api = new Proxy({
     getExpedition: async () => runtime,
-    advanceExpedition: async () => {
+    advanceCellWatch: async () => {
         movementRetryCalls += 1;
+        runtime = {
+            ...runtime,
+            version: runtime.version + 1,
+            expedition: {
+                ...runtime.expedition,
+                completedWatches: runtime.expedition.completedWatches + 1
+            }
+        };
         return runtime;
     },
     getOverworld: async () => world,
@@ -2108,7 +2085,6 @@ if (stateName === "course-change-reload") {
 
     disposeExpedition();
     root.replaceChildren();
-    localStorage.removeItem("hex-crawl.expedition." + runtime.id + ".travel-intent");
     disposeExpedition = await renderExpedition(root, api, runtime.id, () => {}, undefined, null);
     await waitForCondition(
         () => root.querySelector('[data-adjacency-interface-id="adjacency-5"]')?.getAttribute("aria-pressed") === "true",
@@ -2126,7 +2102,6 @@ if (stateName === "course-change-reload") {
 
     disposeExpedition();
     root.replaceChildren();
-    localStorage.removeItem("hex-crawl.expedition." + runtime.id + ".travel-intent");
     disposeExpedition = await renderExpedition(root, api, runtime.id, () => {}, undefined, null);
     await waitForCondition(
         () => root.querySelectorAll('[data-adjacency-interface-id][aria-pressed="true"]').length === 0,
@@ -2286,14 +2261,13 @@ const metrics = {
     scrollHeight: document.documentElement.scrollHeight,
     navigatorButtons: root.querySelectorAll("[data-adjacency-interface-id]").length,
     selectedEdges: root.querySelectorAll('[data-adjacency-interface-id][aria-pressed="true"]').length,
-    selectedDirection: root.querySelector('[data-adjacency-interface-id][aria-pressed="true"]')?.dataset.adjacencyInterfaceId?.replace("adjacency-", "") ?? null,
+    selectedInterfaceIndex: root.querySelector('[data-adjacency-interface-id][aria-pressed="true"]')?.dataset.adjacencyInterfaceId?.replace("adjacency-", "") ?? null,
     runtimeIntendedHeading: runtime.expedition.isSpatial ? runtime.expedition.intendedHeading : null,
     runtimeActualHeading: runtime.expedition.isSpatial ? runtime.expedition.actualHeading : null,
     currentTravelCourseText: root.querySelector("[data-current-travel-course]")?.textContent?.trim() ?? null,
     navigationStatText: Array.from(root.querySelectorAll(".hc-stat-action")).find(item =>
         item.querySelector(".hc-stat-action-label")?.textContent?.trim() === "Navigation")?.textContent?.replace(/\s+/g, " ").trim() ?? null,
     focusedNavigationText: root.querySelector("[data-phase15-drawer]")?.textContent?.replace(/\s+/g, " ").trim() ?? null,
-    storedTravelPreferences: localStorage.getItem("hex-crawl.expedition." + runtime.id + ".travel-intent"),
     continueButtons: buttons.filter(button => isVisible(button) && button.textContent?.trim() === "Continue travel").length,
     travelControlsButtons: buttons.filter(button => isVisible(button) && button.textContent?.trim() === "Travel controls").length,
     drawerCount: root.querySelectorAll("[data-phase15-drawer]").length,
