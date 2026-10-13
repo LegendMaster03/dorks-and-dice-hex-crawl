@@ -12,10 +12,9 @@ import { ExpeditionSurvivalResourcesPanel } from "./survival-resources-panel";
 type Mutate = (control: HTMLButtonElement | null, action: () => Promise<void>) => Promise<void>;
 
 /**
- * The legacy and generalized expeditions share the same persistent gameplay
- * aggregates. Mount their existing editors instead of a second implementation
- * tied to hex-grid navigation. The only generalized-specific UI remains the
- * cell-travel controller and its authoritative topology.
+ * Persistent expedition gameplay aggregates use one set of party,
+ * environment, journey, effects, and survival editors. Each editor mounts
+ * within the explicitly provided gameplay host, independently of tile shape.
  */
 export function mountPeriodicGameplayPanels(
     host: HTMLElement,

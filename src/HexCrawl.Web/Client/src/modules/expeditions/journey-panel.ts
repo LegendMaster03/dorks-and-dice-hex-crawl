@@ -34,7 +34,7 @@ export class ExpeditionJourneyPanel {
         this.body = document.createElement("div");
         this.body.className = "hc-form";
         this.panel.append(summary, this.body);
-        const page = root.matches(".hc-page")
+        const page = root.matches("[data-gameplay-panels]") || root.matches(".hc-page")
             ? root
             : root.querySelector<HTMLElement>(".hc-page");
         page?.append(this.panel);

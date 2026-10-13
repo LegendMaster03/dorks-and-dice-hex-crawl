@@ -28,9 +28,11 @@ export class ExpeditionEnvironmentPanel {
         private readonly getRuntime: () => ExpeditionDetail,
         private readonly onRuntimeChanged: (next: ExpeditionDetail) => void,
         private readonly mutate: (control: HTMLButtonElement | null, action: () => Promise<void>) => Promise<void>) {
-        const host = root.querySelector<HTMLElement>(".hc-sidebar")
-            ?? root.querySelector<HTMLElement>(".hc-columns > .hc-panel:last-child")
-            ?? (root.matches(".hc-page") ? root : root.querySelector<HTMLElement>(".hc-page"));
+        const host = root.matches("[data-gameplay-panels]")
+            ? root
+            : root.querySelector<HTMLElement>(".hc-sidebar")
+                ?? root.querySelector<HTMLElement>(".hc-columns > .hc-panel:last-child")
+                ?? (root.matches(".hc-page") ? root : root.querySelector<HTMLElement>(".hc-page"));
         if (!host) throw new Error("Expedition environment panel requires a running-sheet host.");
 
         this.panel = document.createElement("details");

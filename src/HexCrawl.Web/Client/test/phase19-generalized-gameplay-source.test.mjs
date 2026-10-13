@@ -6,11 +6,11 @@ import test from "node:test";
 const source = (...pieces) => fs.readFileSync(path.join("src", ...pieces), "utf8");
 
 test("generalized expedition keeps the existing route, context and shared gameplay editors", () => {
-    const legacy = source("modules","expeditions","expedition-view.ts");
+    const expedition = source("modules","expeditions","expedition-view.ts");
     const periodic = source("modules","expeditions","periodic-expedition-workbench.ts");
     const panels = source("modules","expeditions","periodic-gameplay-panels.ts");
 
-    assert.match(legacy, /renderPeriodicExpeditionWorkbench\(root, api, runtime, world, navigate, toolContext\)/);
+    assert.match(expedition, /renderPeriodicExpeditionWorkbench\(root, api, runtime, world, navigate, toolContext\)/);
     assert.match(periodic, /mountPeriodicGameplayPanels\(/);
     assert.match(periodic, /\[data-gameplay-panels\]/);
     assert.match(periodic, /gameplay\.sync\(\)/);
@@ -29,6 +29,19 @@ test("generalized expedition keeps the existing route, context and shared gamepl
     assert.match(panels, /party\.sync\(getRuntime\(\)\)/);
     assert.match(panels, /environment\.sync\(\)/);
     assert.match(panels, /journey\.sync\(\), effects\.sync\(\), survival\.sync\(\)/);
+});
+
+test("shared gameplay editors mount in the explicit panel host and existing running-sheet views", () => {
+    for (const name of [
+        "environment-panel.ts", "journey-panel.ts", "survival-resources-panel.ts"
+    ]) {
+        const panel = source("modules", "expeditions", name);
+        assert.match(panel, /root\.matches\("\[data-gameplay-panels\]"\)/);
+        assert.match(panel, /root\.matches\("\.hc-page"\)/);
+    }
+    const panels = source("modules", "expeditions", "periodic-gameplay-panels.ts");
+    assert.match(panels, /host\.append\(partyPanel\)/);
+    assert.match(panels, /new ExpeditionEnvironmentPanel\(\s*host,/);
 });
 
 test("generalized environment fact editing uses qualified Cell rather than fake axial hex", () => {
