@@ -28,7 +28,7 @@ public sealed class Phase19WorldGeometryEndpointsTests
                 created.EnsureSuccessStatusCode();
                 var world = await created.Content.ReadFromJsonAsync<JsonElement>();
                 worldId = world.GetProperty("id").GetGuid();
-                Assert.Equal(JsonValueKind.Null, world.GetProperty("grid").ValueKind);
+                Assert.False(world.TryGetProperty("grid", out _));
                 Assert.NotEqual(JsonValueKind.Null, world.GetProperty("tiling").ValueKind);
                 Assert.Equal(0, world.GetProperty("sourceMaps").GetArrayLength());
                 using var viewport = await client.GetAsync(
@@ -94,7 +94,7 @@ public sealed class Phase19WorldGeometryEndpointsTests
                 renamed.EnsureSuccessStatusCode();
                 var renamedWorld = await renamed.Content.ReadFromJsonAsync<JsonElement>();
                 Assert.Equal("Renamed periodic world", renamedWorld.GetProperty("name").GetString());
-                Assert.Equal(JsonValueKind.Null, renamedWorld.GetProperty("grid").ValueKind);
+                Assert.False(renamedWorld.TryGetProperty("grid", out _));
                 Assert.Equal(cell.GetProperty("id").GetProperty("tilingId").GetGuid(),
                     renamedWorld.GetProperty("tiling").GetProperty("id").GetGuid());
             }
