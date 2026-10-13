@@ -43,6 +43,19 @@ const visualCell = (u = 0, v = 0) => ({
     tilingId: "visual-tiling",
     address: { motifCellId: "visual-motif", translation: { u, v } }
 });
+// Geometry for one authored hexagonal preset, expressed as polygon and interfaces.
+// Other periodic motifs use the same runtime contracts, not these fixture values.
+const visualPolygon = [
+    { x: 1, y: 0 }, { x: .5, y: .8660254 }, { x: -.5, y: .8660254 },
+    { x: -1, y: 0 }, { x: -.5, y: -.8660254 }, { x: .5, y: -.8660254 }
+];
+const visualInterfaces = visualPolygon.map((start, interfaceIndex) => ({
+    interfaceIndex, boundarySideIndex: interfaceIndex,
+    neighborCell: visualCell(interfaceIndex + 1, 0),
+    reciprocalInterfaceIndex: (interfaceIndex + visualPolygon.length / 2) % visualPolygon.length,
+    start, end: visualPolygon[(interfaceIndex + 1) % visualPolygon.length]
+}));
+
 const visualTiling = {
     id: "visual-tiling",
     revision: 1,
@@ -566,6 +579,7 @@ if (stateName === "home") {
     emitSpecialMetrics("procedure");
     restoreFetch();
 } else if (stateName === "world-selected-cell") {
+    const restoreFetch = installProcedureFetch();
     const worldFixture = {
         id: "visual-world",
         name: "The Shattered Marches",
@@ -647,6 +661,11 @@ if (stateName === "home") {
         getOverworld: async () => worldFixture,
         getWorldEnvironment: async () => environmentFixture,
         getProcedurePresets: async () => [],
+        getPresentationProfiles: async () => [{
+            key: "exploration-map", name: "Exploration map",
+            automationMode: "DmControlled", playerGrid: "None",
+            terrainMode: "Hidden", markEnteredCellKnown: false
+        }],
         listExpeditions: async () => [],
         listSourceMaps: async () => ({ overworldVersion: worldFixture.version, sourceMaps: [] }),
         listVisibleCells: async () => [cellGeometry],
@@ -665,20 +684,8 @@ if (stateName === "home") {
     if (!root.querySelector(".hc-selected-cell-panel input[name=terrain]"))
         throw new Error("Qualified polygon selection did not render its world authoring panel.");
     emitSpecialMetrics("world");
+    restoreFetch();
 } else {
-// Geometry for one authored hexagonal preset, expressed as polygon and interfaces.
-// Other periodic motifs use the same runtime contracts, not these fixture values.
-const visualPolygon = [
-    { x: 1, y: 0 }, { x: .5, y: .8660254 }, { x: -.5, y: .8660254 },
-    { x: -1, y: 0 }, { x: -.5, y: -.8660254 }, { x: .5, y: -.8660254 }
-];
-const visualInterfaces = visualPolygon.map((start, interfaceIndex) => ({
-    interfaceIndex, boundarySideIndex: interfaceIndex,
-    neighborCell: visualCell(interfaceIndex + 1, 0),
-    reciprocalInterfaceIndex: (interfaceIndex + visualPolygon.length / 2) % visualPolygon.length,
-    start, end: visualPolygon[(interfaceIndex + 1) % visualPolygon.length]
-}));
-
 const world = {
     id: "visual-world",
     name: "The Shattered Marches",
