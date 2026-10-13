@@ -27,13 +27,25 @@ const responseJson = value => new Response(JSON.stringify(value), {
     headers: { "Content-Type": "application/json" }
 });
 
+// Headings derive from authored polygon boundaries, never numbered axial directions.
+const visualHeading = interfaceIndex => {
+    const boundary = visualInterfaces.find(edge => edge.interfaceIndex === interfaceIndex);
+    if (!boundary) throw new Error("Unknown fixture cell interface.");
+    return {
+        x: (boundary.start.x + boundary.end.x) / 2,
+        y: (boundary.start.y + boundary.end.y) / 2
+    };
+};
+const visualCell = (u = 0, v = 0) => ({
+    tilingId: "visual-tiling",
+    address: { motifCellId: "visual-motif", translation: { u, v } }
+});
 const richProcedureParameters = {
     "time.interval": { durationTicks: "144000000000" },
     "party.activities": { assignmentScope: "participant", roleKeys: "navigator;scout", activityBudgetModel: "one-per-watch", activityKeys: "navigate;scout;forage" },
     "movement.budget": { budgetModel: "watch-distance", baseBudget: "6", budgetUnit: "mi", limitingScope: "party", travelModeKeys: "normal;fast;slow" },
     "movement.terrain": { adjustmentModel: "multiplier", terrainAdjustments: "clear=1;rough=0.75;difficult=0.5", routeAdjustmentModel: "route-improves-cost", weatherAdjustmentModel: "symbolic" },
     "movement.resolution": { travelResolution: "continuous-distance", actualDistanceResolution: "fixed" },
-    "movement.hex-progress": { tracksIntraHexProgress: "true", startingExitProgressFactor: "0", nearExitProgressFactor: "0.5", farExitProgressFactor: "1", backExitProgressFactor: "1", directionChangesCostProgress: "true", directionChangeProgressCostFactor: "0.5", supportsDeliberateDoubleBack: "true" },
     "navigation.check": { usesNavigationChecks: "true", usesPersistentVeer: "true" },
     "navigation.outcome": { checkTriggerModel: "per-watch", failureStateModel: "lost", directionalErrorModel: "persistent-veer", recognitionModel: "procedure-check", reorientationModel: "resolved-check" },
     "encounters.cadence": { cadence: "per-watch" },
@@ -648,20 +660,31 @@ if (stateName === "home") {
 } else {
 const mile = { kind: "Mile", symbol: "mi", metersPerUnit: 1609.344 };
 const distance = value => ({ value, unit: mile });
+// Geometry for one authored hexagonal preset, expressed as polygon and interfaces.
+// Other periodic motifs use the same runtime contracts, not these fixture values.
+const visualPolygon = [
+    { x: 1, y: 0 }, { x: .5, y: .8660254 }, { x: -.5, y: .8660254 },
+    { x: -1, y: 0 }, { x: -.5, y: -.8660254 }, { x: .5, y: -.8660254 }
+];
+const visualInterfaces = visualPolygon.map((start, interfaceIndex) => ({
+    interfaceIndex, boundarySideIndex: interfaceIndex,
+    neighborCell: visualCell(interfaceIndex + 1, 0),
+    reciprocalInterfaceIndex: (interfaceIndex + visualPolygon.length / 2) % visualPolygon.length,
+    start, end: visualPolygon[(interfaceIndex + 1) % visualPolygon.length]
+}));
+
 const world = {
     id: "visual-world",
     name: "The Shattered Marches",
     version: 8,
     createdAt: "2026-10-01T12:00:00Z",
     updatedAt: "2026-10-06T04:00:00Z",
-    grid: {
-        id: "visual-grid",
-        orientation: "PointyTop",
-        coordinateConvention: "AxialQr",
+    tiling: {
+        id: "visual-tiling",
+        revision: 1,
         origin: { x: 0, y: 0 },
-        rotationDegrees: 0,
-        hexRadiusWorldUnits: 1,
-        neighborCenterDistance: distance(12)
+        topology: { motifCells: [{ id: "visual-motif" }], quotientDsSymbol: "<1:1,1,1:6,3>" },
+        physicalDistancePerWorldUnit: distance(12)
     },
     features: [{
         id: "feature-ridge",
@@ -712,14 +735,6 @@ function procedure() {
             encounterCadence: "None",
             usesNavigationChecks: false,
             usesPersistentVeer: true,
-            tracksIntraHexProgress: true,
-            directionChangesCostProgress: true,
-            supportsDeliberateDoubleBack: true,
-            startingExitProgressFactor: 0,
-            nearExitProgressFactor: 0.5,
-            farExitProgressFactor: 1,
-            backExitProgressFactor: 1,
-            directionChangeProgressCostFactor: 0.5,
             resolutionHelpers: null
         },
         focusedIntervalPolicy: {
@@ -733,7 +748,6 @@ function procedure() {
         modules: [
             "time.interval",
             "movement.resolution",
-            "movement.hex-progress",
             "navigation.check",
             "encounters.cadence",
             "party.activities",
@@ -829,19 +843,22 @@ function runtimeFixture() {
         expedition: {
             id: "visual-" + stateName,
             isSpatial: true,
-            currentHex: { q: 0, r: 0 },
+            currentCell: visualCell(),
+            cellTraversal: {
+                currentCell: visualCell(),
+                position: { x: 0, y: 0 },
+                enteredFrom: null,
+                entryInterfaceIndex: null,
+                travelHeading: null,
+                selectedExitInterfaceIndex: null
+            },
             position: { x: 0, y: 0 },
-            positionPrecision: "HexAnchor",
-            entryDirection: 3,
-            lastTravelDirection: 0,
-            intendedDirection: null,
-            actualDirection: null,
+            positionPrecision: "Exact",
+            intendedHeading: null,
+            actualHeading: null,
             isLost: false,
-            veerSteps: 0,
             veerDegrees: 0,
             distanceTraveled: distance(18),
-            hexProgress: distance(0),
-            exitRequirement: distance(12),
             elapsedTravelHours: 12,
             currentDay: 1,
             completedWatches: 3,
@@ -881,7 +898,6 @@ function runtimeFixture() {
             watchNumber: 1,
             kind: "WatchCompleted",
             expeditionElapsedHours: 4,
-            hex: { q: -1, r: 0 },
             message: "First travel watch completed.",
             distanceValue: 6,
             distanceUnit: "mi",
@@ -1408,17 +1424,23 @@ let journey = journeyFixtureWithShuffledDefinitions();
 switch (stateName) {
     case "selected-edge":
     case "focus-return":
-        runtime.expedition.intendedDirection = 1;
-        runtime.expedition.actualDirection = 1;
+        runtime.expedition.intendedHeading = visualHeading(1);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 1;
+        runtime.expedition.actualHeading = visualHeading(1);
         break;
     case "fixed-pace":
-        runtime.expedition.intendedDirection = 1;
-        runtime.expedition.actualDirection = 1;
+        runtime.expedition.intendedHeading = visualHeading(1);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 1;
+        runtime.expedition.actualHeading = visualHeading(1);
         runtime.movementComposition = movement(true, []);
         break;
     case "empty-party":
-        runtime.expedition.intendedDirection = 1;
-        runtime.expedition.actualDirection = 1;
+        runtime.expedition.intendedHeading = visualHeading(1);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 1;
+        runtime.expedition.actualHeading = visualHeading(1);
         runtime.party = {
             ...runtime.party,
             members: [],
@@ -1429,26 +1451,36 @@ switch (stateName) {
         };
         break;
     case "persisted-course":
-        runtime.expedition.intendedDirection = 2;
-        runtime.expedition.actualDirection = 2;
+        runtime.expedition.intendedHeading = visualHeading(2);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 2;
+        runtime.expedition.actualHeading = visualHeading(2);
         break;
     case "course-change-reload":
-        runtime.expedition.currentHex = { q: 1, r: -1 };
-        runtime.expedition.intendedDirection = 1;
-        runtime.expedition.actualDirection = 1;
-        runtime.expedition.hexProgress = distance(2);
-        runtime.expedition.exitRequirement = distance(6);
+        runtime.expedition.currentCell = visualCell(1, -1);
+        runtime.expedition.cellTraversal.currentCell = runtime.expedition.currentCell;
+        runtime.expedition.intendedHeading = visualHeading(1);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 1;
+        runtime.expedition.actualHeading = visualHeading(1);
+        runtime.expedition.cellTraversal.position = { x: Number(2), y: 0 };
+        runtime.expedition.position = runtime.expedition.cellTraversal.position;
         runtime.expedition.completedWatches = 2;
         runtime.procedure.runtime.usesNavigationChecks = true;
         break;
     case "course-clear-reload":
-        runtime.expedition.intendedDirection = 1;
-        runtime.expedition.actualDirection = 1;
+        runtime.expedition.intendedHeading = visualHeading(1);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 1;
+        runtime.expedition.actualHeading = visualHeading(1);
         break;
     case "partial-progress":
-        runtime.expedition.intendedDirection = 2;
-        runtime.expedition.actualDirection = 2;
-        runtime.expedition.hexProgress = distance(4.5);
+        runtime.expedition.intendedHeading = visualHeading(2);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 2;
+        runtime.expedition.actualHeading = visualHeading(2);
+        runtime.expedition.cellTraversal.position = { x: Number(4.5), y: 0 };
+        runtime.expedition.position = runtime.expedition.cellTraversal.position;
         runtime.expedition.activeWatchNumber = 4;
         runtime.expedition.activeWatchTotalHours = 4;
         runtime.expedition.activeWatchElapsedHours = 1.5;
@@ -1457,18 +1489,24 @@ switch (stateName) {
         runtime.remainingWatchHours = 2.5;
         break;
     case "navigation-pending":
-        runtime.expedition.intendedDirection = 1;
+        runtime.expedition.intendedHeading = visualHeading(1);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 1;
         runtime.procedure.runtime.usesNavigationChecks = true;
         break;
     case "boundary-pending":
-        runtime.expedition.intendedDirection = 1;
-        runtime.expedition.actualDirection = 2;
+        runtime.expedition.intendedHeading = visualHeading(1);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 1;
+        runtime.expedition.actualHeading = visualHeading(2);
         runtime.expedition.isLost = true;
         runtime.pauseReason = "LostRecognitionRequired";
         break;
     case "movement-input-pending":
     case "movement-validation-retry":
-        runtime.expedition.intendedDirection = 3;
+        runtime.expedition.intendedHeading = visualHeading(3);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 3;
         runtime.movementComposition = movement(false);
         if (stateName === "movement-validation-retry") {
             runtime.procedure.runtime.usesNavigationChecks = false;
@@ -1476,8 +1514,10 @@ switch (stateName) {
         }
         break;
     case "movement-composition":
-        runtime.expedition.intendedDirection = 3;
-        runtime.expedition.actualDirection = 3;
+        runtime.expedition.intendedHeading = visualHeading(3);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 3;
+        runtime.expedition.actualHeading = visualHeading(3);
         runtime.movementComposition = movement(true);
         runtime.movementComposition.effectiveValue = 4.5;
         runtime.movementComposition.preOverrideValue = 4;
@@ -1498,8 +1538,10 @@ switch (stateName) {
     case "encounter-pending":
         runtime.pauseReason = "EncounterTriggered";
         runtime.remainingWatchHours = 2.5;
-        runtime.expedition.intendedDirection = 0;
-        runtime.expedition.actualDirection = 0;
+        runtime.expedition.intendedHeading = visualHeading(0);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 0;
+        runtime.expedition.actualHeading = visualHeading(0);
         runtime.expedition.activeWatchNumber = 4;
         runtime.expedition.activeWatchTotalHours = 4;
         runtime.expedition.activeWatchElapsedHours = 1.5;
@@ -1537,17 +1579,23 @@ switch (stateName) {
         break;
     case "abstract-spatial-course":
         runtime = maplessRuntimeFixture();
-        runtime.expedition.intendedDirection = 2;
-        runtime.expedition.actualDirection = 2;
+        runtime.expedition.intendedHeading = visualHeading(2);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 2;
+        runtime.expedition.actualHeading = visualHeading(2);
         runtime.procedure.runtime.usesNavigationChecks = true;
         break;
     case "forced-travel-pending":
-        runtime.expedition.intendedDirection = 4;
+        runtime.expedition.intendedHeading = visualHeading(4);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 4;
         survival = survivalFixture(true);
         effects = effectsFixture(true);
         break;
     case "forced-travel-one-participant":
-        runtime.expedition.intendedDirection = 4;
+        runtime.expedition.intendedHeading = visualHeading(4);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 4;
         runtime.party = {
             ...runtime.party,
             members: [runtime.party.members[0]],
@@ -1559,7 +1607,9 @@ switch (stateName) {
         effects = effectsFixture(false);
         break;
     case "forced-travel-zero-participants":
-        runtime.expedition.intendedDirection = 4;
+        runtime.expedition.intendedHeading = visualHeading(4);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 4;
         runtime.party = {
             ...runtime.party,
             members: [],
@@ -1571,13 +1621,17 @@ switch (stateName) {
         effects = effectsFixture(false);
         break;
     case "forced-travel-party-scope":
-        runtime.expedition.intendedDirection = 4;
+        runtime.expedition.intendedHeading = visualHeading(4);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 4;
         survival = survivalFixture(true);
         survival.forcedTravelPolicy.failureTargetScope = "Party";
         effects = effectsFixture(false);
         break;
     case "forced-travel-mount":
-        runtime.expedition.intendedDirection = 4;
+        runtime.expedition.intendedHeading = visualHeading(4);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 4;
         runtime.party = {
             ...runtime.party,
             movementContributors: [{
@@ -1604,7 +1658,9 @@ switch (stateName) {
         effects = effectsFixture(false);
         break;
     case "forced-travel-vehicle":
-        runtime.expedition.intendedDirection = 4;
+        runtime.expedition.intendedHeading = visualHeading(4);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 4;
         runtime.party = {
             ...runtime.party,
             movementContributors: [{
@@ -1631,13 +1687,17 @@ switch (stateName) {
         effects = effectsFixture(false);
         break;
     case "effects-workspace":
-        runtime.expedition.intendedDirection = 1;
-        runtime.expedition.actualDirection = 1;
+        runtime.expedition.intendedHeading = visualHeading(1);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 1;
+        runtime.expedition.actualHeading = visualHeading(1);
         effects = effectsFixture(true);
         break;
     case "readability-workspace":
-        runtime.expedition.intendedDirection = 1;
-        runtime.expedition.actualDirection = 1;
+        runtime.expedition.intendedHeading = visualHeading(1);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 1;
+        runtime.expedition.actualHeading = visualHeading(1);
         runtime.party.members.find(member => member.id === "member-3").name = "Cora Longriver";
         survival = survivalFixture(false);
         survival.foragingPolicy = {
@@ -1679,8 +1739,10 @@ switch (stateName) {
         });
         break;
     case "encounter-schedule":
-        runtime.expedition.intendedDirection = 0;
-        runtime.expedition.actualDirection = 0;
+        runtime.expedition.intendedHeading = visualHeading(0);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 0;
+        runtime.expedition.actualHeading = visualHeading(0);
         runtime.procedure.runtime.encounterCadence = "PerWatch";
         runtime.expedition.completedWatches = 3;
         runtime.expedition.activeWatchNumber = 4;
@@ -1689,14 +1751,18 @@ switch (stateName) {
         runtime.expedition.activeWatchRemainingHours = 2;
         break;
     case "encounter-schedule-day":
-        runtime.expedition.intendedDirection = 0;
-        runtime.expedition.actualDirection = 0;
+        runtime.expedition.intendedHeading = visualHeading(0);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 0;
+        runtime.expedition.actualHeading = visualHeading(0);
         runtime.procedure.runtime.encounterCadence = "PerDay";
         runtime.expedition.completedWatches = 3;
         break;
     case "encounter-contextual-schedule":
-        runtime.expedition.intendedDirection = 0;
-        runtime.expedition.actualDirection = 0;
+        runtime.expedition.intendedHeading = visualHeading(0);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 0;
+        runtime.expedition.actualHeading = visualHeading(0);
         runtime.procedure.runtime.encounterCadence = "None";
         runtime.procedure.modules = [
             ...runtime.procedure.modules.filter(module => module.moduleKey !== "encounters.cadence" && module.moduleKey !== "encounters.schedule"),
@@ -1732,14 +1798,18 @@ switch (stateName) {
         journey = journeyFixtureWithShuffledDefinitions();
         break;
     case "guided-pending-consequence":
-        runtime.expedition.intendedDirection = 1;
-        runtime.expedition.actualDirection = 1;
+        runtime.expedition.intendedHeading = visualHeading(1);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 1;
+        runtime.expedition.actualHeading = visualHeading(1);
         effects = effectsFixture(true);
         effects.pendingConsequences = [pendingJourneyConsequence("pending-guided-consequence")];
         break;
     case "effects-journey-source":
-        runtime.expedition.intendedDirection = 1;
-        runtime.expedition.actualDirection = 1;
+        runtime.expedition.intendedHeading = visualHeading(1);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 1;
+        runtime.expedition.actualHeading = visualHeading(1);
         effects = effectsFixture(true);
         effects.activeEffects[0].provenance = [{
             sourceKind: "JourneyEvent",
@@ -1804,12 +1874,16 @@ switch (stateName) {
         }];
         break;
     case "more-options-open":
-        runtime.expedition.intendedDirection = 5;
-        runtime.expedition.actualDirection = 5;
+        runtime.expedition.intendedHeading = visualHeading(5);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 5;
+        runtime.expedition.actualHeading = visualHeading(5);
         break;
     case "rail-realistic":
-        runtime.expedition.intendedDirection = 0;
-        runtime.expedition.actualDirection = 0;
+        runtime.expedition.intendedHeading = visualHeading(0);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 0;
+        runtime.expedition.actualHeading = visualHeading(0);
         break;
     case "map-selected":
     case "map-nonadjacent":
@@ -1929,16 +2003,47 @@ const api = new Proxy({
         return runtime;
     },
     getOverworld: async () => world,
-    setExpeditionCourseIntent: async (_expeditionId, input) => {
-        if (input.expectedVersion !== runtime.version) {
+    getCellTopology: async () => ({
+        formatVersion: 1,
+        currentCell: runtime.expedition.currentCell,
+        position: runtime.expedition.position,
+        center: { x: 0, y: 0 },
+        polygon: visualPolygon,
+        heading: runtime.expedition.intendedHeading,
+        enteredFrom: runtime.expedition.cellTraversal?.enteredFrom ?? null,
+        entryInterfaceIndex: runtime.expedition.cellTraversal?.entryInterfaceIndex ?? null,
+        selectedExitInterfaceIndex: runtime.expedition.cellTraversal?.selectedExitInterfaceIndex ?? null,
+        hasPhysicalCalibration: true,
+        interfaces: visualInterfaces
+    }),
+    listVisibleCells: async () => [{
+        id: runtime.expedition.currentCell,
+        polygon: visualPolygon,
+        center: { x: 0, y: 0 }
+    }],
+    lookupWorldCell: async () => ({
+        status: "Unique", candidates: [runtime.expedition.currentCell]
+    }),
+    resolveWorldCell: async () => ({
+        id: runtime.expedition.currentCell,
+        polygon: visualPolygon,
+        center: { x: 0, y: 0 }
+    }),
+    resolveCellCourse: async (_expeditionId, input) => {
+        if (input.expectedVersion !== runtime.version)
             throw new Error("Visual review stale course mutation.");
-        }
+        const heading = input.decision.intendedHeading;
         runtime = {
             ...runtime,
             version: runtime.version + 1,
             expedition: {
                 ...runtime.expedition,
-                intendedDirection: input.intendedDirection
+                intendedHeading: heading,
+                cellTraversal: {
+                    ...runtime.expedition.cellTraversal,
+                    travelHeading: heading,
+                    selectedExitInterfaceIndex: input.decision.selectedExitInterfaceIndex
+                }
             }
         };
         return runtime;
@@ -1997,7 +2102,7 @@ if (stateName === "course-change-reload") {
     const changedEdge = root.querySelector('[data-adjacency-interface-id="adjacency-5"]');
     changedEdge?.click();
     await waitForCondition(
-        () => runtime.expedition.intendedDirection === 5
+        () => runtime.expedition.cellTraversal?.selectedExitInterfaceIndex === 5
             && root.querySelector('[data-adjacency-interface-id="adjacency-5"]')?.getAttribute("aria-pressed") === "true",
         "server-authoritative changed course");
 
@@ -2015,7 +2120,7 @@ if (stateName === "course-change-reload") {
     const selectedEdge = root.querySelector('[data-adjacency-interface-id="adjacency-1"]');
     selectedEdge?.click();
     await waitForCondition(
-        () => runtime.expedition.intendedDirection === null
+        () => runtime.expedition.cellTraversal?.selectedExitInterfaceIndex === null
             && root.querySelectorAll('[data-adjacency-interface-id][aria-pressed="true"]').length === 0,
         "server-authoritative cleared course");
 
@@ -2182,8 +2287,8 @@ const metrics = {
     navigatorButtons: root.querySelectorAll("[data-adjacency-interface-id]").length,
     selectedEdges: root.querySelectorAll('[data-adjacency-interface-id][aria-pressed="true"]').length,
     selectedDirection: root.querySelector('[data-adjacency-interface-id][aria-pressed="true"]')?.dataset.adjacencyInterfaceId?.replace("adjacency-", "") ?? null,
-    runtimeIntendedDirection: runtime.expedition.isSpatial ? runtime.expedition.intendedDirection : null,
-    runtimeActualDirection: runtime.expedition.isSpatial ? runtime.expedition.actualDirection : null,
+    runtimeIntendedHeading: runtime.expedition.isSpatial ? runtime.expedition.intendedHeading : null,
+    runtimeActualHeading: runtime.expedition.isSpatial ? runtime.expedition.actualHeading : null,
     currentTravelCourseText: root.querySelector("[data-current-travel-course]")?.textContent?.trim() ?? null,
     navigationStatText: Array.from(root.querySelectorAll(".hc-stat-action")).find(item =>
         item.querySelector(".hc-stat-action-label")?.textContent?.trim() === "Navigation")?.textContent?.replace(/\s+/g, " ").trim() ?? null,
@@ -2242,7 +2347,7 @@ const metrics = {
         rootText.includes("Current travel")
         || rootText.includes("Pace / travel mode")
         || rootText.includes("Current cell")
-        || rootText.includes("Hex progress")
+        || rootText.includes("Intra-cell progress")
         || rootText.includes("Teleport party")
         || rootText.includes("Party & travel order")),
     teleportContextVisible: Array.from(root.querySelectorAll("button")).some(button => isVisible(button) && button.textContent?.trim() === "Teleport party here"),
@@ -2259,12 +2364,12 @@ const metrics = {
     movementRetryCalls,
     navigationCourseReadOnly: !["navigation-pending", "abstract-spatial-course"].includes(stateName) || (
         rootText.includes("Intended travel direction:")
-        && !root.querySelector('[data-phase15-drawer] select[name="intendedDirection"]')
+        && !root.querySelector('[data-phase15-drawer] select[name="intendedHeading"]')
     ),
     abstractSpatialCourseReused: stateName !== "abstract-spatial-course" || (
         runtime.context.kind === "MaplessSpatial"
         && root.querySelector("[data-adjacency-select]")?.value === "2"
-        && !root.querySelector('[data-phase15-drawer] select[name="intendedDirection"]')
+        && !root.querySelector('[data-phase15-drawer] select[name="intendedHeading"]')
     ),
     forcedTravelPrimaryDomainFacing: rootText.includes("Current requirement") && rootText.includes("Failure consequence:"),
     forcedTravelNamedTargetVisible: !stateName.startsWith("forced-travel-") || (
