@@ -5,7 +5,7 @@ namespace HexCrawl.Infrastructure.Persistence;
 
 public sealed class PostgresSchemaMigrator(string connectionString)
 {
-    public const int CurrentVersion = 10;
+    public const int CurrentVersion = 12;
     private const long MigrationLockKey = 0x484558435241574C;
     public async Task MigrateAsync(CancellationToken cancellationToken = default)
     {
@@ -40,11 +40,11 @@ public sealed class PostgresSchemaMigrator(string connectionString)
                 await ApplyCurrentSchemaAsync(connection, transaction, cancellationToken);
                 current = CurrentVersion;
             }
-            // Completed schema-8/9 → 10 migrations were retired after the
-            // full tester database reached schema 10. A restored older backup
-            // must use the archived Phase 17 migrator before this release.
-            // Keep the version table, advisory lock, and fail-closed version
-            // checks as the foundation for subsequent schema upgrades.
+            if (current == 11)
+            {
+                await UpgradeFrom11Async(connection, transaction, cancellationToken);
+                current = CurrentVersion;
+            }
             if (current != CurrentVersion)
             {
                 throw new InvalidOperationException(
@@ -69,6 +69,31 @@ public sealed class PostgresSchemaMigrator(string connectionString)
         command.Transaction = transaction;
         command.CommandText = "SELECT COALESCE(MAX(version), 0) FROM hex_crawl_schema_migrations;";
         return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken));
+    }
+
+    /// <summary>
+    /// One-time schema-11 authored-world cutover. This transactional
+    /// migration is not a selectable runtime implementation. All worlds
+    /// must be convertible before updating the schema marker.
+    /// </summary>
+    private static async Task UpgradeFrom11Async(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        CancellationToken cancellationToken)
+    {
+        await PostgresLegacyWorldCutover.ConvertAsync(connection, transaction, cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            ALTER TABLE expeditions
+                RENAME CONSTRAINT ck_expeditions_runtime_v2_only
+                TO ck_expeditions_runtime_kind;
+
+            INSERT INTO hex_crawl_schema_migrations(version, applied_at)
+            VALUES (@version, now());
+            """;
+        command.Parameters.AddWithValue("version", NpgsqlDbType.Bigint, CurrentVersion);
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private static async Task ApplyCurrentSchemaAsync(
@@ -127,7 +152,10 @@ public sealed class PostgresSchemaMigrator(string connectionString)
                 created_at timestamptz NOT NULL,
                 updated_at timestamptz NOT NULL,
                 CONSTRAINT fk_expeditions_overworld
-                    FOREIGN KEY(overworld_id) REFERENCES overworlds(id) ON DELETE RESTRICT
+                    FOREIGN KEY(overworld_id) REFERENCES overworlds(id) ON DELETE RESTRICT,
+                CONSTRAINT ck_expeditions_runtime_kind
+                    CHECK (COALESCE(jsonb_typeof(state_json) = 'object'
+                       AND state_json->>'kind' IN ('CellSpatial', 'NonSpatial'), false))
             );
             CREATE INDEX ix_expeditions_owner_world_updated
                 ON expeditions(owner_user_id, overworld_id, updated_at DESC, name);

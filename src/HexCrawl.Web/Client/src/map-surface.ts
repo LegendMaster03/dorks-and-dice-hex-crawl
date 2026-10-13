@@ -1,9 +1,8 @@
 import { CanvasMapRenderer } from "./canvas-renderer";
 import type { HexCrawlApi } from "./api";
-import { worldToHex } from "./hex-math";
 import { RenderLifecycle } from "./render-lifecycle";
 import { resolveLatestWorldCellSelection } from "./map-selection-policy";
-import type { HexCoordinate, Overworld, WorldPoint, WorldCellGeometry } from "./types";
+import type { Overworld, WorldPoint, WorldCellGeometry } from "./types";
 import { Viewport } from "./viewport";
 
 export class MapSurface {
@@ -19,7 +18,6 @@ export class MapSurface {
     private disposed = false;
     private clickInterceptor: ((point: WorldPoint) => boolean) | null = null;
     private reviewSelectionHandler: ((id: string) => void) | null = null;
-    private hexSelectionHandler: ((hex: HexCoordinate | null) => void) | null = null;
     private cellSelectionHandler: ((cell: WorldCellGeometry | null) => void) | null = null;
     private loadedCells: { worldKey: string; bounds: { minX: number; minY: number; maxX: number; maxY: number } } | null = null;
     private pendingCellsKey: string | null = null;
@@ -54,7 +52,7 @@ export class MapSurface {
         host.replaceChildren(this.canvas, this.accessibilityHelp, this.accessibilityStatus);
 
         const initialWorld = this.getWorld();
-        if (initialWorld?.tiling && !initialWorld.grid) {
+        if (initialWorld?.tiling) {
             this.viewport.center = { ...initialWorld.tiling.origin };
         }
         this.renderer = new CanvasMapRenderer(this.canvas, this.viewport, this.getWorld, () => this.requestRender());
@@ -163,17 +161,13 @@ export class MapSurface {
         this.reviewSelectionHandler = handler;
     }
 
-    public setHexSelectionHandler(handler: ((hex: HexCoordinate | null) => void) | null): void {
-        this.hexSelectionHandler = handler;
-    }
-
     public setCellSelectionHandler(handler: ((cell: WorldCellGeometry | null) => void) | null): void {
         this.cellSelectionHandler = handler;
     }
 
     private loadVisibleCells(): void {
         const world = this.getWorld();
-        if (!world?.tiling || world.grid || !this.api) return;
+        if (!world?.tiling || !this.api) return;
         const width = this.canvas.clientWidth;
         const height = this.canvas.clientHeight;
         if (!(width > 0 && height > 0) || !Number.isFinite(this.viewport.zoom)) return;
@@ -240,10 +234,20 @@ export class MapSurface {
         if (!this.disposed) this.lifecycle.requestRender();
     }
 
+    public centerOn(point: WorldPoint): void {
+        if (!Number.isFinite(point.x) || !Number.isFinite(point.y))
+            throw new Error("Map center requires a finite world position.");
+        this.viewport.center = { ...point };
+        this.requestRender();
+    }
+
     public resetView(): void {
         const world = this.getWorld();
-        this.viewport.center = world?.tiling && !world.grid
-            ? { ...world.tiling.origin } : { x: 0, y: 0 };
+        this.viewport.center = world?.tiling
+            ? { ...world.tiling.origin }
+            : !world && this.renderer.currentWorldCell
+                ? { ...this.renderer.currentWorldCell.center }
+                : { x: 0, y: 0 };
         this.viewport.zoom = 56;
         this.announceView("Map view reset");
         this.requestRender();
@@ -253,7 +257,6 @@ export class MapSurface {
         this.disposed = true;
         this.clickInterceptor = null;
         this.reviewSelectionHandler = null;
-        this.hexSelectionHandler = null;
         this.cellSelectionHandler = null;
         this.cellRequestGeneration++;
         this.cellSelectionGeneration++;
@@ -271,22 +274,12 @@ export class MapSurface {
         }
 
         const world = this.getWorld();
-        if (world) {
-            if (world.tiling && !world.grid && !this.renderer.gridPreview && this.api) {
-                void this.activateWorldCell(world.id, world.tiling.id, point);
-                return;
-            }
-            const grid = this.renderer.gridPreview ?? world.grid;
-            if (!grid) return;
-            const selected = worldToHex(grid, point);
-            this.renderer.selectedHex = selected;
-            this.accessibilityStatus.textContent = `Selected hex q ${selected.q}, r ${selected.r}.`;
-            this.hexSelectionHandler?.(selected);
-            this.requestRender();
-        } else {
-            this.accessibilityStatus.textContent = `Selected map position ${point.x.toFixed(2)}, ${point.y.toFixed(2)}.`;
+        if (world?.tiling && this.api) {
+            void this.activateWorldCell(world.id, world.tiling.id, point);
+            return;
         }
-
+        this.accessibilityStatus.textContent =
+            `Selected map position ${point.x.toFixed(2)}, ${point.y.toFixed(2)}.`;
         this.onWorldClick?.(point);
     }
 
@@ -339,11 +332,9 @@ export class MapSurface {
             const rect = this.canvas.getBoundingClientRect();
             this.activatePoint(this.viewport.screenToWorld(rect.width / 2, rect.height / 2, rect.width, rect.height));
         } else if (event.key === "Escape") {
-            this.renderer.selectedHex = null;
             this.renderer.selectedWorldCell = null;
             this.cellSelectionGeneration++;
             this.accessibilityStatus.textContent = "Selected cell cleared.";
-            this.hexSelectionHandler?.(null);
             this.cellSelectionHandler?.(null);
             this.requestRender();
         } else {
@@ -374,12 +365,6 @@ export class MapSurface {
     private updateAccessibilityLabel(): void {
         const world = this.getWorld();
         const parts = ["Interactive world map"];
-        if (this.renderer.expeditionHex) {
-            parts.push(`Current expedition hex q ${this.renderer.expeditionHex.q}, r ${this.renderer.expeditionHex.r}`);
-        }
-        if (this.renderer.selectedHex) {
-            parts.push(`Selected hex q ${this.renderer.selectedHex.q}, r ${this.renderer.selectedHex.r}`);
-        }
         if (this.renderer.currentWorldCell) parts.push("Current expedition cell is outlined");
         if (this.renderer.selectedWorldCell) parts.push("A world cell is selected");
         if (world) {

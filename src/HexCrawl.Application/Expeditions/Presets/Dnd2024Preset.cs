@@ -8,6 +8,7 @@ internal static class Dnd2024Preset
 {
     internal static CrawlProcedurePresetDefinition Create() =>
         Preset(
+            CampaignProcedureSchema.CurrentHexTilingDsSymbol,
             Dnd2024PresetKey,
             "D&D 5.5e / 2024",
             "Hourly travel with pace and terrain limits, party activities, and extended-travel exhaustion.",

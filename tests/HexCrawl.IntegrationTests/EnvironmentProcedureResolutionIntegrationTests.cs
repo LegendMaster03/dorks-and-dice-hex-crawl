@@ -1,6 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using HexCrawl.Domain.Spatial;
+using HexCrawl.Web.Api;
 
 namespace HexCrawl.IntegrationTests;
 
@@ -15,16 +18,15 @@ public sealed class EnvironmentProcedureResolutionIntegrationTests
             using var factory = TestWebHost.Create(database);
             using var client = factory.CreateClient();
 
-            using var startResponse = await client.PostAsJsonAsync("/api/expeditions", new
+            using var startResponse = await client.PostAsJsonAsync("/api/expeditions/cells", new
             {
                 name = "Environment helper review",
                 procedureKey = "alexandrian-advanced",
                 context = new
                 {
-                    kind = "AbstractHex",
+                    kind = "MaplessSpatial",
                     name = "Environment helper review",
-                    orientation = "PointyTop",
-                    hexCenterDistance = 12,
+                                        physicalDistancePerWorldUnit = 12,
                     distanceUnit = new
                     {
                         kind = "Mile",
@@ -32,7 +34,6 @@ public sealed class EnvironmentProcedureResolutionIntegrationTests
                         metersPerUnit = 1609.344
                     }
                 },
-                startHex = new { q = 0, r = 0 }
             });
             startResponse.EnsureSuccessStatusCode();
             var started = await startResponse.Content.ReadFromJsonAsync<JsonElement>();
@@ -107,19 +108,23 @@ public sealed class EnvironmentProcedureResolutionIntegrationTests
             version++;
 
             using var automatic = await client.PostAsJsonAsync(
-                $"/api/expeditions/{expeditionId:D}/resolution-helper",
-                HelperRequest(version, expectedDistance: null));
+                $"/api/expeditions/{expeditionId:D}/cells/resolution-helper",
+                HelperRequest(version, expectedDistance: null), Json);
             Assert.Equal(HttpStatusCode.BadRequest, automatic.StatusCode);
 
             var afterRejected = await client.GetFromJsonAsync<JsonElement>($"/api/expeditions/{expeditionId:D}");
             Assert.Equal(version, afterRejected.GetProperty("version").GetInt64());
 
             using var manual = await client.PostAsJsonAsync(
-                $"/api/expeditions/{expeditionId:D}/resolution-helper",
-                HelperRequest(version, expectedDistance: 12));
+                $"/api/expeditions/{expeditionId:D}/cells/resolution-helper",
+                HelperRequest(version, expectedDistance: new DistanceMeasure(12, DistanceUnit.Miles)),
+                Json);
             manual.EnsureSuccessStatusCode();
             var generated = await manual.Content.ReadFromJsonAsync<JsonElement>();
-            Assert.Equal(12d, generated.GetProperty("travel").GetProperty("expectedDistance").GetDouble());
+            Assert.Equal(12d, generated.GetProperty("travel").GetProperty("expectedDistance")
+                .GetProperty("value").GetDouble());
+            Assert.Equal("mi", generated.GetProperty("travel").GetProperty("expectedDistance")
+                .GetProperty("unit").GetProperty("symbol").GetString());
         }
         finally
         {
@@ -127,16 +132,16 @@ public sealed class EnvironmentProcedureResolutionIntegrationTests
         }
     }
 
-    private static object HelperRequest(long expectedVersion, double? expectedDistance) => new
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
-        expectedVersion,
-        expectedDistance,
-        travelDistanceRule = "walk",
-        baseSpeedFeet = 30,
-        suppressesNavigationCheck = false,
-        deliberateDoubleBack = false,
-        navigationDifficultyClass = -100,
-        navigationModifier = 0,
-        failureVeerSteps = 1
+        Converters = { new JsonStringEnumConverter(allowIntegerValues: false) }
     };
+
+    private static ResolveCellProcedureInputsRequest HelperRequest(
+        long expectedVersion, DistanceMeasure? expectedDistance) => new(
+        ExpectedVersion: expectedVersion,
+        ExpectedDistance: expectedDistance,
+        TravelDistanceRule: "walk",
+        BaseSpeedFeet: 30,
+        NavigationDifficultyClass: -100);
 }

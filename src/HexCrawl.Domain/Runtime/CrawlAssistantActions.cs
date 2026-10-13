@@ -1,27 +1,9 @@
 using HexCrawl.Domain.Procedure;
-using HexCrawl.Domain.Spatial;
 
 namespace HexCrawl.Domain.Runtime;
 
-public sealed record TravelWatchAssistantInput(
-    TimeSpan ElapsedTime,
-    ResolvedTravelAmount Travel,
-    HexCoordinate ResultingHex,
-    DistanceMeasure? HexProgress,
-    HexDirection? IntendedDirection,
-    HexDirection? ActualDirection,
-    bool CompleteWatch,
-    string? Note = null);
-
 public sealed record NonSpatialWatchAssistantInput(
     TimeSpan ElapsedTime,
-    ResolutionProvenance Provenance,
-    string? Note = null);
-
-public sealed record NavigationAssistantInput(
-    bool IsLost,
-    int VeerSteps,
-    HexDirection? IntendedDirection,
     ResolutionProvenance Provenance,
     string? Note = null);
 

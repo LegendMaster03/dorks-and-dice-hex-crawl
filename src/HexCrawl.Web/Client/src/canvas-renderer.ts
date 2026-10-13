@@ -1,7 +1,6 @@
 import { sourceMapAssetUrl } from "./api";
-import { hexCorners, hexToWorld, visibleHexBounds } from "./hex-math";
 import { RasterImageCache } from "./raster-image-cache";
-import type { DemoWorld, GridDefinition, HexCoordinate, MapRegistrationTransform, SpatialFeature, WorldPoint, WorldCellGeometry } from "./types";
+import type { DemoWorld, MapRegistrationTransform, SpatialFeature, WorldPoint, WorldCellGeometry } from "./types";
 
 export type MapReviewGeometry = {
     id: string;
@@ -17,16 +16,13 @@ export type MapReviewOverlay = {
 import { Viewport } from "./viewport";
 
 export class CanvasMapRenderer {
-    public selectedHex: HexCoordinate | null = null;
     public selectedWorldCell: WorldCellGeometry | null = null;
     public currentWorldCell: WorldCellGeometry | null = null;
     public visibleWorldCells: WorldCellGeometry[] = [];
     public expeditionPosition: WorldPoint | null = null;
-    public expeditionHex: HexCoordinate | null = null;
     public discoveredSubjectIds = new Set<string>();
     public hiddenSourceMapIds = new Set<string>();
     public registrationPreview: { sourceMapId: string; transform: MapRegistrationTransform } | null = null;
-    public gridPreview: GridDefinition | null = null;
     public reviewOverlay: MapReviewOverlay | null = null;
     private readonly rasterCache = new RasterImageCache();
     private readonly provisionalSourceMapTransforms = new Map<string, MapRegistrationTransform>();
@@ -51,7 +47,7 @@ export class CanvasMapRenderer {
         this.resizeToDisplaySize();
         const world = this.getWorld();
         const ctx = this.canvas.getContext("2d");
-        if (!ctx || !world) return;
+        if (!ctx) return;
 
         const ratio = Math.max(1, window.devicePixelRatio || 1);
         const width = this.canvas.width / ratio;
@@ -59,13 +55,17 @@ export class CanvasMapRenderer {
         ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
         ctx.clearRect(0, 0, width, height);
 
-        this.drawSourceMaps(ctx, world, width, height);
-        this.drawReviewOverlay(ctx, width, height);
-        this.drawRegions(ctx, world, width, height);
-        this.drawGrid(ctx, world, width, height);
-        this.drawLinesAndPoints(ctx, world.features, width, height);
-        this.drawLocations(ctx, world, width, height);
-        this.drawSelection(ctx, world, width, height);
+        if (world) {
+            this.drawSourceMaps(ctx, world, width, height);
+            this.drawReviewOverlay(ctx, width, height);
+            this.drawRegions(ctx, world, width, height);
+            this.drawGrid(ctx, world, width, height);
+            this.drawLinesAndPoints(ctx, world.features, width, height);
+            this.drawLocations(ctx, world, width, height);
+            this.drawSelection(ctx, world, width, height);
+        }
+        // Mapless V2 sessions still have authoritative cell geometry.
+        // Render it without inventing an authored world or source image.
         this.drawExpedition(ctx, world, width, height);
     }
 
@@ -229,54 +229,22 @@ export class CanvasMapRenderer {
     }
 
     private drawGrid(ctx: CanvasRenderingContext2D, world: DemoWorld, width: number, height: number): void {
-        if (!this.gridPreview && world.tiling && !world.grid) {
-            ctx.save();
-            ctx.strokeStyle = "rgba(52, 67, 55, .38)";
-            ctx.lineWidth = 1;
-            for (const cell of this.visibleWorldCells) {
-                // The polygons and qualified identities were enumerated by the
-                // server's bounded PeriodicWorldTiling.Intersecting operation.
-                if (cell.polygon.length < 3) continue;
-                const vertices = cell.polygon.map(point => this.toScreen(point, width, height));
-                ctx.beginPath();
-                vertices.forEach((point, index) =>
-                    index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
-                ctx.closePath();
-                ctx.stroke();
-            }
-            ctx.restore();
-            return;
+        if (!world.tiling) return;
+        ctx.save();
+        ctx.strokeStyle = "rgba(52, 67, 55, .38)";
+        ctx.lineWidth = 1;
+        for (const cell of this.visibleWorldCells) {
+            // Render only authoritative bounded polygon geometry. No inferred
+            // coordinates or shape-specific prototype rendering is involved.
+            if (cell.id.tilingId !== world.tiling.id || cell.polygon.length < 3) continue;
+            const vertices = cell.polygon.map(point => this.toScreen(point, width, height));
+            ctx.beginPath();
+            vertices.forEach((point, index) =>
+                index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
+            ctx.closePath();
+            ctx.stroke();
         }
-        const grid = this.gridPreview ?? world.grid;
-        if (!grid) return;
-        const corners = [
-            this.viewport.screenToWorld(0, 0, width, height),
-            this.viewport.screenToWorld(width, 0, width, height),
-            this.viewport.screenToWorld(width, height, width, height),
-            this.viewport.screenToWorld(0, height, width, height)
-        ];
-        const bounds = visibleHexBounds(grid, corners);
-        ctx.strokeStyle = this.gridPreview ? "rgba(139, 76, 20, .70)" : "rgba(52, 67, 55, .38)";
-        ctx.lineWidth = this.gridPreview ? 1.5 : 1;
-        ctx.font = "11px ui-monospace, SFMono-Regular, Menlo, monospace";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillStyle = this.gridPreview ? "rgba(112, 58, 14, .82)" : "rgba(35, 49, 39, .72)";
-
-        for (let q = bounds.minQ; q <= bounds.maxQ; q++) {
-            for (let r = bounds.minR; r <= bounds.maxR; r++) {
-                const hex = { q, r };
-                const screenCorners = hexCorners(grid, hex).map(point => this.toScreen(point, width, height));
-                ctx.beginPath();
-                screenCorners.forEach((point, index) => index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
-                ctx.closePath();
-                ctx.stroke();
-                if (this.viewport.zoom >= 38) {
-                    const center = this.toScreen(hexToWorld(grid, hex), width, height);
-                    ctx.fillText(`${q},${r}`, center.x, center.y);
-                }
-            }
-        }
+        ctx.restore();
     }
 
     private drawRegions(ctx: CanvasRenderingContext2D, world: DemoWorld, width: number, height: number): void {
@@ -349,7 +317,7 @@ export class CanvasMapRenderer {
     }
 
     private drawSelection(ctx: CanvasRenderingContext2D, world: DemoWorld, width: number, height: number): void {
-        if (this.selectedWorldCell && world.tiling && !world.grid) {
+        if (this.selectedWorldCell && world.tiling) {
             const cell = this.selectedWorldCell;
             if (cell.id.tilingId !== world.tiling.id || cell.polygon.length < 3) return;
             const points = cell.polygon.map(point => this.toScreen(point, width, height));
@@ -364,25 +332,12 @@ export class CanvasMapRenderer {
             ctx.stroke();
             return;
         }
-        if (!this.selectedHex) return;
-        const grid = this.gridPreview ?? world.grid;
-        if (!grid) return;
-        const points = hexCorners(grid, this.selectedHex).map(point => this.toScreen(point, width, height));
-        ctx.beginPath();
-        points.forEach((point, index) => index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
-        ctx.closePath();
-        ctx.fillStyle = "rgba(210, 139, 39, .24)";
-        ctx.fill();
-        ctx.strokeStyle = "#9b5f12";
-        ctx.lineWidth = 3;
-        ctx.stroke();
     }
 
-    private drawExpedition(ctx: CanvasRenderingContext2D, world: DemoWorld, width: number, height: number): void {
+    private drawExpedition(ctx: CanvasRenderingContext2D, world: DemoWorld | null, width: number, height: number): void {
         // Current cell and inspected cell are separate visual states. Use the
         // authoritative Phase 18 polygon, not an inferred hex-shaped marker.
-        if (this.currentWorldCell && world.tiling && !world.grid
-            && this.currentWorldCell.id.tilingId === world.tiling.id
+        if (this.currentWorldCell && (!world || world.tiling?.id === this.currentWorldCell.id.tilingId)
             && this.currentWorldCell.polygon.length >= 3) {
             const corners = this.currentWorldCell.polygon.map(point => this.toScreen(point, width, height));
             ctx.save();
@@ -397,9 +352,8 @@ export class CanvasMapRenderer {
             ctx.stroke();
             ctx.restore();
         }
-        if (!this.expeditionPosition && (!this.expeditionHex || !world.grid)) return;
-        const position = this.expeditionPosition ?? hexToWorld(world.grid!, this.expeditionHex!);
-        const point = this.toScreen(position, width, height);
+        if (!this.expeditionPosition) return;
+        const point = this.toScreen(this.expeditionPosition, width, height);
         ctx.beginPath();
         ctx.arc(point.x, point.y, 10, 0, Math.PI * 2);
         ctx.fillStyle = "#b22626";

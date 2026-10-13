@@ -43,6 +43,17 @@ public sealed record SpatialTurnBudgetPolicy(double NeighborCenterDistanceFactor
             || NeighborCenterDistanceFactor == 0)
             return null;
 
+        if (world.PhysicalTurnCostReference is { } explicitReference)
+        {
+            // This reference is authored data, independent of cell side counts.
+            var explicitCost = explicitReference.Value * NeighborCenterDistanceFactor;
+            if (!double.IsFinite(explicitCost))
+                throw new InvalidOperationException("Explicit turning cost exceeded the supported budget range.");
+            return new NonGeometricTravelCharge(
+                new DistanceMeasure(explicitCost, explicitReference.Unit),
+                "procedure-direction-change");
+        }
+
         var center = world.Resolve(cursor.CurrentCell.Address).Center;
         var neighbors = world.Neighbors(cursor.CurrentCell.Address);
         if (neighbors.Count == 0)

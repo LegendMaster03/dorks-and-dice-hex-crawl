@@ -1,4 +1,5 @@
 using HexCrawl.Domain.Runtime;
+using HexCrawl.Domain.Spatial;
 
 namespace HexCrawl.Application;
 
@@ -24,7 +25,42 @@ public sealed record ProcedureResolutionHelperCommand
     public IReadOnlyList<string> NavigationRiskFactors { get; init; } = [];
     internal string? ExpectedDistanceRulesNote { get; init; }
     internal string? NavigationDifficultyRulesNote { get; init; }
+    // Set only after provider/composition has proved the physical unit.
+    internal DistanceMeasure? ExpectedDistanceQualified { get; init; }
 }
+
+/// <summary>
+/// The geometry-neutral server helper uses explicit physical units and angular
+/// navigation, never an axial step-count or implicit map-distance unit.
+/// </summary>
+public sealed record CellProcedureResolutionHelperCommand
+{
+    public long ExpectedVersion { get; init; }
+    public DistanceMeasure? ExpectedDistance { get; init; }
+    public bool SuppressesNavigationCheck { get; init; }
+    public bool DeliberateDoubleBack { get; init; }
+    public int? NavigationDifficultyClass { get; init; }
+    public int NavigationModifier { get; init; }
+    public double? FailureVeerDegrees { get; init; }
+    public Guid? KeyedLocationId { get; init; }
+    public string? TravelDistanceRule { get; init; }
+    public int? BaseSpeedFeet { get; init; }
+    public string? Terrain { get; init; }
+    public string? Route { get; init; }
+    public IReadOnlyList<string> NavigationRiskFactors { get; init; } = [];
+    internal string? NavigationDifficultyRulesNote { get; init; }
+    internal string? ExpectedDistanceRulesNote { get; init; }
+}
+
+public sealed record CellProcedureResolutionHelperResult(
+    long ExpeditionVersion,
+    Guid? GeneratedResolutionId,
+    long? AuditSequence,
+    ResolvedTravelAmount? Travel,
+    ResolvedCellNavigation? Navigation,
+    ResolvedEncounter? Encounter,
+    IReadOnlyList<ProcedureResolutionRoll> Rolls,
+    IReadOnlyList<string> Notes);
 
 public sealed record ProcedureResolutionRoll(
     string Purpose,
@@ -32,23 +68,6 @@ public sealed record ProcedureResolutionRoll(
     IReadOnlyList<int> Dice,
     int Modifier,
     int Total);
-
-public sealed record ProcedureResolvedTravel(
-    double ExpectedDistance,
-    double ActualDistance,
-    ResolutionProvenance Provenance);
-
-public sealed record ProcedureResolvedNavigation(
-    NavigationCheckOutcome Outcome,
-    int? VeerSteps,
-    ResolutionProvenance Provenance);
-
-public sealed record ProcedureResolvedEncounter(
-    EncounterOutcomeKind Kind,
-    double? OccursAtHours,
-    Guid? LocationId,
-    string? Note,
-    ResolutionProvenance Provenance);
 
 public enum GeneratedProcedureResolutionStatus
 {
@@ -65,19 +84,14 @@ public sealed record GeneratedProcedureResolution(
     long AuditSequence,
     int WatchNumber,
     IReadOnlyList<ProcedureResolutionRoll> Rolls,
-    ProcedureResolvedTravel? Travel,
-    ProcedureResolvedNavigation? Navigation,
-    ProcedureResolvedEncounter? Encounter,
+    ResolvedTravelAmount? Travel,
+    ResolvedCellNavigation? Navigation,
+    ResolvedEncounter? Encounter,
     GeneratedProcedureResolutionStatus Status,
     long? ConsumedAtVersion = null,
-    long? ConsumedAuditSequence = null);
-
-public sealed record ProcedureResolutionHelperResult(
-    long ExpeditionVersion,
-    Guid? GeneratedResolutionId,
-    long? AuditSequence,
-    ProcedureResolvedTravel? Travel,
-    ProcedureResolvedNavigation? Navigation,
-    ProcedureResolvedEncounter? Encounter,
-    IReadOnlyList<ProcedureResolutionRoll> Rolls,
-    IReadOnlyList<string> Notes);
+    long? ConsumedAuditSequence = null)
+{
+    // A missing policy binding must fail authorization, not default to false.
+    public bool? SuppressesNavigationCheck { get; init; }
+    public bool? DeliberateDoubleBack { get; init; }
+}

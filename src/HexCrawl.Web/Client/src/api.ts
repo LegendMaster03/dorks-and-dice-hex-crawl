@@ -1,9 +1,10 @@
-import type { SourceMapGridAnalysis } from "./hex-grid-analysis";
 import type { CreateEncounterHandoffRequest, HexCrawlEncounterHandoffV2 } from "./encounter-handoff";
 import type {
     CellTraversalContext,
     StartCellExpeditionInput,
     CellWatchRequest,
+    CellProcedureResolutionHelperRequest,
+    CellProcedureResolutionHelperResult,
     CellCourseRequest,
     WorldCellGeometry,
     WorldCellId,
@@ -11,31 +12,19 @@ import type {
     ExpeditionDetail,
     ExpeditionSummary,
     DistanceUnit,
-    GridDefinition,
-    HexCoordinate,
-    HexOrientation,
     Location,
     Overworld,
     OverworldSummary,
     PresentationProfile,
     ProcedurePreset,
-    ProcedureResolutionHelperRequest,
-    ProcedureResolutionHelperResult,
     MapRegistrationTransform,
     RegistrationControlPoint,
-    RuntimeAdvanceRequest,
-    ResolveBoundaryDecisionRequest,
     ResolveEncounterRequest,
-    RepositionExpeditionRequest,
-    SetExpeditionCourseIntentRequest,
-    TravelWatchAssistantRequest,
     NonSpatialWatchAssistantRequest,
-    NavigationAssistantRequest,
     EncounterCadenceAssistantRequest,
     SourceMapList,
     SourceMapRole,
     SpatialFeature,
-    StartExpeditionInput,
     StartStandaloneCrawlSessionInput,
     ToolHostContext,
     UpdateExpeditionPartyRequest,
@@ -47,7 +36,6 @@ import type {
     UpdateExpeditionEnvironmentRequest,
     WorldEnvironment
 } from "./environment-types";
-import type { TravelEnvironmentCatalog } from "./travel-rules";
 
 let activeBackendBaseUrl = "";
 
@@ -88,16 +76,6 @@ export type SourceMapCompatibilityAssessment = {
             maximumResidualSourcePixels: number;
         }>;
     } | null;
-};
-
-export type CreateOverworldInput = {
-    name: string;
-    orientation: HexOrientation;
-    origin: WorldPoint;
-    rotationDegrees: number;
-    hexRadiusWorldUnits: number;
-    neighborCenterDistance: number;
-    distanceUnit: { kind: "Mile" | "Kilometer" | "Custom"; symbol: string; metersPerUnit: number | null };
 };
 
 export type LocationMutationInput = Omit<Location, "id"> & { expectedVersion: number };
@@ -256,17 +234,9 @@ export class HexCrawlApi {
         return this.sendJson("POST", "/api/overworlds/periodic", input, "Create periodic world");
     }
 
-    public createOverworld(input: CreateOverworldInput): Promise<Overworld> {
-        return this.sendJson("POST", "/api/overworlds", input, "Create overworld");
-    }
-
     public renameOverworld(id: string, name: string, expectedVersion: number): Promise<Overworld> {
         return this.sendJson("PUT", `/api/overworlds/${encodeURIComponent(id)}/name`,
             { name, expectedVersion }, "Rename overworld");
-    }
-
-    public updateOverworld(id: string, name: string, grid: GridDefinition, expectedVersion: number): Promise<Overworld> {
-        return this.sendJson("PUT", `/api/overworlds/${encodeURIComponent(id)}`, { name, grid, expectedVersion }, "Update overworld");
     }
 
     public getWorldEnvironment(id: string): Promise<WorldEnvironment> {
@@ -473,17 +443,6 @@ export class HexCrawlApi {
         return `${this.backendBaseUrl}/api/overworlds/${encodeURIComponent(worldId)}/source-maps/${encodeURIComponent(sourceMapId)}/asset`;
     }
 
-    public async analyzeSourceMapGrid(
-        worldId: string,
-        sourceMapId: string,
-        signal?: AbortSignal): Promise<SourceMapGridAnalysis> {
-        const response = await fetch(
-            `${this.backendBaseUrl}/api/overworlds/${encodeURIComponent(worldId)}/source-maps/${encodeURIComponent(sourceMapId)}/grid-analysis`,
-            { method: "POST", headers: { Accept: "application/json" }, signal });
-        if (!response.ok) throw await apiError(response, "Automatic map analysis");
-        return await response.json() as SourceMapGridAnalysis;
-    }
-
     public getProcedurePresets(): Promise<ProcedurePreset[]> {
         return this.getJson("/api/procedures/presets", "Procedure presets");
     }
@@ -498,21 +457,14 @@ export class HexCrawlApi {
             : this.getJson("/api/expeditions", "Expedition list");
     }
 
-    public startExpedition(worldId: string, name: string, procedureKey: string, startHex: HexCoordinate): Promise<ExpeditionDetail> {
-        return this.startConfiguredExpedition(worldId, {
-            name,
-            procedureKey,
-            presentationKey: "exploration-map",
-            startHex
-        });
-    }
-
-    public startConfiguredExpedition(worldId: string, input: StartExpeditionInput): Promise<ExpeditionDetail> {
-        return this.sendJson("POST", `/api/overworlds/${encodeURIComponent(worldId)}/expeditions`, input, "Start expedition");
-    }
-
     public startStandaloneSession(input: StartStandaloneCrawlSessionInput): Promise<ExpeditionDetail> {
-        return this.sendJson("POST", "/api/expeditions", input, "Start expedition");
+        return this.sendJson("POST", "/api/expeditions", input, "Start nonspatial expedition");
+    }
+
+    public startStandaloneCellSession(input: StartStandaloneCrawlSessionInput): Promise<ExpeditionDetail> {
+        if (input.context.kind !== "MaplessSpatial")
+            throw new Error("A mapless cell expedition requires a spatial context.");
+        return this.sendJson("POST", "/api/expeditions/cells", input, "Start mapless cell expedition");
     }
 
     public assessCellProcedure(
@@ -544,6 +496,14 @@ export class HexCrawlApi {
             input, "Start generalized expedition");
     }
 
+    public resolveCellProcedureInputs(
+        expeditionId: string, input: CellProcedureResolutionHelperRequest
+    ): Promise<CellProcedureResolutionHelperResult> {
+        return this.sendJson("POST",
+            `/api/expeditions/${encodeURIComponent(expeditionId)}/cells/resolution-helper`,
+            input, "Generate cell procedure resolution");
+    }
+
     public advanceCellWatch(expeditionId: string, input: CellWatchRequest): Promise<ExpeditionDetail> {
         return this.sendJson("POST",
             `/api/expeditions/${encodeURIComponent(expeditionId)}/cells/advance`,
@@ -562,6 +522,17 @@ export class HexCrawlApi {
         return this.sendJson("POST",
             `/api/expeditions/${encodeURIComponent(expeditionId)}/cells/encounters/${encodeURIComponent(occurrenceId)}/resolve`,
             { expectedVersion, resultNote }, "Resolve cell encounter");
+    }
+
+    public repositionCellExpedition(expeditionId: string, input: {
+        expectedVersion: number;
+        targetCell: WorldCellId;
+        position: WorldPoint;
+        note?: string;
+    }): Promise<ExpeditionDetail> {
+        return this.sendJson("POST",
+            `/api/expeditions/${encodeURIComponent(expeditionId)}/cells/reposition`,
+            input, "Teleport to selected cell");
     }
 
     public getCellTopology(expeditionId: string): Promise<CellTraversalContext> {
@@ -601,15 +572,7 @@ export class HexCrawlApi {
         if (!response.ok) throw await apiError(response, "Delete expedition");
     }
 
-    public getTravelEnvironmentCatalog(expeditionId: string): Promise<TravelEnvironmentCatalog> {
-        return this.getJson(
-            `/api/expeditions/${encodeURIComponent(expeditionId)}/travel-environment`,
-            "Travel and environment rules");
-    }
 
-    public advanceExpedition(expeditionId: string, input: RuntimeAdvanceRequest): Promise<ExpeditionDetail> {
-        return this.sendJson("POST", `/api/expeditions/${encodeURIComponent(expeditionId)}/advance`, input, "Advance expedition");
-    }
 
     public resolveEncounter(
         expeditionId: string,
@@ -617,48 +580,18 @@ export class HexCrawlApi {
         input: ResolveEncounterRequest): Promise<ExpeditionDetail> {
         return this.sendJson(
             "POST",
-            `/api/expeditions/${encodeURIComponent(expeditionId)}/encounters/${encodeURIComponent(occurrenceId)}/resolve`,
+            `/api/expeditions/${encodeURIComponent(expeditionId)}/nonspatial/encounters/${encodeURIComponent(occurrenceId)}/resolve`,
             input,
-            "Resolve encounter");
+            "Resolve nonspatial encounter");
     }
 
-    public resolveBoundaryDecision(
-        expeditionId: string,
-        input: ResolveBoundaryDecisionRequest): Promise<ExpeditionDetail> {
-        return this.sendJson(
-            "POST",
-            `/api/expeditions/${encodeURIComponent(expeditionId)}/boundary-decision`,
-            input,
-            "Resolve boundary");
-    }
 
-    public setExpeditionCourseIntent(
-        expeditionId: string,
-        input: SetExpeditionCourseIntentRequest): Promise<ExpeditionDetail> {
-        return this.sendJson(
-            "PUT",
-            `/api/expeditions/${encodeURIComponent(expeditionId)}/course-intent`,
-            input,
-            "Set expedition course");
-    }
 
-    public repositionExpedition(
-        expeditionId: string,
-        input: RepositionExpeditionRequest): Promise<ExpeditionDetail> {
-        return this.sendJson(
-            "POST",
-            `/api/expeditions/${encodeURIComponent(expeditionId)}/reposition`,
-            input,
-            "Teleport party");
-    }
 
     public updateExpeditionParty(expeditionId: string, input: UpdateExpeditionPartyRequest): Promise<ExpeditionDetail> {
         return this.sendJson("PUT", `/api/expeditions/${encodeURIComponent(expeditionId)}/party`, input, "Update party sheet");
     }
 
-    public resolveProcedureInputs(expeditionId: string, input: ProcedureResolutionHelperRequest): Promise<ProcedureResolutionHelperResult> {
-        return this.sendJson("POST", `/api/expeditions/${encodeURIComponent(expeditionId)}/resolution-helper`, input, "Resolve procedure inputs");
-    }
 
     public discover(expeditionId: string, expectedVersion: number, subjectId: string, subjectType: "Location" | "Feature"): Promise<ExpeditionDetail> {
         return this.sendJson("POST", `/api/expeditions/${encodeURIComponent(expeditionId)}/discover`, {
@@ -669,20 +602,14 @@ export class HexCrawlApi {
         }, "Runtime discovery");
     }
 
-    public recordTravelAssistant(expeditionId: string, input: TravelWatchAssistantRequest): Promise<ExpeditionDetail> {
-        return this.sendJson("POST", `/api/expeditions/${encodeURIComponent(expeditionId)}/assistants/travel`, input, "Travel/watch assistant");
-    }
 
     public recordWatchAssistant(expeditionId: string, input: NonSpatialWatchAssistantRequest): Promise<ExpeditionDetail> {
         return this.sendJson("POST", `/api/expeditions/${encodeURIComponent(expeditionId)}/assistants/watch`, input, "Watch/time assistant");
     }
 
-    public recordNavigationAssistant(expeditionId: string, input: NavigationAssistantRequest): Promise<ExpeditionDetail> {
-        return this.sendJson("POST", `/api/expeditions/${encodeURIComponent(expeditionId)}/assistants/navigation`, input, "Navigation assistant");
-    }
 
     public recordEncounterAssistant(expeditionId: string, input: EncounterCadenceAssistantRequest): Promise<ExpeditionDetail> {
-        return this.sendJson("POST", `/api/expeditions/${encodeURIComponent(expeditionId)}/assistants/encounters`, input, "Encounter cadence assistant");
+        return this.sendJson("POST", `/api/expeditions/${encodeURIComponent(expeditionId)}/nonspatial/encounters`, input, "Nonspatial encounter cadence");
     }
 
     private async getJson<T>(path: string, label: string): Promise<T> {

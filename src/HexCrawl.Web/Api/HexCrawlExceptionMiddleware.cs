@@ -45,6 +45,10 @@ public sealed class HexCrawlExceptionMiddleware(
                 ? exception.StatusCode : StatusCodes.Status400BadRequest;
             await WriteAsync(context, status, "The request body is malformed or invalid.");
         }
+        catch (NotSupportedException exception)
+        {
+            await WriteAsync(context, StatusCodes.Status400BadRequest, exception.Message);
+        }
         catch (ArgumentException exception)
         {
             await WriteAsync(context, StatusCodes.Status400BadRequest, exception.Message);

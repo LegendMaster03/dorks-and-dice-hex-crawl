@@ -28,6 +28,7 @@ export class ExpeditionSurvivalResourcesPanel {
     private readonly body: HTMLElement;
     private state: SurvivalResources | null = null;
     private disposed = false;
+    private syncGeneration = 0;
 
     public constructor(
         root: HTMLElement,
@@ -44,19 +45,25 @@ export class ExpeditionSurvivalResourcesPanel {
         this.body = document.createElement("div");
         this.body.className = "hc-form";
         this.panel.append(summary, this.body);
-        const page = root.matches(".hc-page")
+        const page = root.matches("[data-gameplay-panels]") || root.matches(".hc-page")
             ? root
             : root.querySelector<HTMLElement>(".hc-page");
         if (page) page.append(this.panel);
     }
 
-    public async sync(): Promise<void> {
-        this.state = await this.api.get(this.expeditionId);
-        if (!this.disposed) this.render();
+    public async sync(): Promise<SurvivalResources> {
+        const generation = ++this.syncGeneration;
+        const state = await this.api.get(this.expeditionId);
+        if (!this.disposed && generation === this.syncGeneration) {
+            this.state = state;
+            this.render();
+        }
+        return state;
     }
 
     public dispose(): void {
         this.disposed = true;
+        this.syncGeneration++;
         this.panel.remove();
     }
 
@@ -970,8 +977,10 @@ export class ExpeditionSurvivalResourcesPanel {
     }
 
     private apply(state: SurvivalResources): void {
+        this.syncGeneration++;
+        if (this.disposed) return;
         this.state = state;
-        if (!this.disposed) this.render();
+        this.render();
     }
 }
 

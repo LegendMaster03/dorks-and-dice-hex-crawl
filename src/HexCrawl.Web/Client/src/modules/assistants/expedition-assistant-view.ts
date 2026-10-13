@@ -1,49 +1,50 @@
 import type { HexCrawlApi } from "../../api";
 import { manualEntryResolutionSources } from "../expeditions/expedition-input-policy";
 import { assistantEncounterCheckDue } from "../expeditions/expedition-workflow";
-import { canUseFocusedNonSpatialWatch, focusedIntervalHours, focusedIntervalProcedurePresentation, focusedIntervalUnavailableMessage } from "../expeditions/focused-interval-policy";
-import { directionLabel, formatDistance, formatHours } from "../../runtime-view";
+import {
+    canUseFocusedNonSpatialWatch, focusedIntervalHours,
+    focusedIntervalProcedurePresentation, focusedIntervalUnavailableMessage
+} from "../expeditions/focused-interval-policy";
+import { formatHours } from "../../runtime-view";
 import type {
-    EncounterCadenceAssistantRequest,
-    ExpeditionDetail,
-    NavigationAssistantRequest,
-    NonSpatialWatchAssistantRequest,
-    ProcedureRuntime,
-    ResolutionSource,
-    TravelWatchAssistantRequest,
-    SpatialRuntimeExpedition
+    EncounterCadenceAssistantRequest, ExpeditionDetail,
+    NonSpatialWatchAssistantRequest, ResolutionSource
 } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
-import { checkbox, input, integer, numeric, option, optionalText, prettyEnum, required, select, sourceLabel, statusCell } from "../../ui/dom";
+import { input, numeric, option, optionalText, prettyEnum, required, select, sourceLabel, statusCell } from "../../ui/dom";
 import { blockInitiativeHandoffHref } from "../../encounter-handoff";
 
 export type ExpeditionAssistantMode = "travel" | "navigation" | "encounters";
 
+/**
+ * Nonspatial bookkeeping only. All spatial journeys, regardless of polygon
+ * type, use the normal expedition's authoritative cell watch and helpers.
+ */
 export async function renderExpeditionAssistant(
     root: HTMLElement,
     api: HexCrawlApi,
     expeditionId: string,
     mode: ExpeditionAssistantMode,
-    navigate: (route: string, replace?: boolean) => void): Promise<() => void> {
+    navigate: (route: string, replace?: boolean) => void
+): Promise<() => void> {
     let runtime = await api.getExpedition(expeditionId);
+    if (runtime.expedition.isSpatial) {
+        navigate(`/expeditions/${runtime.id}`, true);
+        return () => {};
+    }
     let disposed = false;
     let pending = false;
-
     root.innerHTML = `
         <section class="hc-page">
             <header class="hc-page-header">
-                <div>
-                    <h1 data-title></h1>
-                    <p><span data-mode></span> · <span data-context></span></p>
-                </div>
+                <div><h1 data-title></h1><p><span data-mode></span> · <span data-context></span></p></div>
                 <nav>
-                    <button type="button" data-home>Hex Crawl home</button>
+                    <button type="button" data-home>Expedition home</button>
                     <button type="button" data-expedition>Open expedition</button>
                 </nav>
             </header>
             <div class="hc-view-switcher" aria-label="Focused assistants">
-                <button type="button" data-travel>Travel / time</button>
-                <button type="button" data-navigation>Navigation</button>
+                <button type="button" data-travel>Time / interval</button>
                 <button type="button" data-encounters>Encounter cadence</button>
             </div>
             <div class="hc-error" data-error hidden role="alert"></div>
@@ -52,481 +53,215 @@ export async function renderExpeditionAssistant(
                     <h2 data-assistant-heading></h2>
                     <p class="hc-muted" data-assistant-description></p>
                     <div class="hc-status-grid" data-status></div>
-                    <div data-active-watch-warning hidden class="hc-assistant-warning"></div>
                     <form class="hc-form hc-assistant-form" data-form></form>
                     <div class="hc-encounter-handoff" data-encounter-handoff hidden></div>
                 </section>
                 <section class="hc-panel">
-                    <h2>Relevant history</h2>
-                    <ol class="hc-history" data-history></ol>
+                    <h2>Relevant history</h2><ol class="hc-history" data-history></ol>
                 </section>
             </div>
         </section>`;
-
     const error = required<HTMLElement>(root, "[data-error]");
     const form = required<HTMLFormElement>(root, "[data-form]");
-    const warning = required<HTMLElement>(root, "[data-active-watch-warning]");
-
     required<HTMLButtonElement>(root, "[data-home]").addEventListener("click", () => navigate("/"));
     required<HTMLButtonElement>(root, "[data-expedition]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}`));
     required<HTMLButtonElement>(root, "[data-travel]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}/travel`));
-    required<HTMLButtonElement>(root, "[data-navigation]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}/navigation`));
     required<HTMLButtonElement>(root, "[data-encounters]").addEventListener("click", () => navigate(`/expeditions/${runtime.id}/encounters`));
 
-    const apply = (next: ExpeditionDetail): void => {
-        runtime = next;
-        required<HTMLElement>(root, "[data-title]").textContent = next.name;
-        required<HTMLElement>(root, "[data-context]").textContent = `Setup: ${next.context.name}`;
-        required<HTMLElement>(root, "[data-mode]").textContent = modeLabel(mode, next.expedition.isSpatial);
-        const travelButton = required<HTMLButtonElement>(root, "[data-travel]");
-        travelButton.hidden = false;
-        travelButton.textContent = next.expedition.isSpatial ? "Travel / time" : "Time / interval";
-        travelButton.disabled = !next.expedition.isSpatial && !canUseFocusedNonSpatialWatch(next);
-        required<HTMLButtonElement>(root, "[data-navigation]").hidden = !next.expedition.isSpatial;
-        renderStatus();
-        renderHistory();
-        renderForm();
-        renderEncounterHandoff();
-    };
-
-    const renderStatus = (): void => {
-        const state = runtime.expedition;
-        const execution = runtime.procedure.runtime;
-        const focusedPresentation = focusedIntervalProcedurePresentation(runtime);
-        const focusedWatch = mode === "travel"
-            && !state.isSpatial
-            && canUseFocusedNonSpatialWatch(runtime);
-        if (!execution && !focusedWatch) {
-            const cells = [
-                statusCell("Ruleset", focusedPresentation.procedureLabel),
-                statusCell("Automation", "This ruleset requires manual or unsupported steps here")
-            ];
-            if (mode === "travel" && !state.isSpatial) {
-                cells.push(statusCell("Time / interval", focusedIntervalUnavailableMessage(runtime)));
-            }
-            required<HTMLElement>(root, "[data-status]").replaceChildren(...cells);
-            return;
-        }
-
-        const cells = mode === "travel"
-            ? state.isSpatial
-                ? travelStatus(state)
-                : [
-                    statusCell("Ruleset", focusedPresentation.procedureLabel),
-                    execution
-                        ? statusCell("Execution", focusedPresentation.executionLabel)
-                        : statusCell("Focused interval", "Supported"),
-                    ...nonSpatialWatchStatus(runtime)
-                ]
-            : mode === "navigation"
-                ? navigationStatus(spatialState(runtime))
-                : [
-                    statusCell("Cadence", prettyEnum(execution!.encounterCadence)),
-                    statusCell("Current day", String(state.currentDay)),
-                    statusCell("Upcoming watch", String(state.completedWatches + 1)),
-                    statusCell("Check due", assistantEncounterCheckDue(runtime) ? "Yes" : "No"),
-                    statusCell("Setup", runtime.context.kind === "NonSpatial" ? "Journey / no grid" : runtime.context.kind === "AbstractHex" ? "Mapless" : "Map")
-                ];
-        required<HTMLElement>(root, "[data-status]").replaceChildren(...cells);
-    };
-
     const renderHistory = (): void => {
-        const relevant = runtime.history.filter(event => relevantEvent(mode, event.kind, event.message)).reverse().slice(0, 30);
-        const host = required<HTMLOListElement>(root, "[data-history]");
-        host.replaceChildren();
-        if (relevant.length === 0) {
-            const item = document.createElement("li");
-            item.textContent = "No relevant history yet. Record the first result in this assistant to create history.";
-            host.append(item);
-            return;
-        }
-        for (const event of relevant) {
-            const item = document.createElement("li");
-            item.textContent = `#${event.sequence} · ${formatHours(event.expeditionElapsedHours)} · ${event.message}`;
-            host.append(item);
+        const items = runtime.history.filter(event => {
+            if (event.kind === "ResolutionProvenanceRecorded")
+                return event.message.includes(mode === "travel" ? "watch-assistant=" : "encounter-assistant=");
+            return mode === "travel"
+                ? ["WatchStarted", "WatchTimeAdvanced", "WatchCompleted", "DmOverrideApplied"].includes(event.kind)
+                : ["EncounterCheckPerformed", "EncounterTriggered"].includes(event.kind);
+        }).reverse().slice(0, 30);
+        const list = required<HTMLOListElement>(root, "[data-history]");
+        list.replaceChildren();
+        if (!items.length) {
+            const li = document.createElement("li");
+            li.textContent = "No relevant history yet.";
+            list.append(li);
+        } else {
+            for (const item of items) {
+                const li = document.createElement("li");
+                li.textContent = `#${item.sequence} · ${formatHours(item.expeditionElapsedHours)} · ${item.message}`;
+                list.append(li);
+            }
         }
     };
-
     const renderEncounterHandoff = (): void => {
         const host = required<HTMLElement>(root, "[data-encounter-handoff]");
         host.replaceChildren();
         host.hidden = true;
         if (mode !== "encounters") return;
-
-        const triggered = [...runtime.history].reverse().find(event => event.kind === "EncounterTriggered");
-        if (!triggered) return;
-
-        const text = document.createElement("span");
-        text.textContent = "Continue this recorded encounter in the combat tracker. Preparing the handoff does not alter expedition state.";
+        const event = [...runtime.history].reverse().find(value => value.kind === "EncounterTriggered");
+        if (!event) return;
+        const message = document.createElement("span");
+        message.textContent = "Open this recorded encounter in Block Initiative. Handoff does not resolve it.";
         const button = document.createElement("button");
         button.type = "button";
-        button.className = "hc-button-link";
         button.textContent = "Open in Block Initiative";
-        const handoffId = crypto.randomUUID();
         button.addEventListener("click", () => {
             if (pending) return;
+            pending = true;
+            button.disabled = true;
+            clearUiError(error);
             void (async () => {
-                clearUiError(error);
-                pending = true;
-                button.disabled = true;
-                button.textContent = "Preparing encounter…";
                 try {
+                    const path = window.location.pathname;
+                    const returnPath = path === "/tools/hex-crawl" || path.startsWith("/tools/hex-crawl/")
+                        ? `${path}${window.location.search}${window.location.hash}` : null;
                     const handoff = await api.createEncounterHandoff(runtime.id, {
                         expectedVersion: runtime.version,
-                        handoffId,
-                        returnPath: safeCurrentReturnPath(),
-                        runtimeEncounterSequence: triggered.sequence,
+                        handoffId: crypto.randomUUID(),
+                        returnPath,
+                        runtimeEncounterSequence: event.sequence,
                         journeyEventOccurrenceId: null
                     });
-                    window.location.assign(blockInitiativeHandoffHref(handoff));
-                } catch (value) {
-                    if (!disposed) showUiError(error, value);
+                    if (!disposed) window.location.assign(blockInitiativeHandoffHref(handoff));
+                } catch (failure) {
+                    if (!disposed) showUiError(error, failure);
                 } finally {
                     pending = false;
-                    if (!disposed) {
-                        button.disabled = false;
-                        button.textContent = "Open in Block Initiative";
-                    }
+                    if (!disposed) button.disabled = false;
                 }
             })();
         });
-        host.append(text, button);
+        host.append(message, button);
         host.hidden = false;
     };
-
-    const renderForm = (): void => {
+    const render = (): void => {
+        if (disposed) return;
+        if (runtime.expedition.isSpatial) {
+            navigate(`/expeditions/${runtime.id}`, true);
+            return;
+        }
         const state = runtime.expedition;
-        const activeFullWatch = state.isSpatial && state.activeWatchNumber !== null;
-        warning.hidden = !activeFullWatch;
-        warning.textContent = activeFullWatch
-            ? `A full-workbench watch is active. Finish or resume watch ${state.activeWatchNumber} in the expedition workspace before using independent utility bookkeeping.`
-            : "";
+        const presentation = focusedIntervalProcedurePresentation(runtime);
+        required<HTMLElement>(root, "[data-title]").textContent = runtime.name;
+        required<HTMLElement>(root, "[data-context]").textContent = `Setup: ${runtime.context.name}`;
+        required<HTMLElement>(root, "[data-mode]").textContent = mode === "travel"
+            ? "Time / interval assistant" : mode === "navigation" ? "Navigation" : "Encounter cadence assistant";
+        required<HTMLElement>(root, "[data-assistant-heading]").textContent = mode === "travel"
+            ? "Time / interval bookkeeping" : mode === "navigation" ? "Navigation unavailable" : "Encounter cadence";
+        required<HTMLElement>(root, "[data-assistant-description]").textContent = mode === "travel"
+            ? "Record configured intervals, partial time, watch completion and provenance without spatial movement."
+            : mode === "navigation" ? "Navigation requires a spatial journey and is managed by the cell expedition."
+                : "Record an encounter-cadence result without changing elapsed travel time.";
+        const cells = [
+            statusCell("Ruleset", presentation.procedureLabel),
+            runtime.procedure.runtime
+                ? statusCell("Execution", presentation.executionLabel)
+                : statusCell("Focused interval", canUseFocusedNonSpatialWatch(runtime) ? "Supported" : "Unavailable"),
+            statusCell("Current day", String(state.currentDay)),
+            statusCell("Completed watches", String(state.completedWatches))
+        ];
+        if (mode === "travel") {
+            const length = focusedIntervalHours(runtime);
+            cells.push(statusCell("Interval", length === null ? focusedIntervalUnavailableMessage(runtime)
+                : formatHours(state.activeWatchTotalHours ?? length)));
+            cells.push(statusCell("Remaining", length === null ? "Not configured"
+                : formatHours(state.activeWatchRemainingHours ?? length)));
+        } else if (mode === "encounters" && runtime.procedure.runtime) {
+            cells.push(statusCell("Cadence", prettyEnum(runtime.procedure.runtime.encounterCadence)));
+            cells.push(statusCell("Check due", assistantEncounterCheckDue(runtime) ? "Yes" : "No"));
+        }
+        required<HTMLElement>(root, "[data-status]").replaceChildren(...cells);
+        renderHistory();
+        renderEncounterHandoff();
 
-        required<HTMLElement>(root, "[data-assistant-heading]").textContent = heading(mode, state.isSpatial);
-        required<HTMLElement>(root, "[data-assistant-description]").textContent = description(mode, state.isSpatial);
-        if (!state.isSpatial && mode === "navigation") {
-            form.innerHTML = '<p class="hc-hint">Navigation requires a spatial crawl context. This session intentionally has no direction, position, or grid state.</p>';
-            warning.hidden = true;
-            return;
-        }
-        if (!assistantOperationAvailable(runtime, mode)) {
-            const detail = mode === "travel" && !state.isSpatial
-                ? focusedIntervalUnavailableMessage(runtime)
-                : "This ruleset includes manual or unsupported behavior that this utility can not run automatically.";
-            form.innerHTML = `<p class="hc-hint">${escapeHtml(detail)} The saved rules remain available on the expedition for reference and manual play.</p>`;
-            warning.hidden = true;
-            return;
-        }
-        form.innerHTML = mode === "travel"
-            ? state.isSpatial ? travelForm(runtime) : nonSpatialWatchForm(runtime)
-            : mode === "navigation" ? navigationForm(runtime) : encounterForm(runtime);
-        populateSources(form);
-        if (!state.isSpatial && mode === "travel") {
-            select(form, "source").value = "ProcedureDefault";
-        }
-        const submit = required<HTMLButtonElement>(form, 'button[type="submit"]');
-        submit.disabled = activeFullWatch;
-        form.querySelectorAll<HTMLInputElement | HTMLSelectElement>("input, select").forEach(control => control.disabled = activeFullWatch);
         if (mode === "navigation") {
-            const sync = (): void => {
-                const lost = checkbox(form, "isLost").checked;
-                input(form, "veerSteps").disabled = activeFullWatch || !lost;
-                if (!lost) input(form, "veerSteps").value = "0";
-                else if (input(form, "veerSteps").value === "0") input(form, "veerSteps").value = "1";
-            };
-            checkbox(form, "isLost").addEventListener("change", sync);
-            sync();
+            form.innerHTML = '<p class="hc-hint">A nonspatial journey has no direction or location. Open a spatial cell expedition to resolve navigation.</p>';
+            return;
         }
+        if (mode === "travel" && !canUseFocusedNonSpatialWatch(runtime)) {
+            form.innerHTML = '<p class="hc-hint">Focused interval bookkeeping is not available for this ruleset. Review its saved procedure in the expedition.</p>';
+            return;
+        }
+        if (mode === "encounters" && runtime.procedure.runtime === null) {
+            form.innerHTML = '<p class="hc-hint">This ruleset has no executable encounter-cadence procedure here.</p>';
+            return;
+        }
+        if (mode === "travel") {
+            const length = focusedIntervalHours(runtime)!;
+            const remaining = state.activeWatchRemainingHours ?? length;
+            form.innerHTML = `
+                <p class="hc-hint">Watch ${state.activeWatchNumber ?? state.completedWatches + 1} ·
+                    remaining ${formatHours(remaining)}. Partial watches can resume.</p>
+                <label>Elapsed time to record
+                    <input name="elapsedHours" type="number" min="0.001" max="${remaining}" step="any" value="${remaining}"></label>
+                ${provenanceFields()}
+                <button class="hc-primary-action" type="submit">Record interval</button>`;
+        } else {
+            const helperNote = runtime.procedure.runtime?.resolutionHelpers?.encounter
+                ? '<p class="hc-hint">Automatic encounter helpers also resolve timing. This focused assistant records only independently resolved manual, external, or DM-override outcomes.</p>'
+                : "";
+            form.innerHTML = `
+                <p class="hc-hint">${assistantEncounterCheckDue(runtime) ? "A check is due." : "No check is currently due; a DM may still record an outcome."}</p>
+                ${helperNote}
+                <label>Outcome <select name="outcome" required>
+                    <option value="">Select resolved outcome</option>
+                    <option value="None">No encounter</option>
+                    <option value="WanderingEncounter">Wandering encounter</option>
+                    <option value="ManualCustom">Manual / custom encounter</option>
+                </select></label>
+                <label>Encounter note <input name="note"></label>
+                ${provenanceFields(true)}
+                <button class="hc-primary-action" type="submit">Record encounter check</button>`;
+        }
+        const source = select(form, "source");
+        source.append(option("", "Select result source"));
+        for (const choice of manualEntryResolutionSources) source.append(option(choice, sourceLabel(choice)));
+        source.value = mode === "travel" ? "ProcedureDefault" : "";
+        required<HTMLButtonElement>(form, 'button[type="submit"]').disabled = pending;
     };
-
     form.addEventListener("submit", event => {
         event.preventDefault();
-        if (pending || !assistantOperationAvailable(runtime, mode) || (runtime.expedition.isSpatial && runtime.expedition.activeWatchNumber !== null)) return;
+        if (pending || runtime.expedition.isSpatial || mode === "navigation") return;
+        if (mode === "travel" && !canUseFocusedNonSpatialWatch(runtime)) return;
+        if (mode === "encounters" && runtime.procedure.runtime === null) return;
+        pending = true;
+        clearUiError(error);
+        const button = required<HTMLButtonElement>(form, 'button[type="submit"]');
+        button.disabled = true;
         void (async () => {
-            clearUiError(error);
-            pending = true;
-            const submit = required<HTMLButtonElement>(form, 'button[type="submit"]');
-            submit.disabled = true;
-            const idle = submit.textContent ?? "Save";
-            submit.textContent = "Saving…";
             try {
-                let next: ExpeditionDetail;
-                if (mode === "travel") {
-                    next = runtime.expedition.isSpatial
-                        ? await api.recordTravelAssistant(runtime.id, travelRequest(form, runtime))
-                        : await api.recordWatchAssistant(runtime.id, nonSpatialWatchRequest(form, runtime));
-                } else if (mode === "navigation") {
-                    next = await api.recordNavigationAssistant(runtime.id, navigationRequest(form, runtime));
-                } else {
-                    const request = encounterRequest(form, runtime);
-                    next = await api.recordEncounterAssistant(runtime.id, request);
+                const source = select(form, "source").value as ResolutionSource;
+                const base = {
+                    expectedVersion: runtime.version, resolutionSource: source,
+                    resolutionNote: optionalText(input(form, "resolutionNote")),
+                    note: optionalText(input(form, "note"))
+                };
+                const result = mode === "travel"
+                    ? await api.recordWatchAssistant(runtime.id, {
+                        ...base, elapsedHours: numeric(input(form, "elapsedHours"))
+                    } satisfies NonSpatialWatchAssistantRequest)
+                    : await api.recordEncounterAssistant(runtime.id, {
+                        ...base, outcome: select(form, "outcome").value as EncounterCadenceAssistantRequest["outcome"]
+                    } satisfies EncounterCadenceAssistantRequest);
+                if (!disposed) {
+                    runtime = result;
+                    render();
                 }
-                if (!disposed) apply(next);
-            } catch (value) {
-                if (!disposed) showUiError(error, value);
+            } catch (failure) {
+                if (!disposed) showUiError(error, failure);
             } finally {
                 pending = false;
                 if (!disposed) {
-                    submit.disabled = false;
-                    submit.textContent = idle;
+                    const current = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+                    if (current) current.disabled = false;
                 }
             }
         })();
     });
-
-    apply(runtime);
+    render();
     return () => { disposed = true; };
 }
 
-function travelForm(runtime: ExpeditionDetail): string {
-    const execution = requireProcedureRuntime(runtime);
-    const state = spatialState(runtime);
-    const contextDistance = runtime.context.hexCenterDistance;
-    if (!contextDistance) throw new Error("Spatial crawl context is missing its hex-center distance.");
-    const travelInput = execution.travelResolution === "HexSteps"
-        ? `<label>Resolved hex steps <input name="hexSteps" type="number" min="0" step="1" required></label>`
-        : `<label>Distance traveled (${contextDistance.unit.symbol}) <input name="distance" type="number" min="0" step="any" required></label>`;
-    const progress = execution.tracksIntraHexProgress
-        ? `<label>Resulting intra-hex progress (${contextDistance.unit.symbol}) <input name="hexProgress" type="number" min="0" step="any" value="${state.hexProgress.value}"></label>`
-        : "";
-    return `
-        <p class="hc-hint">Enter the movement result you already resolved. This assistant does not infer distance or hex steps from the map scale, procedure name, pace, or terrain.</p>
-        <label>Elapsed travel hours <input name="elapsedHours" type="number" min="0" step="any" value="${execution.intervalHours}"></label>
-        ${travelInput}
-        <div class="hc-inline">
-            <label>Resulting hex q <input name="q" type="number" step="1" value="${state.currentHex.q}"></label>
-            <label>Resulting hex r <input name="r" type="number" step="1" value="${state.currentHex.r}"></label>
-        </div>
-        ${progress}
-        <label>Intended direction <select name="intendedDirection" required><option value="">Select intended direction</option>${directionOptions(state.intendedDirection)}</select></label>
-        <label>Actual direction override <select name="actualDirection"><option value="">Derive from navigation state</option>${directionOptions(state.actualDirection)}</select></label>
-        <label><input name="completeWatch" type="checkbox" checked> Mark one watch complete</label>
-        ${provenanceFields("travel")}
-        <button type="submit" class="hc-primary-action">Record travel / time</button>`;
-}
-
-function nonSpatialWatchForm(runtime: ExpeditionDetail): string {
-    const intervalHours = requireFocusedIntervalHours(runtime);
-    const state = runtime.expedition;
-    if (state.isSpatial) throw new Error("Expected a non-spatial expedition.");
-    const watchNumber = state.activeWatchNumber ?? state.completedWatches + 1;
-    const total = state.activeWatchTotalHours ?? intervalHours;
-    const elapsed = state.activeWatchElapsedHours ?? 0;
-    const remaining = state.activeWatchRemainingHours ?? total;
-    return `
-        <p class="hc-hint">Watch ${watchNumber} · configured length ${formatHours(total)} · elapsed ${formatHours(elapsed)} · remaining ${formatHours(remaining)}.</p>
-        <label>Elapsed time to record <input name="elapsedHours" type="number" min="0.001" max="${remaining}" step="any" value="${remaining}"></label>
-        ${provenanceFields("watch")}
-        <button type="submit" class="hc-primary-action">${state.activeWatchNumber === null ? "Start / record watch" : "Resume watch"}</button>`;
-}
-
-function navigationForm(runtime: ExpeditionDetail): string {
-    const state = spatialState(runtime);
-    return `
-        <label>Intended direction <select name="intendedDirection" required><option value="">Select intended direction</option>${directionOptions(state.intendedDirection)}</select></label>
-        <label><input name="isLost" type="checkbox" ${state.isLost ? "checked" : ""}> Expedition is lost</label>
-        <label>Veer steps <input name="veerSteps" type="number" step="1" value="${state.isLost ? state.veerSteps : 0}"></label>
-        ${provenanceFields("navigation")}
-        <button type="submit" class="hc-primary-action">Record navigation state</button>`;
-}
-
-function encounterForm(runtime: ExpeditionDetail): string {
-    const execution = requireProcedureRuntime(runtime);
-    const automaticHelperNote = execution.resolutionHelpers?.encounter
-        ? '<p class="hc-hint">This procedure also configures an automatic encounter helper. This focused assistant does not apply it because the helper also resolves encounter timing; use this surface for manual, external, or DM-override bookkeeping.</p>'
-        : "";
-    return `
-        <p class="hc-hint">${assistantEncounterCheckDue(runtime) ? "The configured cadence indicates a check is due." : "The configured cadence does not currently indicate a new check is due. You may still record a manual check."}</p>
-        ${automaticHelperNote}
-        <label>Outcome <select name="outcome" required>
-            <option value="">Select resolved outcome</option>
-            <option value="None">No encounter</option>
-            <option value="WanderingEncounter">Wandering encounter</option>
-            <option value="ManualCustom">Manual / custom encounter</option>
-        </select></label>
-        <label>Encounter note <input name="note" placeholder="optional"></label>
-        ${provenanceFields("encounter")}
-        <button type="submit" class="hc-primary-action">Record encounter check</button>`;
-}
-
-function provenanceFields(prefix: string): string {
+function provenanceFields(encounter = false): string {
     return `
         <label>Result source <select name="source" data-source required></select></label>
         <label>Source note <input name="resolutionNote" placeholder="optional"></label>
-        ${prefix === "encounter" ? "" : '<label>Bookkeeping note <input name="note" placeholder="optional"></label>'}`;
-}
-
-function populateSources(form: HTMLFormElement): void {
-    const source = select(form, "source");
-    source.append(option("", "Select result source"));
-    for (const value of manualEntryResolutionSources) source.append(option(value, sourceLabel(value)));
-    source.value = "";
-}
-
-function travelRequest(form: HTMLFormElement, runtime: ExpeditionDetail): TravelWatchAssistantRequest {
-    const execution = requireProcedureRuntime(runtime);
-    const request: TravelWatchAssistantRequest = {
-        expectedVersion: runtime.version,
-        elapsedHours: numeric(input(form, "elapsedHours")),
-        resultingHex: { q: integer(input(form, "q")), r: integer(input(form, "r")) },
-        intendedDirection: integer(select(form, "intendedDirection")),
-        completeWatch: checkbox(form, "completeWatch").checked,
-        resolutionSource: select(form, "source").value as ResolutionSource,
-        resolutionNote: optionalText(input(form, "resolutionNote")),
-        note: optionalText(input(form, "note"))
-    };
-    if (execution.travelResolution === "HexSteps") request.hexSteps = integer(input(form, "hexSteps"));
-    else request.distance = numeric(input(form, "distance"));
-    if (execution.tracksIntraHexProgress) request.hexProgress = numeric(input(form, "hexProgress"));
-    const actual = select(form, "actualDirection").value;
-    if (actual) request.actualDirection = Number(actual);
-    return request;
-}
-
-function nonSpatialWatchRequest(form: HTMLFormElement, runtime: ExpeditionDetail): NonSpatialWatchAssistantRequest {
-    return {
-        expectedVersion: runtime.version,
-        elapsedHours: numeric(input(form, "elapsedHours")),
-        resolutionSource: select(form, "source").value as ResolutionSource,
-        resolutionNote: optionalText(input(form, "resolutionNote")),
-        note: optionalText(input(form, "note"))
-    };
-}
-
-function navigationRequest(form: HTMLFormElement, runtime: ExpeditionDetail): NavigationAssistantRequest {
-    return {
-        expectedVersion: runtime.version,
-        isLost: checkbox(form, "isLost").checked,
-        veerSteps: integer(input(form, "veerSteps")),
-        intendedDirection: integer(select(form, "intendedDirection")),
-        resolutionSource: select(form, "source").value as ResolutionSource,
-        resolutionNote: optionalText(input(form, "resolutionNote")),
-        note: optionalText(input(form, "note"))
-    };
-}
-
-function encounterRequest(form: HTMLFormElement, runtime: ExpeditionDetail): EncounterCadenceAssistantRequest {
-    return {
-        expectedVersion: runtime.version,
-        outcome: select(form, "outcome").value as EncounterCadenceAssistantRequest["outcome"],
-        resolutionSource: select(form, "source").value as ResolutionSource,
-        resolutionNote: optionalText(input(form, "resolutionNote")),
-        note: optionalText(input(form, "note"))
-    };
-}
-
-function relevantEvent(mode: ExpeditionAssistantMode, kind: string, message: string): boolean {
-    if (kind === "ResolutionProvenanceRecorded") {
-        if (mode === "travel") return message.includes("travel-assistant=") || message.includes("watch-assistant=");
-        return message.includes(`${mode === "navigation" ? "navigation" : "encounter"}-assistant=`);
-    }
-    if (mode === "travel") return ["WatchStarted", "WatchTimeAdvanced", "TravelResolved", "DistanceTraveled", "HexExited", "HexEntered", "WatchCompleted", "DmOverrideApplied"].includes(kind);
-    if (mode === "navigation") return ["NavigationCheckResolved", "ExpeditionBecameLost", "ExpeditionReoriented", "VeerChanged", "VeerReset"].includes(kind);
-    return ["EncounterCheckPerformed", "EncounterTriggered"].includes(kind);
-}
-
-function modeLabel(mode: ExpeditionAssistantMode, spatial: boolean): string {
-    if (mode === "travel") return spatial ? "Travel / time assistant" : "Time / interval assistant";
-    return mode === "navigation" ? "Navigation assistant" : "Encounter cadence assistant";
-}
-
-function heading(mode: ExpeditionAssistantMode, spatial: boolean): string {
-    if (mode === "travel") return spatial ? "Travel / time bookkeeping" : "Time / interval bookkeeping";
-    return mode === "navigation" ? "Navigation / lost / veer" : "Encounter cadence";
-}
-
-function description(mode: ExpeditionAssistantMode, spatial: boolean): string {
-    if (mode === "travel") {
-        return spatial
-            ? "Record elapsed travel, resolved distance or hex steps, resulting hex/progress, and watch completion without running navigation or encounter automation."
-            : "Record configured watch time, partial progress, resume state, completion, provenance, and notes without inventing spatial travel state.";
-    }
-    if (mode === "navigation") return "Record authoritative oriented/lost state and veer without advancing travel or resolving encounters.";
-    return "Record encounter-cadence checks and non-geographic outcomes without advancing travel. Keyed-location discovery remains part of world/map composition.";
-}
-
-function assistantOperationAvailable(runtime: ExpeditionDetail, mode: ExpeditionAssistantMode): boolean {
-    if (mode === "travel" && !runtime.expedition.isSpatial) {
-        return canUseFocusedNonSpatialWatch(runtime);
-    }
-    return runtime.procedure.runtime !== null;
-}
-
-function requireFocusedIntervalHours(runtime: ExpeditionDetail): number {
-    const intervalHours = focusedIntervalHours(runtime);
-    if (runtime.expedition.isSpatial || intervalHours === null) {
-        throw new Error(focusedIntervalUnavailableMessage(runtime));
-    }
-    return intervalHours;
-}
-
-function requireProcedureRuntime(runtime: ExpeditionDetail): ProcedureRuntime {
-    const execution = runtime.procedure.runtime;
-    if (!execution) {
-        throw new Error(`Exploration ruleset ${runtime.procedure.name} requires manual or unsupported behavior in this utility.`);
-    }
-    return execution;
-}
-
-function spatialState(runtime: ExpeditionDetail): SpatialRuntimeExpedition {
-    if (!runtime.expedition.isSpatial) {
-        throw new Error("This assistant requires a spatial expedition.");
-    }
-    return runtime.expedition;
-}
-
-function travelStatus(state: SpatialRuntimeExpedition): HTMLElement[] {
-    return [
-        statusCell("Elapsed travel", formatHours(state.elapsedTravelHours)),
-        statusCell("Distance", formatDistance(state.distanceTraveled)),
-        statusCell("Current hex", `${state.currentHex.q}, ${state.currentHex.r}`),
-        statusCell("Completed watches", String(state.completedWatches))
-    ];
-}
-
-function nonSpatialWatchStatus(runtime: ExpeditionDetail): HTMLElement[] {
-    const intervalHours = requireFocusedIntervalHours(runtime);
-    const state = runtime.expedition;
-    if (state.isSpatial) throw new Error("Expected a non-spatial expedition.");
-    const watch = state.activeWatchNumber === null
-        ? `Ready for watch ${state.completedWatches + 1}`
-        : `Watch ${state.activeWatchNumber}`;
-    return [
-        statusCell("Watch", watch),
-        statusCell("Configured length", formatHours(state.activeWatchTotalHours ?? intervalHours)),
-        statusCell("Watch elapsed", formatHours(state.activeWatchElapsedHours ?? 0)),
-        statusCell("Watch remaining", formatHours(state.activeWatchRemainingHours ?? intervalHours)),
-        statusCell("Completed watches", String(state.completedWatches)),
-        statusCell("Total elapsed", formatHours(state.elapsedTravelHours))
-    ];
-}
-
-function navigationStatus(state: SpatialRuntimeExpedition): HTMLElement[] {
-    return [
-        statusCell("Navigation", state.isLost ? "Lost" : "Oriented"),
-        statusCell("Veer", `${state.veerSteps} (${state.veerDegrees}°)`),
-        statusCell("Intended course", directionLabel(state.intendedDirection)),
-        statusCell("Actual course", directionLabel(state.actualDirection))
-    ];
-}
-
-function safeCurrentReturnPath(): string | null {
-    const path = window.location.pathname;
-    if (path !== "/tools/hex-crawl" && !path.startsWith("/tools/hex-crawl/")) return null;
-    return `${path}${window.location.search}${window.location.hash}`;
-}
-
-function directionOptions(selected: number | null): string {
-    return [0, 1, 2, 3, 4, 5]
-        .map(value => `<option value="${value}" ${selected === value ? "selected" : ""}>${directionLabel(value)}</option>`)
-        .join("");
-}
-
-function escapeHtml(value: string): string {
-    return value
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#39;");
+        ${encounter ? "" : '<label>Bookkeeping note <input name="note" placeholder="optional"></label>'}`;
 }

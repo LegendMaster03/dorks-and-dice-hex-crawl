@@ -34,9 +34,7 @@ public sealed record PlayerKnowledgeState
     public required Guid OverworldId { get; init; }
     public MapPresentationPolicy? PresentationPolicy { get; init; }
     public IReadOnlyDictionary<Guid, KnowledgeEntry> Entries { get; init; } = new Dictionary<Guid, KnowledgeEntry>();
-    public IReadOnlyList<HexCoordinate> KnownHexes { get; init; } = [];
-    // Absent for pre-cell and purely hex snapshots; populated only by
-    // genuine qualified-cell discovery, never by axial projection.
+    // Qualified cell identities are the only spatial knowledge addresses.
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<WorldCellId>? KnownCells { get; init; }
 

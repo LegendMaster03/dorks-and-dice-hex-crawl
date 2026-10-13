@@ -44,6 +44,9 @@ public sealed record PeriodicWorldTiling(
     int Revision = 1,
     DistanceMeasure? PhysicalDistancePerWorldUnit = null)
 {
+    /// <summary>Explicit physical travel-budget reference for deliberate turns.</summary>
+    public DistanceMeasure? PhysicalTurnCostReference { get; init; }
+
     public void Validate()
     {
         if (Id == Guid.Empty || Revision <= 0
@@ -53,6 +56,12 @@ public sealed record PeriodicWorldTiling(
         ArgumentNullException.ThrowIfNull(Realization);
         Topology.ValidateAdjacency();
         PeriodicMetricWitnessValidator.Validate(Topology, Realization);
+        if (PhysicalTurnCostReference is { } turning
+            && (!double.IsFinite(turning.Value) || turning.Value <= 0
+                || string.IsNullOrWhiteSpace(turning.Unit.Symbol)
+                || turning.Unit.MetersPerUnit is { } metersPerUnit
+                    && (!double.IsFinite(metersPerUnit) || metersPerUnit <= 0)))
+            throw new InvalidOperationException("Turning-cost reference must be finite, positive, and identify its physical unit.");
         if (PhysicalDistancePerWorldUnit is { } physical)
         {
             if (!double.IsFinite(physical.Value) || physical.Value <= 0

@@ -1,7 +1,4 @@
-export type HexOrientation = "PointyTop" | "FlatTop";
-export type HexCoordinateConvention = "AxialQr";
 export type WorldPoint = { x: number; y: number };
-export type HexCoordinate = { q: number; r: number };
 
 /** Phase 18: a cell address is qualified by the tiling, not an axial hex. */
 export type PeriodicCellAddress = {
@@ -55,16 +52,6 @@ export type DistanceUnit = {
 };
 
 export type DistanceValue = { value: number; unit: DistanceUnit };
-
-export type GridDefinition = {
-    id: string;
-    orientation: HexOrientation;
-    coordinateConvention: HexCoordinateConvention;
-    origin: WorldPoint;
-    rotationDegrees: number;
-    hexRadiusWorldUnits: number;
-    neighborCenterDistance: DistanceValue;
-};
 
 export type SpatialFeature = {
     id: string;
@@ -146,15 +133,22 @@ export type OverworldSummary = {
     updatedAt: string;
 };
 
+export type PeriodicWorldTiling = {
+    id: string;
+    revision: number;
+    origin: WorldPoint;
+    topology: { motifCells: { id: string }[]; quotientDsSymbol: string };
+    physicalDistancePerWorldUnit: DistanceValue | null;
+};
+
 export type Overworld = {
     id: string;
     name: string;
     version: number;
     createdAt: string;
     updatedAt: string;
-    grid: GridDefinition | null;
     /** Authoritative world topology/metric witness remains on the server. */
-    tiling: { id: string; revision: number; origin: WorldPoint; topology: { motifCells: { id: string }[] } } | null;
+    tiling: PeriodicWorldTiling;
     features: SpatialFeature[];
     locations: Location[];
     sourceMaps: SourceMapRepresentation[];
@@ -163,7 +157,7 @@ export type Overworld = {
 export type DemoWorld = Overworld;
 
 export type EncounterCadence = "None" | "PerWatch" | "PerDay";
-export type TravelResolutionMode = "ContinuousDistance" | "HexSteps" | "CellSteps";
+export type TravelResolutionMode = "ContinuousDistance" | "CellSteps";
 export type ActualDistanceResolutionMode = "Fixed" | "VariableResolved";
 export type ResolutionSource = "ProcedureDefault" | "AutomaticRoll" | "ManualRoll" | "ExternalSystem" | "DmOverride";
 
@@ -196,14 +190,7 @@ export type ProcedureRuntime = {
     encounterCadence: EncounterCadence;
     usesNavigationChecks: boolean;
     usesPersistentVeer: boolean;
-    tracksIntraHexProgress: boolean;
-    directionChangesCostProgress: boolean;
     supportsDeliberateDoubleBack: boolean;
-    startingExitProgressFactor: number;
-    nearExitProgressFactor: number;
-    farExitProgressFactor: number;
-    backExitProgressFactor: number;
-    directionChangeProgressCostFactor: number;
     resolutionHelpers: ProcedureResolutionHelpers | null;
 };
 
@@ -260,7 +247,7 @@ export type PresentationProfile = {
     playerGrid: "Hidden" | "Visible";
     terrainMode: "HiddenUntilKnown" | "AlwaysVisible" | "Manual";
     automationMode: "Automatic" | "DmControlled";
-    markEnteredHexKnown: boolean;
+    markEnteredCellKnown: boolean;
     initiallyKnownFeatureCategories: string[];
     initiallyKnownLocationCategories: string[];
     allowPlayerAnnotations: boolean;
@@ -298,7 +285,6 @@ export type PendingEncounter = {
     watchNumber: number;
     outcome: "WanderingEncounter" | "KeyedLocationDiscovery" | "ManualCustom";
     expeditionElapsedHours: number;
-    hex: HexCoordinate | null;
     locationId: string | null;
     note: string | null;
 };
@@ -306,19 +292,11 @@ export type PendingEncounter = {
 export type SpatialRuntimeExpedition = {
     id: string;
     isSpatial: true;
-    currentHex: HexCoordinate;
     position: WorldPoint | null;
-    positionPrecision: "Exact" | "HexAnchor" | null;
-    entryDirection: number | null;
-    lastTravelDirection: number | null;
-    intendedDirection: number | null;
-    actualDirection: number | null;
+    positionPrecision: "Exact" | null;
     isLost: boolean;
-    veerSteps: number;
     veerDegrees: number;
     distanceTraveled: DistanceValue;
-    hexProgress: DistanceValue;
-    exitRequirement: DistanceValue | null;
     elapsedTravelHours: number;
     currentDay: number;
     completedWatches: number;
@@ -338,7 +316,7 @@ export type SpatialRuntimeExpedition = {
     activeEncounterHour: number | null;
     activeEncounterHandled: boolean | null;
     pendingEncounter: PendingEncounter | null;
-    /** Present only in Phase 18 generalized cell state, with currentHex null on the wire. */
+    /** Qualified cell identity from the authoritative tiling. */
     currentCell?: WorldCellId | null;
     cellTraversal?: {
         currentCell: WorldCellId;
@@ -355,19 +333,11 @@ export type SpatialRuntimeExpedition = {
 export type NonSpatialRuntimeExpedition = {
     id: string;
     isSpatial: false;
-    currentHex: null;
     position: null;
     positionPrecision: null;
-    entryDirection: null;
-    lastTravelDirection: null;
-    intendedDirection: null;
-    actualDirection: null;
     isLost: null;
-    veerSteps: null;
     veerDegrees: null;
     distanceTraveled: null;
-    hexProgress: null;
-    exitRequirement: null;
     elapsedTravelHours: number;
     currentDay: number;
     completedWatches: number;
@@ -404,7 +374,6 @@ export type RuntimeEvent = {
     watchNumber: number;
     kind: string;
     expeditionElapsedHours: number;
-    hex: HexCoordinate | null;
     message: string;
     distanceValue: number | null;
     distanceUnit: string | null;
@@ -415,14 +384,13 @@ export type RuntimeEvent = {
     encounterOccurrenceId?: string | null;
 };
 
-export type CrawlSessionContextKind = "WorldBound" | "AbstractHex" | "NonSpatial";
+export type CrawlSessionContextKind = "WorldBound" | "MaplessSpatial" | "NonSpatial";
 
 export type CrawlContext = {
     kind: CrawlSessionContextKind;
     name: string;
     overworldId: string | null;
-    orientation: HexOrientation | null;
-    hexCenterDistance: DistanceValue | null;
+    tiling: PeriodicWorldTiling | null;
 };
 
 export type ExpeditionSummary = {
@@ -604,7 +572,6 @@ export type ExpeditionDetail = {
     party: ExpeditionParty;
     participantActivityPolicy: ParticipantActivityPolicy;
     movementComposition: MovementCapabilityComposition;
-    knownHexes: HexCoordinate[];
     knowledge: RuntimeKnowledgeEntry[];
     history: RuntimeEvent[];
 };
@@ -625,14 +592,16 @@ export type ProcedureStartSelectionInput =
 
 export type StartCellExpeditionInput = {
     name: string;
-    procedureId: string;
-    procedureRevision: number;
     startCell: PeriodicCellAddress;
     presentationKey: string;
-};
+} & (
+    | { presetKey: string; procedureId?: never; procedureRevision?: never }
+    | { presetKey?: never; procedureId: string; procedureRevision: number }
+);
 
 export type CellWatchRequest = {
     expectedVersion: number;
+    generatedProcedureResolutionId?: string;
     plan: {
         intendedHeading: WorldPoint;
         deliberateDoubleBack: boolean;
@@ -672,6 +641,29 @@ export type CellWatchRequest = {
     };
 };
 
+/** A server-issued, owner/version/watch-bound automatic cell resolution. */
+export type CellProcedureResolutionHelperRequest = {
+    expectedVersion: number;
+    expectedDistance?: DistanceValue;
+    suppressesNavigationCheck: boolean;
+    deliberateDoubleBack: boolean;
+    navigationDifficultyClass?: number;
+    navigationModifier: number;
+    failureVeerDegrees?: number;
+    keyedLocationId?: string;
+};
+
+export type CellProcedureResolutionHelperResult = {
+    expeditionVersion: number;
+    generatedResolutionId: string | null;
+    auditSequence: number | null;
+    travel: CellWatchRequest["inputs"]["travel"] | null;
+    navigation: NonNullable<CellWatchRequest["inputs"]["navigation"]> | null;
+    encounter: NonNullable<CellWatchRequest["inputs"]["encounter"]> | null;
+    rolls: ProcedureResolutionRoll[];
+    notes: string[];
+};
+
 export type CellCourseRequest = {
     expectedVersion: number;
     decision: {
@@ -681,18 +673,11 @@ export type CellCourseRequest = {
     };
 };
 
-export type StartExpeditionInput = {
-    name: string;
-    presentationKey: string;
-    startHex: HexCoordinate;
-} & ProcedureStartSelectionInput;
-
 export type StandaloneCrawlContextInput =
     | {
-        kind: "AbstractHex";
+        kind: "MaplessSpatial";
         name: string;
-        orientation: HexOrientation;
-        hexCenterDistance: number;
+        physicalDistancePerWorldUnit: number;
         distanceUnit: DistanceUnit;
     }
     | {
@@ -703,64 +688,8 @@ export type StandaloneCrawlContextInput =
 export type StartStandaloneCrawlSessionInput = {
     name: string;
     context: StandaloneCrawlContextInput;
-    startHex?: HexCoordinate;
+    startCell?: PeriodicCellAddress;
 } & ProcedureStartSelectionInput;
-
-export type RuntimeAdvanceRequest = {
-    expectedVersion: number;
-    intendedDirection: number;
-    paceKey: string;
-    navigationAidKey: string;
-    suppressesNavigationCheck: boolean;
-    resetsVeerAtBoundary: boolean;
-    effectiveDistance?: number;
-    expectedDistance?: number;
-    actualDistance?: number;
-    hexSteps?: number;
-    resolutionSource: ResolutionSource;
-    travelResolutionSource?: ResolutionSource;
-    travelResolutionNote?: string;
-    navigationResolutionSource?: ResolutionSource;
-    navigationResolutionNote?: string;
-    encounterResolutionSource?: ResolutionSource;
-    encounterResolutionNote?: string;
-    boundaryResolutionSource?: ResolutionSource;
-    boundaryResolutionNote?: string;
-    navigationOutcome?: "NotRequired" | "Succeeded" | "Failed";
-    veerSteps?: number;
-    encounterOutcome?: "None" | "WanderingEncounter" | "KeyedLocationDiscovery" | "ManualCustom";
-    encounterHour?: number;
-    locationId?: string;
-    encounterNote?: string;
-    deliberateDoubleBack: boolean;
-    continueAcrossBoundaries: boolean;
-    recognizedLost?: boolean;
-    reorient?: boolean;
-    dmOverrideNote?: string;
-    generatedProcedureResolutionId?: string;
-};
-
-export type SetExpeditionCourseIntentRequest = {
-    expectedVersion: number;
-    intendedDirection: number | null;
-};
-
-export type RepositionExpeditionRequest = {
-    expectedVersion: number;
-    targetHex: HexCoordinate;
-    note?: string;
-};
-
-export type ProcedureResolutionHelperRequest = {
-    expectedVersion: number;
-    expectedDistance?: number;
-    suppressesNavigationCheck: boolean;
-    deliberateDoubleBack: boolean;
-    navigationDifficultyClass?: number;
-    navigationModifier: number;
-    failureVeerSteps?: number;
-    keyedLocationId?: string;
-};
 
 export type ProcedureResolutionRoll = {
     purpose: string;
@@ -770,73 +699,9 @@ export type ProcedureResolutionRoll = {
     total: number;
 };
 
-export type ProcedureResolvedTravel = {
-    expectedDistance: number;
-    actualDistance: number;
-    provenance: { source: ResolutionSource; note: string | null };
-};
-
-export type ProcedureResolvedNavigation = {
-    outcome: "NotRequired" | "Succeeded" | "Failed";
-    veerSteps: number | null;
-    provenance: { source: ResolutionSource; note: string | null };
-};
-
-export type ProcedureResolvedEncounter = {
-    kind: "None" | "WanderingEncounter" | "KeyedLocationDiscovery" | "ManualCustom";
-    occursAtHours: number | null;
-    locationId: string | null;
-    note: string | null;
-    provenance: { source: ResolutionSource; note: string | null };
-};
-
-export type ProcedureResolutionHelperResult = {
-    expeditionVersion: number;
-    generatedResolutionId: string | null;
-    auditSequence: number | null;
-    travel: ProcedureResolvedTravel | null;
-    navigation: ProcedureResolvedNavigation | null;
-    encounter: ProcedureResolvedEncounter | null;
-    rolls: ProcedureResolutionRoll[];
-    notes: string[];
-};
-
-export type ResolveBoundaryDecisionRequest = {
-    expectedVersion: number;
-    recognizedLost: boolean;
-    reorient: boolean;
-    resolutionSource: ResolutionSource;
-    resolutionNote?: string;
-};
-
-export type TravelWatchAssistantRequest = {
-    expectedVersion: number;
-    elapsedHours: number;
-    distance?: number;
-    hexSteps?: number;
-    resultingHex: HexCoordinate;
-    hexProgress?: number;
-    intendedDirection?: number;
-    actualDirection?: number;
-    completeWatch: boolean;
-    resolutionSource: ResolutionSource;
-    resolutionNote?: string;
-    note?: string;
-};
-
 export type NonSpatialWatchAssistantRequest = {
     expectedVersion: number;
     elapsedHours: number;
-    resolutionSource: ResolutionSource;
-    resolutionNote?: string;
-    note?: string;
-};
-
-export type NavigationAssistantRequest = {
-    expectedVersion: number;
-    isLost: boolean;
-    veerSteps: number;
-    intendedDirection?: number;
     resolutionSource: ResolutionSource;
     resolutionNote?: string;
     note?: string;

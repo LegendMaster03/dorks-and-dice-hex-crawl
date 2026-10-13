@@ -6,31 +6,10 @@ namespace HexCrawl.Domain.Presentation;
 
 public static class PresentationKnowledgeProjection
 {
-    public static PlayerKnowledgeState Initialize(
-        OverworldDefinition world,
-        MapPresentationPolicy policy,
-        PlayerKnowledgeState knowledge,
-        HexCoordinate startHex)
-    {
-        policy.Validate();
-        var result = knowledge;
-        if (policy.AutomationMode == PresentationAutomationMode.DmControlled)
-        {
-            return result;
-        }
-
-        if (policy.MarkEnteredHexKnown)
-        {
-            result = KnowledgeDiscovery.KnowHex(result, startHex);
-        }
-
-        return InitializeVisibleSubjects(world, policy, result);
-    }
-
     /// <summary>
     /// Initialize a generalized player's knowledge at the actual qualified
     /// starting cell. Reuse the same initial visible feature/location policy
-    /// as legacy hex starts without projecting any axial coordinate.
+    /// as the selected presentation profile without projecting an axial coordinate.
     /// </summary>
     public static PlayerKnowledgeState InitializeCells(
         OverworldDefinition world,
@@ -46,7 +25,7 @@ public static class PresentationKnowledgeProjection
         if (policy.AutomationMode == PresentationAutomationMode.DmControlled)
             return knowledge;
 
-        var result = policy.MarkEnteredHexKnown
+        var result = policy.MarkEnteredCellKnown
             ? KnowledgeDiscovery.KnowCell(knowledge, startCell)
             : knowledge;
         return InitializeVisibleSubjects(world, policy, result);
@@ -84,7 +63,7 @@ public static class PresentationKnowledgeProjection
     {
         policy.Validate();
         if (policy.AutomationMode == PresentationAutomationMode.DmControlled
-            || !policy.MarkEnteredHexKnown)
+            || !policy.MarkEnteredCellKnown)
             return knowledge;
 
         var result = knowledge;
@@ -93,22 +72,4 @@ public static class PresentationKnowledgeProjection
         return result;
     }
 
-    public static PlayerKnowledgeState ApplyEnteredHexes(
-        MapPresentationPolicy policy,
-        PlayerKnowledgeState knowledge,
-        IEnumerable<HexCoordinate> enteredHexes)
-    {
-        policy.Validate();
-        if (policy.AutomationMode == PresentationAutomationMode.DmControlled || !policy.MarkEnteredHexKnown)
-        {
-            return knowledge;
-        }
-
-        var result = knowledge;
-        foreach (var hex in enteredHexes.Distinct())
-        {
-            result = KnowledgeDiscovery.KnowHex(result, hex);
-        }
-        return result;
-    }
 }

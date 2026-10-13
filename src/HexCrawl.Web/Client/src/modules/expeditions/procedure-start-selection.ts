@@ -1,5 +1,8 @@
 import type { SavedProcedureSummary } from "../../procedure-composer-types";
-import type { ProcedurePreset, StartExpeditionInput, StartStandaloneCrawlSessionInput } from "../../types";
+import type {
+    PeriodicCellAddress, ProcedurePreset, StartCellExpeditionInput,
+    StartStandaloneCrawlSessionInput
+} from "../../types";
 
 const SAVED_PREFIX = "saved:";
 const PRESET_PREFIX = "preset:";
@@ -69,17 +72,12 @@ export function startChoiceSummary(
         : "Preset starting point";
 }
 
-export function applyWorldProcedureChoice(
-    base: Omit<StartExpeditionInput, "procedureKey" | "procedureId" | "procedureRevision">,
-    choice: ProcedureStartChoice): StartExpeditionInput {
-    if (choice.kind === "preset") {
-        return { ...base, procedureKey: choice.presetKey };
-    }
-    return {
-        ...base,
-        procedureId: choice.procedureId,
-        procedureRevision: choice.revision
-    };
+export function applyCellProcedureChoice(
+    base: { name: string; presentationKey: string; startCell: PeriodicCellAddress },
+    choice: ProcedureStartChoice): StartCellExpeditionInput {
+    return choice.kind === "preset"
+        ? { ...base, presetKey: choice.presetKey }
+        : { ...base, procedureId: choice.procedureId, procedureRevision: choice.revision };
 }
 
 export function applyStandaloneProcedureChoice(

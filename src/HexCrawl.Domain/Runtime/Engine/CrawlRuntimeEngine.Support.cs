@@ -35,11 +35,6 @@ public sealed partial class CrawlRuntimeEngine
     private static string Format(double value) =>
         value.ToString("0.###", CultureInfo.InvariantCulture);
 
-    private sealed record MovementOutcome(
-        ExpeditionState State,
-        ActiveWatchState Active,
-        RuntimePauseReason? PauseReason);
-
     private sealed class EventCollector
     {
         private long _nextSequence;
@@ -56,7 +51,6 @@ public sealed partial class CrawlRuntimeEngine
             int watchNumber,
             CrawlRuntimeEventKind kind,
             TimeSpan elapsed,
-            HexCoordinate? hex,
             string message,
             double? distanceValue = null,
             string? distanceUnit = null,
@@ -75,7 +69,6 @@ public sealed partial class CrawlRuntimeEngine
                 watchNumber,
                 kind,
                 elapsed,
-                hex,
                 message,
                 distanceValue,
                 distanceUnit,

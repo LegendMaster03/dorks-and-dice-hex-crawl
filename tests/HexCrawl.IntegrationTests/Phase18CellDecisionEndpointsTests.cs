@@ -55,9 +55,7 @@ public sealed class Phase18CellDecisionEndpointsTests
                 Assert.Equal(1, runtime.GetProperty("completedWatches").GetInt32());
                 Assert.Equal(boundary.To, JsonSerializer.Deserialize<WorldCellId>(
                     runtime.GetProperty("currentCell").GetRawText(), ApiJson));
-                Assert.Equal(JsonValueKind.Null, runtime.GetProperty("currentHex").ValueKind);
                 Assert.Equal(JsonValueKind.Null, runtime.GetProperty("distanceTraveled").ValueKind);
-                Assert.Empty(result.GetProperty("knownHexes").EnumerateArray());
                 var exit = Assert.Single(result.GetProperty("history").EnumerateArray(),
                     e => e.GetProperty("kind").GetString() == "CellExited");
                 var entered = Assert.Single(result.GetProperty("history").EnumerateArray(),
@@ -114,7 +112,6 @@ public sealed class Phase18CellDecisionEndpointsTests
             var known = Assert.Single(initial.GetProperty("knownCells").EnumerateArray());
             Assert.Equal(cell.Id, JsonSerializer.Deserialize<WorldCellId>(
                 known.GetRawText(), ApiJson));
-            Assert.Empty(initial.GetProperty("knownHexes").EnumerateArray());
 
             var boundary = world.Tiling!.Boundaries(cell.Id.Address)[0];
             var heading = Midpoint(boundary) - cell.Center;
@@ -127,7 +124,6 @@ public sealed class Phase18CellDecisionEndpointsTests
             Assert.Contains(after.GetProperty("knownCells").EnumerateArray(),
                 entry => JsonSerializer.Deserialize<WorldCellId>(entry.GetRawText(), ApiJson)
                     == boundary.To);
-            Assert.Empty(after.GetProperty("knownHexes").EnumerateArray());
             var persisted = await new PostgresHexCrawlStore(database)
                 .GetExpeditionAsync(id, "alice");
             Assert.Equal(2, persisted!.Knowledge!.KnownCells!.Count);
@@ -196,7 +192,7 @@ public sealed class Phase18CellDecisionEndpointsTests
     [Theory]
     [InlineData("<1:1,1,1:4,4>")]
     [InlineData("<1:1,1,1:6,3>")]
-    public async Task CanonicalVersionTwoProcedureCanBeAuthoredAndPinnedThroughHttpForCellStart(string dsSymbol)
+    public async Task CanonicalCellProcedureCanBeAuthoredAndPinnedThroughHttpForCellStart(string dsSymbol)
     {
         await WithWorldAsync(async (database, _, world, procedure, cell) =>
         {
@@ -232,11 +228,11 @@ public sealed class Phase18CellDecisionEndpointsTests
                     "Procedure authored through HTTP", procedure.ProcedureId,
                     1, cell.Id.Address), ApiJson);
             Assert.True(started.IsSuccessStatusCode,
-                $"Pinned v2 start failed: {await started.Content.ReadAsStringAsync()}");
+                $"Pinned cell start failed: {await started.Content.ReadAsStringAsync()}");
             var runtime = await started.Content.ReadFromJsonAsync<JsonElement>();
-            Assert.Equal(2,
+            Assert.Equal("CellSteps",
                 runtime.GetProperty("procedure").GetProperty("runtime")
-                    .GetProperty("movementMechanicVersion").GetInt32());
+                    .GetProperty("travelResolution").GetString());
             Assert.Equal(cell.Id,
                 JsonSerializer.Deserialize<WorldCellId>(
                     runtime.GetProperty("expedition").GetProperty("currentCell")
@@ -274,9 +270,6 @@ public sealed class Phase18CellDecisionEndpointsTests
             Assert.Equal(cell.Id.TilingId,
                 created.GetProperty("expedition").GetProperty("currentCell")
                     .GetProperty("tilingId").GetGuid());
-            Assert.Equal(JsonValueKind.Null,
-                created.GetProperty("expedition").GetProperty("currentHex").ValueKind);
-            Assert.Equal(0, created.GetProperty("knownHexes").GetArrayLength());
             Assert.Equal(procedure.ProcedureId,
                 created.GetProperty("procedure").GetProperty("procedureId").GetGuid());
 
@@ -356,11 +349,8 @@ public sealed class Phase18CellDecisionEndpointsTests
                 $"Resume returned {resumed.StatusCode}: {await resumed.Content.ReadAsStringAsync()}");
             var body = await resumed.Content.ReadFromJsonAsync<JsonElement>();
             Assert.Equal(1, body.GetProperty("expedition").GetProperty("completedWatches").GetInt32());
-            Assert.Equal(0, body.GetProperty("knownHexes").GetArrayLength());
             Assert.Single(body.GetProperty("history").EnumerateArray(),
                 e => e.GetProperty("kind").GetString() == "CellEntered");
-            Assert.Equal(JsonValueKind.Null,
-                body.GetProperty("expedition").GetProperty("currentHex").ValueKind);
             var persisted = await new PostgresHexCrawlStore(database)
                 .GetExpeditionAsync(initial.Id, "alice");
             Assert.Equal(3, persisted!.Version);
@@ -489,7 +479,7 @@ public sealed class Phase18CellDecisionEndpointsTests
                 half, null, "Trail ambush", Manual);
             var triggered = new CrawlRuntimeEvent(
                 1, 1, CrawlRuntimeEventKind.EncounterTriggered, half,
-                null, "Trail ambush",
+                "Trail ambush",
                 EncounterOutcome: encounter.Kind,
                 EncounterOccurrenceId: id)
             { Cell = cell.Id };
@@ -501,7 +491,7 @@ public sealed class Phase18CellDecisionEndpointsTests
                     1, duration, half, plan, encounter, true,
                     RuntimePauseReason.EncounterTriggered),
                 PendingEncounter = new PendingEncounterOccurrence(
-                    id, 1, 1, encounter.Kind, half, null,
+                    id, 1, 1, encounter.Kind, half,
                     null, encounter.Note, Manual) { Cell = cell.Id },
                 History = [triggered]
             };
@@ -819,19 +809,26 @@ public sealed class Phase18CellDecisionEndpointsTests
             var original = CrawlProcedureCatalog.Resolve(
                 procedureKey).MaterializeGeneric().Procedure;
             var modules = original.Modules
-                .Where(m => m.Mechanic.ExecutionHandler !=
-                    GenericProcedureExecutionHandlers.HexProgressPolicy)
+
                 .Select(m =>
                 {
+                    if (m.Mechanic.ExecutionHandler ==
+                        GenericProcedureExecutionHandlers.SpatialTurnCostPolicy)
+                    {
+                        // A discrete cell-step procedure has no distance-denominated
+                        // turning charge. This test changes its movement policy
+                        // without inventing a second hex-specific runtime.
+                        var turns = m.Parameters.ToDictionary(x => x.Key, x => x.Value);
+                        turns["neighborCenterDistanceFactor"] = "0";
+                        return m with { Parameters = turns };
+                    }
                     if (m.Mechanic.ExecutionHandler !=
                         GenericProcedureExecutionHandlers.MovementResolutionPolicy) return m;
                     var parameters = m.Parameters.ToDictionary(x => x.Key, x => x.Value);
                     parameters["travelResolution"] = TravelResolutionMode.CellSteps.ToString();
                     parameters["actualDistanceResolution"] = ActualDistanceResolutionMode.Fixed.ToString();
-                    parameters["tracksIntraHexProgress"] = "false";
                     return m with
                     {
-                        Mechanic = m.Mechanic with { Version = 2 },
                         Parameters = parameters
                     };
                 }).ToArray();

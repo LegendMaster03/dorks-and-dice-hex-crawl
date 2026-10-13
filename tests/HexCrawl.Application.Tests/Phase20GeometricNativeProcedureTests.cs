@@ -13,26 +13,22 @@ public sealed class Phase20GeometricNativeProcedureTests
     public void GeometricNativeMaterializationKeepsExistingPresetSemantics(
         string key, TravelResolutionMode mode, bool hasTurnCost)
     {
-        var legacy = CrawlProcedureCatalog.Resolve(key).MaterializeGeneric();
-        var geometric = GeometricNativeProcedureMaterializer.Materialize(key);
-        var oldRuntime = GenericProcedureRuntime.Bind(legacy.Procedure);
+        var published = CrawlProcedureCatalog.Resolve(key).MaterializeGeneric();
+        var geometric = CampaignProcedureMaterializer.MaterializeExecutableSpatial(CrawlProcedureCatalog.Resolve(key));
+        var publishedRuntime = GenericProcedureRuntime.Bind(published.Procedure);
         var runtime = GenericProcedureRuntime.Bind(geometric.Procedure);
 
-        Assert.Equal(1, oldRuntime.Movement.MechanicVersion);
-        Assert.Equal(2, runtime.Movement.MechanicVersion);
         Assert.Equal(mode, runtime.Movement.TravelResolution);
         Assert.Equal(hasTurnCost, runtime.TurnPolicy!.NeighborCenterDistanceFactor > 0);
-        Assert.Equal(oldRuntime.Time.IntervalDuration, runtime.Time.IntervalDuration);
-        Assert.Equal(oldRuntime.Encounters.Cadence, runtime.Encounters.Cadence);
-        Assert.Equal(oldRuntime.Navigation, runtime.Navigation);
-        Assert.Equal(legacy.Procedure.TilingDsSymbol, geometric.Procedure.TilingDsSymbol);
-        Assert.Equal(legacy.Procedure.Name, geometric.Procedure.Name);
-        Assert.Equal(legacy.Procedure.Key, geometric.Procedure.Key);
-        Assert.Equal(legacy.Origin!.PresetKey, geometric.Origin!.PresetKey);
+        Assert.Equal(publishedRuntime.Time.IntervalDuration, runtime.Time.IntervalDuration);
+        Assert.Equal(publishedRuntime.Encounters.Cadence, runtime.Encounters.Cadence);
+        Assert.Equal(publishedRuntime.Navigation, runtime.Navigation);
+        Assert.Equal(published.Procedure.TilingDsSymbol, geometric.Procedure.TilingDsSymbol);
+        Assert.Equal(published.Procedure.Name, geometric.Procedure.Name);
+        Assert.Equal(published.Procedure.Key, geometric.Procedure.Key);
+        Assert.Equal(published.Origin!.PresetKey, geometric.Origin!.PresetKey);
         Assert.Null(geometric.Origin.PresetRevision);
-        Assert.NotNull(legacy.Origin.PresetRevision);
-        Assert.DoesNotContain(geometric.Procedure.Modules, module =>
-            module.Mechanic.ExecutionHandler == GenericProcedureExecutionHandlers.HexProgressPolicy);
+        Assert.NotNull(published.Origin.PresetRevision);
     }
 
     [Theory]
@@ -43,13 +39,13 @@ public sealed class Phase20GeometricNativeProcedureTests
     public void DeclarativePresetsDoNotAcquireInventedGeometricWatches(string key)
     {
         Assert.Throws<NotSupportedException>(() =>
-            GeometricNativeProcedureMaterializer.Materialize(key));
+            CampaignProcedureMaterializer.MaterializeExecutableSpatial(CrawlProcedureCatalog.Resolve(key)));
     }
 
     [Fact]
     public void DiscreteCellStepsRejectDistanceDenominatedTurningCosts()
     {
-        var original = GeometricNativeProcedureMaterializer.Materialize("simple-hex-step").Procedure;
+        var original = CampaignProcedureMaterializer.MaterializeExecutableSpatial(CrawlProcedureCatalog.Resolve("simple-hex-step")).Procedure;
         var modules = original.Modules.Select(module =>
         {
             if (module.Mechanic.ExecutionHandler != GenericProcedureExecutionHandlers.SpatialTurnCostPolicy)
@@ -66,7 +62,7 @@ public sealed class Phase20GeometricNativeProcedureTests
     public void OptInGeometricProcedureUsesRequestedFreshPinnedId()
     {
         var id = Guid.NewGuid();
-        var materialized = GeometricNativeProcedureMaterializer.Materialize("simple-hex-step", id);
+        var materialized = CampaignProcedureMaterializer.MaterializeExecutableSpatial(CrawlProcedureCatalog.Resolve("simple-hex-step"), id);
         Assert.Equal(id, materialized.Procedure.ProcedureId);
         Assert.Equal(1, materialized.Procedure.Revision);
     }
@@ -74,16 +70,20 @@ public sealed class Phase20GeometricNativeProcedureTests
     [Fact]
     public void AlexandrianTurnChargesEffortWithoutFabricatingPhysicalDistance()
     {
-        var context = new AbstractHexCrawlSessionContext("Geometric watch",
-            HexOrientation.PointyTop,
-            new CrawlRuntimeContext(new DistanceMeasure(6, DistanceUnit.Miles)));
-        var session = AbstractCellSessionGeometry.CreateNewHexSession(
-            Guid.NewGuid(), context, new HexCoordinate(0, 0));
-        var procedure = GeometricNativeProcedureMaterializer.Materialize("alexandrian-advanced").Procedure;
-        var east = SpatialCourseSelection.FromLegacyHexDirection(session.World,
-            new HexCoordinate(0, 0), new HexDirection(0));
-        var turn = SpatialCourseSelection.FromLegacyHexDirection(session.World,
-            new HexCoordinate(0, 0), new HexDirection(1));
+        var realized = DelaneyDressHarmonicMetricRealization.Construct(
+            "<1:1,1,1:6,3>", 1d, "world-unit");
+        var id = Guid.NewGuid();
+        var tiling = new PeriodicWorldTiling(id, realized.Topology!,
+            realized.Realization!, new WorldPoint(0, 0),
+            PhysicalDistancePerWorldUnit: new DistanceMeasure(6, DistanceUnit.Miles))
+        {
+            PhysicalTurnCostReference = new DistanceMeasure(6, DistanceUnit.Miles)
+        };
+        var session = MaplessCellSessionGeometry.Create(id, tiling);
+        var procedure = CampaignProcedureMaterializer.MaterializeExecutableSpatial(CrawlProcedureCatalog.Resolve("alexandrian-advanced")).Procedure;
+        var current = session.Expedition.Traversal.CurrentCell;
+        var east = HeadingToBoundary(session.World, current, 0);
+        var turn = HeadingToBoundary(session.World, current, 5);
         var engine = new CrawlRuntimeEngine();
         var inputs1 = new CellWatchAdvanceInputs(
             ResolvedTravelAmount.Distance(
@@ -112,5 +112,10 @@ public sealed class Phase20GeometricNativeProcedureTests
         Assert.Contains(second.Events, e => e.Kind == CrawlRuntimeEventKind.ResolutionProvenanceRecorded
             && e.Message.Contains("turn debited", StringComparison.OrdinalIgnoreCase)
             && e.DistanceValue == 1d);
+    }
+    private static WorldPoint HeadingToBoundary(PeriodicWorldTiling world, WorldCellId current, int interfaceIndex)
+    {
+        var boundary = world.Boundaries(current.Address)[interfaceIndex];
+        return SpatialCourseSelection.ParallelToNeighborCenters(world, current, boundary.To);
     }
 }

@@ -65,6 +65,29 @@ public sealed class ProcedureComposerServiceTests
     }
 
     [Fact]
+    public async Task BlankCustomMovementDefaultsToNativeGeneralizedCellExecution()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var store = new PostgresHexCrawlStore(database.ConnectionString);
+        await store.InitializeAsync();
+        var draft = await Composer(store).CreateDraftAsync(
+            "alice", null, null, null,
+            [
+                new ProcedureModuleSelection(GenericProcedureCatalog.TimeIntervalModule, true),
+                new ProcedureModuleSelection(GenericProcedureCatalog.MovementResolutionModule, true)
+            ],
+            []);
+
+        var movement = Assert.Single(draft.Procedure.Modules, module =>
+            module.Module.Key == GenericProcedureCatalog.MovementResolutionModule);
+        Assert.Equal(2, movement.Mechanic.Version);
+        Assert.Equal(GenericProcedureExecutionHandlers.MovementResolutionPolicy,
+            movement.Mechanic.ExecutionHandler);
+        Assert.Equal(TravelResolutionMode.ContinuousDistance.ToString(),
+            movement.Parameters["travelResolution"]);
+    }
+
+    [Fact]
     public async Task DraftBehaviorReplacementUsesGenericAlternativeAndRefreshesDependencies()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
@@ -153,14 +176,9 @@ public sealed class ProcedureComposerServiceTests
         var store = new PostgresHexCrawlStore(database.ConnectionString);
         await store.InitializeAsync();
         var composer = Composer(store);
-        var sessions = new CrawlSessionService(store);
+        var sessions = new ExpeditionStartService(store, new HexCrawlService(store), new CampaignProcedureService(store));
 
-        var pinned = await sessions.StartAsync(
-            "alice",
-            new StartStandaloneCrawlSessionCommand(
-                "Pinned expedition",
-                "simple-fixed-distance",
-                new NonSpatialCrawlSessionContext("Procedure clock")));
+        var pinned = await sessions.StartNonSpatialAsync("alice", "Pinned expedition", new ProcedureStartSelection(PresetKey: "simple-fixed-distance"), new NonSpatialCrawlSessionContext("Procedure clock"));
         var originalPinned = pinned.CampaignProcedure;
 
         var created = await composer.CreateAsync("alice", "simple-fixed-distance", []);

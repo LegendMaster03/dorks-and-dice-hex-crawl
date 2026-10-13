@@ -14,6 +14,7 @@ public sealed class Phase18CellWatchRuntimeTests
     [InlineData("<1:1,1,1:4,4>")]
     [InlineData("<1:1,1,1:6,3>")]
     [InlineData("<10:2 5 4 6 7 8 10,1 4 6 5 9 10,3 5 7 8 9 10:3 3 4,5 5>")]
+    [InlineData("<14:2 5 7 9 11 13 14,1 4 6 8 10 12 14 13,3 5 4 6 7 8 9 14 11 13:6 4,3 4 4 3>")]
     public void CellWatchAdvancesTimeAndEmitsQualifiedReciprocalEvents(string dsSymbol)
     {
         var (world, procedure, state, plan) = Setup(dsSymbol, calibrated: true);
@@ -35,12 +36,28 @@ public sealed class Phase18CellWatchRuntimeTests
         Assert.Equal(result.Expedition.Traversal.CurrentCell, entered.Cell);
         Assert.Equal(exited.ReciprocalInterfaceIndex, entered.BoundaryInterfaceIndex);
         Assert.Equal(exited.BoundaryInterfaceIndex, entered.ReciprocalInterfaceIndex);
-        Assert.Null(exited.Hex);
-        Assert.Null(entered.Hex);
-        Assert.DoesNotContain(result.Events, e =>
-            e.Kind is CrawlRuntimeEventKind.HexEntered or CrawlRuntimeEventKind.HexExited);
+        Assert.NotNull(exited.Cell);
+        Assert.NotNull(entered.Cell);
         Assert.Equal(result.Events.Count, result.Events.Select(e => e.Sequence).Distinct().Count());
         Assert.Equal(result.Events.Count, result.Expedition.History.Count);
+    }
+
+    [Fact]
+    public void CellWatchAcceptsRulesetProvenEquivalentByWorldTranslationCover()
+    {
+        const string square = "<1:1,1,1:4,4>";
+        const string checkerboard = "<2:1 2,1 2,2:4 4,4>";
+        var (world, worldProcedure, state, plan) = Setup(checkerboard, calibrated: true);
+        var comparison = DelaneyDressTopology.Compare(
+            square, world.Topology.QuotientDsSymbol, world.Topology.TranslationDsSymbol);
+        Assert.Equal(TilingComparisonStatus.ProvenEquivalent, comparison.Status);
+        var procedure = worldProcedure with { TilingDsSymbol = square };
+        procedure.Validate();
+
+        var result = new CrawlRuntimeEngine().AdvanceCellWatch(
+            world, procedure, state, plan, Inputs(1));
+        Assert.Single(result.Events, e => e.Kind == CrawlRuntimeEventKind.CellEntered);
+        Assert.NotEqual(state.Traversal.CurrentCell, result.Expedition.Traversal.CurrentCell);
     }
 
     [Fact]
@@ -154,14 +171,13 @@ public sealed class Phase18CellWatchRuntimeTests
             e => e.Kind == CrawlRuntimeEventKind.DmOverrideApplied);
         Assert.Equal("Navigator used a DM-resolved course.", audit.Message);
         Assert.Equal(state.Traversal.CurrentCell, audit.Cell);
-        Assert.Null(audit.Hex);
     }
 
     [Fact]
     public void DeliberateReverseAtTerminalBoundaryCompletesWithoutStrandedPause()
     {
         var (world, procedure, initial, plan) = Setup(
-            "<1:1,1,1:4,4>", calibrated: true);
+            "<1:1,1,1:4,4>", calibrated: true, allowDoubleBack: true);
         var engine = new CrawlRuntimeEngine();
         var paused = engine.AdvanceCellWatch(world, procedure, initial, plan, Inputs(2));
         Assert.Equal(RuntimePauseReason.ConditionsReviewRequired, paused.PauseReason);
@@ -273,7 +289,6 @@ public sealed class Phase18CellWatchRuntimeTests
         var audit = Assert.Single(decided.Events,
             e => e.Kind == CrawlRuntimeEventKind.ResolutionProvenanceRecorded);
         Assert.Equal(state.Traversal.CurrentCell, audit.Cell);
-        Assert.Null(audit.Hex);
         Assert.Contains("ManualRoll", audit.Message);
         Assert.Contains(boundary.InterfaceIndex.ToString(), audit.Message);
         var resumed = engine.AdvanceCellWatch(world, procedure,
@@ -333,10 +348,7 @@ public sealed class Phase18CellWatchRuntimeTests
         var decision = Assert.Single(changed.Events,
             e => e.Kind == CrawlRuntimeEventKind.DirectionChanged);
         Assert.Equal(paused.Expedition.Traversal.CurrentCell, decision.Cell);
-        Assert.Null(decision.Hex);
         Assert.True(decision.ExpeditionElapsedTime >= paused.Expedition.ElapsedTravelTime);
-        Assert.DoesNotContain(changed.Events, e => e.Kind is
-            CrawlRuntimeEventKind.HexEntered or CrawlRuntimeEventKind.HexExited);
         Assert.Equal(changed.Expedition.History.Count,
             changed.Expedition.History.Select(e => e.Sequence).Distinct().Count());
     }
@@ -357,7 +369,7 @@ public sealed class Phase18CellWatchRuntimeTests
         var (world, _, state, plan) = Setup("<1:1,1,1:4,4>", calibrated: true);
         var encounter = new PendingEncounterOccurrence(Guid.NewGuid(), 1, 1,
             EncounterOutcomeKind.WanderingEncounter,
-            TimeSpan.Zero, null, null, null, Manual)
+            TimeSpan.Zero, null, null, Manual)
         { Cell = state.Traversal.CurrentCell };
         var current = state with
         {
@@ -371,8 +383,6 @@ public sealed class Phase18CellWatchRuntimeTests
             (current with { PendingEncounter = null }).Validate(world));
         Assert.Throws<InvalidOperationException>(() =>
             (current with { PendingEncounter = encounter with { Cell = null } }).Validate(world));
-        Assert.Throws<InvalidOperationException>(() =>
-            (current with { PendingEncounter = encounter with { Hex = new HexCoordinate(0, 0) } }).Validate(world));
         Assert.Throws<InvalidOperationException>(() =>
             (current with { ActiveWatch = current.ActiveWatch! with { PendingDecision = null } }).Validate(world));
     }
@@ -472,7 +482,6 @@ public sealed class Phase18CellWatchRuntimeTests
         Assert.Equal(RuntimePauseReason.EncounterTriggered, result.PauseReason);
         var pending = Assert.IsType<PendingEncounterOccurrence>(result.Expedition.PendingEncounter);
         Assert.Equal(result.Expedition.Traversal.CurrentCell, pending.Cell);
-        Assert.Null(pending.Hex);
         Assert.Equal(encounter.OccursAt, result.Expedition.ElapsedTravelTime);
         Assert.NotNull(result.Expedition.ActiveWatch);
         Assert.Throws<InvalidOperationException>(() => engine.AdvanceCellWatch(
@@ -561,7 +570,6 @@ public sealed class Phase18CellWatchRuntimeTests
         var pending = Assert.IsType<PendingEncounterOccurrence>(
             recognized.Expedition.PendingEncounter);
         Assert.Equal(recognized.Expedition.Traversal.CurrentCell, pending.Cell);
-        Assert.Null(pending.Hex);
         var triggered = Assert.Single(recognized.Events,
             e => e.Kind == CrawlRuntimeEventKind.EncounterTriggered);
         Assert.Equal(pending.Id, triggered.EncounterOccurrenceId);
@@ -603,7 +611,7 @@ public sealed class Phase18CellWatchRuntimeTests
 
     private static (PeriodicWorldTiling World, CampaignProcedure Procedure, CellExpeditionState State,
         CellWatchTravelPlan Plan) Setup(string symbol, bool calibrated, bool advanced = false,
-        TravelResolutionMode mode = TravelResolutionMode.CellSteps)
+        TravelResolutionMode mode = TravelResolutionMode.CellSteps, bool allowDoubleBack = false)
     {
         var generated = DelaneyDressHarmonicMetricRealization.Construct(symbol, 1.5, "world-unit");
         Assert.Equal("realized", generated.Status);
@@ -615,16 +623,23 @@ public sealed class Phase18CellWatchRuntimeTests
         world.Validate();
         var original = (advanced ? TestProcedureProfiles.AdvancedContinuous() : TestProcedureProfiles.FixedDistance()).Materialize();
         var modules = original.Modules
-            .Where(m => m.Mechanic.ExecutionHandler != GenericProcedureExecutionHandlers.HexProgressPolicy)
             .Select(m =>
             {
+                if (m.Mechanic.ExecutionHandler == GenericProcedureExecutionHandlers.SpatialTurnCostPolicy)
+                {
+                    var turn = m.Parameters.ToDictionary(x => x.Key, x => x.Value);
+                    if (mode == TravelResolutionMode.CellSteps)
+                        turn["neighborCenterDistanceFactor"] = "0";
+                    if (allowDoubleBack)
+                        turn["supportsDeliberateDoubleBack"] = "true";
+                    return m with { Parameters = turn };
+                }
                 if (m.Mechanic.ExecutionHandler != GenericProcedureExecutionHandlers.MovementResolutionPolicy)
                     return m;
                 var parameters = m.Parameters.ToDictionary(x => x.Key, x => x.Value);
                 parameters["travelResolution"] = mode.ToString();
                 parameters["actualDistanceResolution"] = ActualDistanceResolutionMode.Fixed.ToString();
-                parameters["tracksIntraHexProgress"] = "false";
-                return m with { Mechanic = m.Mechanic with { Version = 2 }, Parameters = parameters };
+                return m with { Parameters = parameters };
             }).ToArray();
         var procedure = original with
         {

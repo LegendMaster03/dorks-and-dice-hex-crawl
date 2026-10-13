@@ -173,7 +173,7 @@ public static partial class SourceMapApiEndpoints
             && !map.ContainsBakedGrid
             && !hasExistingWorldAnchors
             && TryCreateWonderdraftScaleAlignment(
-                world.World.Grid,
+                world.World.SpatialTiling,
                 map,
                 summary,
                 sourceScale,
@@ -187,8 +187,8 @@ public static partial class SourceMapApiEndpoints
         else if (alignment is null && map.ContainsBakedGrid)
         {
             registrationNote = summary.PhysicalScale is null
-                ? "The Wonderdraft source records were retained. The raster is marked as containing a baked grid, so Hex Crawl will use raster lattice detection for orientation, spacing, and phase instead of centering an unanchored map."
-                : "The Wonderdraft source records and physical scale were retained. Physical scale alone does not determine the baked grid's orientation or phase; use Detect / repair hex grid to align the raster lattice before semantic review.";
+                ? "The Wonderdraft source records were retained. The raster is marked as containing a baked grid, so Hex Crawl will use periodic motif detection for placement and scale instead of centering an unanchored map."
+                : "The Wonderdraft source records and physical scale were retained. Physical scale alone does not determine the baked grid's orientation or phase; use periodic motif registration to align the raster before semantic review.";
         }
         else if (alignment is null
             && hasExistingWorldAnchors
@@ -268,7 +268,7 @@ public static partial class SourceMapApiEndpoints
     }
 
     private static bool TryCreateWonderdraftScaleAlignment(
-        HexGridDefinition grid,
+        PeriodicWorldTiling tiling,
         SourceMapRepresentation map,
         WonderdraftProjectSummary summary,
         double sourceScale,
@@ -284,9 +284,10 @@ public static partial class SourceMapApiEndpoints
             return false;
         }
         if (!TryMetersPerUnit(scale.UnitLabel, out var sourceMetersPerUnit)
-            || grid.NeighborCenterDistance.Unit.MetersPerUnit is not { } worldMetersPerUnit
+            || tiling.PhysicalDistancePerWorldUnit is not { } physicalScale
+            || physicalScale.Unit.MetersPerUnit is not { } worldMetersPerUnit
             || worldMetersPerUnit <= 0
-            || grid.NeighborCenterDistance.Value <= 0)
+            || physicalScale.Value <= 0)
         {
             return false;
         }
@@ -295,9 +296,7 @@ public static partial class SourceMapApiEndpoints
             return false;
         }
 
-        var neighborWorldUnits = Math.Sqrt(3d) * grid.HexRadiusWorldUnits;
-        var metersPerWorldUnit =
-            (grid.NeighborCenterDistance.Value * worldMetersPerUnit) / neighborWorldUnits;
+        var metersPerWorldUnit = physicalScale.Value * worldMetersPerUnit;
         var metersPerRasterPixel =
             (scale.UnitsPerPixel * sourceMetersPerUnit) / sourceScale;
         var worldUnitsPerRasterPixel = metersPerRasterPixel / metersPerWorldUnit;
@@ -311,10 +310,10 @@ public static partial class SourceMapApiEndpoints
             0,
             0,
             worldUnitsPerRasterPixel,
-            grid.Origin.X - ((map.PixelWidth * worldUnitsPerRasterPixel) / 2d),
-            grid.Origin.Y - ((map.PixelHeight * worldUnitsPerRasterPixel) / 2d));
+            tiling.Origin.X - ((map.PixelWidth * worldUnitsPerRasterPixel) / 2d),
+            tiling.Origin.Y - ((map.PixelHeight * worldUnitsPerRasterPixel) / 2d));
         note =
-            $"The gridless raster was centered on the Hex Crawl grid origin and scaled from Wonderdraft's {scale.DistancePerSegment:g} {scale.UnitLabel} × {scale.SegmentCount} scale over {scale.PixelLength:g} project pixels.";
+            $"The unanchored raster was centered on the periodic world origin and scaled from Wonderdraft's {scale.DistancePerSegment:g} {scale.UnitLabel} × {scale.SegmentCount} scale over {scale.PixelLength:g} project pixels.";
         return true;
     }
 

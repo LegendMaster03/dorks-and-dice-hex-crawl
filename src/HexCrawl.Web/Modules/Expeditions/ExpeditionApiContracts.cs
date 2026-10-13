@@ -15,7 +15,7 @@ public sealed record PresentationProfileContract(
     GridVisibility PlayerGrid,
     TerrainPresentationMode TerrainMode,
     PresentationAutomationMode AutomationMode,
-    bool MarkEnteredHexKnown,
+    bool MarkEnteredCellKnown,
     IReadOnlyList<string> InitiallyKnownFeatureCategories,
     IReadOnlyList<string> InitiallyKnownLocationCategories,
     bool AllowPlayerAnnotations)
@@ -26,7 +26,7 @@ public sealed record PresentationProfileContract(
         policy.PlayerGrid,
         policy.TerrainMode,
         policy.AutomationMode,
-        policy.MarkEnteredHexKnown,
+        policy.MarkEnteredCellKnown,
         policy.InitiallyKnownFeatureCategories,
         policy.InitiallyKnownLocationCategories,
         policy.AllowPlayerAnnotations);
@@ -38,7 +38,6 @@ public sealed record PendingEncounterContract(
     int WatchNumber,
     EncounterOutcomeKind Outcome,
     double ExpeditionElapsedHours,
-    HexCoordinate? Hex,
     Guid? LocationId,
     string? Note)
 {
@@ -48,26 +47,18 @@ public sealed record PendingEncounterContract(
     public static PendingEncounterContract? From(PendingEncounterOccurrence? occurrence) =>
         occurrence is null ? null : new PendingEncounterContract(
             occurrence.Id, occurrence.TriggerSequence, occurrence.WatchNumber, occurrence.Outcome,
-            occurrence.ExpeditionElapsedTime.TotalHours, occurrence.Hex, occurrence.LocationId, occurrence.Note)
+            occurrence.ExpeditionElapsedTime.TotalHours, occurrence.LocationId, occurrence.Note)
         { Cell = occurrence.Cell };
 }
 
 public sealed record WorkbenchExpeditionStateContract(
     Guid Id,
     bool IsSpatial,
-    HexCoordinate? CurrentHex,
     WorldPoint? Position,
     WorldPositionPrecision? PositionPrecision,
-    int? EntryDirection,
-    int? LastTravelDirection,
-    int? IntendedDirection,
-    int? ActualDirection,
     bool? IsLost,
-    int? VeerSteps,
     double? VeerDegrees,
     DistanceContract? DistanceTraveled,
-    DistanceContract? HexProgress,
-    DistanceContract? ExitRequirement,
     double ElapsedTravelHours,
     int CurrentDay,
     int CompletedWatches,
@@ -88,8 +79,7 @@ public sealed record WorkbenchExpeditionStateContract(
     bool? ActiveEncounterHandled,
     PendingEncounterContract? PendingEncounter)
 {
-    // Additive qualified-cell authority. These fields are absent from legacy
-    // hex and nonspatial JSON rather than populated with invented coordinates.
+    // Qualified-cell fields are present for spatial expeditions only.
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public WorldCellId? CurrentCell { get; init; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -101,99 +91,45 @@ public sealed record WorkbenchExpeditionStateContract(
 
     public static WorkbenchExpeditionStateContract From(CrawlSessionRuntimeState runtime) => runtime switch
     {
-        ExpeditionState expedition => new(
-            expedition.Id,
-            true,
-            expedition.CurrentHex,
-            expedition.Position,
-            expedition.PositionPrecision,
-            expedition.Traversal.EntryDirection?.Value,
-            expedition.Traversal.LastTravelDirection?.Value,
-            expedition.IntendedDirection?.Value,
-            expedition.ActualDirection?.Value,
-            expedition.Navigation.IsLost,
-            expedition.Navigation.VeerSteps,
-            expedition.Navigation.VeerDegrees,
-            DistanceContract.From(expedition.DistanceTraveled),
-            DistanceContract.From(expedition.Traversal.Progress),
-            expedition.Traversal.CurrentExitRequirement is { } requirement ? DistanceContract.From(requirement) : null,
-            expedition.ElapsedTravelTime.TotalHours,
-            (int)Math.Floor(expedition.ElapsedTravelTime.TotalDays) + 1,
-            expedition.CompletedWatches,
-            expedition.ActiveWatch?.WatchNumber,
-            expedition.ActiveWatch?.TotalDuration.TotalHours,
-            expedition.ActiveWatch?.Elapsed.TotalHours,
-            expedition.ActiveWatch?.Remaining.TotalHours,
-            expedition.ActiveWatch?.PendingDecision,
-            expedition.ActiveWatch?.Plan.Mode.PaceKey,
-            expedition.ActiveWatch?.Plan.Mode.ActivityAssignments
-                .Select(ParticipantActivityAssignmentContract.From)
-                .ToArray() ?? [],
-            expedition.ActiveWatch?.Plan.NavigationAid.Key,
-            expedition.ActiveWatch?.Plan.NavigationAid.SuppressesNavigationCheck ?? false,
-            expedition.ActiveWatch?.Plan.NavigationAid.ResetsVeerAtBoundary ?? false,
-            expedition.ActiveWatch?.Plan.DeliberateDoubleBack ?? false,
-            expedition.ActiveWatch?.Plan.ContinueAcrossBoundaries ?? false,
-            expedition.ActiveWatch?.Encounter.Kind,
-            expedition.ActiveWatch?.Encounter.OccursAt?.TotalHours,
-            expedition.ActiveWatch?.EncounterHandled,
-            PendingEncounterContract.From(expedition.PendingEncounter)),
         CellExpeditionState cells => FromCells(cells),
         NonSpatialSessionState nonSpatial => new(
-            nonSpatial.Id,
-            false,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            nonSpatial.ElapsedTime.TotalHours,
-            (int)Math.Floor(nonSpatial.ElapsedTime.TotalDays) + 1,
-            nonSpatial.CompletedWatches,
-            nonSpatial.ActiveWatch?.WatchNumber,
-            nonSpatial.ActiveWatch?.TotalDuration.TotalHours,
-            nonSpatial.ActiveWatch?.Elapsed.TotalHours,
-            nonSpatial.ActiveWatch?.Remaining.TotalHours,
-            null,
-            null,
-            nonSpatial.ActiveWatch?.ActivityAssignments
-                .Select(ParticipantActivityAssignmentContract.From)
-                .ToArray() ?? [],
-            null,
-            false,
-            false,
-            false,
-            false,
-            null,
-            null,
-            null,
-            PendingEncounterContract.From(nonSpatial.PendingEncounter)),
+            Id: nonSpatial.Id,
+            IsSpatial: false,
+            Position: null,
+            PositionPrecision: null,
+            IsLost: null,
+            VeerDegrees: null,
+            DistanceTraveled: null,
+            ElapsedTravelHours: nonSpatial.ElapsedTime.TotalHours,
+            CurrentDay: (int)Math.Floor(nonSpatial.ElapsedTime.TotalDays) + 1,
+            CompletedWatches: nonSpatial.CompletedWatches,
+            ActiveWatchNumber: nonSpatial.ActiveWatch?.WatchNumber,
+            ActiveWatchTotalHours: nonSpatial.ActiveWatch?.TotalDuration.TotalHours,
+            ActiveWatchElapsedHours: nonSpatial.ActiveWatch?.Elapsed.TotalHours,
+            ActiveWatchRemainingHours: nonSpatial.ActiveWatch?.Remaining.TotalHours,
+            ActiveWatchPendingDecision: null,
+            ActivePaceKey: null,
+            ActiveActivityAssignments: nonSpatial.ActiveWatch?.ActivityAssignments
+                .Select(ParticipantActivityAssignmentContract.From).ToArray() ?? [],
+            ActiveNavigationAidKey: null,
+            ActiveSuppressesNavigationCheck: false,
+            ActiveResetsVeerAtBoundary: false,
+            ActiveDeliberateDoubleBack: false,
+            ActiveContinueAcrossBoundaries: false,
+            ActiveEncounterKind: null,
+            ActiveEncounterHour: null,
+            ActiveEncounterHandled: null,
+            PendingEncounter: PendingEncounterContract.From(nonSpatial.PendingEncounter)),
         _ => throw new ArgumentOutOfRangeException(nameof(runtime))
     };
     private static WorkbenchExpeditionStateContract FromCells(CellExpeditionState cells) => new(
         Id: cells.Id,
         IsSpatial: true,
-        CurrentHex: null,
         Position: cells.Traversal.Position,
         PositionPrecision: WorldPositionPrecision.Exact,
-        EntryDirection: null,
-        LastTravelDirection: null,
-        IntendedDirection: null,
-        ActualDirection: null,
         IsLost: cells.IsLost,
-        VeerSteps: null,
         VeerDegrees: cells.ResolvedVeerDegrees,
         DistanceTraveled: cells.DistanceTraveled is { } distance ? DistanceContract.From(distance) : null,
-        HexProgress: null,
-        ExitRequirement: null,
         ElapsedTravelHours: cells.ElapsedTravelTime.TotalHours,
         CurrentDay: (int)Math.Floor(cells.ElapsedTravelTime.TotalDays) + 1,
         CompletedWatches: cells.CompletedWatches,
@@ -226,30 +162,17 @@ public sealed record CrawlContextContract(
     CrawlSessionContextKind Kind,
     string Name,
     Guid? OverworldId,
-    HexOrientation? Orientation,
-    DistanceContract? HexCenterDistance)
+    PeriodicWorldTiling? Tiling)
 {
     public static CrawlContextContract From(CrawlSessionContext context, OverworldDefinition? world = null) => context switch
     {
         WorldBoundCrawlSessionContext worldContext => new(
-            context.Kind,
-            world?.Name ?? "World-bound crawl",
-            worldContext.WorldId,
-            world is { HasLegacyHexGrid: true } ? world.Grid.Orientation : null,
-            world is { HasLegacyHexGrid: true }
-                ? DistanceContract.From(world.Grid.NeighborCenterDistance) : null),
-        AbstractHexCrawlSessionContext abstractContext => new(
-            context.Kind,
-            abstractContext.DisplayName,
-            null,
-            abstractContext.Orientation,
-            DistanceContract.From(abstractContext.HexContext.HexCenterDistance)),
+            context.Kind, world?.Name ?? "World-bound crawl",
+            worldContext.WorldId, world?.SpatialTiling),
+        MaplessSpatialCrawlSessionContext mapless => new(
+            context.Kind, mapless.DisplayName, null, mapless.Tiling),
         NonSpatialCrawlSessionContext nonSpatial => new(
-            context.Kind,
-            nonSpatial.DisplayName,
-            null,
-            null,
-            null),
+            context.Kind, nonSpatial.DisplayName, null, null),
         _ => throw new ArgumentOutOfRangeException(nameof(context))
     };
 }
@@ -289,7 +212,6 @@ public sealed record ExpeditionWorkbenchContract(
     ExpeditionPartyContract Party,
     ParticipantActivityPolicyContract ParticipantActivityPolicy,
     MovementCapabilityCompositionContract MovementComposition,
-    IReadOnlyList<HexCoordinate> KnownHexes,
     IReadOnlyList<KnowledgeEntryContract> Knowledge,
     IReadOnlyList<RuntimeEventContract> History)
 {
@@ -322,7 +244,6 @@ public sealed record ExpeditionWorkbenchContract(
                 ParticipantActivityPolicyResolver.Resolve(expedition.CampaignProcedure)),
             MovementCapabilityCompositionContract.From(
                 MovementCapabilityComposer.Compose(expedition)),
-            expedition.Knowledge?.KnownHexes ?? [],
             expedition.Knowledge?.Entries.Values
                 .OrderBy(item => item.SubjectType)
                 .ThenBy(item => item.SubjectId)
@@ -340,199 +261,28 @@ public sealed record ExpeditionWorkbenchContract(
 public sealed record StandaloneCrawlContextRequest(
     CrawlSessionContextKind Kind,
     string? Name = null,
-    HexOrientation? Orientation = null,
-    double? HexCenterDistance = null,
+    double? PhysicalDistancePerWorldUnit = null,
     DistanceUnitContract? DistanceUnit = null)
 {
-    public CrawlSessionContext ToDomain() => Kind switch
+    public NonSpatialCrawlSessionContext ToNonSpatial() =>
+        Kind == CrawlSessionContextKind.NonSpatial
+            ? new NonSpatialCrawlSessionContext(
+                string.IsNullOrWhiteSpace(Name) ? "Non-spatial session" : Name.Trim())
+            : throw new ArgumentException("This endpoint starts nonspatial sessions only.");
+
+    public MaplessSpatialStartOptions ToMaplessOptions()
     {
-        CrawlSessionContextKind.AbstractHex => new AbstractHexCrawlSessionContext(
-            string.IsNullOrWhiteSpace(Name) ? "Abstract hex crawl" : Name.Trim(),
-            Orientation ?? HexOrientation.PointyTop,
-            new CrawlRuntimeContext(new DistanceMeasure(
-                HexCenterDistance is > 0 and < double.PositiveInfinity
-                    ? HexCenterDistance.Value
-                    : throw new ArgumentException("Abstract-hex context requires a positive finite hex-center distance."),
-                (DistanceUnit ?? throw new ArgumentException(
-                    "Abstract-hex context requires an explicit distance unit.")).ToDomain()))),
-        CrawlSessionContextKind.NonSpatial => new NonSpatialCrawlSessionContext(
-            string.IsNullOrWhiteSpace(Name) ? "Non-spatial session" : Name.Trim()),
-        CrawlSessionContextKind.WorldBound => throw new ArgumentException(
-            "World-bound sessions must be started through an overworld endpoint."),
-        _ => throw new ArgumentOutOfRangeException(nameof(Kind))
-    };
-}
-
-public sealed record StartStandaloneCrawlSessionRequest(
-    string Name,
-    string ProcedureKey,
-    StandaloneCrawlContextRequest Context,
-    HexCoordinate? StartHex = null)
-{
-    public StartStandaloneCrawlSessionCommand ToCommand() => new(
-        Name,
-        ProcedureKey,
-        Context.ToDomain(),
-        StartHex);
-}
-
-public sealed record StartExpeditionWorkbenchRequest(
-    string Name,
-    string ProcedureKey,
-    HexCoordinate StartHex,
-    string? PresentationKey = null)
-{
-    public StartExpeditionWorkbenchCommand ToCommand() => new(
-        Name,
-        ProcedureKey,
-        string.IsNullOrWhiteSpace(PresentationKey) ? "exploration-map" : PresentationKey.Trim(),
-        StartHex);
-}
-
-public sealed record AdvanceExpeditionWorkbenchRequest
-{
-    public long ExpectedVersion { get; init; }
-    public int IntendedDirection { get; init; }
-    public string PaceKey { get; init; } = "normal";
-    public string NavigationAidKey { get; init; } = "none";
-    public bool SuppressesNavigationCheck { get; init; }
-    public bool ResetsVeerAtBoundary { get; init; }
-    public double? EffectiveDistance { get; init; }
-    public double? ExpectedDistance { get; init; }
-    public double? ActualDistance { get; init; }
-    public int? HexSteps { get; init; }
-    public ResolutionSource ResolutionSource { get; init; } = ResolutionSource.ManualRoll;
-    public ResolutionSource? TravelResolutionSource { get; init; }
-    public string? TravelResolutionNote { get; init; }
-    public ResolutionSource? NavigationResolutionSource { get; init; }
-    public string? NavigationResolutionNote { get; init; }
-    public ResolutionSource? EncounterResolutionSource { get; init; }
-    public string? EncounterResolutionNote { get; init; }
-    public ResolutionSource? BoundaryResolutionSource { get; init; }
-    public string? BoundaryResolutionNote { get; init; }
-    public NavigationCheckOutcome? NavigationOutcome { get; init; }
-    public int? VeerSteps { get; init; }
-    public EncounterOutcomeKind? EncounterOutcome { get; init; }
-    public double? EncounterHour { get; init; }
-    public Guid? LocationId { get; init; }
-    public string? EncounterNote { get; init; }
-    public bool DeliberateDoubleBack { get; init; }
-    public bool ContinueAcrossBoundaries { get; init; }
-    public bool? RecognizedLost { get; init; }
-    public bool? Reorient { get; init; }
-    public string? DmOverrideNote { get; init; }
-    public Guid? GeneratedProcedureResolutionId { get; init; }
-
-    public AdvanceExpeditionWorkbenchCommand ToCommand() => new()
-    {
-        ExpectedVersion = ExpectedVersion,
-        IntendedDirection = IntendedDirection,
-        PaceKey = PaceKey,
-        NavigationAidKey = NavigationAidKey,
-        SuppressesNavigationCheck = SuppressesNavigationCheck,
-        ResetsVeerAtBoundary = ResetsVeerAtBoundary,
-        EffectiveDistance = EffectiveDistance,
-        ExpectedDistance = ExpectedDistance,
-        ActualDistance = ActualDistance,
-        HexSteps = HexSteps,
-        ResolutionSource = ResolutionSource,
-        TravelResolutionSource = TravelResolutionSource,
-        TravelResolutionNote = TravelResolutionNote,
-        NavigationResolutionSource = NavigationResolutionSource,
-        NavigationResolutionNote = NavigationResolutionNote,
-        EncounterResolutionSource = EncounterResolutionSource,
-        EncounterResolutionNote = EncounterResolutionNote,
-        BoundaryResolutionSource = BoundaryResolutionSource,
-        BoundaryResolutionNote = BoundaryResolutionNote,
-        NavigationOutcome = NavigationOutcome,
-        VeerSteps = VeerSteps,
-        EncounterOutcome = EncounterOutcome,
-        EncounterHour = EncounterHour,
-        LocationId = LocationId,
-        EncounterNote = EncounterNote,
-        DeliberateDoubleBack = DeliberateDoubleBack,
-        ContinueAcrossBoundaries = ContinueAcrossBoundaries,
-        RecognizedLost = RecognizedLost,
-        Reorient = Reorient,
-        DmOverrideNote = DmOverrideNote,
-        GeneratedProcedureResolutionId = GeneratedProcedureResolutionId
-    };
-}
-
-public sealed record ResolveEncounterRequest(
-    long ExpectedVersion,
-    ResolutionSource ResolutionSource = ResolutionSource.DmOverride,
-    string? ResolutionNote = null,
-    string? ResultNote = null)
-{
-    public ResolveEncounterCommand ToCommand(Guid occurrenceId) => new(
-        ExpectedVersion, occurrenceId, ResolutionSource, ResolutionNote, ResultNote);
-}
-
-public sealed record ResolveBoundaryDecisionRequest(
-    long ExpectedVersion,
-    bool RecognizedLost,
-    bool Reorient,
-    ResolutionSource ResolutionSource = ResolutionSource.ManualRoll,
-    string? ResolutionNote = null)
-{
-    public ResolveBoundaryDecisionWorkbenchCommand ToCommand() => new(
-        ExpectedVersion,
-        RecognizedLost,
-        Reorient,
-        ResolutionSource,
-        ResolutionNote);
-}
-
-public sealed record SetExpeditionCourseIntentRequest(
-    long ExpectedVersion,
-    int? IntendedDirection)
-{
-    public SetExpeditionCourseIntentCommand ToCommand() => new(
-        ExpectedVersion,
-        IntendedDirection);
-}
-
-public sealed record RepositionExpeditionRequest(
-    long ExpectedVersion,
-    HexCoordinate TargetHex,
-    string? Note = null)
-{
-    public RepositionExpeditionCommand ToCommand() => new(
-        ExpectedVersion,
-        TargetHex,
-        Note);
-}
-
-public sealed record TravelWatchAssistantRequest(
-    long ExpectedVersion,
-    double ElapsedHours,
-    double? Distance,
-    int? HexSteps,
-    HexCoordinate ResultingHex,
-    double? HexProgress,
-    int? IntendedDirection,
-    int? ActualDirection,
-    bool CompleteWatch,
-    ResolutionSource ResolutionSource = ResolutionSource.ManualRoll,
-    string? ResolutionNote = null,
-    string? Note = null)
-{
-    public TravelWatchAssistantCommand ToCommand() => new()
-    {
-        ExpectedVersion = ExpectedVersion,
-        ElapsedHours = ElapsedHours,
-        Distance = Distance,
-        HexSteps = HexSteps,
-        ResultingHex = ResultingHex,
-        HexProgress = HexProgress,
-        IntendedDirection = IntendedDirection,
-        ActualDirection = ActualDirection,
-        CompleteWatch = CompleteWatch,
-        ResolutionSource = ResolutionSource,
-        ResolutionNote = ResolutionNote,
-        Note = Note
-    };
+        if (Kind != CrawlSessionContextKind.MaplessSpatial)
+            throw new ArgumentException("This endpoint starts mapless spatial sessions only.");
+        if (PhysicalDistancePerWorldUnit is not { } distance
+            || !double.IsFinite(distance) || distance <= 0)
+            throw new ArgumentException("Mapless physical distance per world unit must be finite and positive.");
+        var units = (DistanceUnit ?? throw new ArgumentException(
+            "Mapless spatial scale requires an explicit physical unit.")).ToDomain();
+        return new MaplessSpatialStartOptions(
+            string.IsNullOrWhiteSpace(Name) ? "Mapless exploration" : Name.Trim(),
+            new DistanceMeasure(distance, units));
+    }
 }
 
 public sealed record NonSpatialWatchAssistantRequest(
@@ -546,44 +296,6 @@ public sealed record NonSpatialWatchAssistantRequest(
     {
         ExpectedVersion = ExpectedVersion,
         ElapsedHours = ElapsedHours,
-        ResolutionSource = ResolutionSource,
-        ResolutionNote = ResolutionNote,
-        Note = Note
-    };
-}
-
-public sealed record NavigationAssistantRequest(
-    long ExpectedVersion,
-    bool IsLost,
-    int VeerSteps,
-    int? IntendedDirection,
-    ResolutionSource ResolutionSource = ResolutionSource.ManualRoll,
-    string? ResolutionNote = null,
-    string? Note = null)
-{
-    public NavigationAssistantCommand ToCommand() => new()
-    {
-        ExpectedVersion = ExpectedVersion,
-        IsLost = IsLost,
-        VeerSteps = VeerSteps,
-        IntendedDirection = IntendedDirection,
-        ResolutionSource = ResolutionSource,
-        ResolutionNote = ResolutionNote,
-        Note = Note
-    };
-}
-
-public sealed record EncounterCadenceAssistantRequest(
-    long ExpectedVersion,
-    EncounterOutcomeKind Outcome,
-    ResolutionSource ResolutionSource = ResolutionSource.ManualRoll,
-    string? ResolutionNote = null,
-    string? Note = null)
-{
-    public EncounterCadenceAssistantCommand ToCommand() => new()
-    {
-        ExpectedVersion = ExpectedVersion,
-        Outcome = Outcome,
         ResolutionSource = ResolutionSource,
         ResolutionNote = ResolutionNote,
         Note = Note

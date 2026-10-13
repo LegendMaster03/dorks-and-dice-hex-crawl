@@ -14,15 +14,7 @@ public sealed class Phase9ReviewRegressionTests
         {
             Id = Guid.NewGuid(),
             Name = "Trimmed dimension world",
-            Grid = new HexGridDefinition
-            {
-                Id = Guid.NewGuid(),
-                Orientation = HexOrientation.PointyTop,
-                Origin = new WorldPoint(0, 0),
-                RotationDegrees = 0,
-                HexRadiusWorldUnits = 1,
-                NeighborCenterDistance = new DistanceMeasure(12, DistanceUnit.Miles)
-            },
+            Tiling = MaplessSessionFixture.Start().World,
             EnvironmentAnnotations =
             [
                 new EnvironmentAnnotation
@@ -39,12 +31,7 @@ public sealed class Phase9ReviewRegressionTests
             .MaterializeGeneric().Procedure;
         var expedition = new StoredExpedition(
             "Trimmed dimension expedition",
-            new ExpeditionState
-            {
-                Id = Guid.NewGuid(),
-                Traversal = HexTraversalState.StartingIn(new HexCoordinate(0, 0), DistanceUnit.Miles),
-                DistanceTraveled = new DistanceMeasure(0, DistanceUnit.Miles)
-            },
+            PeriodicCourseFixture.StartingState(world.SpatialTiling),
             new WorldBoundCrawlSessionContext(world.Id),
             null,
             procedure,
@@ -166,26 +153,13 @@ public sealed class Phase9ReviewRegressionTests
         {
             Id = Guid.NewGuid(),
             Name = "Phase 9 review world",
-            Grid = new HexGridDefinition
-            {
-                Id = Guid.NewGuid(),
-                Orientation = HexOrientation.PointyTop,
-                Origin = new WorldPoint(0, 0),
-                RotationDegrees = 0,
-                HexRadiusWorldUnits = 1,
-                NeighborCenterDistance = new DistanceMeasure(12, DistanceUnit.Miles)
-            }
+            Tiling = MaplessSessionFixture.Start().World
         };
         var now = DateTimeOffset.UtcNow;
         var procedure = CrawlProcedureCatalog.Resolve(procedureKey).MaterializeGeneric().Procedure;
         var expedition = new StoredExpedition(
             "Phase 9 review expedition",
-            new ExpeditionState
-            {
-                Id = Guid.NewGuid(),
-                Traversal = HexTraversalState.StartingIn(new HexCoordinate(0, 0), DistanceUnit.Miles),
-                DistanceTraveled = new DistanceMeasure(0, DistanceUnit.Miles)
-            },
+            PeriodicCourseFixture.StartingState(world.SpatialTiling),
             new WorldBoundCrawlSessionContext(world.Id),
             null,
             procedure,

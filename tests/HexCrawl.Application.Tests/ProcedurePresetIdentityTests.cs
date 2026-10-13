@@ -1,5 +1,6 @@
 using HexCrawl.Application.Persistence;
 using HexCrawl.Domain.Runtime;
+using HexCrawl.Domain.Procedure;
 using HexCrawl.Infrastructure.Persistence;
 
 namespace HexCrawl.Application.Tests;
@@ -7,7 +8,7 @@ namespace HexCrawl.Application.Tests;
 public sealed class ProcedurePresetIdentityTests
 {
     [Fact]
-    public void CatalogRegistersOneDefinitionPerPresetInStableOrder()
+    public void CatalogRegistersAllIndividualPresetsInStableOrder()
     {
         string[] expected =
         [
@@ -23,13 +24,17 @@ public sealed class ProcedurePresetIdentityTests
             CrawlProcedureCatalog.Pathfinder2eHexplorationPresetKey,
             CrawlProcedureCatalog.ForbiddenLandsPresetKey,
             CrawlProcedureCatalog.WorldsWithoutNumberPresetKey,
-            CrawlProcedureCatalog.OneRing2ePresetKey,        ];
+            CrawlProcedureCatalog.OneRing2ePresetKey
+        ];
+
         var actual = CrawlProcedureCatalog.Catalog.Select(preset => preset.PresetKey).ToArray();
         Assert.Equal(expected, actual);
         Assert.Equal(actual.Length, actual.Distinct(StringComparer.Ordinal).Count());
+
         foreach (var preset in CrawlProcedureCatalog.Catalog)
         {
             preset.Validate();
+            Assert.Equal(CampaignProcedureSchema.CurrentHexTilingDsSymbol, preset.Recipe.TilingDsSymbol);
             var materialized = preset.MaterializeGeneric();
             materialized.Procedure.Validate();
             Assert.Equal(preset.PresetKey, materialized.Origin?.PresetKey);
@@ -93,14 +98,9 @@ public sealed class ProcedurePresetIdentityTests
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = new PostgresHexCrawlStore(database.ConnectionString);
         await store.InitializeAsync();
-        var service = new CrawlSessionService(store);
+        var service = new ExpeditionStartService(store, new HexCrawlService(store), new CampaignProcedureService(store));
 
-        var started = await service.StartAsync(
-            "alice",
-            new StartStandaloneCrawlSessionCommand(
-                "Origin independence",
-                "simple-fixed-distance",
-                new NonSpatialCrawlSessionContext("Procedure clock")));
+        var started = await service.StartNonSpatialAsync("alice", "Origin independence", new ProcedureStartSelection(PresetKey: "simple-fixed-distance"), new NonSpatialCrawlSessionContext("Procedure clock"));
         var pinned = started.CampaignProcedure;
         var runtimeBefore = GenericProcedureRuntime.Bind(pinned);
 
@@ -123,7 +123,7 @@ public sealed class ProcedurePresetIdentityTests
         Assert.Equal(expected.Name, actual.Name);
         Assert.Equal(expected.Time, actual.Time);
         Assert.Equal(expected.Movement, actual.Movement);
-        Assert.Equal(expected.HexProgress, actual.HexProgress);
+        Assert.Equal(expected.TurnPolicy, actual.TurnPolicy);
         Assert.Equal(expected.Navigation, actual.Navigation);
         Assert.Equal(expected.Encounters, actual.Encounters);
         Assert.Equal(expected.ResolutionHelpers, actual.ResolutionHelpers);

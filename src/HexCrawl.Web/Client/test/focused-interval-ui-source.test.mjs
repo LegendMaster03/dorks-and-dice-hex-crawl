@@ -21,18 +21,19 @@ test("unified non-spatial expedition gates interval work on focused interval sup
 });
 
 test("focused utility separates non-spatial interval bookkeeping from full runtime execution", () => {
-    assert.match(assistant, /mode === "travel" && !runtime\.expedition\.isSpatial/);
-    assert.match(assistant, /return canUseFocusedNonSpatialWatch\(runtime\)/);
-    assert.match(assistant, /function nonSpatialWatchForm[\s\S]*requireFocusedIntervalHours\(runtime\)/);
-    assert.match(assistant, /function travelForm[\s\S]*requireProcedureRuntime\(runtime\)/);
-    assert.match(assistant, /function navigationForm[\s\S]*spatialState\(runtime\)/);
-    assert.match(assistant, /function encounterForm[\s\S]*requireProcedureRuntime\(runtime\)/);
+    assert.match(assistant, /if \(runtime\.expedition\.isSpatial\)/);
+    assert.match(assistant, /canUseFocusedNonSpatialWatch\(runtime\)/);
+    assert.match(assistant, /focusedIntervalHours\(runtime\)/);
+    assert.match(assistant, /api\.recordWatchAssistant\(runtime\.id/);
+    assert.match(assistant, /api\.recordEncounterAssistant\(runtime\.id/);
+    assert.doesNotMatch(assistant, /function travelForm|function navigationForm|resultingHex|veerSteps/);
 });
 
 test("non-spatial utility status distinguishes executable procedures from structural focused capability", () => {
     assert.match(assistant, /focusedIntervalProcedurePresentation\(runtime\)/);
-    assert.match(assistant, /statusCell\("Ruleset", focusedPresentation\.procedureLabel\)/);
-    assert.match(assistant, /execution\s*\? statusCell\("Execution", focusedPresentation\.executionLabel\)\s*:\s*statusCell\("Focused interval", "Supported"\)/);
+    assert.match(assistant, /statusCell\("Ruleset", presentation\.procedureLabel\)/);
+    assert.match(assistant, /statusCell\("Execution", presentation\.executionLabel\)/);
+    assert.match(assistant, /statusCell\("Focused interval", canUseFocusedNonSpatialWatch\(runtime\)/);
     assert.doesNotMatch(
         assistant,
         /statusCell\("Ruleset", `\$\{runtime\.procedure\.name\} · structural`\),\s*statusCell\("Focused interval", "Supported"\)/s);

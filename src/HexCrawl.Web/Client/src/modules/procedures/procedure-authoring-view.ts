@@ -785,8 +785,8 @@ export async function renderProcedureAuthoringWorkspace(
         const groups: Array<{ title: string; description: string; keys: string[] }> = [
             {
                 title: "Travel, course, and pace",
-                description: "Set travel periods, activities and roles, movement budget or pace, terrain and routes, movement resolution, and partial cell progress.",
-                keys: ["time.interval", "party.activities", "movement.budget", "movement.terrain", "movement.resolution", "movement.hex-progress"]
+                description: "Set travel periods, activities and roles, movement budget or pace, terrain and routes, movement resolution, and turning effort.",
+                keys: ["time.interval", "party.activities", "movement.budget", "movement.terrain", "movement.resolution", "movement.turn-cost"]
             },
             {
                 title: "Navigation",
@@ -821,7 +821,7 @@ export async function renderProcedureAuthoringWorkspace(
             module.moduleKey === "movement.resolution"
             || module.moduleKey === "movement.budget"
             || module.moduleKey === "movement.terrain"
-            || module.moduleKey === "movement.hex-progress");
+            || module.moduleKey === "movement.turn-cost");
 
         for (const group of groups) {
             const rules = group.keys
@@ -1423,7 +1423,7 @@ function presetComparison(preset: ProcedurePreset): Record<string, string> {
         : interval === 24 ? "Daily" : interval === 1 ? "Hourly" : `${formatNumber(interval)} hours`;
     const movement = modules.has("movement.terrain")
         ? "Terrain-adjusted"
-        : parameter("movement.resolution", "travelResolution") === "HexSteps" ? "Whole cell steps"
+        : parameter("movement.resolution", "travelResolution") === "CellSteps" ? "Whole cell steps"
             : modules.has("movement.resolution") ? "Distance travel" : "Not used";
     const navigation = modules.has("navigation.outcome")
         ? "Getting lost / recovery"

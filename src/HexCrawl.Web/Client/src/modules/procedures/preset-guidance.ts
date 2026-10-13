@@ -28,11 +28,6 @@ export function presetGuidance(procedure: CampaignProcedure): PresetGuidance {
 
     const timeActive = get("time.interval") !== null;
     const movementResolutionActive = activeToken(parameter("movement.resolution", "travelResolution"));
-    const tracksIntraHexProgress = bool(parameter("movement.resolution", "tracksIntraHexProgress"));
-    const hexProgressActive = get("movement.hex-progress") !== null && (
-        tracksIntraHexProgress
-        || bool(parameter("movement.hex-progress", "directionChangesCostProgress"))
-        || bool(parameter("movement.hex-progress", "supportsDeliberateDoubleBack")));
     const movementBudgetActive = activeToken(parameter("movement.budget", "budgetModel"));
     const terrainActive = activeToken(parameter("movement.terrain", "adjustmentModel"));
 
@@ -85,7 +80,6 @@ export function presetGuidance(procedure: CampaignProcedure): PresetGuidance {
         activeModules([
             [timeActive, get("time.interval")],
             [movementResolutionActive, get("movement.resolution")],
-            [hexProgressActive, get("movement.hex-progress")],
             [movementBudgetActive, get("movement.budget")],
             [terrainActive, get("movement.terrain")]
         ]),
@@ -138,7 +132,7 @@ export function presetGuidance(procedure: CampaignProcedure): PresetGuidance {
         false);
 
     const spatialTravelActive =
-        movementResolutionActive || hexProgressActive || movementBudgetActive || terrainActive;
+        movementResolutionActive || movementBudgetActive || terrainActive;
     const travelActive = timeActive || spatialTravelActive;
     const navigationActive = navigationCheckActive || navigationOutcomeActive;
     const survivalActive =

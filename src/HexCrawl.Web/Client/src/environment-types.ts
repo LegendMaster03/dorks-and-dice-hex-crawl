@@ -1,9 +1,9 @@
-import type { HexCoordinate, MovementCapabilityComposition, WorldCellId } from "./types";
+import type { MovementCapabilityComposition, WorldCellId } from "./types";
 
 export type EnvironmentValueKind = "Tag" | "Measurement";
-export type EnvironmentAnnotationScopeKind = "World" | "Hex" | "SpatialFeature" | "Cell";
+export type EnvironmentAnnotationScopeKind = "World" | "SpatialFeature" | "Cell";
 export type EnvironmentContextStatus = "Resolved" | "RequiresAdjudication" | "Unavailable";
-export type EnvironmentFactSourceKind = "World" | "Hex" | "SpatialFeature" | "ExpeditionCurrent" | "DmOverride" | "Cell";
+export type EnvironmentFactSourceKind = "World" | "SpatialFeature" | "ExpeditionCurrent" | "DmOverride" | "Cell";
 export type EnvironmentProcedureEvaluationStatus = "Resolved" | "Partial" | "RequiresAdjudication";
 
 export type EnvironmentMeasurement = {
@@ -23,10 +23,8 @@ export type EnvironmentFact = {
 
 export type EnvironmentAnnotationScope = {
     kind: EnvironmentAnnotationScopeKind;
-    hex: HexCoordinate | null;
     featureId: string | null;
-    /** Omitted by older/hex APIs; required by server validation for Cell scope. */
-    cell?: WorldCellId | null;
+    cell: WorldCellId | null;
 };
 
 export type EnvironmentAnnotation = {
@@ -44,7 +42,6 @@ export type WorldEnvironment = {
 export type EnvironmentFactSource = {
     kind: EnvironmentFactSourceKind;
     annotationId: string | null;
-    hex: HexCoordinate | null;
     featureId: string | null;
     featureName: string | null;
     /** Qualified source cell, never substituted with a hex coordinate. */

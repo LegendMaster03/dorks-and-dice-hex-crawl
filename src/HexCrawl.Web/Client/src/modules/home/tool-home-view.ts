@@ -2,14 +2,14 @@ import type { HexCrawlApi } from "../../api";
 import { ProcedureComposerApi } from "../../procedure-composer-api";
 import { customUnitFieldsVisible } from "../worlds/world-form";
 import type { DistanceUnitKind } from "../worlds/world-form";
-import type { ExpeditionSummary, OverworldSummary, ProcedurePreset, StartStandaloneCrawlSessionInput } from "../../types";
+import type { ExpeditionSummary, Overworld, OverworldSummary, ProcedurePreset, StartStandaloneCrawlSessionInput } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
 import { campaignProcedureSummary, renderProcedureMechanicList } from "../../campaign-procedure-view";
 import { input, integer, numeric, option, required, select } from "../../ui/dom";
 import { applyGuidedExperience, attachFieldHelp, guidedExperienceEnabled, guidancePreferenceButton } from "../../ui/guidance";
 import {
     applyStandaloneProcedureChoice,
-    applyWorldProcedureChoice,
+    applyCellProcedureChoice,
     populateProcedureStartChoices,
     readProcedureStartChoice,
     startChoiceSummary
@@ -81,14 +81,13 @@ export async function renderToolHome(
                             <label>Expedition name <input name="name" required value="Expedition" autocomplete="off"></label>
                             <div class="hc-form" data-abstract-context hidden>
                                 <label>Setup name <input name="contextName" value="Mapless exploration" autocomplete="off"></label>
-                                <details class="hc-optional-reference"><summary>Optional grid orientation</summary><label>Grid orientation <select name="orientation"><option value="PointyTop">Pointy top</option><option value="FlatTop">Flat top</option></select></label><p class="hc-hint">Keep pointy top unless your grid uses flat-top cells.</p></details>
                                 <fieldset class="hc-field-group hc-map-scale-field">
                                     <legend>Map scale</legend>
                                     <div class="hc-inline">
                                         <label>Distance <input name="scale" type="number" min="0.001" step="any" placeholder="required"></label>
                                         <label>Unit <select name="unit"><option value="">Select unit</option><option value="Mile">Miles</option><option value="Kilometer">Kilometers</option><option value="Custom">Custom</option></select></label>
                                     </div>
-                                    <p class="hc-hint">The game-world distance from the center of one cell to the center of an adjacent cell.</p>
+                                    <p class="hc-hint">Physical travel distance represented by one world geometry unit.</p>
                                 </fieldset>
                                 <div class="hc-form" data-custom-unit hidden>
                                     <label>Custom symbol <input name="symbol" autocomplete="off"></label>
@@ -96,15 +95,13 @@ export async function renderToolHome(
                                 </div>
                                 <p class="hc-hint">There is no authored map, but spatial positions and adjacent-cell travel are still tracked.</p>
                             </div>
-                            <div data-spatial-start hidden>
-                                <details class="hc-optional-reference">
-                                    <summary>Optional starting position (defaults to cell 0, 0)</summary>
-                                    <p class="hc-hint">Leave these coordinates unchanged to begin at the default cell. For an existing grid, enter the exact cell coordinates if you need another starting point.</p>
-                                    <div class="hc-inline">
-                                        <label>Cell coordinate q <input name="q" type="number" step="1" value="0"></label>
-                                        <label>Cell coordinate r <input name="r" type="number" step="1" value="0"></label>
-                                    </div>
-                                </details>
+                            <div data-periodic-start hidden class="hc-form">
+                                <label>Starting cell type <select name="motifCellId"></select></label>
+                                <div class="hc-inline">
+                                    <label>East/west repeat <input name="u" type="number" step="1" value="0"></label>
+                                    <label>North/south repeat <input name="v" type="number" step="1" value="0"></label>
+                                </div>
+                                <p class="hc-hint">Choose an authoritative motif cell and repeat position. The world and ruleset determine the cell topology.</p>
                             </div>
                             <div data-nonspatial-context hidden>
                                 <label>Setup name <input name="nonSpatialName" value="Journey" autocomplete="off"></label>
@@ -169,7 +166,6 @@ export async function renderToolHome(
     const procedure = select(form, "procedure");
     const unit = select(form, "unit");
     const abstractContext = required<HTMLElement>(form, "[data-abstract-context]");
-    const spatialStart = required<HTMLElement>(form, "[data-spatial-start]");
     const nonSpatialContext = required<HTMLElement>(form, "[data-nonspatial-context]");
     const customUnit = required<HTMLElement>(form, "[data-custom-unit]");
     const startButton = required<HTMLButtonElement>(form, "[data-start-button]");
@@ -213,14 +209,10 @@ export async function renderToolHome(
         "Map or travel setup",
         "Choose an authored map, mapless spatial exploration, or a journey that does not use a grid.");
     attachFieldHelp(
-        select(form, "orientation"),
-        "Hex orientation",
-        "Pointy-top and flat-top describe how the hexes are drawn. Orientation alone does not define north or change the distance represented by a hex.");
-    attachFieldHelp(
         input(form, "scale"),
         "Map scale",
-        "This is the game-world distance from the center of one cell to the center of an adjacent cell.",
-        "If adjacent hexes on your map represent 6 miles of travel, enter 6 and choose Miles.");
+        "This is the physical distance represented by one geometry unit of the selected ruleset.",
+        "Set the travel scale and unit explicitly before starting a mapless session.");
     attachFieldHelp(
         unit,
         "Map scale unit",
@@ -231,20 +223,24 @@ export async function renderToolHome(
         "For a custom distance unit, this conversion tells Hex Crawl how large one custom unit is in meters. Leave it alone unless you selected Custom.");
     let presets: ProcedurePreset[] = [];
     let savedProcedures = await Promise.resolve([] as Awaited<ReturnType<ProcedureComposerApi["listProcedures"]>>);
+    let selectedWorld: Overworld | null = null;
+    let worldSelectionGeneration = 0;
     const composerApi = await ProcedureComposerApi.create(root);
 
+    const periodicStart = required<HTMLElement>(form, "[data-periodic-start]");
     const syncContext = (): void => {
         const abstract = context.value === ABSTRACT_CONTEXT;
         const nonSpatial = context.value === NON_SPATIAL_CONTEXT;
         abstractContext.hidden = !abstract;
         nonSpatialContext.hidden = !nonSpatial;
         const spatial = Boolean(context.value) && !nonSpatial;
-        spatialStart.hidden = !spatial;
+        periodicStart.hidden = !(spatial && selectedWorld !== null);
         input(form, "contextName").required = abstract;
         input(form, "scale").required = abstract;
         unit.required = abstract;
-        input(form, "q").required = spatial;
-        input(form, "r").required = spatial;
+        select(form, "motifCellId").required = !periodicStart.hidden;
+        input(form, "u").required = !periodicStart.hidden;
+        input(form, "v").required = !periodicStart.hidden;
         input(form, "nonSpatialName").required = nonSpatial;
         contextNext.disabled = !context.value;
         required<HTMLElement>(form, "[data-context-summary]").textContent = nonSpatial
@@ -255,6 +251,29 @@ export async function renderToolHome(
                     ? "Use an authored map. The selected ruleset still decides which travel, navigation, and journey mechanics apply."
                     : "Choose how this expedition relates to a map.";
         syncUnit();
+    };
+    const syncSelectedWorld = async (): Promise<void> => {
+        const generation = ++worldSelectionGeneration;
+        selectedWorld = null;
+        syncContext();
+        refreshAvailableProcedures();
+        if (!context.value || context.value === ABSTRACT_CONTEXT
+            || context.value === NON_SPATIAL_CONTEXT) return;
+        try {
+            const loaded = await api.getOverworld(context.value);
+            if (disposed || generation !== worldSelectionGeneration || context.value !== loaded.id) return;
+            if (!loaded.tiling) throw new Error("The selected world has no accepted cell topology.");
+            selectedWorld = loaded;
+            const motif = select(form, "motifCellId");
+            motif.replaceChildren();
+            loaded.tiling.topology.motifCells.forEach((cell, index) =>
+                motif.append(option(cell.id, `Cell shape ${index + 1}`)));
+            syncContext();
+            refreshAvailableProcedures();
+        } catch (failure) {
+            if (!disposed && generation === worldSelectionGeneration)
+                showUiError(error, failure);
+        }
     };
     const syncUnit = (): void => {
         const custom = context.value === ABSTRACT_CONTEXT && customUnitFieldsVisible(unit.value as DistanceUnitKind);
@@ -290,6 +309,27 @@ export async function renderToolHome(
         }
     };
 
+    const refreshAvailableProcedures = (): void => {
+        const previous = procedure.value;
+        const geometric = presets.filter(value =>
+            ["alexandrian-advanced", "simple-fixed-distance", "simple-hex-step"].includes(value.presetKey)
+            && value.procedure.isExecutable);
+        const available = context.value === NON_SPATIAL_CONTEXT
+            ? presets
+            : selectedWorld
+                ? geometric.filter(value =>
+                    value.procedure.tilingDsSymbol === selectedWorld!.tiling?.topology.quotientDsSymbol)
+                : geometric;
+        populateProcedureStartChoices(procedure, savedProcedures, available);
+        if ([...procedure.options].some(option => option.value === previous))
+            procedure.value = previous;
+        else if (available.length > 0 && context.value !== NON_SPATIAL_CONTEXT)
+            procedure.value = `preset:${available[0].presetKey}`;
+        void syncProcedure().catch(failure => {
+            if (!disposed) showUiError(error, failure);
+        });
+    };
+
     try {
         const [expeditions, worlds, procedurePresets, procedures] = await Promise.all([
             api.listExpeditions(),
@@ -301,7 +341,7 @@ export async function renderToolHome(
 
         presets = procedurePresets;
         savedProcedures = procedures;
-        populateProcedureStartChoices(procedure, savedProcedures, presets);
+        refreshAvailableProcedures();
         context.append(option("", "Choose map or travel setup"));
         for (const world of worlds) context.append(option(world.id, `Use map: ${world.name}`));
         context.append(
@@ -320,7 +360,7 @@ export async function renderToolHome(
         if (!disposed) showUiError(error, value);
     }
 
-    context.addEventListener("change", syncContext);
+    context.addEventListener("change", () => void syncSelectedWorld());
     unit.addEventListener("change", syncUnit);
     procedure.addEventListener("change", () => void syncProcedure());
 
@@ -341,18 +381,13 @@ export async function renderToolHome(
                     const base: Omit<StartStandaloneCrawlSessionInput, "procedureKey"> = {
                         name,
                         context: {
-                            kind: "AbstractHex",
+                            kind: "MaplessSpatial",
                             name: input(form, "contextName").value.trim(),
-                            orientation: select(form, "orientation").value === "FlatTop" ? "FlatTop" : "PointyTop",
-                            hexCenterDistance: numeric(input(form, "scale")),
+                            physicalDistancePerWorldUnit: numeric(input(form, "scale")),
                             distanceUnit: distanceUnit(unitKind, form)
-                        },
-                        startHex: {
-                            q: integer(input(form, "q")),
-                            r: integer(input(form, "r"))
                         }
                     };
-                    expedition = await api.startStandaloneSession(applyStandaloneProcedureChoice(base, choice));
+                    expedition = await api.startStandaloneCellSession(applyStandaloneProcedureChoice(base, choice));
                 } else if (context.value === NON_SPATIAL_CONTEXT) {
                     expedition = await api.startStandaloneSession(applyStandaloneProcedureChoice({
                         name,
@@ -363,13 +398,23 @@ export async function renderToolHome(
                     }, choice));
                 } else {
                     if (!context.value) throw new Error("A map or travel setup is required.");
-                    expedition = await api.startConfiguredExpedition(context.value, applyWorldProcedureChoice({
-                        name,
-                        presentationKey: "dm-controlled",
-                        startHex: {
-                            q: integer(input(form, "q")),
-                            r: integer(input(form, "r"))
+                    const world = selectedWorld;
+                    if (!world || world.id !== context.value)
+                        throw new Error("The selected world topology is not loaded. Select it again.");
+                    const startCell = {
+                        motifCellId: select(form, "motifCellId").value,
+                        translation: {
+                            u: integer(input(form, "u")), v: integer(input(form, "v"))
                         }
+                    };
+                    if (choice.kind === "saved") {
+                        const compatibility = await api.assessCellProcedure(
+                            world.id, choice.procedureId, choice.revision);
+                        if (compatibility.status !== "ready")
+                            throw new Error(compatibility.explanation);
+                    }
+                    expedition = await api.startCellExpedition(world.id, applyCellProcedureChoice({
+                        name, presentationKey: "dm-controlled", startCell
                     }, choice));
                 }
                 if (!disposed) navigate(`/expeditions/${expedition.id}`);
@@ -385,7 +430,7 @@ export async function renderToolHome(
         })();
     });
 
-    return () => { disposed = true; };
+    return () => { disposed = true; worldSelectionGeneration++; };
 }
 
 function renderExpeditions(
@@ -478,7 +523,7 @@ function distanceUnit(kind: DistanceUnitKind, form: HTMLFormElement) {
 
 function contextLabel(kind: ExpeditionSummary["context"]["kind"]): string {
     if (kind === "WorldBound") return "Map";
-    if (kind === "AbstractHex") return "Mapless spatial";
+    if (kind === "MaplessSpatial") return "Mapless spatial";
     return "Journey / no grid";
 }
 

@@ -43,14 +43,19 @@ public sealed class ProcedureResolutionProviderEnricherTests
 
         var prepared = await enricher.PrepareAsync(Expedition(), command);
         var resolver = new ProcedureResolutionResolver(new SequenceRandomSource(20));
-        var result = resolver.Resolve(
+        var result = resolver.ResolveCells(
             GenericProcedureRuntime.Bind(NavigationOnlyProcedure()),
             Context(),
             State(),
             3,
-            prepared);
-
-        var navigation = Assert.IsType<ProcedureResolvedNavigation>(result.Navigation);
+            new CellProcedureResolutionHelperCommand
+            {
+                ExpectedVersion = 3,
+                NavigationDifficultyClass = prepared.NavigationDifficultyClass,
+                NavigationModifier = prepared.NavigationModifier,
+                NavigationDifficultyRulesNote = prepared.NavigationDifficultyRulesNote
+            });
+        var navigation = Assert.IsType<ResolvedCellNavigation>(result.Navigation);
         Assert.Equal(NavigationCheckOutcome.Succeeded, navigation.Outcome);
     }
 
@@ -162,13 +167,19 @@ public sealed class ProcedureResolutionProviderEnricherTests
 
         Assert.Equal(15, prepared.NavigationDifficultyClass);
         var resolver = new ProcedureResolutionResolver(new SequenceRandomSource(20));
-        var result = resolver.Resolve(
+        var result = resolver.ResolveCells(
             GenericProcedureRuntime.Bind(NavigationOnlyProcedure()),
             Context(),
             State(),
             3,
-            prepared);
-        var navigation = Assert.IsType<ProcedureResolvedNavigation>(result.Navigation);
+            new CellProcedureResolutionHelperCommand
+            {
+                ExpectedVersion = 3,
+                NavigationDifficultyClass = prepared.NavigationDifficultyClass,
+                NavigationModifier = prepared.NavigationModifier,
+                NavigationDifficultyRulesNote = prepared.NavigationDifficultyRulesNote
+            });
+        var navigation = Assert.IsType<ResolvedCellNavigation>(result.Navigation);
         Assert.Contains("Provider: Rules Core", navigation.Provenance.Note!);
     }
 
@@ -380,7 +391,14 @@ public sealed class ProcedureResolutionProviderEnricherTests
         var store = new PostgresHexCrawlStore(database.ConnectionString);
         await store.InitializeAsync();
         var campaignId = Guid.NewGuid();
-        var expedition = Expedition(campaignId);
+        // Campaign pinning is context-independent. Use a supported runtime
+        // rather than inserting a retired V1 spatial snapshot.
+        var original = Expedition(campaignId);
+        var expedition = original with
+        {
+            Runtime = new NonSpatialSessionState { Id = original.Id },
+            Context = new NonSpatialCrawlSessionContext("Campaign pinning")
+        };
 
         await store.CreateExpeditionAsync(expedition);
         var loaded = await store.GetExpeditionAsync(expedition.Id, expedition.OwnerUserId);
@@ -448,17 +466,11 @@ public sealed class ProcedureResolutionProviderEnricherTests
         };
     }
 
-    private static AbstractHexCrawlSessionContext Context() => new(
-        "Provider test",
-        HexOrientation.PointyTop,
-        new CrawlRuntimeContext(new DistanceMeasure(12, DistanceUnit.Miles)));
+    private static MaplessSpatialCrawlSessionContext Context() =>
+        MaplessSessionFixture.Context("Provider test");
 
-    private static ExpeditionState State() => new()
-    {
-        Id = Guid.NewGuid(),
-        Traversal = HexTraversalState.StartingIn(new HexCoordinate(0, 0), DistanceUnit.Miles),
-        DistanceTraveled = new DistanceMeasure(0, DistanceUnit.Miles)
-    };
+    private static CellExpeditionState State() =>
+        MaplessSessionFixture.Start().Expedition;
 
     private static TravelEnvironmentProviderCatalogResult CatalogResult(
         Guid? campaignId,

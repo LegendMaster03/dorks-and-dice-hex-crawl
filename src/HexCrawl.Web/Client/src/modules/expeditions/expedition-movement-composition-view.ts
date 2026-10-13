@@ -101,7 +101,10 @@ export function movementCompositionLedger(runtime: ExpeditionDetail): HTMLElemen
             body.append(row);
         }
         table.append(head, body);
-        section.append(table);
+        const scroll = document.createElement("div");
+        scroll.className = "hc-ledger-table-scroll";
+        scroll.append(table);
+        section.append(scroll);
     }
 
     const diagnostics = diagnosticSummary(runtime);

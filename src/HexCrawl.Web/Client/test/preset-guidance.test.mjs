@@ -20,12 +20,7 @@ test("preset guidance excludes disabled native navigation, encounters, and helpe
         module("time.interval", { durationTicks: "144000000000" }, "Automatic"),
         module("movement.resolution", {
             travelResolution: "ContinuousDistance",
-            actualDistanceResolution: "Fixed",
-            tracksIntraHexProgress: "true"
-        }, "Automatic"),
-        module("movement.hex-progress", {
-            directionChangesCostProgress: "false",
-            supportsDeliberateDoubleBack: "false"
+            actualDistanceResolution: "Fixed"
         }, "Automatic"),
         module("navigation.check", {
             usesNavigationChecks: "false",

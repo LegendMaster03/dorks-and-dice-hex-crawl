@@ -27,13 +27,48 @@ const responseJson = value => new Response(JSON.stringify(value), {
     headers: { "Content-Type": "application/json" }
 });
 
+const mile = { kind: "Mile", symbol: "mi", metersPerUnit: 1609.344 };
+const distance = value => ({ value, unit: mile });
+
+// Headings derive from authored polygon boundaries, never numbered axial directions.
+const visualHeading = interfaceIndex => {
+    const boundary = visualInterfaces.find(edge => edge.interfaceIndex === interfaceIndex);
+    if (!boundary) throw new Error("Unknown fixture cell interface.");
+    return {
+        x: (boundary.start.x + boundary.end.x) / 2,
+        y: (boundary.start.y + boundary.end.y) / 2
+    };
+};
+const visualCell = (u = 0, v = 0) => ({
+    tilingId: "visual-tiling",
+    address: { motifCellId: "visual-motif", translation: { u, v } }
+});
+// Geometry for one authored hexagonal preset, expressed as polygon and interfaces.
+// Other periodic motifs use the same runtime contracts, not these fixture values.
+const visualPolygon = [
+    { x: 1, y: 0 }, { x: .5, y: .8660254 }, { x: -.5, y: .8660254 },
+    { x: -1, y: 0 }, { x: -.5, y: -.8660254 }, { x: .5, y: -.8660254 }
+];
+const visualInterfaces = visualPolygon.map((start, interfaceIndex) => ({
+    interfaceIndex, boundarySideIndex: interfaceIndex,
+    neighborCell: visualCell(interfaceIndex + 1, 0),
+    reciprocalInterfaceIndex: (interfaceIndex + visualPolygon.length / 2) % visualPolygon.length,
+    start, end: visualPolygon[(interfaceIndex + 1) % visualPolygon.length]
+}));
+
+const visualTiling = {
+    id: "visual-tiling",
+    revision: 1,
+    origin: { x: 0, y: 0 },
+    topology: { motifCells: [{ id: "visual-motif" }], quotientDsSymbol: "<1:1,1,1:6,3>" },
+    physicalDistancePerWorldUnit: distance(12)
+};
 const richProcedureParameters = {
     "time.interval": { durationTicks: "144000000000" },
     "party.activities": { assignmentScope: "participant", roleKeys: "navigator;scout", activityBudgetModel: "one-per-watch", activityKeys: "navigate;scout;forage" },
     "movement.budget": { budgetModel: "watch-distance", baseBudget: "6", budgetUnit: "mi", limitingScope: "party", travelModeKeys: "normal;fast;slow" },
     "movement.terrain": { adjustmentModel: "multiplier", terrainAdjustments: "clear=1;rough=0.75;difficult=0.5", routeAdjustmentModel: "route-improves-cost", weatherAdjustmentModel: "symbolic" },
     "movement.resolution": { travelResolution: "continuous-distance", actualDistanceResolution: "fixed" },
-    "movement.hex-progress": { tracksIntraHexProgress: "true", startingExitProgressFactor: "0", nearExitProgressFactor: "0.5", farExitProgressFactor: "1", backExitProgressFactor: "1", directionChangesCostProgress: "true", directionChangeProgressCostFactor: "0.5", supportsDeliberateDoubleBack: "true" },
     "navigation.check": { usesNavigationChecks: "true", usesPersistentVeer: "true" },
     "navigation.outcome": { checkTriggerModel: "per-watch", failureStateModel: "lost", directionalErrorModel: "persistent-veer", recognitionModel: "procedure-check", reorientationModel: "resolved-check" },
     "encounters.cadence": { cadence: "per-watch" },
@@ -208,14 +243,6 @@ function visualPreset() {
                 encounterCadence: "PerWatch",
                 usesNavigationChecks: true,
                 usesPersistentVeer: true,
-                tracksIntraHexProgress: false,
-                directionChangesCostProgress: false,
-                supportsDeliberateDoubleBack: true,
-                startingExitProgressFactor: 0,
-                nearExitProgressFactor: 0.5,
-                farExitProgressFactor: 1,
-                backExitProgressFactor: 1,
-                directionChangeProgressCostFactor: 0,
                 resolutionHelpers: null
             },
             focusedIntervalPolicy: {
@@ -287,7 +314,6 @@ function representativeCatalogPresets() {
     const simpleModules = [
         item("time.interval", { durationTicks: "144000000000" }, "Automatic"),
         item("movement.resolution", { travelResolution: "ContinuousDistance", actualDistanceResolution: "Fixed" }, "Automatic"),
-        item("movement.hex-progress", { tracksIntraHexProgress: "true" }, "Automatic"),
         item("navigation.check", { usesNavigationChecks: "false", usesPersistentVeer: "false" }, "Automatic"),
         item("encounters.cadence", { cadence: "None" }, "Automatic")
     ];
@@ -397,6 +423,7 @@ function emitSpecialMetrics(surface) {
         advancedVisible: Boolean(root.querySelector(".hc-advanced-layout")),
         jsonVisible: Boolean(root.querySelector(".hc-json-editor")),
         procedureHomeVisible: text.includes("Saved rulesets") && text.includes("Build my own"),
+        expectedProcedureModuleCount: Object.keys(richProcedureParameters).length,
         procedureModuleCards: root.querySelectorAll(".hc-rule-card").length,
         procedureFactGroups: root.querySelectorAll(".hc-rule-fact-group").length,
         referenceVisible: Boolean(root.querySelector(".hc-procedure-reference")),
@@ -424,12 +451,12 @@ function emitSpecialMetrics(surface) {
         compactGuidanceVisible: text.includes("How to use Compact"),
         guidedRuleWhyCount: Array.from(root.querySelectorAll("summary")).filter(summary => summary.textContent?.trim() === "Why?").length,
         guidedNextActionWhyVisible: Array.from(root.querySelectorAll("summary")).some(summary => summary.textContent?.trim() === "Why is this next?"),
-        selectedCellTitle: root.querySelector("[data-selected-cell-title]")?.textContent?.trim() || null,
-        selectedCellTerrain: root.querySelector("[data-cell-terrain]")?.value || null,
-        selectedCellHiddenPoiVisible: text.includes("Ruined Watchtower · Ruin · Hidden"),
-        selectedCellRoadVisible: text.includes("Old King's Road · road · Line"),
-        selectedCellRouteBehaviorVisible: text.includes("Old King's Road · Route: good-road"),
-        selectedCellAdvancedOpen: Boolean(root.querySelector("[data-cell-advanced][open]")),
+        selectedCellSummary: root.querySelector(".hc-selected-cell-panel p:not(.hc-hint)")?.textContent?.trim() || null,
+        selectedCellTerrain: root.querySelector(".hc-selected-cell-panel input[name=terrain]")?.value || null,
+        selectedCellHiddenPoiVisible: text.includes("Ruined Watchtower · Ruin"),
+        selectedCellRoadVisible: text.includes("Old King's Road · road"),
+        selectedCellRouteBehaviorVisible: text.includes("SpatialFeature: route · good-road"),
+        selectedCellAdvancedOpen: Boolean(root.querySelector(".hc-selected-cell-panel details.hc-stack[open]")),
         mapHeight: Math.round(root.querySelector("[data-map]")?.getBoundingClientRect().height || 0)
     };
     document.getElementById("review-metrics").textContent = JSON.stringify(metrics);
@@ -458,7 +485,8 @@ if (stateName === "home") {
         }],
         getProcedurePresets: async () => [visualPreset()],
         startStandaloneSession: async () => { createCalls += 1; throw new Error("visual review must not create"); },
-        startConfiguredExpedition: async () => { createCalls += 1; throw new Error("visual review must not create"); }
+        startStandaloneCellSession: async () => { createCalls += 1; throw new Error("visual review must not create"); },
+        startCellExpedition: async () => { createCalls += 1; throw new Error("visual review must not create"); }
     };
     await renderToolHome(root, api, () => {});
 
@@ -486,7 +514,6 @@ if (stateName === "home") {
         const reachedDetails = atStep(2);
         root.dataset.guidedSetupTransitioned = String(couldAdvanceContext && reachedRules && reachedDetails);
         const abstractShown = !setup.querySelector("[data-abstract-context]").hidden
-            && !setup.querySelector("[data-spatial-start]").hidden
             && setup.querySelector("[data-nonspatial-context]").hidden;
         name.value = "Preserved expedition";
         scale.value = "6";
@@ -512,7 +539,6 @@ if (stateName === "home") {
         nextContext.click();
         nextRules.click();
         const worldShown = setup.querySelector("[data-abstract-context]").hidden
-            && !setup.querySelector("[data-spatial-start]").hidden
             && setup.querySelector("[data-nonspatial-context]").hidden;
         backRules.click();
         backContext.click();
@@ -521,7 +547,6 @@ if (stateName === "home") {
         nextContext.click();
         nextRules.click();
         const nonspatialShown = setup.querySelector("[data-abstract-context]").hidden
-            && setup.querySelector("[data-spatial-start]").hidden
             && !setup.querySelector("[data-nonspatial-context]").hidden;
         root.dataset.guidedSetupAllContexts = String(abstractShown && worldShown && nonspatialShown);
         backRules.click();
@@ -554,22 +579,14 @@ if (stateName === "home") {
     emitSpecialMetrics("procedure");
     restoreFetch();
 } else if (stateName === "world-selected-cell") {
-    const worldMile = { kind: "Mile", symbol: "mi", metersPerUnit: 1609.344 };
+    const restoreFetch = installProcedureFetch();
     const worldFixture = {
         id: "visual-world",
         name: "The Shattered Marches",
         version: 12,
         createdAt: "2026-10-01T12:00:00Z",
         updatedAt: "2026-10-07T05:00:00Z",
-        grid: {
-            id: "visual-grid",
-            orientation: "PointyTop",
-            coordinateConvention: "AxialQr",
-            origin: { x: 0, y: 0 },
-            rotationDegrees: 18,
-            hexRadiusWorldUnits: 1,
-            neighborCenterDistance: { value: 12, unit: worldMile }
-        },
+        tiling: visualTiling,
         features: [{
             id: "road-1",
             name: "Old King's Road",
@@ -600,8 +617,8 @@ if (stateName === "home") {
         overworldId: worldFixture.id,
         version: worldFixture.version,
         annotations: [{
-            id: "hex-environment",
-            scope: { kind: "Hex", hex: { q: 0, r: 0 }, featureId: null },
+            id: "cell-environment",
+            scope: { kind: "Cell", cell: { tilingId: "visual-tiling", address: { motifCellId: "visual-motif", translation: { u: 0, v: 0 } } }, featureId: null },
             facts: [{
                 id: "terrain-1",
                 dimension: "terrain",
@@ -621,7 +638,7 @@ if (stateName === "home") {
             }]
         }, {
             id: "road-environment",
-            scope: { kind: "SpatialFeature", hex: null, featureId: "road-1" },
+            scope: { kind: "SpatialFeature", cell: null, featureId: "road-1" },
             facts: [{
                 id: "route-1",
                 dimension: "route",
@@ -633,36 +650,49 @@ if (stateName === "home") {
             }]
         }]
     };
-    sessionStorage.setItem(
-        `hex-crawl.world-editor.selected-cell.${worldFixture.id}`,
-        JSON.stringify({ q: 0, r: 0 }));
+    const cellPolygon = [
+        { x: 1, y: 0 }, { x: .5, y: .8660254 }, { x: -.5, y: .8660254 },
+        { x: -1, y: 0 }, { x: -.5, y: -.8660254 }, { x: .5, y: -.8660254 }
+    ];
+    const cellGeometry = {
+        id: visualCell(), center: { x: 0, y: 0 }, polygon: cellPolygon
+    };
     const api = {
         getOverworld: async () => worldFixture,
         getWorldEnvironment: async () => environmentFixture,
         getProcedurePresets: async () => [],
+        getPresentationProfiles: async () => [{
+            key: "exploration-map", name: "Exploration map",
+            automationMode: "DmControlled", playerGrid: "None",
+            terrainMode: "Hidden", markEnteredCellKnown: false
+        }],
         listExpeditions: async () => [],
-        listSourceMaps: async () => ({ overworldVersion: worldFixture.version, sourceMaps: [] })
+        listSourceMaps: async () => ({ overworldVersion: worldFixture.version, sourceMaps: [] }),
+        listVisibleCells: async () => [cellGeometry],
+        lookupWorldCell: async () => ({ status: "Unique", candidates: [cellGeometry.id] }),
+        resolveWorldCell: async () => cellGeometry
     };
     await renderWorldEditor(root, api, worldFixture.id, () => {});
+    const canvas = root.querySelector(".hc-map-canvas");
+    if (!(canvas instanceof HTMLCanvasElement))
+        throw new Error("The generalized map selection canvas did not mount.");
+    canvas.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    for (let attempt = 0; attempt < 20; attempt++) {
+        if (root.querySelector(".hc-selected-cell-panel input[name=terrain]")) break;
+        await new Promise(resolve => setTimeout(resolve, 25));
+    }
+    if (!root.querySelector(".hc-selected-cell-panel input[name=terrain]"))
+        throw new Error("Qualified polygon selection did not render its world authoring panel.");
     emitSpecialMetrics("world");
+    restoreFetch();
 } else {
-const mile = { kind: "Mile", symbol: "mi", metersPerUnit: 1609.344 };
-const distance = value => ({ value, unit: mile });
 const world = {
     id: "visual-world",
     name: "The Shattered Marches",
     version: 8,
     createdAt: "2026-10-01T12:00:00Z",
     updatedAt: "2026-10-06T04:00:00Z",
-    grid: {
-        id: "visual-grid",
-        orientation: "PointyTop",
-        coordinateConvention: "AxialQr",
-        origin: { x: 0, y: 0 },
-        rotationDegrees: 0,
-        hexRadiusWorldUnits: 1,
-        neighborCenterDistance: distance(12)
-    },
+    tiling: visualTiling,
     features: [{
         id: "feature-ridge",
         name: "Ashen Ridge",
@@ -712,14 +742,6 @@ function procedure() {
             encounterCadence: "None",
             usesNavigationChecks: false,
             usesPersistentVeer: true,
-            tracksIntraHexProgress: true,
-            directionChangesCostProgress: true,
-            supportsDeliberateDoubleBack: true,
-            startingExitProgressFactor: 0,
-            nearExitProgressFactor: 0.5,
-            farExitProgressFactor: 1,
-            backExitProgressFactor: 1,
-            directionChangeProgressCostFactor: 0.5,
             resolutionHelpers: null
         },
         focusedIntervalPolicy: {
@@ -733,7 +755,6 @@ function procedure() {
         modules: [
             "time.interval",
             "movement.resolution",
-            "movement.hex-progress",
             "navigation.check",
             "encounters.cadence",
             "party.activities",
@@ -816,8 +837,7 @@ function runtimeFixture() {
             kind: "WorldBound",
             name: "The Shattered Marches",
             overworldId: world.id,
-            orientation: null,
-            hexCenterDistance: distance(12)
+            tiling: world.tiling
         },
         name: "Crossing the Shattered Marches",
         version: 42,
@@ -830,19 +850,22 @@ function runtimeFixture() {
         expedition: {
             id: "visual-" + stateName,
             isSpatial: true,
-            currentHex: { q: 0, r: 0 },
+            currentCell: visualCell(),
+            cellTraversal: {
+                currentCell: visualCell(),
+                position: { x: 0, y: 0 },
+                enteredFrom: null,
+                entryInterfaceIndex: null,
+                travelHeading: null,
+                selectedExitInterfaceIndex: null
+            },
             position: { x: 0, y: 0 },
-            positionPrecision: "HexAnchor",
-            entryDirection: 3,
-            lastTravelDirection: 0,
-            intendedDirection: null,
-            actualDirection: null,
+            positionPrecision: "Exact",
+            intendedHeading: null,
+            actualHeading: null,
             isLost: false,
-            veerSteps: 0,
             veerDegrees: 0,
             distanceTraveled: distance(18),
-            hexProgress: distance(0),
-            exitRequirement: distance(12),
             elapsedTravelHours: 12,
             currentDay: 1,
             completedWatches: 3,
@@ -876,14 +899,12 @@ function runtimeFixture() {
             unsupportedReason: null
         },
         movementComposition: movement(true),
-        knownHexes: [{ q: 0, r: 0 }],
         knowledge: [],
         history: [{
             sequence: 1,
             watchNumber: 1,
             kind: "WatchCompleted",
             expeditionElapsedHours: 4,
-            hex: { q: -1, r: 0 },
             message: "First travel watch completed.",
             distanceValue: 6,
             distanceUnit: "mi",
@@ -967,19 +988,17 @@ function nonSpatialRuntimeFixture() {
         referenceUse: "None",
         suggestedExpectedDistance: null
     };
-    value.knownHexes = [];
     value.knowledge = [];
     return value;
 }
 
-function abstractHexRuntimeFixture() {
+function maplessRuntimeFixture() {
     const value = runtimeFixture();
     value.overworldId = null;
     value.context = {
-        kind: "AbstractHex",
-        name: "Abstract route",
-        orientation: "PointyTop",
-        hexCenterDistance: distance(12)
+        kind: "MaplessSpatial",
+        name: "Unmapped route",
+        tiling: world.tiling
     };
     return value;
 }
@@ -1412,17 +1431,23 @@ let journey = journeyFixtureWithShuffledDefinitions();
 switch (stateName) {
     case "selected-edge":
     case "focus-return":
-        runtime.expedition.intendedDirection = 1;
-        runtime.expedition.actualDirection = 1;
+        runtime.expedition.intendedHeading = visualHeading(1);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 1;
+        runtime.expedition.actualHeading = visualHeading(1);
         break;
     case "fixed-pace":
-        runtime.expedition.intendedDirection = 1;
-        runtime.expedition.actualDirection = 1;
+        runtime.expedition.intendedHeading = visualHeading(1);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 1;
+        runtime.expedition.actualHeading = visualHeading(1);
         runtime.movementComposition = movement(true, []);
         break;
     case "empty-party":
-        runtime.expedition.intendedDirection = 1;
-        runtime.expedition.actualDirection = 1;
+        runtime.expedition.intendedHeading = visualHeading(1);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 1;
+        runtime.expedition.actualHeading = visualHeading(1);
         runtime.party = {
             ...runtime.party,
             members: [],
@@ -1433,26 +1458,40 @@ switch (stateName) {
         };
         break;
     case "persisted-course":
-        runtime.expedition.intendedDirection = 2;
-        runtime.expedition.actualDirection = 2;
+        runtime.expedition.intendedHeading = visualHeading(2);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 2;
+        runtime.expedition.actualHeading = visualHeading(2);
         break;
     case "course-change-reload":
-        runtime.expedition.currentHex = { q: 1, r: -1 };
-        runtime.expedition.intendedDirection = 1;
-        runtime.expedition.actualDirection = 1;
-        runtime.expedition.hexProgress = distance(2);
-        runtime.expedition.exitRequirement = distance(6);
+        runtime.expedition.currentCell = visualCell(1, -1);
+        runtime.expedition.cellTraversal.currentCell = runtime.expedition.currentCell;
+        runtime.expedition.intendedHeading = visualHeading(1);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 1;
+        runtime.expedition.actualHeading = visualHeading(1);
+        runtime.expedition.cellTraversal.position = { x: 0, y: 0 };
+        runtime.expedition.position = runtime.expedition.cellTraversal.position;
         runtime.expedition.completedWatches = 2;
+        runtime.expedition.activeWatchNumber = 3;
+        runtime.expedition.activeWatchPendingDecision = "CellCourseAdjudicationRequired";
+        runtime.pauseReason = "CellCourseAdjudicationRequired";
+        runtime.remainingWatchHours = 1;
         runtime.procedure.runtime.usesNavigationChecks = true;
         break;
     case "course-clear-reload":
-        runtime.expedition.intendedDirection = 1;
-        runtime.expedition.actualDirection = 1;
+        runtime.expedition.intendedHeading = visualHeading(1);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 1;
+        runtime.expedition.actualHeading = visualHeading(1);
         break;
     case "partial-progress":
-        runtime.expedition.intendedDirection = 2;
-        runtime.expedition.actualDirection = 2;
-        runtime.expedition.hexProgress = distance(4.5);
+        runtime.expedition.intendedHeading = visualHeading(2);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 2;
+        runtime.expedition.actualHeading = visualHeading(2);
+        runtime.expedition.cellTraversal.position = { x: Number(4.5), y: 0 };
+        runtime.expedition.position = runtime.expedition.cellTraversal.position;
         runtime.expedition.activeWatchNumber = 4;
         runtime.expedition.activeWatchTotalHours = 4;
         runtime.expedition.activeWatchElapsedHours = 1.5;
@@ -1461,18 +1500,24 @@ switch (stateName) {
         runtime.remainingWatchHours = 2.5;
         break;
     case "navigation-pending":
-        runtime.expedition.intendedDirection = 1;
+        runtime.expedition.intendedHeading = visualHeading(1);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 1;
         runtime.procedure.runtime.usesNavigationChecks = true;
         break;
     case "boundary-pending":
-        runtime.expedition.intendedDirection = 1;
-        runtime.expedition.actualDirection = 2;
+        runtime.expedition.intendedHeading = visualHeading(1);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 1;
+        runtime.expedition.actualHeading = visualHeading(2);
         runtime.expedition.isLost = true;
         runtime.pauseReason = "LostRecognitionRequired";
         break;
     case "movement-input-pending":
     case "movement-validation-retry":
-        runtime.expedition.intendedDirection = 3;
+        runtime.expedition.intendedHeading = visualHeading(3);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 3;
         runtime.movementComposition = movement(false);
         if (stateName === "movement-validation-retry") {
             runtime.procedure.runtime.usesNavigationChecks = false;
@@ -1480,8 +1525,10 @@ switch (stateName) {
         }
         break;
     case "movement-composition":
-        runtime.expedition.intendedDirection = 3;
-        runtime.expedition.actualDirection = 3;
+        runtime.expedition.intendedHeading = visualHeading(3);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 3;
+        runtime.expedition.actualHeading = visualHeading(3);
         runtime.movementComposition = movement(true);
         runtime.movementComposition.effectiveValue = 4.5;
         runtime.movementComposition.preOverrideValue = 4;
@@ -1502,8 +1549,10 @@ switch (stateName) {
     case "encounter-pending":
         runtime.pauseReason = "EncounterTriggered";
         runtime.remainingWatchHours = 2.5;
-        runtime.expedition.intendedDirection = 0;
-        runtime.expedition.actualDirection = 0;
+        runtime.expedition.intendedHeading = visualHeading(0);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 0;
+        runtime.expedition.actualHeading = visualHeading(0);
         runtime.expedition.activeWatchNumber = 4;
         runtime.expedition.activeWatchTotalHours = 4;
         runtime.expedition.activeWatchElapsedHours = 1.5;
@@ -1519,7 +1568,6 @@ switch (stateName) {
             watchNumber: 4,
             outcome: "WanderingEncounter",
             expeditionElapsedHours: 13.5,
-            hex: { q: 0, r: 0 },
             locationId: null,
             note: "A wandering encounter interrupts the expedition."
         };
@@ -1528,7 +1576,6 @@ switch (stateName) {
             watchNumber: 4,
             kind: "EncounterTriggered",
             expeditionElapsedHours: 13.5,
-            hex: { q: 0, r: 0 },
             message: "A wandering encounter interrupts the expedition.",
             distanceValue: null,
             distanceUnit: null,
@@ -1540,18 +1587,24 @@ switch (stateName) {
         });
         break;
     case "abstract-spatial-course":
-        runtime = abstractHexRuntimeFixture();
-        runtime.expedition.intendedDirection = 2;
-        runtime.expedition.actualDirection = 2;
+        runtime = maplessRuntimeFixture();
+        runtime.expedition.intendedHeading = visualHeading(2);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 2;
+        runtime.expedition.actualHeading = visualHeading(2);
         runtime.procedure.runtime.usesNavigationChecks = true;
         break;
     case "forced-travel-pending":
-        runtime.expedition.intendedDirection = 4;
+        runtime.expedition.intendedHeading = visualHeading(4);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 4;
         survival = survivalFixture(true);
         effects = effectsFixture(true);
         break;
     case "forced-travel-one-participant":
-        runtime.expedition.intendedDirection = 4;
+        runtime.expedition.intendedHeading = visualHeading(4);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 4;
         runtime.party = {
             ...runtime.party,
             members: [runtime.party.members[0]],
@@ -1563,7 +1616,9 @@ switch (stateName) {
         effects = effectsFixture(false);
         break;
     case "forced-travel-zero-participants":
-        runtime.expedition.intendedDirection = 4;
+        runtime.expedition.intendedHeading = visualHeading(4);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 4;
         runtime.party = {
             ...runtime.party,
             members: [],
@@ -1575,13 +1630,17 @@ switch (stateName) {
         effects = effectsFixture(false);
         break;
     case "forced-travel-party-scope":
-        runtime.expedition.intendedDirection = 4;
+        runtime.expedition.intendedHeading = visualHeading(4);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 4;
         survival = survivalFixture(true);
         survival.forcedTravelPolicy.failureTargetScope = "Party";
         effects = effectsFixture(false);
         break;
     case "forced-travel-mount":
-        runtime.expedition.intendedDirection = 4;
+        runtime.expedition.intendedHeading = visualHeading(4);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 4;
         runtime.party = {
             ...runtime.party,
             movementContributors: [{
@@ -1608,7 +1667,9 @@ switch (stateName) {
         effects = effectsFixture(false);
         break;
     case "forced-travel-vehicle":
-        runtime.expedition.intendedDirection = 4;
+        runtime.expedition.intendedHeading = visualHeading(4);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 4;
         runtime.party = {
             ...runtime.party,
             movementContributors: [{
@@ -1635,13 +1696,17 @@ switch (stateName) {
         effects = effectsFixture(false);
         break;
     case "effects-workspace":
-        runtime.expedition.intendedDirection = 1;
-        runtime.expedition.actualDirection = 1;
+        runtime.expedition.intendedHeading = visualHeading(1);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 1;
+        runtime.expedition.actualHeading = visualHeading(1);
         effects = effectsFixture(true);
         break;
     case "readability-workspace":
-        runtime.expedition.intendedDirection = 1;
-        runtime.expedition.actualDirection = 1;
+        runtime.expedition.intendedHeading = visualHeading(1);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 1;
+        runtime.expedition.actualHeading = visualHeading(1);
         runtime.party.members.find(member => member.id === "member-3").name = "Cora Longriver";
         survival = survivalFixture(false);
         survival.foragingPolicy = {
@@ -1665,7 +1730,7 @@ switch (stateName) {
             { id: "supplies", resourceKey: "supplies", target: { scope: "Party", targetId: null }, inventoryModel: "SupplyDie", quantity: null, unit: null, symbolicState: null, supplyDieSides: 8, isDepleted: false, note: null },
             { id: "special-stock", resourceKey: "special-stock", target: { scope: "Expedition", targetId: null }, inventoryModel: "ExternalManual", quantity: null, unit: null, symbolicState: null, supplyDieSides: null, isDepleted: false, note: "Tracked by the table" });
         survival.environmentFacts = [
-            { id: "heat", dimension: "temperature", valueKind: "Measurement", value: "96 °F", effective: true, sourceKind: "Hex" },
+            { id: "heat", dimension: "temperature", valueKind: "Measurement", value: "96 °F", effective: true, sourceKind: "Cell" },
             { id: "rain", dimension: "precipitation", valueKind: "Tag", value: "heavy rain", effective: true, sourceKind: "Weather" }
         ];
         survival.camp = {
@@ -1683,8 +1748,10 @@ switch (stateName) {
         });
         break;
     case "encounter-schedule":
-        runtime.expedition.intendedDirection = 0;
-        runtime.expedition.actualDirection = 0;
+        runtime.expedition.intendedHeading = visualHeading(0);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 0;
+        runtime.expedition.actualHeading = visualHeading(0);
         runtime.procedure.runtime.encounterCadence = "PerWatch";
         runtime.expedition.completedWatches = 3;
         runtime.expedition.activeWatchNumber = 4;
@@ -1693,14 +1760,18 @@ switch (stateName) {
         runtime.expedition.activeWatchRemainingHours = 2;
         break;
     case "encounter-schedule-day":
-        runtime.expedition.intendedDirection = 0;
-        runtime.expedition.actualDirection = 0;
+        runtime.expedition.intendedHeading = visualHeading(0);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 0;
+        runtime.expedition.actualHeading = visualHeading(0);
         runtime.procedure.runtime.encounterCadence = "PerDay";
         runtime.expedition.completedWatches = 3;
         break;
     case "encounter-contextual-schedule":
-        runtime.expedition.intendedDirection = 0;
-        runtime.expedition.actualDirection = 0;
+        runtime.expedition.intendedHeading = visualHeading(0);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 0;
+        runtime.expedition.actualHeading = visualHeading(0);
         runtime.procedure.runtime.encounterCadence = "None";
         runtime.procedure.modules = [
             ...runtime.procedure.modules.filter(module => module.moduleKey !== "encounters.cadence" && module.moduleKey !== "encounters.schedule"),
@@ -1736,14 +1807,18 @@ switch (stateName) {
         journey = journeyFixtureWithShuffledDefinitions();
         break;
     case "guided-pending-consequence":
-        runtime.expedition.intendedDirection = 1;
-        runtime.expedition.actualDirection = 1;
+        runtime.expedition.intendedHeading = visualHeading(1);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 1;
+        runtime.expedition.actualHeading = visualHeading(1);
         effects = effectsFixture(true);
         effects.pendingConsequences = [pendingJourneyConsequence("pending-guided-consequence")];
         break;
     case "effects-journey-source":
-        runtime.expedition.intendedDirection = 1;
-        runtime.expedition.actualDirection = 1;
+        runtime.expedition.intendedHeading = visualHeading(1);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 1;
+        runtime.expedition.actualHeading = visualHeading(1);
         effects = effectsFixture(true);
         effects.activeEffects[0].provenance = [{
             sourceKind: "JourneyEvent",
@@ -1808,12 +1883,16 @@ switch (stateName) {
         }];
         break;
     case "more-options-open":
-        runtime.expedition.intendedDirection = 5;
-        runtime.expedition.actualDirection = 5;
+        runtime.expedition.intendedHeading = visualHeading(5);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 5;
+        runtime.expedition.actualHeading = visualHeading(5);
         break;
     case "rail-realistic":
-        runtime.expedition.intendedDirection = 0;
-        runtime.expedition.actualDirection = 0;
+        runtime.expedition.intendedHeading = visualHeading(0);
+        if (runtime.expedition.cellTraversal)
+            runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 0;
+        runtime.expedition.actualHeading = visualHeading(0);
         break;
     case "map-selected":
     case "map-nonadjacent":
@@ -1901,18 +1980,6 @@ switch (stateName) {
         throw new Error("Unknown visual state: " + stateName);
 }
 
-localStorage.removeItem("hex-crawl.expedition." + runtime.id + ".travel-intent");
-if (stateName === "persisted-course") {
-    localStorage.setItem(
-        "hex-crawl.expedition." + runtime.id + ".travel-intent",
-        JSON.stringify({ direction: 4, pace: "fast" }));
-}
-if (stateName === "course-change-reload" || stateName === "course-clear-reload") {
-    localStorage.setItem(
-        "hex-crawl.expedition." + runtime.id + ".travel-intent",
-        JSON.stringify({ direction: 1, pace: "normal" }));
-}
-
 const originalFetch = window.fetch.bind(window);
 window.fetch = async input => {
     const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
@@ -1928,21 +1995,73 @@ window.fetch = async input => {
 let movementRetryCalls = 0;
 const api = new Proxy({
     getExpedition: async () => runtime,
-    advanceExpedition: async () => {
+    advanceCellWatch: async () => {
         movementRetryCalls += 1;
-        return runtime;
-    },
-    getOverworld: async () => world,
-    setExpeditionCourseIntent: async (_expeditionId, input) => {
-        if (input.expectedVersion !== runtime.version) {
-            throw new Error("Visual review stale course mutation.");
-        }
         runtime = {
             ...runtime,
             version: runtime.version + 1,
             expedition: {
                 ...runtime.expedition,
-                intendedDirection: input.intendedDirection
+                completedWatches: runtime.expedition.completedWatches + 1
+            }
+        };
+        return runtime;
+    },
+    getOverworld: async () => world,
+    getCellTopology: async () => ({
+        formatVersion: 1,
+        currentCell: runtime.expedition.currentCell,
+        position: runtime.expedition.position,
+        center: { x: 0, y: 0 },
+        polygon: visualPolygon,
+        heading: runtime.expedition.intendedHeading,
+        enteredFrom: runtime.expedition.cellTraversal?.enteredFrom ?? null,
+        entryInterfaceIndex: runtime.expedition.cellTraversal?.entryInterfaceIndex ?? null,
+        selectedExitInterfaceIndex: runtime.expedition.cellTraversal?.selectedExitInterfaceIndex ?? null,
+        hasPhysicalCalibration: true,
+        interfaces: visualInterfaces
+    }),
+    listVisibleCells: async () => [{
+        id: runtime.expedition.currentCell,
+        polygon: visualPolygon,
+        center: { x: 0, y: 0 }
+    }],
+    lookupWorldCell: async () => ({
+        status: "Unique",
+        candidates: [["map-nonadjacent", "teleport-workspace"].includes(stateName)
+            ? visualCell(20, 0) : runtime.expedition.currentCell]
+    }),
+    resolveWorldCell: async () => {
+        const distant = ["map-nonadjacent", "teleport-workspace"].includes(stateName);
+        return distant
+            ? {
+                id: visualCell(20, 0), center: { x: 20, y: 0 },
+                polygon: visualPolygon.map(point => ({ x: point.x + 20, y: point.y }))
+            }
+            : {
+                id: runtime.expedition.currentCell,
+                polygon: visualPolygon,
+                center: { x: 0, y: 0 }
+            };
+    },
+    resolveCellCourse: async (_expeditionId, input) => {
+        if (input.expectedVersion !== runtime.version)
+            throw new Error("Visual review stale course mutation.");
+        const heading = input.decision.intendedHeading;
+        runtime = {
+            ...runtime,
+            version: runtime.version + 1,
+            pauseReason: null,
+            remainingWatchHours: 1,
+            expedition: {
+                ...runtime.expedition,
+                intendedHeading: heading,
+                activeWatchPendingDecision: null,
+                cellTraversal: {
+                    ...runtime.expedition.cellTraversal,
+                    travelHeading: heading,
+                    selectedExitInterfaceIndex: input.decision.selectedExitInterfaceIndex
+                }
             }
         };
         return runtime;
@@ -1998,38 +2117,53 @@ let movementValidationVerified = false;
 let movementRetryVerified = false;
 
 if (stateName === "course-change-reload") {
-    const changedEdge = root.querySelector('[data-adjacency-interface-id="adjacency-5"]');
-    changedEdge?.click();
+    const changedEdge = root.querySelector('[data-adjacency-interface-id$=":5"]');
+    if (!changedEdge) throw new Error("Missing qualified exit interface 5.");
+    changedEdge.click();
     await waitForCondition(
-        () => runtime.expedition.intendedDirection === 5
-            && root.querySelector('[data-adjacency-interface-id="adjacency-5"]')?.getAttribute("aria-pressed") === "true",
-        "server-authoritative changed course");
+        () => root.querySelector('[data-adjacency-interface-id$=":5"]')?.getAttribute("aria-pressed") === "true"
+            && runtime.expedition.cellTraversal?.selectedExitInterfaceIndex === 1,
+        "draft atomic exit selected without changing saved course");
+    findButton("Resolve travel / watch")?.click();
+    const confirmCourse = root.querySelector('[data-phase15-drawer] [data-confirm-course]');
+    if (!confirmCourse || confirmCourse.disabled)
+        throw new Error("Adjudication pause did not expose an enabled atomic course resolution.");
+    confirmCourse.click();
+    await waitForCondition(
+        () => runtime.expedition.cellTraversal?.selectedExitInterfaceIndex === 5
+            && root.querySelector('[data-adjacency-interface-id$=":5"]')?.getAttribute("aria-pressed") === "true",
+        "server-authoritative adjudicated course");
 
     disposeExpedition();
     root.replaceChildren();
-    localStorage.removeItem("hex-crawl.expedition." + runtime.id + ".travel-intent");
     disposeExpedition = await renderExpedition(root, api, runtime.id, () => {}, undefined, null);
     await waitForCondition(
-        () => root.querySelector('[data-adjacency-interface-id="adjacency-5"]')?.getAttribute("aria-pressed") === "true",
+        () => root.querySelector('[data-adjacency-interface-id$=":5"]')?.getAttribute("aria-pressed") === "true",
         "fresh client restored changed course");
 
-    findButton("Resolve navigation")?.click();
-    await waitForRootText("Intended travel direction:");
-} else if (stateName === "course-clear-reload") {
-    const selectedEdge = root.querySelector('[data-adjacency-interface-id="adjacency-1"]');
-    selectedEdge?.click();
+    findButton("Resolve travel / watch")?.click();
     await waitForCondition(
-        () => runtime.expedition.intendedDirection === null
+        () => Boolean(root.querySelector('[data-phase15-drawer] input[name="headingX"]'))
+            && Boolean(root.querySelector('[data-phase15-drawer] input[name="headingY"]')),
+        "fresh client exposed the unified physical course form");
+} else if (stateName === "course-clear-reload") {
+    const selectedEdge = root.querySelector('[data-adjacency-interface-id$=":1"]');
+    if (!selectedEdge) throw new Error("Missing initially selected atomic interface.");
+    selectedEdge.click();
+    await waitForCondition(
+        () => runtime.expedition.cellTraversal?.selectedExitInterfaceIndex === 1
             && root.querySelectorAll('[data-adjacency-interface-id][aria-pressed="true"]').length === 0,
-        "server-authoritative cleared course");
+        "cleared draft does not mutate saved course");
 
     disposeExpedition();
     root.replaceChildren();
-    localStorage.removeItem("hex-crawl.expedition." + runtime.id + ".travel-intent");
     disposeExpedition = await renderExpedition(root, api, runtime.id, () => {}, undefined, null);
     await waitForCondition(
-        () => root.querySelectorAll('[data-adjacency-interface-id][aria-pressed="true"]').length === 0,
-        "fresh client retained no-course state");
+        () => root.querySelector('[data-adjacency-interface-id$=":1"]')?.getAttribute("aria-pressed") === "true",
+        "fresh client restored saved course rather than uncommitted draft");
+    await waitForCondition(
+        () => root.querySelector('[data-current-action-label]')?.textContent === "Continue travel",
+        "fresh client loaded gameplay requirements before choosing its next action");
 } else if (stateName === "map-selected" || stateName === "map-nonadjacent") {
     const canvas = root.querySelector("canvas");
     if (canvas) {
@@ -2040,46 +2174,52 @@ if (stateName === "course-change-reload") {
             clientX: rect.left + rect.width / 2 + (stateName === "map-nonadjacent" ? 280 : 90),
             clientY: rect.top + rect.height / 2
         }));
+        if (stateName === "map-nonadjacent")
+            await waitForCondition(
+                () => [...root.querySelectorAll("button")].some(button =>
+                    button.textContent?.trim() === "Teleport party here" && !button.disabled),
+                "distant qualified cell inspection resolved");
     }
 } else if (stateName === "navigation-pending" || stateName === "abstract-spatial-course") {
-    findButton("Resolve navigation")?.click();
+    findButton("Resolve travel / watch")?.click();
 } else if (stateName === "movement-input-pending" || stateName === "movement-validation-retry") {
     findButton("Continue travel")?.click();
     await waitForCondition(() => Boolean(root.querySelector('[data-phase15-drawer] [data-advance]')), "rendered movement form");
     if (stateName === "movement-validation-retry") {
-        const form = root.querySelector('[data-phase15-drawer] [data-advance]');
-        const hint = root.querySelector('[data-phase15-drawer] [data-travel-resolution] .hc-hint');
-        const effective = form.querySelector('[name="effectiveDistance"]');
-        const source = form.querySelector('[name="travelSource"]');
-        const initialHint = root.querySelector('[data-phase15-drawer]')?.textContent || "";
-        if (!initialHint.includes("Effective distance (mi)") || !initialHint.includes("travel period")
-            || initialHint.includes("runtime can not derive")) {
-            throw new Error("Rendered movement hint lost the field, period, or unit.");
-        }
-        const originalActionLabel = form.querySelector("[data-advance-button]")?.textContent?.trim();
-        if (originalActionLabel !== "Resolve movement and continue") throw new Error(`Unexpected movement action: ${originalActionLabel}`);
-        effective.value = "";
-        source.value = "DmOverride";
+        const form = root.querySelector('[data-phase15-drawer] [data-travel-form]');
+        const actual = form?.querySelector('[name="actual"]');
+        const expected = form?.querySelector('[name="expected"]');
+        const unitLabel = root.querySelector('[data-phase15-drawer] [data-distance-unit]')?.textContent || "";
+        if (!form || !actual || !expected || !unitLabel.includes("Distance is entered in mi"))
+            throw new Error("Unified travel/watch form lost physical travel inputs or their unit.");
+        if (!expected.value) expected.value = "2";
+        actual.value = "";
         form.requestSubmit();
-        await waitForCondition(() => Boolean(root.querySelector('[data-watch-advance-error]')), "blank-distance validation");
-        const validation = root.querySelector('[data-watch-advance-error]')?.textContent || "";
-        movementValidationVerified = validation.includes("Effective distance (mi)")
-            && validation.includes("travel period") && !validation.includes("effectiveDistance requires a number");
-        if (!movementValidationVerified || movementRetryCalls !== 0) throw new Error("Blank movement validation did not block travel with plain-language context.");
-        await waitForCondition(() => !form.querySelector("[data-advance-button]").disabled, "validation returned control");
-        if (form.querySelector("[data-advance-button]")?.textContent?.trim() !== originalActionLabel) throw new Error("Movement action label changed after validation.");
-        effective.value = "2";
+        await waitForCondition(
+            () => (root.querySelector('[data-error]')?.textContent || "").includes("Enter a valid finite actual value."),
+            "blank resolved-distance validation");
+        movementValidationVerified = movementRetryCalls === 0;
+        if (!movementValidationVerified)
+            throw new Error("Invalid resolved distance incorrectly advanced the spatial watch.");
+        actual.value = "2";
         form.requestSubmit();
-        await waitForCondition(() => movementRetryCalls === 1, "retry reached authoritative advance");
-        movementRetryVerified = !root.querySelector('[data-watch-advance-error]')
-            && form.querySelector("[data-advance-button]")?.textContent?.trim() === originalActionLabel;
-        if (!movementRetryVerified) throw new Error("Retry did not clear the validation error.");
+        await waitForCondition(() => movementRetryCalls === 1, "corrected watch reached authoritative advance");
+        movementRetryVerified = !(root.querySelector('[data-error]')?.textContent || "").trim();
+        if (!movementRetryVerified)
+            throw new Error("Corrected watch retained its previous validation error.");
     }
 } else if (stateName === "movement-composition" || stateName === "nonspatial-movement-composition") {
-    findStatAction("Movement")?.click();
+    if (stateName === "movement-composition") {
+        const disclosure = root.querySelector("[data-movement]")?.closest("details");
+        if (disclosure) disclosure.open = true;
+    } else {
+        (findStatAction("Movement") ?? findStatAction("Party"))?.click();
+    }
     await waitForRootText("Movement composition contributors");
 } else if (["encounter-schedule", "encounter-schedule-day", "encounter-contextual-schedule"].includes(stateName)) {
-    findButtonContaining("Encounter schedule")?.click();
+    findButton("Resolve travel / watch")?.click();
+    const details = root.querySelector("[data-encounter-cadence]")?.closest("details");
+    if (details) details.open = true;
     await waitForRootText("Encounter check schedule");
 } else if (stateName === "encounter-pending") {
     findButton("Resolve encounter")?.click();
@@ -2089,7 +2229,8 @@ if (stateName === "course-change-reload") {
     || stateName === "forced-travel-party-scope"
     || stateName === "forced-travel-mount"
     || stateName === "forced-travel-vehicle") {
-    findButton("Resolve forced travel")?.click();
+    const gameplay = root.querySelector("[data-gameplay-disclosure]");
+    if (gameplay) gameplay.open = true;
     await waitForRootText("Current requirement");
     const checkbox = Array.from(root.querySelectorAll("label"))
         .find(label => label.textContent?.includes("Check succeeded"))
@@ -2103,14 +2244,31 @@ if (stateName === "course-change-reload") {
 }
 
 if (stateName === "more-options-open") {
-    findButton("More options")?.click();
+    const gm = root.querySelector(".hc-gm-tools details");
+    if (gm) gm.open = true;
 } else if (stateName === "teleport-workspace") {
-    findButton("Teleport party")?.click();
+    const gm = root.querySelector(".hc-gm-tools details");
+    if (gm) gm.open = true;
+    const canvas = root.querySelector("canvas");
+    if (canvas) {
+        const rect = canvas.getBoundingClientRect();
+        canvas.dispatchEvent(new MouseEvent("click", {
+            bubbles: true, button: 0,
+            clientX: rect.left + rect.width / 2,
+            clientY: rect.top + rect.height / 2
+        }));
+    }
+    await waitForCondition(
+        () => !root.querySelector("[data-gm-reposition]")?.disabled,
+        "inspected cell enables explicit GM reposition");
+    root.querySelector("[data-gm-reposition]")?.click();
 } else if (stateName === "journey-pending") {
     findButton("Resolve journey event")?.click();
     await waitForRootText("Pending journey event");
 } else if (stateName === "effects-workspace" || stateName === "effects-journey-source" || stateName === "readability-workspace" || stateName === "guided-pending-consequence") {
-    findButtonContaining("Resources & effects")?.click();
+    const gameplay = root.querySelector("[data-gameplay-disclosure]");
+    if (gameplay) gameplay.open = true;
+    else findButtonContaining("Resources & effects")?.click();
     await waitForRootText("Active effects");
 } else if (stateName === "history-workspace") {
     findStatAction("Time")?.click();
@@ -2137,7 +2295,7 @@ const buttons = Array.from(root.querySelectorAll("button"));
 const mapHost = root.querySelector(".hc-map-host");
 const mapContext = root.querySelector("[data-map-context]");
 const rail = root.querySelector(".hc-table-rail");
-const currentTravel = root.querySelector("[data-current-travel]");
+const currentTravel = root.querySelector(".hc-current-travel");
 const rootText = root.textContent || "";
 const journeyPrimaryText = root.querySelector(".hc-journey-primary")?.textContent || "";
 const isNormalPresentationElement = element => {
@@ -2173,9 +2331,25 @@ const shortReadableLedgerCells = Array.from(root.querySelectorAll(".hc-readable-
 const forcedTravelTarget = root.querySelector("[data-forced-travel-target]");
 const forcedTravelResolve = Array.from(root.querySelectorAll("button"))
     .find(button => button.textContent?.trim() === "Record forced-travel result");
+const reviewBoundary = root.getBoundingClientRect();
+const overflowingElements = Array.from(root.querySelectorAll("*")).flatMap(element => {
+    const rect = element.getBoundingClientRect();
+    if (rect.width <= 0 || rect.right <= reviewBoundary.right + 2) return [];
+    return [{
+        element: element.tagName.toLowerCase()
+            + [...element.classList].slice(0, 3).map(name => "." + name).join("")
+            + [...Object.keys(element.dataset)].slice(0, 2).map(name => "[" + name + "]").join(""),
+        right: Math.round(rect.right - reviewBoundary.left),
+        width: Math.round(rect.width),
+        scrollWidth: element.scrollWidth,
+        clientWidth: element.clientWidth,
+        text: (element.textContent || "").trim().slice(0, 48)
+    }];
+}).sort((a, b) => b.right - a.right).slice(0, 12);
 const metrics = {
     state: stateName,
     surface: "expedition",
+    overflowingElements,
     theme,
     viewportWidth: window.innerWidth,
     viewportHeight: window.innerHeight,
@@ -2185,14 +2359,13 @@ const metrics = {
     scrollHeight: document.documentElement.scrollHeight,
     navigatorButtons: root.querySelectorAll("[data-adjacency-interface-id]").length,
     selectedEdges: root.querySelectorAll('[data-adjacency-interface-id][aria-pressed="true"]').length,
-    selectedDirection: root.querySelector('[data-adjacency-interface-id][aria-pressed="true"]')?.dataset.adjacencyInterfaceId?.replace("adjacency-", "") ?? null,
-    runtimeIntendedDirection: runtime.expedition.isSpatial ? runtime.expedition.intendedDirection : null,
-    runtimeActualDirection: runtime.expedition.isSpatial ? runtime.expedition.actualDirection : null,
-    currentTravelCourseText: root.querySelector("[data-current-travel-course]")?.textContent?.trim() ?? null,
+    selectedInterfaceIndex: root.querySelector('[data-adjacency-interface-id][aria-pressed="true"]')?.dataset.adjacencyInterfaceId?.replace("adjacency-", "") ?? null,
+    runtimeIntendedHeading: runtime.expedition.isSpatial ? runtime.expedition.intendedHeading : null,
+    runtimeActualHeading: runtime.expedition.isSpatial ? runtime.expedition.actualHeading : null,
+    currentTravelCourseText: root.querySelector(".hc-current-travel [data-course]")?.textContent?.trim() ?? null,
     navigationStatText: Array.from(root.querySelectorAll(".hc-stat-action")).find(item =>
         item.querySelector(".hc-stat-action-label")?.textContent?.trim() === "Navigation")?.textContent?.replace(/\s+/g, " ").trim() ?? null,
     focusedNavigationText: root.querySelector("[data-phase15-drawer]")?.textContent?.replace(/\s+/g, " ").trim() ?? null,
-    storedTravelPreferences: localStorage.getItem("hex-crawl.expedition." + runtime.id + ".travel-intent"),
     continueButtons: buttons.filter(button => isVisible(button) && button.textContent?.trim() === "Continue travel").length,
     travelControlsButtons: buttons.filter(button => isVisible(button) && button.textContent?.trim() === "Travel controls").length,
     drawerCount: root.querySelectorAll("[data-phase15-drawer]").length,
@@ -2203,12 +2376,14 @@ const metrics = {
     currentTravelVisible: isVisible(currentTravel),
     currentTravelTop: currentTravel ? Math.round(currentTravel.getBoundingClientRect().top) : null,
     currentTravelInRail: Boolean(currentTravel?.parentElement?.classList.contains("hc-table-rail")),
-    currentTravelCount: root.querySelectorAll("[data-current-travel]").length,
+    currentTravelCount: root.querySelectorAll(".hc-current-travel").length,
     changePaceButtons: buttons.filter(button => isVisible(button) && button.textContent?.trim() === "Change pace").length,
     paceTextInputs: root.querySelectorAll('input[name="pace"][type="text"]').length,
     paceSelects: root.querySelectorAll(".hc-current-travel-pace-editor select").length,
+    paceOptionCount: root.querySelectorAll('[data-travel-form] select[name="pace"] option').length,
+    gmToolsOpen: Boolean(root.querySelector(".hc-gm-tools details[open]")),
     partyActivitiesRailButtons: buttons.filter(button => isVisible(button) && button.textContent?.includes("Party & activities")).length,
-    partySetupVisible: rootText.includes("Party not configured"),
+    partySetupVisible: rootText.includes("No party members assigned.") && Boolean(root.querySelector("[data-gameplay-disclosure]")),
     primaryAction: root.querySelector(".hc-current-action-primary")?.textContent?.trim() || null,
     guidedNextActionWhyVisible: Array.from(root.querySelectorAll("summary"))
         .some(summary => summary.textContent?.trim() === "Why is this next?"),
@@ -2246,7 +2421,7 @@ const metrics = {
         rootText.includes("Current travel")
         || rootText.includes("Pace / travel mode")
         || rootText.includes("Current cell")
-        || rootText.includes("Hex progress")
+        || rootText.includes("Intra-cell progress")
         || rootText.includes("Teleport party")
         || rootText.includes("Party & travel order")),
     teleportContextVisible: Array.from(root.querySelectorAll("button")).some(button => isVisible(button) && button.textContent?.trim() === "Teleport party here"),
@@ -2257,18 +2432,19 @@ const metrics = {
     journeyNoPendingConsequencesVisible: journeyPrimaryText.includes("No pending consequences"),
     journeyPendingRawInternalsVisible: stateName === "journey-pending"
         && /ProcessProgress|journey-event-opportunity|event-1:pass:progress/.test(normalJourneyText),
-    movementUnitVisible: rootText.includes("Effective distance (mi)"),
+    movementUnitVisible: rootText.includes("Distance is entered in mi"),
     movementValidationVerified,
     movementRetryVerified,
     movementRetryCalls,
     navigationCourseReadOnly: !["navigation-pending", "abstract-spatial-course"].includes(stateName) || (
-        rootText.includes("Intended travel direction:")
-        && !root.querySelector('[data-phase15-drawer] select[name="intendedDirection"]')
+        Boolean(root.querySelector('[data-phase15-drawer] input[name="headingX"]'))
+        && !root.querySelector('[data-phase15-drawer] select[name="direction"]')
     ),
     abstractSpatialCourseReused: stateName !== "abstract-spatial-course" || (
-        runtime.context.kind === "AbstractHex"
-        && root.querySelector("[data-adjacency-select]")?.value === "2"
-        && !root.querySelector('[data-phase15-drawer] select[name="intendedDirection"]')
+        runtime.context.kind === "MaplessSpatial"
+        && runtime.expedition.cellTraversal?.selectedExitInterfaceIndex === 2
+        && Boolean(root.querySelector('[data-phase15-drawer] input[name="headingX"]'))
+        && !root.querySelector('[data-phase15-drawer] select[name="direction"]')
     ),
     forcedTravelPrimaryDomainFacing: rootText.includes("Current requirement") && rootText.includes("Failure consequence:"),
     forcedTravelNamedTargetVisible: !stateName.startsWith("forced-travel-") || (
@@ -2309,7 +2485,9 @@ const metrics = {
     activeEffectVisible: rootText.includes("Fatigue") && rootText.includes("Level 2") && rootText.includes("Clear effect"),
     effectRecoveryVisible: rootText.includes("Reduce 1 level") && rootText.includes("Recovery:"),
     unifiedHistoryVisible: rootText.includes("Journey") && rootText.includes("Travel / runtime") && rootText.includes("Effects / consequences"),
-    positionProgressVisible: rootText.includes("4.5 / 12 mi") && rootText.includes("37.5% through current cell"),
+    partialWatchPositionVisible: rootText.includes("Travel period in progress")
+        && Boolean(root.querySelector("[data-cell-navigator]"))
+        && rootText.includes("Position"),
     focusReturnedToOpener: focusReturnVerified,
     encounterResolutionVisible: rootText.includes("Mark encounter resolved")
         && !rootText.includes("Encounter resolved — continue travel")

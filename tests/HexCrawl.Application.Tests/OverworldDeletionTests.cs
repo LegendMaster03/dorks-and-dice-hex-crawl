@@ -11,9 +11,9 @@ public sealed class OverworldDeletionTests
     {
         await using var database = await TestDatabase.CreateAsync();
         var service = await database.ServiceAsync();
-        var first = await service.CreateOverworldAsync("alice", WorldCommand("First"));
-        var second = await service.CreateOverworldAsync("alice", WorldCommand("Second"));
-        var bob = await service.CreateOverworldAsync("bob", WorldCommand("Bob"));
+        var first = await service.CreatePeriodicOverworldAsync("alice", "First", MaplessSessionFixture.Start().World);
+        var second = await service.CreatePeriodicOverworldAsync("alice", "Second", MaplessSessionFixture.Start().World);
+        var bob = await service.CreatePeriodicOverworldAsync("bob", "Bob", MaplessSessionFixture.Start().World);
 
         var deleted = await service.DeleteOverworldAsync(first.World.Id, "alice", first.Version);
 
@@ -31,11 +31,9 @@ public sealed class OverworldDeletionTests
     {
         await using var database = await TestDatabase.CreateAsync();
         var service = await database.ServiceAsync();
-        var world = await service.CreateOverworldAsync("alice", WorldCommand());
-        var updated = await service.UpdateOverworldAsync(
-            world.World.Id,
-            "alice",
-            new UpdateOverworldCommand("Renamed", world.World.Grid, world.Version));
+        var world = await service.CreatePeriodicOverworldAsync("alice", "World", MaplessSessionFixture.Start().World);
+        var updated = await service.RenameOverworldAsync(
+            world.World.Id, "alice", "Renamed", world.Version);
 
         await Assert.ThrowsAsync<HexCrawlConcurrencyException>(() =>
             service.DeleteOverworldAsync(world.World.Id, "alice", world.Version));
@@ -48,26 +46,14 @@ public sealed class OverworldDeletionTests
     {
         await using var database = await TestDatabase.CreateAsync();
         var service = await database.ServiceAsync();
-        var world = await service.CreateOverworldAsync("alice", WorldCommand());
-        _ = await service.StartExpeditionAsync(
-            world.World.Id,
-            "alice",
-            new StartExpeditionCommand("Active", "simple-fixed-distance", new HexCoordinate(0, 0)));
+        var world = await service.CreatePeriodicOverworldAsync("alice", "World", MaplessSessionFixture.Start().World);
+        await database.StartCellAsync(world.World.Id, "Active");
 
         await Assert.ThrowsAsync<HexCrawlConflictException>(() =>
             service.DeleteOverworldAsync(world.World.Id, "alice", world.Version));
 
         Assert.Equal(world.World.Id, (await service.GetOverworldAsync(world.World.Id, "alice")).World.Id);
     }
-
-    private static CreateOverworldCommand WorldCommand(string name = "World") => new(
-        name,
-        HexOrientation.PointyTop,
-        new WorldPoint(0, 0),
-        0,
-        1,
-        12,
-        DistanceUnit.Miles);
 
     private sealed class TestDatabase : IAsyncDisposable
     {
@@ -92,6 +78,17 @@ public sealed class OverworldDeletionTests
             var store = new PostgresHexCrawlStore(ConnectionString);
             await store.InitializeAsync();
             return new HexCrawlService(store);
+        }
+
+        public async Task StartCellAsync(Guid worldId, string name)
+        {
+            var store = new PostgresHexCrawlStore(ConnectionString);
+            var service = new HexCrawlService(store);
+            await new ExpeditionStartService(store, service, new CampaignProcedureService(store))
+                .StartWorldBoundCellsAsync(
+                    worldId, "alice", name,
+                    new ProcedureStartSelection(PresetKey: "simple-fixed-distance"),
+                    new PeriodicCellAddress("face-0", new LatticeDisplacement(0, 0)));
         }
 
         public ValueTask DisposeAsync() => _database.DisposeAsync();

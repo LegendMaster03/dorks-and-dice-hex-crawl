@@ -63,37 +63,24 @@ public sealed class Phase18EnvironmentContextTests
     }
 
     [Fact]
-    public void CellEnvironmentAlsoResolvesForLegacyHexWithoutReplacingHexScope()
+    public void QualifiedCellEnvironmentResolvesOnlyMatchingCellAnnotations()
     {
-        var grid = new HexGridDefinition
-        {
-            Id = Guid.NewGuid(),
-            HexRadiusWorldUnits = 1,
-            NeighborCenterDistance = new DistanceMeasure(6, DistanceUnit.Miles)
-        };
-        var cell = LegacyHexTilingCompatibility.ToCellId(new HexId(grid.Id, new HexCoordinate(0, 0)));
+        var tiling = MaplessSessionFixture.Start().World;
+        var cell = new WorldCellId(tiling.Id,
+            new PeriodicCellAddress(tiling.Topology.MotifCells[0].Id, new LatticeDisplacement(0, 0)));
         var world = new OverworldDefinition
         {
-            Id = Guid.NewGuid(), Name = "Legacy cell annotations", Grid = grid,
+            Id = Guid.NewGuid(), Name = "Qualified cell annotations", Tiling = tiling,
             EnvironmentAnnotations =
             [
                 Annotation(
                     new EnvironmentAnnotationScope { Kind = EnvironmentAnnotationScopeKind.Cell,
-                        Cell = cell }, "terrain", "coastal"),
-                Annotation(
-                    new EnvironmentAnnotationScope { Kind = EnvironmentAnnotationScopeKind.Hex,
-                        Hex = new HexCoordinate(0, 0) }, "weather", "windy")
+                        Cell = cell }, "terrain", "coastal")
             ]
         };
-        var state = new ExpeditionState
-        {
-            Id = Guid.NewGuid(),
-            Traversal = HexTraversalState.StartingIn(new HexCoordinate(0, 0), DistanceUnit.Miles),
-            DistanceTraveled = new DistanceMeasure(0, DistanceUnit.Miles)
-        };
+        var state = State(world.SpatialTiling.Resolve(cell.Address));
         var values = EnvironmentContextResolver.Resolve(Stored(world, state), world);
         Assert.Contains(values.Facts, f => f.Effective && f.Fact.Tag == "coastal");
-        Assert.Contains(values.Facts, f => f.Effective && f.Fact.Tag == "windy");
     }
 
     private static CellExpeditionState State(WorldCellGeometry cell) => new()

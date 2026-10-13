@@ -50,12 +50,12 @@ public sealed class OverworldDeletionEndpointsTests
             var worldId = world.GetProperty("id").GetGuid();
             var version = world.GetProperty("version").GetInt64();
 
-            using (var start = await client.PostAsJsonAsync($"/api/overworlds/{worldId:D}/expeditions", new
+            using (var start = await client.PostAsJsonAsync($"/api/overworlds/{worldId:D}/cell-expeditions", new
             {
                 name = "Active expedition",
-                procedureKey = "simple-fixed-distance",
+                presetKey = "simple-fixed-distance",
                 presentationKey = "exploration-map",
-                startHex = new { q = 0, r = 0 }
+                startCell = new { motifCellId = "face-0", translation = new { u = 0L, v = 0L } }
             }))
             {
                 start.EnsureSuccessStatusCode();
@@ -111,15 +111,17 @@ public sealed class OverworldDeletionEndpointsTests
 
     private static async Task<JsonElement> CreateWorld(HttpClient client, string name)
     {
-        using var response = await client.PostAsJsonAsync("/api/overworlds", new
+        using var response = await client.PostAsJsonAsync("/api/overworlds/periodic", new
         {
-            name,
-            orientation = "PointyTop",
-            origin = new { x = 0, y = 0 },
-            rotationDegrees = 0,
-            hexRadiusWorldUnits = 1,
-            neighborCenterDistance = 12,
-            distanceUnit = new { kind = "Mile", symbol = "mi", metersPerUnit = 1609.344 }
+            name = name,
+            tilingDsSymbol = "<1:1,1,1:6,3>",
+            worldUnitsPerAbstractPeriod = 1.0,
+            origin = new { x = 0.0, y = 0.0 },
+            physicalDistancePerWorldUnit = new
+            {
+                value = 12.0,
+                unit = new { kind = "Mile", symbol = "mi", metersPerUnit = 1609.344 }
+            }
         });
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<JsonElement>();

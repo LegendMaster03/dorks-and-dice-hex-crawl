@@ -1225,15 +1225,17 @@ public sealed class SourceMapEndpointsTests
 
     private static async Task<JsonElement> CreateWorld(HttpClient client, string name)
     {
-        using var response = await client.PostAsJsonAsync("/api/overworlds", new
+        using var response = await client.PostAsJsonAsync("/api/overworlds/periodic", new
         {
-            name,
-            orientation = "PointyTop",
-            origin = new { x = 0, y = 0 },
-            rotationDegrees = 0,
-            hexRadiusWorldUnits = 1,
-            neighborCenterDistance = 12,
-            distanceUnit = new { kind = "Mile", symbol = "mi", metersPerUnit = 1609.344 }
+            name = name,
+            tilingDsSymbol = "<1:1,1,1:6,3>",
+            worldUnitsPerAbstractPeriod = 1.0,
+            origin = new { x = 0.0, y = 0.0 },
+            physicalDistancePerWorldUnit = new
+            {
+                value = 12.0,
+                unit = new { kind = "Mile", symbol = "mi", metersPerUnit = 1609.344 }
+            }
         });
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<JsonElement>();

@@ -27,7 +27,6 @@ public sealed class Phase18CellWorldCompositionTests
         var initialized = PresentationKnowledgeProjection.InitializeCells(
             world, policy, baseline, current.Id);
         Assert.Equal(current.Id, Assert.Single(initialized.KnownCells!));
-        Assert.Empty(initialized.KnownHexes);
         Assert.Contains(obvious.Id, initialized.Entries.Keys);
         Assert.DoesNotContain(hidden.Id, initialized.Entries.Keys);
         Assert.DoesNotContain(distant.Id, initialized.Entries.Keys);
@@ -36,7 +35,6 @@ public sealed class Phase18CellWorldCompositionTests
             world, MapPresentationPolicy.TraditionalHiddenHexcrawl(),
             baseline, current.Id);
         Assert.Null(traditional.KnownCells);
-        Assert.Empty(traditional.KnownHexes);
 
         var dmControlled = PresentationKnowledgeProjection.InitializeCells(
             world, MapPresentationPolicy.DmControlled(),
@@ -58,7 +56,6 @@ public sealed class Phase18CellWorldCompositionTests
         var events = projected.State.History;
         Assert.Equal(4, events.Count);
         Assert.Equal(4, events.Select(e => e.Sequence).Distinct().Count());
-        Assert.Empty(projected.Knowledge.KnownHexes);
         Assert.Equal(current.Id, Assert.Single(projected.Knowledge.KnownCells!));
         Assert.Equal(KnowledgeState.Discovered, projected.Knowledge.Entries[inside.Id].State);
         Assert.DoesNotContain(outside.Id, projected.Knowledge.Entries.Keys);
@@ -66,8 +63,6 @@ public sealed class Phase18CellWorldCompositionTests
             e.Kind == CrawlRuntimeEventKind.KeyedLocationEncountered).Cell);
         Assert.Equal(current.Id, Assert.Single(events, e =>
             e.Kind == CrawlRuntimeEventKind.LocationDiscovered).Cell);
-        Assert.Null(Assert.Single(events, e =>
-            e.Kind == CrawlRuntimeEventKind.LocationDiscovered).Hex);
         Assert.Equal(inside.Id, Assert.Single(events, e =>
             e.Kind == CrawlRuntimeEventKind.EncounterTriggered).EncounterLocation!.Id);
     }
@@ -99,7 +94,7 @@ public sealed class Phase18CellWorldCompositionTests
         Assert.Null(projection.Knowledge.KnownCells);
         Assert.Contains(projection.State.History,
             e => e.Kind == CrawlRuntimeEventKind.LocationDiscovered
-                 && e.Cell == current.Id && e.Hex is null);
+                 && e.Cell == current.Id);
     }
 
     [Fact]
@@ -156,13 +151,13 @@ public sealed class Phase18CellWorldCompositionTests
         var occurrenceId = Guid.NewGuid();
         var trigger = new CrawlRuntimeEvent(
             2, 1, CrawlRuntimeEventKind.EncounterTriggered,
-            TimeSpan.FromHours(1), null, "A location was encountered.",
+            TimeSpan.FromHours(1), "A location was encountered.",
             SubjectId: subjectId, EncounterOutcome: kind,
             EncounterOccurrenceId: occurrenceId)
         { Cell = current.Id };
         var entry = new CrawlRuntimeEvent(
             1, 1, CrawlRuntimeEventKind.CellEntered,
-            TimeSpan.FromMinutes(20), null, "Entered a new cell.")
+            TimeSpan.FromMinutes(20), "Entered a new cell.")
         { Cell = current.Id };
         var runtime = new CellExpeditionState
         {
@@ -179,7 +174,7 @@ public sealed class Phase18CellWorldCompositionTests
                 plan, scheduled, true, RuntimePauseReason.EncounterTriggered),
             PendingEncounter = new PendingEncounterOccurrence(
                 occurrenceId, 2, 1, kind, TimeSpan.FromHours(1),
-                null, subjectId, "Encounter", Manual)
+                subjectId, "Encounter", Manual)
             { Cell = current.Id },
             History = [entry, trigger]
         };

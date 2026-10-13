@@ -19,6 +19,7 @@ export class ExpeditionJourneyPanel {
     private readonly body: HTMLElement;
     private state: ExpeditionJourneyState | null = null;
     private disposed = false;
+    private syncGeneration = 0;
 
     public constructor(
         root: HTMLElement,
@@ -34,19 +35,25 @@ export class ExpeditionJourneyPanel {
         this.body = document.createElement("div");
         this.body.className = "hc-form";
         this.panel.append(summary, this.body);
-        const page = root.matches(".hc-page")
+        const page = root.matches("[data-gameplay-panels]") || root.matches(".hc-page")
             ? root
             : root.querySelector<HTMLElement>(".hc-page");
         page?.append(this.panel);
     }
 
-    public async sync(): Promise<void> {
-        this.state = await this.api.get(this.expeditionId);
-        if (!this.disposed) this.render();
+    public async sync(): Promise<ExpeditionJourneyState> {
+        const generation = ++this.syncGeneration;
+        const state = await this.api.get(this.expeditionId);
+        if (!this.disposed && generation === this.syncGeneration) {
+            this.state = state;
+            this.render();
+        }
+        return state;
     }
 
     public dispose(): void {
         this.disposed = true;
+        this.syncGeneration++;
         this.panel.remove();
     }
 
@@ -658,8 +665,10 @@ export class ExpeditionJourneyPanel {
     }
 
     private apply(next: ExpeditionJourneyState): void {
+        this.syncGeneration++;
+        if (this.disposed) return;
         this.state = next;
-        if (!this.disposed) this.render();
+        this.render();
     }
 
     private requireState(): ExpeditionJourneyState {

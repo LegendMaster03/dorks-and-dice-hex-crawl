@@ -128,7 +128,6 @@ public static class JourneyRuntimeIntegration
 
     private static int CompletedWatches(CrawlSessionRuntimeState runtime) => runtime switch
     {
-        ExpeditionState spatial => spatial.CompletedWatches,
         CellExpeditionState cellSpatial => cellSpatial.CompletedWatches,
         NonSpatialSessionState nonSpatial => nonSpatial.CompletedWatches,
         _ => throw new InvalidOperationException("Unsupported expedition runtime state for journey watch integration.")

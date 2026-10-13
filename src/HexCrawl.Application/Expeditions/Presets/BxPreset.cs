@@ -8,6 +8,7 @@ internal static class BxPreset
 {
     internal static CrawlProcedurePresetDefinition Create() =>
         Preset(
+            CampaignProcedureSchema.CurrentHexTilingDsSymbol,
             BxPresetKey,
             "B/X",
             "Daily wilderness travel where terrain, getting lost, encounters, foraging, and supplies matter.",

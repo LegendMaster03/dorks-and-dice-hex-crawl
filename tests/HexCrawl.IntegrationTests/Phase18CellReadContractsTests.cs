@@ -54,7 +54,7 @@ public sealed class Phase18CellReadContractsTests
 
             var original = CrawlProcedureCatalog.Resolve("simple-fixed-distance").MaterializeGeneric().Procedure;
             var modules = original.Modules
-                .Where(m => m.Mechanic.ExecutionHandler != GenericProcedureExecutionHandlers.HexProgressPolicy)
+
                 .Select(m =>
                 {
                     if (m.Mechanic.ExecutionHandler != GenericProcedureExecutionHandlers.MovementResolutionPolicy)
@@ -62,8 +62,7 @@ public sealed class Phase18CellReadContractsTests
                     var parameters = m.Parameters.ToDictionary(x => x.Key, x => x.Value);
                     parameters["travelResolution"] = TravelResolutionMode.CellSteps.ToString();
                     parameters["actualDistanceResolution"] = ActualDistanceResolutionMode.Fixed.ToString();
-                    parameters["tracksIntraHexProgress"] = "false";
-                    return m with { Mechanic = m.Mechanic with { Version = 2 }, Parameters = parameters };
+                    return m with { Parameters = parameters };
                 }).ToArray();
             var procedure = original with
             {
@@ -78,7 +77,7 @@ public sealed class Phase18CellReadContractsTests
             var boundary = tiling.Boundaries(cell.Id.Address)[0];
             var record = new CrawlRuntimeEvent(
                 1, 1, CrawlRuntimeEventKind.CellEntered,
-                TimeSpan.Zero, null, "Qualified cell transition")
+                TimeSpan.Zero, "Qualified cell transition")
             {
                 Cell = cell.Id,
                 BoundaryInterfaceIndex = boundary.InterfaceIndex,
@@ -118,25 +117,18 @@ public sealed class Phase18CellReadContractsTests
                 var materialized = body.GetProperty("procedure");
                 Assert.True(materialized.GetProperty("isExecutable").GetBoolean());
                 var procedureRuntime = materialized.GetProperty("runtime");
-                Assert.Equal(2, procedureRuntime.GetProperty("movementMechanicVersion").GetInt32());
-                if (procedureRuntime.TryGetProperty("farExitProgressFactor", out var factor))
-                    Assert.Equal(JsonValueKind.Null, factor.ValueKind);
+                Assert.Equal("CellSteps", procedureRuntime.GetProperty("travelResolution").GetString());
                 var state = body.GetProperty("expedition");
                 Assert.True(state.GetProperty("isSpatial").GetBoolean());
-                Assert.Equal(JsonValueKind.Null, state.GetProperty("currentHex").ValueKind);
-                Assert.Equal(JsonValueKind.Null, state.GetProperty("hexProgress").ValueKind);
                 Assert.Equal(JsonValueKind.Null, state.GetProperty("distanceTraveled").ValueKind);
                 Assert.Equal(cell.Id.TilingId,
                     state.GetProperty("currentCell").GetProperty("tilingId").GetGuid());
                 Assert.Equal(cell.Id.TilingId,
                     state.GetProperty("cellTraversal").GetProperty("currentCell").GetProperty("tilingId").GetGuid());
                 Assert.Equal(cell.Center.X, state.GetProperty("position").GetProperty("x").GetDouble(), 8);
-                Assert.Equal(JsonValueKind.Null, body.GetProperty("context").GetProperty("hexCenterDistance").ValueKind);
-                Assert.Equal(JsonValueKind.Null, body.GetProperty("context").GetProperty("orientation").ValueKind);
                 var ev = Assert.Single(body.GetProperty("history").EnumerateArray());
                 Assert.Equal("CellEntered", ev.GetProperty("kind").GetString());
                 Assert.Equal(cell.Id.TilingId, ev.GetProperty("cell").GetProperty("tilingId").GetGuid());
-                Assert.Equal(JsonValueKind.Null, ev.GetProperty("hex").ValueKind);
                 Assert.Equal(boundary.InterfaceIndex, ev.GetProperty("boundaryInterfaceIndex").GetInt32());
                 Assert.Equal(boundary.ReciprocalInterfaceIndex, ev.GetProperty("reciprocalInterfaceIndex").GetInt32());
 
@@ -175,8 +167,7 @@ public sealed class Phase18CellReadContractsTests
                     .Single(item => item.GetProperty("kind").GetString() == "LocationDiscovered");
                 Assert.Equal(cell.Id.TilingId,
                     discoveredEvent.GetProperty("cell").GetProperty("tilingId").GetGuid());
-                Assert.Equal(JsonValueKind.Null, discoveredEvent.GetProperty("hex").ValueKind);
-                Assert.Equal(0, discovered.GetProperty("knownHexes").GetArrayLength());
+                Assert.False(discoveredEvent.TryGetProperty("hex", out _));
 
                 var heading = new WorldPoint(
                     (boundary.Start.X + boundary.End.X) / 2 - cell.Center.X,
@@ -220,7 +211,6 @@ public sealed class Phase18CellReadContractsTests
                 advancedResponse.EnsureSuccessStatusCode();
                 var advanced = await advancedResponse.Content.ReadFromJsonAsync<JsonElement>();
                 Assert.Equal(1, advanced.GetProperty("expedition").GetProperty("completedWatches").GetInt32());
-                Assert.Equal(0, advanced.GetProperty("knownHexes").GetArrayLength());
                 Assert.Equal(boundary.To.TilingId,
                     advanced.GetProperty("expedition").GetProperty("currentCell").GetProperty("tilingId").GetGuid());
                 Assert.Contains(advanced.GetProperty("history").EnumerateArray(),

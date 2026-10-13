@@ -37,7 +37,7 @@ public static class SpatialTurnBudgetAccounting
         if (newCharge is null && outstandingCharge is null)
             return new SpatialTurnBudgetDebit(segmentTravel, null, null);
 
-        if (segmentTravel.CellSteps is not null || segmentTravel.HexSteps is not null)
+        if (segmentTravel.CellSteps is not null)
             throw new NotSupportedException(
                 "A distance-denominated turning cost needs continuous-distance movement. A discrete-step conversion requires an explicit separate procedure rule.");
         if (segmentTravel.ActualDistance is not { } actual

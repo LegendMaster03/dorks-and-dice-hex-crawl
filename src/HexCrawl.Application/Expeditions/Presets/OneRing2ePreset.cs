@@ -8,6 +8,7 @@ internal static class OneRing2ePreset
 {
     internal static CrawlProcedurePresetDefinition Create() =>
         Preset(
+            CampaignProcedureSchema.CurrentHexTilingDsSymbol,
             OneRing2ePresetKey,
             "The One Ring 2e",
             "Role-driven journeys with route planning, Guide progress, journey events, terrain influence, and fatigue.",

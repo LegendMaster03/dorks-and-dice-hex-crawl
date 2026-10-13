@@ -52,6 +52,7 @@ public sealed class Phase11SurvivalResourcesTests
 
     [Theory]
     [InlineData(CrawlProcedureCatalog.Dnd35PresetKey, 8d, "hours", "escalating-check", "fatigue-and-nonlethal-effect")]
+    [InlineData(CrawlProcedureCatalog.Dnd2014PresetKey, 8d, "hours", "escalating-constitution-save", "exhaustion")]
     [InlineData(CrawlProcedureCatalog.Dnd2024PresetKey, 8d, "hours", "escalating-constitution-save", "exhaustion")]
     [InlineData(CrawlProcedureCatalog.ForbiddenLandsPresetKey, 2d, "quarter-days", "endurance-check", "fatigue-or-mishap")]
     public void ForcedTravelProofPoliciesRemainDeclarative(

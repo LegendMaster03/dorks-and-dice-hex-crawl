@@ -15,15 +15,10 @@ public sealed class MovementGeneratedResolutionPersistenceTests
         await store.InitializeAsync();
 
         var now = DateTimeOffset.UtcNow;
-        var procedure = CrawlProcedureCatalog.Resolve("simple-fixed-distance")
-            .MaterializeGeneric()
-            .Procedure;
-        var state = new ExpeditionState
-        {
-            Id = Guid.NewGuid(),
-            Traversal = HexTraversalState.StartingIn(new HexCoordinate(0, 0), DistanceUnit.Miles),
-            DistanceTraveled = new DistanceMeasure(0, DistanceUnit.Miles)
-        };
+        var procedure = CampaignProcedureMaterializer.MaterializeExecutableSpatial(CrawlProcedureCatalog.Resolve("simple-fixed-distance")).Procedure;
+        var geometry = MaplessSessionFixture.Start();
+        var context = new MaplessSpatialCrawlSessionContext("Movement history", geometry.World);
+        var state = geometry.Expedition;
         var generatedId = Guid.NewGuid();
         var generated = new GeneratedProcedureResolution(
             generatedId,
@@ -33,9 +28,9 @@ public sealed class MovementGeneratedResolutionPersistenceTests
             41,
             1,
             [],
-            new ProcedureResolvedTravel(
-                12,
-                10,
+            ResolvedTravelAmount.Distance(
+                new DistanceMeasure(12, DistanceUnit.Miles),
+                new DistanceMeasure(10, DistanceUnit.Miles),
                 new ResolutionProvenance(
                     ResolutionSource.ExternalSystem,
                     "Movement composition: participant=3 mi/hour; interval=4h; expected=12 mi.")),
@@ -47,10 +42,7 @@ public sealed class MovementGeneratedResolutionPersistenceTests
         var expedition = new StoredExpedition(
             "Movement history",
             state,
-            new AbstractHexCrawlSessionContext(
-                "Movement history",
-                HexOrientation.PointyTop,
-                new CrawlRuntimeContext(new DistanceMeasure(12, DistanceUnit.Miles))),
+            context,
             null,
             procedure,
             null,
@@ -87,8 +79,10 @@ public sealed class MovementGeneratedResolutionPersistenceTests
         Assert.Equal(3, resolution.ConsumedAtVersion);
         Assert.Equal(42, resolution.ConsumedAuditSequence);
         Assert.NotNull(resolution.Travel);
-        Assert.Equal(12, resolution.Travel!.ExpectedDistance);
-        Assert.Equal(10, resolution.Travel.ActualDistance);
+        Assert.Equal(new DistanceMeasure(12, DistanceUnit.Miles),
+            resolution.Travel!.ExpectedDistance);
+        Assert.Equal(new DistanceMeasure(10, DistanceUnit.Miles),
+            resolution.Travel.ActualDistance);
         Assert.Equal(ResolutionSource.ExternalSystem, resolution.Travel.Provenance.Source);
         Assert.Equal(
             "Movement composition: participant=3 mi/hour; interval=4h; expected=12 mi.",

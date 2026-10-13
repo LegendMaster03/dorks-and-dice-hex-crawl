@@ -3,10 +3,14 @@ using HexCrawl.Domain.Spatial;
 namespace HexCrawl.Domain.Runtime;
 
 /// <summary>
-/// Non-axial expedition authority. A cell-bound expedition has exactly one
-/// authoritative position: Traversal.Position, qualified by Traversal.CurrentCell.
-/// No legacy hex coordinate is invented to satisfy old clients.
+/// Spatial expedition authority. The authoritative world position is
+/// Traversal.Position, qualified by Traversal.CurrentCell.
 /// </summary>
+public enum WorldPositionPrecision
+{
+    Exact
+}
+
 public sealed record CellExpeditionState : CrawlSessionRuntimeState
 {
     public required PeriodicCellTraversal Traversal { get; init; }
@@ -43,7 +47,7 @@ public sealed record CellExpeditionState : CrawlSessionRuntimeState
             && (!double.IsFinite(traveled.Value) || traveled.Value < 0))
             throw new InvalidOperationException("Physical travel accounting must be finite and nonnegative.");
         if (PendingEncounter is { } pending
-            && (pending.Hex is not null || pending.Cell != Traversal.CurrentCell
+            && (pending.Cell != Traversal.CurrentCell
                 || ActiveWatch?.PendingDecision != RuntimePauseReason.EncounterTriggered
                 || ActiveWatch.WatchNumber != pending.WatchNumber))
             throw new InvalidOperationException(

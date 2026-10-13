@@ -8,6 +8,7 @@ internal static class SimpleHexStepPreset
 {
     internal static CrawlProcedurePresetDefinition Create() =>
         Preset(
+            CampaignProcedureSchema.CurrentHexTilingDsSymbol,
             "simple-hex-step",
             "Simple Hex Step",
             "Four-hour whole-cell travel with no partial progress, navigation, or encounter checks.",
@@ -15,13 +16,12 @@ internal static class SimpleHexStepPreset
             "Simple Hex Step",
             ExecutableCore(
                 TimeSpan.FromHours(4),
-                TravelResolutionMode.HexSteps,
+                TravelResolutionMode.CellSteps,
                 ActualDistanceResolutionMode.Fixed,
                 EncounterCheckCadence.None,
                 usesNavigationChecks: false,
                 usesPersistentVeer: false,
-                tracksIntraHexProgress: false,
-                directionChangesCostProgress: false,
+                neighborCenterDistanceFactor: 0d,
                 supportsDeliberateDoubleBack: false),
             category: "Generic starting points");
 }

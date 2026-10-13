@@ -16,14 +16,9 @@ public sealed class GenericProcedureReviewRegressionTests
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = new PostgresHexCrawlStore(database.ConnectionString);
         await store.InitializeAsync();
-        var service = new CrawlSessionService(store);
+        var service = new ExpeditionStartService(store, new HexCrawlService(store), new CampaignProcedureService(store));
 
-        var started = await service.StartAsync(
-            "alice",
-            new StartStandaloneCrawlSessionCommand(
-                "Pinned",
-                "simple-fixed-distance",
-                new NonSpatialCrawlSessionContext("Travel clock")));
+        var started = await service.StartNonSpatialAsync("alice", "Pinned", new ProcedureStartSelection(PresetKey: "simple-fixed-distance"), new NonSpatialCrawlSessionContext("Travel clock"));
         var pinned = started.CampaignProcedure;
 
         var saved = await store.SaveExpeditionAsync(started with { Name = "Still pinned" }, started.Version);
@@ -40,13 +35,8 @@ public sealed class GenericProcedureReviewRegressionTests
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = new PostgresHexCrawlStore(database.ConnectionString);
         await store.InitializeAsync();
-        var service = new CrawlSessionService(store);
-        var started = await service.StartAsync(
-            "alice",
-            new StartStandaloneCrawlSessionCommand(
-                "Future source",
-                "simple-fixed-distance",
-                new NonSpatialCrawlSessionContext("Travel clock")));
+        var service = new ExpeditionStartService(store, new HexCrawlService(store), new CampaignProcedureService(store));
+        var started = await service.StartNonSpatialAsync("alice", "Future source", new ProcedureStartSelection(PresetKey: "simple-fixed-distance"), new NonSpatialCrawlSessionContext("Travel clock"));
         var future = WithFutureMovementMechanic(started.CampaignProcedure);
         var futureExpedition = DuplicateStandalone(started, "Future snapshot") with { CampaignProcedure = future };
 
@@ -154,20 +144,17 @@ public sealed class GenericProcedureReviewRegressionTests
         var store = new PostgresHexCrawlStore(database.ConnectionString);
         await store.InitializeAsync();
 
-        var standaloneService = new CrawlSessionService(store);
-        var standalone = await standaloneService.StartAsync(
-            "alice",
-            new StartStandaloneCrawlSessionCommand(
-                "Standalone",
-                "simple-fixed-distance",
-                new NonSpatialCrawlSessionContext("Travel clock")));
+        var standaloneService = new ExpeditionStartService(store, new HexCrawlService(store), new CampaignProcedureService(store));
+        var standalone = await standaloneService.StartNonSpatialAsync("alice", "Standalone", new ProcedureStartSelection(PresetKey: "simple-fixed-distance"), new NonSpatialCrawlSessionContext("Travel clock"));
 
         var core = new HexCrawlService(store);
-        var world = await core.CreateOverworldAsync("alice", WorldCommand());
-        var worldBound = await core.StartExpeditionAsync(
-            world.World.Id,
-            "alice",
-            new StartExpeditionCommand("World-bound", "simple-fixed-distance", new HexCoordinate(0, 0)));
+        var world = await core.CreatePeriodicOverworldAsync("alice", "World", MaplessSessionFixture.Start().World);
+        var worldBound = await new ExpeditionStartService(
+            store, core, new CampaignProcedureService(store))
+            .StartWorldBoundCellsAsync(
+                world.World.Id, "alice", "World-bound",
+                new ProcedureStartSelection(PresetKey: "simple-fixed-distance"),
+                new PeriodicCellAddress("face-0", new LatticeDisplacement(0, 0)));
 
         AssertPinned(standalone, "simple-fixed-distance");
         AssertPinned(worldBound, "simple-fixed-distance");
@@ -227,12 +214,4 @@ public sealed class GenericProcedureReviewRegressionTests
         return future;
     }
 
-    private static CreateOverworldCommand WorldCommand() => new(
-        "World",
-        HexOrientation.PointyTop,
-        new WorldPoint(0, 0),
-        0,
-        1,
-        12,
-        DistanceUnit.Miles);
 }

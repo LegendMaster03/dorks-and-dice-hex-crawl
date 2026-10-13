@@ -199,12 +199,7 @@ public sealed class Phase10EffectConsequenceEngineTests
             .MaterializeGeneric().Procedure;
         return new StoredExpedition(
             "Phase 10 effect projection",
-            new ExpeditionState
-            {
-                Id = Guid.NewGuid(),
-                Traversal = HexTraversalState.StartingIn(new HexCoordinate(0, 0), DistanceUnit.Miles),
-                DistanceTraveled = new DistanceMeasure(0, DistanceUnit.Miles)
-            },
+            PeriodicCourseFixture.StartingState(),
             new WorldBoundCrawlSessionContext(Guid.NewGuid()),
             null,
             procedure,

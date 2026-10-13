@@ -11,7 +11,6 @@ public static class GenericProcedureExecutionHandlers
 {
     public const string FixedIntervalDuration = "procedure.time.fixed-interval";
     public const string MovementResolutionPolicy = "procedure.movement.resolution";
-    public const string HexProgressPolicy = "procedure.movement.hex-progress";
     public const string SpatialTurnCostPolicy = "procedure.movement.turn-cost";
     public const string NavigationCheckPolicy = "procedure.navigation.check-policy";
     public const string EncounterCheckCadence = "procedure.encounter.cadence";
@@ -22,8 +21,7 @@ public static class GenericProcedureExecutionHandlers
         new Dictionary<string, IReadOnlySet<int>>(StringComparer.Ordinal)
         {
             [FixedIntervalDuration] = new HashSet<int> { 1 },
-            [MovementResolutionPolicy] = new HashSet<int> { 1, 2 },
-            [HexProgressPolicy] = new HashSet<int> { 1 },
+            [MovementResolutionPolicy] = new HashSet<int> { 2 },
             [SpatialTurnCostPolicy] = new HashSet<int> { 1 },
             [NavigationCheckPolicy] = new HashSet<int> { 1 },
             [EncounterCheckCadence] = new HashSet<int> { 1 },
@@ -35,7 +33,6 @@ public static class GenericProcedureExecutionHandlers
     {
         FixedIntervalDuration,
         MovementResolutionPolicy,
-        HexProgressPolicy,
         SpatialTurnCostPolicy,
         NavigationCheckPolicy,
         EncounterCheckCadence,
@@ -76,24 +73,11 @@ public sealed record ProcedureTimeRuntime(TimeSpan IntervalDuration);
 
 public sealed record ProcedureMovementRuntime(
     TravelResolutionMode TravelResolution,
-    ActualDistanceResolutionMode ActualDistanceResolution,
-    bool TracksIntraHexProgress)
-{
-    public int MechanicVersion { get; init; } = 1;
-}
-
-public sealed record ProcedureHexProgressRuntime(
-    double StartingExitProgressFactor,
-    double NearExitProgressFactor,
-    double FarExitProgressFactor,
-    double BackExitProgressFactor,
-    bool DirectionChangesCostProgress,
-    double DirectionChangeProgressCostFactor,
-    bool SupportsDeliberateDoubleBack);
+    ActualDistanceResolutionMode ActualDistanceResolution);
 
 /// <summary>
 /// Nongeometric budget charges are distinct from cursor displacement.
-/// A pinned version-2 procedure may explicitly enable/disable double-back.
+/// A pinned procedure may explicitly enable/disable double-back.
 /// </summary>
 public sealed record ProcedureSpatialTurnRuntime(
     double NeighborCenterDistanceFactor,
@@ -117,7 +101,6 @@ public sealed class GenericProcedureRuntime
         string name,
         ProcedureTimeRuntime time,
         ProcedureMovementRuntime movement,
-        ProcedureHexProgressRuntime? hexProgress,
         ProcedureSpatialTurnRuntime? turnPolicy,
         ProcedureNavigationRuntime navigation,
         ProcedureEncounterRuntime encounters,
@@ -126,7 +109,6 @@ public sealed class GenericProcedureRuntime
         Name = name;
         Time = time;
         Movement = movement;
-        _hexProgress = hexProgress;
         TurnPolicy = turnPolicy;
         Navigation = navigation;
         Encounters = encounters;
@@ -137,9 +119,6 @@ public sealed class GenericProcedureRuntime
     public string Name { get; }
     public ProcedureTimeRuntime Time { get; }
     public ProcedureMovementRuntime Movement { get; }
-    private readonly ProcedureHexProgressRuntime? _hexProgress;
-    public ProcedureHexProgressRuntime HexProgress => _hexProgress
-        ?? throw new InvalidOperationException("A cell movement procedure has no legacy hex progress contract.");
     public ProcedureSpatialTurnRuntime? TurnPolicy { get; }
     public ProcedureNavigationRuntime Navigation { get; }
     public ProcedureEncounterRuntime Encounters { get; }
@@ -164,10 +143,7 @@ public sealed class GenericProcedureRuntime
 
         var time = Required(procedure, GenericProcedureExecutionHandlers.FixedIntervalDuration);
         var movement = Required(procedure, GenericProcedureExecutionHandlers.MovementResolutionPolicy);
-        var progress = Optional(procedure, GenericProcedureExecutionHandlers.HexProgressPolicy);
         var turning = Optional(procedure, GenericProcedureExecutionHandlers.SpatialTurnCostPolicy);
-        if (movement.Mechanic.Version == 1 && progress is null)
-            throw new InvalidOperationException("Legacy hex movement requires its pinned hex progress contract.");
         var navigation = Required(procedure, GenericProcedureExecutionHandlers.NavigationCheckPolicy);
         var encounters = Required(procedure, GenericProcedureExecutionHandlers.EncounterCheckCadence);
         var helpers = Optional(procedure, GenericProcedureExecutionHandlers.DeterministicResolutionHelpers);
@@ -177,19 +153,7 @@ public sealed class GenericProcedureRuntime
             new ProcedureTimeRuntime(TimeSpan.FromTicks(Long(time, "durationTicks"))),
             new ProcedureMovementRuntime(
                 EnumValue<TravelResolutionMode>(movement, "travelResolution"),
-                EnumValue<ActualDistanceResolutionMode>(movement, "actualDistanceResolution"),
-                Boolean(movement, "tracksIntraHexProgress"))
-            {
-                MechanicVersion = movement.Mechanic.Version
-            },
-            progress is null ? null : new ProcedureHexProgressRuntime(
-                Double(progress, "startingExitProgressFactor"),
-                Double(progress, "nearExitProgressFactor"),
-                Double(progress, "farExitProgressFactor"),
-                Double(progress, "backExitProgressFactor"),
-                Boolean(progress, "directionChangesCostProgress"),
-                Double(progress, "directionChangeProgressCostFactor"),
-                Boolean(progress, "supportsDeliberateDoubleBack")),
+                EnumValue<ActualDistanceResolutionMode>(movement, "actualDistanceResolution")),
             turning is null ? null : new ProcedureSpatialTurnRuntime(
                 Double(turning, "neighborCenterDistanceFactor"),
                 Boolean(turning, "supportsDeliberateDoubleBack")),
@@ -213,52 +177,17 @@ public sealed class GenericProcedureRuntime
 
         ResolutionHelpers?.Validate();
         TurnPolicy?.CreateBudgetPolicy().Validate();
-        if (TurnPolicy is not null && Movement.MechanicVersion != 2)
-            throw new InvalidOperationException(
-                "The geometric turning policy requires version-2 spatial movement.");
         if (TurnPolicy is { NeighborCenterDistanceFactor: > 0d }
             && Movement.TravelResolution != TravelResolutionMode.ContinuousDistance)
             throw new InvalidOperationException(
                 "A distance-denominated turning charge is not valid for discrete cell steps without an explicit step-budget rule.");
 
-        if (Movement.MechanicVersion == 2)
-        {
-            // Version 2 makes the distinction explicit: a cell-step is one
-            // authoritative boundary crossing; continuous distance follows
-            // calibrated world geometry. It does not adopt v1 hex factors.
-            if (_hexProgress is not null || Movement.TracksIntraHexProgress)
-                throw new InvalidOperationException(
-                    "Generalized movement version 2 must not include legacy hex progress factors.");
-            if (Movement.TravelResolution is not (TravelResolutionMode.CellSteps
-                or TravelResolutionMode.ContinuousDistance))
-                throw new InvalidOperationException(
-                    "Generalized movement version 2 supports cell steps or continuous distance.");
-            if (Movement.TravelResolution == TravelResolutionMode.CellSteps
-                && Movement.ActualDistanceResolution != ActualDistanceResolutionMode.Fixed)
-                throw new InvalidOperationException("Cell-step travel does not have a resolved distance variance.");
-            return;
-        }
-
-        if (Movement.MechanicVersion != 1 || _hexProgress is null
-            || Movement.TravelResolution == TravelResolutionMode.CellSteps)
-            throw new InvalidOperationException("Unsupported legacy hex movement contract.");
-
-        var hexProgress = _hexProgress;
-        ValidateFactor(hexProgress.StartingExitProgressFactor, nameof(hexProgress.StartingExitProgressFactor));
-        ValidateFactor(hexProgress.NearExitProgressFactor, nameof(hexProgress.NearExitProgressFactor));
-        ValidateFactor(hexProgress.FarExitProgressFactor, nameof(hexProgress.FarExitProgressFactor));
-        ValidateFactor(hexProgress.BackExitProgressFactor, nameof(hexProgress.BackExitProgressFactor));
-        ValidateFactor(hexProgress.DirectionChangeProgressCostFactor, nameof(hexProgress.DirectionChangeProgressCostFactor), allowZero: true);
-
-        if (Movement.TravelResolution == TravelResolutionMode.HexSteps && Movement.TracksIntraHexProgress)
-            throw new InvalidOperationException("Hex-step travel can not simultaneously use intra-hex progress.");
-        if (Movement.TravelResolution == TravelResolutionMode.HexSteps
+        if (Movement.TravelResolution is not (TravelResolutionMode.CellSteps
+            or TravelResolutionMode.ContinuousDistance))
+            throw new InvalidOperationException("Spatial movement supports cell steps or continuous distance.");
+        if (Movement.TravelResolution == TravelResolutionMode.CellSteps
             && Movement.ActualDistanceResolution != ActualDistanceResolutionMode.Fixed)
-            throw new InvalidOperationException("Hex-step travel does not use variable resolved physical distance.");
-        if (Movement.TravelResolution == TravelResolutionMode.ContinuousDistance && !Movement.TracksIntraHexProgress)
-            throw new InvalidOperationException("Continuous-distance legacy hex travel requires intra-hex progress.");
-        if (hexProgress.DirectionChangesCostProgress && !Movement.TracksIntraHexProgress)
-            throw new InvalidOperationException("Direction-change progress costs require intra-hex progress tracking.");
+            throw new InvalidOperationException("Cell-step travel does not have a resolved distance variance.");
     }
 
     private static MaterializedProcedureModule Required(CampaignProcedure procedure, string handler)
@@ -347,14 +276,6 @@ public sealed class GenericProcedureRuntime
             ? value
             : throw new InvalidOperationException($"Procedure parameter '{key}' is not a supported {typeof(T).Name} value.");
 
-    private static void ValidateFactor(double factor, string name, bool allowZero = false)
-    {
-        var invalidFloor = allowZero ? factor < 0 : factor <= 0;
-        if (invalidFloor || !double.IsFinite(factor))
-        {
-            throw new InvalidOperationException($"{name} must be finite and {(allowZero ? "non-negative" : "positive")}.");
-        }
-    }
 }
 
 public static class GenericProcedureRuntimeRequirements
@@ -365,26 +286,10 @@ public static class GenericProcedureRuntimeRequirements
         ArgumentNullException.ThrowIfNull(state);
         return state switch
         {
-            ExpeditionState spatial => IsEncounterCheckDue(procedure, spatial),
             CellExpeditionState cells => IsEncounterCheckDue(procedure, cells),
             NonSpatialSessionState nonSpatial => IsEncounterCheckDue(procedure, nonSpatial),
             _ => throw new ArgumentOutOfRangeException(nameof(state))
         };
-    }
-
-    public static bool IsEncounterCheckDue(GenericProcedureRuntime procedure, ExpeditionState state)
-    {
-        ArgumentNullException.ThrowIfNull(procedure);
-        ArgumentNullException.ThrowIfNull(state);
-        if (state.ActiveWatch is not null)
-        {
-            return false;
-        }
-        return IsEncounterCheckDue(
-            procedure.Encounters.Cadence,
-            state.History,
-            Math.Max(1, state.CompletedWatches + 1),
-            state.ElapsedTravelTime);
     }
 
     public static bool IsEncounterCheckDue(GenericProcedureRuntime procedure, CellExpeditionState state)
@@ -407,20 +312,6 @@ public static class GenericProcedureRuntimeRequirements
             state.History,
             state.ActiveWatch?.WatchNumber ?? Math.Max(1, state.CompletedWatches + 1),
             state.ElapsedTime);
-    }
-
-    public static bool IsNavigationResolutionPotentiallyRequired(GenericProcedureRuntime procedure, ExpeditionState state)
-    {
-        ArgumentNullException.ThrowIfNull(procedure);
-        ArgumentNullException.ThrowIfNull(state);
-        if (state.ActiveWatch is not null || !procedure.Navigation.UsesNavigationChecks)
-        {
-            return false;
-        }
-        var watchNumber = Math.Max(1, state.CompletedWatches + 1);
-        return !state.History.Any(runtimeEvent =>
-            runtimeEvent.Kind == CrawlRuntimeEventKind.NavigationCheckResolved
-            && runtimeEvent.WatchNumber == watchNumber);
     }
 
     private static bool IsEncounterCheckDue(

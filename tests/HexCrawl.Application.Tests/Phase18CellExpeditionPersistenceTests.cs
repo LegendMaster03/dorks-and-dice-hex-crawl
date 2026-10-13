@@ -60,20 +60,24 @@ public sealed class Phase18CellExpeditionPersistenceTests
 
         var runtimeEvent = new CrawlRuntimeEvent(
             1, 1, CrawlRuntimeEventKind.DistanceTraveled,
-            TimeSpan.FromHours(1), null, "Partial generalized cell movement.",
+            TimeSpan.FromHours(1), "Partial generalized cell movement.",
             DistanceValue: quarter.Value, DistanceUnit: quarter.Unit.Symbol)
         { Cell = startingCell.Id };
         var active = new CellActiveWatchState(
             1, TimeSpan.FromHours(4), TimeSpan.FromHours(1),
             new CellWatchTravelPlan(heading,
                 false, true, TravelModeSelection.Normal, NavigationAidSelection.None),
-            ResolvedEncounter.None, true, null);
+            ResolvedEncounter.None, true, null)
+        {
+            PendingTurnFromHeading = heading
+        };
         var state = new CellExpeditionState
         {
             Id = Guid.NewGuid(),
             Traversal = first.Traversal,
             IntendedHeading = heading,
             DistanceTraveled = first.ConsumedPhysicalDistance!.Value,
+            PendingTravelBudgetCharge = new DistanceMeasure(0.125, DistanceUnit.Miles),
             ElapsedTravelTime = TimeSpan.FromHours(1),
             ActiveWatch = active,
             History = [runtimeEvent]
@@ -93,6 +97,8 @@ public sealed class Phase18CellExpeditionPersistenceTests
             query.Parameters.AddWithValue("id", expedition.Id);
             var json = (string)(await query.ExecuteScalarAsync())!;
             Assert.Contains("\"cellTraversal\"", json);
+            Assert.Contains("\"cellPendingTravelBudgetCharge\"", json);
+            Assert.Contains("\"pendingTurnFromHeading\"", json);
             Assert.DoesNotContain("\"currentHex\":{\"q\":0", json, StringComparison.Ordinal);
         }
 
@@ -108,6 +114,9 @@ public sealed class Phase18CellExpeditionPersistenceTests
         Assert.Equal(edge.InterfaceIndex, loadedState.Traversal.SelectedExitInterfaceIndex);
         Assert.Equal(active.TotalDuration, loadedState.ActiveWatch!.TotalDuration);
         Assert.Equal(active.Elapsed, loadedState.ActiveWatch.Elapsed);
+        Assert.Equal(heading, loadedState.ActiveWatch.PendingTurnFromHeading);
+        Assert.False(loadedState.ActiveWatch.TurnPreflightWasDeferred);
+        Assert.Equal(state.PendingTravelBudgetCharge, loadedState.PendingTravelBudgetCharge);
         Assert.Equal(quarter, loadedState.DistanceTraveled);
         Assert.Equal(runtimeEvent.Cell, Assert.Single(loadedState.History).Cell);
 
@@ -120,7 +129,7 @@ public sealed class Phase18CellExpeditionPersistenceTests
         var nextSequence = loadedState.History[^1].Sequence + 1;
         var entered = new CrawlRuntimeEvent(
             nextSequence, 1, CrawlRuntimeEventKind.CellEntered,
-            TimeSpan.FromHours(3), null, "Entered cell through reciprocal interface.")
+            TimeSpan.FromHours(3), "Entered cell through reciprocal interface.")
         {
             Cell = second.Traversal.CurrentCell,
             BoundaryInterfaceIndex = crossing.ExitInterfaceIndex,
@@ -147,7 +156,31 @@ public sealed class Phase18CellExpeditionPersistenceTests
         Assert.Equal(crossing.EntryInterfaceIndex, verifiedState.Traversal.EntryInterfaceIndex);
         Assert.Equal(2, verifiedState.History.Count);
         Assert.Equal(crossing.To, verifiedState.History[1].Cell);
-        Assert.Null(verifiedState.History[1].Hex);
+        Assert.Equal(state.PendingTravelBudgetCharge, verifiedState.PendingTravelBudgetCharge);
+
+        // Simulate a course decision being deferred at a boundary and verify that
+        // the real PostgreSQL snapshot round-trip preserves its preflight state.
+        var deferred = verified with
+        {
+            Runtime = verifiedState with
+            {
+                ActiveWatch = verifiedState.ActiveWatch! with
+                {
+                    PendingDecision = RuntimePauseReason.CellCourseAdjudicationRequired,
+                    PendingTurnFromHeading = heading,
+                    TurnPreflightWasDeferred = true
+                }
+            },
+            PauseReason = RuntimePauseReason.CellCourseAdjudicationRequired
+        };
+        Assert.Equal(SaveOutcome.Saved,
+            (await restarted.SaveExpeditionAsync(deferred, verified.Version)).Outcome);
+        var reloaded = await restarted.GetExpeditionAsync(expedition.Id, "owner");
+        var reloadedState = Assert.IsType<CellExpeditionState>(reloaded!.Runtime);
+        reloadedState.Validate(tiling);
+        Assert.True(reloadedState.ActiveWatch!.TurnPreflightWasDeferred);
+        Assert.Equal(heading, reloadedState.ActiveWatch.PendingTurnFromHeading);
+        Assert.Equal(state.PendingTravelBudgetCharge, reloadedState.PendingTravelBudgetCharge);
     }
 
     [Fact]
@@ -179,13 +212,13 @@ public sealed class Phase18CellExpeditionPersistenceTests
         var provenance = new ResolutionProvenance(ResolutionSource.DmOverride, "Explicit test encounter");
         var eventRecord = new CrawlRuntimeEvent(
             1, 1, CrawlRuntimeEventKind.EncounterTriggered,
-            TimeSpan.FromHours(1), null, "A pending custom encounter.",
+            TimeSpan.FromHours(1), "A pending custom encounter.",
             EncounterOutcome: EncounterOutcomeKind.ManualCustom,
             EncounterOccurrenceId: occurrenceId)
         { Cell = cell.Id };
         var pending = new PendingEncounterOccurrence(
             occurrenceId, 1, 1, EncounterOutcomeKind.ManualCustom,
-            TimeSpan.FromHours(1), null, null, "Encounter pending", provenance)
+            TimeSpan.FromHours(1), null, "Encounter pending", provenance)
         { Cell = cell.Id };
         var active = new CellActiveWatchState(
             1, TimeSpan.FromHours(4), TimeSpan.FromHours(1),
@@ -193,7 +226,10 @@ public sealed class Phase18CellExpeditionPersistenceTests
                 TravelModeSelection.Normal, NavigationAidSelection.None),
             new ResolvedEncounter(EncounterOutcomeKind.ManualCustom,
                 TimeSpan.FromHours(1), null, "Encounter pending", provenance),
-            true, RuntimePauseReason.EncounterTriggered);
+            true, RuntimePauseReason.EncounterTriggered)
+        {
+            PendingTurnFromHeading = heading
+        };
         var state = new CellExpeditionState
         {
             Id = Guid.NewGuid(), Traversal = cursor, IntendedHeading = heading,
@@ -213,10 +249,12 @@ public sealed class Phase18CellExpeditionPersistenceTests
         var spatial = Assert.IsType<CellExpeditionState>(loaded!.Runtime);
         spatial.Validate(tiling);
         Assert.Null(spatial.DistanceTraveled);
-        Assert.Null(spatial.PendingEncounter!.Hex);
-        Assert.Equal(cell.Id, spatial.PendingEncounter.Cell);
-        Assert.Equal(occurrenceId, spatial.PendingEncounter.Id);
+        var persistedPending = Assert.IsType<PendingEncounterOccurrence>(spatial.PendingEncounter);
+        Assert.Equal(cell.Id, persistedPending.Cell);
+        Assert.Equal(occurrenceId, persistedPending.Id);
         Assert.Equal(RuntimePauseReason.EncounterTriggered, spatial.ActiveWatch!.PendingDecision);
+        Assert.Equal(heading, spatial.ActiveWatch.PendingTurnFromHeading);
+        Assert.False(spatial.ActiveWatch.TurnPreflightWasDeferred);
         Assert.Equal(TimeSpan.FromHours(3), spatial.ActiveWatch.Remaining);
         Assert.Equal(cell.Id, Assert.Single(spatial.History).Cell);
 
@@ -311,10 +349,8 @@ public sealed class Phase18CellExpeditionPersistenceTests
         Assert.Null(moved.DistanceTraveled);
         Assert.Equal(1, moved.CompletedWatches);
         Assert.Equal(1, moved.History.Count(e => e.Kind == CrawlRuntimeEventKind.CellEntered));
-        Assert.DoesNotContain(moved.History, e => e.Hex is not null);
         Assert.True(saved.Version > initial.Version);
-        Assert.Empty(saved.Knowledge!.KnownHexes);
-        Assert.Equal(exit.To, Assert.Single(saved.Knowledge.KnownCells!));
+        Assert.Equal(exit.To, Assert.Single(saved.Knowledge!.KnownCells!));
 
         await Assert.ThrowsAsync<HexCrawlConcurrencyException>(() =>
             service.AdvanceCellExpeditionAsync(initial.Id, "alice", 1, plan, inputs));
@@ -327,7 +363,6 @@ public sealed class Phase18CellExpeditionPersistenceTests
         var manualEvent = Assert.Single(
             ((CellExpeditionState)discovered.Runtime).History,
             e => e.Kind == CrawlRuntimeEventKind.LocationDiscovered);
-        Assert.Null(manualEvent.Hex);
         Assert.Equal(exit.To, manualEvent.Cell);
         Assert.Equal(landmark.Id, manualEvent.SubjectId);
 
@@ -395,7 +430,6 @@ public sealed class Phase18CellExpeditionPersistenceTests
         Assert.Contains(loaded.Effects.AppliedConsequences, e => e.ConsequenceId == delay.Id);
         Assert.Equal(KnowledgeState.Discovered, loaded.Knowledge!.Entries[landmark.Id].State);
         Assert.Equal(exit.To, Assert.Single(loaded.Knowledge.KnownCells!));
-        Assert.Empty(loaded.Knowledge.KnownHexes);
         Assert.Single(restored.History, e => e.Kind == CrawlRuntimeEventKind.CellEntered);
         Assert.Single(restored.History, e => e.Kind == CrawlRuntimeEventKind.LocationDiscovered);
     }
@@ -404,16 +438,15 @@ public sealed class Phase18CellExpeditionPersistenceTests
     {
         var original = SyntheticProcedureFixtures.MixedProcedure();
         var modules = original.Modules
-            .Where(m => m.Mechanic.ExecutionHandler != GenericProcedureExecutionHandlers.HexProgressPolicy)
+
             .Select(m =>
             {
                 if (m.Mechanic.ExecutionHandler != GenericProcedureExecutionHandlers.MovementResolutionPolicy)
                     return m;
                 var parameters = m.Parameters.ToDictionary(x => x.Key, x => x.Value);
                 parameters["travelResolution"] = mode.ToString();
-                parameters["tracksIntraHexProgress"] = "false";
                 parameters["actualDistanceResolution"] = ActualDistanceResolutionMode.Fixed.ToString();
-                return m with { Mechanic = m.Mechanic with { Version = 2 }, Parameters = parameters };
+                return m with { Parameters = parameters };
             }).ToArray();
         var procedure = original with
         {

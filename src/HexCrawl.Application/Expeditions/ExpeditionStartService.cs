@@ -39,6 +39,21 @@ public sealed record ProcedureStartSelection(
     }
 }
 
+public sealed record MaplessSpatialStartOptions(
+    string Name, DistanceMeasure PhysicalDistancePerWorldUnit)
+{
+    public void Validate()
+    {
+        if (string.IsNullOrWhiteSpace(Name))
+            throw new ArgumentException("Mapless setup name is required.");
+        if (!double.IsFinite(PhysicalDistancePerWorldUnit.Value)
+            || PhysicalDistancePerWorldUnit.Value <= 0)
+            throw new ArgumentException("Mapless physical scale must be finite and positive.");
+        if (string.IsNullOrWhiteSpace(PhysicalDistancePerWorldUnit.Unit.Symbol))
+            throw new ArgumentException("Mapless physical scale unit is required.");
+    }
+}
+
 /// <summary>
 /// Owns the creation-time procedure selection boundary for new crawl sessions.
 /// Presets are materialized into campaign-owned procedure revisions before use; saved
@@ -50,74 +65,10 @@ public sealed class ExpeditionStartService(
     HexCrawlService coreService,
     CampaignProcedureService procedures)
 {
-    public async Task<StoredExpedition> StartWorldBoundAsync(
-        Guid overworldId,
-        string ownerUserId,
-        string name,
-        ProcedureStartSelection selection,
-        string presentationKey,
-        HexCoordinate startHex,
-        CancellationToken cancellationToken = default)
-    {
-        var owner = RequiredText(ownerUserId, "Owner user id");
-        var expeditionName = RequiredText(name, "Expedition name");
-        var presentation = MapPresentationPolicyCatalog.Resolve(presentationKey);
-        presentation.Validate();
-
-        var world = await coreService.GetOverworldAsync(overworldId, owner, cancellationToken);
-        // Phase 18 is responsible for generalized boundary-based movement.
-        // Avoid creating a materialized procedure revision for an unsupported start.
-        if (!world.World.HasLegacyHexGrid)
-            throw new NotSupportedException(
-                "Generalized world movement is gated until Phase 18. This world was not changed.");
-        var selected = await ResolveProcedureAsync(owner, selection, cancellationToken);
-        if (!CampaignProcedureSchema.RequiresLegacyHexTiling(selected.Procedure.TilingDsSymbol))
-            throw new NotSupportedException(
-                "The selected procedure requires a different tiling; this runtime supports hexagonal worlds only.");
-        RequireLegacyHexMovement(selected.Procedure);
-
-        var expeditionId = Guid.NewGuid();
-        var state = new ExpeditionState
-        {
-            Id = expeditionId,
-            Position = HexGeometry.HexToWorld(world.World.Grid, startHex),
-            PositionPrecision = WorldPositionPrecision.HexAnchor,
-            Traversal = HexTraversalState.StartingIn(startHex, world.World.Grid.NeighborCenterDistance.Unit),
-            Navigation = new NavigationRuntimeState(false, 0),
-            DistanceTraveled = new DistanceMeasure(0, world.World.Grid.NeighborCenterDistance.Unit)
-        };
-        var knowledge = new PlayerKnowledgeState
-        {
-            ScopeId = Guid.NewGuid(),
-            OverworldId = world.World.Id,
-            PresentationPolicy = presentation
-        };
-        knowledge = PresentationKnowledgeProjection.Initialize(world.World, presentation, knowledge, startHex);
-
-        var now = DateTimeOffset.UtcNow;
-        return await store.CreateExpeditionAsync(new StoredExpedition(
-            expeditionName,
-            state,
-            new WorldBoundCrawlSessionContext(world.World.Id),
-            knowledge,
-            CampaignProcedureSnapshot.Copy(selected.Procedure),
-            null,
-            TimeSpan.Zero,
-            world.OwnerUserId,
-            1,
-            now,
-            now)
-        {
-            CampaignId = selected.CampaignId,
-            ProcedureOrigin = selected.ProcedureOrigin
-        }, cancellationToken);
-    }
-
     /// <summary>
     /// Begin a generalized world-bound expedition at an authoritative motif
-    /// cell. No hex coordinate, fake center distance or hex presentation
-    /// projection is created. This is an application capability; the existing
-    /// hex-only HTTP start route stays gated until its cell contracts are ready.
+    /// cell. All spatial authority belongs to the actual persisted tiling;
+    /// no separate coordinate model or presentation projection is fabricated.
     /// </summary>
     public Task<StoredExpedition> StartWorldBoundCellsAsync(
         Guid overworldId,
@@ -143,21 +94,28 @@ public sealed class ExpeditionStartService(
         var owner = RequiredText(ownerUserId, "Owner user id");
         var expeditionName = RequiredText(name, "Expedition name");
         var world = await coreService.GetOverworldAsync(overworldId, owner, cancellationToken);
-        var tiling = world.World.Tiling
-            ?? throw new NotSupportedException("This world has no explicit generalized tiling.");
+        var tiling = world.World.SpatialTiling;
 
         // Check the cell address before materializing or loading a procedure.
         var cell = tiling.Resolve(startCell);
-        var selected = await ResolveProcedureAsync(owner, selection, cancellationToken);
-        var bound = GenericProcedureRuntime.Bind(selected.Procedure);
-        if (bound.Movement.MechanicVersion != 2)
-            throw new NotSupportedException("Generalized world traversal requires movement version 2.");
+        selection.Validate();
+        // Saved revisions remain pinned verbatim.
+        // Validate the recipe before storing a new campaign revision so an
+        // incompatible preset does not create an orphan revision.
+        var geometricPreset = !string.IsNullOrWhiteSpace(selection.PresetKey)
+            ? CampaignProcedureMaterializer.MaterializeExecutableSpatial(CrawlProcedureCatalog.Resolve(selection.PresetKey!))
+            : null;
+        var selected = geometricPreset is null
+            ? await ResolveProcedureAsync(owner, selection, cancellationToken)
+            : null;
+        var procedure = geometricPreset?.Procedure ?? selected!.Procedure;
+        GenericProcedureRuntime.Bind(procedure);
 
         // Alternative legitimate symmetry quotients must not be rejected only
         // because their canonical strings differ. The world's independently
         // validated translation cover can prove structural equivalence.
         var comparison = DelaneyDressTopology.Compare(
-            selected.Procedure.TilingDsSymbol,
+            procedure.TilingDsSymbol,
             tiling.Topology.QuotientDsSymbol,
             tiling.Topology.TranslationDsSymbol);
         if (comparison.Status is not (
@@ -192,13 +150,20 @@ public sealed class ExpeditionStartService(
                 PresentationPolicy = presentation
             },
             cell.Id);
+        // All local spatial and knowledge validation has succeeded. Only now
+        // create a campaign revision for the selected preset.
+        if (geometricPreset is not null)
+            selected = await procedures.CreateAsync(owner, geometricPreset.Procedure,
+                geometricPreset.Origin, cancellationToken: cancellationToken);
+        var pinned = selected ?? throw new InvalidOperationException(
+            "Generalized expedition start did not produce a pinned procedure.");
         var now = DateTimeOffset.UtcNow;
         return await store.CreateExpeditionAsync(new StoredExpedition(
             expeditionName,
             state,
             new WorldBoundCrawlSessionContext(world.World.Id),
             knowledge,
-            CampaignProcedureSnapshot.Copy(selected.Procedure),
+            CampaignProcedureSnapshot.Copy(pinned.Procedure),
             null,
             TimeSpan.Zero,
             owner,
@@ -206,43 +171,105 @@ public sealed class ExpeditionStartService(
             now,
             now)
         {
-            CampaignId = selected.CampaignId,
-            ProcedureOrigin = selected.ProcedureOrigin
+            CampaignId = pinned.CampaignId,
+            ProcedureOrigin = pinned.ProcedureOrigin
         }, cancellationToken);
     }
 
-    public async Task<StoredExpedition> StartStandaloneAsync(
+    /// <summary>
+    /// Materialize one periodic tiling from the selected executable procedure.
+    /// This same realized geometry is retained in the session context and
+    /// reloaded without any shape-specific constructor or axial projection.
+    /// </summary>
+    public async Task<StoredExpedition> StartStandaloneCellsAsync(
         string ownerUserId,
         string name,
         ProcedureStartSelection selection,
-        CrawlSessionContext context,
-        HexCoordinate? startHex = null,
+        MaplessSpatialStartOptions options,
+        PeriodicCellAddress? startCell = null,
+        CancellationToken cancellationToken = default)
+    {
+        var owner = RequiredText(ownerUserId, "Owner user id");
+        var sessionName = RequiredText(name, "Session name");
+        ArgumentNullException.ThrowIfNull(options);
+        options.Validate();
+        ArgumentNullException.ThrowIfNull(selection);
+        selection.Validate();
+
+        var geometricPreset = selection.PresetKey is { } presetKey
+            ? CampaignProcedureMaterializer.MaterializeExecutableSpatial(CrawlProcedureCatalog.Resolve(presetKey))
+            : null;
+        var selected = geometricPreset is null
+            ? await ResolveProcedureAsync(owner, selection, cancellationToken)
+            : null;
+        var procedure = geometricPreset?.Procedure ?? selected!.Procedure;
+        GenericProcedureRuntime.Bind(procedure);
+
+        var realized = DelaneyDressHarmonicMetricRealization.Construct(
+            procedure.TilingDsSymbol, 1d, "world-unit");
+        if (realized.Status != "realized" || realized.Topology is null || realized.Realization is null)
+            throw new InvalidOperationException("The selected ruleset does not provide realizable periodic mapless geometry.");
+        var sessionId = Guid.NewGuid();
+        var tiling = new PeriodicWorldTiling(
+            sessionId, realized.Topology, realized.Realization, new WorldPoint(0, 0),
+            PhysicalDistancePerWorldUnit: options.PhysicalDistancePerWorldUnit)
+        {
+            PhysicalTurnCostReference = options.PhysicalDistancePerWorldUnit
+        };
+        tiling.Validate();
+
+        var comparison = DelaneyDressTopology.Compare(
+            procedure.TilingDsSymbol,
+            tiling.Topology.QuotientDsSymbol,
+            tiling.Topology.TranslationDsSymbol);
+        if (comparison.Status is not (
+            TilingComparisonStatus.ExactIdentity
+            or TilingComparisonStatus.ChamberIsomorphic
+            or TilingComparisonStatus.ProvenEquivalent))
+            throw new InvalidOperationException(
+                "The selected ruleset has not been proven equivalent to the realized mapless geometry.");
+
+        var initial = MaplessCellSessionGeometry.Create(sessionId, tiling, startCell);
+        var context = new MaplessSpatialCrawlSessionContext(options.Name.Trim(), tiling);
+        context.Validate();
+        if (geometricPreset is not null)
+            selected = await procedures.CreateAsync(owner, geometricPreset.Procedure,
+                geometricPreset.Origin, cancellationToken: cancellationToken);
+
+        var pinned = selected ?? throw new InvalidOperationException(
+            "Mapless expedition start did not produce a pinned procedure.");
+        var now = DateTimeOffset.UtcNow;
+        return await store.CreateExpeditionAsync(new StoredExpedition(
+            sessionName,
+            initial.Expedition,
+            context,
+            null,
+            CampaignProcedureSnapshot.Copy(pinned.Procedure),
+            null,
+            TimeSpan.Zero,
+            owner,
+            1,
+            now,
+            now)
+        {
+            CampaignId = pinned.CampaignId,
+            ProcedureOrigin = pinned.ProcedureOrigin
+        }, cancellationToken);
+    }
+
+    public async Task<StoredExpedition> StartNonSpatialAsync(
+        string ownerUserId,
+        string name,
+        ProcedureStartSelection selection,
+        NonSpatialCrawlSessionContext context,
         CancellationToken cancellationToken = default)
     {
         var owner = RequiredText(ownerUserId, "Owner user id");
         var sessionName = RequiredText(name, "Session name");
         ArgumentNullException.ThrowIfNull(context);
-
-        var id = Guid.NewGuid();
-        CrawlSessionRuntimeState runtime = context switch
-        {
-            AbstractHexCrawlSessionContext abstractContext => CreateAbstractState(
-                id,
-                abstractContext,
-                startHex ?? throw new ArgumentException("Abstract-hex sessions require a starting hex.", nameof(startHex))),
-            NonSpatialCrawlSessionContext nonSpatialContext => CreateNonSpatialState(id, nonSpatialContext),
-            WorldBoundCrawlSessionContext => throw new ArgumentException(
-                "World-bound sessions must be started through the overworld expedition endpoint.",
-                nameof(context)),
-            _ => throw new ArgumentException("Unsupported crawl session context.", nameof(context))
-        };
+        context.Validate();
+        var runtime = CreateNonSpatialState(Guid.NewGuid(), context);
         var selected = await ResolveProcedureAsync(owner, selection, cancellationToken);
-        if (context is AbstractHexCrawlSessionContext
-            && !CampaignProcedureSchema.RequiresLegacyHexTiling(selected.Procedure.TilingDsSymbol))
-            throw new NotSupportedException(
-                "This abstract hex runtime cannot execute a nonhex tiling until Phase 18.");
-        if (context is AbstractHexCrawlSessionContext)
-            RequireLegacyHexMovement(selected.Procedure);
 
         var now = DateTimeOffset.UtcNow;
         return await store.CreateExpeditionAsync(new StoredExpedition(
@@ -261,20 +288,6 @@ public sealed class ExpeditionStartService(
             CampaignId = selected.CampaignId,
             ProcedureOrigin = selected.ProcedureOrigin
         }, cancellationToken);
-    }
-
-    private static void RequireLegacyHexMovement(CampaignProcedure procedure)
-    {
-        // Existing legacy starts can select symbolic/non-native procedures.
-        // Preserve that established contract; only a concrete generalized
-        // movement handler must be rejected before constructing ExpeditionState.
-        var movement = procedure.Modules.SingleOrDefault(module =>
-            module.Mechanic.ExecutionHandler ==
-                GenericProcedureExecutionHandlers.MovementResolutionPolicy);
-        if (movement is not null && movement.Mechanic.Version != 1)
-            throw new NotSupportedException(
-                "Legacy world-bound and abstract-hex expeditions require movement version 1. " +
-                "Use the explicit cell expedition start for movement version 2.");
     }
 
     private async Task<StoredCampaignProcedureRevision> ResolveProcedureAsync(
@@ -297,24 +310,6 @@ public sealed class ExpeditionStartService(
             ownerUserId,
             selection.PresetKey!,
             cancellationToken: cancellationToken);
-    }
-
-    private static ExpeditionState CreateAbstractState(
-        Guid id,
-        AbstractHexCrawlSessionContext context,
-        HexCoordinate startHex)
-    {
-        context.Validate();
-        var unit = context.HexContext.HexCenterDistance.Unit;
-        return new ExpeditionState
-        {
-            Id = id,
-            Position = null,
-            PositionPrecision = null,
-            Traversal = HexTraversalState.StartingIn(startHex, unit),
-            Navigation = new NavigationRuntimeState(false, 0),
-            DistanceTraveled = new DistanceMeasure(0, unit)
-        };
     }
 
     private static NonSpatialSessionState CreateNonSpatialState(

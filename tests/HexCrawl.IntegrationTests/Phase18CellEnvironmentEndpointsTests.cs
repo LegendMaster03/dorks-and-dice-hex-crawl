@@ -51,8 +51,7 @@ public sealed class Phase18CellEnvironmentEndpointsTests
             var original = CrawlProcedureCatalog.Resolve(
                 "simple-fixed-distance").MaterializeGeneric().Procedure;
             var modules = original.Modules
-                .Where(m => m.Mechanic.ExecutionHandler !=
-                    GenericProcedureExecutionHandlers.HexProgressPolicy)
+
                 .Select(m =>
                 {
                     if (m.Mechanic.ExecutionHandler !=
@@ -60,7 +59,7 @@ public sealed class Phase18CellEnvironmentEndpointsTests
                     var parameters = m.Parameters.ToDictionary(x => x.Key, x => x.Value);
                     parameters["travelResolution"] = TravelResolutionMode.CellSteps.ToString();
                     parameters["actualDistanceResolution"] = ActualDistanceResolutionMode.Fixed.ToString();
-                    parameters["tracksIntraHexProgress"] = "false";
+
                     return m with
                     {
                         Mechanic = m.Mechanic with { Version = 2 },
@@ -110,7 +109,7 @@ public sealed class Phase18CellEnvironmentEndpointsTests
                 {
                     var scope = entry.GetProperty("scope");
                     Assert.Equal("Cell", scope.GetProperty("kind").GetString());
-                    Assert.Equal(JsonValueKind.Null, scope.GetProperty("hex").ValueKind);
+                    Assert.False(scope.TryGetProperty("hex", out _));
                     Assert.Equal(tiling.Id, scope.GetProperty("cell").GetProperty("tilingId").GetGuid());
                 });
 
@@ -136,8 +135,8 @@ public sealed class Phase18CellEnvironmentEndpointsTests
                     .GetProperty("tag").GetString());
                 Assert.Equal(current.Id, ReadCell(
                     EffectiveTerrain(before).GetProperty("source").GetProperty("cell")));
-                Assert.Equal(JsonValueKind.Null,
-                    EffectiveTerrain(before).GetProperty("source").GetProperty("hex").ValueKind);
+                Assert.False(EffectiveTerrain(before).GetProperty("source")
+                    .TryGetProperty("hex", out _));
 
                 var midpoint = new WorldPoint(
                     (exit.Start.X + exit.End.X) / 2,

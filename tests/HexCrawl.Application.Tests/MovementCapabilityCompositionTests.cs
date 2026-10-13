@@ -247,6 +247,27 @@ public sealed class MovementCapabilityCompositionTests
     }
 
     [Fact]
+    public void Dnd2014DifficultTerrainUsesNumericMultiplierWithPartyMovement()
+    {
+        var walker = Member("Walker");
+        var party = new CrawlPartySheet
+        {
+            Members = [walker],
+            MovementContributors = [Participant(walker, 3)]
+        };
+
+        var result = MovementCapabilityComposer.Compose(
+            Expedition(Procedure(CrawlProcedureCatalog.Dnd2014PresetKey), party),
+            new MovementCompositionInput(TerrainKey: "difficult", PaceKey: "normal"));
+
+        Assert.Equal(MovementCompositionStatus.Resolved, result.Status);
+        Assert.Equal(1.5, result.EffectiveValue);
+        Assert.Equal(1.5, result.SuggestedExpectedDistance?.Value);
+        Assert.Equal(3, result.Policy.PaceDistances?.PerHour["normal"]);
+        Assert.Equal(24, result.Policy.PaceDistances?.PerDay["normal"]);
+    }
+
+    [Fact]
     public void Dnd2024ArcticPaceRemainsConditionalSymbolicData()
     {
         var walker = Member("Walker");
@@ -411,19 +432,15 @@ public sealed class MovementCapabilityCompositionTests
             "provider:walk-distance",
             3,
             scope: MovementCapabilityScope.Party);
-        var state = State() with
+        var heading = new WorldPoint(1, 0);
+        var state = PeriodicCourseFixture.StartingState() with
         {
-            ActiveWatch = new ActiveWatchState(
-                1,
-                TimeSpan.FromHours(4),
-                TimeSpan.FromHours(2),
-                new WatchTravelPlan(
-                    new HexDirection(0),
-                    TravelModeSelection.Normal,
-                    NavigationAidSelection.None),
-                ResolvedEncounter.None,
-                false,
-                null)
+            IntendedHeading = heading,
+            ActiveWatch = new CellActiveWatchState(
+                1, TimeSpan.FromHours(4), TimeSpan.FromHours(2),
+                new CellWatchTravelPlan(
+                    heading, false, true, TravelModeSelection.Normal, NavigationAidSelection.None),
+                ResolvedEncounter.None, false, null)
         };
 
         var result = MovementCapabilityComposer.Compose(
@@ -486,9 +503,15 @@ public sealed class MovementCapabilityCompositionTests
             2.75,
             scope: MovementCapabilityScope.Party,
             provenance: "manual test");
-        var expedition = Expedition(
+        var fixture = Expedition(
             Procedure("simple-fixed-distance"),
             new CrawlPartySheet { MovementContributors = [contributor] });
+        // Contributor persistence is independent of spatial execution.
+        var expedition = fixture with
+        {
+            Runtime = new NonSpatialSessionState { Id = fixture.Id },
+            Context = new NonSpatialCrawlSessionContext("Movement contributor persistence")
+        };
 
         await store.CreateExpeditionAsync(expedition);
         var loaded = await store.GetExpeditionAsync(expedition.Id, expedition.OwnerUserId);
@@ -517,6 +540,7 @@ public sealed class MovementCapabilityCompositionTests
     [InlineData(CrawlProcedureCatalog.BxPresetKey, "fixed-per-day", "travel-day")]
     [InlineData(CrawlProcedureCatalog.Adnd2ePresetKey, "movement-points", "daily-movement-budget")]
     [InlineData(CrawlProcedureCatalog.Dnd35PresetKey, "speed-derived-distance", "hour")]
+    [InlineData(CrawlProcedureCatalog.Dnd2014PresetKey, "speed-and-pace", "hour")]
     [InlineData(CrawlProcedureCatalog.Dnd2024PresetKey, "speed-and-pace", "hour")]
     [InlineData(CrawlProcedureCatalog.Pathfinder2eHexplorationPresetKey, "speed-derived-activities", "hexploration-activity")]
     [InlineData(CrawlProcedureCatalog.ForbiddenLandsPresetKey, "quarter-day-activities", "quarter-day")]
@@ -560,13 +584,13 @@ public sealed class MovementCapabilityCompositionTests
     private static StoredExpedition Expedition(
         CampaignProcedure procedure,
         CrawlPartySheet? party = null,
-        ExpeditionState? state = null)
+        CellExpeditionState? state = null)
     {
         var now = DateTimeOffset.UtcNow;
         var interval = FocusedIntervalPolicyResolver.Resolve(procedure).IntervalDuration ?? TimeSpan.Zero;
         return new StoredExpedition(
             "Movement test",
-            state ?? State(),
+            state ?? PeriodicCourseFixture.StartingState(),
             Context(),
             null,
             procedure,
@@ -581,17 +605,8 @@ public sealed class MovementCapabilityCompositionTests
         };
     }
 
-    private static AbstractHexCrawlSessionContext Context() => new(
-        "Movement test",
-        HexOrientation.PointyTop,
-        new CrawlRuntimeContext(new DistanceMeasure(12, DistanceUnit.Miles)));
-
-    private static ExpeditionState State() => new()
-    {
-        Id = Guid.NewGuid(),
-        Traversal = HexTraversalState.StartingIn(new HexCoordinate(0, 0), DistanceUnit.Miles),
-        DistanceTraveled = new DistanceMeasure(0, DistanceUnit.Miles)
-    };
+    private static MaplessSpatialCrawlSessionContext Context() =>
+        MaplessSessionFixture.Context("Movement test");
 
     private static CrawlPartyMember Member(string name, bool counts = true) =>
         new(Guid.NewGuid(), name, CountsTowardPartyMovement: counts);

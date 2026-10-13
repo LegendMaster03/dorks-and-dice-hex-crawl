@@ -45,7 +45,8 @@ public sealed class Phase19MixedWorldHttpTests
                 $"{label}: world creation failed: {await created.Content.ReadAsStringAsync()}");
             var world = await created.Content.ReadFromJsonAsync<JsonElement>();
             var worldId = world.GetProperty("id").GetGuid();
-            Assert.Equal(JsonValueKind.Null, world.GetProperty("grid").ValueKind);
+            Assert.False(world.TryGetProperty("grid", out _));
+            Assert.NotEqual(JsonValueKind.Null, world.GetProperty("tiling").ValueKind);
             Assert.Empty(world.GetProperty("sourceMaps").EnumerateArray());
 
             using var viewport = await client.GetAsync(

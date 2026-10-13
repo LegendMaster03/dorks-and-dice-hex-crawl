@@ -7,278 +7,6 @@ namespace HexCrawl.Domain.Tests;
 public sealed class CrawlAssistantActionsTests
 {
     [Fact]
-    public void TravelWatchAssistantMutatesOnlyTravelWatchState()
-    {
-        var state = State();
-        var context = new CrawlRuntimeContext(Miles(12));
-        var travel = ResolvedTravelAmount.Distance(
-            Miles(6),
-            Miles(6),
-            new ResolutionProvenance(ResolutionSource.ManualRoll, "physical dice"));
-
-        var result = CrawlAssistantActions.RecordTravelWatch(
-            context,
-            TestProcedureProfiles.FixedDistance(),
-            state,
-            new TravelWatchAssistantInput(
-                TimeSpan.FromHours(2),
-                travel,
-                new HexCoordinate(1, 0),
-                Miles(2),
-                new HexDirection(0),
-                null,
-                CompleteWatch: true,
-                Note: "physical map"));
-
-        Assert.Equal(new HexCoordinate(1, 0), result.CurrentHex);
-        Assert.Equal(6, result.DistanceTraveled.Value, 6);
-        Assert.Equal(TimeSpan.FromHours(2), result.ElapsedTravelTime);
-        Assert.Equal(1, result.CompletedWatches);
-        Assert.False(result.Navigation.IsLost);
-        Assert.Contains(result.History, item => item.Kind == CrawlRuntimeEventKind.TravelResolved);
-        Assert.Contains(result.History, item =>
-            item.Kind == CrawlRuntimeEventKind.ResolutionProvenanceRecorded
-            && item.Message.Contains("travel-assistant=ManualRoll", StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public void DmRepositionChangesOnlyLocalPositionStateAndEndsActiveWatch()
-    {
-        var state = State() with
-        {
-            Traversal = new HexTraversalState
-            {
-                CurrentHex = new HexCoordinate(1, -1),
-                EntryDirection = new HexDirection(2),
-                LastTravelDirection = new HexDirection(1),
-                Progress = Miles(5),
-                CurrentExitRequirement = Miles(12)
-            },
-            IntendedDirection = new HexDirection(1),
-            ActualDirection = new HexDirection(2),
-            Navigation = new NavigationRuntimeState(true, 1),
-            DistanceTraveled = Miles(18),
-            ElapsedTravelTime = TimeSpan.FromHours(7),
-            CompletedWatches = 1,
-            ActiveWatch = new ActiveWatchState(
-                2,
-                TimeSpan.FromHours(4),
-                TimeSpan.FromHours(1),
-                new WatchTravelPlan(
-                    new HexDirection(1),
-                    TravelModeSelection.Normal,
-                    NavigationAidSelection.None),
-                ResolvedEncounter.None,
-                true,
-                null)
-        };
-
-        var result = CrawlRuntimeActions.Reposition(
-            state,
-            new HexCoordinate(9, -4),
-            "Teleportation.");
-
-        Assert.Equal(new HexCoordinate(9, -4), result.CurrentHex);
-        Assert.Equal(0, result.Traversal.Progress.Value);
-        Assert.Equal(DistanceUnit.Miles, result.Traversal.Progress.Unit);
-        Assert.Null(result.Traversal.EntryDirection);
-        Assert.Null(result.Traversal.LastTravelDirection);
-        Assert.Null(result.Traversal.CurrentExitRequirement);
-        Assert.Null(result.IntendedDirection);
-        Assert.Null(result.ActualDirection);
-        Assert.False(result.Navigation.IsLost);
-        Assert.Equal(0, result.Navigation.VeerSteps);
-        Assert.Null(result.ActiveWatch);
-        Assert.Equal(state.DistanceTraveled, result.DistanceTraveled);
-        Assert.Equal(state.ElapsedTravelTime, result.ElapsedTravelTime);
-        Assert.Equal(state.CompletedWatches, result.CompletedWatches);
-        Assert.Contains(result.History, item =>
-            item.Kind == CrawlRuntimeEventKind.DmOverrideApplied
-            && item.Hex == new HexCoordinate(9, -4)
-            && item.Message.Contains("without recording travel", StringComparison.Ordinal)
-            && item.Message.Contains("Active watch 2 was ended", StringComparison.Ordinal)
-            && item.Message.Contains("Teleportation", StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public void CourseIntentMutationUpdatesCurrentIntentAndActivePlanWithoutTravelSideEffects()
-    {
-        var state = State() with
-        {
-            Traversal = new HexTraversalState
-            {
-                CurrentHex = new HexCoordinate(1, -1),
-                EntryDirection = new HexDirection(2),
-                LastTravelDirection = new HexDirection(1),
-                Progress = Miles(2),
-                CurrentExitRequirement = Miles(6)
-            },
-            IntendedDirection = new HexDirection(0),
-            ActualDirection = new HexDirection(1),
-            Navigation = new NavigationRuntimeState(true, 1),
-            DistanceTraveled = Miles(18),
-            ElapsedTravelTime = TimeSpan.FromHours(8),
-            CompletedWatches = 2,
-            ActiveWatch = new ActiveWatchState(
-                3,
-                TimeSpan.FromHours(4),
-                TimeSpan.FromHours(1),
-                new WatchTravelPlan(
-                    new HexDirection(0),
-                    TravelModeSelection.Normal,
-                    NavigationAidSelection.None),
-                ResolvedEncounter.None,
-                true,
-                null)
-        };
-        var history = state.History;
-
-        var result = CrawlRuntimeActions.SetIntendedCourse(state, new HexDirection(2));
-
-        Assert.Equal(new HexDirection(2), result.IntendedDirection);
-        Assert.Equal(new HexDirection(2), result.ActiveWatch!.Plan.IntendedDirection);
-        Assert.Equal(new HexDirection(1), result.ActualDirection);
-        Assert.Equal(state.CurrentHex, result.CurrentHex);
-        Assert.Equal(state.Traversal.Progress, result.Traversal.Progress);
-        Assert.Equal(state.DistanceTraveled, result.DistanceTraveled);
-        Assert.Equal(state.ElapsedTravelTime, result.ElapsedTravelTime);
-        Assert.Equal(state.CompletedWatches, result.CompletedWatches);
-        Assert.Same(history, result.History);
-    }
-
-    [Fact]
-    public void CourseIntentCanClearOutsideActiveWatchButNotFakeClearInsideOne()
-    {
-        var state = State() with
-        {
-            IntendedDirection = new HexDirection(0),
-            ActualDirection = new HexDirection(1)
-        };
-
-        var cleared = CrawlRuntimeActions.SetIntendedCourse(state, null);
-        Assert.Null(cleared.IntendedDirection);
-        Assert.Equal(state.ActualDirection, cleared.ActualDirection);
-
-        var active = state with
-        {
-            ActiveWatch = new ActiveWatchState(
-                1,
-                TimeSpan.FromHours(4),
-                TimeSpan.Zero,
-                new WatchTravelPlan(new HexDirection(0), TravelModeSelection.Normal, NavigationAidSelection.None),
-                ResolvedEncounter.None,
-                true,
-                null)
-        };
-        var error = Assert.Throws<InvalidOperationException>(() =>
-            CrawlRuntimeActions.SetIntendedCourse(active, null));
-        Assert.Contains("requires an intended course", error.Message, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public void NavigationAssistantMutatesNavigationWithoutAdvancingTravel()
-    {
-        var state = State();
-
-        var result = CrawlAssistantActions.RecordNavigation(
-            state,
-            new NavigationAssistantInput(
-                IsLost: true,
-                VeerSteps: 1,
-                IntendedDirection: new HexDirection(0),
-                new ResolutionProvenance(ResolutionSource.ExternalSystem, "external check"),
-                Note: "physical compass"));
-
-        Assert.True(result.Navigation.IsLost);
-        Assert.Equal(1, result.Navigation.VeerSteps);
-        Assert.Equal(new HexDirection(0), result.IntendedDirection);
-        Assert.Equal(new HexDirection(1), result.ActualDirection);
-        Assert.Equal(state.DistanceTraveled, result.DistanceTraveled);
-        Assert.Equal(state.ElapsedTravelTime, result.ElapsedTravelTime);
-        Assert.Equal(state.CompletedWatches, result.CompletedWatches);
-        Assert.Contains(result.History, item => item.Kind == CrawlRuntimeEventKind.ExpeditionBecameLost);
-    }
-
-    [Fact]
-    public void EncounterAssistantRecordsCadenceWithoutAdvancingTravel()
-    {
-        var state = State();
-
-        var result = CrawlAssistantActions.RecordEncounterCadence(
-            state,
-            new EncounterCadenceAssistantInput(
-                EncounterOutcomeKind.WanderingEncounter,
-                new ResolutionProvenance(ResolutionSource.ManualRoll, "d20"),
-                "wandering monster"));
-
-        Assert.Equal(state.DistanceTraveled, result.DistanceTraveled);
-        Assert.Equal(state.ElapsedTravelTime, result.ElapsedTravelTime);
-        Assert.Equal(state.CurrentHex, result.CurrentHex);
-        Assert.Contains(result.History, item => item.Kind == CrawlRuntimeEventKind.EncounterCheckPerformed);
-        var trigger = Assert.Single(result.History, item => item.Kind == CrawlRuntimeEventKind.EncounterTriggered);
-        Assert.NotNull(result.PendingEncounter);
-        Assert.Equal(trigger.Sequence, result.PendingEncounter!.TriggerSequence);
-        Assert.Equal(trigger.EncounterOccurrenceId, result.PendingEncounter.Id);
-        Assert.Equal(EncounterOutcomeKind.WanderingEncounter, result.PendingEncounter.Outcome);
-    }
-
-    [Fact]
-    public void EncounterAssistantNoneLeavesTravelUnblocked()
-    {
-        var result = CrawlAssistantActions.RecordEncounterCadence(
-            State(),
-            new EncounterCadenceAssistantInput(
-                EncounterOutcomeKind.None,
-                new ResolutionProvenance(ResolutionSource.ManualRoll, "d20")));
-
-        Assert.Null(result.PendingEncounter);
-        Assert.DoesNotContain(result.History, item => item.Kind == CrawlRuntimeEventKind.EncounterTriggered);
-    }
-
-    [Fact]
-    public void FocusedAssistantsDoNotMutateAnActiveFullWorkbenchWatch()
-    {
-        var state = State() with
-        {
-            ActiveWatch = new ActiveWatchState(
-                1,
-                TimeSpan.FromHours(4),
-                TimeSpan.FromHours(1),
-                new WatchTravelPlan(
-                    new HexDirection(0),
-                    TravelModeSelection.Normal,
-                    NavigationAidSelection.None),
-                ResolvedEncounter.None,
-                true,
-                null)
-        };
-
-        var error = Assert.Throws<InvalidOperationException>(() =>
-            CrawlAssistantActions.RecordNavigation(
-                state,
-                new NavigationAssistantInput(
-                    false,
-                    0,
-                    new HexDirection(0),
-                    ResolutionProvenance.ProcedureDefault)));
-
-        Assert.Contains("active full-workbench watch", error.Message, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public void EncounterAssistantRejectsWorldBoundKeyedDiscovery()
-    {
-        var error = Assert.Throws<InvalidOperationException>(() =>
-            CrawlAssistantActions.RecordEncounterCadence(
-                State(),
-                new EncounterCadenceAssistantInput(
-                    EncounterOutcomeKind.KeyedLocationDiscovery,
-                    ResolutionProvenance.ProcedureDefault)));
-
-        Assert.Contains("world/map composition", error.Message, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
     public void NonSpatialWatchSupportsPartialResumeAndCompletion()
     {
         var profile = TestProcedureProfiles.FixedDistance();
@@ -299,8 +27,8 @@ public sealed class CrawlAssistantActionsTests
         Assert.Equal(profile.WatchLength, partial.ActiveWatch.TotalDuration);
         Assert.Equal(TimeSpan.FromHours(1.5), partial.ActiveWatch.Elapsed);
         Assert.Equal(profile.WatchLength - TimeSpan.FromHours(1.5), partial.ActiveWatch.Remaining);
-        Assert.Contains(partial.History, item => item.Kind == CrawlRuntimeEventKind.WatchStarted && item.Hex is null);
-        Assert.Contains(partial.History, item => item.Kind == CrawlRuntimeEventKind.WatchTimeAdvanced && item.Hex is null);
+        Assert.Contains(partial.History, item => item.Kind == CrawlRuntimeEventKind.WatchStarted && item.Cell is null);
+        Assert.Contains(partial.History, item => item.Kind == CrawlRuntimeEventKind.WatchTimeAdvanced && item.Cell is null);
         Assert.Contains(partial.History, item =>
             item.Kind == CrawlRuntimeEventKind.ResolutionProvenanceRecorded
             && item.Message.Contains("watch-assistant=ProcedureDefault", StringComparison.Ordinal));
@@ -319,7 +47,7 @@ public sealed class CrawlAssistantActionsTests
         Assert.Contains(completed.History, item =>
             item.Kind == CrawlRuntimeEventKind.WatchCompleted
             && item.WatchNumber == 1
-            && item.Hex is null);
+            && item.Cell is null);
     }
 
     [Fact]
@@ -362,7 +90,7 @@ public sealed class CrawlAssistantActionsTests
 
         Assert.Equal(TimeSpan.FromHours(1), result.ElapsedTime);
         Assert.NotNull(result.ActiveWatch);
-        Assert.All(result.History, item => Assert.Null(item.Hex));
+        Assert.All(result.History, item => Assert.Null(item.Cell));
         Assert.Contains(result.History, item =>
             item.Kind == CrawlRuntimeEventKind.DmOverrideApplied
             && item.Message.Contains("advance the clock", StringComparison.Ordinal));
@@ -370,16 +98,6 @@ public sealed class CrawlAssistantActionsTests
             item.Kind == CrawlRuntimeEventKind.ResolutionProvenanceRecorded
             && item.Message.Contains("watch-assistant=DmOverride", StringComparison.Ordinal));
     }
-
-    private static ExpeditionState State() => new()
-    {
-        Id = Guid.NewGuid(),
-        Position = new WorldPoint(0, 0),
-        PositionPrecision = WorldPositionPrecision.HexAnchor,
-        Traversal = HexTraversalState.StartingIn(new HexCoordinate(0, 0), DistanceUnit.Miles),
-        Navigation = new NavigationRuntimeState(false, 0),
-        DistanceTraveled = Miles(0)
-    };
 
     private static DistanceMeasure Miles(double value) => new(value, DistanceUnit.Miles);
 }

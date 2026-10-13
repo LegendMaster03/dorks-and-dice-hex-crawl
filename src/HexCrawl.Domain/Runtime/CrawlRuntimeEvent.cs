@@ -17,9 +17,8 @@ public enum CrawlRuntimeEventKind
     DirectionChanged,
     TravelResolved,
     DistanceTraveled,
-    HexExited,
-    HexEntered,
-    EncounterCheckPerformed,
+    // Event-kind identifiers remain stable across persisted runtime histories.
+    EncounterCheckPerformed = 13,
     EncounterTriggered,
     KeyedLocationEncountered,
     LocationDiscovered,
@@ -52,7 +51,6 @@ public sealed record CrawlRuntimeEvent(
     int WatchNumber,
     CrawlRuntimeEventKind Kind,
     TimeSpan ExpeditionElapsedTime,
-    HexCoordinate? Hex,
     string Message,
     double? DistanceValue = null,
     string? DistanceUnit = null,
@@ -72,8 +70,3 @@ public sealed record CrawlRuntimeEvent(
     public int? ReciprocalInterfaceIndex { get; init; }
 }
 
-public sealed record WatchAdvanceResult(
-    ExpeditionState Expedition,
-    RuntimePauseReason? PauseReason,
-    TimeSpan RemainingWatchTime,
-    IReadOnlyList<CrawlRuntimeEvent> Events);

@@ -17,9 +17,9 @@ public sealed class PersistenceApplicationTests
         await using var database = await TestDatabase.CreateAsync();
         var alice = await database.ServiceAsync();
         var bob = await database.ServiceAsync();
-        var first = await alice.CreateOverworldAsync("alice", WorldCommand("First"));
-        _ = await alice.CreateOverworldAsync("alice", WorldCommand("Second"));
-        _ = await bob.CreateOverworldAsync("bob", WorldCommand("Bob world"));
+        var first = await alice.CreatePeriodicOverworldAsync("alice", "First", MaplessSessionFixture.Start().World);
+        _ = await alice.CreatePeriodicOverworldAsync("alice", "Second", MaplessSessionFixture.Start().World);
+        _ = await bob.CreatePeriodicOverworldAsync("bob", "Bob world", MaplessSessionFixture.Start().World);
 
         Assert.Equal(2, (await alice.ListOverworldsAsync("alice")).Count);
         Assert.Single(await bob.ListOverworldsAsync("bob"));
@@ -27,38 +27,28 @@ public sealed class PersistenceApplicationTests
     }
 
     [Fact]
-    public async Task GridAndCustomScaleRoundTripAcrossStoreRestart()
+    public async Task PeriodicWorldAndCustomScaleRoundTripAcrossStoreRestart()
     {
         await using var database = await TestDatabase.CreateAsync();
         var service = await database.ServiceAsync();
         var custom = DistanceUnit.Custom("league", 4828.032);
-        var created = await service.CreateOverworldAsync("alice", new CreateOverworldCommand(
-            "Custom grid",
-            HexOrientation.FlatTop,
-            new WorldPoint(4.5, -2),
-            12.5,
-            2.25,
-            3,
-            custom));
-        var changedGrid = created.World.Grid with
+        var tiling = MaplessSessionFixture.Start().World with
         {
             Origin = new WorldPoint(8, 9),
-            RotationDegrees = 20,
-            NeighborCenterDistance = new DistanceMeasure(4, custom)
+            PhysicalDistancePerWorldUnit = new DistanceMeasure(4, custom)
         };
-        _ = await service.UpdateOverworldAsync(
-            created.World.Id,
-            "alice",
-            new UpdateOverworldCommand("Renamed", changedGrid, created.Version));
-
+        var created = await service.CreatePeriodicOverworldAsync("alice", "Custom units", tiling);
+        _ = await service.RenameOverworldAsync(
+            created.World.Id, "alice", "Renamed", created.Version);
         var restarted = await database.ServiceAsync();
         var loaded = await restarted.GetOverworldAsync(created.World.Id, "alice");
         Assert.Equal("Renamed", loaded.World.Name);
-        Assert.Equal(HexOrientation.FlatTop, loaded.World.Grid.Orientation);
-        Assert.Equal(new WorldPoint(8, 9), loaded.World.Grid.Origin);
-        Assert.Equal(4, loaded.World.Grid.NeighborCenterDistance.Value);
-        Assert.Equal("league", loaded.World.Grid.NeighborCenterDistance.Unit.Symbol);
-        Assert.Equal(4828.032, loaded.World.Grid.NeighborCenterDistance.Unit.MetersPerUnit);
+        Assert.Equal(tiling.Id, loaded.World.SpatialTiling.Id);
+        Assert.Equal(new WorldPoint(8, 9), loaded.World.SpatialTiling.Origin);
+        var calibration = Assert.IsType<DistanceMeasure>(loaded.World.SpatialTiling.PhysicalDistancePerWorldUnit);
+        Assert.Equal(4, calibration.Value);
+        Assert.Equal("league", calibration.Unit.Symbol);
+        Assert.Equal(4828.032, calibration.Unit.MetersPerUnit);
     }
 
     [Fact]
@@ -66,7 +56,7 @@ public sealed class PersistenceApplicationTests
     {
         await using var database = await TestDatabase.CreateAsync();
         var service = await database.ServiceAsync();
-        var world = await service.CreateOverworldAsync("alice", WorldCommand());
+        var world = await service.CreatePeriodicOverworldAsync("alice", "World", MaplessSessionFixture.Start().World);
         world = await service.CreateLocationAsync(world.World.Id, "alice", new CreateLocationCommand(
             "Ruin", "ruin", new WorldPoint(.25, .75), LocationDiscoverability.Hidden, world.Version));
         var location = Assert.Single(world.World.Locations);
@@ -88,7 +78,7 @@ public sealed class PersistenceApplicationTests
     {
         await using var database = await TestDatabase.CreateAsync();
         var service = await database.ServiceAsync();
-        var world = await service.CreateOverworldAsync("alice", WorldCommand());
+        var world = await service.CreatePeriodicOverworldAsync("alice", "World", MaplessSessionFixture.Start().World);
         world = await service.CreateFeatureAsync(world.World.Id, "alice", new CreateFeatureCommand(
             "Spring", "spring", SpatialFeatureKind.Point, new WorldPoint(1.2, 2.3), null, null, world.Version));
         var feature = Assert.IsType<PointFeature>(Assert.Single(world.World.Features));
@@ -108,7 +98,7 @@ public sealed class PersistenceApplicationTests
     {
         await using var database = await TestDatabase.CreateAsync();
         var service = await database.ServiceAsync();
-        var world = await service.CreateOverworldAsync("alice", WorldCommand());
+        var world = await service.CreatePeriodicOverworldAsync("alice", "World", MaplessSessionFixture.Start().World);
         WorldPoint[] path = [new(0, 0), new(.25, 1.75), new(4.5, 3)];
         world = await service.CreateFeatureAsync(world.World.Id, "alice", new CreateFeatureCommand(
             "North road", "road", SpatialFeatureKind.Line, null, path, null, world.Version));
@@ -123,7 +113,7 @@ public sealed class PersistenceApplicationTests
     {
         await using var database = await TestDatabase.CreateAsync();
         var service = await database.ServiceAsync();
-        var world = await service.CreateOverworldAsync("alice", WorldCommand());
+        var world = await service.CreatePeriodicOverworldAsync("alice", "World", MaplessSessionFixture.Start().World);
         WorldPoint[] boundary = [new(0, 0), new(4, 0), new(2, 3)];
         world = await service.CreateFeatureAsync(world.World.Id, "alice", new CreateFeatureCommand(
             "Crystal marsh", "crystal-marsh", SpatialFeatureKind.Region, null, null, boundary, world.Version));
@@ -140,7 +130,7 @@ public sealed class PersistenceApplicationTests
     {
         await using var database = await TestDatabase.CreateAsync();
         var service = await database.ServiceAsync();
-        var world = await service.CreateOverworldAsync("alice", WorldCommand());
+        var world = await service.CreatePeriodicOverworldAsync("alice", "World", MaplessSessionFixture.Start().World);
         var originalVersion = world.Version;
 
         world = await service.ImportWorldObjectsAsync(
@@ -195,7 +185,7 @@ public sealed class PersistenceApplicationTests
     {
         await using var database = await TestDatabase.CreateAsync();
         var service = await database.ServiceAsync();
-        var world = await service.CreateOverworldAsync("alice", WorldCommand());
+        var world = await service.CreatePeriodicOverworldAsync("alice", "World", MaplessSessionFixture.Start().World);
         world = await service.CreateSourceMapAsync(world.World.Id, "alice", new CreateSourceMapCommand(
             "northlands",
             "Northlands GM gridless",
@@ -218,7 +208,7 @@ public sealed class PersistenceApplicationTests
     {
         await using var database = await TestDatabase.CreateAsync();
         var legacy = await database.ServiceAsync();
-        var world = await legacy.CreateOverworldAsync("alice", WorldCommand());
+        var world = await legacy.CreatePeriodicOverworldAsync("alice", "World", MaplessSessionFixture.Start().World);
 
         var store = new PostgresHexCrawlStore(database.ConnectionString);
         await store.InitializeAsync();
@@ -299,7 +289,7 @@ public sealed class PersistenceApplicationTests
     {
         await using var database = await TestDatabase.CreateAsync();
         var service = await database.ServiceAsync();
-        var world = await service.CreateOverworldAsync("alice", WorldCommand());
+        var world = await service.CreatePeriodicOverworldAsync("alice", "World", MaplessSessionFixture.Start().World);
         _ = await service.CreateLocationAsync(world.World.Id, "alice", new CreateLocationCommand(
             "A", "site", new WorldPoint(0, 0), LocationDiscoverability.Obvious, world.Version));
 
@@ -314,145 +304,22 @@ public sealed class PersistenceApplicationTests
     {
         await using var database = await TestDatabase.CreateAsync();
         var service = await database.ServiceAsync();
-        var world = await service.CreateOverworldAsync("alice", WorldCommand());
-        var expedition = await service.StartExpeditionAsync(world.World.Id, "alice", new StartExpeditionCommand(
-            "Survey", "alexandrian-advanced", new HexCoordinate(2, -1)));
+        var world = await service.CreatePeriodicOverworldAsync("alice", "World", MaplessSessionFixture.Start().World);
+        var expedition = await StartCellAsync(
+            database, service, world.World.Id, "Survey", "alexandrian-advanced", new LatticeDisplacement(2, -1));
 
         var restarted = await database.ServiceAsync();
-        var loaded = await restarted.GetExpeditionAsync(expedition.State.Id, "alice");
+        var loaded = await restarted.GetExpeditionAsync(expedition.Id, "alice");
         var loadedRuntime = GenericProcedureRuntime.Bind(loaded.CampaignProcedure);
-        Assert.Equal(new HexCoordinate(2, -1), loaded.State.CurrentHex);
+        var cells = Assert.IsType<CellExpeditionState>(loaded.Runtime);
+        Assert.Equal(world.World.SpatialTiling.Resolve(
+            new PeriodicCellAddress(
+                world.World.SpatialTiling.Topology.MotifCells[0].Id,
+                new LatticeDisplacement(2, -1))).Id,
+            cells.Traversal.CurrentCell);
         Assert.Equal("alexandrian-advanced", loaded.CampaignProcedure.Key);
         Assert.True(loadedRuntime.Navigation.UsesPersistentVeer);
         Assert.Equal(expedition.CampaignProcedure, loaded.CampaignProcedure);
-    }
-
-    [Fact]
-    public async Task CourseIntentAuthorityPersistsAcrossReloadScenariosWithoutTravelSideEffects()
-    {
-        await using var database = await TestDatabase.CreateAsync();
-        var service = await database.ServiceAsync();
-        var world = await service.CreateOverworldAsync("alice", WorldCommand());
-
-        var course = await service.StartExpeditionAsync(world.World.Id, "alice", new StartExpeditionCommand(
-            "Course persistence", "alexandrian-advanced", new HexCoordinate(1, -1)));
-        course = await service.SetExpeditionCourseIntentAsync(
-            course.State.Id,
-            "alice",
-            new SetExpeditionCourseIntentCommand(course.Version, 0));
-        var versionWithA = course.Version;
-        var beforeChange = course.State;
-
-        course = await service.SetExpeditionCourseIntentAsync(
-            course.State.Id,
-            "alice",
-            new SetExpeditionCourseIntentCommand(versionWithA, 2));
-
-        Assert.Equal(new HexDirection(2), course.State.IntendedDirection);
-        Assert.Equal(beforeChange.ActualDirection, course.State.ActualDirection);
-        Assert.Equal(beforeChange.CurrentHex, course.State.CurrentHex);
-        Assert.Equal(beforeChange.Traversal.Progress, course.State.Traversal.Progress);
-        Assert.Equal(beforeChange.DistanceTraveled, course.State.DistanceTraveled);
-        Assert.Equal(beforeChange.ElapsedTravelTime, course.State.ElapsedTravelTime);
-        Assert.Equal(beforeChange.CompletedWatches, course.State.CompletedWatches);
-        Assert.Equal(beforeChange.History, course.State.History);
-
-        await Assert.ThrowsAsync<HexCrawlConcurrencyException>(() =>
-            service.SetExpeditionCourseIntentAsync(
-                course.State.Id,
-                "alice",
-                new SetExpeditionCourseIntentCommand(versionWithA, 4)));
-
-        var reloadedB = await service.GetExpeditionAsync(course.State.Id, "alice");
-        Assert.Equal(new HexDirection(2), reloadedB.State.IntendedDirection);
-        Assert.Equal(course.State.CurrentHex, reloadedB.State.CurrentHex);
-        Assert.Equal(course.State.Traversal.Progress, reloadedB.State.Traversal.Progress);
-        Assert.Equal(course.State.DistanceTraveled, reloadedB.State.DistanceTraveled);
-        Assert.Equal(course.State.ElapsedTravelTime, reloadedB.State.ElapsedTravelTime);
-        Assert.Equal(course.State.CompletedWatches, reloadedB.State.CompletedWatches);
-
-        course = await service.SetExpeditionCourseIntentAsync(
-            reloadedB.State.Id,
-            "alice",
-            new SetExpeditionCourseIntentCommand(reloadedB.Version, 5));
-        Assert.Equal(new HexDirection(5), course.State.IntendedDirection);
-
-        course = await service.SetExpeditionCourseIntentAsync(
-            course.State.Id,
-            "alice",
-            new SetExpeditionCourseIntentCommand(course.Version, null));
-        Assert.Null(course.State.IntendedDirection);
-
-        var active = await service.StartExpeditionAsync(world.World.Id, "alice", new StartExpeditionCommand(
-            "Active course change", "simple-fixed-distance", new HexCoordinate(0, 0)));
-        active = await service.AdvanceExpeditionAsync(
-            active.State.Id,
-            "alice",
-            FixedAdvance(active.Version, 12, false));
-        Assert.NotNull(active.State.ActiveWatch);
-        var beforeActiveChange = active.State;
-
-        active = await service.SetExpeditionCourseIntentAsync(
-            active.State.Id,
-            "alice",
-            new SetExpeditionCourseIntentCommand(active.Version, 2));
-
-        Assert.Equal(new HexDirection(2), active.State.IntendedDirection);
-        Assert.Equal(new HexDirection(2), active.State.ActiveWatch!.Plan.IntendedDirection);
-        Assert.Equal(beforeActiveChange.ActualDirection, active.State.ActualDirection);
-        Assert.Equal(beforeActiveChange.CurrentHex, active.State.CurrentHex);
-        Assert.Equal(beforeActiveChange.Traversal.Progress, active.State.Traversal.Progress);
-        Assert.Equal(beforeActiveChange.DistanceTraveled, active.State.DistanceTraveled);
-        Assert.Equal(beforeActiveChange.ElapsedTravelTime, active.State.ElapsedTravelTime);
-        Assert.Equal(beforeActiveChange.CompletedWatches, active.State.CompletedWatches);
-        Assert.Equal(beforeActiveChange.History, active.State.History);
-
-        var lost = await service.StartExpeditionAsync(world.World.Id, "alice", new StartExpeditionCommand(
-            "Lost changed course", "alexandrian-advanced", new HexCoordinate(0, 0)));
-        lost = await service.SetExpeditionCourseIntentAsync(
-            lost.State.Id,
-            "alice",
-            new SetExpeditionCourseIntentCommand(lost.Version, 0));
-        lost = await service.SetExpeditionCourseIntentAsync(
-            lost.State.Id,
-            "alice",
-            new SetExpeditionCourseIntentCommand(lost.Version, 2));
-
-        var reloadedBeforeResolution = await service.GetExpeditionAsync(lost.State.Id, "alice");
-        Assert.Equal(new HexDirection(2), reloadedBeforeResolution.State.IntendedDirection);
-
-        lost = await service.AdvanceExpeditionAsync(
-            reloadedBeforeResolution.State.Id,
-            "alice",
-            new AdvanceExpeditionCommand
-            {
-                ExpectedVersion = reloadedBeforeResolution.Version,
-                IntendedDirection = 2,
-                ExpectedDistance = 2,
-                ActualDistance = 2,
-                ResolutionSource = ResolutionSource.ManualRoll,
-                NavigationOutcome = NavigationCheckOutcome.Failed,
-                VeerSteps = 1,
-                EncounterOutcome = EncounterOutcomeKind.None
-            });
-
-        Assert.Equal(new HexDirection(2), lost.State.IntendedDirection);
-        Assert.Equal(new HexDirection(3), lost.State.ActualDirection);
-
-        var restarted = await database.ServiceAsync();
-
-        var clearedReload = await restarted.GetExpeditionAsync(course.State.Id, "alice");
-        Assert.Null(clearedReload.State.IntendedDirection);
-
-        var activeReload = await restarted.GetExpeditionAsync(active.State.Id, "alice");
-        Assert.Equal(new HexDirection(2), activeReload.State.IntendedDirection);
-        Assert.Equal(new HexDirection(2), activeReload.State.ActiveWatch!.Plan.IntendedDirection);
-
-        var lostReload = await restarted.GetExpeditionAsync(lost.State.Id, "alice");
-        Assert.True(lostReload.State.Navigation.IsLost);
-        Assert.Equal(1, lostReload.State.Navigation.VeerSteps);
-        Assert.Equal(new HexDirection(2), lostReload.State.IntendedDirection);
-        Assert.Equal(new HexDirection(3), lostReload.State.ActualDirection);
     }
 
     [Fact]
@@ -460,18 +327,43 @@ public sealed class PersistenceApplicationTests
     {
         await using var database = await TestDatabase.CreateAsync();
         var service = await database.ServiceAsync();
-        var world = await service.CreateOverworldAsync("alice", WorldCommand());
-        var expedition = await service.StartExpeditionAsync(world.World.Id, "alice", new StartExpeditionCommand(
-            "Survey", "simple-fixed-distance", new HexCoordinate(0, 0)));
-        expedition = await service.AdvanceExpeditionAsync(expedition.State.Id, "alice", FixedAdvance(expedition.Version, 12, false));
-        Assert.Equal(RuntimePauseReason.ConditionsReviewRequired, expedition.PauseReason);
+        var world = await service.CreatePeriodicOverworldAsync("alice", "World", MaplessSessionFixture.Start().World);
+        var created = await StartCellAsync(
+            database, service, world.World.Id, "Paused watch",
+            "simple-fixed-distance", new LatticeDisplacement(0, 0));
+        var original = Assert.IsType<CellExpeditionState>(created.Runtime);
+        var heading = PeriodicCourseFixture.ThroughInterface(world.World.SpatialTiling, original.Traversal.CurrentCell);
+        var plan = new CellWatchTravelPlan(
+            heading, false, false, TravelModeSelection.Normal, NavigationAidSelection.None);
+        // A paused watch can have elapsed time without spending any physical
+        // distance. Never invent a partial geometric position from V1 progress.
+        var partiallyElapsed = original with
+        {
+            IntendedHeading = heading,
+            ElapsedTravelTime = TimeSpan.FromHours(2),
+            ActiveWatch = new CellActiveWatchState(
+                1, TimeSpan.FromHours(4), TimeSpan.FromHours(2),
+                plan, ResolvedEncounter.None, true, RuntimePauseReason.ConditionsReviewRequired)
+        };
+        partiallyElapsed.Validate(world.World.SpatialTiling);
+        var store = new PostgresHexCrawlStore(database.ConnectionString);
+        var stored = await store.SaveExpeditionAsync(
+            created with
+            {
+                Runtime = partiallyElapsed,
+                PauseReason = RuntimePauseReason.ConditionsReviewRequired,
+                RemainingWatchTime = TimeSpan.FromHours(2)
+            }, created.Version);
+        Assert.Equal(SaveOutcome.Saved, stored.Outcome);
 
         var restarted = await database.ServiceAsync();
-        var loaded = await restarted.GetExpeditionAsync(expedition.State.Id, "alice");
-        Assert.NotNull(loaded.State.ActiveWatch);
+        var loaded = await restarted.GetExpeditionAsync(created.Id, "alice");
+        var actual = Assert.IsType<CellExpeditionState>(loaded.Runtime);
+        Assert.NotNull(actual.ActiveWatch);
+        Assert.Equal(TimeSpan.FromHours(2), actual.ActiveWatch!.Elapsed);
         Assert.Equal(TimeSpan.FromHours(2), loaded.RemainingWatchTime);
-        Assert.Equal(6, loaded.State.DistanceTraveled.Value);
-        Assert.Equal(new HexCoordinate(1, 0), loaded.State.CurrentHex);
+        Assert.Equal(partiallyElapsed.Traversal, actual.Traversal);
+        Assert.Equal(0, actual.DistanceTraveled!.Value.Value);
     }
 
     [Fact]
@@ -479,16 +371,32 @@ public sealed class PersistenceApplicationTests
     {
         await using var database = await TestDatabase.CreateAsync();
         var service = await database.ServiceAsync();
-        var world = await service.CreateOverworldAsync("alice", WorldCommand());
-        var expedition = await service.StartExpeditionAsync(world.World.Id, "alice", new StartExpeditionCommand(
-            "History", "simple-fixed-distance", new HexCoordinate(0, 0)));
-        expedition = await service.AdvanceExpeditionAsync(expedition.State.Id, "alice", FixedAdvance(expedition.Version, 1, true));
-        expedition = await service.AdvanceExpeditionAsync(expedition.State.Id, "alice", FixedAdvance(expedition.Version, 1, true));
+        var world = await service.CreatePeriodicOverworldAsync("alice", "World", MaplessSessionFixture.Start().World);
+        var start = new LatticeDisplacement(0, 0);
+        var expedition = await StartCellAsync(
+            database, service, world.World.Id, "History", "simple-fixed-distance", start);
+        var heading = PeriodicCourseFixture.ThroughInterface(world.World.SpatialTiling, Assert.IsType<CellExpeditionState>(expedition.Runtime).Traversal.CurrentCell);
+        var plan = new CellWatchTravelPlan(
+            heading, false, true, TravelModeSelection.Normal, NavigationAidSelection.None);
+        var source = new ResolutionProvenance(ResolutionSource.ManualRoll);
+        var inputs = new CellWatchAdvanceInputs(
+            ResolvedTravelAmount.Distance(
+                new DistanceMeasure(1, DistanceUnit.Miles),
+                new DistanceMeasure(1, DistanceUnit.Miles), source),
+            new ResolvedCellNavigation(NavigationCheckOutcome.Succeeded, null, source),
+            ResolvedEncounter.None);
+        expedition = await service.AdvanceCellExpeditionAsync(
+            expedition.Id, "alice", expedition.Version, plan, inputs);
+        expedition = await service.AdvanceCellExpeditionAsync(
+            expedition.Id, "alice", expedition.Version, plan, inputs);
 
         var restarted = await database.ServiceAsync();
-        var loaded = await restarted.GetExpeditionAsync(expedition.State.Id, "alice");
-        Assert.NotEmpty(loaded.State.History);
-        Assert.Equal(loaded.State.History.Count, loaded.State.History.Select(item => item.Sequence).Distinct().Count());
+        var loaded = await restarted.GetExpeditionAsync(expedition.Id, "alice");
+        var cell = Assert.IsType<CellExpeditionState>(loaded.Runtime);
+        Assert.Equal(2, cell.CompletedWatches);
+        Assert.NotEmpty(cell.History);
+        Assert.All(cell.History, item => Assert.NotNull(item.Cell));
+        Assert.Equal(cell.History.Count, cell.History.Select(item => item.Sequence).Distinct().Count());
     }
 
     [Fact]
@@ -496,20 +404,20 @@ public sealed class PersistenceApplicationTests
     {
         await using var database = await TestDatabase.CreateAsync();
         var service = await database.ServiceAsync();
-        var world = await service.CreateOverworldAsync("alice", WorldCommand());
+        var world = await service.CreatePeriodicOverworldAsync("alice", "World", MaplessSessionFixture.Start().World);
         world = await service.CreateLocationAsync(world.World.Id, "alice", new CreateLocationCommand(
             "Hidden ruin", "ruin", new WorldPoint(.1, .1), LocationDiscoverability.Hidden, world.Version));
         var location = Assert.Single(world.World.Locations);
         world = await service.CreateFeatureAsync(world.World.Id, "alice", new CreateFeatureCommand(
             "Spring", "spring", SpatialFeatureKind.Point, new WorldPoint(.2, .2), null, null, world.Version));
         var feature = Assert.Single(world.World.Features);
-        var expedition = await service.StartExpeditionAsync(world.World.Id, "alice", new StartExpeditionCommand(
-            "Knowledge", "simple-fixed-distance", new HexCoordinate(0, 0)));
-        expedition = await service.DiscoverAsync(expedition.State.Id, "alice", new DiscoverSubjectCommand(
+        var expedition = await StartCellAsync(
+            database, service, world.World.Id, "Knowledge", "simple-fixed-distance", new LatticeDisplacement(0, 0));
+        expedition = await service.DiscoverAsync(expedition.Id, "alice", new DiscoverSubjectCommand(
             expedition.Version, location.Id, KnowledgeSubjectType.Location, "test"));
 
         var restarted = await database.ServiceAsync();
-        var loaded = await restarted.GetExpeditionAsync(expedition.State.Id, "alice");
+        var loaded = await restarted.GetExpeditionAsync(expedition.Id, "alice");
         Assert.Equal(KnowledgeState.Discovered, loaded.RequireKnowledge().Entries[location.Id].State);
         Assert.False(loaded.RequireKnowledge().Entries.ContainsKey(feature.Id));
         Assert.Single(loaded.RequireKnowledge().Entries);
@@ -520,19 +428,29 @@ public sealed class PersistenceApplicationTests
     {
         await using var database = await TestDatabase.CreateAsync();
         var service = await database.ServiceAsync();
-        var world = await service.CreateOverworldAsync("alice", WorldCommand());
-        var expedition = await service.StartExpeditionAsync(world.World.Id, "alice", new StartExpeditionCommand(
-            "Replay", "simple-fixed-distance", new HexCoordinate(0, 0)));
+        var world = await service.CreatePeriodicOverworldAsync("alice", "World", MaplessSessionFixture.Start().World);
+        var start = new LatticeDisplacement(0, 0);
+        var expedition = await StartCellAsync(
+            database, service, world.World.Id, "Replay", "simple-fixed-distance", start);
         var restarted = await database.ServiceAsync();
-        var loaded = await restarted.GetExpeditionAsync(expedition.State.Id, "alice");
+        var loaded = await restarted.GetExpeditionAsync(expedition.Id, "alice");
         var loadedWorld = await restarted.GetOverworldAsync(world.World.Id, "alice");
+        var cell = Assert.IsType<CellExpeditionState>(loaded.Runtime);
+        var heading = PeriodicCourseFixture.ThroughInterface(loadedWorld.World.SpatialTiling, cell.Traversal.CurrentCell);
+        var plan = new CellWatchTravelPlan(
+            heading, false, true, TravelModeSelection.Normal, NavigationAidSelection.None);
+        var source = new ResolutionProvenance(ResolutionSource.ManualRoll);
+        var inputs = new CellWatchAdvanceInputs(
+            ResolvedTravelAmount.Distance(
+                new DistanceMeasure(3, DistanceUnit.Miles),
+                new DistanceMeasure(3, DistanceUnit.Miles), source),
+            new ResolvedCellNavigation(NavigationCheckOutcome.Succeeded, null, source),
+            ResolvedEncounter.None);
         var engine = new CrawlRuntimeEngine();
-        var plan = new WatchTravelPlan(new HexDirection(0), TravelModeSelection.Normal, NavigationAidSelection.None, false, true);
-        var inputs = new WatchAdvanceInputs(TravelDistanceResolver.Fixed(new DistanceMeasure(3, DistanceUnit.Miles)));
-
-        var context = ExpeditionWorldComposition.RuntimeContext(loadedWorld.World);
-        var first = engine.Advance(context, loaded.CampaignProcedure, loaded.State, plan, inputs);
-        var second = engine.Advance(context, loaded.CampaignProcedure, loaded.State, plan, inputs);
+        var first = engine.AdvanceCellWatch(
+            loadedWorld.World.SpatialTiling, loaded.CampaignProcedure, cell, plan, inputs);
+        var second = engine.AdvanceCellWatch(
+            loadedWorld.World.SpatialTiling, loaded.CampaignProcedure, cell, plan, inputs);
         var sharedEmptyHistory = Array.Empty<CrawlRuntimeEvent>();
         Assert.Equal(
             first.Expedition with { History = sharedEmptyHistory },
@@ -546,24 +464,20 @@ public sealed class PersistenceApplicationTests
     {
         await using var database = await TestDatabase.CreateAsync();
         var service = await database.ServiceAsync();
-        var world = await service.CreateOverworldAsync("alice", WorldCommand());
+        var world = await service.CreatePeriodicOverworldAsync("alice", "World", MaplessSessionFixture.Start().World);
         world = await service.CreateLocationAsync(world.World.Id, "alice", new CreateLocationCommand(
             "Keep", "site", new WorldPoint(0, 0), LocationDiscoverability.Obvious, world.Version));
         var location = Assert.Single(world.World.Locations);
         world = await service.CreateFeatureAsync(world.World.Id, "alice", new CreateFeatureCommand(
             "Keep feature", "road", SpatialFeatureKind.Line, null, [new(0, 0), new(1, 1)], null, world.Version));
         var feature = Assert.Single(world.World.Features);
-        _ = await service.StartExpeditionAsync(world.World.Id, "alice", new StartExpeditionCommand(
-            "Active", "simple-fixed-distance", new HexCoordinate(0, 0)));
+        _ = await StartCellAsync(
+            database, service, world.World.Id, "Active", "simple-fixed-distance", new LatticeDisplacement(0, 0));
 
         await Assert.ThrowsAsync<HexCrawlConflictException>(() => service.DeleteLocationAsync(
             world.World.Id, location.Id, "alice", world.Version));
         await Assert.ThrowsAsync<HexCrawlConflictException>(() => service.DeleteFeatureAsync(
             world.World.Id, feature.Id, "alice", world.Version));
-        await Assert.ThrowsAsync<HexCrawlConflictException>(() => service.UpdateOverworldAsync(
-            world.World.Id,
-            "alice",
-            new UpdateOverworldCommand(world.World.Name, world.World.Grid with { Origin = new WorldPoint(5, 5) }, world.Version)));
     }
 
     [Fact]
@@ -576,24 +490,19 @@ public sealed class PersistenceApplicationTests
         Assert.Empty(await store.ListOverworldsAsync("nobody"));
     }
 
-    private static CreateOverworldCommand WorldCommand(string name = "World") => new(
-        name,
-        HexOrientation.PointyTop,
-        new WorldPoint(0, 0),
-        0,
-        1,
-        12,
-        DistanceUnit.Miles);
-
-    private static AdvanceExpeditionCommand FixedAdvance(long version, double miles, bool continueAcrossBoundaries) => new()
+    private static async Task<StoredExpedition> StartCellAsync(
+        TestDatabase database, HexCrawlService core, Guid worldId,
+        string name, string presetKey, LatticeDisplacement translation)
     {
-        ExpectedVersion = version,
-        IntendedDirection = 0,
-        ExpectedDistance = miles,
-        ActualDistance = miles,
-        ResolutionSource = ResolutionSource.ManualRoll,
-        ContinueAcrossBoundaries = continueAcrossBoundaries
-    };
+        var stored = await core.GetOverworldAsync(worldId, "alice");
+        var start = new PeriodicCellAddress(
+            stored.World.SpatialTiling.Topology.MotifCells[0].Id, translation);
+        var store = new PostgresHexCrawlStore(database.ConnectionString);
+        return await new ExpeditionStartService(store, core, new CampaignProcedureService(store))
+            .StartWorldBoundCellsAsync(
+                worldId, "alice", name,
+                new ProcedureStartSelection(PresetKey: presetKey), start);
+    }
 
     private sealed class TestDatabase : IAsyncDisposable
     {

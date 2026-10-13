@@ -83,38 +83,32 @@ test("active journey stays primary instead of falling through to generic interva
 });
 
 
-test("abstract spatial position exposes authoritative cell and partial progress with units", () => {
+test("abstract spatial position does not fabricate legacy intra-cell progress", () => {
     const state = {
-        context: { kind: "AbstractHex" },
-        procedure: { runtime: { tracksIntraHexProgress: true } },
+        context: { kind: "MaplessSpatial" },
         expedition: {
             isSpatial: true,
-            currentHex: { q: 0, r: 0 },
-            hexProgress: { value: 1.5, unit: { symbol: "mi" } },
-            exitRequirement: { value: 6, unit: { symbol: "mi" } }
+            currentCell: { tilingId: "tile", address: { motifCellId: "alpha", translation: { u: 0, v: 0 } } }
         }
     };
 
     assert.deepEqual(spatialPositionPresentation(state), {
-        value: "Cell 0, 0",
-        detail: "1.5 / 6 mi · 25% through current cell"
+        value: "Cell alpha (0, 0)",
+        detail: "Mapless spatial position"
     });
 });
 
 test("spatial procedures without partial progress do not fabricate a progress value", () => {
     const state = {
         context: { kind: "WorldBound" },
-        procedure: { runtime: { tracksIntraHexProgress: false } },
         expedition: {
             isSpatial: true,
-            currentHex: { q: 4, r: -2 },
-            hexProgress: { value: 0, unit: { symbol: "km" } },
-            exitRequirement: { value: 8, unit: { symbol: "km" } }
+            currentCell: { tilingId: "tile", address: { motifCellId: "beta", translation: { u: 4, v: -2 } } }
         }
     };
 
     assert.deepEqual(spatialPositionPresentation(state), {
-        value: "Cell 4, -2",
+        value: "Cell beta (4, -2)",
         detail: "Mapped spatial position"
     });
 });

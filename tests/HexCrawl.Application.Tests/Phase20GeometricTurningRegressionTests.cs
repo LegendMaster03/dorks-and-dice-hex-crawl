@@ -14,13 +14,25 @@ public sealed class Phase20GeometricTurningRegressionTests
     private static readonly ResolutionProvenance Manual =
         new(ResolutionSource.ManualRoll);
 
-    private static AbstractCellSessionStart Session() =>
-        AbstractCellSessionGeometry.CreateNewHexSession(
-            Guid.NewGuid(),
-            new AbstractHexCrawlSessionContext(
-                "Mapless geometric test", HexOrientation.PointyTop,
-                new CrawlRuntimeContext(new DistanceMeasure(6, DistanceUnit.Miles))),
-            new HexCoordinate(0, 0));
+    private static MaplessCellSessionStart Session()
+    {
+        var realized = DelaneyDressHarmonicMetricRealization.Construct(
+            "<1:1,1,1:6,3>", 1d, "world-unit");
+        var id = Guid.NewGuid();
+        var tiling = new PeriodicWorldTiling(id, realized.Topology!,
+            realized.Realization!, new WorldPoint(0, 0),
+            PhysicalDistancePerWorldUnit: new DistanceMeasure(6, DistanceUnit.Miles))
+        {
+            PhysicalTurnCostReference = new DistanceMeasure(6, DistanceUnit.Miles)
+        };
+        return MaplessCellSessionGeometry.Create(id, tiling);
+    }
+
+    private static WorldPoint HeadingToBoundary(PeriodicWorldTiling world, WorldCellId current, int interfaceIndex)
+    {
+        var boundary = world.Boundaries(current.Address)[interfaceIndex];
+        return SpatialCourseSelection.ParallelToNeighborCenters(world, current, boundary.To);
+    }
 
     private static CellWatchAdvanceInputs Inputs(double miles) => new(
         ResolvedTravelAmount.Distance(
@@ -37,13 +49,11 @@ public sealed class Phase20GeometricTurningRegressionTests
     public void TurningBudgetDebtSurvivesWatchCompletionSerializationAndResume()
     {
         var session = Session();
-        var procedure = GeometricNativeProcedureMaterializer.Materialize(
-            "alexandrian-advanced").Procedure;
+        var procedure = CampaignProcedureMaterializer.MaterializeExecutableSpatial(
+            CrawlProcedureCatalog.Resolve("alexandrian-advanced")).Procedure;
         var engine = new CrawlRuntimeEngine();
-        var east = SpatialCourseSelection.FromLegacyHexDirection(
-            session.World, new HexCoordinate(0, 0), new HexDirection(0));
-        var northEast = SpatialCourseSelection.FromLegacyHexDirection(
-            session.World, new HexCoordinate(0, 0), new HexDirection(1));
+        var east = HeadingToBoundary(session.World, session.Expedition.Traversal.CurrentCell, 0);
+        var northEast = HeadingToBoundary(session.World, session.Expedition.Traversal.CurrentCell, 5);
 
         var first = engine.AdvanceCellWatch(
             session.World, procedure, session.Expedition, Plan(east), Inputs(1));
@@ -97,8 +107,8 @@ public sealed class Phase20GeometricTurningRegressionTests
     {
         var session = Session();
         var world = session.World;
-        var procedure = GeometricNativeProcedureMaterializer.Materialize(
-            "alexandrian-advanced").Procedure;
+        var procedure = CampaignProcedureMaterializer.MaterializeExecutableSpatial(
+            CrawlProcedureCatalog.Resolve("alexandrian-advanced")).Procedure;
         var center = world.Resolve(session.Expedition.Traversal.CurrentCell.Address);
         var edge = world.Boundaries(center.Id.Address)[0];
         var midpoint = new WorldPoint(
@@ -168,13 +178,11 @@ public sealed class Phase20GeometricTurningRegressionTests
     {
         var session = Session();
         var world = session.World;
-        var procedure = GeometricNativeProcedureMaterializer.Materialize(
-            "alexandrian-advanced").Procedure;
+        var procedure = CampaignProcedureMaterializer.MaterializeExecutableSpatial(
+            CrawlProcedureCatalog.Resolve("alexandrian-advanced")).Procedure;
         var engine = new CrawlRuntimeEngine();
-        var east = SpatialCourseSelection.FromLegacyHexDirection(
-            world, new HexCoordinate(0, 0), new HexDirection(0));
-        var northEast = SpatialCourseSelection.FromLegacyHexDirection(
-            world, new HexCoordinate(0, 0), new HexDirection(1));
+        var east = HeadingToBoundary(world, session.Expedition.Traversal.CurrentCell, 0);
+        var northEast = HeadingToBoundary(world, session.Expedition.Traversal.CurrentCell, 5);
         var first = engine.AdvanceCellWatch(
             world, procedure, session.Expedition, Plan(east), Inputs(1));
         Assert.Null(first.PauseReason);
@@ -249,8 +257,8 @@ public sealed class Phase20GeometricTurningRegressionTests
             },
             IntendedHeading = null
         };
-        var procedure = GeometricNativeProcedureMaterializer.Materialize(
-            "alexandrian-advanced").Procedure;
+        var procedure = CampaignProcedureMaterializer.MaterializeExecutableSpatial(
+            CrawlProcedureCatalog.Resolve("alexandrian-advanced")).Procedure;
         var engine = new CrawlRuntimeEngine();
         var paused = engine.AdvanceCellWatch(
             world, procedure, positionWithoutPriorCourse, Plan(outward), Inputs(2));
@@ -293,8 +301,8 @@ public sealed class Phase20GeometricTurningRegressionTests
             },
             IntendedHeading = incoming
         };
-        var procedure = GeometricNativeProcedureMaterializer.Materialize(
-            "alexandrian-advanced").Procedure;
+        var procedure = CampaignProcedureMaterializer.MaterializeExecutableSpatial(
+            CrawlProcedureCatalog.Resolve("alexandrian-advanced")).Procedure;
         var engine = new CrawlRuntimeEngine();
 
         // Only 0.4 miles are available; the full turning cost is 1 mile.
@@ -331,12 +339,10 @@ public sealed class Phase20GeometricTurningRegressionTests
     {
         var session = Session();
         var world = session.World;
-        var procedure = GeometricNativeProcedureMaterializer.Materialize(
-            "alexandrian-advanced").Procedure;
-        var east = SpatialCourseSelection.FromLegacyHexDirection(
-            world, new HexCoordinate(0, 0), new HexDirection(0));
-        var northEast = SpatialCourseSelection.FromLegacyHexDirection(
-            world, new HexCoordinate(0, 0), new HexDirection(1));
+        var procedure = CampaignProcedureMaterializer.MaterializeExecutableSpatial(
+            CrawlProcedureCatalog.Resolve("alexandrian-advanced")).Procedure;
+        var east = HeadingToBoundary(world, session.Expedition.Traversal.CurrentCell, 0);
+        var northEast = HeadingToBoundary(world, session.Expedition.Traversal.CurrentCell, 5);
         var engine = new CrawlRuntimeEngine();
         var first = engine.AdvanceCellWatch(
             world, procedure, session.Expedition, Plan(east), Inputs(1));
@@ -377,12 +383,10 @@ public sealed class Phase20GeometricTurningRegressionTests
     {
         var session = Session();
         var world = session.World;
-        var procedure = GeometricNativeProcedureMaterializer.Materialize(
-            "alexandrian-advanced").Procedure;
-        var east = SpatialCourseSelection.FromLegacyHexDirection(
-            world, new HexCoordinate(0, 0), new HexDirection(0));
-        var northEast = SpatialCourseSelection.FromLegacyHexDirection(
-            world, new HexCoordinate(0, 0), new HexDirection(1));
+        var procedure = CampaignProcedureMaterializer.MaterializeExecutableSpatial(
+            CrawlProcedureCatalog.Resolve("alexandrian-advanced")).Procedure;
+        var east = HeadingToBoundary(world, session.Expedition.Traversal.CurrentCell, 0);
+        var northEast = HeadingToBoundary(world, session.Expedition.Traversal.CurrentCell, 5);
         var engine = new CrawlRuntimeEngine();
 
         // A heading requested at an encounter occurring at the first instant
@@ -419,10 +423,9 @@ public sealed class Phase20GeometricTurningRegressionTests
     {
         var session = Session();
         var world = session.World;
-        var procedure = GeometricNativeProcedureMaterializer.Materialize(
-            "alexandrian-advanced").Procedure;
-        var heading = SpatialCourseSelection.FromLegacyHexDirection(
-            world, new HexCoordinate(0, 0), new HexDirection(0));
+        var procedure = CampaignProcedureMaterializer.MaterializeExecutableSpatial(
+            CrawlProcedureCatalog.Resolve("alexandrian-advanced")).Procedure;
+        var heading = HeadingToBoundary(world, session.Expedition.Traversal.CurrentCell, 0);
         var backtrack = Plan(heading) with { DeliberateDoubleBack = true };
         var immediate = new ResolvedEncounter(
             EncounterOutcomeKind.WanderingEncounter, TimeSpan.Zero,
@@ -440,21 +443,19 @@ public sealed class Phase20GeometricTurningRegressionTests
     }
 
     [Fact]
-    public void GeometricExitIsNotGovernedByTheHistoricalFarExitFactor()
+    public void GeometricExitUsesAuthoritativePolygonBoundary()
     {
         var session = Session();
         var world = session.World;
-        var legacy = GenericProcedureRuntime.Bind(
+        var published = GenericProcedureRuntime.Bind(
             CrawlProcedureCatalog.Resolve("alexandrian-advanced").MaterializeGeneric().Procedure);
         var geometric = GenericProcedureRuntime.Bind(
-            GeometricNativeProcedureMaterializer.Materialize("alexandrian-advanced").Procedure);
-        Assert.Equal(1, legacy.Movement.MechanicVersion);
-        Assert.Equal(2, geometric.Movement.MechanicVersion);
-        Assert.Equal(1d, legacy.HexProgress.FarExitProgressFactor);
+            CampaignProcedureMaterializer.MaterializeExecutableSpatial(
+                CrawlProcedureCatalog.Resolve("alexandrian-advanced")).Procedure);
+        Assert.Equal(published.TurnPolicy, geometric.TurnPolicy);
         Assert.Equal(1d / 6d, geometric.TurnPolicy!.NeighborCenterDistanceFactor, 12);
 
-        var east = SpatialCourseSelection.FromLegacyHexDirection(
-            world, new HexCoordinate(0, 0), new HexDirection(0));
+        var east = HeadingToBoundary(world, session.Expedition.Traversal.CurrentCell, 0);
         var fromCenter = session.Expedition.Traversal with { TravelHeading = east };
         var first = PeriodicCellTraversalGeometry.NextCrossing(world, fromCenter);
         Assert.Equal(CellCrossingStatus.Crosses, first.Status);
@@ -466,8 +467,7 @@ public sealed class Phase20GeometricTurningRegressionTests
         // a polygon boundary sooner than the historical 6-mile far factor.
         var changed = entered with
         {
-            TravelHeading = SpatialCourseSelection.FromLegacyHexDirection(
-                world, new HexCoordinate(1, 0), new HexDirection(1)),
+            TravelHeading = HeadingToBoundary(world, entered.CurrentCell, 5),
             SelectedExitInterfaceIndex = null
         };
         var exit = PeriodicCellTraversalGeometry.NextCrossing(world, changed);
@@ -476,7 +476,7 @@ public sealed class Phase20GeometricTurningRegressionTests
             exit.DistanceWorldUnits!.Value * world.PhysicalDistancePerWorldUnit!.Value.Value,
             world.PhysicalDistancePerWorldUnit.Value.Unit);
         Assert.InRange(distance.Value, 0.001, 5.999999);
-        Assert.True(distance.Value < 6 * legacy.HexProgress.FarExitProgressFactor);
+        Assert.True(distance.Value < 6d);
         Assert.NotEqual(changed.CurrentCell,
             PeriodicCellTraversalGeometry.Advance(
                 world, changed, exit.DistanceWorldUnits.Value).Traversal.CurrentCell);

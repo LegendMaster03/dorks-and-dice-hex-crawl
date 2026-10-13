@@ -1,15 +1,16 @@
 using HexCrawl.Application;
+using HexCrawl.Domain.Spatial;
 
 namespace HexCrawl.Web.Api;
 
-public sealed record ResolveProcedureInputsRequest(
+public sealed record ResolveCellProcedureInputsRequest(
     long ExpectedVersion,
-    double? ExpectedDistance = null,
+    DistanceMeasure? ExpectedDistance = null,
     bool SuppressesNavigationCheck = false,
     bool DeliberateDoubleBack = false,
     int? NavigationDifficultyClass = null,
     int NavigationModifier = 0,
-    int? FailureVeerSteps = null,
+    double? FailureVeerDegrees = null,
     Guid? KeyedLocationId = null,
     string? TravelDistanceRule = null,
     int? BaseSpeedFeet = null,
@@ -17,7 +18,16 @@ public sealed record ResolveProcedureInputsRequest(
     string? Route = null,
     IReadOnlyList<string>? NavigationRiskFactors = null)
 {
-    public ProcedureResolutionHelperCommand ToCommand() => new()
+    public void Validate()
+    {
+        if (ExpectedVersion <= 0)
+            throw new InvalidOperationException("Expected expedition version is required.");
+        if (FailureVeerDegrees is { } veer
+            && (!double.IsFinite(veer) || veer == 0 || Math.Abs(veer) > 180))
+            throw new InvalidOperationException("Failure veer must be in finite nonzero degrees, at most 180.");
+    }
+
+    public CellProcedureResolutionHelperCommand ToCommand() => new()
     {
         ExpectedVersion = ExpectedVersion,
         ExpectedDistance = ExpectedDistance,
@@ -25,7 +35,7 @@ public sealed record ResolveProcedureInputsRequest(
         DeliberateDoubleBack = DeliberateDoubleBack,
         NavigationDifficultyClass = NavigationDifficultyClass,
         NavigationModifier = NavigationModifier,
-        FailureVeerSteps = FailureVeerSteps,
+        FailureVeerDegrees = FailureVeerDegrees,
         KeyedLocationId = KeyedLocationId,
         TravelDistanceRule = TravelDistanceRule,
         BaseSpeedFeet = BaseSpeedFeet,

@@ -14,14 +14,8 @@ internal sealed record TestProcedureFixture
     public EncounterCheckCadence EncounterCadence { get; init; } = EncounterCheckCadence.PerWatch;
     public bool UsesNavigationChecks { get; init; }
     public bool UsesPersistentVeer { get; init; }
-    public bool TracksIntraHexProgress { get; init; } = true;
-    public bool DirectionChangesCostProgress { get; init; }
     public bool SupportsDeliberateDoubleBack { get; init; } = true;
-    public double StartingExitProgressFactor { get; init; } = 0.5d;
-    public double NearExitProgressFactor { get; init; } = 0.5d;
-    public double FarExitProgressFactor { get; init; } = 1d;
-    public double BackExitProgressFactor { get; init; } = 0.5d;
-    public double DirectionChangeProgressCostFactor { get; init; }
+    public double NeighborCenterDistanceFactor { get; init; }
     public ProcedureResolutionHelperProfile? ResolutionHelpers { get; init; }
 
     public CampaignProcedure Materialize()
@@ -39,19 +33,14 @@ internal sealed record TestProcedureFixture
                 GenericProcedureExecutionHandlers.MovementResolutionPolicy,
                 Values(
                     ("travelResolution", TravelResolution.ToString()),
-                    ("actualDistanceResolution", ActualDistanceResolution.ToString()),
-                    ("tracksIntraHexProgress", Bool(TracksIntraHexProgress)))),
+                    ("actualDistanceResolution", ActualDistanceResolution.ToString())),
+                version: 2),
             Module(
-                "test.hex-progress",
-                "test.hex-progress-policy",
-                GenericProcedureExecutionHandlers.HexProgressPolicy,
+                "test.turn",
+                "test.spatial-turn-policy",
+                GenericProcedureExecutionHandlers.SpatialTurnCostPolicy,
                 Values(
-                    ("startingExitProgressFactor", Number(StartingExitProgressFactor)),
-                    ("nearExitProgressFactor", Number(NearExitProgressFactor)),
-                    ("farExitProgressFactor", Number(FarExitProgressFactor)),
-                    ("backExitProgressFactor", Number(BackExitProgressFactor)),
-                    ("directionChangesCostProgress", Bool(DirectionChangesCostProgress)),
-                    ("directionChangeProgressCostFactor", Number(DirectionChangeProgressCostFactor)),
+                    ("neighborCenterDistanceFactor", Number(NeighborCenterDistanceFactor)),
                     ("supportsDeliberateDoubleBack", Bool(SupportsDeliberateDoubleBack)))),
             Module(
                 "test.navigation",
@@ -93,7 +82,8 @@ internal sealed record TestProcedureFixture
         string moduleKey,
         string mechanicKey,
         string handler,
-        IReadOnlyDictionary<string, string> parameters)
+        IReadOnlyDictionary<string, string> parameters,
+        int version = 1)
     {
         var module = new ProcedureModuleDefinition(
             moduleKey,
@@ -118,7 +108,7 @@ internal sealed record TestProcedureFixture
             handler,
             [],
             ProcedureAutomationLevel.Assisted,
-            1);
+            version);
         return new MaterializedProcedureModule(module, mechanic, parameters);
     }
 
@@ -175,14 +165,8 @@ internal static class TestProcedureProfiles
         EncounterCadence = EncounterCheckCadence.PerWatch,
         UsesNavigationChecks = true,
         UsesPersistentVeer = true,
-        TracksIntraHexProgress = true,
-        DirectionChangesCostProgress = true,
         SupportsDeliberateDoubleBack = true,
-        StartingExitProgressFactor = 0.5d,
-        NearExitProgressFactor = 0.5d,
-        FarExitProgressFactor = 1d,
-        BackExitProgressFactor = 0.5d,
-        DirectionChangeProgressCostFactor = 1d / 6d,
+        NeighborCenterDistanceFactor = 1d / 6d,
         ResolutionHelpers = new ProcedureResolutionHelperProfile(
             Travel: new TravelResolutionHelperProfile(new DiceRollFormula(2, 6, 3), 0.1d),
             Navigation: new NavigationResolutionHelperProfile(new DiceRollFormula(1, 20)),
@@ -203,27 +187,7 @@ internal static class TestProcedureProfiles
         EncounterCadence = EncounterCheckCadence.None,
         UsesNavigationChecks = false,
         UsesPersistentVeer = false,
-        TracksIntraHexProgress = true,
-        DirectionChangesCostProgress = false,
-        SupportsDeliberateDoubleBack = false,
-        StartingExitProgressFactor = 0.5d,
-        NearExitProgressFactor = 0.5d,
-        FarExitProgressFactor = 1d,
-        BackExitProgressFactor = 0.5d
-    };
-
-    public static TestProcedureFixture HexStep() => new()
-    {
-        Key = "test-hex-step",
-        Name = "Test Hex Step",
-        WatchLength = TimeSpan.FromHours(4),
-        TravelResolution = TravelResolutionMode.HexSteps,
-        ActualDistanceResolution = ActualDistanceResolutionMode.Fixed,
-        EncounterCadence = EncounterCheckCadence.None,
-        UsesNavigationChecks = false,
-        UsesPersistentVeer = false,
-        TracksIntraHexProgress = false,
-        DirectionChangesCostProgress = false,
         SupportsDeliberateDoubleBack = false
     };
+
 }

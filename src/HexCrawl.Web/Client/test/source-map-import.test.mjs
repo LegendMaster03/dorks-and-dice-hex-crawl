@@ -69,14 +69,17 @@ test("renderer source puts rasters before semantic regions and grid", () => {
     assert.match(renderer, /rasterCache\.get/);
 });
 
-test("preview grid is authoritative for click selection and selected-hex rendering", () => {
+test("periodic polygon rendering and qualified cell selection do not use axial previews", () => {
     const surface = fs.readFileSync(path.join(sourceRoot, "map-surface.ts"), "utf8");
     const renderer = fs.readFileSync(path.join(sourceRoot, "canvas-renderer.ts"), "utf8");
 
-    assert.match(surface, /const grid = this\.renderer\.gridPreview \?\? world\.grid/);
-    assert.match(surface, /worldToHex\(grid, point\)/);
-    assert.doesNotMatch(surface, /worldToHex\(world\.grid, point\)/);
-    assert.match(renderer, /private drawSelection[\s\S]*const grid = this\.gridPreview \?\? world\.grid[\s\S]*hexCorners\(grid, this\.selectedHex\)/);
+    assert.match(surface, /world\?\.tiling && this\.api/);
+    assert.match(surface, /void this\.activateWorldCell/);
+    assert.match(surface, /this\.onWorldClick\?\.\(point\)/);
+    assert.doesNotMatch(surface, /worldToHex|setHexSelectionHandler|selectedHex|gridPreview/);
+    assert.match(renderer, /private drawGrid[\s\S]*this\.visibleWorldCells/);
+    assert.match(renderer, /private drawSelection[\s\S]*this\.selectedWorldCell/);
+    assert.doesNotMatch(renderer, /hexCorners|hexToWorld|visibleHexBounds|gridPreview|selectedHex/);
 });
 
 test("map navigation uses direct drag panning without redundant arrow controls", () => {
@@ -133,8 +136,10 @@ test("Wonderdraft source import is automatic, scalable, and spatially reviewable
     const activatePoint = surface.slice(
         surface.indexOf("private activatePoint"),
         surface.indexOf("private handleKeyDown"));
-    assert.ok(activatePoint.indexOf("clickInterceptor") < activatePoint.indexOf("worldToHex"));
-    assert.ok(activatePoint.indexOf("hitTestReview") < activatePoint.indexOf("worldToHex"));
+    const placePoint = activatePoint.indexOf("this.onWorldClick?.(point)");
+    assert.ok(placePoint >= 0);
+    assert.ok(activatePoint.indexOf("clickInterceptor") < placePoint);
+    assert.ok(activatePoint.indexOf("hitTestReview") < placePoint);
 });
 
 test("reference map image loading retries transient failures instead of staying blank forever", () => {

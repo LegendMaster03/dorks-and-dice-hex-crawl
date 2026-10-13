@@ -33,22 +33,11 @@ internal static class ProcedureComposerCustomProcedureFactory
             GenericProcedureCatalog.MovementResolutionModule,
             GenericProcedureCatalog.MovementResolutionPolicyMechanic,
             ("travelResolution", TravelResolutionMode.ContinuousDistance.ToString()),
-            ("actualDistanceResolution", ActualDistanceResolutionMode.Fixed.ToString()),
-            ("tracksIntraHexProgress", "true")),
+            ("actualDistanceResolution", ActualDistanceResolutionMode.Fixed.ToString())),
         GenericProcedureCatalog.SpatialTurnCostModule => Select(
             GenericProcedureCatalog.SpatialTurnCostModule,
             GenericProcedureCatalog.SpatialTurnCostPolicyMechanic,
             ("neighborCenterDistanceFactor", "0"),
-            ("supportsDeliberateDoubleBack", "false")),
-        GenericProcedureCatalog.HexProgressModule => Select(
-            GenericProcedureCatalog.HexProgressModule,
-            GenericProcedureCatalog.HexProgressPolicyMechanic,
-            ("startingExitProgressFactor", "0.5"),
-            ("nearExitProgressFactor", "0.5"),
-            ("farExitProgressFactor", "1"),
-            ("backExitProgressFactor", "0.5"),
-            ("directionChangesCostProgress", "false"),
-            ("directionChangeProgressCostFactor", "0"),
             ("supportsDeliberateDoubleBack", "false")),
         GenericProcedureCatalog.NavigationModule => Select(
             GenericProcedureCatalog.NavigationModule,

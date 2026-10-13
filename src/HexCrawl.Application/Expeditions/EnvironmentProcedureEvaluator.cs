@@ -297,7 +297,7 @@ public static class EnvironmentProcedureEvaluator
         var source = value.Source.Kind switch
         {
             EnvironmentFactSourceKind.World => "world",
-            EnvironmentFactSourceKind.Hex => $"hex {value.Source.Hex}",
+            EnvironmentFactSourceKind.Cell => $"cell {value.Source.Cell}",
             EnvironmentFactSourceKind.SpatialFeature => $"feature {value.Source.FeatureName ?? value.Source.FeatureId?.ToString("D")}",
             EnvironmentFactSourceKind.ExpeditionCurrent => "expedition current state",
             EnvironmentFactSourceKind.DmOverride => "DM override",

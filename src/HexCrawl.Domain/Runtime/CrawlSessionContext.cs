@@ -8,7 +8,7 @@ namespace HexCrawl.Domain.Runtime;
 public enum CrawlSessionContextKind
 {
     WorldBound,
-    AbstractHex,
+    MaplessSpatial,
     NonSpatial
 }
 
@@ -16,7 +16,6 @@ public abstract record CrawlSessionContext
 {
     public abstract CrawlSessionContextKind Kind { get; }
     public virtual Guid? OverworldId => null;
-    public virtual CrawlRuntimeContext? RuntimeContext => null;
     public virtual string DisplayName => Kind.ToString();
 }
 
@@ -27,22 +26,19 @@ public sealed record WorldBoundCrawlSessionContext(Guid WorldId) : CrawlSessionC
     public override string DisplayName => "World-bound crawl";
 }
 
-public sealed record AbstractHexCrawlSessionContext(
+public sealed record MaplessSpatialCrawlSessionContext(
     string Name,
-    HexOrientation Orientation,
-    CrawlRuntimeContext HexContext) : CrawlSessionContext
+    PeriodicWorldTiling Tiling) : CrawlSessionContext
 {
-    public override CrawlSessionContextKind Kind => CrawlSessionContextKind.AbstractHex;
-    public override CrawlRuntimeContext? RuntimeContext => HexContext;
-    public override string DisplayName => string.IsNullOrWhiteSpace(Name) ? "Abstract hex crawl" : Name.Trim();
+    public override CrawlSessionContextKind Kind => CrawlSessionContextKind.MaplessSpatial;
+    public override string DisplayName => Name.Trim();
 
     public void Validate()
     {
         if (string.IsNullOrWhiteSpace(Name))
-        {
-            throw new InvalidOperationException("Abstract-hex context name is required.");
-        }
-        HexContext.Validate();
+            throw new InvalidOperationException("Mapless spatial context name is required.");
+        ArgumentNullException.ThrowIfNull(Tiling);
+        Tiling.Validate();
     }
 }
 
@@ -79,7 +75,6 @@ public sealed record PendingEncounterOccurrence(
     int WatchNumber,
     EncounterOutcomeKind Outcome,
     TimeSpan ExpeditionElapsedTime,
-    HexCoordinate? Hex,
     Guid? LocationId,
     string? Note,
     ResolutionProvenance Provenance)

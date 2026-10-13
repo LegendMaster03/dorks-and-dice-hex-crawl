@@ -539,7 +539,7 @@ public static class MovementCapabilityComposer
         out Quantity result)
     {
         result = current;
-        var paceKey = input.PaceKey ?? (expedition.Runtime as ExpeditionState)?.ActiveWatch?.Plan.Mode.PaceKey;
+        var paceKey = input.PaceKey ?? (expedition.Runtime as CellExpeditionState)?.ActiveWatch?.Plan.Mode.PaceKey;
 
         currentStatus = ApplyContributorStage(
             MovementCapabilityContributorKind.Load,
@@ -818,7 +818,7 @@ public static class MovementCapabilityComposer
 
         Quantity? quantity = null;
         string? detail = null;
-        if (expedition.Runtime is ExpeditionState { ActiveWatch: null } && reference.PerWatch is { } readyWatch)
+        if (expedition.Runtime is CellExpeditionState { ActiveWatch: null } && reference.PerWatch is { } readyWatch)
         {
             quantity = Physical(readyWatch, "watch");
             detail = "Explicit per-watch party movement reference.";
@@ -1019,26 +1019,35 @@ public static class MovementCapabilityComposer
 
     private static DistanceMeasure? Suggest(StoredExpedition expedition, Quantity quantity)
     {
-        if (expedition.Runtime is not ExpeditionState spatial || !quantity.DistanceUnit.HasValue)
+        // Physical travel suggestions require calibrated spatial distance.
+        var traveled = expedition.Runtime switch
         {
+            CellExpeditionState cells => cells.DistanceTraveled,
+            _ => null
+        };
+        if (traveled is not { } distance || !quantity.DistanceUnit.HasValue)
             return null;
-        }
 
         DistanceMeasure converted;
         try
         {
             converted = new DistanceMeasure(quantity.Value, quantity.DistanceUnit.Value)
-                .ConvertTo(spatial.DistanceTraveled.Unit);
+                .ConvertTo(distance.Unit);
         }
         catch (InvalidOperationException)
         {
             return null;
         }
 
+        var remaining = expedition.Runtime switch
+        {
+            CellExpeditionState cells => cells.ActiveWatch?.Remaining,
+            _ => null
+        };
         if (string.Equals(quantity.PerUnit, "hour", StringComparison.OrdinalIgnoreCase))
         {
             var interval = FocusedIntervalPolicyResolver.Resolve(expedition.CampaignProcedure);
-            var hours = spatial.ActiveWatch?.Remaining.TotalHours ?? interval.IntervalDuration?.TotalHours;
+            var hours = remaining?.TotalHours ?? interval.IntervalDuration?.TotalHours;
             return hours.HasValue && double.IsFinite(hours.Value) && hours.Value >= 0
                 ? new DistanceMeasure(converted.Value * hours.Value, converted.Unit)
                 : null;
@@ -1046,16 +1055,12 @@ public static class MovementCapabilityComposer
 
         if (string.Equals(quantity.PerUnit, "watch", StringComparison.OrdinalIgnoreCase))
         {
-            if (spatial.ActiveWatch is null)
-            {
+            if (remaining is null)
                 return converted;
-            }
             var interval = FocusedIntervalPolicyResolver.Resolve(expedition.CampaignProcedure);
             if (interval.IntervalDuration is { } duration
-                && NearlyEqual(spatial.ActiveWatch.Remaining.TotalHours, duration.TotalHours))
-            {
+                && NearlyEqual(remaining.Value.TotalHours, duration.TotalHours))
                 return converted;
-            }
         }
 
         return null;

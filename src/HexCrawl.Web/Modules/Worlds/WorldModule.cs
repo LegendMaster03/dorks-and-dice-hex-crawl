@@ -22,7 +22,6 @@ public sealed class WorldModule : IHexCrawlModule
     public void MapEndpoints(RouteGroupBuilder api)
     {
         api.MapGet("/overworlds", ListOverworldsAsync);
-        api.MapPost("/overworlds", CreateOverworldAsync);
         api.MapPost("/overworlds/periodic", CreatePeriodicOverworldAsync);
         api.MapPost("/overworlds/{overworldId:guid}/cell-procedures", CreateCellTravelProcedureAsync);
         api.MapGet("/overworlds/{overworldId:guid}/cell-procedures/compatibility", AssessCellProcedureAsync);
@@ -30,7 +29,6 @@ public sealed class WorldModule : IHexCrawlModule
         api.MapGet("/overworlds/{overworldId:guid}/cells/viewport", GetVisibleCellsAsync);
         api.MapGet("/overworlds/{overworldId:guid}/cells/containing", GetContainingCellsAsync);
         api.MapGet("/overworlds/{overworldId:guid}/cells/resolve", ResolveCellAsync);
-        api.MapPut("/overworlds/{overworldId:guid}", UpdateOverworldAsync);
         api.MapPut("/overworlds/{overworldId:guid}/name", RenameOverworldAsync);
         api.MapDelete("/overworlds/{overworldId:guid}", DeleteOverworldAsync);
 
@@ -48,18 +46,6 @@ public sealed class WorldModule : IHexCrawlModule
         HexCrawlService service,
         CancellationToken cancellationToken) =>
         Results.Ok(await service.ListOverworldsAsync(UserId(context), cancellationToken));
-
-    private static async Task<IResult> CreateOverworldAsync(
-        CreateOverworldRequest request,
-        HttpContext context,
-        HexCrawlService service,
-        CancellationToken cancellationToken) =>
-        Results.Created(
-            "/api/overworlds",
-            OverworldContract.From(await service.CreateOverworldAsync(
-                UserId(context),
-                request.ToCommand(),
-                cancellationToken)));
 
     // An image-independent, general authoring route. Unresolved harmonic
     // realizations fail closed rather than producing a fabricated grid.
@@ -182,7 +168,7 @@ public sealed class WorldModule : IHexCrawlModule
     }
 
     // Generate a normal editable, pinned campaign revision using existing
-    // movement-v2 capabilities. Preset templates and past revisions are not
+    // cell movement capabilities. Preset templates and past revisions are not
     // edited. No image or manually authored notation is required.
     private static async Task<IResult> CreateCellTravelProcedureAsync(
         Guid overworldId,
@@ -193,14 +179,10 @@ public sealed class WorldModule : IHexCrawlModule
     {
         var owner = UserId(context);
         var stored = await service.GetOverworldAsync(overworldId, owner, cancellationToken);
-        if (stored.World.HasLegacyHexGrid || stored.World.Tiling is null)
-            throw new NotSupportedException("This world already uses legacy hex procedures.");
         var materialized = CrawlProcedureCatalog.Resolve("simple-fixed-distance")
             .MaterializeGeneric();
         var template = materialized.Procedure;
         var modules = template.Modules
-            .Where(module => module.Mechanic.ExecutionHandler !=
-                GenericProcedureExecutionHandlers.HexProgressPolicy)
             .Select(module =>
             {
                 if (module.Mechanic.ExecutionHandler !=
@@ -209,10 +191,8 @@ public sealed class WorldModule : IHexCrawlModule
                 var parameters = module.Parameters.ToDictionary(item => item.Key, item => item.Value);
                 parameters["travelResolution"] = TravelResolutionMode.CellSteps.ToString();
                 parameters["actualDistanceResolution"] = ActualDistanceResolutionMode.Fixed.ToString();
-                parameters["tracksIntraHexProgress"] = "false";
                 return module with
                 {
-                    Mechanic = module.Mechanic with { Version = 2 },
                     Parameters = parameters
                 };
             }).ToArray();
@@ -220,13 +200,12 @@ public sealed class WorldModule : IHexCrawlModule
         {
             ProcedureId = Guid.NewGuid(),
             Name = "Cell-step exploration for " + stored.World.Name,
-            TilingDsSymbol = stored.World.Tiling.Topology.QuotientDsSymbol,
+            TilingDsSymbol = stored.World.SpatialTiling.Topology.QuotientDsSymbol,
             Modules = modules
         };
         edition.Validate();
         var bound = GenericProcedureRuntime.Bind(edition);
-        if (bound.Movement.MechanicVersion != 2
-            || bound.Movement.TravelResolution != TravelResolutionMode.CellSteps)
+        if (bound.Movement.TravelResolution != TravelResolutionMode.CellSteps)
             throw new InvalidOperationException("The generated cell ruleset is not executable.");
         var saved = await procedures.CreateAsync(owner, edition, materialized.Origin,
             cancellationToken: cancellationToken);
@@ -244,15 +223,12 @@ public sealed class WorldModule : IHexCrawlModule
             throw new ArgumentException("A saved ruleset id and pinned revision are required.");
         var owner = UserId(context);
         var stored = await service.GetOverworldAsync(overworldId, owner, cancellationToken);
-        if (stored.World.HasLegacyHexGrid || stored.World.Tiling is null)
-            throw new NotSupportedException(
-                "This compatibility check applies to generalized cell worlds.");
         var procedure = (await procedures.GetAsync(
             owner, procedureId, revision, cancellationToken)).Procedure;
         var comparison = HexCrawl.Domain.Spatial.DelaneyDressTopology.Compare(
             procedure.TilingDsSymbol,
-            stored.World.Tiling.Topology.QuotientDsSymbol,
-            stored.World.Tiling.Topology.TranslationDsSymbol);
+            stored.World.SpatialTiling.Topology.QuotientDsSymbol,
+            stored.World.SpatialTiling.Topology.TranslationDsSymbol);
         if (comparison.Status is not (
             HexCrawl.Domain.Spatial.TilingComparisonStatus.ExactIdentity
             or HexCrawl.Domain.Spatial.TilingComparisonStatus.ChamberIsomorphic
@@ -285,17 +261,8 @@ public sealed class WorldModule : IHexCrawlModule
                 revision
             });
         }
-        if (bound.Movement.MechanicVersion != 2)
-            return Results.Ok(new
-            {
-                status = "unsupported",
-                explanation = "This saved ruleset uses legacy hex movement. Create or select a cell-travel ruleset.",
-                worldVersion = stored.Version,
-                procedureId,
-                revision
-            });
         if (bound.Movement.TravelResolution == TravelResolutionMode.ContinuousDistance
-            && stored.World.Tiling.PhysicalDistancePerWorldUnit is null)
+            && stored.World.SpatialTiling.PhysicalDistancePerWorldUnit is null)
             return Results.Ok(new
             {
                 status = "needs-calibration",
@@ -380,18 +347,6 @@ public sealed class WorldModule : IHexCrawlModule
         HttpContext context, HexCrawlService service, CancellationToken cancellationToken) =>
         Results.Ok(OverworldContract.From(await service.RenameOverworldAsync(
             overworldId, UserId(context), request.Name, request.ExpectedVersion,
-            cancellationToken)));
-
-    private static async Task<IResult> UpdateOverworldAsync(
-        Guid overworldId,
-        UpdateOverworldRequest request,
-        HttpContext context,
-        HexCrawlService service,
-        CancellationToken cancellationToken) =>
-        Results.Ok(OverworldContract.From(await service.UpdateOverworldAsync(
-            overworldId,
-            UserId(context),
-            request.ToCommand(),
             cancellationToken)));
 
     private static async Task<IResult> DeleteOverworldAsync(

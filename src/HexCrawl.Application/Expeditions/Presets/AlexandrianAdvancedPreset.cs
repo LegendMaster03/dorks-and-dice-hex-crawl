@@ -8,6 +8,7 @@ internal static class AlexandrianAdvancedPreset
 {
     internal static CrawlProcedurePresetDefinition Create() =>
         Preset(
+            CampaignProcedureSchema.CurrentHexTilingDsSymbol,
             "alexandrian-advanced",
             "Alexandrian Advanced",
             "Four-hour distance travel with navigation, persistent veer, per-watch encounters, and built-in resolution helpers.",
@@ -20,10 +21,8 @@ internal static class AlexandrianAdvancedPreset
                 EncounterCheckCadence.PerWatch,
                 usesNavigationChecks: true,
                 usesPersistentVeer: true,
-                tracksIntraHexProgress: true,
-                directionChangesCostProgress: true,
+                neighborCenterDistanceFactor: 1d / 6d,
                 supportsDeliberateDoubleBack: true,
-                directionChangeProgressCostFactor: 1d / 6d,
                 resolutionHelpers: new ProcedureResolutionHelperProfile(
                     Travel: new TravelResolutionHelperProfile(new DiceRollFormula(2, 6, 3), 0.1d),
                     Navigation: new NavigationResolutionHelperProfile(new DiceRollFormula(1, 20)),

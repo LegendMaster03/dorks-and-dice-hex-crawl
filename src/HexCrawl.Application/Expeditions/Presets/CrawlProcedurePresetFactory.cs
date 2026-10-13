@@ -6,6 +6,7 @@ namespace HexCrawl.Application;
 internal static class CrawlProcedurePresetFactory
 {
     internal static CrawlProcedurePresetDefinition Preset(
+        string tilingDsSymbol,
         string presetKey,
         string displayName,
         string description,
@@ -22,7 +23,7 @@ internal static class CrawlProcedurePresetFactory
             2,
             new GenericProcedurePresetRecipe(procedureKey, procedureName, modules.ToArray())
             {
-                TilingDsSymbol = CampaignProcedureSchema.CurrentHexTilingDsSymbol
+                TilingDsSymbol = tilingDsSymbol
             },
             attribution,
             disclaimer,
@@ -35,28 +36,23 @@ internal static class CrawlProcedurePresetFactory
         EncounterCheckCadence encounterCadence,
         bool usesNavigationChecks,
         bool usesPersistentVeer,
-        bool tracksIntraHexProgress,
-        bool directionChangesCostProgress,
+        double neighborCenterDistanceFactor,
         bool supportsDeliberateDoubleBack,
-        double startingExitProgressFactor = 0.5d,
-        double nearExitProgressFactor = 0.5d,
-        double farExitProgressFactor = 1d,
-        double backExitProgressFactor = 0.5d,
-        double directionChangeProgressCostFactor = 0d,
         ProcedureResolutionHelperProfile? resolutionHelpers = null) =>
     [
         NativeTime(interval),
-        Structural(GenericProcedureCatalog.MovementResolutionModule, GenericProcedureCatalog.MovementResolutionPolicyMechanic,
-            ("travelResolution", travelResolution.ToString()),
-            ("actualDistanceResolution", actualDistanceResolution.ToString()),
-            ("tracksIntraHexProgress", Bool(tracksIntraHexProgress))),
-        Structural(GenericProcedureCatalog.HexProgressModule, GenericProcedureCatalog.HexProgressPolicyMechanic,
-            ("startingExitProgressFactor", Number(startingExitProgressFactor)),
-            ("nearExitProgressFactor", Number(nearExitProgressFactor)),
-            ("farExitProgressFactor", Number(farExitProgressFactor)),
-            ("backExitProgressFactor", Number(backExitProgressFactor)),
-            ("directionChangesCostProgress", Bool(directionChangesCostProgress)),
-            ("directionChangeProgressCostFactor", Number(directionChangeProgressCostFactor)),
+        new ProcedureModuleRecipe(
+            GenericProcedureCatalog.MovementResolutionModule,
+            GenericProcedureCatalog.MovementResolutionPolicyMechanic,
+            2,
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["travelResolution"] = travelResolution.ToString(),
+                ["actualDistanceResolution"] = actualDistanceResolution.ToString()
+            }),
+        Structural(GenericProcedureCatalog.SpatialTurnCostModule,
+            GenericProcedureCatalog.SpatialTurnCostPolicyMechanic,
+            ("neighborCenterDistanceFactor", Number(neighborCenterDistanceFactor)),
             ("supportsDeliberateDoubleBack", Bool(supportsDeliberateDoubleBack))),
         Structural(GenericProcedureCatalog.NavigationModule, GenericProcedureCatalog.NavigationCheckPolicyMechanic,
             ("usesNavigationChecks", Bool(usesNavigationChecks)),

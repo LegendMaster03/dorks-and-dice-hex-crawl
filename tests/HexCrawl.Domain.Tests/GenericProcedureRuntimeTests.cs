@@ -17,15 +17,9 @@ public sealed class GenericProcedureRuntimeTests
         Assert.Equal(EncounterCheckCadence.PerWatch, runtime.Encounters.Cadence);
         Assert.True(runtime.Navigation.UsesNavigationChecks);
         Assert.True(runtime.Navigation.UsesPersistentVeer);
-        Assert.True(runtime.Movement.TracksIntraHexProgress);
-        Assert.True(runtime.HexProgress.DirectionChangesCostProgress);
-        Assert.True(runtime.HexProgress.SupportsDeliberateDoubleBack);
-
-        Assert.Equal(0.5d, runtime.HexProgress.StartingExitProgressFactor, 12);
-        Assert.Equal(0.5d, runtime.HexProgress.NearExitProgressFactor, 12);
-        Assert.Equal(1d, runtime.HexProgress.FarExitProgressFactor, 12);
-        Assert.Equal(0.5d, runtime.HexProgress.BackExitProgressFactor, 12);
-        Assert.Equal(1d / 6d, runtime.HexProgress.DirectionChangeProgressCostFactor, 12);
+        var turn = Assert.IsType<ProcedureSpatialTurnRuntime>(runtime.TurnPolicy);
+        Assert.True(turn.SupportsDeliberateDoubleBack);
+        Assert.Equal(1d / 6d, turn.NeighborCenterDistanceFactor, 12);
 
         var helpers = Assert.IsType<ProcedureResolutionHelperProfile>(runtime.ResolutionHelpers);
         var travel = Assert.IsType<TravelResolutionHelperProfile>(helpers.Travel);

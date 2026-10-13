@@ -36,60 +36,6 @@ public sealed class EnvironmentContextTests
     }
 
     [Fact]
-    public void WorldHexRegionAndLineFactsResolveButCategoryAloneDoesNot()
-    {
-        var region = new RegionFeature(Guid.NewGuid(), "Blackwood", "forest-looking-category",
-        [
-            new WorldPoint(-0.4, -0.4), new WorldPoint(0.4, -0.4),
-            new WorldPoint(0.4, 0.4), new WorldPoint(-0.4, 0.4)
-        ]);
-        var road = new LinearFeature(Guid.NewGuid(), "King's Road", "road",
-            [new WorldPoint(-0.6, 0), new WorldPoint(0.6, 0)]);
-        var far = new LinearFeature(Guid.NewGuid(), "Far Trail", "road",
-            [new WorldPoint(100, 100), new WorldPoint(101, 101)]);
-        var world = World([region, road, far],
-        [
-            Annotation(WorldScope(), Tag("weather", "clear")),
-            Annotation(HexScope(0, 0), Tag("terrain", "hills")),
-            Annotation(FeatureScope(region.Id), Tag("terrain", "forest")),
-            Annotation(FeatureScope(road.Id), Tag("route", "good-road")),
-            Annotation(FeatureScope(far.Id), Tag("route", "far-road"))
-        ]);
-        var expedition = WorldExpedition(world, State(0, 0));
-
-        var context = EnvironmentContextResolver.Resolve(expedition, world);
-        var effective = EffectiveTags(context);
-
-        Assert.Contains(("weather", "clear"), effective);
-        Assert.Contains(("terrain", "hills"), effective);
-        Assert.Contains(("terrain", "forest"), effective);
-        Assert.Contains(("route", "good-road"), effective);
-        Assert.DoesNotContain(("route", "far-road"), effective);
-        Assert.DoesNotContain(effective, value => value.Item2 == "road");
-        Assert.Equal(EnvironmentContextStatus.Resolved, context.Status);
-    }
-
-    [Fact]
-    public void MovingHexRecomputesWorldTruthInsteadOfCopyingItIntoExpeditionState()
-    {
-        var world = World([], [
-            Annotation(HexScope(0, 0), Tag("terrain", "forest")),
-            Annotation(HexScope(1, 0), Tag("terrain", "swamp"))
-        ]);
-        var a = WorldExpedition(world, State(0, 0));
-        var b = a with { Runtime = State(1, 0) };
-
-        var first = EffectiveTags(EnvironmentContextResolver.Resolve(a, world));
-        var second = EffectiveTags(EnvironmentContextResolver.Resolve(b, world));
-
-        Assert.Contains(("terrain", "forest"), first);
-        Assert.DoesNotContain(("terrain", "swamp"), first);
-        Assert.Contains(("terrain", "swamp"), second);
-        Assert.Empty(a.Environment.CurrentFacts);
-        Assert.Empty(a.Environment.Overrides);
-    }
-
-    [Fact]
     public void AbstractAndNonSpatialContextsUseCurrentEnvironmentWithoutOverworldOrProvider()
     {
         var abstractExpedition = AbstractExpedition(Procedure(CrawlProcedureCatalog.Dnd35PresetKey)) with
@@ -349,36 +295,20 @@ public sealed class EnvironmentContextTests
     };
 
     private static EnvironmentAnnotationScope WorldScope() => new() { Kind = EnvironmentAnnotationScopeKind.World };
-    private static EnvironmentAnnotationScope HexScope(int q, int r) => new()
-    {
-        Kind = EnvironmentAnnotationScopeKind.Hex, Hex = new HexCoordinate(q, r)
-    };
-    private static EnvironmentAnnotationScope FeatureScope(Guid id) => new()
-    {
-        Kind = EnvironmentAnnotationScopeKind.SpatialFeature, FeatureId = id
-    };
 
     private static OverworldDefinition World(IReadOnlyList<SpatialFeature> features, IReadOnlyList<EnvironmentAnnotation> annotations) => new()
     {
         Id = Guid.NewGuid(),
         Name = "Environment test world",
-        Grid = new HexGridDefinition
-        {
-            Id = Guid.NewGuid(),
-            Orientation = HexOrientation.PointyTop,
-            Origin = new WorldPoint(0, 0),
-            RotationDegrees = 0,
-            HexRadiusWorldUnits = 1,
-            NeighborCenterDistance = new DistanceMeasure(12, DistanceUnit.Miles)
-        },
+        Tiling = Tiling(),
         Features = features,
         EnvironmentAnnotations = annotations
     };
 
-    private static StoredExpedition WorldExpedition(OverworldDefinition world, ExpeditionState? state = null)
+    private static StoredExpedition WorldExpedition(OverworldDefinition world, CellExpeditionState? state = null)
     {
         var now = DateTimeOffset.UtcNow;
-        return new StoredExpedition("World environment test", state ?? State(0, 0),
+        return new StoredExpedition("World environment test", state ?? PeriodicCourseFixture.StartingState(world.SpatialTiling),
             new WorldBoundCrawlSessionContext(world.Id), null, Procedure(CrawlProcedureCatalog.Dnd35PresetKey),
             null, TimeSpan.FromHours(1), "owner", 1, now, now);
     }
@@ -386,9 +316,8 @@ public sealed class EnvironmentContextTests
     private static StoredExpedition AbstractExpedition(CampaignProcedure procedure, CrawlPartySheet? party = null)
     {
         var now = DateTimeOffset.UtcNow;
-        return new StoredExpedition("Abstract environment test", State(0, 0),
-            new AbstractHexCrawlSessionContext("Abstract", HexOrientation.PointyTop,
-                new CrawlRuntimeContext(new DistanceMeasure(12, DistanceUnit.Miles))),
+        return new StoredExpedition("Abstract environment test", PeriodicCourseFixture.StartingState(Tiling()),
+            MaplessSessionFixture.Context("Abstract"),
             null, procedure, null, TimeSpan.FromHours(1), "owner", 1, now, now)
         { Party = party ?? CrawlPartySheet.Empty };
     }
@@ -401,12 +330,18 @@ public sealed class EnvironmentContextTests
             "owner", 1, now, now);
     }
 
-    private static ExpeditionState State(int q, int r) => new()
+    private static PeriodicWorldTiling Tiling()
     {
-        Id = Guid.NewGuid(),
-        Traversal = HexTraversalState.StartingIn(new HexCoordinate(q, r), DistanceUnit.Miles),
-        DistanceTraveled = new DistanceMeasure(0, DistanceUnit.Miles)
-    };
+        var realized = DelaneyDressHarmonicMetricRealization.Construct(
+            "<1:1,1,1:4,4>", 1.5, "world-unit");
+        Assert.Equal("realized", realized.Status);
+        var tiling = new PeriodicWorldTiling(
+            Guid.NewGuid(), realized.Topology!, realized.Realization!,
+            new WorldPoint(0, 0),
+            PhysicalDistancePerWorldUnit: new DistanceMeasure(12, DistanceUnit.Miles));
+        tiling.Validate();
+        return tiling;
+    }
 
     private static CampaignProcedure Procedure(string presetKey) =>
         CrawlProcedureCatalog.Resolve(presetKey).MaterializeGeneric().Procedure;

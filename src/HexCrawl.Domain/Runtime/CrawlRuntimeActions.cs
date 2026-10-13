@@ -4,11 +4,6 @@ using HexCrawl.Domain.World;
 
 namespace HexCrawl.Domain.Runtime;
 
-public sealed record ManualDiscoveryResult(
-    ExpeditionState Expedition,
-    PlayerKnowledgeState Knowledge,
-    CrawlRuntimeEvent Event);
-
 public sealed record CellManualDiscoveryResult(
     CellExpeditionState Expedition,
     PlayerKnowledgeState Knowledge,
@@ -16,126 +11,62 @@ public sealed record CellManualDiscoveryResult(
 
 public static class CrawlRuntimeActions
 {
-    public static ExpeditionState Reposition(
-        ExpeditionState expedition,
-        HexCoordinate destination,
+    /// <summary>
+    /// An explicit DM correction of a qualified spatial position. This is not
+    /// travel: no distance, watch time, or imaginary axial progress is recorded.
+    /// Do not discard an unresolved watch, encounter, or budget charge.
+    /// </summary>
+    public static CellExpeditionState RepositionCell(
+        PeriodicWorldTiling world,
+        CellExpeditionState expedition,
+        WorldCellId destination,
+        WorldPoint position,
         string? note = null)
-    {
-        ArgumentNullException.ThrowIfNull(expedition);
-
-        var sequence = expedition.History.Count == 0 ? 1 : expedition.History[^1].Sequence + 1;
-        var watchNumber = expedition.ActiveWatch?.WatchNumber ?? expedition.CompletedWatches;
-        var priorHex = expedition.CurrentHex;
-        var activeWatch = expedition.ActiveWatch?.WatchNumber;
-        var message = priorHex == destination
-            ? $"DM reset the party position in hex {destination} without recording travel."
-            : $"DM repositioned the party from hex {priorHex} to hex {destination} without recording travel.";
-        if (activeWatch.HasValue)
-        {
-            message += $" Active watch {activeWatch.Value} was ended.";
-        }
-        if (!string.IsNullOrWhiteSpace(note))
-        {
-            message += $" {note.Trim()}";
-        }
-
-        var runtimeEvent = new CrawlRuntimeEvent(
-            sequence,
-            watchNumber,
-            CrawlRuntimeEventKind.DmOverrideApplied,
-            expedition.ElapsedTravelTime,
-            destination,
-            message);
-
-        return expedition with
-        {
-            Traversal = HexTraversalState.StartingIn(destination, expedition.Traversal.Progress.Unit),
-            IntendedDirection = null,
-            ActualDirection = null,
-            Navigation = new NavigationRuntimeState(false, 0),
-            ActiveWatch = null,
-            History = [.. expedition.History, runtimeEvent]
-        };
-    }
-
-    public static ExpeditionState SetIntendedCourse(
-        ExpeditionState expedition,
-        HexDirection? intendedDirection)
-    {
-        ArgumentNullException.ThrowIfNull(expedition);
-
-        if (expedition.PendingEncounter is not null)
-        {
-            throw new InvalidOperationException(
-                "Resolve the pending encounter before changing the intended course.");
-        }
-
-        if (expedition.ActiveWatch?.PendingDecision is RuntimePauseReason.LostRecognitionRequired
-            or RuntimePauseReason.BacktrackBoundaryReached)
-        {
-            throw new InvalidOperationException(
-                "Resolve the pending boundary decision before changing the intended course.");
-        }
-
-        if (intendedDirection is null && expedition.ActiveWatch is not null)
-        {
-            throw new InvalidOperationException(
-                "The active travel watch requires an intended course. Choose another adjacent course instead of clearing it.");
-        }
-
-        var activeWatch = expedition.ActiveWatch;
-        if (activeWatch is not null && intendedDirection is { } activeDirection)
-        {
-            activeWatch = activeWatch with
-            {
-                Plan = activeWatch.Plan with { IntendedDirection = activeDirection }
-            };
-        }
-
-        return expedition with
-        {
-            IntendedDirection = intendedDirection,
-            ActiveWatch = activeWatch
-        };
-    }
-
-    public static ManualDiscoveryResult Discover(
-        OverworldDefinition world,
-        ExpeditionState expedition,
-        PlayerKnowledgeState knowledge,
-        Guid subjectId,
-        KnowledgeSubjectType subjectType,
-        string source)
     {
         ArgumentNullException.ThrowIfNull(world);
         ArgumentNullException.ThrowIfNull(expedition);
-        ArgumentNullException.ThrowIfNull(knowledge);
+        expedition.Validate(world);
+        if (expedition.ActiveWatch is not null || expedition.PendingEncounter is not null
+            || expedition.PendingTravelBudgetCharge is not null)
+            throw new InvalidOperationException(
+                "Resolve the active watch, pending encounter, and travel-budget charge before repositioning a cell expedition.");
 
-        var (name, eventKind) = ResolveWorldDiscoverySubject(world, subjectId, subjectType);
-
-        var updatedKnowledge = KnowledgeDiscovery.Discover(
-            knowledge,
-            subjectId,
-            subjectType,
-            source);
-        var sequence = expedition.History.Count == 0 ? 1 : expedition.History[^1].Sequence + 1;
-        var watchNumber = expedition.ActiveWatch?.WatchNumber ?? expedition.CompletedWatches;
-        var runtimeEvent = new CrawlRuntimeEvent(
-            sequence,
-            watchNumber,
-            eventKind,
-            expedition.ElapsedTravelTime,
-            expedition.CurrentHex,
-            $"Discovered {subjectType.ToString().ToLowerInvariant()} {name}; unrelated contents remain unchanged.",
-            SubjectId: subjectId,
-            SubjectType: subjectType);
-        var updatedExpedition = expedition with
+        // Client-selected position must be real, finite, inside the supplied
+        // qualified cell and bound to this session's authoritative tiling.
+        var cursor = new PeriodicCellTraversal
         {
-            History = expedition.History.Concat([runtimeEvent]).ToArray()
+            CurrentCell = destination,
+            Position = position
         };
+        cursor.Validate(world);
 
-        return new ManualDiscoveryResult(updatedExpedition, updatedKnowledge, runtimeEvent);
+        var prior = expedition.Traversal.CurrentCell;
+        var sequence = expedition.History.Count == 0 ? 1 : expedition.History[^1].Sequence + 1;
+        var message = prior == destination
+            ? $"DM corrected the party's exact position in cell {destination} without recording travel."
+            : $"DM repositioned the party from cell {prior} to cell {destination} without recording travel.";
+        if (!string.IsNullOrWhiteSpace(note))
+            message += " " + note.Trim();
+        var audit = new CrawlRuntimeEvent(
+            sequence,
+            Math.Max(1, expedition.CompletedWatches),
+            CrawlRuntimeEventKind.DmOverrideApplied,
+            expedition.ElapsedTravelTime,
+            message)
+        { Cell = destination };
+
+        var updated = expedition with
+        {
+            Traversal = cursor,
+            IntendedHeading = null,
+            IsLost = false,
+            ResolvedVeerDegrees = null,
+            History = [.. expedition.History, audit]
+        };
+        updated.Validate(world);
+        return updated;
     }
+
     public static CellManualDiscoveryResult DiscoverCell(
         OverworldDefinition world,
         CellExpeditionState expedition,
@@ -158,7 +89,7 @@ public static class CrawlRuntimeActions
         var watch = expedition.ActiveWatch?.WatchNumber ?? Math.Max(1, expedition.CompletedWatches);
         var recorded = new CrawlRuntimeEvent(
             sequence, watch, kind, expedition.ElapsedTravelTime,
-            null, $"Discovered {subjectType.ToString().ToLowerInvariant()} {name}; unrelated contents remain unchanged.",
+            $"Discovered {subjectType.ToString().ToLowerInvariant()} {name}; unrelated contents remain unchanged.",
             SubjectId: subjectId, SubjectType: subjectType)
         { Cell = expedition.Traversal.CurrentCell };
         return new CellManualDiscoveryResult(
@@ -170,7 +101,7 @@ public static class CrawlRuntimeActions
         OverworldDefinition world, Guid subjectId, KnowledgeSubjectType type)
     {
         // The user-directed discovery action is semantic rather than a
-        // proximity assertion; this intentionally matches existing hex rules.
+        // proximity assertion; the action is independent of cell shape.
         return type switch
         {
             KnowledgeSubjectType.Location when world.Locations.FirstOrDefault(x => x.Id == subjectId) is { } location

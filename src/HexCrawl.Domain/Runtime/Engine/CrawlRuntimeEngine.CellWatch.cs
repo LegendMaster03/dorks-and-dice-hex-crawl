@@ -48,8 +48,6 @@ public sealed partial class CrawlRuntimeEngine
             throw new InvalidOperationException("Resolve the pending encounter before continuing travel.");
 
         var runtime = GenericProcedureRuntime.Bind(procedure);
-        if (runtime.Movement.MechanicVersion != 2)
-            throw new NotSupportedException("Cell watches require an explicit version-2 movement procedure.");
         expedition.Validate(world);
         ValidateCellPlan(plan);
         ValidateCellTravel(runtime.Movement, inputs.Travel);
@@ -298,9 +296,8 @@ public sealed partial class CrawlRuntimeEngine
             Elapsed = ClampTime(active.Elapsed + spent, TimeSpan.Zero, active.TotalDuration),
             PendingDecision = stop
         };
-        // A review/backtrack checkpoint at the exact end of the interval is
-        // not a pending decision for a watch that has no time left. Legacy hex
-        // execution similarly completes at an exact terminal boundary.
+        // A review/backtrack checkpoint at the exact end of the interval
+        // is not pending once the watch has no remaining time.
         if (active.Remaining == TimeSpan.Zero
             && stop is RuntimePauseReason.BacktrackBoundaryReached
                 or RuntimePauseReason.ConditionsReviewRequired)
@@ -481,13 +478,13 @@ public sealed partial class CrawlRuntimeEngine
     {
         if (policy.TravelResolution == TravelResolutionMode.CellSteps)
         {
-            if (travel.CellSteps is null or < 0 || travel.HexSteps is not null
+            if (travel.CellSteps is null or < 0
                 || travel.ExpectedDistance is not null || travel.ActualDistance is not null)
-                throw new InvalidOperationException("Cell steps require one nonnegative count, without legacy hex steps or distances.");
+                throw new InvalidOperationException("Cell steps require one nonnegative count without distance values.");
         }
         else
         {
-            ValidateNativeTravelAmountPolicy(policy, travel);
+            ValidateCellDistanceTravelPolicy(policy, travel);
             if (travel.ExpectedDistance!.Value.Value < 0 || travel.ActualDistance!.Value.Value < 0)
                 throw new InvalidOperationException("Travel distances must not be negative.");
         }
@@ -507,7 +504,7 @@ public sealed partial class CrawlRuntimeEngine
         CellExpeditionState state, string message, double? distance = null,
         string? unit = null, Guid? encounterId = null)
     {
-        events.Add(watch, kind, state.ElapsedTravelTime, null, message,
+        events.Add(watch, kind, state.ElapsedTravelTime, message,
             distance, unit, encounterOccurrenceId: encounterId,
             cell: state.Traversal.CurrentCell);
     }
@@ -516,7 +513,7 @@ public sealed partial class CrawlRuntimeEngine
         EventCollector events, int watch, CrawlRuntimeEventKind kind,
         TimeSpan elapsed, WorldCellId cell, int interfaceIndex, int reciprocalIndex)
     {
-        events.Add(watch, kind, elapsed, null, $"Cell {cell} boundary crossed.",
+        events.Add(watch, kind, elapsed, $"Cell {cell} boundary crossed.",
             cell: cell, boundaryInterfaceIndex: interfaceIndex,
             reciprocalInterfaceIndex: reciprocalIndex);
     }
@@ -527,7 +524,7 @@ public sealed partial class CrawlRuntimeEngine
         var encounter = active.Encounter;
         var emitted = RecordEncounterTrigger(
             state.Id, active.WatchNumber, state.ElapsedTravelTime,
-            null, state.Traversal.CurrentCell, encounter, events,
+            state.Traversal.CurrentCell, encounter, events,
             encounter.Note ?? $"{encounter.Kind} triggered.");
         var occurrenceId = emitted.EncounterOccurrenceId!.Value;
         active = active with { EncounterHandled = true, PendingDecision = RuntimePauseReason.EncounterTriggered };
@@ -536,7 +533,7 @@ public sealed partial class CrawlRuntimeEngine
             ActiveWatch = active,
             PendingEncounter = new PendingEncounterOccurrence(
                 occurrenceId, emitted.Sequence, active.WatchNumber, encounter.Kind,
-                state.ElapsedTravelTime, null, encounter.LocationId, encounter.Note, encounter.Provenance)
+                state.ElapsedTravelTime, encounter.LocationId, encounter.Note, encounter.Provenance)
             { Cell = state.Traversal.CurrentCell }
         };
         return FinishCell(state, RuntimePauseReason.EncounterTriggered, active.Remaining, events);
