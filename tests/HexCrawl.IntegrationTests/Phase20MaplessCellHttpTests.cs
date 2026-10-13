@@ -246,6 +246,17 @@ public sealed class Phase20MaplessCellHttpTests
         }
     }
 
+    private static PeriodicWorldTiling PeriodicHexFixture()
+    {
+        var realized = DelaneyDressHarmonicMetricRealization.Construct(
+            "<1:1,1,1:6,3>", 1, "world-unit");
+        if (realized.Status != "realized")
+            throw new InvalidOperationException("Hex-shaped periodic fixture failed realization.");
+        return new PeriodicWorldTiling(Guid.NewGuid(), realized.Topology!,
+            realized.Realization!, new WorldPoint(0, 0),
+            PhysicalDistancePerWorldUnit: new DistanceMeasure(12, DistanceUnit.Miles));
+    }
+
     [Fact]
     public async Task GeometricHexWorldPresetStartIsOptInAndRejectsConflictingSelection()
     {
@@ -257,18 +268,15 @@ public sealed class Phase20MaplessCellHttpTests
             var world = new OverworldDefinition
             {
                 Id = Guid.NewGuid(),
-                Name = "Legacy hex grid with generalized opt-in",
-                Grid = new HexGridDefinition
-                {
-                    Id = Guid.NewGuid(),
-                    HexRadiusWorldUnits = 2,
-                    NeighborCenterDistance = new DistanceMeasure(12, DistanceUnit.Miles)
-                }
+                Name = "Hex-shaped periodic world",
+                Tiling = PeriodicHexFixture()
             };
             var now = DateTimeOffset.UtcNow;
             await store.CreateOverworldAsync(new(
                 world, "alice", 1, now, now));
-            var startCell = LegacyHexTilingCompatibility.ToAddress(new HexCoordinate(0, 0));
+            var startCell = new PeriodicCellAddress(
+                world.SpatialTiling.Topology.MotifCells[0].Id,
+                new LatticeDisplacement(0, 0));
             using var factory = TestWebHost.Create(database, "alice");
             using var client = factory.CreateClient();
             var route = $"/api/overworlds/{world.Id:D}/cell-expeditions";
