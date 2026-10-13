@@ -62,15 +62,18 @@ test("crawl creation surfaces do not assume a 12-mile physical scale", () => {
     const home = read("modules/home/tool-home-view.ts");
     const assistant = read("modules/assistants/assistant-entry-view.ts");
     const editor = read("modules/worlds/world-editor-view.ts");
-    for (const source of [world, home, assistant]) {
+    for (const source of [home, assistant]) {
         assert.doesNotMatch(source, /name="scale"[^>]*value="12"/);
         assert.match(source, /Select unit/);
     }
+    assert.match(world, /name="physicalScale"[^>]*required/);
+    assert.match(world, /api\.createPeriodicOverworld/);
+    assert.doesNotMatch(world, /api\.createOverworld\(|<option value="square"|<option value="triangle"/);
     for (const source of [world, home, assistant, editor]) {
         assert.doesNotMatch(source, /name="(?:symbol|unitSymbol)"[^>]*value="u"/);
         assert.doesNotMatch(source, /name="(?:meters|metersPerUnit)"[^>]*value="1"/);
     }
-    assert.match(world, /No default physical scale is assumed/);
+    assert.match(world, /Physical map scale/);
     assert.match(home, /unit\.required = abstract/);
     assert.match(assistant, /unit\.required = abstract/);
 });

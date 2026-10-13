@@ -5,10 +5,8 @@ import { enhanceExpeditionSetup } from "../expeditions/expedition-setup";
 import { SourceMapWorkspace } from "./source-map-workspace";
 import type { Location, Overworld, SpatialFeature, WorldPoint, WorldCellGeometry, WorldCellId } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
-import { customUnitFieldsVisible, gridWithSelectedUnit } from "./world-form";
-import type { DistanceUnitKind } from "./world-form";
 import { input, numeric, required, select } from "../../ui/dom";
-import { applyGuidedExperience, attachFieldHelp, guidancePreferenceButton } from "../../ui/guidance";
+import { applyGuidedExperience, guidancePreferenceButton } from "../../ui/guidance";
 import {
     addEnvironmentFact,
     featureHasEnvironmentRules,
@@ -59,27 +57,9 @@ export async function renderWorldEditor(
                         </div>
                     </details>
 
-                    <details><summary>World and grid</summary><form class="hc-form" data-grid-form>
+                    <details><summary>World name</summary><form class="hc-form" data-world-form>
                         <label>Name <input name="name" required></label>
-                        <label>Grid orientation <select name="orientation"><option value="PointyTop">Pointy top</option><option value="FlatTop">Flat top</option></select></label>
-                        <fieldset class="hc-field-group hc-map-scale-field">
-                            <legend>Map scale</legend>
-                            <div class="hc-inline">
-                                <label>Distance <input name="scale" type="number" min="0.001" step="any" required></label>
-                                <label>Unit <select name="unitKind"><option value="Mile">Miles</option><option value="Kilometer">Kilometers</option><option value="Custom">Custom</option></select></label>
-                            </div>
-                            <p class="hc-hint">Game-world distance from the center of one adjacent cell to the next.</p>
-                        </fieldset>
-                        <div class="hc-custom-unit-fields" data-custom-unit hidden>
-                            <label>Custom symbol <input name="unitSymbol"></label>
-                            <label>Custom meters per unit <input name="metersPerUnit" type="number" min="0.001" step="any"></label>
-                        </div>
-                        <details><summary>Advanced grid alignment</summary><div class="hc-form"><p class="hc-hint">These values define the internal world-coordinate frame. Most maps can keep the existing values.</p><p class="hc-hint hc-guided-only">Change origin, rotation, or internal hex radius only when aligning an existing source map or coordinate frame. They are not travel-distance settings.</p>
-                            <div class="hc-inline"><label>Origin X <input name="originX" type="number" step="any"></label><label>Origin Y <input name="originY" type="number" step="any"></label></div>
-                            <label>Rotation degrees <input name="rotation" type="number" step="any"></label>
-                            <label>Hex radius (world units) <input name="radius" type="number" min="0.001" step="any"></label>
-                        </div></details>
-                        <button type="submit" class="hc-primary-action">Save world and grid</button>
+                        <button type="submit" class="hc-primary-action">Save world name</button>
                     </form></details>
 
                     <details data-advanced-world-objects><summary>Advanced world objects</summary>
@@ -123,20 +103,11 @@ export async function renderWorldEditor(
     const title = required<HTMLElement>(root, "[data-title]");
     const mapHint = required<HTMLElement>(root, "[data-map-hint]");
     const mapSurface = new MapSurface(required(root, "[data-map]"), () => world, point => onMapClick(point), api);
-    const gridForm = required<HTMLFormElement>(root, "[data-grid-form]");
+    const gridForm = required<HTMLFormElement>(root, "[data-world-form]");
     const locationForm = required<HTMLFormElement>(root, "[data-location-form]");
     const featureForm = required<HTMLFormElement>(root, "[data-feature-form]");
      const draftLabel = required<HTMLElement>(root, "[data-draft]");
-    const unitKindSelect = select(gridForm, "unitKind");
-    const customUnitFields = required<HTMLElement>(gridForm, "[data-custom-unit]");
-    const unitSymbolInput = input(gridForm, "unitSymbol");
-    const metersPerUnitInput = input(gridForm, "metersPerUnit");
     required<HTMLElement>(root, "[data-guidance-controls]").append(guidancePreferenceButton(root));
-    attachFieldHelp(select(gridForm, "orientation"), "Hex orientation", "Pointy-top and flat-top describe the grid geometry. They do not define map north.");
-    attachFieldHelp(input(gridForm, "scale"), "Map scale", "This is the game-world distance from the center of one cell to the center of an adjacent cell.", "If adjacent cells represent 6 miles, enter 6 and choose Miles.");
-    attachFieldHelp(unitKindSelect, "Map scale unit", "The physical unit used by the map scale.");
-    attachFieldHelp(metersPerUnitInput, "Custom meters per unit", "Only used for Custom units. Enter the number of meters represented by one custom unit.");
-    attachFieldHelp(input(gridForm, "radius"), "Hex radius (world units)", "This controls internal map geometry. It is separate from the physical distance represented by each hex and normally remains unchanged.");
     const selectedCellEmpty = required<HTMLElement>(root, "[data-selected-cell-empty]");
     const advancedWorldObjects = required<HTMLDetailsElement>(root, "[data-advanced-world-objects]");
     const run = async (form: HTMLFormElement | null, action: () => Promise<void>): Promise<void> => {
@@ -165,14 +136,6 @@ export async function renderWorldEditor(
             if (form && !disposed) setFormPending(form, false);
         }
     };
-
-    const syncCustomUnit = (): void => {
-        const visible = customUnitFieldsVisible(unitKindSelect.value as DistanceUnitKind);
-        customUnitFields.hidden = !visible;
-        unitSymbolInput.required = visible;
-        metersPerUnitInput.required = visible;
-    };
-    unitKindSelect.addEventListener("change", syncCustomUnit);
 
     const applyWorld = (next: Overworld): void => {
         world = next;
@@ -203,33 +166,6 @@ export async function renderWorldEditor(
 
     const fillGrid = (): void => {
         input(gridForm, "name").value = world.name;
-        const nameLabel = input(gridForm, "name").closest("label");
-        const saveButton = gridForm.querySelector<HTMLButtonElement>('button[type="submit"]');
-        if (saveButton) saveButton.textContent =
-            world.grid ? "Save world and grid" : "Save world name";
-        for (const child of Array.from(gridForm.children)) {
-            if (child === nameLabel || child === saveButton) continue;
-            (child as HTMLElement).hidden = !world.grid;
-        }
-        if (!world.grid) {
-            gridForm.querySelectorAll<HTMLInputElement | HTMLSelectElement>("input, select").forEach(control => {
-                if (control.name !== "name") control.disabled = true;
-            });
-            return;
-        }
-        gridForm.querySelectorAll<HTMLInputElement | HTMLSelectElement>("input, select").forEach(control => control.disabled = false);
-        select(gridForm, "orientation").value = world.grid.orientation;
-        input(gridForm, "scale").value = String(world.grid.neighborCenterDistance.value);
-        unitKindSelect.value = world.grid.neighborCenterDistance.unit.kind;
-        if (world.grid.neighborCenterDistance.unit.kind === "Custom") {
-            unitSymbolInput.value = world.grid.neighborCenterDistance.unit.symbol;
-            metersPerUnitInput.value = world.grid.neighborCenterDistance.unit.metersPerUnit?.toString() ?? "";
-        }
-        input(gridForm, "originX").value = String(world.grid.origin.x);
-        input(gridForm, "originY").value = String(world.grid.origin.y);
-        input(gridForm, "rotation").value = String(world.grid.rotationDegrees);
-        input(gridForm, "radius").value = String(world.grid.hexRadiusWorldUnits);
-        syncCustomUnit();
     };
 
     const renderLocations = (): void => {
@@ -642,27 +578,8 @@ export async function renderWorldEditor(
     gridForm.addEventListener("submit", event => {
         event.preventDefault();
         void run(gridForm, async () => {
-            if (!world.grid) {
-                applyWorld(await api.renameOverworld(
-                    world.id, input(gridForm, "name").value.trim(), world.version));
-                return;
-            }
-            const kind = unitKindSelect.value as DistanceUnitKind;
-            const centerDistance = numeric(input(gridForm, "scale"));
-            let nextGrid = gridWithSelectedUnit(
-                world.grid,
-                kind,
-                centerDistance,
-                unitSymbolInput.value,
-                kind === "Custom" ? numeric(metersPerUnitInput) : null);
-            nextGrid = {
-                ...nextGrid,
-                orientation: select(gridForm, "orientation").value === "FlatTop" ? "FlatTop" : "PointyTop",
-                origin: { x: numeric(input(gridForm, "originX")), y: numeric(input(gridForm, "originY")) },
-                rotationDegrees: numeric(input(gridForm, "rotation")),
-                hexRadiusWorldUnits: numeric(input(gridForm, "radius"))
-            };
-            applyWorld(await api.updateOverworld(world.id, input(gridForm, "name").value.trim(), nextGrid, world.version));
+            applyWorld(await api.renameOverworld(
+                world.id, input(gridForm, "name").value.trim(), world.version));
         });
     });
 
