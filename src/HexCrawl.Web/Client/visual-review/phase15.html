@@ -13,6 +13,17 @@
 <body>
     <main id="tool-root" class="hex-crawl-app"></main>
     <pre id="review-metrics"></pre>
+    <script>
+        const recordFixtureFailure = failure => {
+            document.getElementById("review-metrics").textContent = JSON.stringify({
+                fixtureError: String(failure)
+            });
+        };
+        window.addEventListener("error", event =>
+            recordFixtureFailure(event.error?.stack ?? event.message));
+        window.addEventListener("unhandledrejection", event =>
+            recordFixtureFailure(event.reason?.stack ?? event.reason));
+    </script>
     <script type="module" src="/visual-review/phase15.ts"></script>
 </body>
 </html>
