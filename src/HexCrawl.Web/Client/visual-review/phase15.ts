@@ -27,6 +27,9 @@ const responseJson = value => new Response(JSON.stringify(value), {
     headers: { "Content-Type": "application/json" }
 });
 
+const mile = { kind: "Mile", symbol: "mi", metersPerUnit: 1609.344 };
+const distance = value => ({ value, unit: mile });
+
 // Headings derive from authored polygon boundaries, never numbered axial directions.
 const visualHeading = interfaceIndex => {
     const boundary = visualInterfaces.find(edge => edge.interfaceIndex === interfaceIndex);
@@ -634,9 +637,6 @@ if (stateName === "home") {
             }]
         }]
     };
-    sessionStorage.setItem(
-        `hex-crawl.world-editor.selected-cell.${worldFixture.id}`,
-        JSON.stringify({ q: 0, r: 0 }));
     const api = {
         getOverworld: async () => worldFixture,
         getWorldEnvironment: async () => environmentFixture,
@@ -647,8 +647,6 @@ if (stateName === "home") {
     await renderWorldEditor(root, api, worldFixture.id, () => {});
     emitSpecialMetrics("world");
 } else {
-const mile = { kind: "Mile", symbol: "mi", metersPerUnit: 1609.344 };
-const distance = value => ({ value, unit: mile });
 // Geometry for one authored hexagonal preset, expressed as polygon and interfaces.
 // Other periodic motifs use the same runtime contracts, not these fixture values.
 const visualPolygon = [
