@@ -14,6 +14,9 @@ import { guidancePreferenceButton } from "../../ui/guidance";
 import { openWorkspaceDrawer, statAction, textElement, type WorkspaceDrawer } from "../../ui/workspace";
 import { renderPhase15NextAction } from "./phase15-next-action";
 import { nextCellExpeditionAction } from "./phase15-cell-action";
+import { navigationResolutionDue } from "./expedition-workflow";
+import type { ExpeditionJourneyState } from "../../journey-types";
+import type { SurvivalResources } from "../../survival-types";
 import { polygonContainsSubject, uniquelyAdjacentInterface } from "./phase20-cell-ui-policy";
 import { discoveredSubjectIds } from "../../runtime-view";
 import { encounterLocationId } from "./keyed-location-encounter";
@@ -45,6 +48,9 @@ export async function renderPeriodicExpeditionWorkbench(
     let displayedWatchNumber: number | null | undefined = undefined;
     let inspectedGeometry: WorldCellGeometry | null = null;
     let inspectedTilingRevision: number | null = null;
+    let survivalAttention: SurvivalResources | null = null;
+    let journeyAttention: ExpeditionJourneyState | null = null;
+    let attentionStatus: "loading" | "ready" | "error" = "loading";
 
     root.innerHTML = `
         <section class="hc-page hc-workspace hc-expedition hc-periodic-expedition hc-phase15-expedition">
@@ -93,7 +99,10 @@ export async function renderPeriodicExpeditionWorkbench(
                 <details><summary>GM Tools</summary>
                     <div class="hc-button-row">
                         <button type="button" data-gm-travel>Travel and navigation</button>
-                        <button type="button" data-gm-party>Party and gameplay</button>
+                        <button type="button" data-gm-party>Party and travel order</button>
+                        <button type="button" data-gm-environment>Environment</button>
+                        <button type="button" data-gm-survival>Survival and resources</button>
+                        <button type="button" data-gm-journey>Journey and challenges</button>
                         <button type="button" data-gm-history>Expedition history</button>
                         <button type="button" data-gm-reposition>Teleport party to selected cell</button>
                     </div>
@@ -179,7 +188,7 @@ export async function renderPeriodicExpeditionWorkbench(
     const travelContent = required<HTMLElement>("[data-travel-content]");
     const travelDock = required<HTMLElement>("[data-travel-staging]");
     let travelDrawer: WorkspaceDrawer | null = null;
-    const openTravelDrawer = (focus?: "encounter" | "course"): void => {
+    const openTravelDrawer = (focus?: "encounter" | "course" | "lost" | "navigation"): void => {
         if (!travelDrawer) {
             travelDrawer = openWorkspaceDrawer(root, "Travel / watch",
                 body => { body.append(travelContent); },
@@ -189,20 +198,38 @@ export async function renderPeriodicExpeditionWorkbench(
                     travelDrawer = null;
                 });
         }
-        const target = focus === "encounter" ? required<HTMLButtonElement>("[data-resolve-encounter]")
-            : focus === "course" ? required<HTMLButtonElement>("[data-confirm-course]")
-                : required<HTMLButtonElement>("[data-advance]");
+        const target = focus === "encounter" ? required<HTMLElement>("[data-resolve-encounter]")
+            : focus === "course" ? required<HTMLElement>("[data-confirm-course]")
+                : focus === "lost" ? input("recognizedLost")
+                    : focus === "navigation" ? choice("navigation")
+                        : required<HTMLElement>("[data-advance]");
+        const disclosure = target.closest("details");
+        if (disclosure) disclosure.open = true;
         target.focus();
     };
     required<HTMLButtonElement>("[data-open-travel]").addEventListener("click",
         () => openTravelDrawer());
     required<HTMLButtonElement>("[data-gm-travel]").addEventListener("click",
         () => openTravelDrawer());
-    required<HTMLButtonElement>("[data-gm-party]").addEventListener("click", () => {
+    const openGameplayPanel = (selector: string, actionLabel?: string): void => {
         const disclosure = required<HTMLDetailsElement>("[data-gameplay-disclosure]");
         disclosure.open = true;
-        disclosure.scrollIntoView({ block: "nearest" });
-    });
+        const panel = required<HTMLDetailsElement>(selector);
+        panel.open = true;
+        panel.scrollIntoView({ block: "nearest" });
+        const controls = Array.from(panel.querySelectorAll<HTMLButtonElement>("button"));
+        const target = actionLabel
+            ? controls.find(button => button.textContent?.trim() === actionLabel) : null;
+        (target ?? panel.querySelector<HTMLElement>("summary"))?.focus();
+    };
+    required<HTMLButtonElement>("[data-gm-party]").addEventListener("click", () =>
+        openGameplayPanel("[data-periodic-party]"));
+    required<HTMLButtonElement>("[data-gm-environment]").addEventListener("click", () =>
+        openGameplayPanel(".hc-environment-panel"));
+    required<HTMLButtonElement>("[data-gm-survival]").addEventListener("click", () =>
+        openGameplayPanel("[data-survival-resources-panel]"));
+    required<HTMLButtonElement>("[data-gm-journey]").addEventListener("click", () =>
+        openGameplayPanel("[data-journey-panel]"));
     required<HTMLButtonElement>("[data-gm-history]").addEventListener("click", () => {
         const disclosure = required<HTMLDetailsElement>("[data-history-disclosure]");
         disclosure.open = true;
@@ -405,6 +432,13 @@ export async function renderPeriodicExpeditionWorkbench(
         },
         failure => {
             if (!disposed) showUiError(error, failure);
+        },
+        (journey, survival, failed) => {
+            if (disposed) return;
+            journeyAttention = journey;
+            survivalAttention = survival;
+            attentionStatus = failed ? "error" : "ready";
+            render();
         }
     );
 
@@ -418,6 +452,7 @@ export async function renderPeriodicExpeditionWorkbench(
             if (disposed) return;
             runtime = updated;
             generated = null;
+            attentionStatus = "loading";
             topology = await api.getCellTopology(runtime.id);
             selectedExit = topology.selectedExitInterfaceIndex;
             if (!world) map.centerOn(topology.position);
@@ -446,6 +481,7 @@ export async function renderPeriodicExpeditionWorkbench(
             if (disposed) return;
             runtime = next;
             generated = null;
+            attentionStatus = "loading";
             world = nextWorld;
             required<HTMLButtonElement>("[data-world]").hidden = world === null;
             topology = nextTopology;
@@ -690,7 +726,12 @@ export async function renderPeriodicExpeditionWorkbench(
             pauseReason: pause,
             executable: !!runtime.procedure.runtime,
             hasSelectedCourse: selectedExit !== null || state.intendedHeading !== null,
-            activeWatchNumber: state.activeWatchNumber
+            activeWatchNumber: state.activeWatchNumber,
+            survival: survivalAttention,
+            journey: journeyAttention,
+            navigationDue: navigationResolutionDue(runtime,
+                state.activeSuppressesNavigationCheck, state.activeDeliberateDoubleBack),
+            attentionStatus
         });
         const guide = document.createElement("details");
         guide.className = "hc-guided-action-guide hc-guided-only";
@@ -708,15 +749,27 @@ export async function renderPeriodicExpeditionWorkbench(
         const activate = (): void => {
             if (action.kind === "procedure") {
                 navigate(`/procedures/${encodeURIComponent(runtime.procedure.procedureId)}/revisions/${runtime.procedure.revision}/reference`);
+            } else if (action.kind === "survival") {
+                openGameplayPanel("[data-survival-resources-panel]",
+                    survivalAttention?.forcedTravel.checkDue
+                        ? "Record forced-travel result" : "Apply resolved resource change");
+            } else if (action.kind === "journey") {
+                openGameplayPanel("[data-journey-panel]",
+                    journeyAttention?.eventOccurrences.some(item => item.status === "ResolutionRequired")
+                        ? "Resolve event" : "Resolve attempt");
             } else if (action.label === "Choose travel direction") {
                 const navigatorButton = root.querySelector<HTMLButtonElement>(
                     "[data-cell-navigator] .hc-adjacency-interface:not(:disabled)");
                 if (navigatorButton) navigatorButton.focus();
                 else openTravelDrawer();
+            } else if (action.label === "Loading gameplay state" || action.label === "Review gameplay state") {
+                void refresh();
             } else {
                 openTravelDrawer(action.kind === "encounter" ? "encounter"
-                    : action.kind === "boundary" && pause === "CellCourseAdjudicationRequired" ? "course"
-                    : undefined);
+                    : action.kind === "navigation" ? "navigation"
+                        : action.kind === "boundary" && pause === "CellCourseAdjudicationRequired" ? "course"
+                            : action.kind === "boundary" && pause === "LostRecognitionRequired" ? "lost"
+                                : undefined);
             }
         };
         const content = renderPhase15NextAction(
@@ -759,6 +812,17 @@ export async function renderPeriodicExpeditionWorkbench(
         if (pending)
             stats.push(statAction("Encounters", "Encounter active",
                 "Resolve before more movement", () => openTravelDrawer("encounter"), "danger"));
+        if (survivalAttention?.forcedTravel.checkDue || survivalAttention?.pendingResourceConsequences.length)
+            stats.push(statAction("Survival", survivalAttention.forcedTravel.checkDue
+                ? "Forced-travel check due" : "Consequence pending",
+                "Resolution needed", () => openGameplayPanel("[data-survival-resources-panel]",
+                    survivalAttention?.forcedTravel.checkDue
+                        ? "Record forced-travel result" : "Apply resolved resource change"), "warning"));
+        if (journeyAttention?.eventOccurrences.some(item => item.status === "ResolutionRequired")
+            || journeyAttention?.activeProcesses.some(item => item.status === "ResolutionRequired"
+                || item.pendingActions.length > 0))
+            stats.push(statAction("Journey", "Resolution needed", "Review the pending event or stage",
+                () => openGameplayPanel("[data-journey-panel]"), "warning"));
         required<HTMLElement>("[data-phase15-stats]").replaceChildren(...stats);
         required<HTMLButtonElement>("[data-open-travel]").disabled = busy || !runtime.procedure.runtime;
     }

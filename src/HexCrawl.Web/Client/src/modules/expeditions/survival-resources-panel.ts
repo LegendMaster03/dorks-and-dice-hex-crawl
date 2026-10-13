@@ -50,9 +50,11 @@ export class ExpeditionSurvivalResourcesPanel {
         if (page) page.append(this.panel);
     }
 
-    public async sync(): Promise<void> {
-        this.state = await this.api.get(this.expeditionId);
+    public async sync(): Promise<SurvivalResources> {
+        const state = await this.api.get(this.expeditionId);
+        this.state = state;
         if (!this.disposed) this.render();
+        return state;
     }
 
     public dispose(): void {

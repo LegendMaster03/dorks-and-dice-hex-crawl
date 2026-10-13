@@ -40,9 +40,11 @@ export class ExpeditionJourneyPanel {
         page?.append(this.panel);
     }
 
-    public async sync(): Promise<void> {
-        this.state = await this.api.get(this.expeditionId);
+    public async sync(): Promise<ExpeditionJourneyState> {
+        const state = await this.api.get(this.expeditionId);
+        this.state = state;
         if (!this.disposed) this.render();
+        return state;
     }
 
     public dispose(): void {

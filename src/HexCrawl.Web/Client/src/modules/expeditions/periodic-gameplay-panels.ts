@@ -3,6 +3,8 @@ import { ExpeditionEffectsApi } from "../../effect-api";
 import { JourneyApi } from "../../journey-api";
 import { SurvivalResourcesApi } from "../../survival-api";
 import type { ExpeditionDetail, ToolHostContext } from "../../types";
+import type { ExpeditionJourneyState } from "../../journey-types";
+import type { SurvivalResources } from "../../survival-types";
 import { ExpeditionEffectsPanel } from "./effects-panel";
 import { ExpeditionEnvironmentPanel } from "./environment-panel";
 import { ExpeditionJourneyPanel } from "./journey-panel";
@@ -24,7 +26,9 @@ export function mountPeriodicGameplayPanels(
     getRuntime: () => ExpeditionDetail,
     applyRuntime: (runtime: ExpeditionDetail) => void,
     mutate: Mutate,
-    reportError: (error: unknown) => void
+    reportError: (error: unknown) => void,
+    onAttention: (journey: ExpeditionJourneyState | null,
+        survival: SurvivalResources | null, failed: boolean) => void
 ): { sync: () => void; dispose: () => void } {
     const partyPanel = document.createElement("details");
     partyPanel.className = "hc-party-editor-panel";
@@ -65,6 +69,9 @@ export function mountPeriodicGameplayPanels(
             for (const result of results) {
                 if (result.status === "rejected") reportError(result.reason);
             }
+            onAttention(results[0].status === "fulfilled" ? results[0].value : null,
+                results[2].status === "fulfilled" ? results[2].value : null,
+                results[0].status === "rejected" || results[2].status === "rejected");
         });
     };
     const dispose = (): void => {
