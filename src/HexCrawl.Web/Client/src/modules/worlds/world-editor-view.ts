@@ -369,7 +369,7 @@ export async function renderWorldEditor(
                             fact.dimension.trim().toLowerCase() !== "terrain") }
                         : annotation).filter(annotation => annotation.facts.length > 0);
                 if (value?.trim()) next = addEnvironmentFact(next,
-                    { kind: "Cell", cell: cell.id, hex: null, featureId: null },
+                    { kind: "Cell", cell: cell.id, featureId: null },
                     tagFact("terrain", value.trim(), "world-editor:selected-cell", null));
                 await saveWorldEnvironment(next);
         };
@@ -425,7 +425,7 @@ export async function renderWorldEditor(
                 }
                 await saveWorldEnvironment(addEnvironmentFact(
                     worldEnvironment.annotations,
-                    { kind: "Cell", cell: cell.id, hex: null, featureId: null },
+                    { kind: "Cell", cell: cell.id, featureId: null },
                     tagFact(dimension, value, "world-editor:selected-cell", null)));
             });
         });
@@ -489,10 +489,10 @@ export async function renderWorldEditor(
                     && !features.some(item => item.id === featureId))
                     throw new Error("Select an intersecting feature.");
                 const scope: EnvironmentAnnotation["scope"] = scopeKind === "World"
-                    ? { kind: "World", hex: null, featureId: null }
+                    ? { kind: "World", cell: null, featureId: null }
                     : scopeKind === "SpatialFeature"
-                        ? { kind: "SpatialFeature", hex: null, featureId }
-                        : { kind: "Cell", cell: cell.id, hex: null, featureId: null };
+                        ? { kind: "SpatialFeature", cell: null, featureId }
+                        : { kind: "Cell", cell: cell.id, featureId: null };
                 if (scopeKind === "Cell" && dimension.toLowerCase() === "terrain"
                     && fact.valueKind === "Tag") {
                     await replaceTerrain(fact.tag ?? "");

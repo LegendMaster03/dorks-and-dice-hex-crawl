@@ -63,7 +63,7 @@ public sealed class Phase18EnvironmentContextTests
     }
 
     [Fact]
-    public void QualifiedCellEnvironmentWorksOnSavedGridWorldWithoutApplyingRetiredHexScope()
+    public void QualifiedCellEnvironmentResolvesOnlyMatchingCellAnnotations()
     {
         var grid = new HexGridDefinition
         {
@@ -80,16 +80,12 @@ public sealed class Phase18EnvironmentContextTests
             [
                 Annotation(
                     new EnvironmentAnnotationScope { Kind = EnvironmentAnnotationScopeKind.Cell,
-                        Cell = cell }, "terrain", "coastal"),
-                Annotation(
-                    new EnvironmentAnnotationScope { Kind = EnvironmentAnnotationScopeKind.Hex,
-                        Hex = new HexCoordinate(0, 0) }, "weather", "windy")
+                        Cell = cell }, "terrain", "coastal")
             ]
         };
         var state = State(world.SpatialTiling.Resolve(cell.Address));
         var values = EnvironmentContextResolver.Resolve(Stored(world, state), world);
         Assert.Contains(values.Facts, f => f.Effective && f.Fact.Tag == "coastal");
-        Assert.DoesNotContain(values.Facts, f => f.Effective && f.Fact.Tag == "windy");
     }
 
     private static CellExpeditionState State(WorldCellGeometry cell) => new()

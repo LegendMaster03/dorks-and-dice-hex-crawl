@@ -227,8 +227,7 @@ export class ExpeditionEnvironmentPanel {
                 id: crypto.randomUUID(),
                 scope: {
                     kind: selectedScope,
-                    hex: null,
-                    cell: selectedScope === "Cell" ? currentCell : null,
+                            cell: selectedScope === "Cell" ? currentCell : null,
                     featureId: selectedScope === "SpatialFeature" ? feature.value : null
                 },
                 facts: [fact]
@@ -376,7 +375,6 @@ function sourceLabel(kind: string, featureName: string | null): string {
 }
 
 function scopeLabel(annotation: EnvironmentAnnotation): string {
-    if (annotation.scope.kind === "Hex" && annotation.scope.hex) return `hex ${annotation.scope.hex.q},${annotation.scope.hex.r}`;
     if (annotation.scope.kind === "Cell" && annotation.scope.cell)
         return `cell at ${annotation.scope.cell.address.translation.u},${annotation.scope.cell.address.translation.v}`;
     if (annotation.scope.kind === "SpatialFeature") return `feature ${annotation.scope.featureId ?? "unknown"}`;

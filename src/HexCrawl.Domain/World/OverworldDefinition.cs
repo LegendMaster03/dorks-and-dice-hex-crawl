@@ -50,8 +50,6 @@ public sealed record OverworldDefinition
         {
             EnvironmentAnnotationScopeKind.World => true,
             EnvironmentAnnotationScopeKind.Cell => a.Scope.Cell == identity,
-            EnvironmentAnnotationScopeKind.Hex when HasLegacyHexGrid =>
-                a.Scope.Hex == LegacyHexTilingCompatibility.ToHex(address),
             EnvironmentAnnotationScopeKind.SpatialFeature => a.Scope.FeatureId is { } id && features.Contains(id),
             _ => false
         }).ToArray();
@@ -77,8 +75,6 @@ public sealed record OverworldDefinition
                     throw new InvalidOperationException("Environment annotation addresses another world tiling.");
                 SpatialTiling.Resolve(cell.Address);
             }
-            if (annotation.Scope.Kind == EnvironmentAnnotationScopeKind.Hex && !HasLegacyHexGrid)
-                throw new InvalidOperationException("Axial environment scope is not valid for a generalized world.");
             if (!annotationIds.Add(annotation.Id))
             {
                 throw new InvalidOperationException("Environment annotation ids must be unique within an overworld.");

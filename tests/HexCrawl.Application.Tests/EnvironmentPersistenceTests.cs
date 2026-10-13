@@ -21,8 +21,9 @@ public sealed class EnvironmentPersistenceTests
             Id = Guid.NewGuid(),
             Scope = new EnvironmentAnnotationScope
             {
-                Kind = EnvironmentAnnotationScopeKind.Hex,
-                Hex = new HexCoordinate(0, 0)
+                Kind = EnvironmentAnnotationScopeKind.Cell,
+                Cell = new WorldCellId(world.SpatialTiling.Id,
+                    new PeriodicCellAddress("hex", new LatticeDisplacement(0, 0)))
             },
             Facts = [Tag("terrain", "forest", "authored world truth")]
         };

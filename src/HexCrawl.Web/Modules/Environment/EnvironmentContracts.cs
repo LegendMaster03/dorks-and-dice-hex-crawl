@@ -40,20 +40,15 @@ public sealed record EnvironmentFactContract(
 
 public sealed record EnvironmentAnnotationScopeContract(
     EnvironmentAnnotationScopeKind Kind,
-    HexCoordinate? Hex,
-    Guid? FeatureId)
+    Guid? FeatureId,
+    WorldCellId? Cell)
 {
-    // Additive Phase 18 field. Legacy hex/world/feature JSON has no cell key,
-    // while an actual cell scope retains its full tiling-qualified identity.
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public WorldCellId? Cell { get; init; }
-
     public static EnvironmentAnnotationScopeContract From(EnvironmentAnnotationScope value) =>
-        new(value.Kind, value.Hex, value.FeatureId) { Cell = value.Cell };
+        new(value.Kind, value.FeatureId, value.Cell);
 
     public EnvironmentAnnotationScope ToDomain() => new()
     {
-        Kind = Kind, Hex = Hex, FeatureId = FeatureId, Cell = Cell
+        Kind = Kind, FeatureId = FeatureId, Cell = Cell
     };
 }
 

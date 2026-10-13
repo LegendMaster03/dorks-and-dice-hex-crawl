@@ -601,7 +601,7 @@ if (stateName === "home") {
         version: worldFixture.version,
         annotations: [{
             id: "hex-environment",
-            scope: { kind: "Hex", hex: { q: 0, r: 0 }, featureId: null },
+            scope: { kind: "Cell", cell: { tilingId: "visual-tiling", address: { motifCellId: "hex", translation: { u: 0, v: 0 } } }, featureId: null },
             facts: [{
                 id: "terrain-1",
                 dimension: "terrain",
@@ -621,7 +621,7 @@ if (stateName === "home") {
             }]
         }, {
             id: "road-environment",
-            scope: { kind: "SpatialFeature", hex: null, featureId: "road-1" },
+            scope: { kind: "SpatialFeature", cell: null, featureId: "road-1" },
             facts: [{
                 id: "route-1",
                 dimension: "route",
