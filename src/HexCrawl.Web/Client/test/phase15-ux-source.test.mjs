@@ -838,14 +838,16 @@ test("Phase 15.1 explains domain-specific numeric grid settings at their point o
     const worlds = fs.readFileSync(path.join(sourceDir, "modules/worlds/world-list-view.ts"), "utf8");
     const editor = fs.readFileSync(path.join(sourceDir, "modules/worlds/world-editor-view.ts"), "utf8");
     const assistant = fs.readFileSync(path.join(sourceDir, "modules/assistants/assistant-entry-view.ts"), "utf8");
-    for (const source of [home, worlds, editor, assistant]) {
+    for (const source of [home, assistant]) {
         assert.match(source, /attachFieldHelp/);
-        assert.match(source, /Map scale/);
         assert.doesNotMatch(source, /Hex center distance/);
     }
     assert.match(home, /physical distance represented by one geometry unit/i);
-    assert.match(worlds, /center of one adjacent cell to the next/);
-    assert.match(editor, /They are not travel-distance settings/);
+    assert.match(worlds, /Physical map scale/);
+    assert.match(worlds, /name="physicalScale"[^>]*required/);
+    assert.doesNotMatch(worlds, /Grid orientation|Hex radius|<option value="square"|<option value="triangle"/);
+    assert.match(editor, /data-world-form/);
+    assert.doesNotMatch(editor, /data-grid-form|Save world and grid|Hex radius/);
     assert.match(assistant, /physical distance represented by one (realized )?geometry unit/i);
     assert.doesNotMatch(assistant, /Start q|Start r|name="orientation"/);
 });
