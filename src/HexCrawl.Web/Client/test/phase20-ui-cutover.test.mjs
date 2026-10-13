@@ -157,7 +157,8 @@ test("V2 cell-workbench helpers generate owner/version-scoped automatic rolls", 
 test("Phase 15 next action respects V2 interrupt, decision and travel precedence", () => {
     const ready = {
         pendingEncounter: false, pauseReason: null, executable: true,
-        hasSelectedCourse: false, activeWatchNumber: null
+        hasSelectedCourse: false, activeWatchNumber: null,
+        survival: null, journey: null, navigationDue: false, attentionStatus: "ready"
     };
     assert.equal(nextCellExpeditionAction(ready).label, "Choose travel direction");
     assert.equal(nextCellExpeditionAction({ ...ready, hasSelectedCourse: true }).label, "Continue travel");
