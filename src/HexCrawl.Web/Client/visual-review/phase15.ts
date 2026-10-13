@@ -1470,9 +1470,13 @@ switch (stateName) {
         if (runtime.expedition.cellTraversal)
             runtime.expedition.cellTraversal.selectedExitInterfaceIndex = 1;
         runtime.expedition.actualHeading = visualHeading(1);
-        runtime.expedition.cellTraversal.position = { x: Number(2), y: 0 };
+        runtime.expedition.cellTraversal.position = { x: 0, y: 0 };
         runtime.expedition.position = runtime.expedition.cellTraversal.position;
         runtime.expedition.completedWatches = 2;
+        runtime.expedition.activeWatchNumber = 3;
+        runtime.expedition.activeWatchPendingDecision = "CellCourseAdjudicationRequired";
+        runtime.pauseReason = "CellCourseAdjudicationRequired";
+        runtime.remainingWatchHours = 1;
         runtime.procedure.runtime.usesNavigationChecks = true;
         break;
     case "course-clear-reload":
@@ -2047,9 +2051,12 @@ const api = new Proxy({
         runtime = {
             ...runtime,
             version: runtime.version + 1,
+            pauseReason: null,
+            remainingWatchHours: 1,
             expedition: {
                 ...runtime.expedition,
                 intendedHeading: heading,
+                activeWatchPendingDecision: null,
                 cellTraversal: {
                     ...runtime.expedition.cellTraversal,
                     travelHeading: heading,
@@ -2111,11 +2118,21 @@ let movementRetryVerified = false;
 
 if (stateName === "course-change-reload") {
     const changedEdge = root.querySelector('[data-adjacency-interface-id$=":5"]');
-    changedEdge?.click();
+    if (!changedEdge) throw new Error("Missing qualified exit interface 5.");
+    changedEdge.click();
+    await waitForCondition(
+        () => root.querySelector('[data-adjacency-interface-id$=":5"]')?.getAttribute("aria-pressed") === "true"
+            && runtime.expedition.cellTraversal?.selectedExitInterfaceIndex === 1,
+        "draft atomic exit selected without changing saved course");
+    findButton("Resolve travel / watch")?.click();
+    const confirmCourse = root.querySelector('[data-phase15-drawer] [data-confirm-course]');
+    if (!confirmCourse || confirmCourse.disabled)
+        throw new Error("Adjudication pause did not expose an enabled atomic course resolution.");
+    confirmCourse.click();
     await waitForCondition(
         () => runtime.expedition.cellTraversal?.selectedExitInterfaceIndex === 5
             && root.querySelector('[data-adjacency-interface-id$=":5"]')?.getAttribute("aria-pressed") === "true",
-        "server-authoritative changed course");
+        "server-authoritative adjudicated course");
 
     disposeExpedition();
     root.replaceChildren();
@@ -2128,18 +2145,19 @@ if (stateName === "course-change-reload") {
     await waitForRootText("Intended travel direction:");
 } else if (stateName === "course-clear-reload") {
     const selectedEdge = root.querySelector('[data-adjacency-interface-id$=":1"]');
-    selectedEdge?.click();
+    if (!selectedEdge) throw new Error("Missing initially selected atomic interface.");
+    selectedEdge.click();
     await waitForCondition(
-        () => runtime.expedition.cellTraversal?.selectedExitInterfaceIndex === null
+        () => runtime.expedition.cellTraversal?.selectedExitInterfaceIndex === 1
             && root.querySelectorAll('[data-adjacency-interface-id][aria-pressed="true"]').length === 0,
-        "server-authoritative cleared course");
+        "cleared draft does not mutate saved course");
 
     disposeExpedition();
     root.replaceChildren();
     disposeExpedition = await renderExpedition(root, api, runtime.id, () => {}, undefined, null);
     await waitForCondition(
-        () => root.querySelectorAll('[data-adjacency-interface-id][aria-pressed="true"]').length === 0,
-        "fresh client retained no-course state");
+        () => root.querySelector('[data-adjacency-interface-id$=":1"]')?.getAttribute("aria-pressed") === "true",
+        "fresh client restored saved course rather than uncommitted draft");
 } else if (stateName === "map-selected" || stateName === "map-nonadjacent") {
     const canvas = root.querySelector("canvas");
     if (canvas) {

@@ -246,13 +246,22 @@ export function ensurePhase15Styles(): void {
         .hc-readable-facts > div { min-width:0; padding:.55rem .6rem; border:1px solid var(--hc-border); border-radius:.55rem; background:var(--hc-surface-elevated); }
         .hc-readable-facts dt { font-size:.72rem; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:var(--hc-muted); }
         .hc-readable-facts dd { margin:.12rem 0 0; min-width:0; color:var(--hc-text-strong); overflow-wrap:anywhere; }
-        .hc-readable-table { width:100%; border-collapse:collapse; margin:.55rem 0; font-size:.88rem; }
+        .hc-readable-table { width:100%; max-width:100%; table-layout:fixed; border-collapse:collapse; margin:.55rem 0; font-size:.88rem; }
         .hc-readable-table caption { text-align:left; padding:0 0 .35rem; font-weight:750; color:var(--hc-text-strong); }
-        .hc-readable-table th, .hc-readable-table td { padding:.4rem .45rem; border-bottom:1px solid var(--hc-border); text-align:left; vertical-align:top; overflow-wrap:normal; word-break:normal; }
+        .hc-readable-table th, .hc-readable-table td { padding:.4rem .45rem; border-bottom:1px solid var(--hc-border); text-align:left; vertical-align:top; overflow-wrap:anywhere; word-break:normal; }
         .hc-readable-table thead th { font-size:.72rem; text-transform:uppercase; letter-spacing:.04em; color:var(--hc-muted); white-space:nowrap; }
-        .hc-readable-table tbody th { font-weight:650; color:var(--hc-text-strong); white-space:nowrap; }
+        .hc-readable-table tbody th { font-weight:650; color:var(--hc-text-strong); }
         .hc-form select[multiple] { min-height:4.5rem; }
-        .hc-movement-composition-ledger { display:grid; gap:.65rem; min-width:0; padding:.75rem; border:1px solid var(--hc-border); border-radius:.7rem; background:var(--hc-surface-elevated); }
+        /* Nested tables and gameplay editors must not grow their grid tracks. */
+        .hc-periodic-expedition .hc-workspace-grid > *,
+        .hc-periodic-expedition .hc-table-rail,
+        .hc-periodic-expedition .hc-table-rail > details,
+        .hc-periodic-expedition .hc-table-rail > details > div,
+        .hc-periodic-expedition .hc-gameplay-controls,
+        .hc-periodic-expedition .hc-gameplay-controls > * { min-width:0; max-width:100%; }
+        .hc-movement-composition-ledger { display:grid; gap:.65rem; min-width:0; max-width:100%; padding:.75rem; border:1px solid var(--hc-border); border-radius:.7rem; background:var(--hc-surface-elevated); }
+        .hc-ledger-table-scroll { min-width:0; max-width:100%; overflow-x:auto; overscroll-behavior-inline:contain; }
+        .hc-ledger-table-scroll .hc-movement-ledger-table { min-width:33rem; table-layout:fixed; }
         .hc-movement-composition-ledger > header { display:flex; justify-content:space-between; align-items:flex-start; gap:.75rem; flex-wrap:wrap; }
         .hc-movement-composition-ledger > header > div { display:grid; gap:.1rem; }
         .hc-ledger-effective { font-size:1.15rem; color:var(--hc-text-strong); }
@@ -261,9 +270,9 @@ export function ensurePhase15Styles(): void {
         .hc-movement-ledger-summary dt { font-weight:650; color:var(--hc-text-strong); }
         .hc-movement-ledger-summary dd { margin:0; min-width:0; overflow-wrap:anywhere; }
         .hc-movement-ledger-table { width:100%; border-collapse:collapse; font-size:.88rem; }
-        .hc-movement-ledger-table th, .hc-movement-ledger-table td { padding:.38rem .45rem; border-bottom:1px solid var(--hc-border); text-align:left; vertical-align:top; overflow-wrap:normal; word-break:normal; }
+        .hc-movement-ledger-table th, .hc-movement-ledger-table td { padding:.38rem .45rem; border-bottom:1px solid var(--hc-border); text-align:left; vertical-align:top; overflow-wrap:anywhere; word-break:normal; }
         .hc-movement-ledger-table thead th { font-size:.72rem; text-transform:uppercase; letter-spacing:.04em; color:var(--hc-muted); white-space:nowrap; }
-        .hc-movement-ledger-table tbody th { font-weight:650; color:var(--hc-text-strong); white-space:nowrap; }
+        .hc-movement-ledger-table tbody th { font-weight:650; color:var(--hc-text-strong); }
         .hc-movement-ledger-table small { color:var(--hc-muted); font-weight:400; }
         .hc-movement-ledger-diagnostic { margin:0; padding:.55rem .65rem; border-inline-start:3px solid var(--hc-warning); background:var(--hc-surface); }
         .hc-journey-stage-sequence { display:grid; gap:.45rem; }
@@ -321,6 +330,14 @@ export function ensurePhase15Styles(): void {
             .hc-table-rail > .hc-current-travel { grid-column:1 / -1; }
         }
         @media (max-width: 760px) {
+            /* Flatten only the spatial map/rail group so the map begins in
+               the first viewport ahead of longer management panels. */
+            .hc-periodic-expedition > .hc-workspace-grid { display:contents; }
+            .hc-periodic-expedition .hc-map-panel { order:1; }
+            .hc-periodic-expedition > [data-phase15-action] { order:2; }
+            .hc-periodic-expedition .hc-table-rail { order:3; }
+            .hc-periodic-expedition > .hc-phase15-runtime-summary { order:4; }
+            .hc-periodic-expedition > .hc-gm-tools { order:5; }
             .hc-phase15-expedition > .hc-current-action { order:1; }
             .hc-phase15-expedition > .hc-workspace-grid,
             .hc-phase15-expedition > .hc-nonspatial-primary { order:2; }

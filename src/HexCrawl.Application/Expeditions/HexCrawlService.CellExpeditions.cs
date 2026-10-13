@@ -294,7 +294,7 @@ public sealed partial class HexCrawlService
 
     /// <summary>
     /// Explicit exact-position correction, distinct from travel and available
-    /// to any V2 spatial session. Paused watches are not silently abandoned.
+    /// to any periodic-cell spatial session. Paused watches are not silently abandoned.
     /// </summary>
     public async Task<StoredExpedition> RepositionCellExpeditionAsync(
         Guid expeditionId,

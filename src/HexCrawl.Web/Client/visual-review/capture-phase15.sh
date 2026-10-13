@@ -326,10 +326,10 @@ else:
         if metrics["drawerCount"] != 1 or metrics["focusedTitle"] != "Travel / watch":
             raise SystemExit(f'fresh client did not expose the current travel workflow: {metrics}')
     if state == "course-clear-reload":
-        if metrics["selectedEdges"] != 0 or metrics["runtimeIntendedHeading"] is not None:
-            raise SystemExit(f'explicitly cleared qualified-cell course returned after a fresh client: {metrics}')
-        if metrics["primaryAction"] != "Choose travel direction":
-            raise SystemExit(f'cleared course did not return to cell selection: {metrics}')
+        if metrics["selectedEdges"] != 1 or not (metrics["selectedInterfaceIndex"] or "").endswith(":1"):
+            raise SystemExit(f'fresh client did not restore saved course after discarding a local draft: {metrics}')
+        if metrics["runtimeIntendedHeading"] is None or metrics["primaryAction"] != "Continue travel":
+            raise SystemExit(f'reloading a discarded course proposal changed authoritative travel intent: {metrics}')
     if state == "map-nonadjacent" and not metrics["teleportContextVisible"]:
         raise SystemExit(f'distant cell inspection did not expose an explicit GM teleport action: {metrics}')
     if state == "teleport-workspace":

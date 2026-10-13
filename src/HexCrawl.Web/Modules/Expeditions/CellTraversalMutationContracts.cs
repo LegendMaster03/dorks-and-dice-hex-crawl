@@ -5,9 +5,8 @@ using HexCrawl.Application;
 namespace HexCrawl.Web.Api;
 
 /// <summary>
-/// Explicit versioned API surface for existing cell expeditions. These
-/// contracts are intentionally separate from the legacy six-direction route.
-/// An isolated cell-only start path is enabled; legacy browser workbench remains gated.
+/// API surface for periodic-cell expeditions and their authoritative watch state.
+/// Course adjudication is distinct from selecting a draft travel boundary.
 /// </summary>
 public sealed record StartCellExpeditionRequest(
     string Name,
