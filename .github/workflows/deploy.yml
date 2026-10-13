@@ -32,6 +32,7 @@ jobs:
           ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
       - name: Retain the actual running image before overwriting latest
+        shell: python3 .github/scripts/measure-action.py "Retain the actual running image before overwriting latest" {0}
         id: previous_image
         run: |
           set -euo pipefail
@@ -50,6 +51,7 @@ jobs:
           fi
 
       - name: Validate production deployment configuration
+        shell: python3 .github/scripts/measure-action.py "Validate production deployment configuration" {0}
         id: preflight
         timeout-minutes: 3
         env:
@@ -68,15 +70,18 @@ jobs:
           python3 .github/scripts/phase16-deployment-config.py verify dorks-and-dice-hex-crawl "$ENV_FILE" "$DEPLOY_SNAPSHOT_DIR"
 
       - name: Build image
+        shell: python3 .github/scripts/measure-action.py "Build image" {0}
         timeout-minutes: 10
         run: |
-          docker build --label "org.opencontainers.image.revision=$DEPLOY_SHA" \
+          docker build --progress=plain --label "org.opencontainers.image.revision=$DEPLOY_SHA" \
             -t dorks-and-dice-hex-crawl:latest -t "dorks-and-dice-hex-crawl:$DEPLOY_SHA" \
             -f src/HexCrawl.Web/Dockerfile .
 
       - name: Start smoke-test PostgreSQL
-        timeout-minutes: 3
+        shell: python3 .github/scripts/measure-action.py "Start smoke-test PostgreSQL" {0}
+        timeout-minutes: 5
         run: |
+          set -euo pipefail
           docker rm -f dorks-and-dice-hex-crawl-test-postgres 2>/dev/null || true
           docker network create dorks-and-dice-hex-crawl-test 2>/dev/null || true
           docker run -d --name dorks-and-dice-hex-crawl-test-postgres \
@@ -85,10 +90,10 @@ jobs:
             -e POSTGRES_USER=hex_crawl_test \
             -e POSTGRES_PASSWORD=hex_crawl_test \
             postgres:18 >/dev/null
-          sleep 10
           consecutive=0
-          for i in {1..30}; do
-            result=$(docker exec dorks-and-dice-hex-crawl-test-postgres \
+          deadline=$((SECONDS + 180))
+          while [ "$SECONDS" -lt "$deadline" ]; do
+            result=$(timeout 5s docker exec -e PGCONNECT_TIMEOUT=3 dorks-and-dice-hex-crawl-test-postgres \
               psql -v ON_ERROR_STOP=1 -U hex_crawl_test -d hex_crawl_test -tAc 'SELECT 1' 2>/dev/null || true)
             if [ "$(echo "$result" | tr -d '[:space:]')" = "1" ]; then
               consecutive=$((consecutive + 1))
@@ -99,11 +104,13 @@ jobs:
             sleep 1
           done
           if [ "$consecutive" -lt 3 ]; then
+            echo 'Smoke-test PostgreSQL did not pass three consecutive database queries within 180 seconds.' >&2
             docker logs dorks-and-dice-hex-crawl-test-postgres || true
             exit 1
           fi
 
       - name: Smoke test PostgreSQL-backed container
+        shell: python3 .github/scripts/measure-action.py "Smoke test PostgreSQL-backed container" {0}
         timeout-minutes: 5
         run: |
           docker rm -f dorks-and-dice-hex-crawl-smoketest 2>/dev/null || true
@@ -151,6 +158,7 @@ jobs:
           docker network rm dorks-and-dice-hex-crawl-test 2>/dev/null || true
 
       - name: Deploy
+        shell: python3 .github/scripts/measure-action.py "Deploy" {0}
         id: deploy
         timeout-minutes: 5
         env:
@@ -165,6 +173,7 @@ jobs:
             -f docker-compose.yml up -d --force-recreate --remove-orphans
 
       - name: Verify deployed service
+        shell: python3 .github/scripts/measure-action.py "Verify deployed service" {0}
         id: verify
         timeout-minutes: 5
         run: |
@@ -233,3 +242,12 @@ jobs:
           DEPLOY_SNAPSHOT_DIR: ${{ steps.previous_image.outputs.snapshot_dir }}
         run: |
           python3 .github/scripts/phase16-deployment-config.py cleanup "$DEPLOY_SNAPSHOT_DIR"
+
+      - name: Upload deployment timing
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-timing-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/hex-crawl-deploy-timing.jsonl
+          if-no-files-found: warn
+          retention-days: 14
