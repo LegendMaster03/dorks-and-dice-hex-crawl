@@ -1,5 +1,8 @@
 # Phase 20.4 — source deletion checkpoint
 
+**October 13 generated-grant deletion (CI pending):** Removed the original scalar resolution fields and null placeholders from `GeneratedProcedureResolution`, retaining one typed travel/navigation/encounter grant and its plan-binding metadata. Deleted retired scalar result records and assertions. The one-time transactional schema-11→12 conversion now rewrites any saved typed `cellTravel`/`cellNavigation`/`cellEncounter` fields to their authoritative positions, rejects conflicting or nonconvertible scalar grants, and preserves owner-scoped generation/consumption audits. Isolated PostgreSQL tests cover the saved-grant conversion. Actual development data remains unchanged.
+
+
 **October 13 presentation policy cleanup (CI pending):** Replaced axial-named `MarkEnteredHexKnown` with `MarkEnteredCellKnown` in domain presentation semantics, HTTP contracts and browser types. The one-time schema-11→12 PostgreSQL authored-data cutover now transactionally rewrites persisted expedition knowledge policies, rejecting conflicting dual fields. Regression coverage checks saved policy semantics and removal of the old serialized key. This is a schema conversion, not a permanent compatibility reader. No actual development data was migrated.
 
 

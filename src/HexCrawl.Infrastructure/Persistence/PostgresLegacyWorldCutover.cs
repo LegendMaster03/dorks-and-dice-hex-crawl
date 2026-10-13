@@ -50,6 +50,7 @@ internal static class PostgresLegacyWorldCutover
                 throw new InvalidDataException("World disappeared during the locked authored-data cutover.");
         }
         await ConvertKnowledgePoliciesAsync(connection, transaction, cancellationToken);
+        await ConvertResolutionGrantsAsync(connection, transaction, cancellationToken);
     }
 
     // Rewrite persisted presentation semantics within the same transaction as
@@ -85,6 +86,79 @@ internal static class PostgresLegacyWorldCutover
             WHERE (knowledge_json->'presentationPolicy') ? 'markEnteredHexKnown';
             """;
         await update.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// One-time conversion from the retired dual grant structure to the
+    /// authoritative typed spatial grant. Never silently reinterpret a
+    /// nonnull legacy scalar as a typed distance or direction.
+    /// </summary>
+    private static async Task ConvertResolutionGrantsAsync(
+        NpgsqlConnection connection, NpgsqlTransaction transaction,
+        CancellationToken cancellationToken)
+    {
+        var records = new List<(Guid Id, string Json)>();
+        await using (var select = connection.CreateCommand())
+        {
+            select.Transaction = transaction;
+            select.CommandText = """
+                SELECT id, generated_resolutions_json::text
+                FROM expeditions ORDER BY id FOR UPDATE;
+                """;
+            await using var reader = await select.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+                records.Add((reader.GetGuid(0), reader.GetString(1)));
+        }
+
+        foreach (var (id, json) in records)
+        {
+            if (JsonNode.Parse(json) is not JsonArray grants)
+                throw new InvalidDataException("Generated procedure resolutions must be a JSON array.");
+            var changed = false;
+            foreach (var item in grants)
+            {
+                if (item is not JsonObject grant)
+                    throw new InvalidDataException("Generated procedure resolution must be an object.");
+                foreach (var (former, authoritative) in new[]
+                {
+                    ("cellTravel", "travel"),
+                    ("cellNavigation", "navigation"),
+                    ("cellEncounter", "encounter"),
+                    ("cellSuppressesNavigationCheck", "suppressesNavigationCheck"),
+                    ("cellDeliberateDoubleBack", "deliberateDoubleBack")
+                })
+                {
+                    if (grant.TryGetPropertyValue(former, out var value))
+                    {
+                        if (grant.TryGetPropertyValue(authoritative, out var existing)
+                            && existing is not null)
+                            throw new InvalidDataException(
+                                "A generated resolution contains both obsolete and authoritative data.");
+                        grant[authoritative] = value?.DeepClone();
+                        grant.Remove(former);
+                        changed = true;
+                    }
+                    else if (authoritative is "travel" or "navigation" or "encounter"
+                             && grant.TryGetPropertyValue(authoritative, out var scalar)
+                             && scalar is not null)
+                    {
+                        throw new InvalidDataException(
+                            "An untyped historical resolution can not be converted to a spatial grant.");
+                    }
+                }
+            }
+            if (!changed) continue;
+            await using var update = connection.CreateCommand();
+            update.Transaction = transaction;
+            update.CommandText = """
+                UPDATE expeditions SET generated_resolutions_json = @value
+                WHERE id = @id;
+                """;
+            update.Parameters.AddWithValue("id", NpgsqlDbType.Uuid, id);
+            update.Parameters.AddWithValue("value", NpgsqlDbType.Jsonb, grants.ToJsonString(Json));
+            if (await update.ExecuteNonQueryAsync(cancellationToken) != 1)
+                throw new InvalidDataException("Generated resolution disappeared during the locked cutover.");
+        }
     }
 
     private static string ConvertSnapshot(Guid identity, string json)

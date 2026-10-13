@@ -73,19 +73,18 @@ public sealed partial class HexCrawlService
             || grant.Status != GeneratedProcedureResolutionStatus.Available
             || grant.GeneratedAtVersion != expectedVersion
             || grant.WatchNumber != expectedWatch
-            || grant.CellSuppressesNavigationCheck != plan.NavigationAid.SuppressesNavigationCheck
-            || grant.CellDeliberateDoubleBack != plan.DeliberateDoubleBack
-            || grant.CellTravel is null && grant.CellNavigation is null && grant.CellEncounter is null
-            || grant.Travel is not null || grant.Navigation is not null || grant.Encounter is not null)
+            || grant.SuppressesNavigationCheck != plan.NavigationAid.SuppressesNavigationCheck
+            || grant.DeliberateDoubleBack != plan.DeliberateDoubleBack
+            || grant.Travel is null && grant.Navigation is null && grant.Encounter is null)
             throw new InvalidOperationException(
                 "This cell helper generation is missing, stale, already used, or belongs to a different session.");
 
-        if (grant.CellTravel is { } travel && travel != inputs.Travel
-            || grant.CellTravel is null && inputs.Travel.Provenance.Source == ResolutionSource.AutomaticRoll
-            || grant.CellNavigation is { } nav && nav != inputs.Navigation
-            || grant.CellNavigation is null && inputs.Navigation?.Provenance.Source == ResolutionSource.AutomaticRoll
-            || grant.CellEncounter is { } encounter && encounter != inputs.Encounter
-            || grant.CellEncounter is null && inputs.Encounter?.Provenance.Source == ResolutionSource.AutomaticRoll)
+        if (grant.Travel is { } travel && travel != inputs.Travel
+            || grant.Travel is null && inputs.Travel.Provenance.Source == ResolutionSource.AutomaticRoll
+            || grant.Navigation is { } nav && nav != inputs.Navigation
+            || grant.Navigation is null && inputs.Navigation?.Provenance.Source == ResolutionSource.AutomaticRoll
+            || grant.Encounter is { } encounter && encounter != inputs.Encounter
+            || grant.Encounter is null && inputs.Encounter?.Provenance.Source == ResolutionSource.AutomaticRoll)
             throw new InvalidOperationException(
                 "Submitted automatic cell inputs do not match the exact persisted helper result.");
 

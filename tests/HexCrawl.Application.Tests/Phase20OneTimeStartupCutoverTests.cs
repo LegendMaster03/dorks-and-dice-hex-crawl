@@ -66,9 +66,25 @@ public sealed class Phase20OneTimeStartupCutoverTests
         var spatial = PeriodicCourseFixture.StartingState(world.Tiling);
         var procedure = CampaignProcedureMaterializer.MaterializeExecutableSpatial(
             CrawlProcedureCatalog.Resolve("simple-fixed-distance")).Procedure;
+        var generatedId = Guid.NewGuid();
+        var generated = new GeneratedProcedureResolution(
+            generatedId, spatial.Id, 1, 2, 41, 1, [],
+            ResolvedTravelAmount.Distance(
+                new DistanceMeasure(12, DistanceUnit.Miles),
+                new DistanceMeasure(10, DistanceUnit.Miles),
+                new ResolutionProvenance(ResolutionSource.AutomaticRoll, "saved grant")),
+            null, null, GeneratedProcedureResolutionStatus.Consumed,
+            ConsumedAtVersion: 3, ConsumedAuditSequence: 42)
+        {
+            SuppressesNavigationCheck = false,
+            DeliberateDoubleBack = true
+        };
         var expedition = await store.CreateExpeditionAsync(new StoredExpedition(
             "Preserved knowledge", spatial, new WorldBoundCrawlSessionContext(world.Id),
-            knowledge, procedure, null, TimeSpan.Zero, "owner", 1, createdAt, createdAt));
+            knowledge, procedure, null, TimeSpan.Zero, "owner", 1, createdAt, createdAt)
+        {
+            GeneratedProcedureResolutions = [generated]
+        });
         await using var connection = new NpgsqlConnection(database.ConnectionString);
         await connection.OpenAsync();
         await using (var downgrade = connection.CreateCommand())
@@ -91,6 +107,20 @@ public sealed class Phase20OneTimeStartupCutoverTests
                         || jsonb_build_object('markEnteredHexKnown',
                             knowledge_json #> '{presentationPolicy,markEnteredCellKnown}'),
                     false)
+                WHERE id = @expedition;
+                UPDATE expeditions
+                SET generated_resolutions_json = (
+                    SELECT jsonb_agg(
+                        (item - 'travel' - 'navigation' - 'encounter'
+                              - 'suppressesNavigationCheck' - 'deliberateDoubleBack')
+                        || jsonb_build_object(
+                            'travel', null, 'navigation', null, 'encounter', null,
+                            'cellTravel', item->'travel',
+                            'cellNavigation', item->'navigation',
+                            'cellEncounter', item->'encounter',
+                            'cellSuppressesNavigationCheck', item->'suppressesNavigationCheck',
+                            'cellDeliberateDoubleBack', item->'deliberateDoubleBack'))
+                    FROM jsonb_array_elements(generated_resolutions_json) item)
                 WHERE id = @expedition;
                 """;
             downgrade.Parameters.AddWithValue("legacyWorld", world.Id);
@@ -145,10 +175,26 @@ public sealed class Phase20OneTimeStartupCutoverTests
         Assert.NotNull(preserved);
         Assert.Equal(knowledge.ScopeId, preserved!.Knowledge?.ScopeId);
         Assert.True(preserved.Knowledge!.PresentationPolicy!.MarkEnteredCellKnown);
+        var recoveredGrant = Assert.Single(preserved.GeneratedProcedureResolutions);
+        Assert.Equal(generatedId, recoveredGrant.Id);
+        Assert.Equal(GeneratedProcedureResolutionStatus.Consumed, recoveredGrant.Status);
+        Assert.Equal(3, recoveredGrant.ConsumedAtVersion);
+        Assert.Equal(42, recoveredGrant.ConsumedAuditSequence);
+        Assert.Equal(new DistanceMeasure(12, DistanceUnit.Miles),
+            recoveredGrant.Travel?.ExpectedDistance);
+        Assert.Equal(new DistanceMeasure(10, DistanceUnit.Miles),
+            recoveredGrant.Travel?.ActualDistance);
+        Assert.Equal(ResolutionSource.AutomaticRoll, recoveredGrant.Travel?.Provenance.Source);
+        Assert.Equal(false, recoveredGrant.SuppressesNavigationCheck);
+        Assert.Equal(true, recoveredGrant.DeliberateDoubleBack);
         await using var verifyKnowledge = connection.CreateCommand();
         verifyKnowledge.CommandText = """
             SELECT (knowledge_json->'presentationPolicy') ? 'markEnteredHexKnown',
-                   (knowledge_json->'presentationPolicy') ? 'markEnteredCellKnown'
+                   (knowledge_json->'presentationPolicy') ? 'markEnteredCellKnown',
+                   (generated_resolutions_json->0) ? 'cellTravel',
+                   (generated_resolutions_json->0) ? 'travel',
+                   (generated_resolutions_json->0) ? 'cellSuppressesNavigationCheck',
+                   (generated_resolutions_json->0) ? 'suppressesNavigationCheck'
             FROM expeditions WHERE id = @id;
             """;
         verifyKnowledge.Parameters.AddWithValue("id", expedition.Id);
@@ -156,6 +202,10 @@ public sealed class Phase20OneTimeStartupCutoverTests
         Assert.True(await knowledgeReader.ReadAsync());
         Assert.False(knowledgeReader.GetBoolean(0));
         Assert.True(knowledgeReader.GetBoolean(1));
+        Assert.False(knowledgeReader.GetBoolean(2));
+        Assert.True(knowledgeReader.GetBoolean(3));
+        Assert.False(knowledgeReader.GetBoolean(4));
+        Assert.True(knowledgeReader.GetBoolean(5));
     }
 
     [Fact]

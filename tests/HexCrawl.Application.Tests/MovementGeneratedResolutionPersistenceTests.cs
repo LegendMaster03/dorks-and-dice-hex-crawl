@@ -28,9 +28,9 @@ public sealed class MovementGeneratedResolutionPersistenceTests
             41,
             1,
             [],
-            new ProcedureResolvedTravel(
-                12,
-                10,
+            ResolvedTravelAmount.Distance(
+                new DistanceMeasure(12, DistanceUnit.Miles),
+                new DistanceMeasure(10, DistanceUnit.Miles),
                 new ResolutionProvenance(
                     ResolutionSource.ExternalSystem,
                     "Movement composition: participant=3 mi/hour; interval=4h; expected=12 mi.")),
@@ -79,8 +79,10 @@ public sealed class MovementGeneratedResolutionPersistenceTests
         Assert.Equal(3, resolution.ConsumedAtVersion);
         Assert.Equal(42, resolution.ConsumedAuditSequence);
         Assert.NotNull(resolution.Travel);
-        Assert.Equal(12, resolution.Travel!.ExpectedDistance);
-        Assert.Equal(10, resolution.Travel.ActualDistance);
+        Assert.Equal(new DistanceMeasure(12, DistanceUnit.Miles),
+            resolution.Travel!.ExpectedDistance);
+        Assert.Equal(new DistanceMeasure(10, DistanceUnit.Miles),
+            resolution.Travel.ActualDistance);
         Assert.Equal(ResolutionSource.ExternalSystem, resolution.Travel.Provenance.Source);
         Assert.Equal(
             "Movement composition: participant=3 mi/hour; interval=4h; expected=12 mi.",

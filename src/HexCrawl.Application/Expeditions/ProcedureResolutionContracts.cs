@@ -69,23 +69,6 @@ public sealed record ProcedureResolutionRoll(
     int Modifier,
     int Total);
 
-public sealed record ProcedureResolvedTravel(
-    double ExpectedDistance,
-    double ActualDistance,
-    ResolutionProvenance Provenance);
-
-public sealed record ProcedureResolvedNavigation(
-    NavigationCheckOutcome Outcome,
-    int? VeerSteps,
-    ResolutionProvenance Provenance);
-
-public sealed record ProcedureResolvedEncounter(
-    EncounterOutcomeKind Kind,
-    double? OccursAtHours,
-    Guid? LocationId,
-    string? Note,
-    ResolutionProvenance Provenance);
-
 public enum GeneratedProcedureResolutionStatus
 {
     Available,
@@ -101,31 +84,14 @@ public sealed record GeneratedProcedureResolution(
     long AuditSequence,
     int WatchNumber,
     IReadOnlyList<ProcedureResolutionRoll> Rolls,
-    ProcedureResolvedTravel? Travel,
-    ProcedureResolvedNavigation? Navigation,
-    ProcedureResolvedEncounter? Encounter,
+    ResolvedTravelAmount? Travel,
+    ResolvedCellNavigation? Navigation,
+    ResolvedEncounter? Encounter,
     GeneratedProcedureResolutionStatus Status,
     long? ConsumedAtVersion = null,
     long? ConsumedAuditSequence = null)
 {
-    // V2 grants are typed and must never be authorized by legacy scalar or
-    // hex-step fields in the positional V1 grant payload.
-    public ResolvedTravelAmount? CellTravel { get; init; }
-    public ResolvedCellNavigation? CellNavigation { get; init; }
-    public ResolvedEncounter? CellEncounter { get; init; }
-    // Bind the generated navigation result to the plan whose check policy
-    // produced it. Null marks older, non-V2 grants; these are never usable
-    // to authorize geometric automatic resolutions.
-    public bool? CellSuppressesNavigationCheck { get; init; }
-    public bool? CellDeliberateDoubleBack { get; init; }
+    // A missing policy binding must fail authorization, not default to false.
+    public bool? SuppressesNavigationCheck { get; init; }
+    public bool? DeliberateDoubleBack { get; init; }
 }
-
-public sealed record ProcedureResolutionHelperResult(
-    long ExpeditionVersion,
-    Guid? GeneratedResolutionId,
-    long? AuditSequence,
-    ProcedureResolvedTravel? Travel,
-    ProcedureResolvedNavigation? Navigation,
-    ProcedureResolvedEncounter? Encounter,
-    IReadOnlyList<ProcedureResolutionRoll> Rolls,
-    IReadOnlyList<string> Notes);

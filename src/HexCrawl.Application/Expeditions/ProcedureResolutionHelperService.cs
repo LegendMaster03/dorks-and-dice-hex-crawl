@@ -101,13 +101,11 @@ public sealed class ProcedureResolutionHelperService(
         retained.Add(new GeneratedProcedureResolution(
             id, expedition.Id, expedition.Version, generatedAtVersion, sequence,
             CurrentWatchNumber(state), audited.Rolls.ToArray(),
-            null, null, null, GeneratedProcedureResolutionStatus.Available)
+            audited.Travel, audited.Navigation, audited.Encounter,
+            GeneratedProcedureResolutionStatus.Available)
         {
-            CellTravel = audited.Travel,
-            CellNavigation = audited.Navigation,
-            CellEncounter = audited.Encounter,
-            CellSuppressesNavigationCheck = command.SuppressesNavigationCheck,
-            CellDeliberateDoubleBack = command.DeliberateDoubleBack
+            SuppressesNavigationCheck = command.SuppressesNavigationCheck,
+            DeliberateDoubleBack = command.DeliberateDoubleBack
         });
         var save = await store.SaveExpeditionAsync(
             expedition with
