@@ -500,7 +500,6 @@ if (stateName === "home") {
         const reachedDetails = atStep(2);
         root.dataset.guidedSetupTransitioned = String(couldAdvanceContext && reachedRules && reachedDetails);
         const abstractShown = !setup.querySelector("[data-abstract-context]").hidden
-            && !setup.querySelector("[data-spatial-start]").hidden
             && setup.querySelector("[data-nonspatial-context]").hidden;
         name.value = "Preserved expedition";
         scale.value = "6";
@@ -526,7 +525,6 @@ if (stateName === "home") {
         nextContext.click();
         nextRules.click();
         const worldShown = setup.querySelector("[data-abstract-context]").hidden
-            && !setup.querySelector("[data-spatial-start]").hidden
             && setup.querySelector("[data-nonspatial-context]").hidden;
         backRules.click();
         backContext.click();
@@ -535,7 +533,6 @@ if (stateName === "home") {
         nextContext.click();
         nextRules.click();
         const nonspatialShown = setup.querySelector("[data-abstract-context]").hidden
-            && setup.querySelector("[data-spatial-start]").hidden
             && !setup.querySelector("[data-nonspatial-context]").hidden;
         root.dataset.guidedSetupAllContexts = String(abstractShown && worldShown && nonspatialShown);
         backRules.click();
