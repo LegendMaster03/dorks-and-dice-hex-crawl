@@ -2142,7 +2142,10 @@ if (stateName === "course-change-reload") {
         "fresh client restored changed course");
 
     findButton("Resolve travel / watch")?.click();
-    await waitForRootText("Intended travel direction:");
+    await waitForCondition(
+        () => Boolean(root.querySelector('[data-phase15-drawer] input[name="headingX"]'))
+            && Boolean(root.querySelector('[data-phase15-drawer] input[name="headingY"]')),
+        "fresh client exposed the unified physical course form");
 } else if (stateName === "course-clear-reload") {
     const selectedEdge = root.querySelector('[data-adjacency-interface-id$=":1"]');
     if (!selectedEdge) throw new Error("Missing initially selected atomic interface.");
@@ -2320,9 +2323,25 @@ const shortReadableLedgerCells = Array.from(root.querySelectorAll(".hc-readable-
 const forcedTravelTarget = root.querySelector("[data-forced-travel-target]");
 const forcedTravelResolve = Array.from(root.querySelectorAll("button"))
     .find(button => button.textContent?.trim() === "Record forced-travel result");
+const reviewBoundary = root.getBoundingClientRect();
+const overflowingElements = Array.from(root.querySelectorAll("*")).flatMap(element => {
+    const rect = element.getBoundingClientRect();
+    if (rect.width <= 0 || rect.right <= reviewBoundary.right + 2) return [];
+    return [{
+        element: element.tagName.toLowerCase()
+            + [...element.classList].slice(0, 3).map(name => "." + name).join("")
+            + [...Object.keys(element.dataset)].slice(0, 2).map(name => "[" + name + "]").join(""),
+        right: Math.round(rect.right - reviewBoundary.left),
+        width: Math.round(rect.width),
+        scrollWidth: element.scrollWidth,
+        clientWidth: element.clientWidth,
+        text: (element.textContent || "").trim().slice(0, 48)
+    }];
+}).sort((a, b) => b.right - a.right).slice(0, 12);
 const metrics = {
     state: stateName,
     surface: "expedition",
+    overflowingElements,
     theme,
     viewportWidth: window.innerWidth,
     viewportHeight: window.innerHeight,
