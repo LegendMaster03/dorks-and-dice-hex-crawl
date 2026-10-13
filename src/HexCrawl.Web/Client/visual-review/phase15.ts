@@ -2184,7 +2184,7 @@ if (stateName === "course-change-reload") {
         const disclosure = root.querySelector("[data-movement]")?.closest("details");
         if (disclosure) disclosure.open = true;
     } else {
-        findStatAction("Movement")?.click();
+        (findStatAction("Movement") ?? findStatAction("Party"))?.click();
     }
     await waitForRootText("Movement composition contributors");
 } else if (["encounter-schedule", "encounter-schedule-day", "encounter-contextual-schedule"].includes(stateName)) {

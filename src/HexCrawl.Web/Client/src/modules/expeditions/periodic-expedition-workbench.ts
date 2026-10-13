@@ -906,7 +906,7 @@ export async function renderPeriodicExpeditionWorkbench(
         const cadenceLabel = cadence === "PerWatch" ? "Every watch"
             : cadence === "PerDay" ? "Every day" : "None";
         const humanize = (value: string): string =>
-            value.replace(/[-_]/g, " ").replace(/\\b\\w/g, letter => letter.toUpperCase());
+            value.replace(/[-_]/g, " ").replace(/\b\w/g, letter => letter.toUpperCase());
         const contextualLabel = contextualSchedule
             ? " Contextual schedule: "
                 + humanize(contextualSchedule.scheduleModel ?? "unspecified")

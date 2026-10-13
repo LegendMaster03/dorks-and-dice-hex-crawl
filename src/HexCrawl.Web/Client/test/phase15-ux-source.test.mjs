@@ -522,7 +522,7 @@ test("forced travel and pending consequences use focused survival workspaces", (
     assert.match(panel, /this\.focus === "pendingResourceConsequences"/);
 });
 
-test("rendered review exercises focused forced travel and navigator focus", () => {
+test("rendered review retains forced travel in the shared gameplay panel and navigator focus", () => {
     const capture = fs.readFileSync(
         path.join(sourceDir, "..", "visual-review", "capture-phase15.sh"),
         "utf8");
@@ -530,10 +530,9 @@ test("rendered review exercises focused forced travel and navigator focus", () =
         path.join(sourceDir, "..", "visual-review", "phase15.ts"),
         "utf8");
 
-    assert.match(capture, /"forced-travel-pending": "Forced travel"/);
-    assert.match(capture, /metrics\["drawerCount"\] != 1/);
     assert.match(capture, /forcedTravelPrimaryDomainFacing/);
-    assert.match(fixture, /findButton\("Resolve forced travel"\)\?\.click\(\)/);
+    assert.match(capture, /forcedTravelNamedTargetVisible/);
+    assert.match(fixture, /root\.querySelector\("\[data-gameplay-disclosure\]"\)/);
     assert.match(fixture, /focusedEdge:/);
 });
 
