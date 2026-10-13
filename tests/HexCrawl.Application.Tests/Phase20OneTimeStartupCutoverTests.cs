@@ -48,8 +48,9 @@ public sealed class Phase20OneTimeStartupCutoverTests
                     Id = Guid.NewGuid(),
                     Scope = new EnvironmentAnnotationScope
                     {
-                        Kind = EnvironmentAnnotationScopeKind.Hex,
-                        Hex = new HexCoordinate(2, -1)
+                        Kind = EnvironmentAnnotationScopeKind.Cell,
+                        Cell = new WorldCellId(grid.Id,
+                            new PeriodicCellAddress("hex", new LatticeDisplacement(2, -1)))
                     },
                     Facts = [fact]
                 }
@@ -65,7 +66,14 @@ public sealed class Phase20OneTimeStartupCutoverTests
             downgrade.CommandText = """
                 ALTER TABLE expeditions DROP CONSTRAINT ck_expeditions_runtime_v2_only;
                 UPDATE hex_crawl_schema_migrations SET version = 10 WHERE version = 11;
+                -- Recreate the persisted pre-cutover scope as raw archived JSON.
+                -- The current domain intentionally has no axial environment scope.
+                UPDATE overworlds SET world_json = jsonb_set(
+                    world_json, '{environmentAnnotations,0,scope}',
+                    '{"kind":"Hex","hex":{"q":2,"r":-1}}'::jsonb)
+                WHERE id = @legacyWorld;
                 """;
+            downgrade.Parameters.AddWithValue("legacyWorld", world.Id);
             await downgrade.ExecuteNonQueryAsync();
         }
 
