@@ -97,7 +97,7 @@ public sealed class EncounterHandoffEndpointsTests
             expedition = await finishResponse.Content.ReadFromJsonAsync<JsonElement>();
 
             var destination = await client.GetFromJsonAsync<JsonElement>(
-                $"/api/overworlds/{worldId:D}/cells/resolve?motifCellId=hex&u=1&v=0");
+                $"/api/overworlds/{worldId:D}/cells/resolve?motifCellId=face-0&u=1&v=0");
             var destinationId = destination.GetProperty("id");
             using var repositionResponse = await client.PostAsJsonAsync(
                 $"/api/expeditions/{expeditionId:D}/cells/reposition",
@@ -561,15 +561,17 @@ public sealed class EncounterHandoffEndpointsTests
 
     private static async Task<JsonElement> CreateWorldAsync(HttpClient client)
     {
-        using var response = await client.PostAsJsonAsync("/api/overworlds", new
+        using var response = await client.PostAsJsonAsync("/api/overworlds/periodic", new
         {
             name = "Encounter handoff world",
-            orientation = "PointyTop",
+            tilingDsSymbol = "<1:1,1,1:6,3>",
+            worldUnitsPerAbstractPeriod = 1d,
             origin = new { x = 0d, y = 0d },
-            rotationDegrees = 0d,
-            hexRadiusWorldUnits = 1d,
-            neighborCenterDistance = 12d,
-            distanceUnit = new { kind = "Mile", symbol = "mi", metersPerUnit = (double?)null }
+            physicalDistancePerWorldUnit = new
+            {
+                value = 12d,
+                unit = new { kind = "Mile", symbol = "mi", metersPerUnit = 1609.344 }
+            }
         });
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -589,7 +591,7 @@ public sealed class EncounterHandoffEndpointsTests
                 name,
                 presetKey = procedureKey,
                 presentationKey = "dm-controlled",
-                startCell = new { motifCellId = "hex", translation = new { u = (long)q, v = (long)r } }
+                startCell = new { motifCellId = "face-0", translation = new { u = (long)q, v = (long)r } }
             });
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<JsonElement>();
