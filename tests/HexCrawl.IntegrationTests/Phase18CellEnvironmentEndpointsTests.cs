@@ -109,7 +109,7 @@ public sealed class Phase18CellEnvironmentEndpointsTests
                 {
                     var scope = entry.GetProperty("scope");
                     Assert.Equal("Cell", scope.GetProperty("kind").GetString());
-                    Assert.Equal(JsonValueKind.Null, scope.GetProperty("hex").ValueKind);
+                    Assert.False(scope.TryGetProperty("hex", out _));
                     Assert.Equal(tiling.Id, scope.GetProperty("cell").GetProperty("tilingId").GetGuid());
                 });
 
