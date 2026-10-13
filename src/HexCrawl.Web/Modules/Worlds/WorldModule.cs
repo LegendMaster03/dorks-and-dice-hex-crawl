@@ -22,7 +22,6 @@ public sealed class WorldModule : IHexCrawlModule
     public void MapEndpoints(RouteGroupBuilder api)
     {
         api.MapGet("/overworlds", ListOverworldsAsync);
-        api.MapPost("/overworlds", CreateOverworldAsync);
         api.MapPost("/overworlds/periodic", CreatePeriodicOverworldAsync);
         api.MapPost("/overworlds/{overworldId:guid}/cell-procedures", CreateCellTravelProcedureAsync);
         api.MapGet("/overworlds/{overworldId:guid}/cell-procedures/compatibility", AssessCellProcedureAsync);
@@ -30,7 +29,6 @@ public sealed class WorldModule : IHexCrawlModule
         api.MapGet("/overworlds/{overworldId:guid}/cells/viewport", GetVisibleCellsAsync);
         api.MapGet("/overworlds/{overworldId:guid}/cells/containing", GetContainingCellsAsync);
         api.MapGet("/overworlds/{overworldId:guid}/cells/resolve", ResolveCellAsync);
-        api.MapPut("/overworlds/{overworldId:guid}", UpdateOverworldAsync);
         api.MapPut("/overworlds/{overworldId:guid}/name", RenameOverworldAsync);
         api.MapDelete("/overworlds/{overworldId:guid}", DeleteOverworldAsync);
 
@@ -48,18 +46,6 @@ public sealed class WorldModule : IHexCrawlModule
         HexCrawlService service,
         CancellationToken cancellationToken) =>
         Results.Ok(await service.ListOverworldsAsync(UserId(context), cancellationToken));
-
-    private static async Task<IResult> CreateOverworldAsync(
-        CreateOverworldRequest request,
-        HttpContext context,
-        HexCrawlService service,
-        CancellationToken cancellationToken) =>
-        Results.Created(
-            "/api/overworlds",
-            OverworldContract.From(await service.CreateOverworldAsync(
-                UserId(context),
-                request.ToCommand(),
-                cancellationToken)));
 
     // An image-independent, general authoring route. Unresolved harmonic
     // realizations fail closed rather than producing a fabricated grid.
@@ -361,18 +347,6 @@ public sealed class WorldModule : IHexCrawlModule
         HttpContext context, HexCrawlService service, CancellationToken cancellationToken) =>
         Results.Ok(OverworldContract.From(await service.RenameOverworldAsync(
             overworldId, UserId(context), request.Name, request.ExpectedVersion,
-            cancellationToken)));
-
-    private static async Task<IResult> UpdateOverworldAsync(
-        Guid overworldId,
-        UpdateOverworldRequest request,
-        HttpContext context,
-        HexCrawlService service,
-        CancellationToken cancellationToken) =>
-        Results.Ok(OverworldContract.From(await service.UpdateOverworldAsync(
-            overworldId,
-            UserId(context),
-            request.ToCommand(),
             cancellationToken)));
 
     private static async Task<IResult> DeleteOverworldAsync(

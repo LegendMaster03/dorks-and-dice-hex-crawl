@@ -19,10 +19,8 @@ test("Embedded Module mode routes persistent reads, writes, map upload, and map 
         const method = init.method ?? "GET";
         calls.push({ url, method, form: init.body instanceof FormData });
         if (url === "/tool-context") return Response.json(context);
-        if (url === "/tool-host/hex-crawl/api/upstream/api/overworlds") {
-            if (method === "POST") return Response.json({ id: "world-1", version: 1 });
-            return Response.json([]);
-        }
+        if (url === "/tool-host/hex-crawl/api/upstream/api/overworlds" && method === "GET") return Response.json([]);
+        if (url === "/tool-host/hex-crawl/api/upstream/api/overworlds/periodic" && method === "POST") return Response.json({ id: "world-1", version: 1 });
         if (url === "/tool-host/hex-crawl/api/upstream/api/overworlds/world-1/source-maps" && method === "POST") {
             return Response.json({ id: "world-1", version: 2, sourceMaps: [] });
         }
@@ -79,14 +77,14 @@ test("Embedded Module mode routes persistent reads, writes, map upload, and map 
         const { api, context: loadedContext } = await HexCrawlApi.create(root);
         assert.equal(loadedContext.toolSlug, "hex-crawl");
         assert.deepEqual(await api.listOverworlds(), []);
-        const created = await api.createOverworld({
+        const created = await api.createPeriodicOverworld({
             name: "Smoke world",
-            orientation: "PointyTop",
+            tilingDsSymbol: "<1:1,1,1:6,3>",
+            worldUnitsPerAbstractPeriod: 1,
             origin: { x: 0, y: 0 },
-            rotationDegrees: 0,
-            hexRadiusWorldUnits: 1,
-            neighborCenterDistance: 12,
-            distanceUnit: { kind: "Mile", symbol: "mi", metersPerUnit: 1609.344 }
+            physicalDistancePerWorldUnit: {
+                value: 12, unit: { kind: "Mile", symbol: "mi", metersPerUnit: 1609.344 }
+            }
         });
         assert.equal(created.id, "world-1");
 
@@ -129,7 +127,7 @@ test("Embedded Module mode routes persistent reads, writes, map upload, and map 
         assert.deepEqual(calls.map(call => ({ url: call.url, method: call.method })), [
             { url: "/tool-context", method: "GET" },
             { url: "/tool-host/hex-crawl/api/upstream/api/overworlds", method: "GET" },
-            { url: "/tool-host/hex-crawl/api/upstream/api/overworlds", method: "POST" },
+            { url: "/tool-host/hex-crawl/api/upstream/api/overworlds/periodic", method: "POST" },
             { url: "/tool-host/hex-crawl/api/upstream/api/overworlds/world-1/source-maps", method: "POST" },
             { url: "/tool-host/hex-crawl/api/upstream/api/overworlds/world-1/source-maps/wonderdraft/inspect", method: "POST" },
             { url: "/tool-host/hex-crawl/api/upstream/api/overworlds/world-1/source-maps/map-1/wonderdraft/candidates", method: "POST" },

@@ -114,30 +114,6 @@ public sealed record OverworldContract(
         world.World.SpatialTiling);
 }
 
-public sealed record CreateOverworldRequest(
-    string Name,
-    HexOrientation Orientation,
-    WorldPoint Origin,
-    double RotationDegrees,
-    double HexRadiusWorldUnits,
-    double NeighborCenterDistance,
-    DistanceUnitContract DistanceUnit)
-{
-    public CreateOverworldCommand ToCommand() => new(
-        Name,
-        Orientation,
-        Origin,
-        RotationDegrees,
-        HexRadiusWorldUnits,
-        NeighborCenterDistance,
-        DistanceUnit.ToDomain());
-}
-
-public sealed record UpdateOverworldRequest(string Name, GridContract Grid, long ExpectedVersion)
-{
-    public UpdateOverworldCommand ToCommand() => new(Name, Grid.ToDomain(), ExpectedVersion);
-}
-
 public sealed record LocationMutationRequest(
     string Name,
     string Category,

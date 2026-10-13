@@ -55,7 +55,7 @@ public sealed class ExpeditionWorkbenchEndpointsTests
                 name = "Configured expedition",
                 presetKey = "simple-fixed-distance",
                 presentationKey = "exploration-map",
-                startCell = new { motifCellId = "hex", translation = new { u = 3L, v = -2L } }
+                startCell = new { motifCellId = "face-0", translation = new { u = 3L, v = -2L } }
             });
             startResponse.EnsureSuccessStatusCode();
             var started = await startResponse.Content.ReadFromJsonAsync<JsonElement>();
@@ -68,7 +68,7 @@ public sealed class ExpeditionWorkbenchEndpointsTests
             Assert.Equal("None", procedure.GetProperty("runtime").GetProperty("encounterCadence").GetString());
             Assert.Equal("exploration-map", started.GetProperty("presentation").GetProperty("key").GetString());
             var knownCell = Assert.Single(started.GetProperty("knownCells").EnumerateArray());
-            Assert.Equal("hex", knownCell.GetProperty("address").GetProperty("motifCellId").GetString());
+            Assert.Equal("face-0", knownCell.GetProperty("address").GetProperty("motifCellId").GetString());
             Assert.Equal(3L, knownCell.GetProperty("address").GetProperty("translation").GetProperty("u").GetInt64());
             Assert.Equal(-2L, knownCell.GetProperty("address").GetProperty("translation").GetProperty("v").GetInt64());
             Assert.Equal(knownCell.GetRawText(),
@@ -103,14 +103,14 @@ public sealed class ExpeditionWorkbenchEndpointsTests
                         name = "Reposition cell expedition",
                         presetKey = "simple-fixed-distance",
                         presentationKey = "exploration-map",
-                        startCell = new { motifCellId = "hex", translation = new { u = 0L, v = 0L } }
+                        startCell = new { motifCellId = "face-0", translation = new { u = 0L, v = 0L } }
                     });
                 startResponse.EnsureSuccessStatusCode();
                 var started = await startResponse.Content.ReadFromJsonAsync<JsonElement>();
                 expeditionId = started.GetProperty("id").GetGuid();
 
                 var destination = await client.GetFromJsonAsync<JsonElement>(
-                    $"/api/overworlds/{worldId:D}/cells/resolve?motifCellId=hex&u=7&v=-4");
+                    $"/api/overworlds/{worldId:D}/cells/resolve?motifCellId=face-0&u=7&v=-4");
                 var cellId = destination.GetProperty("id");
                 targetCell = cellId.GetRawText();
                 using var moveResponse = await client.PostAsJsonAsync(
@@ -178,7 +178,7 @@ public sealed class ExpeditionWorkbenchEndpointsTests
                     name = "Procedure helper expedition",
                     presetKey = "alexandrian-advanced",
                     presentationKey = "exploration-map",
-                    startCell = new { motifCellId = "hex", translation = new { u = 0L, v = 0L } }
+                    startCell = new { motifCellId = "face-0", translation = new { u = 0L, v = 0L } }
                 });
                 startResponse.EnsureSuccessStatusCode();
                 var started = await startResponse.Content.ReadFromJsonAsync<JsonElement>();
@@ -253,7 +253,7 @@ public sealed class ExpeditionWorkbenchEndpointsTests
                     name,
                     presetKey = "simple-fixed-distance",
                     presentationKey = "dm-controlled",
-                    startCell = new { motifCellId = "hex", translation = new { u = 0L, v = 0L } }
+                    startCell = new { motifCellId = "face-0", translation = new { u = 0L, v = 0L } }
                 });
                 startResponse.EnsureSuccessStatusCode();
             }
@@ -720,7 +720,7 @@ public sealed class ExpeditionWorkbenchEndpointsTests
                         name = "Navigation aid persistence",
                         presetKey = "alexandrian-advanced",
                         presentationKey = "exploration-map",
-                        startCell = new { motifCellId = "hex", translation = new { u = 0L, v = 0L } }
+                        startCell = new { motifCellId = "face-0", translation = new { u = 0L, v = 0L } }
                     });
                 startedResponse.EnsureSuccessStatusCode();
                 var started = await startedResponse.Content.ReadFromJsonAsync<JsonElement>();
@@ -783,14 +783,17 @@ public sealed class ExpeditionWorkbenchEndpointsTests
 
     private static async Task<JsonElement> CreateWorld(HttpClient client)
     {
-        using var response = await client.PostAsJsonAsync("/api/overworlds", new
+        using var response = await client.PostAsJsonAsync("/api/overworlds/periodic", new
         {
             name = "Workbench API",
-                        origin = new { x = 0, y = 0 },
-            rotationDegrees = 0,
-            hexRadiusWorldUnits = 1,
-            neighborCenterDistance = 12,
-            distanceUnit = new { kind = "Mile", symbol = "mi", metersPerUnit = 1609.344 }
+            tilingDsSymbol = "<1:1,1,1:6,3>",
+            worldUnitsPerAbstractPeriod = 1.0,
+            origin = new { x = 0.0, y = 0.0 },
+            physicalDistancePerWorldUnit = new
+            {
+                value = 12.0,
+                unit = new { kind = "Mile", symbol = "mi", metersPerUnit = 1609.344 }
+            }
         });
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<JsonElement>();

@@ -12,9 +12,7 @@ import type {
     ExpeditionDetail,
     ExpeditionSummary,
     DistanceUnit,
-    GridDefinition,
     HexCoordinate,
-    HexOrientation,
     Location,
     Overworld,
     OverworldSummary,
@@ -79,16 +77,6 @@ export type SourceMapCompatibilityAssessment = {
             maximumResidualSourcePixels: number;
         }>;
     } | null;
-};
-
-export type CreateOverworldInput = {
-    name: string;
-    orientation: HexOrientation;
-    origin: WorldPoint;
-    rotationDegrees: number;
-    hexRadiusWorldUnits: number;
-    neighborCenterDistance: number;
-    distanceUnit: { kind: "Mile" | "Kilometer" | "Custom"; symbol: string; metersPerUnit: number | null };
 };
 
 export type LocationMutationInput = Omit<Location, "id"> & { expectedVersion: number };
@@ -247,17 +235,9 @@ export class HexCrawlApi {
         return this.sendJson("POST", "/api/overworlds/periodic", input, "Create periodic world");
     }
 
-    public createOverworld(input: CreateOverworldInput): Promise<Overworld> {
-        return this.sendJson("POST", "/api/overworlds", input, "Create overworld");
-    }
-
     public renameOverworld(id: string, name: string, expectedVersion: number): Promise<Overworld> {
         return this.sendJson("PUT", `/api/overworlds/${encodeURIComponent(id)}/name`,
             { name, expectedVersion }, "Rename overworld");
-    }
-
-    public updateOverworld(id: string, name: string, grid: GridDefinition, expectedVersion: number): Promise<Overworld> {
-        return this.sendJson("PUT", `/api/overworlds/${encodeURIComponent(id)}`, { name, grid, expectedVersion }, "Update overworld");
     }
 
     public getWorldEnvironment(id: string): Promise<WorldEnvironment> {

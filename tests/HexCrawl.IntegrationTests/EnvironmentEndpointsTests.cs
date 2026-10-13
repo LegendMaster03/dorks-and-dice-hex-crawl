@@ -28,7 +28,7 @@ public sealed class EnvironmentEndpointsTests
                     name = "Environment HTTP crawl",
                     presetKey = "alexandrian-advanced",
                     presentationKey = "dm-controlled",
-                    startCell = new { motifCellId = "hex", translation = new { u = 0L, v = 0L } }
+                    startCell = new { motifCellId = "face-0", translation = new { u = 0L, v = 0L } }
                 });
                 startResponse.EnsureSuccessStatusCode();
                 var expedition = await startResponse.Content.ReadFromJsonAsync<JsonElement>();
@@ -294,19 +294,16 @@ public sealed class EnvironmentEndpointsTests
 
     private static async Task<JsonElement> CreateWorldAsync(HttpClient client)
     {
-        using var response = await client.PostAsJsonAsync("/api/overworlds", new
+        using var response = await client.PostAsJsonAsync("/api/overworlds/periodic", new
         {
             name = "Environment HTTP world",
-            orientation = "PointyTop",
-            origin = new { x = 0, y = 0 },
-            rotationDegrees = 0,
-            hexRadiusWorldUnits = 1,
-            neighborCenterDistance = 12,
-            distanceUnit = new
+            tilingDsSymbol = "<1:1,1,1:6,3>",
+            worldUnitsPerAbstractPeriod = 1.0,
+            origin = new { x = 0.0, y = 0.0 },
+            physicalDistancePerWorldUnit = new
             {
-                kind = "Mile",
-                symbol = "mi",
-                metersPerUnit = 1609.344
+                value = 12.0,
+                unit = new { kind = "Mile", symbol = "mi", metersPerUnit = 1609.344 }
             }
         });
         response.EnsureSuccessStatusCode();
