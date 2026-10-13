@@ -65,17 +65,12 @@ public sealed class Phase18EnvironmentContextTests
     [Fact]
     public void QualifiedCellEnvironmentResolvesOnlyMatchingCellAnnotations()
     {
-        var grid = new HexGridDefinition
-        {
-            Id = Guid.NewGuid(),
-            HexRadiusWorldUnits = 1,
-            NeighborCenterDistance = new DistanceMeasure(6, DistanceUnit.Miles)
-        };
-        var cell = new WorldCellId(grid.Id,
-            new PeriodicCellAddress(LegacyHexTilingCompatibility.MotifId, new LatticeDisplacement(0, 0)));
+        var tiling = MaplessSessionFixture.Start().World;
+        var cell = new WorldCellId(tiling.Id,
+            new PeriodicCellAddress(tiling.Topology.MotifCells[0].Id, new LatticeDisplacement(0, 0)));
         var world = new OverworldDefinition
         {
-            Id = Guid.NewGuid(), Name = "Legacy cell annotations", Grid = grid,
+            Id = Guid.NewGuid(), Name = "Qualified cell annotations", Tiling = tiling,
             EnvironmentAnnotations =
             [
                 Annotation(

@@ -1,7 +1,4 @@
-export type HexOrientation = "PointyTop" | "FlatTop";
-export type HexCoordinateConvention = "AxialQr";
 export type WorldPoint = { x: number; y: number };
-export type HexCoordinate = { q: number; r: number };
 
 /** Phase 18: a cell address is qualified by the tiling, not an axial hex. */
 export type PeriodicCellAddress = {
@@ -55,16 +52,6 @@ export type DistanceUnit = {
 };
 
 export type DistanceValue = { value: number; unit: DistanceUnit };
-
-export type GridDefinition = {
-    id: string;
-    orientation: HexOrientation;
-    coordinateConvention: HexCoordinateConvention;
-    origin: WorldPoint;
-    rotationDegrees: number;
-    hexRadiusWorldUnits: number;
-    neighborCenterDistance: DistanceValue;
-};
 
 export type SpatialFeature = {
     id: string;
@@ -160,9 +147,8 @@ export type Overworld = {
     version: number;
     createdAt: string;
     updatedAt: string;
-    grid: GridDefinition | null;
     /** Authoritative world topology/metric witness remains on the server. */
-    tiling: PeriodicWorldTiling | null;
+    tiling: PeriodicWorldTiling;
     features: SpatialFeature[];
     locations: Location[];
     sourceMaps: SourceMapRepresentation[];

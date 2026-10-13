@@ -18,49 +18,6 @@ public sealed partial class HexCrawlService
         await _store.GetOverworldAsync(overworldId, RequireUser(ownerUserId), cancellationToken)
         ?? throw new HexCrawlNotFoundException("Overworld was not found.");
 
-    public async Task<StoredOverworld> CreateOverworldAsync(
-        string ownerUserId,
-        CreateOverworldCommand command,
-        CancellationToken cancellationToken = default)
-    {
-        var owner = RequireUser(ownerUserId);
-        var name = RequiredText(command.Name, "Overworld name");
-        ValidatePoint(command.Origin, "Grid origin");
-        if (command.NeighborCenterDistance <= 0 || !double.IsFinite(command.NeighborCenterDistance))
-        {
-            throw new ArgumentOutOfRangeException(nameof(command.NeighborCenterDistance), "Grid scale must be finite and positive.");
-        }
-
-        var grid = new HexGridDefinition
-        {
-            Id = Guid.NewGuid(),
-            Orientation = command.Orientation,
-            Origin = command.Origin,
-            RotationDegrees = command.RotationDegrees,
-            HexRadiusWorldUnits = command.HexRadiusWorldUnits,
-            NeighborCenterDistance = new DistanceMeasure(command.NeighborCenterDistance, command.DistanceUnit)
-        };
-        grid.Validate();
-
-        var now = DateTimeOffset.UtcNow;
-        return await _store.CreateOverworldAsync(new StoredOverworld(
-            new OverworldDefinition
-            {
-                Id = Guid.NewGuid(),
-                Name = name,
-                Grid = grid
-            },
-            owner,
-            1,
-            now,
-            now), cancellationToken);
-    }
-
-
-    /// <summary>
-    /// Phase 17 internal authoring entry point. No public HTTP creation route is
-    /// exposed while the Phase 18 movement and Phase 19 rendering gates remain.
-    /// </summary>
     public async Task<StoredOverworld> CreatePeriodicOverworldAsync(
         string ownerUserId,
         string name,
@@ -83,8 +40,6 @@ public sealed partial class HexCrawlService
             world, owner, 1, now, now), cancellationToken);
     }
 
-    // Metadata-only update uses the same owner and expected-version boundary;
-    // it does not reinterpret any legacy or generalized cell identities.
     public async Task<StoredOverworld> RenameOverworldAsync(
         Guid overworldId, string ownerUserId, string name, long expectedVersion,
         CancellationToken cancellationToken = default)
@@ -96,39 +51,6 @@ public sealed partial class HexCrawlService
             World = current.World with { Name = RequiredText(name, "Overworld name") }
         };
         return await SaveWorldAsync(updated, expectedVersion, cancellationToken);
-    }
-
-    public async Task<StoredOverworld> UpdateOverworldAsync(
-        Guid overworldId,
-        string ownerUserId,
-        UpdateOverworldCommand command,
-        CancellationToken cancellationToken = default)
-    {
-        var current = await GetOverworldAsync(overworldId, ownerUserId, cancellationToken);
-        RequireVersion(command.ExpectedVersion, current.Version);
-        var name = RequiredText(command.Name, "Overworld name");
-        command.Grid.Validate();
-        if (command.Grid.Id != current.World.Grid.Id)
-        {
-            throw new InvalidOperationException("Grid identity can not be replaced during an overworld update.");
-        }
-
-        if (command.Grid != current.World.Grid
-            && await _store.HasExpeditionsAsync(overworldId, current.OwnerUserId, cancellationToken))
-        {
-            throw new HexCrawlConflictException("Grid geometry can not be changed after an expedition has been created for this overworld.");
-        }
-
-        var newTiling = LegacyHexTilingCompatibility.Create(command.Grid) with
-        {
-            Revision = current.World.SpatialTiling.Revision +
-                (command.Grid == current.World.Grid ? 0 : 1)
-        };
-        var updated = current with
-        {
-            World = current.World with { Name = name, Grid = command.Grid, Tiling = newTiling }
-        };
-        return await SaveWorldAsync(updated, command.ExpectedVersion, cancellationToken);
     }
 
     public async Task<StoredOverworld> DeleteOverworldAsync(

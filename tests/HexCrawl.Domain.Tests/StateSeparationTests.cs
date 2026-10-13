@@ -52,14 +52,19 @@ public sealed class StateSeparationTests
         Assert.Single(knowledge.Annotations);
     }
 
-    private static OverworldDefinition CreateWorld() => new()
+    private static OverworldDefinition CreateWorld()
     {
-        Id = Guid.NewGuid(),
-        Name = "State separation",
-        Grid = new HexGridDefinition
+        var realized = DelaneyDressHarmonicMetricRealization.Construct(
+            "<1:1,1,1:6,3>", 1, "world-unit");
+        Assert.Equal("realized", realized.Status);
+        return new OverworldDefinition
         {
             Id = Guid.NewGuid(),
-            NeighborCenterDistance = new DistanceMeasure(6, DistanceUnit.Miles)
-        }
-    };
+            Name = "State separation",
+            Tiling = new PeriodicWorldTiling(
+                Guid.NewGuid(), realized.Topology!, realized.Realization!,
+                new WorldPoint(0, 0),
+                PhysicalDistancePerWorldUnit: new DistanceMeasure(6, DistanceUnit.Miles))
+        };
+    }
 }

@@ -139,22 +139,14 @@ public sealed class EnvironmentPersistenceTests
     {
         Id = Guid.NewGuid(),
         Name = "Environment persistence world",
-        Grid = new HexGridDefinition
-        {
-            Id = Guid.NewGuid(),
-            Orientation = HexOrientation.PointyTop,
-            Origin = new WorldPoint(0, 0),
-            RotationDegrees = 0,
-            HexRadiusWorldUnits = 1,
-            NeighborCenterDistance = new DistanceMeasure(12, DistanceUnit.Miles)
-        }
+        Tiling = MaplessSessionFixture.Start().World
     };
 
     private static StoredExpedition Expedition(OverworldDefinition world)
     {
         var now = DateTimeOffset.UtcNow;
-        var cell = world.SpatialTiling.Resolve(
-            LegacyHexTilingCompatibility.ToAddress(new HexCoordinate(0, 0)));
+        var cell = world.SpatialTiling.Resolve(new PeriodicCellAddress(
+            world.SpatialTiling.Topology.MotifCells[0].Id, new LatticeDisplacement(0, 0)));
         return new StoredExpedition(
             "Environment persistence expedition",
             new CellExpeditionState

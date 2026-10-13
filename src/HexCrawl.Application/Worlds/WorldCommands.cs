@@ -3,20 +3,6 @@ using HexCrawl.Domain.World;
 
 namespace HexCrawl.Application;
 
-public sealed record CreateOverworldCommand(
-    string Name,
-    HexOrientation Orientation,
-    WorldPoint Origin,
-    double RotationDegrees,
-    double HexRadiusWorldUnits,
-    double NeighborCenterDistance,
-    DistanceUnit DistanceUnit);
-
-public sealed record UpdateOverworldCommand(
-    string Name,
-    HexGridDefinition Grid,
-    long ExpectedVersion);
-
 public sealed record CreateLocationCommand(
     string Name,
     string Category,

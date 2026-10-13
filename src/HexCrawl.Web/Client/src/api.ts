@@ -12,7 +12,6 @@ import type {
     ExpeditionDetail,
     ExpeditionSummary,
     DistanceUnit,
-    HexCoordinate,
     Location,
     Overworld,
     OverworldSummary,

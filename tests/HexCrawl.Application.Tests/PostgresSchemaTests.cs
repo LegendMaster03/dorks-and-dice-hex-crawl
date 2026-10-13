@@ -169,15 +169,7 @@ public sealed class PostgresSchemaTests
         {
             Id = worldId,
             Name = "Large representative PostgreSQL snapshot",
-            Grid = new HexGridDefinition
-            {
-                Id = Guid.NewGuid(),
-                Orientation = HexOrientation.PointyTop,
-                Origin = new WorldPoint(0, 0),
-                RotationDegrees = 0,
-                HexRadiusWorldUnits = 1,
-                NeighborCenterDistance = new DistanceMeasure(12, DistanceUnit.Miles)
-            },
+            Tiling = MaplessSessionFixture.Start().World,
             Locations = locations
         };
         var now = DateTimeOffset.UtcNow;
