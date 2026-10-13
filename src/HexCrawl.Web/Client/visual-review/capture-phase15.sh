@@ -145,6 +145,8 @@ raw = html.unescape(match.group(1)).strip()
 if not raw:
     raise SystemExit("visual review metrics were empty before the fixture finished")
 metrics = json.loads(raw)
+if "fixtureError" in metrics:
+    raise SystemExit(f'Visual-review fixture initialization failed: {metrics["fixtureError"]}')
 case_name = sys.argv[3]
 requested_window_width = int(sys.argv[4])
 requested_container_width = int(sys.argv[5]) if sys.argv[5] else None
