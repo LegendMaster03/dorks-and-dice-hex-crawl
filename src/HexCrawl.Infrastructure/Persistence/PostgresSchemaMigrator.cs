@@ -5,7 +5,7 @@ namespace HexCrawl.Infrastructure.Persistence;
 
 public sealed class PostgresSchemaMigrator(string connectionString)
 {
-    public const int CurrentVersion = 11;
+    public const int CurrentVersion = 12;
     private const long MigrationLockKey = 0x484558435241574C;
     public async Task MigrateAsync(CancellationToken cancellationToken = default)
     {
@@ -40,13 +40,9 @@ public sealed class PostgresSchemaMigrator(string connectionString)
                 await ApplyCurrentSchemaAsync(connection, transaction, cancellationToken);
                 current = CurrentVersion;
             }
-            // TEMPORARY, ONE-DEPLOYMENT UPGRADE: retire schema-10 V1 spatial
-            // session records. Remove UpgradeFrom10Async after the development
-            // environment reaches schema 11. Keep CurrentVersion and the
-            // V2-only constraint in place on later deployments.
-            if (current == 10)
+            if (current == 11)
             {
-                await UpgradeFrom10Async(connection, transaction, cancellationToken);
+                await UpgradeFrom11Async(connection, transaction, cancellationToken);
                 current = CurrentVersion;
             }
             if (current != CurrentVersion)
@@ -76,55 +72,22 @@ public sealed class PostgresSchemaMigrator(string connectionString)
     }
 
     /// <summary>
-    /// Temporary schema 10 → 11 dev/test cutover. Historic V1 partial progress
-    /// cannot be reconstructed as an exact geometric cursor. Remove those
-    /// short-lived session records rather than fabricating coordinates or
-    /// retaining a second runtime. Authored worlds are converted; map assets,\n    /// world ownership and procedure revisions are not changed.
-    /// The entire change commits or rolls back atomically.
+    /// One-time schema-11 authored-world cutover. This transactional
+    /// migration is not a selectable runtime implementation. All worlds
+    /// must be convertible before updating the schema marker.
     /// </summary>
-    private static async Task UpgradeFrom10Async(
+    private static async Task UpgradeFrom11Async(
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,
         CancellationToken cancellationToken)
     {
-        // Do not silently delete unexpected future or malformed runtime kinds.
-        await using (var preflight = connection.CreateCommand())
-        {
-            preflight.Transaction = transaction;
-            preflight.CommandText = """
-                SELECT count(*) FROM expeditions
-                WHERE jsonb_typeof(state_json) IS DISTINCT FROM 'object'
-                   -- Absence is a supported old V1 discriminator default,
-                   -- but an explicitly null discriminator is malformed.
-                   OR (state_json ? 'kind' AND state_json->>'kind' IS NULL)
-                   OR COALESCE(state_json->>'kind', 'Spatial')
-                      NOT IN ('Spatial', 'CellSpatial', 'NonSpatial');
-                """;
-            var unknown = Convert.ToInt64(await preflight.ExecuteScalarAsync(cancellationToken));
-            if (unknown > 0)
-                throw new InvalidOperationException(
-                    $"Phase 20.2 found {unknown} unknown runtime snapshots. " +
-                    "No tester records were changed; inspect them before upgrading.");
-        }
-
-        // Authored worlds, assets and per-cell facts are preserved through
-        // a verified geometry conversion before disposable V1 sessions go.
-        await PostgresLegacyWorldCutover.ConvertAsync(
-            connection, transaction, cancellationToken);
-
+        await PostgresLegacyWorldCutover.ConvertAsync(connection, transaction, cancellationToken);
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
         command.CommandText = """
-            -- V1 expedition event rows cascade through the existing FK.
-            -- V2 CellSpatial and NonSpatial sessions and all unrelated tables
-            -- remain unmodified. No backup/archive runtime is introduced.
-            DELETE FROM expeditions
-            WHERE COALESCE(state_json->>'kind', 'Spatial') = 'Spatial';
-
             ALTER TABLE expeditions
-                ADD CONSTRAINT ck_expeditions_runtime_v2_only
-                CHECK (COALESCE(jsonb_typeof(state_json) = 'object'
-                   AND state_json->>'kind' IN ('CellSpatial', 'NonSpatial'), false));
+                RENAME CONSTRAINT ck_expeditions_runtime_v2_only
+                TO ck_expeditions_runtime_kind;
 
             INSERT INTO hex_crawl_schema_migrations(version, applied_at)
             VALUES (@version, now());
@@ -190,7 +153,7 @@ public sealed class PostgresSchemaMigrator(string connectionString)
                 updated_at timestamptz NOT NULL,
                 CONSTRAINT fk_expeditions_overworld
                     FOREIGN KEY(overworld_id) REFERENCES overworlds(id) ON DELETE RESTRICT,
-                CONSTRAINT ck_expeditions_runtime_v2_only
+                CONSTRAINT ck_expeditions_runtime_kind
                     CHECK (COALESCE(jsonb_typeof(state_json) = 'object'
                        AND state_json->>'kind' IN ('CellSpatial', 'NonSpatial'), false))
             );

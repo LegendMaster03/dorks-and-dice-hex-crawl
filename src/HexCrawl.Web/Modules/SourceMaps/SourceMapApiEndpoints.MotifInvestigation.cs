@@ -40,10 +40,7 @@ public static partial class SourceMapApiEndpoints
         var blockers = CorrectionBlockers(stored, expeditions);
         var assessment = Phase19TilingCompatibility.Assess(
             stored.World.SpatialTiling, analyzed.Value, procedure, blockers, stored.Version);
-        return Results.Ok(stored.World.HasLegacyHexGrid
-            ? assessment with {
-                Registration = null, Correction = null, CanCorrectInPlace = false
-              } : assessment);
+        return Results.Ok(assessment);
     }
 
     private static IReadOnlyList<string> CorrectionBlockers(
@@ -96,9 +93,6 @@ public static partial class SourceMapApiEndpoints
         if (world.Version != request.ExpectedVersion)
             throw new HexCrawlConcurrencyException(
                 "The world changed while its replacement cells were being reviewed. Reload and check the image again.");
-        if (world.World.HasLegacyHexGrid)
-            throw new NotSupportedException(
-                "The legacy hex world uses its existing image-alignment workflow.");
         var observed = await InvestigateMotifAsync(overworldId, sourceMapId,
             context, sourceMaps, assets, surveyor, cancellationToken);
         if (observed is not Ok<PeriodicMotifInvestigation> analyzed
@@ -152,9 +146,6 @@ public static partial class SourceMapApiEndpoints
         if (request.ExpectedVersion != world.Version)
             throw new HexCrawlConcurrencyException(
                 "The world changed while the detected map placement was being reviewed. Reload and check it again.");
-        if (world.World.HasLegacyHexGrid)
-            throw new NotSupportedException(
-                "Use the existing hex-grid alignment or manual placement for this world.");
         if (request.Alignment is null)
             throw new ArgumentException("A selected verified map placement is required.");
 
