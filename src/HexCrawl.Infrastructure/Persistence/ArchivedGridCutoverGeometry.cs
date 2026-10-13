@@ -1,22 +1,120 @@
+// One-time schema-11 authored-world conversion support.
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.CompilerServices;
+// The archived axial format is never accepted by the runtime world model,
+// endpoints, session context, or ordinary snapshot serialization.
+using HexCrawl.Domain.Spatial;
 
-namespace HexCrawl.Domain.Spatial;
+namespace HexCrawl.Infrastructure.Persistence;
+
+internal readonly record struct ArchivedAxialCoordinate(int Q, int R)
+{
+    public override string ToString() => $"{Q},{R}";
+}
+
+internal enum ArchivedOrientation
+{
+    PointyTop,
+    FlatTop
+}
+
+internal enum ArchivedCoordinateConvention
+{
+    AxialQr
+}
+
+internal sealed record ArchivedGridDefinition
+{
+    public required Guid Id { get; init; }
+    public ArchivedOrientation Orientation { get; init; } = ArchivedOrientation.PointyTop;
+    public ArchivedCoordinateConvention CoordinateConvention { get; init; } = ArchivedCoordinateConvention.AxialQr;
+    public WorldPoint Origin { get; init; } = new(0, 0);
+    public double RotationDegrees { get; init; }
+    public double HexRadiusWorldUnits { get; init; } = 1;
+    public required DistanceMeasure NeighborCenterDistance { get; init; }
+
+    public void Validate()
+    {
+        if (Id == Guid.Empty)
+        {
+            throw new InvalidOperationException("Grid identity must be stable and non-empty.");
+        }
+
+        if (HexRadiusWorldUnits <= 0 || double.IsNaN(HexRadiusWorldUnits) || double.IsInfinity(HexRadiusWorldUnits))
+        {
+            throw new InvalidOperationException("Hex radius must be finite and positive.");
+        }
+
+        if (CoordinateConvention != ArchivedCoordinateConvention.AxialQr)
+        {
+            throw new NotSupportedException($"Coordinate convention {CoordinateConvention} is not implemented.");
+        }
+    }
+}
+
+internal static class ArchivedHexGeometry
+{
+    private const double Sqrt3 = 1.7320508075688772935;
+
+    public static WorldPoint HexToWorld(ArchivedGridDefinition grid, ArchivedAxialCoordinate hex)
+    {
+        grid.Validate();
+        var radius = grid.HexRadiusWorldUnits;
+
+        var local = grid.Orientation switch
+        {
+            ArchivedOrientation.PointyTop => new WorldPoint(
+                radius * Sqrt3 * (hex.Q + (hex.R / 2d)),
+                radius * 1.5d * hex.R),
+            ArchivedOrientation.FlatTop => new WorldPoint(
+                radius * 1.5d * hex.Q,
+                radius * Sqrt3 * (hex.R + (hex.Q / 2d))),
+            _ => throw new ArgumentOutOfRangeException(nameof(grid.Orientation))
+        };
+
+        return Rotate(local, grid.RotationDegrees) + grid.Origin;
+    }
+
+    public static IReadOnlyList<WorldPoint> Corners(ArchivedGridDefinition grid, ArchivedAxialCoordinate hex)
+    {
+        var center = HexToWorld(grid, hex);
+        var startAngle = grid.Orientation == ArchivedOrientation.PointyTop ? -30d : 0d;
+        var corners = new WorldPoint[6];
+
+        for (var i = 0; i < 6; i++)
+        {
+            var angle = DegreesToRadians(startAngle + (60d * i) + grid.RotationDegrees);
+            corners[i] = new WorldPoint(
+                center.X + (grid.HexRadiusWorldUnits * Math.Cos(angle)),
+                center.Y + (grid.HexRadiusWorldUnits * Math.Sin(angle)));
+        }
+
+        return corners;
+    }
+
+    private static WorldPoint Rotate(WorldPoint point, double degrees)
+    {
+        if (degrees == 0)
+        {
+            return point;
+        }
+
+        var radians = DegreesToRadians(degrees);
+        var cos = Math.Cos(radians);
+        var sin = Math.Sin(radians);
+        return new WorldPoint((point.X * cos) - (point.Y * sin), (point.X * sin) + (point.Y * cos));
+    }
+
+    private static double DegreesToRadians(double degrees) => degrees * Math.PI / 180d;
+}
 
 /// <summary>
-/// Phase 17 compatibility bridge. Axial (Q,R) maps bijectively to the single
-/// hex motif's (U,V), without changing the existing grid UUID, world pose,
-/// distance units, direction ordering or saved HexId representation.
-/// The bridge is temporary until Phase 18 accepts boundary-based movement.
+/// Reconstructs archived grid geometry only inside the transactional
+/// authored-world migration. No runtime path selects or executes this format.
 /// </summary>
-public static class LegacyHexTilingCompatibility
+internal static class ArchivedGridCutoverGeometry
 {
-    private static readonly ConditionalWeakTable<HexGridDefinition, PeriodicWorldTiling> Cached = new();
-    public static PeriodicWorldTiling FromGrid(HexGridDefinition grid) =>
-        Cached.GetValue(grid, Create);
-
     public const string MotifId = "hex";
     public const string HexQuotient = "<1:1,1,1:6,3>";
 
@@ -26,24 +124,15 @@ public static class LegacyHexTilingCompatibility
         new(-1, 0), new(0, -1), new(1, -1)
     ];
 
-    public static PeriodicCellAddress ToAddress(HexCoordinate hex) =>
+    public static PeriodicCellAddress ToAddress(ArchivedAxialCoordinate hex) =>
         new(MotifId, new LatticeDisplacement(hex.Q, hex.R));
 
-    public static HexCoordinate ToHex(PeriodicCellAddress address)
-    {
-        if (!string.Equals(address.MotifCellId, MotifId, StringComparison.Ordinal)
-            || address.Translation.U < int.MinValue || address.Translation.U > int.MaxValue
-            || address.Translation.V < int.MinValue || address.Translation.V > int.MaxValue)
-            throw new ArgumentOutOfRangeException(nameof(address), "Not a legacy axial hex cell address.");
-        return new HexCoordinate((int)address.Translation.U, (int)address.Translation.V);
-    }
-
-    /// <summary>Legacy grid is a verified compatibility projection, never a second editable authority.</summary>
-    public static bool Matches(PeriodicWorldTiling authoritative, HexGridDefinition grid)
+    /// <summary>Verify that a separately stored archived metric agrees with its archived grid definition.</summary>
+    public static bool Matches(PeriodicWorldTiling authoritative, ArchivedGridDefinition grid)
     {
         if (authoritative.Id != grid.Id || authoritative.Revision < 1)
             return false;
-        var projection = FromGrid(grid);
+        var projection = Create(grid);
         if (authoritative.Topology.QuotientDsSymbol != projection.Topology.QuotientDsSymbol
             || authoritative.Topology.TranslationDsSymbol != projection.Topology.TranslationDsSymbol
             || authoritative.Topology.MotifCells.Count != projection.Topology.MotifCells.Count
@@ -76,7 +165,7 @@ public static class LegacyHexTilingCompatibility
         return true;
     }
 
-    public static PeriodicWorldTiling Create(HexGridDefinition grid)
+    public static PeriodicWorldTiling Create(ArchivedGridDefinition grid)
     {
         ArgumentNullException.ThrowIfNull(grid);
         grid.Validate();
@@ -105,9 +194,9 @@ public static class LegacyHexTilingCompatibility
         // digits and can invalidate otherwise legitimate rotated hex grids.
         // The original origin remains the authoritative separate world pose.
         var localGrid = grid with { Origin = new WorldPoint(0, 0) };
-        var translationU = HexGeometry.HexToWorld(localGrid, new HexCoordinate(1, 0));
-        var translationV = HexGeometry.HexToWorld(localGrid, new HexCoordinate(0, 1));
-        var corners = HexGeometry.Corners(localGrid, new HexCoordinate(0, 0))
+        var translationU = ArchivedHexGeometry.HexToWorld(localGrid, new ArchivedAxialCoordinate(1, 0));
+        var translationV = ArchivedHexGeometry.HexToWorld(localGrid, new ArchivedAxialCoordinate(0, 1));
+        var corners = ArchivedHexGeometry.Corners(localGrid, new ArchivedAxialCoordinate(0, 0))
             .Select(p => new TilingWorldPoint(p.X, p.Y)).ToArray();
         // Coordinates must remain in the original world/map space. The
         // neighbor-center distance is an independent physical calibration;

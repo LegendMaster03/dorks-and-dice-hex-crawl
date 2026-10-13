@@ -68,15 +68,15 @@ internal static class PostgresLegacyWorldCutover
         {
             if (version == 3)
                 throw new InvalidDataException("A converted world still contains a legacy grid.");
-            var grid = gridNode.Deserialize<HexGridDefinition>(Json)
+            var grid = gridNode.Deserialize<ArchivedGridDefinition>(Json)
                 ?? throw new InvalidDataException("The authored grid was not readable.");
             grid.Validate();
-            tiling = LegacyHexTilingCompatibility.Create(grid);
+            tiling = ArchivedGridCutoverGeometry.Create(grid);
             if (tilingNode is not null)
             {
                 var recorded = tilingNode.Deserialize<PeriodicWorldTiling>(Json)
                     ?? throw new InvalidDataException("Authored periodic geometry is missing.");
-                if (!LegacyHexTilingCompatibility.Matches(recorded, grid))
+                if (!ArchivedGridCutoverGeometry.Matches(recorded, grid))
                     throw new InvalidDataException(
                         "Original grid and retained periodic geometry disagree; world preserved.");
                 tiling = recorded;
@@ -104,8 +104,8 @@ internal static class PostgresLegacyWorldCutover
             {
                 if (gridNode is null || scope["hex"] is not JsonObject coordinates)
                     throw new InvalidDataException("Axial environment scope has no originating grid.");
-                var hex = coordinates.Deserialize<HexCoordinate>(Json);
-                var address = LegacyHexTilingCompatibility.ToAddress(hex);
+                var hex = coordinates.Deserialize<ArchivedAxialCoordinate>(Json);
+                var address = ArchivedGridCutoverGeometry.ToAddress(hex);
                 tiling.Resolve(address);
                 scope["kind"] = "Cell";
                 scope["cell"] = JsonSerializer.SerializeToNode(

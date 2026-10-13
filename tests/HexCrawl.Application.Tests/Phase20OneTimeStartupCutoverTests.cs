@@ -16,12 +16,7 @@ public sealed class Phase20OneTimeStartupCutoverTests
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = new PostgresHexCrawlStore(database.ConnectionString);
         await store.InitializeAsync();
-        var grid = new HexGridDefinition
-        {
-            Id = Guid.NewGuid(),
-            HexRadiusWorldUnits = 2,
-            NeighborCenterDistance = new DistanceMeasure(6, DistanceUnit.Miles)
-        };
+        var gridId = Guid.NewGuid();
         var feature = new PointFeature(Guid.NewGuid(), "Ancient tower", "structure",
             new WorldPoint(14, -7));
         var fact = new EnvironmentFact
@@ -40,7 +35,7 @@ public sealed class Phase20OneTimeStartupCutoverTests
         var world = new OverworldDefinition
         {
             Id = Guid.NewGuid(), Name = "Persisted authored world",
-            Tiling = LegacyHexTilingCompatibility.Create(grid),
+            Tiling = CurrentPeriodicFixture(),
             Features = [feature],
             SourceMaps = [map],
             EnvironmentAnnotations =
@@ -50,9 +45,7 @@ public sealed class Phase20OneTimeStartupCutoverTests
                     Id = Guid.NewGuid(),
                     Scope = new EnvironmentAnnotationScope
                     {
-                        Kind = EnvironmentAnnotationScopeKind.Cell,
-                        Cell = new WorldCellId(grid.Id,
-                            new PeriodicCellAddress("hex", new LatticeDisplacement(2, -1)))
+                        Kind = EnvironmentAnnotationScopeKind.World
                     },
                     Facts = [fact]
                 }
@@ -72,14 +65,14 @@ public sealed class Phase20OneTimeStartupCutoverTests
                 -- The current domain intentionally has no axial environment scope.
                 UPDATE overworlds SET world_json = jsonb_set(
                     jsonb_set(
-                        jsonb_set(world_json, '{grid}', @archivedGrid::jsonb),
-                        '{formatVersion}', '2'::jsonb),
+                        jsonb_set(world_json - 'tiling', '{grid}', @archivedGrid::jsonb),
+                        '{formatVersion}', '1'::jsonb),
                     '{environmentAnnotations,0,scope}',
                     '{"kind":"Hex","hex":{"q":2,"r":-1}}'::jsonb)
                 WHERE id = @legacyWorld;
                 """;
             downgrade.Parameters.AddWithValue("legacyWorld", world.Id);
-            downgrade.Parameters.AddWithValue("archivedGrid", NpgsqlTypes.NpgsqlDbType.Jsonb, ArchivedGridJson(grid));
+            downgrade.Parameters.AddWithValue("archivedGrid", NpgsqlTypes.NpgsqlDbType.Jsonb, ArchivedGridJson(gridId, 2, 6));
             await downgrade.ExecuteNonQueryAsync();
         }
 
@@ -103,7 +96,7 @@ public sealed class Phase20OneTimeStartupCutoverTests
             var scope = root.GetProperty("environmentAnnotations")[0].GetProperty("scope");
             Assert.Equal("Cell", scope.GetProperty("kind").GetString());
             Assert.False(scope.TryGetProperty("hex", out _));
-            Assert.Equal(grid.Id, scope.GetProperty("cell").GetProperty("tilingId").GetGuid());
+            Assert.Equal(gridId, scope.GetProperty("cell").GetProperty("tilingId").GetGuid());
             Assert.Equal("owner", reader.GetString(1));
             Assert.Equal(7L, reader.GetInt64(2));
             Assert.Equal(createdAt.ToUnixTimeSeconds(),
@@ -113,13 +106,13 @@ public sealed class Phase20OneTimeStartupCutoverTests
         var reloaded = await new PostgresHexCrawlStore(database.ConnectionString)
             .GetOverworldAsync(world.Id, "owner");
         Assert.NotNull(reloaded);
-        Assert.Equal(grid.Id, reloaded!.World.SpatialTiling.Id);
+        Assert.Equal(gridId, reloaded!.World.SpatialTiling.Id);
         Assert.Equal(map.AssetKey, Assert.Single(reloaded.World.SourceMaps).AssetKey);
         Assert.Equal(map.Alignment, Assert.Single(reloaded.World.SourceMaps).Alignment);
         Assert.Equal(feature.Id, Assert.Single(reloaded.World.Features).Id);
         var annotation = Assert.Single(reloaded.World.EnvironmentAnnotations);
         Assert.Equal(EnvironmentAnnotationScopeKind.Cell, annotation.Scope.Kind);
-        Assert.Equal(new WorldCellId(grid.Id,
+        Assert.Equal(new WorldCellId(gridId,
             new PeriodicCellAddress("hex", new LatticeDisplacement(2, -1))),
             annotation.Scope.Cell);
         Assert.Equal(fact.Id, Assert.Single(annotation.Facts).Id);
@@ -133,22 +126,14 @@ public sealed class Phase20OneTimeStartupCutoverTests
         var store = new PostgresHexCrawlStore(database.ConnectionString);
         await store.InitializeAsync();
 
-        static (OverworldDefinition World, HexGridDefinition Grid) MakeWorld(string name)
+        static OverworldDefinition MakeWorld(string name) => new()
         {
-            var grid = new HexGridDefinition
-            {
-                Id = Guid.NewGuid(),
-                HexRadiusWorldUnits = 1,
-                NeighborCenterDistance = new DistanceMeasure(6, DistanceUnit.Miles)
-            };
-            return (new OverworldDefinition
-            {
-                Id = Guid.NewGuid(), Name = name,
-                Tiling = LegacyHexTilingCompatibility.Create(grid)
-            }, grid);
-        }
-        var (valid, validGrid) = MakeWorld("Valid authored world");
-        var (invalid, _) = MakeWorld("Unrecognized authored format");
+            Id = Guid.NewGuid(), Name = name,
+            Tiling = CurrentPeriodicFixture()
+        };
+        var valid = MakeWorld("Valid authored world");
+        var invalid = MakeWorld("Unrecognized authored format");
+        var validGridId = Guid.NewGuid();
         var timestamp = DateTimeOffset.UtcNow;
         await store.CreateOverworldAsync(new StoredOverworld(valid, "owner", 1, timestamp, timestamp));
         await store.CreateOverworldAsync(new StoredOverworld(invalid, "owner", 2, timestamp, timestamp));
@@ -161,15 +146,15 @@ public sealed class Phase20OneTimeStartupCutoverTests
                 ALTER TABLE expeditions RENAME CONSTRAINT ck_expeditions_runtime_kind TO ck_expeditions_runtime_v2_only;
                 UPDATE hex_crawl_schema_migrations SET version = 11 WHERE version = 12;
                 UPDATE overworlds SET world_json = jsonb_set(
-                    jsonb_set(world_json, '{grid}', @validGrid::jsonb),
-                    '{formatVersion}', '2'::jsonb)
+                    jsonb_set(world_json - 'tiling', '{grid}', @validGrid::jsonb),
+                    '{formatVersion}', '1'::jsonb)
                 WHERE id = @valid;
                 UPDATE overworlds
                 SET world_json = jsonb_set(world_json, '{formatVersion}', '99'::jsonb)
                 WHERE id = @invalid;
                 """;
             downgrade.Parameters.AddWithValue("valid", valid.Id);
-            downgrade.Parameters.AddWithValue("validGrid", NpgsqlTypes.NpgsqlDbType.Jsonb, ArchivedGridJson(validGrid));
+            downgrade.Parameters.AddWithValue("validGrid", NpgsqlTypes.NpgsqlDbType.Jsonb, ArchivedGridJson(validGridId, 1, 6));
             downgrade.Parameters.AddWithValue("invalid", invalid.Id);
             await downgrade.ExecuteNonQueryAsync();
         }
@@ -222,11 +207,32 @@ public sealed class Phase20OneTimeStartupCutoverTests
         Assert.Equal("23514", error.SqlState);
     }
 
-    private static string ArchivedGridJson(HexGridDefinition grid)
+    private static PeriodicWorldTiling CurrentPeriodicFixture()
+    {
+        var realized = DelaneyDressHarmonicMetricRealization.Construct(
+            "<1:1,1,1:6,3>", 1d, "world-unit");
+        if (realized.Status != "realized")
+            throw new InvalidOperationException("World fixture periodic geometry did not realize.");
+        return new PeriodicWorldTiling(
+            Guid.NewGuid(), realized.Topology!, realized.Realization!,
+            new WorldPoint(0, 0),
+            PhysicalDistancePerWorldUnit: new DistanceMeasure(6, DistanceUnit.Miles));
+    }
+
+    private static string ArchivedGridJson(Guid id, double radius, double distance)
     {
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
         options.Converters.Add(new JsonStringEnumConverter(allowIntegerValues: false));
-        return JsonSerializer.Serialize(grid, options);
+        return JsonSerializer.Serialize(new
+        {
+            id,
+            orientation = "PointyTop",
+            coordinateConvention = "AxialQr",
+            origin = new WorldPoint(0, 0),
+            rotationDegrees = 0d,
+            hexRadiusWorldUnits = radius,
+            neighborCenterDistance = new DistanceMeasure(distance, DistanceUnit.Miles)
+        }, options);
     }
 
 }
