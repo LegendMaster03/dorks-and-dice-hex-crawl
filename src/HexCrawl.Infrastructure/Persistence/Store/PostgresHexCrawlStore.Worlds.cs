@@ -140,9 +140,8 @@ public sealed partial class PostgresHexCrawlStore
                 return new SaveResult<StoredOverworld>(SaveOutcome.NotFound, null);
             var version = reader.GetInt64(0);
             var previous = Deserialize<WorldSnapshot>(reader.GetString(1)).ToDomain();
-            if (version != expectedVersion || previous.HasLegacyHexGrid
-                || previous.Tiling is null || candidate.World.HasLegacyHexGrid
-                || candidate.World.Tiling is null
+            if (version != expectedVersion
+                || previous.Tiling is null || candidate.World.Tiling is null
                 || previous.Tiling.Id == candidate.World.Tiling.Id
                 || candidate.World.Tiling.Revision <= previous.Tiling.Revision
                 || previous.Locations.Count != 0 || previous.Features.Count != 0

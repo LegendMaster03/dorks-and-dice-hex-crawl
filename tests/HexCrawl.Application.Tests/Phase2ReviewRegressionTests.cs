@@ -122,12 +122,4 @@ public sealed class Phase2ReviewRegressionTests
 
     private static DistanceMeasure Miles(double value) => new(value, DistanceUnit.Miles);
 
-    private static CreateOverworldCommand WorldCommand() => new(
-        "Phase 2 review world",
-        HexOrientation.PointyTop,
-        new WorldPoint(0, 0),
-        0,
-        1,
-        12,
-        DistanceUnit.Miles);
 }

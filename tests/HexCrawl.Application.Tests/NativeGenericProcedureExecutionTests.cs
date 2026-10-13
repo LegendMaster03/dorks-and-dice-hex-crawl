@@ -91,13 +91,13 @@ public sealed class NativeGenericProcedureExecutionTests
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = await StoreAsync(database.ConnectionString);
         var core = new HexCrawlService(store);
-        var world = await core.CreateOverworldAsync(Owner, WorldCommand());
+        var world = await core.CreatePeriodicOverworldAsync(Owner, "World", MaplessSessionFixture.Start().World);
         var started = await new ExpeditionStartService(
             store, core, new CampaignProcedureService(store))
             .StartWorldBoundCellsAsync(
                 world.World.Id, Owner, "Native world-bound",
                 new ProcedureStartSelection(PresetKey: "simple-fixed-distance"),
-                LegacyHexTilingCompatibility.ToAddress(new HexCoordinate(0, 0)));
+                new PeriodicCellAddress("face-0", new LatticeDisplacement(0, 0)));
 
         var advanced = await AdvanceCellAsync(core, started, 2);
         var state = Assert.IsType<CellExpeditionState>(advanced.Runtime);
@@ -210,12 +210,4 @@ public sealed class NativeGenericProcedureExecutionTests
 
     private static DistanceMeasure Miles(double value) => new(value, DistanceUnit.Miles);
 
-    private static CreateOverworldCommand WorldCommand() => new(
-        "World",
-        HexOrientation.PointyTop,
-        new WorldPoint(0, 0),
-        0,
-        1,
-        12,
-        DistanceUnit.Miles);
 }

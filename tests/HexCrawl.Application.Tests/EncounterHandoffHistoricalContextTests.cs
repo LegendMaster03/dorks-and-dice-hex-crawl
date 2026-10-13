@@ -12,25 +12,19 @@ public sealed class EncounterHandoffHistoricalContextTests
     {
         await using var database = await TestDatabase.CreateAsync();
         var (core, starter) = await database.ServicesAsync();
-        var world = await core.CreateOverworldAsync("alice", new CreateOverworldCommand(
-            "Historical handoff world",
-            HexOrientation.PointyTop,
-            new WorldPoint(0, 0),
-            0,
-            1,
-            12,
-            DistanceUnit.Miles));
+        var world = await core.CreatePeriodicOverworldAsync(
+            "alice", "Historical handoff world", MaplessSessionFixture.Start().World);
+        var startGeometry = world.World.SpatialTiling.Resolve(
+            new PeriodicCellAddress("face-0", new LatticeDisplacement(0, 0)));
         world = await core.CreateLocationAsync(world.World.Id, "alice", new CreateLocationCommand(
             "Old Ruin",
             "ruin",
-            new WorldPoint(0, 0),
+            startGeometry.Center,
             LocationDiscoverability.Hidden,
             world.Version));
         var originalLocation = Assert.Single(world.World.Locations);
 
-        var start = new HexCoordinate(0, 0);
-        var startCell = world.World.SpatialTiling.Resolve(
-            LegacyHexTilingCompatibility.ToAddress(start)).Id;
+        var startCell = startGeometry.Id;
         var expedition = await starter.StartWorldBoundCellsAsync(
             world.World.Id, "alice", "Historical location",
             new ProcedureStartSelection(PresetKey: "alexandrian-advanced"),

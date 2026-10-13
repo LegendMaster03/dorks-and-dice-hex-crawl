@@ -14,16 +14,8 @@ public sealed class Phase9WorldEnvironmentIntegrityTests
         await store.InitializeAsync();
         var service = new HexCrawlService(store);
 
-        var world = await service.CreateOverworldAsync(
-            "owner",
-            new CreateOverworldCommand(
-                "Environment reference world",
-                HexOrientation.PointyTop,
-                new WorldPoint(0, 0),
-                0,
-                1,
-                12,
-                DistanceUnit.Miles));
+        var world = await service.CreatePeriodicOverworldAsync(
+            "owner", "Environment reference world", MaplessSessionFixture.Start().World);
         world = await service.CreateFeatureAsync(
             world.World.Id,
             "owner",

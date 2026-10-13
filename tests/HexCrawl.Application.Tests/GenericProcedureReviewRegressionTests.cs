@@ -148,13 +148,13 @@ public sealed class GenericProcedureReviewRegressionTests
         var standalone = await standaloneService.StartNonSpatialAsync("alice", "Standalone", new ProcedureStartSelection(PresetKey: "simple-fixed-distance"), new NonSpatialCrawlSessionContext("Travel clock"));
 
         var core = new HexCrawlService(store);
-        var world = await core.CreateOverworldAsync("alice", WorldCommand());
+        var world = await core.CreatePeriodicOverworldAsync("alice", "World", MaplessSessionFixture.Start().World);
         var worldBound = await new ExpeditionStartService(
             store, core, new CampaignProcedureService(store))
             .StartWorldBoundCellsAsync(
                 world.World.Id, "alice", "World-bound",
                 new ProcedureStartSelection(PresetKey: "simple-fixed-distance"),
-                LegacyHexTilingCompatibility.ToAddress(new HexCoordinate(0, 0)));
+                new PeriodicCellAddress("face-0", new LatticeDisplacement(0, 0)));
 
         AssertPinned(standalone, "simple-fixed-distance");
         AssertPinned(worldBound, "simple-fixed-distance");
@@ -214,12 +214,4 @@ public sealed class GenericProcedureReviewRegressionTests
         return future;
     }
 
-    private static CreateOverworldCommand WorldCommand() => new(
-        "World",
-        HexOrientation.PointyTop,
-        new WorldPoint(0, 0),
-        0,
-        1,
-        12,
-        DistanceUnit.Miles);
 }

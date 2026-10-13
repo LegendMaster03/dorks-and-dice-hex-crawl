@@ -11,10 +11,10 @@ public sealed class ExpeditionDeletionTests
     {
         await using var database = await TestDatabase.CreateAsync();
         var service = database.Service;
-        var humblewood = await service.CreateOverworldAsync("alice", WorldCommand("Humblewood"));
-        var magnostephis = await service.CreateOverworldAsync("alice", WorldCommand("Magnostephis"));
-        var sessionReady = await service.CreateOverworldAsync("alice", WorldCommand("Magnostephis — Session Ready"));
-        var qaWorld = await service.CreateOverworldAsync("alice", WorldCommand("QA Magnostephis PR17 2026-09-27"));
+        var humblewood = await service.CreatePeriodicOverworldAsync("alice", "Humblewood", MaplessSessionFixture.Start().World);
+        var magnostephis = await service.CreatePeriodicOverworldAsync("alice", "Magnostephis", MaplessSessionFixture.Start().World);
+        var sessionReady = await service.CreatePeriodicOverworldAsync("alice", "Magnostephis — Session Ready", MaplessSessionFixture.Start().World);
+        var qaWorld = await service.CreatePeriodicOverworldAsync("alice", "QA Magnostephis PR17 2026-09-27", MaplessSessionFixture.Start().World);
         var realSession = await StartCellAsync(database, magnostephis.World.Id, "Original Magnostephis expedition");
         var qaSession = await StartCellAsync(database, qaWorld.World.Id, "Disposable QA expedition");
 
@@ -48,7 +48,7 @@ public sealed class ExpeditionDeletionTests
     {
         await using var database = await TestDatabase.CreateAsync();
         var service = database.Service;
-        var world = await service.CreateOverworldAsync("alice", WorldCommand());
+        var world = await service.CreatePeriodicOverworldAsync("alice", , MaplessSessionFixture.Start().World);
         var expedition = await StartCellAsync(database, world.World.Id, "Alice session");
 
         await Assert.ThrowsAsync<HexCrawlNotFoundException>(() =>
@@ -62,7 +62,7 @@ public sealed class ExpeditionDeletionTests
     {
         await using var database = await TestDatabase.CreateAsync();
         var service = database.Service;
-        var world = await service.CreateOverworldAsync("alice", WorldCommand());
+        var world = await service.CreatePeriodicOverworldAsync("alice", , MaplessSessionFixture.Start().World);
         var expedition = await StartCellAsync(database, world.World.Id, "Versioned session");
         var saved = await database.Store.SaveExpeditionAsync(
             expedition with { Name = "Updated version" },
@@ -85,16 +85,7 @@ public sealed class ExpeditionDeletionTests
         .StartWorldBoundCellsAsync(
             worldId, "alice", name,
             new ProcedureStartSelection(PresetKey: "simple-fixed-distance"),
-            LegacyHexTilingCompatibility.ToAddress(new HexCoordinate(0, 0)));
-
-    private static CreateOverworldCommand WorldCommand(string name = "World") => new(
-        name,
-        HexOrientation.PointyTop,
-        new WorldPoint(0, 0),
-        0,
-        1,
-        12,
-        DistanceUnit.Miles);
+            new PeriodicCellAddress("face-0", new LatticeDisplacement(0, 0)));
 
     private sealed class TestDatabase : IAsyncDisposable
     {
