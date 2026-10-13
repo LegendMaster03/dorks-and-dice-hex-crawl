@@ -325,34 +325,7 @@ export async function renderPeriodicExpeditionWorkbench(
         renderSelectedCellDetails();
         map.requestRender();
     };
-    let cellInspectionGeneration = 0;
-    map.setClickInterceptor(point => {
-        // On older authored hex worlds, the grid is an editing convenience.
-        // Select the exact clicked world point through the server tiling,
-        // never the center of a synthesized q/r hex.
-        if (!world?.grid || !world.tiling) return false;
-        const current = world;
-        const generation = ++cellInspectionGeneration;
-        setInspectedGeometry(null);
-        void (async () => {
-            try {
-                const lookup = await api.lookupWorldCell(current.id, point);
-                if (lookup.status !== "Unique" || lookup.candidates.length !== 1
-                    || lookup.candidates[0].tilingId !== current.tiling?.id)
-                    throw new Error("Choose a point inside exactly one accepted world cell.");
-                const geometry = await api.resolveWorldCell(current.id, lookup.candidates[0]);
-                if (disposed || generation !== cellInspectionGeneration
-                    || world?.tiling?.id !== geometry.id.tilingId
-                    || world?.tiling?.revision !== current.tiling?.revision) return;
-                setInspectedGeometry(geometry);
-            } catch (cause) {
-                if (!disposed && generation === cellInspectionGeneration) showUiError(error, cause);
-            }
-        })();
-        return true;
-    });
     map.setCellSelectionHandler(cell => {
-        cellInspectionGeneration++;
         setInspectedGeometry(cell);
     });
 

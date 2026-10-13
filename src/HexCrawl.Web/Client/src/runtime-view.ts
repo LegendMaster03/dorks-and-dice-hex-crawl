@@ -1,4 +1,4 @@
-import type { DistanceValue, HexOrientation, RuntimeState } from "./types";
+import type { DistanceValue, RuntimeState } from "./types";
 
 export function discoveredSubjectIds(runtime: RuntimeState | null): Set<string> {
     return new Set(runtime?.knowledge
@@ -16,7 +16,7 @@ export function formatHours(hours: number): string {
     return `${formatNumber(hours)} h`;
 }
 
-export function directionLabel(direction: number | null, _orientation?: HexOrientation): string {
+export function directionLabel(direction: number | null): string {
     if (direction === null) return "—";
     return `Edge ${direction + 1}`;
 }
