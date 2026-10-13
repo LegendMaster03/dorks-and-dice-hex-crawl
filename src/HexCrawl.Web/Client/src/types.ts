@@ -247,7 +247,7 @@ export type PresentationProfile = {
     playerGrid: "Hidden" | "Visible";
     terrainMode: "HiddenUntilKnown" | "AlwaysVisible" | "Manual";
     automationMode: "Automatic" | "DmControlled";
-    markEnteredHexKnown: boolean;
+    markEnteredCellKnown: boolean;
     initiallyKnownFeatureCategories: string[];
     initiallyKnownLocationCategories: string[];
     allowPlayerAnnotations: boolean;

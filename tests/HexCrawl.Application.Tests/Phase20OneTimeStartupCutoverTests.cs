@@ -2,6 +2,9 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using HexCrawl.Application.Persistence;
 using HexCrawl.Domain.Spatial;
+using HexCrawl.Domain.Knowledge;
+using HexCrawl.Domain.Presentation;
+using HexCrawl.Domain.Runtime;
 using HexCrawl.Domain.World;
 using HexCrawl.Infrastructure.Persistence;
 using Npgsql;
@@ -54,6 +57,18 @@ public sealed class Phase20OneTimeStartupCutoverTests
         var createdAt = DateTimeOffset.UtcNow;
         await store.CreateOverworldAsync(new StoredOverworld(
             world, "owner", 7, createdAt, createdAt));
+        var knowledge = new PlayerKnowledgeState
+        {
+            ScopeId = Guid.NewGuid(),
+            OverworldId = world.Id,
+            PresentationPolicy = MapPresentationPolicy.ExplorationMap()
+        };
+        var spatial = PeriodicCourseFixture.StartingState(world.Tiling);
+        var procedure = CampaignProcedureMaterializer.MaterializeExecutableSpatial(
+            CrawlProcedureCatalog.Resolve("simple-fixed-distance")).Procedure;
+        var expedition = await store.CreateExpeditionAsync(new StoredExpedition(
+            "Preserved knowledge", spatial, new WorldBoundCrawlSessionContext(world.Id),
+            knowledge, procedure, null, TimeSpan.Zero, "owner", 1, createdAt, createdAt));
         await using var connection = new NpgsqlConnection(database.ConnectionString);
         await connection.OpenAsync();
         await using (var downgrade = connection.CreateCommand())
@@ -70,8 +85,16 @@ public sealed class Phase20OneTimeStartupCutoverTests
                     '{environmentAnnotations,0,scope}',
                     '{"kind":"Hex","hex":{"q":2,"r":-1}}'::jsonb)
                 WHERE id = @legacyWorld;
+                UPDATE expeditions SET knowledge_json = jsonb_set(
+                    knowledge_json, '{presentationPolicy}',
+                    ((knowledge_json->'presentationPolicy') - 'markEnteredCellKnown')
+                        || jsonb_build_object('markEnteredHexKnown',
+                            knowledge_json #> '{presentationPolicy,markEnteredCellKnown}'),
+                    false)
+                WHERE id = @expedition;
                 """;
             downgrade.Parameters.AddWithValue("legacyWorld", world.Id);
+            downgrade.Parameters.AddWithValue("expedition", expedition.Id);
             downgrade.Parameters.AddWithValue("archivedGrid", NpgsqlTypes.NpgsqlDbType.Jsonb, ArchivedGridJson(gridId, 2, 6));
             await downgrade.ExecuteNonQueryAsync();
         }
@@ -117,6 +140,22 @@ public sealed class Phase20OneTimeStartupCutoverTests
             annotation.Scope.Cell);
         Assert.Equal(fact.Id, Assert.Single(annotation.Facts).Id);
         Assert.Equal(fact.Provenance, annotation.Facts[0].Provenance);
+        var preserved = await new PostgresHexCrawlStore(database.ConnectionString)
+            .GetExpeditionAsync(expedition.Id, "owner");
+        Assert.NotNull(preserved);
+        Assert.Equal(knowledge.ScopeId, preserved!.Knowledge?.ScopeId);
+        Assert.True(preserved.Knowledge!.PresentationPolicy!.MarkEnteredCellKnown);
+        await using var verifyKnowledge = connection.CreateCommand();
+        verifyKnowledge.CommandText = """
+            SELECT (knowledge_json->'presentationPolicy') ? 'markEnteredHexKnown',
+                   (knowledge_json->'presentationPolicy') ? 'markEnteredCellKnown'
+            FROM expeditions WHERE id = @id;
+            """;
+        verifyKnowledge.Parameters.AddWithValue("id", expedition.Id);
+        await using var knowledgeReader = await verifyKnowledge.ExecuteReaderAsync();
+        Assert.True(await knowledgeReader.ReadAsync());
+        Assert.False(knowledgeReader.GetBoolean(0));
+        Assert.True(knowledgeReader.GetBoolean(1));
     }
 
     [Fact]

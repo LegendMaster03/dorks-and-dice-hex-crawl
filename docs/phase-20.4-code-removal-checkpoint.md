@@ -1,5 +1,8 @@
 # Phase 20.4 — source deletion checkpoint
 
+**October 13 presentation policy cleanup (CI pending):** Replaced axial-named `MarkEnteredHexKnown` with `MarkEnteredCellKnown` in domain presentation semantics, HTTP contracts and browser types. The one-time schema-11→12 PostgreSQL authored-data cutover now transactionally rewrites persisted expedition knowledge policies, rejecting conflicting dual fields. Regression coverage checks saved policy semantics and removal of the old serialized key. This is a schema conversion, not a permanent compatibility reader. No actual development data was migrated.
+
+
 **October 13 cutover hardening (CI pending):** Verified baseline `5959f489` / CI 38347822317 (success). Archived axial environment scopes missing an integer q or r now fail closed instead of silently receiving record-struct defaults. Added isolated PostgreSQL transactional rollback tests covering missing and nonintegral coordinates. This only strengthens the one-time converter; no runtime axial geometry is restored. The real development database remains untouched. Zero-prototype source verification and owner-authorized WorkChat review remain outstanding.
 
 

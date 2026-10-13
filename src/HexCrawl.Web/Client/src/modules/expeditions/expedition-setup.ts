@@ -113,7 +113,7 @@ export async function enhanceExpeditionSetup(
         }
     };
     const renderPresentationSummary = (policy: PresentationProfile): void => {
-        const automation = policy.automationMode === "DmControlled" ? "DM controls every reveal" : policy.markEnteredHexKnown ? "entered cells become known" : "no travel-based reveal";
+        const automation = policy.automationMode === "DmControlled" ? "DM controls every reveal" : policy.markEnteredCellKnown ? "entered cells become known" : "no travel-based reveal";
         required<HTMLElement>(form, "[data-presentation-summary]").textContent =
             `${policy.playerGrid.toLowerCase()} player grid · terrain ${policy.terrainMode.replace(/([A-Z])/g, " $1").trim().toLowerCase()} · ${automation}`;
     };

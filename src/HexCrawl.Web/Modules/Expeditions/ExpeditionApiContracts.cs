@@ -15,7 +15,7 @@ public sealed record PresentationProfileContract(
     GridVisibility PlayerGrid,
     TerrainPresentationMode TerrainMode,
     PresentationAutomationMode AutomationMode,
-    bool MarkEnteredHexKnown,
+    bool MarkEnteredCellKnown,
     IReadOnlyList<string> InitiallyKnownFeatureCategories,
     IReadOnlyList<string> InitiallyKnownLocationCategories,
     bool AllowPlayerAnnotations)
@@ -26,7 +26,7 @@ public sealed record PresentationProfileContract(
         policy.PlayerGrid,
         policy.TerrainMode,
         policy.AutomationMode,
-        policy.MarkEnteredHexKnown,
+        policy.MarkEnteredCellKnown,
         policy.InitiallyKnownFeatureCategories,
         policy.InitiallyKnownLocationCategories,
         policy.AllowPlayerAnnotations);

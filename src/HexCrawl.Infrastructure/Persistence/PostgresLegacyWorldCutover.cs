@@ -49,6 +49,42 @@ internal static class PostgresLegacyWorldCutover
             if (await update.ExecuteNonQueryAsync(cancellationToken) != 1)
                 throw new InvalidDataException("World disappeared during the locked authored-data cutover.");
         }
+        await ConvertKnowledgePoliciesAsync(connection, transaction, cancellationToken);
+    }
+
+    // Rewrite persisted presentation semantics within the same transaction as
+    // authored-world conversion. Old knowledge JSON is never accepted by the
+    // permanent domain model, and no runtime alias or fallback is retained.
+    private static async Task ConvertKnowledgePoliciesAsync(
+        NpgsqlConnection connection, NpgsqlTransaction transaction,
+        CancellationToken cancellationToken)
+    {
+        await using (var conflicts = connection.CreateCommand())
+        {
+            conflicts.Transaction = transaction;
+            conflicts.CommandText = """
+                SELECT id FROM expeditions
+                WHERE (knowledge_json->'presentationPolicy') ? 'markEnteredHexKnown'
+                  AND (knowledge_json->'presentationPolicy') ? 'markEnteredCellKnown'
+                LIMIT 1;
+                """;
+            if (await conflicts.ExecuteScalarAsync(cancellationToken) is not null)
+                throw new InvalidDataException(
+                    "Authored presentation policy contains conflicting entry-discovery fields; cutover aborted.");
+        }
+        await using var update = connection.CreateCommand();
+        update.Transaction = transaction;
+        update.CommandText = """
+            UPDATE expeditions
+            SET knowledge_json = jsonb_set(
+                knowledge_json, '{presentationPolicy}',
+                ((knowledge_json->'presentationPolicy') - 'markEnteredHexKnown')
+                    || jsonb_build_object('markEnteredCellKnown',
+                        knowledge_json #> '{presentationPolicy,markEnteredHexKnown}'),
+                false)
+            WHERE (knowledge_json->'presentationPolicy') ? 'markEnteredHexKnown';
+            """;
+        await update.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private static string ConvertSnapshot(Guid identity, string json)

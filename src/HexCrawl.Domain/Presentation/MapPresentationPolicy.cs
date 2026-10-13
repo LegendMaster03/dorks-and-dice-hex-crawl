@@ -26,7 +26,7 @@ public sealed record MapPresentationPolicy
     public GridVisibility PlayerGrid { get; init; } = GridVisibility.Visible;
     public TerrainPresentationMode TerrainMode { get; init; } = TerrainPresentationMode.HiddenUntilKnown;
     public PresentationAutomationMode AutomationMode { get; init; } = PresentationAutomationMode.Automatic;
-    public bool MarkEnteredHexKnown { get; init; } = true;
+    public bool MarkEnteredCellKnown { get; init; } = true;
     public IReadOnlyList<string> InitiallyKnownFeatureCategories { get; init; } = [];
     public IReadOnlyList<string> InitiallyKnownLocationCategories { get; init; } = [];
     public bool AllowPlayerAnnotations { get; init; } = true;
@@ -42,7 +42,7 @@ public sealed record MapPresentationPolicy
         ValidateCategories(InitiallyKnownLocationCategories, nameof(InitiallyKnownLocationCategories));
 
         if (AutomationMode == PresentationAutomationMode.DmControlled
-            && (MarkEnteredHexKnown
+            && (MarkEnteredCellKnown
                 || InitiallyKnownFeatureCategories.Count > 0
                 || InitiallyKnownLocationCategories.Count > 0))
         {
@@ -63,7 +63,7 @@ public sealed record MapPresentationPolicy
         PlayerGrid = GridVisibility.Hidden,
         TerrainMode = TerrainPresentationMode.Manual,
         AutomationMode = PresentationAutomationMode.Automatic,
-        MarkEnteredHexKnown = false,
+        MarkEnteredCellKnown = false,
         AllowPlayerAnnotations = true
     };
 
@@ -74,7 +74,7 @@ public sealed record MapPresentationPolicy
         PlayerGrid = GridVisibility.Visible,
         TerrainMode = TerrainPresentationMode.HiddenUntilKnown,
         AutomationMode = PresentationAutomationMode.Automatic,
-        MarkEnteredHexKnown = true,
+        MarkEnteredCellKnown = true,
         InitiallyKnownFeatureCategories = ["road"],
         InitiallyKnownLocationCategories = ["settlement", "city", "town", "village"],
         AllowPlayerAnnotations = true
@@ -87,7 +87,7 @@ public sealed record MapPresentationPolicy
         PlayerGrid = GridVisibility.Visible,
         TerrainMode = TerrainPresentationMode.AlwaysVisible,
         AutomationMode = PresentationAutomationMode.Automatic,
-        MarkEnteredHexKnown = true,
+        MarkEnteredCellKnown = true,
         InitiallyKnownFeatureCategories = ["road", "trail", "river", "border", "coast", "mountain", "landmark"],
         InitiallyKnownLocationCategories = ["settlement", "city", "town", "village", "landmark"],
         AllowPlayerAnnotations = true
@@ -100,7 +100,7 @@ public sealed record MapPresentationPolicy
         PlayerGrid = GridVisibility.Hidden,
         TerrainMode = TerrainPresentationMode.Manual,
         AutomationMode = PresentationAutomationMode.DmControlled,
-        MarkEnteredHexKnown = false,
+        MarkEnteredCellKnown = false,
         AllowPlayerAnnotations = true
     };
 

@@ -9,7 +9,7 @@ public static class PresentationKnowledgeProjection
     /// <summary>
     /// Initialize a generalized player's knowledge at the actual qualified
     /// starting cell. Reuse the same initial visible feature/location policy
-    /// as legacy hex starts without projecting any axial coordinate.
+    /// as the selected presentation profile without projecting an axial coordinate.
     /// </summary>
     public static PlayerKnowledgeState InitializeCells(
         OverworldDefinition world,
@@ -25,7 +25,7 @@ public static class PresentationKnowledgeProjection
         if (policy.AutomationMode == PresentationAutomationMode.DmControlled)
             return knowledge;
 
-        var result = policy.MarkEnteredHexKnown
+        var result = policy.MarkEnteredCellKnown
             ? KnowledgeDiscovery.KnowCell(knowledge, startCell)
             : knowledge;
         return InitializeVisibleSubjects(world, policy, result);
@@ -63,7 +63,7 @@ public static class PresentationKnowledgeProjection
     {
         policy.Validate();
         if (policy.AutomationMode == PresentationAutomationMode.DmControlled
-            || !policy.MarkEnteredHexKnown)
+            || !policy.MarkEnteredCellKnown)
             return knowledge;
 
         var result = knowledge;
