@@ -2171,6 +2171,11 @@ if (stateName === "course-change-reload") {
             clientX: rect.left + rect.width / 2 + (stateName === "map-nonadjacent" ? 280 : 90),
             clientY: rect.top + rect.height / 2
         }));
+        if (stateName === "map-nonadjacent")
+            await waitForCondition(
+                () => [...root.querySelectorAll("button")].some(button =>
+                    button.textContent?.trim() === "Teleport party here" && !button.disabled),
+                "distant qualified cell inspection resolved");
     }
 } else if (stateName === "navigation-pending" || stateName === "abstract-spatial-course") {
     findButton("Resolve travel / watch")?.click();

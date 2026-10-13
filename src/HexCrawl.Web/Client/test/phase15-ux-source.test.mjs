@@ -788,6 +788,8 @@ test("encounter schedule presentation distinguishes contextual procedure from au
     assert.match(styles, /\.hc-periodic-expedition \.hc-party-register-grid/);
     assert.match(styles, /grid-template-columns:minmax\(0,1fr\)/);
     assert.match(styles, /\.hc-readable-table thead th[^}]*white-space:nowrap/);
+    assert.match(styles, /\.hc-readable-table tbody th[^}]*white-space:nowrap/);
+    assert.match(styles, /\.hc-readable-table \{ display:block;[^}]*overflow-x:auto/);
     assert.match(styles, /\.hc-movement-ledger-table thead th[^}]*white-space:nowrap/);
 });
 

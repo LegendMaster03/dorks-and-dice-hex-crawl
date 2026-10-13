@@ -246,11 +246,11 @@ export function ensurePhase15Styles(): void {
         .hc-readable-facts > div { min-width:0; padding:.55rem .6rem; border:1px solid var(--hc-border); border-radius:.55rem; background:var(--hc-surface-elevated); }
         .hc-readable-facts dt { font-size:.72rem; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:var(--hc-muted); }
         .hc-readable-facts dd { margin:.12rem 0 0; min-width:0; color:var(--hc-text-strong); overflow-wrap:anywhere; }
-        .hc-readable-table { width:100%; max-width:100%; table-layout:fixed; border-collapse:collapse; margin:.55rem 0; font-size:.88rem; }
+        .hc-readable-table { display:block; width:100%; max-width:100%; min-width:0; overflow-x:auto; overscroll-behavior-inline:contain; border-collapse:collapse; margin:.55rem 0; font-size:.88rem; }
         .hc-readable-table caption { text-align:left; padding:0 0 .35rem; font-weight:750; color:var(--hc-text-strong); }
         .hc-readable-table th, .hc-readable-table td { padding:.4rem .45rem; border-bottom:1px solid var(--hc-border); text-align:left; vertical-align:top; overflow-wrap:anywhere; word-break:normal; }
         .hc-readable-table thead th { font-size:.72rem; text-transform:uppercase; letter-spacing:.04em; color:var(--hc-muted); white-space:nowrap; }
-        .hc-readable-table tbody th { font-weight:650; color:var(--hc-text-strong); }
+        .hc-readable-table tbody th { font-weight:650; color:var(--hc-text-strong); white-space:nowrap; }
         .hc-form select[multiple] { min-height:4.5rem; }
         /* Nested tables and gameplay editors must not grow their grid tracks. */
         .hc-periodic-expedition .hc-workspace-grid > *,
