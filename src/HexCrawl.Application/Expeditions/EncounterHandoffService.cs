@@ -202,7 +202,7 @@ public sealed class EncounterHandoffService(HexCrawlService coreService)
             && (runtimeEvent.Cell is not { } recordedCell
                 || recordedCell.TilingId != spatial.Traversal.CurrentCell.TilingId))
             throw new InvalidOperationException(
-                "A V2 runtime encounter must retain a cell qualified by the expedition tiling.");
+                "A spatial runtime encounter must retain a cell qualified by the expedition tiling.");
 
         var location = runtimeEvent.EncounterLocation is null
             ? null
