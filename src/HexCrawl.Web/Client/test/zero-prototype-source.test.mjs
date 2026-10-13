@@ -28,6 +28,17 @@ const retiredSymbols = [
     "HexStepTravel",
     "hexProgress",
     "currentHex",
+    "entryDirection",
+    "lastTravelDirection",
+    "intendedDirection",
+    "actualDirection",
+    "veerSteps",
+    "exitRequirement",
+    "tracksIntraHexProgress",
+    "directionChangesCostProgress",
+    "directionChangeProgressCostFactor",
+    "HexAnchor",
+    "movement.hex-progress",
     "selectedHex",
     "worldToHex",
     "startHex",
@@ -71,7 +82,15 @@ test("no executable source still references the original hex prototype", () => {
             }
         }
     }
-    assert.ok(checked > 150, "Expected to scan all domain, application, infrastructure and web sources");
+    // The host CI checkout contains every project. The Docker frontend stage
+    // intentionally COPYs only the client and selected service contracts.
+    // Both must reject retired symbols in every source available to that build;
+    // the complete checkout additionally enforces an all-project scan.
+    assert.ok(checked > 30, "Expected the full frontend source tree");
+    const completeCheckout = fs.existsSync(path.join(
+        sourceRoot, "HexCrawl.Domain", "Spatial", "PeriodicWorldTiling.cs"));
+    if (completeCheckout)
+        assert.ok(checked > 150, "Expected to scan all domain, application, infrastructure and web sources");
     assert.deepEqual(errors, [], errors.join("\n"));
 });
 
