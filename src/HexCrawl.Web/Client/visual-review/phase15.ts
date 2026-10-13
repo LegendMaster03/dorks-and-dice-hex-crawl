@@ -437,12 +437,12 @@ function emitSpecialMetrics(surface) {
         compactGuidanceVisible: text.includes("How to use Compact"),
         guidedRuleWhyCount: Array.from(root.querySelectorAll("summary")).filter(summary => summary.textContent?.trim() === "Why?").length,
         guidedNextActionWhyVisible: Array.from(root.querySelectorAll("summary")).some(summary => summary.textContent?.trim() === "Why is this next?"),
-        selectedCellTitle: root.querySelector("[data-selected-cell-title]")?.textContent?.trim() || null,
-        selectedCellTerrain: root.querySelector("[data-cell-terrain]")?.value || null,
-        selectedCellHiddenPoiVisible: text.includes("Ruined Watchtower · Ruin · Hidden"),
-        selectedCellRoadVisible: text.includes("Old King's Road · road · Line"),
-        selectedCellRouteBehaviorVisible: text.includes("Old King's Road · Route: good-road"),
-        selectedCellAdvancedOpen: Boolean(root.querySelector("[data-cell-advanced][open]")),
+        selectedCellSummary: root.querySelector(".hc-selected-cell-panel p:not(.hc-hint)")?.textContent?.trim() || null,
+        selectedCellTerrain: root.querySelector(".hc-selected-cell-panel input[name=terrain]")?.value || null,
+        selectedCellHiddenPoiVisible: text.includes("Ruined Watchtower · Ruin"),
+        selectedCellRoadVisible: text.includes("Old King's Road · road"),
+        selectedCellRouteBehaviorVisible: text.includes("SpatialFeature: route · good-road"),
+        selectedCellAdvancedOpen: Boolean(root.querySelector(".hc-selected-cell-panel details.hc-stack[open]")),
         mapHeight: Math.round(root.querySelector("[data-map]")?.getBoundingClientRect().height || 0)
     };
     document.getElementById("review-metrics").textContent = JSON.stringify(metrics);
@@ -638,14 +638,34 @@ if (stateName === "home") {
             }]
         }]
     };
+    const cellPolygon = [
+        { x: 1, y: 0 }, { x: .5, y: .8660254 }, { x: -.5, y: .8660254 },
+        { x: -1, y: 0 }, { x: -.5, y: -.8660254 }, { x: .5, y: -.8660254 }
+    ];
+    const cellGeometry = {
+        id: visualCell(), center: { x: 0, y: 0 }, polygon: cellPolygon
+    };
     const api = {
         getOverworld: async () => worldFixture,
         getWorldEnvironment: async () => environmentFixture,
         getProcedurePresets: async () => [],
         listExpeditions: async () => [],
-        listSourceMaps: async () => ({ overworldVersion: worldFixture.version, sourceMaps: [] })
+        listSourceMaps: async () => ({ overworldVersion: worldFixture.version, sourceMaps: [] }),
+        listVisibleCells: async () => [cellGeometry],
+        lookupWorldCell: async () => ({ status: "Unique", candidates: [cellGeometry.id] }),
+        resolveWorldCell: async () => cellGeometry
     };
     await renderWorldEditor(root, api, worldFixture.id, () => {});
+    const canvas = root.querySelector(".hc-map-canvas");
+    if (!(canvas instanceof HTMLCanvasElement))
+        throw new Error("The generalized map selection canvas did not mount.");
+    canvas.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    for (let attempt = 0; attempt < 20; attempt++) {
+        if (root.querySelector(".hc-selected-cell-panel input[name=terrain]")) break;
+        await new Promise(resolve => setTimeout(resolve, 25));
+    }
+    if (!root.querySelector(".hc-selected-cell-panel input[name=terrain]"))
+        throw new Error("Qualified polygon selection did not render its world authoring panel.");
     emitSpecialMetrics("world");
 } else {
 // Geometry for one authored hexagonal preset, expressed as polygon and interfaces.

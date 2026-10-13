@@ -220,20 +220,22 @@ elif surface == "procedure":
         if metrics["referenceFactGroups"] < 19 or metrics["exactParameterDisclosures"] != 19:
             raise SystemExit(f'procedure reference lost semantic or exact parameter evidence: {metrics}')
 elif surface == "world":
-    if not metrics["guidanceToggleVisible"] or metrics["guidedFieldHelpCount"] < 4:
-        raise SystemExit(f'Guided world/grid help is incomplete: {metrics}')
-    if metrics["selectedCellTitle"] != "Hex 0,0":
-        raise SystemExit(f'selected world cell context is missing: {metrics}')
+    if not metrics["guidanceToggleVisible"]:
+        raise SystemExit(f'World editor lost its guidance preference control: {metrics}')
+    # The selected world is a periodic polygon fixture, not an axial-grid editor.
+    summary = metrics["selectedCellSummary"] or ""
+    if not re.search(r"Center:.*[3-9][0-9]* sides", summary):
+        raise SystemExit(f'qualified polygon context did not render: {metrics}')
     if metrics["selectedCellTerrain"] != "forest":
-        raise SystemExit(f'explicit Hex-scope terrain did not populate the normal editor: {metrics}')
+        raise SystemExit(f'explicit cell-scoped terrain did not populate the editor: {metrics}')
     if not metrics["selectedCellHiddenPoiVisible"]:
-        raise SystemExit(f'hidden POI is not visible to the DM selected-cell editor: {metrics}')
+        raise SystemExit(f'authored hidden POI is not visible to the DM cell editor: {metrics}')
     if not metrics["selectedCellRoadVisible"]:
         raise SystemExit(f'intersecting route is not visible in selected-cell context: {metrics}')
     if not metrics["selectedCellRouteBehaviorVisible"]:
         raise SystemExit(f'feature-scoped route behavior is not visible in selected-cell context: {metrics}')
     if metrics["selectedCellAdvancedOpen"]:
-        raise SystemExit(f'raw selected-cell details are open by default: {metrics}')
+        raise SystemExit(f'advanced cell rules are open by default: {metrics}')
     if metrics["mapHeight"] < 250:
         raise SystemExit(f'world authoring map is too short to remain usable: {metrics}')
 else:
