@@ -110,6 +110,7 @@ cases=(
   "44-course-clear-reload|course-clear-reload|dark|820|980"
 )
 
+failures=()
 for spec in "${cases[@]}"; do
   IFS='|' read -r name state theme width height container_width <<<"$spec"
   echo "Rendering $name ($state, $theme, ${width}x${height})..."
@@ -135,7 +136,7 @@ for spec in "${cases[@]}"; do
   rm -rf "$profile"
 
   printf "%s" "$dom" >"$out_dir/$name.html"
-  python3 - "$out_dir/$name.html" "$out_dir/$name.json" "$name" "$width" "${container_width:-}" <<'PY'
+  if python3 - "$out_dir/$name.html" "$out_dir/$name.json" "$name" "$width" "${container_width:-}" <<'PY'
 import html, json, re, sys
 source = open(sys.argv[1], encoding="utf-8").read()
 match = re.search(r'<pre id="review-metrics"[^>]*>(.*?)</pre>', source, re.S)
@@ -458,6 +459,11 @@ else:
         if metrics["mapTop"] is None or metrics["mapTop"] >= metrics["viewportHeight"]:
             raise SystemExit(f'narrow map does not begin in the initial viewport: {metrics}')
 PY
+  then
+    :
+  else
+    failures+=("$name")
+  fi
 done
 
 python3 - "$out_dir" <<'PY'
@@ -465,5 +471,9 @@ import json, pathlib, sys
 root = pathlib.Path(sys.argv[1])
 metrics = [json.loads(path.read_text()) for path in sorted(root.glob("*.json"))]
 (root / "summary.json").write_text(json.dumps(metrics, indent=2, sort_keys=True))
-print(json.dumps(metrics, indent=2, sort_keys=True))
+print(f"Captured {len(metrics)} completed Phase 15 metrics records.")
 PY
+if (( ${#failures[@]} > 0 )); then
+  printf 'Phase 15 rendered validation failures (%s): %s\\n' "${#failures[@]}" "${failures[*]}" >&2
+  exit 1
+fi

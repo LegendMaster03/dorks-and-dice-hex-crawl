@@ -2230,7 +2230,7 @@ const buttons = Array.from(root.querySelectorAll("button"));
 const mapHost = root.querySelector(".hc-map-host");
 const mapContext = root.querySelector("[data-map-context]");
 const rail = root.querySelector(".hc-table-rail");
-const currentTravel = root.querySelector("[data-current-travel]");
+const currentTravel = root.querySelector(".hc-current-travel");
 const rootText = root.textContent || "";
 const journeyPrimaryText = root.querySelector(".hc-journey-primary")?.textContent || "";
 const isNormalPresentationElement = element => {
@@ -2281,7 +2281,7 @@ const metrics = {
     selectedInterfaceIndex: root.querySelector('[data-adjacency-interface-id][aria-pressed="true"]')?.dataset.adjacencyInterfaceId?.replace("adjacency-", "") ?? null,
     runtimeIntendedHeading: runtime.expedition.isSpatial ? runtime.expedition.intendedHeading : null,
     runtimeActualHeading: runtime.expedition.isSpatial ? runtime.expedition.actualHeading : null,
-    currentTravelCourseText: root.querySelector("[data-current-travel-course]")?.textContent?.trim() ?? null,
+    currentTravelCourseText: root.querySelector(".hc-current-travel [data-course]")?.textContent?.trim() ?? null,
     navigationStatText: Array.from(root.querySelectorAll(".hc-stat-action")).find(item =>
         item.querySelector(".hc-stat-action-label")?.textContent?.trim() === "Navigation")?.textContent?.replace(/\s+/g, " ").trim() ?? null,
     focusedNavigationText: root.querySelector("[data-phase15-drawer]")?.textContent?.replace(/\s+/g, " ").trim() ?? null,
@@ -2295,7 +2295,7 @@ const metrics = {
     currentTravelVisible: isVisible(currentTravel),
     currentTravelTop: currentTravel ? Math.round(currentTravel.getBoundingClientRect().top) : null,
     currentTravelInRail: Boolean(currentTravel?.parentElement?.classList.contains("hc-table-rail")),
-    currentTravelCount: root.querySelectorAll("[data-current-travel]").length,
+    currentTravelCount: root.querySelectorAll(".hc-current-travel").length,
     changePaceButtons: buttons.filter(button => isVisible(button) && button.textContent?.trim() === "Change pace").length,
     paceTextInputs: root.querySelectorAll('input[name="pace"][type="text"]').length,
     paceSelects: root.querySelectorAll(".hc-current-travel-pace-editor select").length,
