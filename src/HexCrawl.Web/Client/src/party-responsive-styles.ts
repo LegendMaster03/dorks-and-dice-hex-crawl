@@ -11,6 +11,12 @@ export function ensurePartyResponsiveStyles(): void {
             container-type: inline-size;
         }
 
+        /* The roster table is wider than a compact rail. Its containing
+           grid item must shrink and allow a local scroll instead. */
+        .hc-party-register-grid,
+        .hc-party-register-grid > div { min-width:0; max-width:100%; }
+        .hc-party-register-wide { overflow-x:auto; overscroll-behavior-inline:contain; }
+
         @container (max-width: 720px) {
             .hc-party-editor-panel .hc-party-editor-row,
             .hc-party-editor-panel .hc-party-movement-grid {

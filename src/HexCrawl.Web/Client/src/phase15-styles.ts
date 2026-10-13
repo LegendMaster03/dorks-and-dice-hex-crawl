@@ -258,7 +258,11 @@ export function ensurePhase15Styles(): void {
         .hc-periodic-expedition .hc-table-rail > details,
         .hc-periodic-expedition .hc-table-rail > details > div,
         .hc-periodic-expedition .hc-gameplay-controls,
-        .hc-periodic-expedition .hc-gameplay-controls > * { min-width:0; max-width:100%; }
+        .hc-periodic-expedition .hc-gameplay-controls > *,
+        .hc-periodic-expedition .hc-gameplay-controls .hc-form,
+        .hc-periodic-expedition .hc-gameplay-controls .hc-stack,
+        .hc-periodic-expedition .hc-party-register-grid,
+        .hc-periodic-expedition .hc-party-register-grid > div { min-width:0; max-width:100%; }
         .hc-movement-composition-ledger { display:grid; gap:.65rem; min-width:0; max-width:100%; padding:.75rem; border:1px solid var(--hc-border); border-radius:.7rem; background:var(--hc-surface-elevated); }
         .hc-ledger-table-scroll { min-width:0; max-width:100%; overflow-x:auto; overscroll-behavior-inline:contain; }
         .hc-ledger-table-scroll .hc-movement-ledger-table { min-width:33rem; table-layout:fixed; }

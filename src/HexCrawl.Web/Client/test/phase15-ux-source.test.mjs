@@ -786,6 +786,8 @@ test("encounter schedule presentation distinguishes contextual procedure from au
     assert.match(styles, /\.hc-ledger-table-scroll[^}]*overflow-x:auto/);
     assert.match(styles, /\.hc-periodic-expedition \.hc-gameplay-controls \.hc-form/);
     assert.match(styles, /\.hc-periodic-expedition \.hc-party-register-grid/);
+    const partyResponsive = fs.readFileSync(path.join(sourceDir, "party-responsive-styles.ts"), "utf8");
+    assert.match(partyResponsive, /\.hc-party-register-wide \{ overflow-x:auto/);
     assert.match(styles, /grid-template-columns:minmax\(0,1fr\)/);
     assert.match(styles, /\.hc-readable-table thead th[^}]*white-space:nowrap/);
     assert.match(styles, /\.hc-readable-table tbody th[^}]*white-space:nowrap/);
