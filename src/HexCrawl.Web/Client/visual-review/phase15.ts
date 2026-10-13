@@ -471,7 +471,8 @@ if (stateName === "home") {
         }],
         getProcedurePresets: async () => [visualPreset()],
         startStandaloneSession: async () => { createCalls += 1; throw new Error("visual review must not create"); },
-        startConfiguredExpedition: async () => { createCalls += 1; throw new Error("visual review must not create"); }
+        startStandaloneCellSession: async () => { createCalls += 1; throw new Error("visual review must not create"); },
+        startCellExpedition: async () => { createCalls += 1; throw new Error("visual review must not create"); }
     };
     await renderToolHome(root, api, () => {});
 

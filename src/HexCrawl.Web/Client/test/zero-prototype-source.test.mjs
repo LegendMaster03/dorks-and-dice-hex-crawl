@@ -43,6 +43,8 @@ const retiredSymbols = [
     "worldToHex",
     "startHex",
     "setHexSelectionHandler",
+    "startConfiguredExpedition",
+    "advanceExpedition",
     "gridPreview",
     "hex-grid-analysis",
     "raster-grid-alignment"
