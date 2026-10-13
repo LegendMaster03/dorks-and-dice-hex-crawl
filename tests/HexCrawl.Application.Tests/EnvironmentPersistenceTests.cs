@@ -23,7 +23,7 @@ public sealed class EnvironmentPersistenceTests
             {
                 Kind = EnvironmentAnnotationScopeKind.Cell,
                 Cell = new WorldCellId(world.SpatialTiling.Id,
-                    new PeriodicCellAddress("hex", new LatticeDisplacement(0, 0)))
+                    new PeriodicCellAddress(world.SpatialTiling.Topology.MotifCells[0].Id, new LatticeDisplacement(0, 0)))
             },
             Facts = [Tag("terrain", "forest", "authored world truth")]
         };

@@ -53,7 +53,6 @@ public sealed class Phase17PostgresWorldTests
         Assert.NotNull(loaded);
         Assert.Equal(original.Id, loaded!.World.Id);
         Assert.Equal(1, loaded.Version);
-        Assert.False(loaded.World.HasLegacyHexGrid);
         Assert.Equal(tiling.Id, loaded.World.SpatialTiling.Id);
         Assert.Equal(tiling.Topology.TranslationDsSymbol,
             loaded.World.SpatialTiling.Topology.TranslationDsSymbol);
@@ -70,18 +69,12 @@ public sealed class Phase17PostgresWorldTests
     }
 
     [Fact]
-    public async Task LegacyWorldWithExpeditionMapRegistrationAndEventSurvivesFormatOneReads()
+    public async Task PeriodicWorldWithExpeditionAndMapRegistrationSurvivesRestart()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = new PostgresHexCrawlStore(database.ConnectionString);
         await store.InitializeAsync();
-        var origin = new WorldPoint(4.5, -2.5);
-        var grid = new HexGridDefinition
-        {
-            Id = Guid.NewGuid(), Orientation = HexOrientation.FlatTop,
-            Origin = origin, RotationDegrees = 41, HexRadiusWorldUnits = 3.25,
-            NeighborCenterDistance = new DistanceMeasure(12, DistanceUnit.Miles)
-        };
+        var tiling = MaplessSessionFixture.Start().World with { Origin = new WorldPoint(4.5, -2.5) };
         var map = new SourceMapRepresentation(
             Guid.NewGuid(), "test", "Map", SourceMapRole.Gm, "unchanged-asset-key",
             false, MapRegistrationTransform.Affine(2, 0, 0, 2, -3, 7),
@@ -89,26 +82,14 @@ public sealed class Phase17PostgresWorldTests
         var feature = new PointFeature(Guid.NewGuid(), "Ruins", "ruins", new WorldPoint(1, 2));
         var world = new OverworldDefinition
         {
-            Id = Guid.NewGuid(), Name = "Old world", Grid = grid,
+            Id = Guid.NewGuid(), Name = "Registered periodic world", Tiling = tiling,
             SourceMaps = [map], Features = [feature]
         };
         var now = DateTimeOffset.UtcNow;
         await store.CreateOverworldAsync(new StoredOverworld(world, "owner", 1, now, now));
-        // Represent a real pre-Phase-17 world_json with no format or tiling fields.
-        await using (var connection = new NpgsqlConnection(database.ConnectionString))
-        {
-            await connection.OpenAsync();
-            await using var command = connection.CreateCommand();
-            command.CommandText = """
-                UPDATE overworlds
-                SET world_json = world_json - 'formatVersion' - 'tiling'
-                WHERE id = @id;
-                """;
-            command.Parameters.AddWithValue("id", world.Id);
-            await command.ExecuteNonQueryAsync();
-        }
-        var current = new HexCoordinate(-91, 47);
-        var cell = world.SpatialTiling.Resolve(LegacyHexTilingCompatibility.ToAddress(current));
+        var address = new PeriodicCellAddress(
+            tiling.Topology.MotifCells[0].Id, new LatticeDisplacement(-91, 47));
+        var cell = world.SpatialTiling.Resolve(address);
         var evt = new CrawlRuntimeEvent(1, 1, CrawlRuntimeEventKind.WatchStarted,
             TimeSpan.Zero, "An event must survive.") { Cell = cell.Id };
         var expedition = new StoredExpedition(
@@ -124,7 +105,8 @@ public sealed class Phase17PostgresWorldTests
                 History = [evt]
             },
             new WorldBoundCrawlSessionContext(world.Id), null,
-            CampaignProcedureMaterializer.MaterializeExecutableSpatial(CrawlProcedureCatalog.Resolve("simple-fixed-distance")).Procedure,
+            CampaignProcedureMaterializer.MaterializeExecutableSpatial(
+                CrawlProcedureCatalog.Resolve("simple-fixed-distance")).Procedure,
             null, TimeSpan.Zero, "owner", 1, now, now);
         await store.CreateExpeditionAsync(expedition);
 
@@ -132,16 +114,13 @@ public sealed class Phase17PostgresWorldTests
         await restarted.InitializeAsync();
         var loaded = await restarted.GetOverworldAsync(world.Id, "owner");
         Assert.NotNull(loaded);
-        Assert.Equal(grid, loaded!.World.Grid);
-        Assert.Equal(world.Id, loaded.World.Id);
+        Assert.Equal(world.Id, loaded!.World.Id);
         Assert.Equal(map.Id, Assert.Single(loaded.World.SourceMaps).Id);
         Assert.Equal(map.AssetKey, loaded.World.SourceMaps[0].AssetKey);
         Assert.Equal(map.Alignment, loaded.World.SourceMaps[0].Alignment);
         Assert.Equal(feature.Id, Assert.Single(loaded.World.Features).Id);
-        Assert.Equal(grid.Id, loaded.World.SpatialTiling.Id);
-        var address = LegacyHexTilingCompatibility.ToAddress(current);
-        Assert.InRange(loaded.World.SpatialTiling.Resolve(address).Center.DistanceTo(
-            HexGeometry.HexToWorld(grid, current)), 0, 1e-8);
+        Assert.Equal(tiling.Id, loaded.World.SpatialTiling.Id);
+        Assert.Equal(cell.Center, loaded.World.SpatialTiling.Resolve(address).Center);
         var savedExpedition = await restarted.GetExpeditionAsync(expedition.Id, "owner");
         Assert.NotNull(savedExpedition);
         var cells = Assert.IsType<CellExpeditionState>(savedExpedition!.Runtime);
@@ -163,11 +142,7 @@ public sealed class Phase17PostgresWorldTests
         var original = new OverworldDefinition
         {
             Id = Guid.NewGuid(), Name = "Identity mismatch",
-            Grid = new HexGridDefinition
-            {
-                Id = Guid.NewGuid(), HexRadiusWorldUnits = 1,
-                NeighborCenterDistance = new DistanceMeasure(12, DistanceUnit.Miles)
-            }
+            Tiling = MaplessSessionFixture.Start().World
         };
         var now = DateTimeOffset.UtcNow;
         await store.CreateOverworldAsync(new StoredOverworld(original, "owner", 4, now, now));
@@ -207,11 +182,7 @@ public sealed class Phase17PostgresWorldTests
         var world = new OverworldDefinition
         {
             Id = Guid.NewGuid(), Name = "Future format fixture",
-            Grid = new HexGridDefinition
-            {
-                Id = Guid.NewGuid(), HexRadiusWorldUnits = 1,
-                NeighborCenterDistance = new DistanceMeasure(12, DistanceUnit.Miles)
-            }
+            Tiling = MaplessSessionFixture.Start().World
         };
         var now = DateTimeOffset.UtcNow;
         await store.CreateOverworldAsync(new StoredOverworld(world, "owner", 1, now, now));

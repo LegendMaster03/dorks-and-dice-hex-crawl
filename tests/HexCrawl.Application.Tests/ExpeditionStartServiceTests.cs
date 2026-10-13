@@ -81,14 +81,10 @@ public sealed class ExpeditionStartServiceTests
         await store.InitializeAsync();
         var procedures = new CampaignProcedureService(store);
         var starter = new ExpeditionStartService(store, new HexCrawlService(store), procedures);
-        var grid = new HexGridDefinition
-        {
-            Id = Guid.NewGuid(), HexRadiusWorldUnits = 2,
-            NeighborCenterDistance = new DistanceMeasure(12, DistanceUnit.Miles)
-        };
+        var tiling = MaplessSessionFixture.Start().World;
         var world = new OverworldDefinition
         {
-            Id = Guid.NewGuid(), Name = "Canonical hex world", Grid = grid
+            Id = Guid.NewGuid(), Name = "Canonical periodic world", Tiling = tiling
         };
         var now = DateTimeOffset.UtcNow;
         await store.CreateOverworldAsync(new StoredOverworld(world, "alice", 1, now, now));
@@ -99,7 +95,8 @@ public sealed class ExpeditionStartServiceTests
         };
         equivalent.Validate();
         await procedures.CreateAsync("alice", equivalent, null);
-        var address = LegacyHexTilingCompatibility.ToAddress(new HexCoordinate(0, 0));
+        var address = new PeriodicCellAddress(
+            tiling.Topology.MotifCells[0].Id, new LatticeDisplacement(0, 0));
         var session = await starter.StartWorldBoundCellsAsync(
             world.Id, "alice", "Equivalent symbol",
             new ProcedureStartSelection(ProcedureId: equivalent.ProcedureId,
@@ -132,11 +129,7 @@ public sealed class ExpeditionStartServiceTests
         var world = new OverworldDefinition
         {
             Id = Guid.NewGuid(), Name = "Pinned native world",
-            Grid = new HexGridDefinition
-            {
-                Id = Guid.NewGuid(), HexRadiusWorldUnits = 2,
-                NeighborCenterDistance = new DistanceMeasure(12, DistanceUnit.Miles)
-            }
+            Tiling = MaplessSessionFixture.Start().World
         };
         var now = DateTimeOffset.UtcNow;
         await store.CreateOverworldAsync(new StoredOverworld(world, "alice", 1, now, now));
@@ -145,8 +138,8 @@ public sealed class ExpeditionStartServiceTests
             CrawlProcedureCatalog.Resolve("simple-fixed-distance")).Procedure;
         await procedures.CreateAsync("alice", catalogProcedure, null);
         await procedures.CreateAsync("alice", sessionProcedure, null);
-        var start = new HexCoordinate(0, 0);
-        var address = LegacyHexTilingCompatibility.ToAddress(start);
+        var address = new PeriodicCellAddress(
+            world.SpatialTiling.Topology.MotifCells[0].Id, new LatticeDisplacement(0, 0));
         foreach (var procedure in new[] { catalogProcedure, sessionProcedure })
         {
             var pinned = new ProcedureStartSelection(
@@ -165,7 +158,7 @@ public sealed class ExpeditionStartServiceTests
     [InlineData("alexandrian-advanced")]
     [InlineData("simple-fixed-distance")]
     [InlineData("simple-hex-step")]
-    public async Task ExplicitCellStartOnLegacyHexWorldPinsGeometricPresetWithoutV1State(string presetKey)
+    public async Task ExplicitCellStartOnPeriodicWorldPinsGeometricPreset(string presetKey)
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var store = new PostgresHexCrawlStore(database.ConnectionString);
@@ -174,21 +167,15 @@ public sealed class ExpeditionStartServiceTests
         var starter = new ExpeditionStartService(store, new HexCrawlService(store), procedures);
         var world = new OverworldDefinition
         {
-            Id = Guid.NewGuid(), Name = "Geometric hex via legacy grid adapter",
-            Grid = new HexGridDefinition
-            {
-                Id = Guid.NewGuid(), HexRadiusWorldUnits = 2,
-                NeighborCenterDistance = new DistanceMeasure(12, DistanceUnit.Miles)
-            }
+            Id = Guid.NewGuid(), Name = "Periodic hex-preset world",
+            Tiling = MaplessSessionFixture.Start().World
         };
         var now = DateTimeOffset.UtcNow;
         await store.CreateOverworldAsync(new StoredOverworld(world, "alice", 1, now, now));
-        Assert.True(world.HasLegacyHexGrid);
-        Assert.Null(world.Tiling);
-
-        var start = LegacyHexTilingCompatibility.ToAddress(new HexCoordinate(0, 0));
+        var start = new PeriodicCellAddress(
+            world.SpatialTiling.Topology.MotifCells[0].Id, new LatticeDisplacement(0, 0));
         var expedition = await starter.StartWorldBoundCellsAsync(
-            world.Id, "alice", "V2 hex", new ProcedureStartSelection(PresetKey: presetKey),
+            world.Id, "alice", "Periodic cells", new ProcedureStartSelection(PresetKey: presetKey),
             start, "dm-controlled");
         var cellState = Assert.IsType<CellExpeditionState>(expedition.Runtime);
         cellState.Validate(world.SpatialTiling);
