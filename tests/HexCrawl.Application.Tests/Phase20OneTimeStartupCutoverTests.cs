@@ -113,6 +113,64 @@ public sealed class Phase20OneTimeStartupCutoverTests
     }
 
     [Fact]
+    public async Task InvalidAuthoredWorldPreventsTheEntireStartupConversion()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var store = new PostgresHexCrawlStore(database.ConnectionString);
+        await store.InitializeAsync();
+
+        static OverworldDefinition World(string name) => new()
+        {
+            Id = Guid.NewGuid(), Name = name,
+            Grid = new HexGridDefinition
+            {
+                Id = Guid.NewGuid(),
+                HexRadiusWorldUnits = 1,
+                NeighborCenterDistance = new DistanceMeasure(6, DistanceUnit.Miles)
+            }
+        };
+        var valid = World("Valid authored world");
+        var invalid = World("Unrecognized authored format");
+        var timestamp = DateTimeOffset.UtcNow;
+        await store.CreateOverworldAsync(new StoredOverworld(valid, "owner", 1, timestamp, timestamp));
+        await store.CreateOverworldAsync(new StoredOverworld(invalid, "owner", 2, timestamp, timestamp));
+
+        await using var connection = new NpgsqlConnection(database.ConnectionString);
+        await connection.OpenAsync();
+        await using (var downgrade = connection.CreateCommand())
+        {
+            downgrade.CommandText = """
+                ALTER TABLE expeditions DROP CONSTRAINT ck_expeditions_runtime_v2_only;
+                UPDATE hex_crawl_schema_migrations SET version = 10 WHERE version = 11;
+                UPDATE overworlds
+                SET world_json = jsonb_set(world_json, '{formatVersion}', '99'::jsonb)
+                WHERE id = @invalid;
+                """;
+            downgrade.Parameters.AddWithValue("invalid", invalid.Id);
+            await downgrade.ExecuteNonQueryAsync();
+        }
+
+        var exception = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            new PostgresSchemaMigrator(database.ConnectionString).MigrateAsync());
+        Assert.Contains("Unknown authored-world snapshot format", exception.Message);
+        await using var check = connection.CreateCommand();
+        check.CommandText = """
+            SELECT (SELECT max(version) FROM hex_crawl_schema_migrations),
+                   (SELECT world_json ? 'grid' FROM overworlds WHERE id = @valid),
+                   (SELECT world_json->>'formatVersion' FROM overworlds WHERE id = @invalid),
+                   (SELECT count(*) FROM overworlds WHERE owner_user_id = 'owner');
+            """;
+        check.Parameters.AddWithValue("valid", valid.Id);
+        check.Parameters.AddWithValue("invalid", invalid.Id);
+        await using var reader = await check.ExecuteReaderAsync();
+        Assert.True(await reader.ReadAsync());
+        Assert.Equal(10L, reader.GetInt64(0));
+        Assert.True(reader.GetBoolean(1));
+        Assert.Equal("99", reader.GetString(2));
+        Assert.Equal(2L, reader.GetInt64(3));
+    }
+
+    [Fact]
     public async Task StartupUpgradeRemovesV1AndItsEventsButPreservesOtherKindsAndUnrelatedRows()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
