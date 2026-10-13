@@ -362,6 +362,15 @@ export function ensurePhase15Styles(): void {
             .hc-periodic-expedition [data-cell-navigator] .hc-adjacency-navigator { width:min(7.5rem,100%); inset:auto; }
             .hc-adjacency-interface { min-width:2.75rem; min-height:2.75rem; }
             .hc-current-travel-facts { grid-template-columns:auto minmax(0,1fr); }
+            /* Party roster and effects tables live several grid levels below
+               the rail; every intervening auto minimum must be able to shrink. */
+            .hc-periodic-expedition .hc-gameplay-controls .hc-form,
+            .hc-periodic-expedition .hc-gameplay-controls .hc-stack,
+            .hc-periodic-expedition .hc-party-register-grid,
+            .hc-periodic-expedition .hc-party-register-grid > div { min-width:0; max-width:100%; }
+            .hc-periodic-expedition .hc-gameplay-controls .hc-form,
+            .hc-periodic-expedition .hc-gameplay-controls .hc-stack,
+            .hc-periodic-expedition .hc-party-register-grid { grid-template-columns:minmax(0,1fr); }
             .hc-movement-ledger-table, .hc-readable-table { display:block; width:100%; max-width:100%; overflow-x:auto; overscroll-behavior-inline:contain; }
             .hc-readable-facts { grid-template-columns:1fr; }
             .hc-reference-table-facts, .hc-rule-facts { grid-template-columns:minmax(6rem,auto) minmax(0,1fr); }

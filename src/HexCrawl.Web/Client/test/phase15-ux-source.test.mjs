@@ -784,6 +784,9 @@ test("encounter schedule presentation distinguishes contextual procedure from au
     assert.match(schedule, /moduleKey === "encounters\.schedule"/);
     assert.match(styles, /overflow-wrap:anywhere; word-break:normal/);
     assert.match(styles, /\.hc-ledger-table-scroll[^}]*overflow-x:auto/);
+    assert.match(styles, /\.hc-periodic-expedition \.hc-gameplay-controls \.hc-form/);
+    assert.match(styles, /\.hc-periodic-expedition \.hc-party-register-grid/);
+    assert.match(styles, /grid-template-columns:minmax\(0,1fr\)/);
     assert.match(styles, /\.hc-readable-table thead th[^}]*white-space:nowrap/);
     assert.match(styles, /\.hc-movement-ledger-table thead th[^}]*white-space:nowrap/);
 });
