@@ -479,7 +479,8 @@ export async function renderExpedition(
                 ? "Forced travel"
             : panelFocus === "pendingResourceConsequences"
                 ? "Travel consequence"
-                : capabilities.effects ? "Resources & effects" : "Survival & resources";
+                : capabilities.effects || (effects?.pendingConsequences.length ?? 0) > 0
+                    ? "Resources & effects" : "Survival & resources";
         openDrawer(title, body => {
             body.classList.add("hc-page");
             const cleanups: Array<() => void> = [];

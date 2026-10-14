@@ -296,6 +296,7 @@ export async function renderToolHome(
         if (!procedure.value) {
             calibrationRequired = false;
             syncCalibration();
+            startButton.disabled = true;
             required<HTMLElement>(form, "[data-procedure-summary]").textContent = "No runnable exploration ruleset is available.";
             return;
         }
@@ -307,6 +308,7 @@ export async function renderToolHome(
             const preset = presets.find(candidate => candidate.presetKey === choice.presetKey);
             calibrationRequired = preset?.procedure.runtime?.travelResolution === "ContinuousDistance";
             syncCalibration();
+            startButton.disabled = startPending;
             if (preset) {
                 required<HTMLElement>(form, "[data-procedure-summary]").textContent =
                     `${preset.description} · ${campaignProcedureSummary(preset.procedure)} · saves an editable campaign copy when play begins`;
@@ -314,11 +316,14 @@ export async function renderToolHome(
             }
             return;
         }
+        // Do not permit a saved-revision start before its movement policy is loaded.
+        startButton.disabled = true;
         const saved = await composerApi.getProcedure(choice.procedureId, choice.revision);
         if (disposed || procedure.value !== selectedValue) return;
         calibrationRequired = saved.modules.some(module => module.moduleKey === "movement.resolution"
             && module.parameters.travelResolution === "ContinuousDistance");
         syncCalibration();
+        startButton.disabled = startPending;
         for (const module of saved.modules) {
             const item = document.createElement("li");
             item.textContent = `${module.displayName}: ${module.mechanic.displayName}`;
@@ -335,7 +340,9 @@ export async function renderToolHome(
             ? presets
             : selectedWorld
                 ? geometric.filter(value =>
-                    value.procedure.tilingDsSymbol === selectedWorld!.tiling?.topology.quotientDsSymbol)
+                    value.procedure.tilingDsSymbol === selectedWorld!.tiling?.topology.quotientDsSymbol
+                    && (selectedWorld!.tiling?.physicalDistancePerWorldUnit !== null
+                        || value.procedure.runtime?.travelResolution !== "ContinuousDistance"))
                 : geometric;
         populateProcedureStartChoices(procedure, savedProcedures, available);
         if ([...procedure.options].some(option => option.value === previous))

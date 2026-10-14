@@ -83,6 +83,9 @@ test("crawl creation surfaces do not assume a 12-mile physical scale", () => {
     assert.match(home, /Boolean\(scaleText\) !== Boolean\(unitKind\)/);
     assert.match(assistant, /Boolean\(scaleText\) !== Boolean\(unitKind\)/);
     assert.match(world, /Boolean\(scaleText\) !== Boolean\(unit\)/);
+    assert.match(home, /physicalDistancePerWorldUnit !== null/);
+    assert.match(home, /startButton\.disabled = true;[\s\S]*composerApi\.getProcedure/);
+    assert.match(assistant, /submit\.disabled = true;[\s\S]*composerApi\.getProcedure/);
 });
 
 test("standalone crawl sessions post directly to the expedition collection", () => {

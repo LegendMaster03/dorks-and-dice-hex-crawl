@@ -189,10 +189,13 @@ export async function renderAssistantEntry(
                     `${preset.description} · ${campaignProcedureSummary(preset.procedure)} · creates a new saved procedure when the assistant session begins`;
                 renderProcedureMechanicList(mechanics, preset.procedure);
             }
-            submit.disabled = false;
+            submit.disabled = pending;
             return;
         }
 
+        // Saved revision metadata determines the calibration requirement.
+        // Prevent submitting until the exact revision has been inspected.
+        submit.disabled = true;
         const saved = await composerApi.getProcedure(choice.procedureId, choice.revision);
         if (disposed || procedure.value !== selectedValue) return;
         calibrationRequired = saved.modules.some(module => module.moduleKey === "movement.resolution"
@@ -203,7 +206,7 @@ export async function renderAssistantEntry(
             item.textContent = `${module.displayName}: ${module.mechanic.displayName}`;
             mechanics.append(item);
         }
-        submit.disabled = false;
+        submit.disabled = pending;
     };
 
     mode?.addEventListener("change", syncMode);
