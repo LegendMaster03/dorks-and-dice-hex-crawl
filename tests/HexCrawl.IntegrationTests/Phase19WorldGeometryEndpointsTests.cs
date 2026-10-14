@@ -29,7 +29,7 @@ public sealed class Phase19WorldGeometryEndpointsTests
             Assert.Equal(5, world.GetProperty("tiling")
                 .GetProperty("playableBounds").GetProperty("width").GetInt32());
             var motif = world.GetProperty("tiling").GetProperty("topology")
-                .GetProperty("motifCells")[0].GetProperty("id").GetString()!;
+                .GetProperty("motifCells").EnumerateArray().First().GetProperty("id").GetString()!;
 
             using var huge = await client.GetAsync(
                 $"/api/overworlds/{id:D}/cells/viewport?minX=-100000&minY=-100000&maxX=100000&maxY=100000");
