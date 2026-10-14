@@ -1054,6 +1054,8 @@ test("vertex adjacency augments the existing tiling card and compass, without pa
     assert.match(expedition, /vertexChoices: allowedVertices\.map/);
     assert.match(expedition, /onVertexToggle: id =>/);
     assert.match(navigator, /hc-adjacency-interface hc-adjacency-vertex/);
+    assert.match(navigator, /coincident\.length > 1/);
+    assert.match(navigator, /candidate\.anchor\.x - contact\.anchor\.x/);
     assert.doesNotMatch(expedition, /data-vertex-contacts/);
     assert.doesNotMatch(expedition, /vertexContainer/);
 });
