@@ -38,6 +38,7 @@ export function ensurePhase15Styles(): void {
         .hc-preset-card-head > div { flex:1; min-width:0; }
         .hc-preset-card-head canvas { border:1px solid var(--hc-border); border-radius:.35rem; }
         .hc-procedure-tiling-picker { display:grid; gap:.4rem; padding-block:.65rem; }
+        .hc-procedure-tiling-selected { display:flex; align-items:center; justify-content:space-between; gap:.75rem; max-width:28rem; }
         .hc-procedure-tiling-picker h3, .hc-procedure-tiling-picker p { margin:0; }
         .hc-procedure-tiling-picker details { max-width:28rem; }
         .hc-procedure-tiling-picker details > button { background:var(--hc-surface); color:var(--hc-text); cursor:pointer; }
