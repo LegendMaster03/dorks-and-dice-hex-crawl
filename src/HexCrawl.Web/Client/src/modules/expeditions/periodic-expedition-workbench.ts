@@ -7,7 +7,7 @@ import type {
     WorldCellGeometry, WorldPoint, ToolHostContext
 } from "../../types";
 import { showUiError, clearUiError } from "../../ui-error";
-import { currentPeriodicCellAdjacency } from "./current-cell-topology";
+import { currentPeriodicCellAdjacency, sameWorldCell } from "./current-cell-topology";
 import { renderCurrentCellNavigator } from "./cell-navigator";
 import { adjacencyForIntent } from "./spatial-adjacency";
 import { guidancePreferenceButton } from "../../ui/guidance";
@@ -43,7 +43,10 @@ export async function renderPeriodicExpeditionWorkbench(
     let runtime = initial;
     let topology = await api.getCellTopology(initial.id);
     let selectedExit = topology.selectedExitInterfaceIndex;
-    let selectedVertex: NonNullable<typeof topology.vertexOnlyContacts>[number] | null = null;
+    let selectedVertex: NonNullable<typeof topology.vertexOnlyContacts>[number] | null =
+        topology.vertexOnlyContacts?.find(contact =>
+            initial.expedition.cellTraversal?.selectedExitVertexNeighbor
+                && sameWorldCell(contact.to, initial.expedition.cellTraversal.selectedExitVertexNeighbor)) ?? null;
     let disposed = false;
     let busy = false;
     let refreshGeneration = 0;
@@ -486,8 +489,9 @@ export async function renderPeriodicExpeditionWorkbench(
             journeyAttention = null;
             topology = await api.getCellTopology(runtime.id);
             selectedExit = topology.selectedExitInterfaceIndex;
-            selectedVertex = null;
-            selectedVertex = null;
+            selectedVertex = topology.vertexOnlyContacts?.find(contact =>
+                runtime.expedition.cellTraversal?.selectedExitVertexNeighbor
+                    && sameWorldCell(contact.to, runtime.expedition.cellTraversal.selectedExitVertexNeighbor)) ?? null;
             if (!world) map.centerOn(topology.position);
             render();
             gameplay.sync();
@@ -524,6 +528,9 @@ export async function renderPeriodicExpeditionWorkbench(
             required<HTMLButtonElement>("[data-world]").hidden = world === null;
             topology = nextTopology;
             selectedExit = topology.selectedExitInterfaceIndex;
+            selectedVertex = topology.vertexOnlyContacts?.find(contact =>
+                runtime.expedition.cellTraversal?.selectedExitVertexNeighbor
+                    && sameWorldCell(contact.to, runtime.expedition.cellTraversal.selectedExitVertexNeighbor)) ?? null;
             if (!world) map.centerOn(topology.position);
             render();
             gameplay.sync();

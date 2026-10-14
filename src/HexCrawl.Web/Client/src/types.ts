@@ -336,6 +336,8 @@ export type SpatialRuntimeExpedition = {
         entryInterfaceIndex: number | null;
         travelHeading: WorldPoint | null;
         selectedExitInterfaceIndex: number | null;
+        selectedExitVertexNeighbor?: WorldCellId | null;
+        entryVertexIndex?: number | null;
     } | null;
     intendedHeading?: WorldPoint | null;
     actualHeading?: WorldPoint | null;
