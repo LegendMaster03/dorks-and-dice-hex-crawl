@@ -1020,43 +1020,6 @@ export async function renderPeriodicExpeditionWorkbench(
         });
         required<HTMLElement>("[data-cell-navigator]").replaceChildren(navigation);
         // Point-only destinations now share the existing navigator compass.
-        const allowedVertices = runtime.procedure.runtime?.adjacency === "EdgeAndVertex"
-            ? topology.vertexOnlyContacts ?? [] : [];
-        for (const contact of allowedVertices) {
-            const choice = document.createElement("button");
-            choice.type = "button";
-            const current = selectedVertex?.to.tilingId === contact.to.tilingId
-                && selectedVertex?.to.address.motifCellId === contact.to.address.motifCellId
-                && selectedVertex?.to.address.translation.u === contact.to.address.translation.u
-                && selectedVertex?.to.address.translation.v === contact.to.address.translation.v;
-            choice.textContent = `Vertex neighbor ${contact.fromVertexIndex + 1} · ${contact.to.address.motifCellId} (${contact.to.address.translation.u}, ${contact.to.address.translation.v})`;
-            choice.setAttribute("aria-pressed", String(current));
-            choice.disabled = busy;
-            choice.addEventListener("click", () => {
-                if (generated) invalidateGenerated();
-                if (current) {
-                    selectedVertex = null;
-                    selectHeading(null);
-                } else {
-                    selectedExit = null;
-                    selectedVertex = contact;
-                    const offset = {
-                        x: contact.point.x - topology.position.x,
-                        y: contact.point.y - topology.position.y
-                    };
-                    const centerOffset = {
-                        x: contact.point.x - topology.center.x,
-                        y: contact.point.y - topology.center.y
-                    };
-                    const heading = Math.hypot(offset.x, offset.y) > 1e-12 ? offset : centerOffset;
-                    input("headingX").value = String(heading.x);
-                    input("headingY").value = String(heading.y);
-                }
-                render();
-            });
-            vertexContainer.append(choice);
-        }
-        vertexContainer.hidden = allowedVertices.length === 0;
         const selectedEdge = topology.interfaces.find(edge => edge.interfaceIndex === selectedExit);
         renderPhase15Chrome();
         text("[data-course]", selectedVertex
