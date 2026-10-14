@@ -485,6 +485,7 @@ export async function renderProcedureAuthoringWorkspace(
         tilingField.append(tilingSelect);
         page.append(tilingField);
         const matches = presets.filter(p => tilingFilter === "all" || p.procedure.tilingDsSymbol === tilingFilter);
+        if (matches.length === 0) page.append(emptyState("No matching presets", "No presets use this tiling yet."));
         const familiar = familiarPresets(matches);
         if (familiar.length > 0) page.append(presetSection("Familiar exploration rulesets", familiar));
         const generic = genericPresets(matches);
