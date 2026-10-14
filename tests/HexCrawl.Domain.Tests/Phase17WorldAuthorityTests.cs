@@ -117,6 +117,45 @@ public sealed class Phase17WorldAuthorityTests
             (bounded with { PlayableBounds = new PeriodicMapBounds(0, 1) }).Validate());
     }
 
+    [Theory]
+    [InlineData(5)]
+    [InlineData(9)]
+    public void SquareMapSizeUsesExactPeriodicCellCounts(int size)
+    {
+        var realized = DelaneyDressHarmonicMetricRealization.Construct("<1:1,1,1:4,4>", 1, "unit");
+        Assert.Equal("realized", realized.Status);
+        var tiling = new PeriodicWorldTiling(Guid.NewGuid(),
+            realized.Topology!, realized.Realization!, new WorldPoint(0, 0))
+        {
+            PlayableBounds = new PeriodicMapBounds(size, size)
+        };
+        tiling.Validate();
+        Assert.Single(tiling.Topology.MotifCells);
+        var cellName = tiling.Topology.MotifCells[0].Id;
+        var count = 0;
+        for (var u = -1; u <= size; u++)
+            for (var v = -1; v <= size; v++)
+            {
+                var address = new PeriodicCellAddress(cellName, new LatticeDisplacement(u, v));
+                if (tiling.IsPlayable(address)) count++;
+            }
+        Assert.Equal(size * size, count);
+        Assert.NotNull(tiling.PlayableEnvelope());
+    }
+
+    [Fact]
+    public void OptionalBoundsIntersectAndNonoverlapFailsClosed()
+    {
+        var left = new PeriodicMapBounds(9, 9);
+        var right = new PeriodicMapBounds(5, 5, 2, 3);
+        Assert.Equal(new PeriodicMapBounds(5, 5, 2, 3),
+            PeriodicMapBounds.Intersection(left, right));
+        Assert.Equal(left, PeriodicMapBounds.Intersection(null, left));
+        Assert.Null(PeriodicMapBounds.Intersection(null, null));
+        Assert.Throws<InvalidOperationException>(() =>
+            PeriodicMapBounds.Intersection(left, new PeriodicMapBounds(2, 2, 12, 12)));
+    }
+
     [Fact]
     public void WorldAuthorityRejectsFabricatedTopologyAndMetric()
     {
