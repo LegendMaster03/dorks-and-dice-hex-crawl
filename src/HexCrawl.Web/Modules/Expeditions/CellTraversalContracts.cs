@@ -78,14 +78,12 @@ public sealed record CellTraversalContextContract(
             cursor.EntryInterfaceIndex,
             cursor.SelectedExitInterfaceIndex,
             world.PhysicalDistancePerWorldUnit is not null,
-            exits.Where(edge => world.IsPlayable(edge.To.Address))
-                .Select(CellInterfaceContract.From).ToArray())
+            exits.Select(CellInterfaceContract.From).ToArray())
         {
             PhysicalDistancePerWorldUnit = world.PhysicalDistancePerWorldUnit is { } calibration
                 ? DistanceContract.From(calibration) : null,
             SupportsVertexOnlyAdjacency = world.HasVertexOnlyContacts(),
             VertexOnlyContacts = world.VertexOnlyContacts(cursor.CurrentCell.Address)
-                .Where(contact => world.IsPlayable(contact.To.Address)).ToArray()
                 .Where(contact => world.IsPlayable(contact.To.Address)).ToArray()
         };
     }
