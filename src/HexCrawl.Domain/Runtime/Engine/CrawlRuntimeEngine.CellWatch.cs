@@ -11,8 +11,11 @@ public sealed record ResolvedCellNavigation(
 
 public sealed record CellCourseDecision(
     WorldPoint IntendedHeading,
-    int SelectedExitInterfaceIndex,
-    ResolutionProvenance Provenance);
+    int? SelectedExitInterfaceIndex,
+    ResolutionProvenance Provenance)
+{
+    public WorldCellId? SelectedExitVertexNeighbor { get; init; }
+}
 
 public sealed record CellWatchAdvanceInputs(
     ResolvedTravelAmount Travel,
@@ -344,7 +347,8 @@ public sealed partial class CrawlRuntimeEngine
     /// </summary>
     public CellWatchAdvanceResult ResolveCellCourse(
         PeriodicWorldTiling world, CellExpeditionState expedition,
-        CellCourseDecision decision)
+        CellCourseDecision decision,
+        CellAdjacencyMode adjacency = CellAdjacencyMode.EdgeOnly)
     {
         ArgumentNullException.ThrowIfNull(world);
         ArgumentNullException.ThrowIfNull(expedition);
@@ -362,17 +366,26 @@ public sealed partial class CrawlRuntimeEngine
             || decision.IntendedHeading.X == 0 && decision.IntendedHeading.Y == 0)
             throw new InvalidOperationException("The resolved course requires a finite, nonzero heading.");
 
+        if (!Enum.IsDefined(adjacency))
+            throw new ArgumentOutOfRangeException(nameof(adjacency));
+        if (decision.SelectedExitInterfaceIndex.HasValue == decision.SelectedExitVertexNeighbor.HasValue)
+            throw new InvalidOperationException("Select exactly one edge interface or point-only vertex destination.");
+        if (decision.SelectedExitVertexNeighbor is not null && adjacency != CellAdjacencyMode.EdgeAndVertex)
+            throw new InvalidOperationException("The pinned movement policy does not permit vertex-only crossings.");
+
         var actual = RotateCellHeading(decision.IntendedHeading,
             expedition.IsLost ? expedition.ResolvedVeerDegrees ?? 0d : 0d);
         var traversal = expedition.Traversal with
         {
             TravelHeading = actual,
             SelectedExitInterfaceIndex = decision.SelectedExitInterfaceIndex,
-            SelectedExitVertexNeighbor = null
+            SelectedExitVertexNeighbor = decision.SelectedExitVertexNeighbor
         };
         traversal.Validate(world);
-        var crossing = PeriodicCellTraversalGeometry.NextCrossing(world, traversal);
-        if (crossing.Status != CellCrossingStatus.Crosses)
+        var crossing = PeriodicCellTraversalGeometry.NextCrossing(world, traversal, adjacency);
+        if (crossing.Status != CellCrossingStatus.Crosses
+            || decision.SelectedExitVertexNeighbor is not null
+                && crossing.VertexContact?.To != decision.SelectedExitVertexNeighbor)
             throw new InvalidOperationException(crossing.Reason
                 ?? "This course has no uniquely adjudicated atomic exit interface.");
 
@@ -395,13 +408,16 @@ public sealed partial class CrawlRuntimeEngine
         next.Validate(world);
         var events = new EventCollector(expedition.History);
         var watchNumber = active?.WatchNumber ?? Math.Max(1, next.CompletedWatches + 1);
+        var contactDescription = decision.SelectedExitVertexNeighbor is { } vertex
+            ? $"point-only vertex destination {vertex}" 
+            : $"atomic exit interface {decision.SelectedExitInterfaceIndex}";
         AddCellEvent(events, watchNumber, CrawlRuntimeEventKind.DirectionChanged, next,
-            $"Resolved atomic exit interface {decision.SelectedExitInterfaceIndex} for the current cell.");
+            $"Resolved {contactDescription} for the current cell.");
         if (decision.Provenance.Source == ResolutionSource.DmOverride)
             AddCellEvent(events, watchNumber, CrawlRuntimeEventKind.DmOverrideApplied,
                 next, decision.Provenance.Note ?? "DM confirmed a cell course decision.");
         AddCellEvent(events, watchNumber, CrawlRuntimeEventKind.ResolutionProvenanceRecorded,
-            next, $"Cell course resolved through {decision.Provenance.Source}; selected atomic interface {decision.SelectedExitInterfaceIndex}."
+            next, $"Cell course resolved through {decision.Provenance.Source}; selected {contactDescription}."
                 + (string.IsNullOrWhiteSpace(decision.Provenance.Note)
                     ? "" : $" Note: {decision.Provenance.Note.Trim()}"));
         return FinishCell(next, null, active?.Remaining ?? TimeSpan.Zero, events);
