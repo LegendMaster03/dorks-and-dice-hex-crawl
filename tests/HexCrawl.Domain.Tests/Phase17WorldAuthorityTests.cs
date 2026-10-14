@@ -103,15 +103,18 @@ public sealed class Phase17WorldAuthorityTests
 
         var bounded = baseTiling with
         {
-            PlayableBounds = new WorldBounds(inside.X - 0.1, inside.Y - 0.1,
-                inside.X + 0.1, inside.Y + 0.1)
+            PlayableBounds = new PeriodicMapBounds(5, 5)
         };
         bounded.Validate();
         Assert.True(bounded.IsPlayable(address));
+        Assert.True(bounded.IsPlayable(new PeriodicCellAddress(address.MotifCellId,
+            new LatticeDisplacement(4, 4))));
+        Assert.False(bounded.IsPlayable(new PeriodicCellAddress(address.MotifCellId,
+            new LatticeDisplacement(-1, 0))));
         Assert.False(bounded.IsPlayable(new PeriodicCellAddress(address.MotifCellId,
             new LatticeDisplacement(100, 100))));
         Assert.Throws<InvalidOperationException>(() =>
-            (bounded with { PlayableBounds = new WorldBounds(0, 0, 0, 1) }).Validate());
+            (bounded with { PlayableBounds = new PeriodicMapBounds(0, 1) }).Validate());
     }
 
     [Fact]
