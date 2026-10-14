@@ -48,8 +48,8 @@ public sealed class Phase16NomenclatureTests
     [InlineData("<1:1,1,1:6,3>")]
     public void RegularNamedTilesHaveVerifiedPreviewRealizations(string symbol)
     {
-        var entry = Assert.Single(CrawlTilingNames.Catalog.ListEntries().Where(
-            choice => choice.CanonicalDsSymbol == symbol));
+        var entry = Assert.Single(CrawlTilingNames.Catalog.ListEntries(),
+            choice => choice.CanonicalDsSymbol == symbol);
         var preview = CrawlTilingNames.RepresentativePreview(entry);
         Assert.NotNull(preview);
         var resolved = CrawlTilingNames.Catalog.Describe(symbol, preview);
