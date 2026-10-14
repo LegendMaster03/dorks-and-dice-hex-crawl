@@ -30,13 +30,14 @@ export class ExpeditionEffectsPanel {
         root.append(this.panel);
     }
 
-    public async sync(): Promise<void> {
+    public async sync(): Promise<ExpeditionEffectState> {
         const generation = ++this.syncGeneration;
         const state = await this.api.get(this.expeditionId);
         if (!this.disposed && generation === this.syncGeneration) {
             this.state = state;
             this.render();
         }
+        return state;
     }
 
     public dispose(): void {

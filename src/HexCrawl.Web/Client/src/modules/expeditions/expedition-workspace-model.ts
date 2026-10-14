@@ -1,4 +1,5 @@
 import type { ExpeditionJourneyState } from "../../journey-types";
+import type { ExpeditionEffectState } from "../../effect-types";
 import type { SurvivalResources } from "../../survival-types";
 import type { ExpeditionDetail, ProcedureModule, SpatialRuntimeExpedition } from "../../types";
 import { canUseFocusedNonSpatialWatch } from "./focused-interval-policy.js";
@@ -9,6 +10,7 @@ export type ExpeditionWorkspaceActionKind =
     | "navigation"
     | "boundary"
     | "survival"
+    | "effects"
     | "journey"
     | "travel"
     | "watch"
@@ -51,10 +53,11 @@ export type ExpeditionWorkspacePresentation = {
 export function expeditionWorkspacePresentation(
     runtime: ExpeditionDetail,
     journey: ExpeditionJourneyState | null,
-    survival: SurvivalResources | null): ExpeditionWorkspacePresentation {
+    survival: SurvivalResources | null,
+    effects: ExpeditionEffectState | null = null): ExpeditionWorkspacePresentation {
     const capabilities = expeditionWorkspaceCapabilities(runtime.procedure.modules);
     return {
-        action: expeditionWorkspaceAction(runtime, journey, survival),
+        action: expeditionWorkspaceAction(runtime, journey, survival, effects),
         capabilities,
         timeLabel: timeLabel(runtime, capabilities.interval),
         routeLabel: runtime.expedition.isSpatial ? routeLabel(runtime) : null,
@@ -104,7 +107,8 @@ export function expeditionWorkspaceCapabilities(modules: ProcedureModule[]): Exp
 export function expeditionWorkspaceAction(
     runtime: ExpeditionDetail,
     journey: ExpeditionJourneyState | null,
-    survival: SurvivalResources | null = null): ExpeditionWorkspaceAction {
+    survival: SurvivalResources | null = null,
+    effects: ExpeditionEffectState | null = null): ExpeditionWorkspaceAction {
     if (runtime.pauseReason === "EncounterTriggered") {
         return {
             kind: "encounter",
@@ -151,6 +155,9 @@ export function expeditionWorkspaceAction(
             urgent: true
         };
     }
+
+    const pendingEffect = pendingEffectConsequenceAction(effects);
+    if (pendingEffect) return pendingEffect;
 
     const journeyEventPending = journey?.eventOccurrences.find(event => event.status === "ResolutionRequired");
     if (journeyEventPending) {
@@ -246,6 +253,21 @@ export function expeditionWorkspaceAction(
         label: "Review exploration rules",
         detail: "This expedition has no automatic travel or journey action available. The saved ruleset remains the table authority for reference and manual play.",
         urgent: false
+    };
+}
+
+/** Attention shared by spatial and nonspatial workspaces, backed by persisted effect state. */
+export function pendingEffectConsequenceAction(
+    effects: ExpeditionEffectState | null): ExpeditionWorkspaceAction | null {
+    const pending = effects?.pendingConsequences[0];
+    if (!pending) return null;
+    return {
+        kind: "effects",
+        label: "Review pending effect consequence",
+        detail: pending.requiredAction?.trim()
+            ? `${pending.reason} Next: ${pending.requiredAction}`
+            : pending.reason || "A pending effect consequence needs table adjudication before routine continuation.",
+        urgent: true
     };
 }
 

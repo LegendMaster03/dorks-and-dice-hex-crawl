@@ -16,6 +16,7 @@ import { renderPhase15NextAction } from "./phase15-next-action";
 import { nextCellExpeditionAction } from "./phase15-cell-action";
 import { navigationResolutionDue } from "./expedition-workflow";
 import type { ExpeditionJourneyState } from "../../journey-types";
+import type { ExpeditionEffectState } from "../../effect-types";
 import type { SurvivalResources } from "../../survival-types";
 import { polygonContainsSubject, uniquelyAdjacentInterface } from "./phase20-cell-ui-policy";
 import { discoveredSubjectIds } from "../../runtime-view";
@@ -50,6 +51,7 @@ export async function renderPeriodicExpeditionWorkbench(
     let inspectedGeometry: WorldCellGeometry | null = null;
     let inspectedTilingRevision: number | null = null;
     let survivalAttention: SurvivalResources | null = null;
+    let effectsAttention: ExpeditionEffectState | null = null;
     let journeyAttention: ExpeditionJourneyState | null = null;
     let attentionStatus: "loading" | "ready" | "error" = "loading";
 
@@ -457,10 +459,11 @@ export async function renderPeriodicExpeditionWorkbench(
         failure => {
             if (!disposed) showUiError(error, failure);
         },
-        (journey, survival, failed) => {
+        (journey, survival, effects, failed) => {
             if (disposed) return;
             journeyAttention = journey;
             survivalAttention = survival;
+            effectsAttention = effects;
             attentionStatus = failed ? "error" : "ready";
             render();
         }
@@ -479,6 +482,7 @@ export async function renderPeriodicExpeditionWorkbench(
             generated = null;
             attentionStatus = "loading";
             survivalAttention = null;
+            effectsAttention = null;
             journeyAttention = null;
             topology = await api.getCellTopology(runtime.id);
             selectedExit = topology.selectedExitInterfaceIndex;
@@ -512,6 +516,7 @@ export async function renderPeriodicExpeditionWorkbench(
             generated = null;
             attentionStatus = "loading";
             survivalAttention = null;
+            effectsAttention = null;
             journeyAttention = null;
             world = nextWorld;
             required<HTMLButtonElement>("[data-world]").hidden = world === null;
@@ -760,6 +765,7 @@ export async function renderPeriodicExpeditionWorkbench(
             hasSelectedCourse: selectedExit !== null || state.intendedHeading !== null,
             activeWatchNumber: state.activeWatchNumber,
             survival: survivalAttention,
+            effects: effectsAttention,
             journey: journeyAttention,
             navigationDue: navigationResolutionDue(runtime,
                 state.activeSuppressesNavigationCheck, state.activeDeliberateDoubleBack),
@@ -785,6 +791,8 @@ export async function renderPeriodicExpeditionWorkbench(
                 openGameplayPanel("[data-survival-resources-panel]",
                     survivalAttention?.forcedTravel.checkDue
                         ? "Record forced-travel result" : "Apply resolved resource change");
+            } else if (action.kind === "effects") {
+                openGameplayPanel("[data-effects-panel]", "Record resolution");
             } else if (action.kind === "journey") {
                 openGameplayPanel("[data-journey-panel]",
                     journeyAttention?.eventOccurrences.some(item => item.status === "ResolutionRequired")

@@ -10,12 +10,19 @@ const baseline = () => ({
     activeWatchNumber: null,
     survival: null,
     journey: null,
+    effects: null,
     navigationDue: false,
     attentionStatus: 'ready'
 });
 const survival = (checkDue = false, consequences = []) => ({
     forcedTravel: { checkDue },
     pendingResourceConsequences: consequences
+});
+const effects = () => ({
+    pendingConsequences: [{
+        reason: 'Effect target scope needs review',
+        requiredAction: 'Resolve at the table'
+    }]
 });
 const journey = (events = [], processes = []) => ({
     eventOccurrences: events,
@@ -27,6 +34,9 @@ for (const [name, state, kind, label] of [
     ['active watch', { activeWatchNumber: 3 }, 'travel', 'Resume watch 3'],
     ['forced travel', { survival: survival(true) }, 'survival', 'Resolve forced travel'],
     ['resource consequence', { survival: survival(false, [{ consequenceId: 'c' }]) }, 'survival', 'Resolve travel consequence'],
+    ['pending effect', { effects: effects() }, 'effects', 'Review pending effect consequence'],
+    ['effect over journey', { effects: effects(), journey: journey([{ status: 'ResolutionRequired' }]) }, 'effects', 'Review pending effect consequence'],
+    ['resource over effect', { effects: effects(), survival: survival(true) }, 'survival', 'Resolve forced travel'],
     ['journey event', { journey: journey([{ status: 'ResolutionRequired', eventType: 'Hazard' }]) }, 'journey', 'Resolve journey event'],
     ['journey process', { journey: journey([], [{ status: 'ResolutionRequired', pendingActions: [], definition: { displayName: 'Journey' } }]) }, 'journey', 'Resolve journey stage'],
     ['journey stage pending action', { journey: journey([], [{ status: 'Active', pendingActions: [{ detail: 'Pick an approach' }], definition: { displayName: 'Challenge' } }]) }, 'journey', 'Resolve journey stage'],
@@ -47,7 +57,7 @@ for (const [name, state, kind, label] of [
         assert.equal(actual.kind, kind);
         assert.equal(actual.label, label);
         assert.equal(actual.urgent,
-            ['survival', 'journey', 'navigation', 'encounter', 'boundary'].includes(kind)
+            ['survival', 'effects', 'journey', 'navigation', 'encounter', 'boundary'].includes(kind)
                 || state.attentionStatus === 'error');
     });
 }

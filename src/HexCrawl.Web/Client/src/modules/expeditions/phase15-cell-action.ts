@@ -1,6 +1,8 @@
 import type { ExpeditionWorkspaceAction } from "./expedition-workspace-model.js";
 import type { ExpeditionJourneyState } from "../../journey-types.js";
 import type { SurvivalResources } from "../../survival-types.js";
+import type { ExpeditionEffectState } from "../../effect-types.js";
+import { pendingEffectConsequenceAction } from "./expedition-workspace-model.js";
 
 /**
  * Projection from persisted cell-watch and gameplay state to the Phase 15
@@ -13,6 +15,7 @@ export function nextCellExpeditionAction(state: {
     hasSelectedCourse: boolean;
     activeWatchNumber: number | null;
     survival: SurvivalResources | null;
+    effects?: ExpeditionEffectState | null;
     journey: ExpeditionJourneyState | null;
     navigationDue: boolean;
     attentionStatus: "loading" | "ready" | "error";
@@ -54,6 +57,8 @@ export function nextCellExpeditionAction(state: {
             : "A pending resource or survival consequence requires resolution.",
         urgent: true
     };
+    const pendingEffect = pendingEffectConsequenceAction(state.effects ?? null);
+    if (pendingEffect) return pendingEffect;
     const event = state.journey?.eventOccurrences.find(item => item.status === "ResolutionRequired");
     if (event) return {
         kind: "journey", label: "Resolve journey event",
