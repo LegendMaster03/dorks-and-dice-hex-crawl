@@ -10,7 +10,8 @@ import type {
     ProcedureComposerDraftInput,
     ProcedureComposerRevisionInput,
     ProcedureRevisionSummary,
-    SavedProcedureSummary
+    SavedProcedureSummary,
+    TilingCatalogEntry
 } from "./procedure-composer-types";
 import type { ProcedureReference } from "./procedure-reference-types";
 
@@ -25,6 +26,10 @@ export class ProcedureComposerApi {
         if (!response.ok) throw await apiError(response, "Tool Host context");
         const context = await response.json() as ToolHostContext;
         return new ProcedureComposerApi(backendBaseFromContext(context.apiBaseUrl));
+    }
+
+    public listTilings(): Promise<TilingCatalogEntry[]> {
+        return this.getJson("/api/procedures/tilings", "Available tilings");
     }
 
     public listProcedures(): Promise<SavedProcedureSummary[]> {
