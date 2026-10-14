@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json.Serialization;
 
 namespace HexCrawl.Domain.Spatial;
 
@@ -95,6 +96,7 @@ public sealed record PeriodicWorldTiling(
     /// An absent value leaves the tiling unbounded. Period counts apply to
     /// the existing periodic basis, not world-space distance.
     /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public PeriodicMapBounds? PlayableBounds { get; init; }
 
     public bool IsPlayable(WorldCellGeometry cell) => IsPlayable(cell.Id.Address);
