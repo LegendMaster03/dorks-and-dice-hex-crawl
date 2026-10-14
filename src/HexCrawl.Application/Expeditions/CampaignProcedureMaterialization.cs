@@ -1,5 +1,6 @@
 using HexCrawl.Domain.Procedure;
 using HexCrawl.Domain.Runtime;
+using HexCrawl.Domain.Spatial;
 
 namespace HexCrawl.Application;
 
@@ -26,6 +27,7 @@ public sealed record GenericProcedurePresetRecipe(
     IReadOnlyList<ProcedureModuleRecipe> ModuleSelections)
 {
     public required string TilingDsSymbol { get; init; }
+    public PeriodicMapBounds? PlayableBounds { get; init; }
 }
 
 public sealed record MaterializedCampaignProcedure(
@@ -68,6 +70,7 @@ public static class CampaignProcedureMaterializer
             Name = preset.Recipe.DefaultProcedureName,
             SchemaVersion = CampaignProcedureSchema.CurrentVersion,
             TilingDsSymbol = preset.Recipe.TilingDsSymbol,
+            PlayableBounds = preset.Recipe.PlayableBounds,
             Modules = modules,
             Overrides = []
         };

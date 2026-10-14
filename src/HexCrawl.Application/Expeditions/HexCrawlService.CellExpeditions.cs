@@ -153,13 +153,22 @@ public sealed partial class HexCrawlService
             {
                 var savedWorld = await GetOverworldAsync(bound.WorldId, ownerUserId, cancellationToken);
                 var tiling = savedWorld.World.SpatialTiling;
+                tiling = tiling with
+                {
+                    PlayableBounds = PeriodicMapBounds.Intersection(
+                        tiling.PlayableBounds, expedition.CampaignProcedure.PlayableBounds)
+                };
                 state.Validate(tiling);
                 return (tiling, savedWorld.World);
             }
             case MaplessSpatialCrawlSessionContext mapless:
             {
                 mapless.Validate();
-                var tiling = mapless.Tiling;
+                var tiling = mapless.Tiling with
+                {
+                    PlayableBounds = PeriodicMapBounds.Intersection(
+                        mapless.Tiling.PlayableBounds, expedition.CampaignProcedure.PlayableBounds)
+                };
                 if (tiling.Id != expedition.Id)
                     throw new InvalidDataException("Mapless geometry identity disagrees with its expedition.");
                 state.Validate(tiling);

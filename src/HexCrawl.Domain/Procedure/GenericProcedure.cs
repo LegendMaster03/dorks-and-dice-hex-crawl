@@ -365,6 +365,7 @@ public sealed record CampaignProcedure
     public required string Name { get; init; }
     public string SchemaVersion { get; init; } = CampaignProcedureSchema.CurrentVersion;
     public string TilingDsSymbol { get; init; } = CampaignProcedureSchema.CurrentHexTilingDsSymbol;
+    public PeriodicMapBounds? PlayableBounds { get; init; }
     public required IReadOnlyList<MaterializedProcedureModule> Modules { get; init; }
     public IReadOnlyList<CampaignProcedureOverride> Overrides { get; init; } = [];
 
@@ -376,6 +377,7 @@ public sealed record CampaignProcedure
         && string.Equals(Name, other.Name, StringComparison.Ordinal)
         && string.Equals(SchemaVersion, other.SchemaVersion, StringComparison.Ordinal)
         && string.Equals(TilingDsSymbol, other.TilingDsSymbol, StringComparison.Ordinal)
+        && Nullable.Equals(PlayableBounds, other.PlayableBounds)
         && ProcedureStructuralEquality.SequenceEquals(Modules, other.Modules)
         && ProcedureStructuralEquality.OverrideSequenceEquals(Overrides, other.Overrides);
 
@@ -388,6 +390,7 @@ public sealed record CampaignProcedure
         hash.Add(Name, StringComparer.Ordinal);
         hash.Add(SchemaVersion, StringComparer.Ordinal);
         hash.Add(TilingDsSymbol, StringComparer.Ordinal);
+        hash.Add(PlayableBounds);
         hash.Add(ProcedureStructuralEquality.SequenceHash(Modules));
         hash.Add(ProcedureStructuralEquality.OverrideSequenceHash(Overrides));
         return hash.ToHashCode();
@@ -410,6 +413,8 @@ public sealed record CampaignProcedure
             throw new InvalidOperationException(
                 $"Campaign procedure schema version '{SchemaVersion}' is not supported. Expected {CampaignProcedureSchema.CurrentVersion}.");
         }
+        if (PlayableBounds is { } bounds)
+            bounds.Validate();
         MechanicDefinition.Require(TilingDsSymbol, "Campaign procedure Delaney-Dress tiling notation");
         var inspection = DelaneyDressTopology.Inspect(TilingDsSymbol, 2048);
         if (inspection.Status != DelaneyDressStatus.Euclidean)

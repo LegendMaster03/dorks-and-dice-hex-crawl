@@ -36,6 +36,22 @@ public readonly record struct PeriodicMapBounds(int Width, int Height, long MinU
     public bool Contains(PeriodicCellAddress address) =>
         address.Translation.U >= MinU && address.Translation.U < MinU + Width
         && address.Translation.V >= MinV && address.Translation.V < MinV + Height;
+
+    public static PeriodicMapBounds? Intersection(PeriodicMapBounds? first, PeriodicMapBounds? second)
+    {
+        if (first is not { } left) return second;
+        if (second is not { } right) return first;
+        left.Validate();
+        right.Validate();
+        var minU = Math.Max(left.MinU, right.MinU);
+        var minV = Math.Max(left.MinV, right.MinV);
+        var maxU = Math.Min(left.MinU + left.Width, right.MinU + right.Width);
+        var maxV = Math.Min(left.MinV + left.Height, right.MinV + right.Height);
+        if (maxU <= minU || maxV <= minV)
+            throw new InvalidOperationException("World map bounds and ruleset map bounds do not overlap.");
+        return new PeriodicMapBounds(checked((int)(maxU - minU)),
+            checked((int)(maxV - minV)), minU, minV);
+    }
 }
 
 public sealed record WorldCellGeometry(

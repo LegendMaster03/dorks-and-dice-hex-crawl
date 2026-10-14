@@ -15,6 +15,8 @@ public static class CrawlProcedureCatalog
     public const string ForbiddenLandsPresetKey = "forbidden-lands";
     public const string WorldsWithoutNumberPresetKey = "worlds-without-number";
     public const string OneRing2ePresetKey = "the-one-ring-2e";
+    public const string WastelandWandererPresetKey = "fallout-wasteland-wanderer";
+    public const string WastelandWarfarePresetKey = "fallout-wasteland-warfare-2e";
 
     private static IReadOnlyList<CrawlProcedurePresetDefinition> FullCatalog { get; } = BuildCatalog();
 
@@ -39,6 +41,8 @@ public static class CrawlProcedureCatalog
             AlexandrianAdvancedPreset.Create(),
             SimpleFixedDistancePreset.Create(),
             SimpleHexStepPreset.Create(),
+            WastelandWandererPreset.Create(),
+            WastelandWarfarePreset.Create(),
             bx,
             ose,
             Adnd2ePreset.Create(),

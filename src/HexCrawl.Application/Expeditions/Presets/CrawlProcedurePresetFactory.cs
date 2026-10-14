@@ -1,5 +1,6 @@
 using System.Globalization;
 using HexCrawl.Domain.Procedure;
+using HexCrawl.Domain.Spatial;
 
 namespace HexCrawl.Application;
 
@@ -15,7 +16,8 @@ internal static class CrawlProcedurePresetFactory
         IReadOnlyList<ProcedureModuleRecipe> modules,
         string? attribution = null,
         string? disclaimer = null,
-        string category = "Familiar procedures") =>
+        string category = "Familiar procedures",
+        PeriodicMapBounds? playableBounds = null) =>
         new(
             presetKey,
             displayName,
@@ -23,7 +25,8 @@ internal static class CrawlProcedurePresetFactory
             2,
             new GenericProcedurePresetRecipe(procedureKey, procedureName, modules.ToArray())
             {
-                TilingDsSymbol = tilingDsSymbol
+                TilingDsSymbol = tilingDsSymbol,
+                PlayableBounds = playableBounds
             },
             attribution,
             disclaimer,
