@@ -18,6 +18,26 @@ public readonly record struct WorldBounds(double MinX, double MinY, double MaxX,
     }
 }
 
+/// <summary>
+/// Optional finite map window in periodic lattice coordinates. One unit is one
+/// motif translation, which may contain multiple cells in a mixed tiling.
+/// This does not change polygon geometry or cell identities.
+/// </summary>
+public readonly record struct PeriodicMapBounds(int Width, int Height, long MinU = 0, long MinV = 0)
+{
+    public void Validate()
+    {
+        if (Width <= 0 || Height <= 0
+            || MinU > long.MaxValue - Width || MinV > long.MaxValue - Height)
+            throw new InvalidOperationException(
+                "Map bounds require positive finite period counts and representable offsets.");
+    }
+
+    public bool Contains(PeriodicCellAddress address) =>
+        address.Translation.U >= MinU && address.Translation.U < MinU + Width
+        && address.Translation.V >= MinV && address.Translation.V < MinV + Height;
+}
+
 public sealed record WorldCellGeometry(
     WorldCellId Id, IReadOnlyList<WorldPoint> Polygon, WorldPoint Center);
 
@@ -56,18 +76,15 @@ public sealed record PeriodicWorldTiling(
     DistanceMeasure? PhysicalDistancePerWorldUnit = null)
 {
     /// <summary>
-    /// Optional playable area, expressed in authoritative world coordinates.
-    /// Missing bounds preserve the unbounded periodic world. The geometry
-    /// itself remains periodic and is not clipped or renumbered.
+    /// An absent value leaves the tiling unbounded. Period counts apply to
+    /// the existing periodic basis, not world-space distance.
     /// </summary>
-    public WorldBounds? PlayableBounds { get; init; }
+    public PeriodicMapBounds? PlayableBounds { get; init; }
 
-    public bool IsPlayable(WorldCellGeometry cell) =>
-        PlayableBounds is not { } bounds
-        || (cell.Center.X >= bounds.MinX && cell.Center.X < bounds.MaxX
-            && cell.Center.Y >= bounds.MinY && cell.Center.Y < bounds.MaxY);
+    public bool IsPlayable(WorldCellGeometry cell) => IsPlayable(cell.Id.Address);
 
-    public bool IsPlayable(PeriodicCellAddress address) => IsPlayable(Resolve(address));
+    public bool IsPlayable(PeriodicCellAddress address) =>
+        PlayableBounds is not { } bounds || bounds.Contains(address);
 
     /// <summary>Explicit physical travel-budget reference for deliberate turns.</summary>
     public DistanceMeasure? PhysicalTurnCostReference { get; init; }
@@ -78,11 +95,7 @@ public sealed record PeriodicWorldTiling(
             || !double.IsFinite(Origin.X) || !double.IsFinite(Origin.Y))
             throw new InvalidOperationException("A periodic world requires a stable identity, revision and finite origin.");
         if (PlayableBounds is { } playable)
-        {
             playable.Validate();
-            if (playable.MinX == playable.MaxX || playable.MinY == playable.MaxY)
-                throw new InvalidOperationException("Playable map dimensions must be positive.");
-        }
         ArgumentNullException.ThrowIfNull(Topology);
         ArgumentNullException.ThrowIfNull(Realization);
         Topology.ValidateAdjacency();
