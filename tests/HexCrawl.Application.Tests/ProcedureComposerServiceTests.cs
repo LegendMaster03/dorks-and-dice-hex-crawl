@@ -136,6 +136,26 @@ public sealed class ProcedureComposerServiceTests
     }
 
     [Fact]
+    public async Task ChangingOnlyTheTilingCreatesAPersistedRevision()
+    {
+        const string square = "<1:1,1,1:4,4>";
+        const string triangle = "<1:1,1,1:3,6>";
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var store = new PostgresHexCrawlStore(database.ConnectionString);
+        await store.InitializeAsync();
+        var composer = Composer(store);
+        var created = await composer.CreateAsync("alice", "simple-fixed-distance", [], [],
+            tilingDsSymbol: square);
+        Assert.Equal(square, created.Procedure.TilingDsSymbol);
+        var revised = await composer.CreateRevisionAsync(
+            "alice", created.ProcedureId, created.Revision, [], [],
+            tilingDsSymbol: triangle);
+        Assert.Equal(triangle, revised.Procedure.TilingDsSymbol);
+        Assert.Equal(square, (await composer.GetAsync("alice", created.ProcedureId, 1)).Procedure.TilingDsSymbol);
+        Assert.Equal(triangle, (await composer.GetAsync("alice", created.ProcedureId, 2)).Procedure.TilingDsSymbol);
+    }
+
+    [Fact]
     public async Task StructuredMapParameterRoundTripsThroughComposerRevision()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
