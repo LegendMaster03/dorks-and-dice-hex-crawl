@@ -517,7 +517,7 @@ public sealed partial class CrawlRuntimeEngine
 
     private static void AddCellCrossingEvent(
         EventCollector events, int watch, CrawlRuntimeEventKind kind,
-        TimeSpan elapsed, WorldCellId cell, int interfaceIndex, int reciprocalIndex)
+        TimeSpan elapsed, WorldCellId cell, int? interfaceIndex, int? reciprocalIndex)
     {
         events.Add(watch, kind, elapsed, $"Cell {cell} boundary crossed.",
             cell: cell, boundaryInterfaceIndex: interfaceIndex,
