@@ -1050,6 +1050,7 @@ test("vertex adjacency augments the existing tiling card and compass, without pa
     assert.match(authoring, /supportsVertexAdjacency\(tilings, draft!\.tilingDsSymbol\)/);
     assert.match(authoring, /withParameter\([\s\S]*?"adjacencyMode", selector\.value/);
 
+    assert.match(expedition, /runtime\.procedure\.runtime\?\.adjacency === "EdgeAndVertex"/);
     assert.match(expedition, /vertexChoices: allowedVertices\.map/);
     assert.match(expedition, /onVertexToggle: id =>/);
     assert.match(navigator, /hc-adjacency-interface hc-adjacency-vertex/);
