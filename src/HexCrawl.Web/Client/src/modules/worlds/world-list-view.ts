@@ -35,6 +35,12 @@ export async function renderWorldList(
                                 <option value="Kilometer">Kilometers</option>
                             </select></label>
                         </fieldset>
+                        <fieldset class="hc-field-group">
+                            <legend>Optional map bounds</legend>
+                            <label>Width (world units) <input name="mapWidth" type="number" min="0.000001" step="any" placeholder="Unbounded"></label>
+                            <label>Height (world units) <input name="mapHeight" type="number" min="0.000001" step="any" placeholder="Unbounded"></label>
+                            <p class="hc-hint">Leave both blank for an unbounded map. Bounds apply to all tile patterns, not only squares.</p>
+                        </fieldset>
                         <p class="hc-hint">Leave both calibration fields blank for cell-step worlds. Distance-based travel rules require physical calibration.</p>
                         <p class="hc-hint">New maps currently use the established hexagonal tiling preset through the periodic-cell engine. Additional tiling controls will be available after review.</p>
                         <button type="submit" class="hc-primary-action" data-create-button>Create world</button>
@@ -155,12 +161,23 @@ export async function renderWorldList(
                     throw new Error("Provide both physical map scale distance and unit, or leave both empty.");
                 const distance = scaleText ? numeric(input(form, "physicalScale")) : null;
                 if (distance !== null && distance <= 0) throw new Error("Physical map scale must be positive.");
+                const widthText = input(form, "mapWidth").value.trim();
+                const heightText = input(form, "mapHeight").value.trim();
+                if (Boolean(widthText) !== Boolean(heightText))
+                    throw new Error("Provide both map dimensions, or leave both blank for an unbounded world.");
+                const width = widthText ? numeric(input(form, "mapWidth")) : null;
+                const height = heightText ? numeric(input(form, "mapHeight")) : null;
+                if ((width !== null && width <= 0) || (height !== null && height <= 0))
+                    throw new Error("Map dimensions must be positive.");
                 const world = await api.createPeriodicOverworld({
                     name: input(form, "name").value.trim(),
                     tilingDsSymbol: "<1:1,1,1:6,3>",
                     worldUnitsPerAbstractPeriod: 1,
                     origin: { x: 0, y: 0 },
                     rotationDegrees: 0,
+                    ...(width === null || height === null ? {} : {
+                        playableBounds: { minX: 0, minY: 0, maxX: width, maxY: height }
+                    }),
                     ...(distance === null ? {} : {
                         physicalDistancePerWorldUnit: {
                             value: distance,
