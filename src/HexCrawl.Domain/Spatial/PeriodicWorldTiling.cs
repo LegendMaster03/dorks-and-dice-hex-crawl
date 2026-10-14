@@ -102,6 +102,30 @@ public sealed record PeriodicWorldTiling(
     public bool IsPlayable(PeriodicCellAddress address) =>
         PlayableBounds is not { } bounds || bounds.Contains(address);
 
+    /// <summary>Finite world-space envelope for viewport search optimization only.</summary>
+    public WorldBounds? PlayableEnvelope()
+    {
+        if (PlayableBounds is not { } extent) return null;
+        extent.Validate();
+        var corners = new[]
+        {
+            new LatticeDisplacement(extent.MinU, extent.MinV),
+            new LatticeDisplacement(extent.MinU + extent.Width - 1, extent.MinV),
+            new LatticeDisplacement(extent.MinU, extent.MinV + extent.Height - 1),
+            new LatticeDisplacement(extent.MinU + extent.Width - 1,
+                extent.MinV + extent.Height - 1)
+        };
+        var coordinates = Realization.Polygons.Values
+            .SelectMany(polygon => polygon)
+            .SelectMany(vertex => corners.Select(corner => Transform(vertex, corner)))
+            .ToArray();
+        if (coordinates.Length == 0)
+            throw new InvalidOperationException("A playable map requires real periodic polygon geometry.");
+        return new WorldBounds(
+            coordinates.Min(p => p.X), coordinates.Min(p => p.Y),
+            coordinates.Max(p => p.X), coordinates.Max(p => p.Y));
+    }
+
     /// <summary>Explicit physical travel-budget reference for deliberate turns.</summary>
     public DistanceMeasure? PhysicalTurnCostReference { get; init; }
 
