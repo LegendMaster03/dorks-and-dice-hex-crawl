@@ -1,5 +1,6 @@
 import { sourceMapAssetUrl } from "./api";
 import { RasterImageCache } from "./raster-image-cache";
+import { traceTilePolygon } from "./tile-polygon-canvas";
 import type { DemoWorld, MapRegistrationTransform, SpatialFeature, WorldPoint, WorldCellGeometry } from "./types";
 
 export type MapReviewGeometry = {
@@ -237,11 +238,7 @@ export class CanvasMapRenderer {
             // Render only authoritative bounded polygon geometry. No inferred
             // coordinates or shape-specific prototype rendering is involved.
             if (cell.id.tilingId !== world.tiling.id || cell.polygon.length < 3) continue;
-            const vertices = cell.polygon.map(point => this.toScreen(point, width, height));
-            ctx.beginPath();
-            vertices.forEach((point, index) =>
-                index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
-            ctx.closePath();
+            traceTilePolygon(ctx, cell.polygon, point => this.toScreen(point, width, height));
             ctx.stroke();
         }
         ctx.restore();
