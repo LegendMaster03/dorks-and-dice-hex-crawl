@@ -18,6 +18,32 @@ export function uniquelyAdjacentInterface(
 }
 
 /**
+ * Regenerate map-selection guidance from authoritative position and the
+ * currently selected boundary. Hints do not imply or commit movement.
+ */
+export function currentCellInspectionHint(
+    geometry: { id: WorldCellId; center: WorldPoint } | null,
+    currentCell: WorldCellId,
+    interfaces: readonly Pick<CellInterface, "interfaceIndex" | "neighborCell">[],
+    selectedExit: number | null
+): string {
+    if (!geometry)
+        return "Select a cell on the map to inspect its player knowledge and GM actions.";
+    const id = geometry.id;
+    if (id.tilingId === currentCell.tilingId
+        && id.address.motifCellId === currentCell.address.motifCellId
+        && id.address.translation.u === currentCell.address.translation.u
+        && id.address.translation.v === currentCell.address.translation.v)
+        return "Selected cell is the party's current position.";
+    const adjacent = uniquelyAdjacentInterface(id, interfaces);
+    if (adjacent !== null && selectedExit === adjacent)
+        return "Adjacent cell selected as travel intent. The party has not moved.";
+    if (adjacent !== null)
+        return "An adjacent cell is selected for inspection. Choose its boundary to set travel intent.";
+    return `Selected cell at ${geometry.center.x.toFixed(2)}, ${geometry.center.y.toFixed(2)}. Inspection does not change travel intent.`;
+}
+
+/**
  * Presentation-only containment for revealing authored point subjects in an
  * explicitly selected authoritative cell polygon. Does not determine cell
  * identity or traversal, which belong exclusively to the server.

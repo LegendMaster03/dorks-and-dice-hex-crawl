@@ -18,7 +18,7 @@ import { navigationResolutionDue } from "./expedition-workflow";
 import type { ExpeditionJourneyState } from "../../journey-types";
 import type { ExpeditionEffectState } from "../../effect-types";
 import type { SurvivalResources } from "../../survival-types";
-import { polygonContainsSubject, uniquelyAdjacentInterface } from "./phase20-cell-ui-policy";
+import { currentCellInspectionHint, polygonContainsSubject, uniquelyAdjacentInterface } from "./phase20-cell-ui-policy";
 import { discoveredSubjectIds } from "../../runtime-view";
 import { encounterLocationId } from "./keyed-location-encounter";
 import { mountPeriodicGameplayPanels } from "./periodic-gameplay-panels";
@@ -371,11 +371,8 @@ export async function renderPeriodicExpeditionWorkbench(
             selectHeading(adjacent);
             render();
         }
-        text("[data-inspection]", geometry
-            ? adjacent !== null
-                ? "Adjacent cell selected as travel intent. The party has not moved."
-                : `Selected cell at ${geometry.center.x.toFixed(2)}, ${geometry.center.y.toFixed(2)}. Inspection does not change travel intent.`
-            : "Select a cell on the map to inspect its player knowledge and GM actions.");
+        text("[data-inspection]", currentCellInspectionHint(
+            inspectedGeometry, topology.currentCell, topology.interfaces, selectedExit));
         renderSelectedCellDetails();
         map.requestRender();
     };
@@ -1073,6 +1070,8 @@ export async function renderPeriodicExpeditionWorkbench(
             inspectedTilingRevision = null;
         }
         map.renderer.selectedWorldCell = inspectedGeometry;
+        text("[data-inspection]", currentCellInspectionHint(
+            inspectedGeometry, topology.currentCell, topology.interfaces, selectedExit));
         renderSelectedCellDetails();
         map.requestRender();
         const party = required<HTMLElement>("[data-party]");
