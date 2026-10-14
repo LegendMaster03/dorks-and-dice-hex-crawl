@@ -80,7 +80,7 @@ public static class GenericProcedureCatalog
                 RequiredMany(
                     ("travelResolution", "enum", "Travel resolution mode."),
                     ("actualDistanceResolution", "enum", "Actual-distance resolution mode.")),
-                ("adjacencyMode", "enum", "EdgeOnly or EdgeAndVertex, when vertex-only contacts exist.")),
+                ("adjacencyMode", "enum", "EdgeOnly or EdgeAndVertex, when vertex-only contacts exist."))),
         Module(
             SpatialTurnCostModule,
             "Movement",
