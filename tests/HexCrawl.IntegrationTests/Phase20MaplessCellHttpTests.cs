@@ -288,7 +288,7 @@ public sealed class Phase20MaplessCellHttpTests
         }
     }
 
-    private static PeriodicWorldTiling PeriodicHexFixture()
+    private static PeriodicWorldTiling PeriodicHexFixture(bool calibrated = true)
     {
         var realized = DelaneyDressHarmonicMetricRealization.Construct(
             "<1:1,1,1:6,3>", 1, "world-unit");
@@ -296,7 +296,51 @@ public sealed class Phase20MaplessCellHttpTests
             throw new InvalidOperationException("Hex-shaped periodic fixture failed realization.");
         return new PeriodicWorldTiling(Guid.NewGuid(), realized.Topology!,
             realized.Realization!, new WorldPoint(0, 0),
-            PhysicalDistancePerWorldUnit: new DistanceMeasure(12, DistanceUnit.Miles));
+            PhysicalDistancePerWorldUnit: calibrated
+                ? new DistanceMeasure(12, DistanceUnit.Miles) : null);
+    }
+
+    [Fact]
+    public async Task UncalibratedWorldAcceptsCellStepButRejectsDistancePresets()
+    {
+        var database = TestWebHost.NewDatabasePath();
+        try
+        {
+            var store = new PostgresHexCrawlStore(database);
+            await store.InitializeAsync();
+            var world = new OverworldDefinition
+            {
+                Id = Guid.NewGuid(),
+                Name = "Uncalibrated periodic world",
+                Tiling = PeriodicHexFixture(calibrated: false)
+            };
+            var now = DateTimeOffset.UtcNow;
+            await store.CreateOverworldAsync(new(world, "alice", 1, now, now));
+            var startCell = new PeriodicCellAddress(
+                world.SpatialTiling.Topology.MotifCells[0].Id,
+                new LatticeDisplacement(0, 0));
+            using var host = TestWebHost.Create(database, "alice");
+            using var client = host.CreateClient();
+            var route = $"/api/overworlds/{world.Id:D}/cell-expeditions";
+            var request = new StartCellExpeditionRequest(
+                "Uncalibrated cell steps", null, null, startCell,
+                "dm-controlled", "simple-hex-step");
+
+            using var distance = await client.PostAsJsonAsync(route,
+                request with { PresetKey = "simple-fixed-distance" }, ApiJson);
+            Assert.Equal(HttpStatusCode.BadRequest, distance.StatusCode);
+            using var steps = await client.PostAsJsonAsync(route, request, ApiJson);
+            Assert.Equal(HttpStatusCode.Created, steps.StatusCode);
+            var result = await steps.Content.ReadFromJsonAsync<JsonElement>();
+            var created = (await store.GetExpeditionAsync(result.GetProperty("id").GetGuid(), "alice"))!;
+            Assert.Null(Assert.IsType<CellExpeditionState>(created.Runtime).DistanceTraveled);
+            Assert.Null((await new HexCrawlService(store).ResolveCellGeometryAsync(created, "alice"))
+                .Tiling.PhysicalDistancePerWorldUnit);
+        }
+        finally
+        {
+            TestWebHost.DeleteDatabase(database);
+        }
     }
 
     [Fact]
