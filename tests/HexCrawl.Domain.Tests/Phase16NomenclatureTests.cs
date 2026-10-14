@@ -28,6 +28,21 @@ public sealed class Phase16NomenclatureTests
     }
 
     [Fact]
+    public void RulesetSelectorVisibilityDoesNotAffectNomenclatureResolution()
+    {
+        var catalog = new TilingNomenclatureCatalog([
+            new(Square, "Visible square", null, [], "Visible choice", "Test"),
+            new(Square, "Hidden square", null, [], "Hidden choice", "Test",
+                ShowInRulesetSelector: false)
+        ]);
+        Assert.Equal(2, catalog.ListEntries().Count);
+        Assert.Single(catalog.ListEntries(rulesetSelectorOnly: true));
+        Assert.Equal("Visible square", catalog.ListEntries(true)[0].PreferredName);
+        Assert.True(catalog.ListEntries(true)[0].ShowInRulesetSelector);
+        Assert.False(catalog.Describe(Square)!.IsNamed);
+    }
+
+    [Fact]
     public void NotationIsSuppressedOutsideExplicitlyAuthorizedSurfaces()
     {
         Assert.Null(TilingNotationPresentationPolicy.Display(Square, TilingNotationSurface.Normal, true, false));
