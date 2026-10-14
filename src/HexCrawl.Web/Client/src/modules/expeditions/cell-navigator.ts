@@ -7,6 +7,8 @@ export type CurrentCellNavigatorOptions<TCell, TIntent> = {
     selectable: boolean;
     actualIntent: TIntent | null;
     onToggle: (adjacency: SpatialAdjacencyInterface<TCell, TIntent>) => void;
+    vertexChoices?: Array<{ id: string; label: string; anchor: { x: number; y: number }; selected: boolean }>;
+    onVertexToggle?: (id: string) => void;
 };
 
 export function renderCurrentCellNavigator<TCell, TIntent>(
@@ -68,6 +70,28 @@ export function renderCurrentCellNavigator<TCell, TIntent>(
         if (selected) control.classList.add("is-selected");
         if (actualCourse) control.classList.add("is-actual-course");
         control.addEventListener("click", () => options.onToggle(candidate));
+        navigator.append(control);
+    }
+    for (const contact of options.vertexChoices ?? []) {
+        const control = document.createElement("button");
+        control.type = "button";
+        control.className = "hc-adjacency-interface hc-adjacency-vertex";
+        control.dataset.adjacencyInterfaceId = contact.id;
+        control.style.setProperty("--hc-adjacency-x", `${contact.anchor.x * 100}%`);
+        control.style.setProperty("--hc-adjacency-y", `${contact.anchor.y * 100}%`);
+        control.style.setProperty("--hc-adjacency-feedback-x", "0rem");
+        control.style.setProperty("--hc-adjacency-feedback-y", "0rem");
+        control.style.setProperty("--hc-adjacency-angle", "0deg");
+        control.setAttribute("aria-label", contact.label);
+        control.setAttribute("aria-pressed", String(contact.selected));
+        control.title = contact.label;
+        control.disabled = !options.selectable;
+        if (contact.selected) control.classList.add("is-selected");
+        const marker = document.createElement("span");
+        marker.textContent = "◆";
+        marker.setAttribute("aria-hidden", "true");
+        control.append(marker);
+        control.addEventListener("click", () => options.onVertexToggle?.(contact.id));
         navigator.append(control);
     }
     return navigator;

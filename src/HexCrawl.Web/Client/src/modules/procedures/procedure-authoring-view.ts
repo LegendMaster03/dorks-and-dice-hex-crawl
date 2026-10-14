@@ -729,6 +729,28 @@ export async function renderProcedureAuthoringWorkspace(
                 choices.append(option);
             }
             tilingField.append(choices);
+            const movement = draft!.modules.find(module => module.moduleKey === "movement.resolution");
+            if (movement && supportsVertexAdjacency(tilings, draft!.tilingDsSymbol)) {
+                const adjacency = document.createElement("label");
+                adjacency.className = "hc-compact-field";
+                adjacency.append(textElement("span", "Permitted movement"));
+                const selector = document.createElement("select");
+                selector.dataset.tilingAdjacency = "";
+                for (const [value, label] of [["EdgeOnly", "Edge only"], ["EdgeAndVertex", "Edge and vertex"]]) {
+                    const option = document.createElement("option");
+                    option.value = value;
+                    option.textContent = label;
+                    selector.append(option);
+                }
+                selector.value = movement.parameters.adjacencyMode ?? "EdgeOnly";
+                selector.disabled = historical() || savePending || tilingPending;
+                selector.addEventListener("change", () =>
+                    void setOverride(withParameter(
+                        movement, pending.get(movement.moduleKey), "adjacencyMode", selector.value)));
+                adjacency.append(selector, textElement("small",
+                    "Movement between tiles sharing an edge, or also those touching only at a vertex."));
+                tilingField.append(adjacency);
+            }
             identity.append(tilingField);
             page.append(identity);
         }
@@ -1056,8 +1078,8 @@ export async function renderProcedureAuthoringWorkspace(
         modules: current.modules.filter(module => module.moduleKey === section)
     });
 
-    const visibleParameter = (key: string): boolean =>
-        visibleMovementParameter(key, supportsVertexAdjacency(tilings, draft?.tilingDsSymbol));
+    // The adjacency control lives on the existing Map tiling card.
+    const visibleParameter = (key: string): boolean => key !== "adjacencyMode";
 
     const populateCompactArea = (body: HTMLElement, modules: ProcedureModuleComposer[]): void => {
         body.replaceChildren();

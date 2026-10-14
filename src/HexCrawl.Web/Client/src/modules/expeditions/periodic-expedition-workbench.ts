@@ -93,7 +93,6 @@ export async function renderPeriodicExpeditionWorkbench(
                     <section class="hc-current-travel" aria-label="Current travel">
                         <h3>Current travel</h3><p data-status></p><p data-actual></p>
                         <div data-cell-navigator></div>
-                        <div data-vertex-contacts class="hc-button-row"></div>
                         <p class="hc-hint" data-course>Choose a boundary to set intended travel.</p>
                         <button type="button" data-open-travel>Resolve travel / watch</button>
                     </section>
@@ -951,9 +950,57 @@ export async function renderPeriodicExpeditionWorkbench(
             ? { ...adjacencies, selectedAdjacencyId: null }
             : { ...adjacencies,
                 selectedAdjacencyId: adjacencyForIntent(adjacencies, selectedExit)?.id ?? null };
+        const allowedVertices = runtime.procedure.runtime?.adjacency === "EdgeAndVertex"
+            ? topology.vertexOnlyContacts ?? [] : [];
+        const minX = Math.min(...topology.polygon.map(point => point.x));
+        const maxX = Math.max(...topology.polygon.map(point => point.x));
+        const minY = Math.min(...topology.polygon.map(point => point.y));
+        const maxY = Math.max(...topology.polygon.map(point => point.y));
+        const scale = 0.68 / Math.max(maxX - minX, maxY - minY);
+        const vertexId = (contact: (typeof allowedVertices)[number]): string =>
+            `vertex:${contact.fromVertexIndex}:${contact.to.address.motifCellId}:${contact.to.address.translation.u}:${contact.to.address.translation.v}`;
+        const toggleVertex = (contact: (typeof allowedVertices)[number]): void => {
+            if (generated) invalidateGenerated();
+            if (selectedVertex && sameWorldCell(selectedVertex.to, contact.to)) {
+                selectedVertex = null;
+                selectHeading(null);
+            } else {
+                selectedExit = null;
+                selectedVertex = contact;
+                const delta = {
+                    x: contact.point.x - topology.position.x,
+                    y: contact.point.y - topology.position.y
+                };
+                const fallback = {
+                    x: contact.point.x - topology.center.x,
+                    y: contact.point.y - topology.center.y
+                };
+                const heading = Math.hypot(delta.x, delta.y) > 1e-12 ? delta : fallback;
+                input("headingX").value = String(heading.x);
+                input("headingY").value = String(heading.y);
+            }
+            render();
+        };
         const navigation = renderCurrentCellNavigator(selected, {
             selectable: !busy,
             actualIntent: topology.selectedExitInterfaceIndex,
+            vertexChoices: allowedVertices.map(contact => {
+                const dx = contact.point.x - (minX + maxX) / 2;
+                const dy = contact.point.y - (minY + maxY) / 2;
+                return {
+                    id: vertexId(contact),
+                    label: `Travel through vertex ${contact.fromVertexIndex + 1} to ${contact.to.address.motifCellId} (${contact.to.address.translation.u}, ${contact.to.address.translation.v})`,
+                    anchor: {
+                        x: Math.max(0.02, Math.min(0.98, 0.5 + dx * scale + dx * 0.055 / Math.max(maxX - minX, Number.EPSILON))),
+                        y: Math.max(0.02, Math.min(0.98, 0.5 + dy * scale + dy * 0.055 / Math.max(maxY - minY, Number.EPSILON)))
+                    },
+                    selected: selectedVertex !== null && sameWorldCell(selectedVertex.to, contact.to)
+                };
+            }),
+            onVertexToggle: id => {
+                const contact = allowedVertices.find(entry => vertexId(entry) === id);
+                if (contact) toggleVertex(contact);
+            },
             onToggle: edge => {
                 // The navigator is outside the travel form. A new atomic
                 // course still invalidates all previously generated rolls.
@@ -972,8 +1019,7 @@ export async function renderPeriodicExpeditionWorkbench(
             }
         });
         required<HTMLElement>("[data-cell-navigator]").replaceChildren(navigation);
-        const vertexContainer = required<HTMLElement>("[data-vertex-contacts]");
-        vertexContainer.replaceChildren();
+        // Point-only destinations now share the existing navigator compass.
         const allowedVertices = runtime.procedure.runtime?.adjacency === "EdgeAndVertex"
             ? topology.vertexOnlyContacts ?? [] : [];
         for (const contact of allowedVertices) {
