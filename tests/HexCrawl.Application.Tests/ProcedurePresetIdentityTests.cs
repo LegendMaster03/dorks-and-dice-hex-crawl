@@ -1,6 +1,8 @@
 using HexCrawl.Application.Persistence;
 using HexCrawl.Domain.Runtime;
 using HexCrawl.Domain.Procedure;
+using HexCrawl.Domain.Spatial;
+using System.Text.Json;
 using HexCrawl.Infrastructure.Persistence;
 
 namespace HexCrawl.Application.Tests;
@@ -15,6 +17,8 @@ public sealed class ProcedurePresetIdentityTests
             "alexandrian-advanced",
             "simple-fixed-distance",
             "simple-hex-step",
+            CrawlProcedureCatalog.WastelandWandererPresetKey,
+            CrawlProcedureCatalog.WastelandWarfarePresetKey,
             CrawlProcedureCatalog.BxPresetKey,
             CrawlProcedureCatalog.OseClassicPresetKey,
             CrawlProcedureCatalog.Adnd2ePresetKey,
@@ -34,11 +38,35 @@ public sealed class ProcedurePresetIdentityTests
         foreach (var preset in CrawlProcedureCatalog.Catalog)
         {
             preset.Validate();
-            Assert.Equal(CampaignProcedureSchema.CurrentHexTilingDsSymbol, preset.Recipe.TilingDsSymbol);
+            var square = preset.PresetKey is
+                CrawlProcedureCatalog.WastelandWandererPresetKey or CrawlProcedureCatalog.WastelandWarfarePresetKey;
+            Assert.Equal(square ? "<1:1,1,1:4,4>" : CampaignProcedureSchema.CurrentHexTilingDsSymbol,
+                preset.Recipe.TilingDsSymbol);
             var materialized = preset.MaterializeGeneric();
             materialized.Procedure.Validate();
             Assert.Equal(preset.PresetKey, materialized.Origin?.PresetKey);
         }
+    }
+
+    [Fact]
+    public void FalloutSquarePresetsCarryOptionalMapLimitsWithoutChangingOtherPresets()
+    {
+        foreach (var (key, expectedSize) in new[]
+        {
+            (CrawlProcedureCatalog.WastelandWandererPresetKey, 5),
+            (CrawlProcedureCatalog.WastelandWarfarePresetKey, 9)
+        })
+        {
+            var procedure = CrawlProcedureCatalog.Resolve(key).MaterializeGeneric().Procedure;
+            Assert.Equal("<1:1,1,1:4,4>", procedure.TilingDsSymbol);
+            Assert.Equal(new PeriodicMapBounds(expectedSize, expectedSize), procedure.PlayableBounds);
+            var copy = JsonSerializer.Deserialize<CampaignProcedure>(JsonSerializer.Serialize(procedure));
+            Assert.NotNull(copy);
+            copy.Validate();
+            Assert.Equal(procedure.PlayableBounds, copy.PlayableBounds);
+        }
+        Assert.Null(CrawlProcedureCatalog.Resolve("simple-hex-step")
+            .MaterializeGeneric().Procedure.PlayableBounds);
     }
 
     [Fact]
