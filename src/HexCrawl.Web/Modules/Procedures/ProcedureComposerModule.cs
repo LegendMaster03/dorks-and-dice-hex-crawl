@@ -40,19 +40,48 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
         api.MapPost("/procedures/{procedureId:guid}/canonical/revisions", CreateCanonicalProcedureRevisionAsync);
     }
 
-    private static IResult ListTilings() => Results.Ok(
-        CrawlTilingNames.Catalog.ListEntries().Select(entry =>
+    private sealed record NamedTilingOption(
+        string DsSymbol,
+        string DisplayName,
+        bool ShowInRulesetSelector,
+        PeriodicMetricRealization? Realization);
+
+    private static readonly Lazy<IReadOnlyList<NamedTilingOption>> TilingOptions = new(() =>
+        CrawlTilingNames.Catalog.ListEntries().Select(entry => new NamedTilingOption(
+            entry.CanonicalDsSymbol, entry.PreferredName, entry.ShowInRulesetSelector,
+            PreviewRealization(entry))).ToArray());
+
+    private static IResult ListTilings() => Results.Ok(TilingOptions.Value);
+
+    private static PeriodicMetricRealization? PreviewRealization(TilingNameEntry entry)
+    {
+        // The D-symbol specifies incidence, not a unique Euclidean embedding.
+        // Return only a verified embedding that actually matches this catalog name.
+        var candidates = new (double U, double V, double Angle)[]
         {
-            var geometry = DelaneyDressHarmonicMetricRealization.Construct(
-                entry.CanonicalDsSymbol, 1, "unit");
-            return new
+            (1, 1, 90), (1, 1, 60), (1, 1, 120),
+            (1, Math.Sqrt(3), 60), (Math.Sqrt(3), 1, 60),
+            (1, Math.Sqrt(3), 90), (Math.Sqrt(3), 1, 90)
+        };
+        foreach (var (u, v, angle) in candidates)
+        {
+            var constraints = new TilingMetricConstraint[]
             {
-                DsSymbol = entry.CanonicalDsSymbol,
-                DisplayName = entry.PreferredName,
-                entry.ShowInRulesetSelector,
-                Realization = geometry.Status == "realized" ? geometry.Realization : null
+                new("period-u-length", "unit", u, u),
+                new("period-v-length", "unit", v, v),
+                new("period-angle-degrees", "degrees", angle, angle)
             };
-        }).ToArray());
+            var result = DelaneyDressHarmonicMetricRealization.Construct(
+                entry.CanonicalDsSymbol, 1, "unit", constraints: constraints);
+            if (result.Status != "realized" || result.Realization is null) continue;
+            var resolved = CrawlTilingNames.Catalog.Describe(
+                entry.CanonicalDsSymbol, result.Realization);
+            if (resolved is { IsNamed: true }
+                && string.Equals(resolved.Label, entry.PreferredName, StringComparison.Ordinal))
+                return result.Realization;
+        }
+        return null;
+    }
 
     private static async Task<IResult> ComposeDraftAsync(
         ProcedureComposerDraftRequest request,
