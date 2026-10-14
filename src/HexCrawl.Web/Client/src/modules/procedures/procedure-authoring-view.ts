@@ -677,7 +677,10 @@ export async function renderProcedureAuthoringWorkspace(
             tilingField.className = "hc-procedure-tiling-picker";
             tilingField.append(textElement("h3", "Map tiling"));
             const selected = tilings.find(t => t.dsSymbol === draft!.tilingDsSymbol);
-            tilingField.append(textElement("p", selected?.displayName ?? "Custom tiling"));
+            const selectedRow = document.createElement("div");
+            selectedRow.className = "hc-procedure-tiling-selected";
+            selectedRow.append(textElement("span", selected?.displayName ?? "Custom tiling"), tilingPreview(selected));
+            tilingField.append(selectedRow);
             const choices = document.createElement("details");
             const summary = document.createElement("summary");
             summary.textContent = "Change tiling";
