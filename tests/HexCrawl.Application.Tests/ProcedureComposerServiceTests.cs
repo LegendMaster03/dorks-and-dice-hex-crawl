@@ -8,6 +8,28 @@ namespace HexCrawl.Application.Tests;
 
 public sealed class ProcedureComposerServiceTests
 {
+    [Theory]
+    [InlineData("")]
+    [InlineData("not a tiling")]
+    [InlineData("<1:1,1,1:3,3>")]
+    public async Task DraftRejectsInvalidOrNonEuclideanTiling(string symbol)
+    {
+        // Preset drafts do not access persistence.
+        var composer = new ProcedureComposerService(new CampaignProcedureService(null!));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => composer.CreateDraftAsync(
+            "alice", "simple-fixed-distance", null, null, [], [], tilingDsSymbol: symbol));
+    }
+
+    [Fact]
+    public async Task DraftCanonicalizesTilingWithoutRequiringACompleteProcedure()
+    {
+        var composer = new ProcedureComposerService(new CampaignProcedureService(null!));
+        var draft = await composer.CreateDraftAsync(
+            "alice", null, null, null, [], [], tilingDsSymbol: " <1:1,1,1:4,4> ");
+        Assert.Equal("<1:1,1,1:4,4>", draft.Procedure.TilingDsSymbol);
+        Assert.Empty(draft.Procedure.Modules);
+    }
+
     [Fact]
     public async Task PresetDraftUsesMaterializedGenericProcedureAndOriginMetadata()
     {
@@ -153,6 +175,13 @@ public sealed class ProcedureComposerServiceTests
         Assert.Equal(triangle, revised.Procedure.TilingDsSymbol);
         Assert.Equal(square, (await composer.GetAsync("alice", created.ProcedureId, 1)).Procedure.TilingDsSymbol);
         Assert.Equal(triangle, (await composer.GetAsync("alice", created.ProcedureId, 2)).Procedure.TilingDsSymbol);
+        var renamed = await composer.CreateRevisionAsync(
+            "alice", created.ProcedureId, 2, [], [], name: "Preserved triangle");
+        Assert.Equal(triangle, renamed.Procedure.TilingDsSymbol);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => composer.CreateRevisionAsync(
+            "alice", created.ProcedureId, 3, [], [], tilingDsSymbol: triangle));
+        await Assert.ThrowsAsync<HexCrawlConcurrencyException>(() => composer.CreateRevisionAsync(
+            "alice", created.ProcedureId, 2, [], [], tilingDsSymbol: square));
     }
 
     [Fact]

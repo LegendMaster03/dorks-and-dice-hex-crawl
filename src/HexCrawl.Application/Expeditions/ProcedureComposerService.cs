@@ -1,5 +1,6 @@
 using HexCrawl.Application.Persistence;
 using HexCrawl.Domain.Procedure;
+using HexCrawl.Domain.Spatial;
 
 namespace HexCrawl.Application;
 
@@ -342,8 +343,15 @@ public sealed class ProcedureComposerService(CampaignProcedureService procedures
             .ToArray();
     }
 
-    private static CampaignProcedure ApplyTiling(CampaignProcedure procedure, string? symbol) =>
-        symbol is null ? procedure : procedure with { TilingDsSymbol = symbol };
+    private static CampaignProcedure ApplyTiling(CampaignProcedure procedure, string? symbol)
+    {
+        if (symbol is null) return procedure;
+        var inspection = DelaneyDressTopology.Inspect(symbol, 2048);
+        if (inspection.Status != DelaneyDressStatus.Euclidean)
+            throw new InvalidOperationException(
+                "Campaign procedure tiling must be a structurally valid supported Euclidean Delaney-Dress symbol.");
+        return procedure with { TilingDsSymbol = inspection.Symbol!.Canonical };
+    }
 
     private static CampaignProcedure ApplyName(CampaignProcedure procedure, string? name)
     {

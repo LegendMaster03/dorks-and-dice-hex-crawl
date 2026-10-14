@@ -8,6 +8,26 @@ namespace HexCrawl.IntegrationTests;
 
 public sealed class ProcedureComposerEndpointsTests
 {
+    [Theory]
+    [InlineData("/api/procedures/composer/draft")]
+    [InlineData("/api/procedures/composer/canonical/draft")]
+    [InlineData("/api/procedures")]
+    public async Task StructuredEndpointsRejectInvalidTiling(string endpoint)
+    {
+        var database = TestWebHost.NewDatabasePath();
+        try
+        {
+            using var factory = TestWebHost.Create(database);
+            using var client = factory.CreateClient();
+            using var response = await client.PostAsJsonAsync(endpoint, new
+            {
+                presetKey = "simple-fixed-distance", tilingDsSymbol = "not a tiling"
+            });
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        }
+        finally { TestWebHost.DeleteDatabase(database); }
+    }
+
     [Fact]
     public async Task RetiredMixedProofRecipeIsAbsentAndCanNotBeMaterializedOrStarted()
     {
