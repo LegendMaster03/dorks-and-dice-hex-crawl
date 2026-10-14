@@ -146,6 +146,7 @@ export type ProcedureComposerDraftInput = {
     name?: string | null;
     moduleSelections?: ProcedureComposerModuleSelectionInput[];
     overrides?: ProcedureComposerOverrideInput[];
+    tilingDsSymbol?: string | null;
 };
 
 export type ProcedureComposerCreateInput = {
@@ -154,6 +155,7 @@ export type ProcedureComposerCreateInput = {
     name?: string | null;
     moduleSelections?: ProcedureComposerModuleSelectionInput[];
     overrides?: ProcedureComposerOverrideInput[];
+    tilingDsSymbol?: string | null;
 };
 
 export type ProcedureComposerRevisionInput = {
@@ -161,6 +163,7 @@ export type ProcedureComposerRevisionInput = {
     name?: string | null;
     moduleSelections?: ProcedureComposerModuleSelectionInput[];
     overrides: ProcedureComposerOverrideInput[];
+    tilingDsSymbol?: string | null;
 };
 
 export type ProcedureRevisionSummary = {
@@ -195,4 +198,15 @@ export type ProcedureCanonicalCreateInput = {
 export type ProcedureCanonicalRevisionInput = {
     expectedRevision: number;
     canonicalJson: string;
+};
+
+export type TilingCatalogEntry = {
+    dsSymbol: string;
+    displayName: string;
+    showInRulesetSelector: boolean;
+    realization: {
+        translationU: { x: number; y: number };
+        translationV: { x: number; y: number };
+        polygons: Record<string, { x: number; y: number }[]>;
+    } | null;
 };

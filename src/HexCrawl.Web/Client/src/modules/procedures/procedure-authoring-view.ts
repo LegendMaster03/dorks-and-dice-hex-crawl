@@ -9,14 +9,16 @@ import type {
     ProcedureMechanicOption,
     ProcedureModuleComposer,
     ProcedureRevisionSummary,
-    SavedProcedureSummary
+    SavedProcedureSummary,
+    TilingCatalogEntry
 } from "../../procedure-composer-types";
 import type { ProcedurePreset } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
 import { badge, openWorkspaceDrawer, textElement, type WorkspaceDrawer } from "../../ui/workspace";
 import { applyGuidedExperience, guidedCallout, guidedDisclosure, guidancePreferenceButton } from "../../ui/guidance";
-import { executionSummary, inputSourceLabel, saveBlocked, withBehavior, withParameter } from "./procedure-composer-model";
+import { executionSummary, inputSourceLabel, saveBlocked, withBehavior, withParameter, selectableTilings, hasSaveableComposerChanges } from "./procedure-composer-model";
 import { presetGuidance } from "./preset-guidance";
+import { tilingPreview } from "./tiling-preview";
 import {
     compactParameter,
     compactRule,
@@ -55,9 +57,14 @@ export async function renderProcedureAuthoringWorkspace(
     let nameOverride: string | null = null;
     let draft: ProcedureComposer | null = null;
     let presets: ProcedurePreset[] = [];
+    let tilings: TilingCatalogEntry[] = [];
+    let tilingFilter = "all";
+    let tilingOverride: string | null = null;
+    let baselineTiling: string | null = null;
     let savedProcedures: SavedProcedureSummary[] = [];
     let revisions: ProcedureRevisionSummary[] = [];
     let savePending = false;
+    let tilingPending = false;
     let refreshSerial = 0;
     let activeDrawer: WorkspaceDrawer | null = null;
     let advancedSelectedModuleKey: string | null = null;
@@ -72,9 +79,10 @@ export async function renderProcedureAuthoringWorkspace(
 
     root.replaceChildren(loadingPanel("Loading exploration rulesets…"));
     const composerApi = await ProcedureComposerApi.create(root);
-    [presets, savedProcedures] = await Promise.all([
+    [presets, savedProcedures, tilings] = await Promise.all([
         api.getProcedurePresets(),
-        composerApi.listProcedures()
+        composerApi.listProcedures(),
+        composerApi.listTilings()
     ]);
     if (disposed) return () => {};
 
@@ -89,14 +97,17 @@ export async function renderProcedureAuthoringWorkspace(
         procedureId: sourceProcedureId,
         revision: sourceProcedureId ? viewedRevision : null,
         name: nameOverride,
+        tilingDsSymbol: tilingOverride,
         moduleSelections: [...moduleSelections.entries()].map(([moduleKey, included]) => ({ moduleKey, included })),
         overrides: [...pending.values()]
     });
 
     const resetEdits = (): void => {
+        ++refreshSerial;
         pending.clear();
         moduleSelections.clear();
         nameOverride = null;
+        tilingOverride = null;
         jsonText = "";
         jsonBaseline = "";
         jsonLoadFailed = false;
@@ -119,6 +130,7 @@ export async function renderProcedureAuthoringWorkspace(
         }
         draft = await composerApi.composeDraft(currentInput());
         baselineName = draft.name;
+        baselineTiling = draft.tilingDsSymbol;
         jsonText = "";
         jsonBaseline = "";
         jsonLoadFailed = false;
@@ -144,6 +156,34 @@ export async function renderProcedureAuthoringWorkspace(
         } catch (error) {
             const target = root.querySelector<HTMLElement>("[data-error]");
             if (target) showUiError(target, error);
+        }
+    };
+
+    const changeTiling = async (symbol: string): Promise<void> => {
+        if (tilingPending || savePending || historical() || symbol === draft?.tilingDsSymbol) return;
+        const nextOverride = symbol === baselineTiling ? null : symbol;
+        const serial = ++refreshSerial;
+        tilingPending = true;
+        render();
+        let failure: unknown = null;
+        try {
+            const next = await composerApi.composeDraft({ ...currentInput(), tilingDsSymbol: nextOverride });
+            if (disposed || serial !== refreshSerial) return;
+            tilingOverride = nextOverride;
+            draft = next;
+            jsonText = "";
+            jsonBaseline = "";
+            jsonValidation = null;
+            jsonLoadFailed = false;
+        } catch (error) {
+            if (serial === refreshSerial) failure = error;
+        } finally {
+            tilingPending = false;
+            if (!disposed) {
+                render();
+                const target = root.querySelector<HTMLElement>("[data-error]");
+                if (failure !== null && target) showUiError(target, failure);
+            }
         }
     };
 
@@ -209,7 +249,7 @@ export async function renderProcedureAuthoringWorkspace(
     };
 
     const saveStructured = async (): Promise<void> => {
-        if (!draft || savePending || historical()) return;
+        if (!draft || savePending || tilingPending || historical()) return;
         const error = root.querySelector<HTMLElement>("[data-error]");
         if (error) clearUiError(error);
         let failure: unknown | null = null;
@@ -220,12 +260,14 @@ export async function renderProcedureAuthoringWorkspace(
                 ? await composerApi.createRevision(sourceProcedureId, {
                     expectedRevision: latestRevision ?? draft.revision,
                     name: nameOverride,
+                    tilingDsSymbol: tilingOverride,
                     moduleSelections: moduleSelectionInputs(moduleSelections),
                     overrides: [...pending.values()]
                 })
                 : await composerApi.createProcedure({
                     presetKey: sourcePresetKey,
                     name: nameOverride,
+                    tilingDsSymbol: tilingOverride,
                     moduleSelections: moduleSelectionInputs(moduleSelections),
                     overrides: [...pending.values()]
                 });
@@ -291,6 +333,7 @@ export async function renderProcedureAuthoringWorkspace(
     };
 
     const changeMode = async (next: ProcedureAuthoringMode): Promise<void> => {
+        if (tilingPending) return;
         if (mode === "json"
             && next !== "json"
             && jsonText.length > 0
@@ -317,11 +360,7 @@ export async function renderProcedureAuthoringWorkspace(
         || (jsonText.length > 0 && jsonText !== jsonBaseline);
 
     const hasSaveableChanges = (): boolean =>
-        mode === "json"
-            ? sourceProcedureId === null
-                ? hasStructuredChanges() || (jsonText.length > 0 && jsonText !== jsonBaseline)
-                : jsonText.length > 0 && jsonText !== jsonBaseline
-            : hasStructuredChanges();
+        hasSaveableComposerChanges(mode, hasStructuredChanges(), jsonText, jsonBaseline);
 
     const hasBlockingStructuredIssues = (): boolean =>
         draft?.dependencies.hasErrors === true
@@ -456,9 +495,27 @@ export async function renderProcedureAuthoringWorkspace(
             "Choosing a ruleset",
             "Compare the four facts on each card. Use View details for exact rules and source information; partial or manual support is flagged before selection."));
 
-        const familiar = familiarPresets(presets);
+        const tilingField = document.createElement("label");
+        tilingField.className = "hc-compact-field";
+        tilingField.append(textElement("span", "Filter by tiling"));
+        const tilingSelect = document.createElement("select");
+        for (const [symbol, name] of [["all", "All tilings"], ...tilings.map(t => [t.dsSymbol, t.displayName])]) {
+            if (tilingSelect.querySelectorAll("option").length > 0 &&
+                [...tilingSelect.options].some(option => option.value === symbol)) continue;
+            const option = document.createElement("option");
+            option.value = symbol;
+            option.textContent = name;
+            tilingSelect.append(option);
+        }
+        tilingSelect.value = tilingFilter;
+        tilingSelect.addEventListener("change", () => { tilingFilter = tilingSelect.value; render(); });
+        tilingField.append(tilingSelect);
+        page.append(tilingField);
+        const matches = presets.filter(p => tilingFilter === "all" || p.procedure.tilingDsSymbol === tilingFilter);
+        if (matches.length === 0) page.append(emptyState("No matching presets", "No presets use this tiling yet."));
+        const familiar = familiarPresets(matches);
         if (familiar.length > 0) page.append(presetSection("Familiar exploration rulesets", familiar));
-        const generic = genericPresets(presets);
+        const generic = genericPresets(matches);
         if (generic.length > 0) page.append(presetSection("Generic starting points", generic,
             "Small generic procedures useful when you want a minimal foundation rather than a named methodology."));
         root.replaceChildren(page);
@@ -480,7 +537,13 @@ export async function renderProcedureAuthoringWorkspace(
         card.className = "hc-panel hc-preset-card";
         const head = document.createElement("div");
         head.className = "hc-preset-card-head";
-        head.append(textElement("h3", preset.displayName), textElement("p", presetTagline(preset)));
+        const heading = document.createElement("div");
+        heading.append(textElement("h3", preset.displayName), textElement("p", presetTagline(preset)));
+        head.append(heading);
+        const tiling = tilings.find(t => t.dsSymbol === preset.procedure.tilingDsSymbol);
+        const preview = tilingPreview(tiling);
+        preview.title = tiling?.displayName ?? "Unlisted tiling";
+        head.append(preview);
         const guidance = presetGuidance(preset.procedure);
         card.append(head, presetDecisionFacts(guidance));
         if (guidance.caution) {
@@ -594,7 +657,7 @@ export async function renderProcedureAuthoringWorkspace(
 
         const save = button(savePending ? "Saving…" : sourceProcedureId ? "Save new revision" : "Save ruleset", "primary");
         save.dataset.procedureSave = "";
-        save.disabled = savePending
+        save.disabled = savePending || tilingPending
             || historical()
             || !hasSaveableChanges()
             || (mode !== "json" && hasBlockingStructuredIssues());
@@ -637,6 +700,36 @@ export async function renderProcedureAuthoringWorkspace(
             });
             nameField.append(nameInput);
             identity.append(nameField);
+            const tilingField = document.createElement("div");
+            tilingField.className = "hc-procedure-tiling-picker";
+            tilingField.append(textElement("h3", "Map tiling"));
+            const selected = tilings.find(t => t.dsSymbol === draft!.tilingDsSymbol);
+            const selectedRow = document.createElement("div");
+            selectedRow.className = "hc-procedure-tiling-selected";
+            selectedRow.append(textElement("span", selected?.displayName ?? "Custom tiling"), tilingPreview(selected));
+            tilingField.append(selectedRow);
+            const choices = document.createElement("details");
+            const summary = document.createElement("summary");
+            summary.textContent = "Change tiling";
+            choices.append(summary);
+            for (const tiling of selectableTilings(tilings)) {
+                const option = document.createElement("button");
+                option.type = "button";
+                option.className = "hc-panel";
+                option.style.display = "flex";
+                option.style.alignItems = "center";
+                option.style.justifyContent = "space-between";
+                option.style.gap = "1rem";
+                option.style.width = "100%";
+                option.style.marginTop = ".4rem";
+                option.append(textElement("span", tiling.displayName), tilingPreview(tiling));
+                option.setAttribute("aria-pressed", String(tiling.dsSymbol === draft!.tilingDsSymbol));
+                option.disabled = historical() || savePending || tilingPending;
+                option.addEventListener("click", () => void changeTiling(tiling.dsSymbol));
+                choices.append(option);
+            }
+            tilingField.append(choices);
+            identity.append(tilingField);
             page.append(identity);
         }
 
@@ -682,6 +775,7 @@ export async function renderProcedureAuthoringWorkspace(
         pending.size > 0
         || moduleSelections.size > 0
         || nameOverride !== null
+        || tilingOverride !== null
         || (sourceProcedureId === null && (sourcePresetKey !== null || (draft?.modules.length ?? 0) > 0));
 
     const renderCompact = (): HTMLElement => {

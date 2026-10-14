@@ -6,6 +6,8 @@ import { renderToolHome } from "../src/modules/home/tool-home-view";
 import { renderProcedureAuthoringWorkspace } from "../src/modules/procedures/procedure-authoring-view";
 import { renderProcedureReference } from "../src/modules/procedures/procedure-reference-view";
 import { renderWorldEditor } from "../src/modules/worlds/world-editor-view";
+// Captured from CrawlTilingNames.RepresentativePreview, not hand-drawn geometry.
+import tilingOptions from "./tilings.json";
 
 const params = new URLSearchParams(window.location.search);
 const stateName = params.get("state") || "no-course";
@@ -360,8 +362,10 @@ const savedProcedure = {
 
 function installProcedureFetch() {
     const original = window.fetch.bind(window);
-    window.fetch = async input => {
+    window.fetch = async (input, init) => {
         const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+        const body = init?.body ? JSON.parse(String(init.body)) : {};
+        if (url.endsWith("/api/procedures/tilings")) return responseJson(tilingOptions);
         if (url.endsWith("/api/procedures")) return responseJson([savedProcedure]);
         if (url.endsWith("/api/procedures/visual-procedure/revisions")) {
             return responseJson([{
@@ -380,17 +384,20 @@ function installProcedureFetch() {
                     procedureId: "visual-procedure",
                     revision: 3,
                     schemaVersion: "1.1",
-                    tilingDsSymbol: "<1:1,1,1:6,3>",
+                    tilingDsSymbol: body.tilingDsSymbol ?? "<1:1,1,1:6,3>",
                     name: "Shattered Marches Procedure",
                     modules: Object.entries(richProcedureParameters).map(([moduleKey, parameters]) => ({ moduleKey, parameters }))
                 }, null, 2)
             });
         }
+        if (url.endsWith("/api/procedures/composer/canonical/validate")) {
+            return responseJson({ isValid: true });
+        }
         if (url.includes("/api/procedures/visual-procedure/revisions/3/reference")) {
             return responseJson(referenceFixture());
         }
         if (url.includes("/api/procedures/composer/draft") || url.includes("/api/procedures/visual-procedure")) {
-            return responseJson(composerFixture());
+            return responseJson({ ...composerFixture(), tilingDsSymbol: body.tilingDsSymbol ?? "<1:1,1,1:6,3>" });
         }
         return new Response(JSON.stringify({ detail: "visual-review procedure stub" }), {
             status: 404,
@@ -577,7 +584,8 @@ if (stateName === "home") {
         await renderProcedureAuthoringWorkspace(root, api, "visual-procedure", () => {});
     }
     emitSpecialMetrics("procedure");
-    restoreFetch();
+    // Keep the isolated fixture active for interactive review after initial rendering.
+    window.addEventListener("pagehide", restoreFetch, { once: true });
 } else if (stateName === "world-selected-cell") {
     const restoreFetch = installProcedureFetch();
     const worldFixture = {
