@@ -16,7 +16,7 @@ import type { ProcedurePreset } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
 import { badge, openWorkspaceDrawer, textElement, type WorkspaceDrawer } from "../../ui/workspace";
 import { applyGuidedExperience, guidedCallout, guidedDisclosure, guidancePreferenceButton } from "../../ui/guidance";
-import { executionSummary, inputSourceLabel, saveBlocked, withBehavior, withParameter, selectableTilings, hasSaveableComposerChanges } from "./procedure-composer-model";
+import { executionSummary, inputSourceLabel, saveBlocked, withBehavior, withParameter, selectableTilings, hasSaveableComposerChanges, supportsVertexAdjacency, visibleMovementParameter } from "./procedure-composer-model";
 import { presetGuidance } from "./preset-guidance";
 import { tilingPreview } from "./tiling-preview";
 import {
@@ -1056,11 +1056,8 @@ export async function renderProcedureAuthoringWorkspace(
         modules: current.modules.filter(module => module.moduleKey === section)
     });
 
-    const supportsVertexAdjacency = (): boolean =>
-        tilings.find(item => item.dsSymbol === draft?.tilingDsSymbol)?.supportsVertexOnlyAdjacency ?? false;
-
     const visibleParameter = (key: string): boolean =>
-        key !== "adjacencyMode" || supportsVertexAdjacency();
+        visibleMovementParameter(key, supportsVertexAdjacency(tilings, draft?.tilingDsSymbol));
 
     const populateCompactArea = (body: HTMLElement, modules: ProcedureModuleComposer[]): void => {
         body.replaceChildren();

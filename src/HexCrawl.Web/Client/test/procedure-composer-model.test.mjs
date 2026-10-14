@@ -3,6 +3,8 @@ import test from "node:test";
 import {
     composerSection,
     selectableTilings,
+    supportsVertexAdjacency,
+    visibleMovementParameter,
     hasSaveableComposerChanges,
     createPendingOverride,
     executionSummary,
@@ -24,6 +26,21 @@ test("structured tiling edits remain saveable when the generated JSON is unchang
     assert.equal(hasSaveableComposerChanges("json", false, "square", "square"), false);
     assert.equal(hasSaveableComposerChanges("json", false, "triangle", "square"), true);
     assert.equal(hasSaveableComposerChanges("compact", true, "", ""), true);
+});
+
+test("adjacency setting visibility is determined by server geometry, independently of tiling names", () => {
+    const catalog = [
+        { dsSymbol: "one", displayName: "hexagonal", showInRulesetSelector: true, supportsVertexOnlyAdjacency: true },
+        { dsSymbol: "two", displayName: "square", showInRulesetSelector: true, supportsVertexOnlyAdjacency: false },
+        { dsSymbol: "three", displayName: "unlisted", showInRulesetSelector: false, supportsVertexOnlyAdjacency: true }
+    ];
+    assert.equal(supportsVertexAdjacency(catalog, "one"), true);
+    assert.equal(supportsVertexAdjacency(catalog, "two"), false);
+    assert.equal(supportsVertexAdjacency(catalog, "three"), true);
+    assert.equal(supportsVertexAdjacency(catalog, "missing"), false);
+    assert.equal(visibleMovementParameter("adjacencyMode", true), true);
+    assert.equal(visibleMovementParameter("adjacencyMode", false), false);
+    assert.equal(visibleMovementParameter("travelResolution", false), true);
 });
 
 test("hidden tilings stay resolvable and filterable but never become selector choices", () => {
