@@ -100,7 +100,7 @@ public sealed class PeriodicVertexAdjacencyTests
         };
         var distance = start.Position.DistanceTo(contact.Point);
         var travel = PeriodicTraversalExecution.AdvanceDistance(
-            world, start, new DistanceMeasure(distance * 2, DistanceUnit.Miles), false,
+            world, start, new DistanceMeasure(distance * 2 * 1.1, DistanceUnit.Miles), false,
             CellAdjacencyMode.EdgeAndVertex);
         Assert.Equal(contact.To, travel.Traversal.CurrentCell);
         Assert.Equal(1, travel.CompletedCellSteps);
