@@ -1059,3 +1059,17 @@ test("vertex adjacency augments the existing tiling card and compass, without pa
     assert.doesNotMatch(expedition, /data-vertex-contacts/);
     assert.doesNotMatch(expedition, /vertexContainer/);
 });
+
+test("bounded world compass omits exits with destinations outside playable bounds", () => {
+    const contracts = fs.readFileSync(path.join(repositoryRoot,
+        "src/HexCrawl.Web/Modules/Expeditions/CellTraversalContracts.cs"), "utf8");
+    const navigation = fs.readFileSync(path.join(sourceDir,
+        "modules/expeditions/periodic-expedition-workbench.ts"), "utf8");
+    const topology = fs.readFileSync(path.join(sourceDir,
+        "modules/expeditions/current-cell-topology.ts"), "utf8");
+
+    assert.match(contracts, /world\.Boundaries\(cursor\.CurrentCell\.Address\)\s*\.Where\(edge => world\.IsPlayable\(edge\.To\.Address\)\)/);
+    assert.match(contracts, /world\.VertexOnlyContacts\(cursor\.CurrentCell\.Address\)\s*\.Where\(contact => world\.IsPlayable\(contact\.To\.Address\)\)/);
+    assert.match(topology, /context\.interfaces\.map\(/);
+    assert.match(navigation, /vertexChoices: allowedVertices\.map/);
+});
