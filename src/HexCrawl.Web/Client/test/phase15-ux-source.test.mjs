@@ -852,7 +852,7 @@ test("Phase 15.1 explains domain-specific numeric grid settings at their point o
     }
     assert.match(home, /physical distance represented by one geometry unit/i);
     assert.match(worlds, /Physical map scale/);
-    assert.match(worlds, /name="physicalScale"[^>]*required/);
+    assert.match(worlds, /name="physicalScale"[^>]*placeholder="Optional for cell steps"/);
     assert.doesNotMatch(worlds, /Grid orientation|Hex radius|<option value="square"|<option value="triangle"/);
     assert.match(editor, /data-world-form/);
     assert.doesNotMatch(editor, /data-grid-form|Save world and grid|Hex radius/);

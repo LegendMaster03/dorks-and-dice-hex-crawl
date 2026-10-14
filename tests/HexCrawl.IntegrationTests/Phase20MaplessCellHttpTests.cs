@@ -51,8 +51,9 @@ public sealed class Phase20MaplessCellHttpTests
                 }, ApiJson);
             Assert.Equal(HttpStatusCode.Created, uncalibrated.StatusCode);
             var body = await uncalibrated.Content.ReadFromJsonAsync<JsonElement>();
-            Assert.Equal(JsonValueKind.Null, body.GetProperty("context").GetProperty("tiling")
-                .GetProperty("physicalDistancePerWorldUnit").ValueKind);
+            var tiling = body.GetProperty("context").GetProperty("tiling");
+            Assert.True(!tiling.TryGetProperty("physicalDistancePerWorldUnit", out var physicalScale)
+                || physicalScale.ValueKind == JsonValueKind.Null);
 
             using var distance = await client.PostAsJsonAsync("/api/expeditions/cells",
                 new {

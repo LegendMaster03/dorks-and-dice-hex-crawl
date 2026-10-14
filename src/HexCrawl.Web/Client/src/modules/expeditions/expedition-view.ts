@@ -511,7 +511,7 @@ export async function renderExpedition(
                     async (_control, action) => {
                         await runUiMutation(action);
                     },
-                    panelFocus);
+                    panelFocus === "effects" ? "all" : panelFocus);
                 void panel.sync();
                 queueMicrotask(() => {
                     const details = body.querySelector<HTMLDetailsElement>("[data-survival-resources-panel]");
