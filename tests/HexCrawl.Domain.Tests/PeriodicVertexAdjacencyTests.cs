@@ -49,8 +49,9 @@ public sealed class PeriodicVertexAdjacencyTests
         var world = CreateWorld(Square);
         var startCell = world.Resolve(new PeriodicCellAddress(
             world.Topology.MotifCells[0].Id, new(0, 0)));
-        var contact = Assert.Single(world.VertexOnlyContacts(startCell.Id.Address)
-            .Where(c => c.FromVertexIndex == 0));
+        var contact = Assert.Single(
+            world.VertexOnlyContacts(startCell.Id.Address),
+            c => c.FromVertexIndex == 0);
         var start = new PeriodicCellTraversal
         {
             CurrentCell = startCell.Id,
@@ -106,7 +107,7 @@ public sealed class PeriodicVertexAdjacencyTests
         Assert.InRange(travel.ConsumedWorldUnits, distance - 1e-8, distance + 1e-8);
         Assert.InRange(travel.ConsumedPhysicalDistance!.Value.Value,
             distance * 2 - 1e-8, distance * 2 + 1e-8);
-        Assert.Equal(1, travel.Transitions.Count);
+        Assert.Single(travel.Transitions);
     }
 
     [Fact]
