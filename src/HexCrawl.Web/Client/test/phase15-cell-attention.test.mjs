@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { nextCellExpeditionAction } from '../src/modules/expeditions/phase15-cell-action.ts';
+import { nextCellExpeditionAction } from '../.test-dist/modules/expeditions/phase15-cell-action.js';
 
 const baseline = () => ({
     pendingEncounter: false,

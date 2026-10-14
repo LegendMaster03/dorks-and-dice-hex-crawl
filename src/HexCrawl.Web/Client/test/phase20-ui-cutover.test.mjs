@@ -37,7 +37,7 @@ test("map inspection hints follow authoritative movement and never retain stale 
     assert.match(currentCellInspectionHint(inspected, movedCell, priorInterfaces, 4), /travel intent/);
     assert.match(currentCellInspectionHint(inspected, oldCell, priorInterfaces, 4), /current position/);
     assert.match(currentCellInspectionHint(null, oldCell, [], null), /Select a cell/);
-    assert.doesNotMatch(currentCellInspectionHint(inspected, movedCell, [], null), /travel intent/);
+    assert.doesNotMatch(currentCellInspectionHint(inspected, movedCell, [], null), /Adjacent cell selected as travel intent/);
 });
 
 test("authored subjects are listed only inside the selected server cell polygon", () => {

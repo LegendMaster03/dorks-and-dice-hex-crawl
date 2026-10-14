@@ -856,7 +856,8 @@ test("Phase 15.1 explains domain-specific numeric grid settings at their point o
     assert.doesNotMatch(worlds, /Grid orientation|Hex radius|<option value="square"|<option value="triangle"/);
     assert.match(editor, /data-world-form/);
     assert.doesNotMatch(editor, /data-grid-form|Save world and grid|Hex radius/);
-    assert.match(assistant, /physical distance represented by one (realized )?geometry unit/i);
+    assert.match(assistant, /physical distance represented by one realized world geometry unit/i);
+    assert.match(assistant, /Optional for cell steps/);
     assert.doesNotMatch(assistant, /Start q|Start r|name="orientation"/);
 });
 
