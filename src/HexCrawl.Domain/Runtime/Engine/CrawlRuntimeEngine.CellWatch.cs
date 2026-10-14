@@ -117,7 +117,7 @@ public sealed partial class CrawlRuntimeEngine
             if (state.Traversal.EntryInterfaceIndex is null
                 && (runtime.Movement.Adjacency != CellAdjacencyMode.EdgeAndVertex
                     || state.Traversal.EntryVertexIndex is null))
-                throw new InvalidOperationException("Double-back requires a known entry interface or an authorized entry vertex.";);
+                throw new InvalidOperationException("Double-back requires a known entry interface or an authorized entry vertex.");
         }
         var dmOverrideNote = ResolveDmOverrideNote(
             inputs.Travel.Provenance,
