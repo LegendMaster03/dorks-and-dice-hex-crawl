@@ -131,7 +131,7 @@ export async function renderExpedition(
         } else {
             cleanupDrawer();
         }
-        const presentation = expeditionWorkspacePresentation(runtime, journey, survival);
+        const presentation = expeditionWorkspacePresentation(runtime, journey, survival, effects);
         const page = document.createElement("section");
         page.className = "hc-page hc-phase15-expedition";
         const header = document.createElement("header");
@@ -192,7 +192,8 @@ export async function renderExpedition(
         kind: ReturnType<typeof expeditionWorkspacePresentation>["action"]["kind"]): string => {
         switch (kind) {
             case "encounter": return "Resolve or hand off the encounter before continuing.";
-            case "survival": return "Resolve pending resource, effect, or forced-travel consequences.";
+            case "survival": return "Resolve pending resource or forced-travel consequences.";
+            case "effects": return "Review and record the table adjudication for a pending effect consequence.";
             case "journey": return "Resolve the saved journey stage, event, or required table action.";
             case "watch": return "Record a configured interval without inventing spatial movement.";
             default: return "Consult the saved ruleset and supply required table decisions.";
@@ -207,7 +208,7 @@ export async function renderExpedition(
         summary.textContent = "What this action needs and changes";
         guide.append(summary,
             textElement("p", guidedActionExplanation(action.kind)),
-            textElement("p", `Current time: ${expeditionWorkspacePresentation(runtime, journey, survival).timeLabel}`));
+            textElement("p", `Current time: ${expeditionWorkspacePresentation(runtime, journey, survival, effects).timeLabel}`));
         const latest = [...runtime.history].reverse().find(event =>
             !/provenance|diagnostic|resolved input source/i.test(event.message));
         if (latest) guide.append(textElement("p", `Recorded event: ${latest.message}`));
@@ -225,7 +226,7 @@ export async function renderExpedition(
         section.className = "hc-nonspatial-primary";
         const main = document.createElement("article");
         main.className = "hc-panel hc-journey-primary";
-        const presentation = expeditionWorkspacePresentation(runtime, journey, survival);
+        const presentation = expeditionWorkspacePresentation(runtime, journey, survival, effects);
         const activeJourney = journey?.activeProcesses.find(process => !process.isTerminal) ?? null;
 
         if (journey?.processPolicy.support === "Supported") {
@@ -282,7 +283,8 @@ export async function renderExpedition(
         side.append(
             textElement("h2", "At the table"),
             railAction("Party & roles", journeyRoleSummary(runtime), openPartyWorkspace));
-        if (presentation.capabilities.resources || presentation.capabilities.survival || presentation.capabilities.effects) {
+        if (presentation.capabilities.resources || presentation.capabilities.survival
+            || presentation.capabilities.effects || (effects?.pendingConsequences.length ?? 0) > 0) {
             side.append(railAction("Resources & effects", resourcesEffectsDetail(survival, effects), openSurvivalWorkspace));
         }
         if (journey?.eventPolicy.support === "Supported") {
@@ -383,13 +385,14 @@ export async function renderExpedition(
     };
 
     const renderGmTools = (): HTMLElement => {
-        const presentation = expeditionWorkspacePresentation(runtime, journey, survival);
+        const presentation = expeditionWorkspacePresentation(runtime, journey, survival, effects);
         const tools = disclosure("GM Tools", false);
         const row = document.createElement("div");
         row.className = "hc-button-row hc-gm-tools";
         row.append(button("Party & roles", openPartyWorkspace),
             button("Environment", openEnvironmentWorkspace));
-        if (presentation.capabilities.resources || presentation.capabilities.survival || presentation.capabilities.effects)
+        if (presentation.capabilities.resources || presentation.capabilities.survival
+            || presentation.capabilities.effects || (effects?.pendingConsequences.length ?? 0) > 0)
             row.append(button("Survival, resources & effects", openSurvivalWorkspace));
         if (presentation.capabilities.journey)
             row.append(button("Journey", openJourneyWorkspace));
@@ -466,22 +469,25 @@ export async function renderExpedition(
     };
 
     const openSurvivalWorkspace = (
-        focus: "all" | "attention" = "all"): void => {
-        const capabilities = expeditionWorkspacePresentation(runtime, journey, survival).capabilities;
+        focus: "all" | "attention" | "effects" = "all"): void => {
+        const capabilities = expeditionWorkspacePresentation(runtime, journey, survival, effects).capabilities;
         const panelFocus = focus === "attention"
-            ? survival?.forcedTravel.checkDue
-                ? "forcedTravel"
-                : "pendingResourceConsequences"
+            ? survival?.forcedTravel.checkDue ? "forcedTravel" : "pendingResourceConsequences"
             : "all";
-        const title = panelFocus === "forcedTravel"
-            ? "Forced travel"
+        const title = focus === "effects" ? "Pending effect consequence"
+            : panelFocus === "forcedTravel"
+                ? "Forced travel"
             : panelFocus === "pendingResourceConsequences"
                 ? "Travel consequence"
-                : capabilities.effects ? "Resources & effects" : "Survival & resources";
+                : capabilities.effects || (effects?.pendingConsequences.length ?? 0) > 0
+                    ? "Resources & effects" : "Survival & resources";
         openDrawer(title, body => {
             body.classList.add("hc-page");
             const cleanups: Array<() => void> = [];
-            if (capabilities.effects) {
+            // An unsupported or missing effect module can still leave an
+            // explicitly pending consequence that requires DM adjudication.
+            if (capabilities.effects || focus === "effects"
+                || (effects?.pendingConsequences.length ?? 0) > 0) {
                 const effectPanel = new ExpeditionEffectsPanel(
                     body,
                     effectsApi,
@@ -490,10 +496,16 @@ export async function renderExpedition(
                     async (_control, action) => {
                         await runUiMutation(action);
                     });
-                void effectPanel.sync();
+                void effectPanel.sync().then(() => {
+                    if (focus === "effects") {
+                        const action = [...body.querySelectorAll<HTMLButtonElement>("[data-effects-panel] button")]
+                            .find(button => button.textContent?.trim() === "Record resolution");
+                        action?.focus();
+                    }
+                });
                 cleanups.push(() => effectPanel.dispose());
             }
-            if (capabilities.resources || capabilities.survival) {
+            if (focus !== "effects" && (capabilities.resources || capabilities.survival)) {
                 const panel = new ExpeditionSurvivalResourcesPanel(
                     body,
                     survivalApi,
@@ -719,6 +731,7 @@ export async function renderExpedition(
         switch (kind) {
             case "encounter": openEncounterWorkspace(); break;
             case "survival": openSurvivalWorkspace("attention"); break;
+            case "effects": openSurvivalWorkspace("effects"); break;
             case "journey": openJourneyWorkspace(); break;
             case "watch": openNonSpatialWatchWorkspace(); break;
             default:

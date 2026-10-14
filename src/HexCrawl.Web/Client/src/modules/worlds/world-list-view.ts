@@ -28,12 +28,14 @@ export async function renderWorldList(
                         <label>Name <input name="name" required value="New overworld" autocomplete="off"></label>
                         <fieldset class="hc-field-group hc-map-scale-field">
                             <legend>Physical map scale</legend>
-                            <label>Distance per world geometry unit <input name="physicalScale" type="number" min="0.000001" step="any" required placeholder="Enter distance"></label>
-                            <label>Distance unit <select name="periodicUnit" required>
+                            <label>Distance per world geometry unit <input name="physicalScale" type="number" min="0.000001" step="any" placeholder="Optional for cell steps"></label>
+                            <label>Distance unit <select name="periodicUnit">
+                                <option value="">Select unit (optional)</option>
                                 <option value="Mile">Miles</option>
                                 <option value="Kilometer">Kilometers</option>
                             </select></label>
                         </fieldset>
+                        <p class="hc-hint">Leave both calibration fields blank for cell-step worlds. Distance-based travel rules require physical calibration.</p>
                         <p class="hc-hint">New maps currently use the established hexagonal tiling preset through the periodic-cell engine. Additional tiling controls will be available after review.</p>
                         <button type="submit" class="hc-primary-action" data-create-button>Create world</button>
                     </form>
@@ -147,19 +149,24 @@ export async function renderWorldList(
             createButton.disabled = true;
             createButton.textContent = "Creating…";
             try {
-                const distance = numeric(input(form, "physicalScale"));
-                if (distance <= 0) throw new Error("Physical map scale must be positive.");
+                const scaleText = input(form, "physicalScale").value.trim();
                 const unit = select(form, "periodicUnit").value as DistanceUnitKind;
+                if (Boolean(scaleText) !== Boolean(unit))
+                    throw new Error("Provide both physical map scale distance and unit, or leave both empty.");
+                const distance = scaleText ? numeric(input(form, "physicalScale")) : null;
+                if (distance !== null && distance <= 0) throw new Error("Physical map scale must be positive.");
                 const world = await api.createPeriodicOverworld({
                     name: input(form, "name").value.trim(),
                     tilingDsSymbol: "<1:1,1,1:6,3>",
                     worldUnitsPerAbstractPeriod: 1,
                     origin: { x: 0, y: 0 },
                     rotationDegrees: 0,
-                    physicalDistancePerWorldUnit: {
-                        value: distance,
-                        unit: canonicalDistanceUnit(unit)
-                    }
+                    ...(distance === null ? {} : {
+                        physicalDistancePerWorldUnit: {
+                            value: distance,
+                            unit: canonicalDistanceUnit(unit)
+                        }
+                    })
                 });
                 if (!disposed) navigate(`/worlds/${world.id}/edit`);
             } catch (value) {

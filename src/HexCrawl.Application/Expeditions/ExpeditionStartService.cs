@@ -40,17 +40,19 @@ public sealed record ProcedureStartSelection(
 }
 
 public sealed record MaplessSpatialStartOptions(
-    string Name, DistanceMeasure PhysicalDistancePerWorldUnit)
+    string Name, DistanceMeasure? PhysicalDistancePerWorldUnit = null)
 {
     public void Validate()
     {
         if (string.IsNullOrWhiteSpace(Name))
             throw new ArgumentException("Mapless setup name is required.");
-        if (!double.IsFinite(PhysicalDistancePerWorldUnit.Value)
-            || PhysicalDistancePerWorldUnit.Value <= 0)
-            throw new ArgumentException("Mapless physical scale must be finite and positive.");
-        if (string.IsNullOrWhiteSpace(PhysicalDistancePerWorldUnit.Unit.Symbol))
-            throw new ArgumentException("Mapless physical scale unit is required.");
+        if (PhysicalDistancePerWorldUnit is { } scale)
+        {
+            if (!double.IsFinite(scale.Value) || scale.Value <= 0)
+                throw new ArgumentException("Mapless physical scale must be finite and positive.");
+            if (string.IsNullOrWhiteSpace(scale.Unit.Symbol))
+                throw new ArgumentException("Mapless physical scale unit is required.");
+        }
     }
 }
 
@@ -109,7 +111,11 @@ public sealed class ExpeditionStartService(
             ? await ResolveProcedureAsync(owner, selection, cancellationToken)
             : null;
         var procedure = geometricPreset?.Procedure ?? selected!.Procedure;
-        GenericProcedureRuntime.Bind(procedure);
+        var executable = GenericProcedureRuntime.Bind(procedure);
+        if (executable.Movement.TravelResolution == TravelResolutionMode.ContinuousDistance
+            && tiling.PhysicalDistancePerWorldUnit is null)
+            throw new InvalidOperationException(
+                "This distance-based ruleset requires an explicit physical map scale before starting.");
 
         // Alternative legitimate symmetry quotients must not be rejected only
         // because their canonical strings differ. The world's independently
@@ -203,7 +209,11 @@ public sealed class ExpeditionStartService(
             ? await ResolveProcedureAsync(owner, selection, cancellationToken)
             : null;
         var procedure = geometricPreset?.Procedure ?? selected!.Procedure;
-        GenericProcedureRuntime.Bind(procedure);
+        var executable = GenericProcedureRuntime.Bind(procedure);
+        if (executable.Movement.TravelResolution == TravelResolutionMode.ContinuousDistance
+            && options.PhysicalDistancePerWorldUnit is null)
+            throw new InvalidOperationException(
+                "This distance-based ruleset requires an explicit physical map scale before starting.");
 
         var realized = DelaneyDressHarmonicMetricRealization.Construct(
             procedure.TilingDsSymbol, 1d, "world-unit");

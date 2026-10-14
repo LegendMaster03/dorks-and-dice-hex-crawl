@@ -263,7 +263,8 @@ export class ExpeditionJourneyPanel {
             .map(value => `${value}|${process.definition.stages.find(stage => stage.stageKey === value)?.displayName ?? humanize(value)}`)]);
         const completeProcess = this.checkbox("Complete process", false);
         const failProcess = this.checkbox("Fail process", false);
-        const consequence = this.consequenceFields();
+        const consequence = this.consequenceFields(() => nullable(actor.control.value));
+        actor.control.addEventListener("change", consequence.syncEffectTarget);
         const submit = this.button("Resolve attempt");
         form.append(pending.wrapper, approach.wrapper, role.wrapper, actor.wrapper, progress.wrapper, successes.wrapper,
             failures.wrapper, complications.wrapper, completeStage.wrapper, targetStage.wrapper, completeProcess.wrapper,
@@ -463,7 +464,8 @@ export class ExpeditionJourneyPanel {
             .filter(value => value.kind === "Mount" || value.kind === "Vehicle")
             .map(value => `${value.id}|${value.kind}: ${value.key}`);
         const movementTarget = this.select("Target mount / vehicle", ["", ...contributors]);
-        const consequence = this.consequenceFields();
+        const consequence = this.consequenceFields(() => nullable(participant.control.value));
+        participant.control.addEventListener("change", consequence.syncEffectTarget);
         const note = this.input("Resolution note", "text");
         const submit = this.button("Resolve event");
         form.append(status.wrapper, key.wrapper, type.wrapper, targetKind.wrapper, role.wrapper, participant.wrapper,
@@ -530,7 +532,13 @@ export class ExpeditionJourneyPanel {
         return section;
     }
 
-    private consequenceFields(): { container: HTMLElement; build: (source: string, sourceId: string, occurrenceId: string) => ExpeditionConsequenceInput[] } {
+    private consequenceFields(
+        preferredParticipantId: () => string | null = () => null
+    ): {
+        container: HTMLElement;
+        syncEffectTarget: () => void;
+        build: (source: string, sourceId: string, occurrenceId: string) => ExpeditionConsequenceInput[];
+    } {
         const container = document.createElement("fieldset");
         const legend = document.createElement("legend");
         legend.textContent = "Optional journey result";
@@ -544,9 +552,11 @@ export class ExpeditionJourneyPanel {
             "DamageEndurance|Damage / endurance"
         ]);
         const runtime = this.getRuntime();
-        const effectKinds = runtime.procedure.modules
-            .find(module => module.moduleKey === "effects.expedition")
-            ?.parameters.effectKinds?.split(";").map(value => value.trim()).filter(Boolean) ?? [];
+        const effectModule = runtime.procedure.modules
+            .find(module => module.moduleKey === "effects.expedition");
+        const effectKinds = effectModule?.parameters.effectKinds
+            ?.split(";").map(value => value.trim()).filter(Boolean) ?? [];
+        const effectScope = effectModule?.parameters.scope?.trim().toLowerCase() ?? null;
         const effect = effectKinds.length > 0
             ? this.select("Effect", effectKinds.map(value => `${value}|${humanize(value)}`))
             : this.input("Effect", "text");
@@ -564,7 +574,26 @@ export class ExpeditionJourneyPanel {
                 .filter(contributor => contributor.kind === "Mount" || contributor.kind === "Vehicle")
                 .map(contributor => `${contributor.kind}:${contributor.id}|${humanize(contributor.kind)}: ${humanize(contributor.key)}`)
         ];
-        const affected = this.select("Affects", targetOptions);
+        const affected = this.select("Affects", [...targetOptions, "|Choose effect target"]);
+        const syncEffectTarget = (): void => {
+            const isEffect = kind.control.value === "PersistentEffectChange" && effectScope !== null;
+            for (const option of affected.control.options) {
+                const scope = option.value.split(":", 1)[0].toLowerCase();
+                option.disabled = isEffect && !!option.value && scope !== effectScope;
+            }
+            if (!isEffect) {
+                if (!affected.control.value) affected.control.value = "Party";
+                return;
+            }
+            const preferred = preferredParticipantId();
+            const matching = targetOptions.map(raw => raw.split("|", 1)[0])
+                .filter(value => value.split(":", 1)[0].toLowerCase() === effectScope);
+            if (effectScope === "participant" && preferred && matching.includes(`Participant:${preferred}`)) {
+                affected.control.value = `Participant:${preferred}`;
+            } else {
+                affected.control.value = matching.length === 1 ? matching[0] : "";
+            }
+        };
 
         const technical = document.createElement("details");
         const technicalSummary = document.createElement("summary");
@@ -593,11 +622,15 @@ export class ExpeditionJourneyPanel {
             timeUnit.wrapper.hidden = selected !== "TimeDelay";
             affected.wrapper.hidden = selected === "None";
         };
-        kind.control.addEventListener("change", updateVisibility);
+        kind.control.addEventListener("change", () => {
+            updateVisibility();
+            syncEffectTarget();
+        });
         updateVisibility();
 
         return {
             container,
+            syncEffectTarget,
             build: (source, sourceId, occurrenceId) => {
                 if (kind.control.value === "None") return [];
                 const consequenceId = crypto.randomUUID();
@@ -615,6 +648,10 @@ export class ExpeditionJourneyPanel {
                         }];
                     case "PersistentEffectChange": {
                         const effectKey = required(effect.control.value, "Effect");
+                        if (!resolvedTarget.scope || !affected.control.value)
+                            throw new Error("Select an affected target for the effect.");
+                        if (effectScope && resolvedTarget.scope.toLowerCase() !== effectScope)
+                            throw new Error(`The pinned effect policy requires a ${effectScope} target. Choose a matching target.`);
                         return [{
                             id: consequenceId,
                             consequenceKey: effectKey,

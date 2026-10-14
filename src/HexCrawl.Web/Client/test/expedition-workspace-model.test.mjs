@@ -54,6 +54,21 @@ test("unresolved journey event is the actual current action", () => {
     assert.match(action.detail, /Mishap/);
 });
 
+test("persisted effect consequences take priority over ordinary journey continuation", () => {
+    const action = expeditionWorkspaceAction(runtime(), journey({
+        activeProcesses: [process()]
+    }), null, {
+        pendingConsequences: [{
+            reason: "Pinned effect policy requires Participant target",
+            requiredAction: "Record DM adjudication"
+        }]
+    });
+    assert.equal(action.kind, "effects");
+    assert.equal(action.label, "Review pending effect consequence");
+    assert.equal(action.urgent, true);
+    assert.match(action.detail, /Participant target/);
+});
+
 test("pending journey stage transition is surfaced specifically", () => {
     const action = expeditionWorkspaceAction(runtime(), journey({
         activeProcesses: [process({

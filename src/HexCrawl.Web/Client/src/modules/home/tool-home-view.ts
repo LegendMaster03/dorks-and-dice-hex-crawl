@@ -84,10 +84,10 @@ export async function renderToolHome(
                                 <fieldset class="hc-field-group hc-map-scale-field">
                                     <legend>Map scale</legend>
                                     <div class="hc-inline">
-                                        <label>Distance <input name="scale" type="number" min="0.001" step="any" placeholder="required"></label>
+                                        <label>Distance <input name="scale" type="number" min="0.001" step="any" placeholder="Optional for cell steps"></label>
                                         <label>Unit <select name="unit"><option value="">Select unit</option><option value="Mile">Miles</option><option value="Kilometer">Kilometers</option><option value="Custom">Custom</option></select></label>
                                     </div>
-                                    <p class="hc-hint">Physical travel distance represented by one world geometry unit.</p>
+                                    <p class="hc-hint" data-calibration-hint>Optional for cell-step exploration. Distance-based rules require a positive physical scale and unit.</p>
                                 </fieldset>
                                 <div class="hc-form" data-custom-unit hidden>
                                     <label>Custom symbol <input name="symbol" autocomplete="off"></label>
@@ -212,7 +212,7 @@ export async function renderToolHome(
         input(form, "scale"),
         "Map scale",
         "This is the physical distance represented by one geometry unit of the selected ruleset.",
-        "Set the travel scale and unit explicitly before starting a mapless session.");
+        "Leave both fields empty for uncalibrated cell-step exploration. Distance-based rulesets require both fields.");
     attachFieldHelp(
         unit,
         "Map scale unit",
@@ -228,6 +228,15 @@ export async function renderToolHome(
     const composerApi = await ProcedureComposerApi.create(root);
 
     const periodicStart = required<HTMLElement>(form, "[data-periodic-start]");
+    let calibrationRequired = false;
+    const syncCalibration = (): void => {
+        const requiredScale = context.value === ABSTRACT_CONTEXT && calibrationRequired;
+        input(form, "scale").required = requiredScale;
+        unit.required = requiredScale;
+        required<HTMLElement>(form, "[data-calibration-hint]").textContent = calibrationRequired
+            ? "This distance-based ruleset requires physical distance and unit."
+            : "Physical scale is optional for cell-step exploration. Leave both fields empty to run uncalibrated.";
+    };
     const syncContext = (): void => {
         const abstract = context.value === ABSTRACT_CONTEXT;
         const nonSpatial = context.value === NON_SPATIAL_CONTEXT;
@@ -236,8 +245,7 @@ export async function renderToolHome(
         const spatial = Boolean(context.value) && !nonSpatial;
         periodicStart.hidden = !(spatial && selectedWorld !== null);
         input(form, "contextName").required = abstract;
-        input(form, "scale").required = abstract;
-        unit.required = abstract;
+        syncCalibration();
         select(form, "motifCellId").required = !periodicStart.hidden;
         input(form, "u").required = !periodicStart.hidden;
         input(form, "v").required = !periodicStart.hidden;
@@ -286,14 +294,21 @@ export async function renderToolHome(
         mechanics.replaceChildren();
         rulesNext.disabled = !procedure.value;
         if (!procedure.value) {
+            calibrationRequired = false;
+            syncCalibration();
+            startButton.disabled = true;
             required<HTMLElement>(form, "[data-procedure-summary]").textContent = "No runnable exploration ruleset is available.";
             return;
         }
-        const choice = readProcedureStartChoice(procedure.value);
+        const selectedValue = procedure.value;
+        const choice = readProcedureStartChoice(selectedValue);
         required<HTMLElement>(form, "[data-procedure-summary]").textContent =
             startChoiceSummary(choice, savedProcedures, presets);
         if (choice.kind === "preset") {
             const preset = presets.find(candidate => candidate.presetKey === choice.presetKey);
+            calibrationRequired = preset?.procedure.runtime?.travelResolution === "ContinuousDistance";
+            syncCalibration();
+            startButton.disabled = startPending;
             if (preset) {
                 required<HTMLElement>(form, "[data-procedure-summary]").textContent =
                     `${preset.description} · ${campaignProcedureSummary(preset.procedure)} · saves an editable campaign copy when play begins`;
@@ -301,7 +316,14 @@ export async function renderToolHome(
             }
             return;
         }
+        // Do not permit a saved-revision start before its movement policy is loaded.
+        startButton.disabled = true;
         const saved = await composerApi.getProcedure(choice.procedureId, choice.revision);
+        if (disposed || procedure.value !== selectedValue) return;
+        calibrationRequired = saved.modules.some(module => module.moduleKey === "movement.resolution"
+            && module.parameters.travelResolution === "ContinuousDistance");
+        syncCalibration();
+        startButton.disabled = startPending;
         for (const module of saved.modules) {
             const item = document.createElement("li");
             item.textContent = `${module.displayName}: ${module.mechanic.displayName}`;
@@ -318,7 +340,9 @@ export async function renderToolHome(
             ? presets
             : selectedWorld
                 ? geometric.filter(value =>
-                    value.procedure.tilingDsSymbol === selectedWorld!.tiling?.topology.quotientDsSymbol)
+                    value.procedure.tilingDsSymbol === selectedWorld!.tiling?.topology.quotientDsSymbol
+                    && (selectedWorld!.tiling?.physicalDistancePerWorldUnit !== null
+                        || value.procedure.runtime?.travelResolution !== "ContinuousDistance"))
                 : geometric;
         populateProcedureStartChoices(procedure, savedProcedures, available);
         if ([...procedure.options].some(option => option.value === previous))
@@ -377,14 +401,22 @@ export async function renderToolHome(
                 const name = input(form, "name").value.trim();
                 let expedition;
                 if (context.value === ABSTRACT_CONTEXT) {
+                    const scaleText = input(form, "scale").value.trim();
                     const unitKind = unit.value as DistanceUnitKind;
+                    if (Boolean(scaleText) !== Boolean(unitKind))
+                        throw new Error("Provide both physical map scale distance and unit, or leave both empty.");
+                    const calibration = scaleText
+                        ? {
+                            physicalDistancePerWorldUnit: numeric(input(form, "scale")),
+                            distanceUnit: distanceUnit(unitKind, form)
+                        }
+                        : {};
                     const base: Omit<StartStandaloneCrawlSessionInput, "procedureKey"> = {
                         name,
                         context: {
                             kind: "MaplessSpatial",
                             name: input(form, "contextName").value.trim(),
-                            physicalDistancePerWorldUnit: numeric(input(form, "scale")),
-                            distanceUnit: distanceUnit(unitKind, form)
+                            ...calibration
                         }
                     };
                     expedition = await api.startStandaloneCellSession(applyStandaloneProcedureChoice(base, choice));

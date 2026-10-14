@@ -274,14 +274,15 @@ public sealed record StandaloneCrawlContextRequest(
     {
         if (Kind != CrawlSessionContextKind.MaplessSpatial)
             throw new ArgumentException("This endpoint starts mapless spatial sessions only.");
+        var name = string.IsNullOrWhiteSpace(Name) ? "Mapless exploration" : Name.Trim();
+        if (PhysicalDistancePerWorldUnit is null && DistanceUnit is null)
+            return new MaplessSpatialStartOptions(name);
         if (PhysicalDistancePerWorldUnit is not { } distance
             || !double.IsFinite(distance) || distance <= 0)
             throw new ArgumentException("Mapless physical distance per world unit must be finite and positive.");
         var units = (DistanceUnit ?? throw new ArgumentException(
             "Mapless spatial scale requires an explicit physical unit.")).ToDomain();
-        return new MaplessSpatialStartOptions(
-            string.IsNullOrWhiteSpace(Name) ? "Mapless exploration" : Name.Trim(),
-            new DistanceMeasure(distance, units));
+        return new MaplessSpatialStartOptions(name, new DistanceMeasure(distance, units));
     }
 }
 

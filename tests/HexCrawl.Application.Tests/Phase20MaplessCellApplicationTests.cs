@@ -67,6 +67,61 @@ public sealed class Phase20MaplessCellApplicationTests
     }
 
     [Fact]
+    public async Task UncalibratedCellStepsSurviveRestartAndDistanceRulesFailClosed()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var store = new PostgresHexCrawlStore(database.ConnectionString);
+        await store.InitializeAsync();
+        var procedures = new CampaignProcedureService(store);
+        var starter = new ExpeditionStartService(store, new HexCrawlService(store), procedures);
+
+        var created = await starter.StartStandaloneCellsAsync(
+            "owner", "Uncalibrated steps",
+            new ProcedureStartSelection(PresetKey: "simple-hex-step"),
+            new MaplessSpatialStartOptions("Mapless steps"));
+        var context = Assert.IsType<MaplessSpatialCrawlSessionContext>(created.Context);
+        Assert.Null(context.Tiling.PhysicalDistancePerWorldUnit);
+        Assert.Null(context.Tiling.PhysicalTurnCostReference);
+        Assert.Null(Assert.IsType<CellExpeditionState>(created.Runtime).DistanceTraveled);
+
+        var restarted = new PostgresHexCrawlStore(database.ConnectionString);
+        await restarted.InitializeAsync();
+        var loaded = (await restarted.GetExpeditionAsync(created.Id, "owner"))!;
+        Assert.Null(Assert.IsType<MaplessSpatialCrawlSessionContext>(loaded.Context)
+            .Tiling.PhysicalDistancePerWorldUnit);
+        var geometry = await new HexCrawlService(restarted).ResolveCellGeometryAsync(loaded, "owner");
+        Assert.Null(geometry.Tiling.PhysicalDistancePerWorldUnit);
+        var starting = Assert.IsType<CellExpeditionState>(loaded.Runtime);
+        starting.Validate(geometry.Tiling);
+        var heading = PeriodicCourseFixture.ThroughInterface(
+            geometry.Tiling, starting.Traversal.CurrentCell);
+        var advanced = await new HexCrawlService(restarted).AdvanceCellExpeditionAsync(
+            loaded.Id, "owner", loaded.Version,
+            new CellWatchTravelPlan(
+                heading, false, false, TravelModeSelection.Normal, NavigationAidSelection.None),
+            new CellWatchAdvanceInputs(ResolvedTravelAmount.CellTransitions(
+                1, new ResolutionProvenance(ResolutionSource.ManualRoll))));
+        var moved = Assert.IsType<CellExpeditionState>(advanced.Runtime);
+        Assert.Equal(1, moved.CompletedWatches);
+        Assert.NotEqual(starting.Traversal.CurrentCell, moved.Traversal.CurrentCell);
+        Assert.Null(moved.DistanceTraveled);
+        Assert.Contains(moved.History, eventRecord =>
+            eventRecord.Kind == CrawlRuntimeEventKind.CellEntered);
+        var afterWatchRestart = new PostgresHexCrawlStore(database.ConnectionString);
+        await afterWatchRestart.InitializeAsync();
+        var persisted = (await afterWatchRestart.GetExpeditionAsync(created.Id, "owner"))!;
+        var persistedState = Assert.IsType<CellExpeditionState>(persisted.Runtime);
+        Assert.Equal(moved.Traversal.CurrentCell, persistedState.Traversal.CurrentCell);
+        Assert.Equal(1, persistedState.CompletedWatches);
+        Assert.Null(persistedState.DistanceTraveled);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            starter.StartStandaloneCellsAsync("owner", "Missing distance", new ProcedureStartSelection(
+                PresetKey: "simple-fixed-distance"), new MaplessSpatialStartOptions("Uncalibrated")));
+        Assert.Single(await store.ListExpeditionsAsync("owner"));
+    }
+
+    [Fact]
     public async Task MaplessWatchUsesSameCellRuntimeAndOwnerVersionProtection()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();

@@ -66,7 +66,7 @@ test("crawl creation surfaces do not assume a 12-mile physical scale", () => {
         assert.doesNotMatch(source, /name="scale"[^>]*value="12"/);
         assert.match(source, /Select unit/);
     }
-    assert.match(world, /name="physicalScale"[^>]*required/);
+    assert.match(world, /name="physicalScale"[^>]*placeholder="Optional for cell steps"/);
     assert.match(world, /api\.createPeriodicOverworld/);
     assert.doesNotMatch(world, /api\.createOverworld\(|<option value="square"|<option value="triangle"/);
     for (const source of [world, home, assistant, editor]) {
@@ -74,8 +74,18 @@ test("crawl creation surfaces do not assume a 12-mile physical scale", () => {
         assert.doesNotMatch(source, /name="(?:meters|metersPerUnit)"[^>]*value="1"/);
     }
     assert.match(world, /Physical map scale/);
-    assert.match(home, /unit\.required = abstract/);
-    assert.match(assistant, /unit\.required = abstract/);
+    assert.match(home, /unit\.required = requiredScale/);
+    assert.match(assistant, /unit\.required = abstract && calibrationRequired/);
+    for (const source of [home, assistant]) {
+        assert.match(source, /runtime\?\.travelResolution === "ContinuousDistance"/);
+        assert.match(source, /module\.parameters\.travelResolution === "ContinuousDistance"/);
+    }
+    assert.match(home, /Boolean\(scaleText\) !== Boolean\(unitKind\)/);
+    assert.match(assistant, /Boolean\(scaleText\) !== Boolean\(unitKind\)/);
+    assert.match(world, /Boolean\(scaleText\) !== Boolean\(unit\)/);
+    assert.match(home, /physicalDistancePerWorldUnit !== null/);
+    assert.match(home, /startButton\.disabled = true;[\s\S]*composerApi\.getProcedure/);
+    assert.match(assistant, /submit\.disabled = true;[\s\S]*composerApi\.getProcedure/);
 });
 
 test("standalone crawl sessions post directly to the expedition collection", () => {

@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { nextCellExpeditionAction } from "../.test-dist/modules/expeditions/phase15-cell-action.js";
-import { polygonContainsSubject, uniquelyAdjacentInterface } from "../.test-dist/modules/expeditions/phase20-cell-ui-policy.js";
+import { currentCellInspectionHint, polygonContainsSubject, uniquelyAdjacentInterface } from "../.test-dist/modules/expeditions/phase20-cell-ui-policy.js";
 
 const file = (...segments) => fs.readFileSync(path.join("src", ...segments), "utf8");
 const id = (tilingId = "tiling-1") => ({
@@ -24,6 +24,20 @@ test("map click selects a travel course only for a uniquely adjacent qualified c
     assert.equal(uniquelyAdjacentInterface(target, [{
         interfaceIndex: 4, neighborCell: id("foreign")
     }]), null);
+});
+
+test("map inspection hints follow authoritative movement and never retain stale intent", () => {
+    const oldCell = id();
+    const movedCell = {
+        tilingId: oldCell.tilingId,
+        address: { motifCellId: oldCell.address.motifCellId, translation: { u: 8, v: -4 } }
+    };
+    const inspected = { id: oldCell, center: { x: 2, y: 3 } };
+    const priorInterfaces = [{ interfaceIndex: 4, neighborCell: oldCell }];
+    assert.match(currentCellInspectionHint(inspected, movedCell, priorInterfaces, 4), /travel intent/);
+    assert.match(currentCellInspectionHint(inspected, oldCell, priorInterfaces, 4), /current position/);
+    assert.match(currentCellInspectionHint(null, oldCell, [], null), /Select a cell/);
+    assert.doesNotMatch(currentCellInspectionHint(inspected, movedCell, [], null), /Adjacent cell selected as travel intent/);
 });
 
 test("authored subjects are listed only inside the selected server cell polygon", () => {

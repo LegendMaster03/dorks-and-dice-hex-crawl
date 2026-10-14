@@ -852,11 +852,12 @@ test("Phase 15.1 explains domain-specific numeric grid settings at their point o
     }
     assert.match(home, /physical distance represented by one geometry unit/i);
     assert.match(worlds, /Physical map scale/);
-    assert.match(worlds, /name="physicalScale"[^>]*required/);
+    assert.match(worlds, /name="physicalScale"[^>]*placeholder="Optional for cell steps"/);
     assert.doesNotMatch(worlds, /Grid orientation|Hex radius|<option value="square"|<option value="triangle"/);
     assert.match(editor, /data-world-form/);
     assert.doesNotMatch(editor, /data-grid-form|Save world and grid|Hex radius/);
-    assert.match(assistant, /physical distance represented by one (realized )?geometry unit/i);
+    assert.match(assistant, /physical distance represented by one realized world geometry unit/i);
+    assert.match(assistant, /Optional for cell steps/);
     assert.doesNotMatch(assistant, /Start q|Start r|name="orientation"/);
 });
 
@@ -936,6 +937,13 @@ test("Phase 15.1 procedure entry surfaces expose the same beginner-help preferen
     assert.match(capture, /Guided procedure preference control is missing/);
 });
 
+
+test("pending effect adjudication opens a resolution panel even without a supported effect module", () => {
+    const view = fs.readFileSync(path.join(sourceDir, "modules/expeditions/expedition-view.ts"), "utf8");
+    assert.match(view, /capabilities\.effects \|\| focus === "effects"/);
+    assert.match(view, /case "effects": openSurvivalWorkspace\("effects"\)/);
+    assert.match(view, /\(effects\?\.pendingConsequences\.length \?\? 0\) > 0/);
+});
 
 test("Phase 15.1 explains pending consequences without inventing their outcome", () => {
     const effects = fs.readFileSync(

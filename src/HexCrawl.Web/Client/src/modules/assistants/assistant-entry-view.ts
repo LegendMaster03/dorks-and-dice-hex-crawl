@@ -76,7 +76,7 @@ export async function renderAssistantEntry(
                             <fieldset class="hc-field-group hc-map-scale-field">
                                 <legend>Map scale</legend>
                                 <div class="hc-inline">
-                                    <label>Distance <input name="scale" type="number" min="0.001" step="any" placeholder="required"></label>
+                                    <label>Distance <input name="scale" type="number" min="0.001" step="any" placeholder="Optional for cell steps"></label>
                                     <label>Unit
                                         <select name="unit">
                                             <option value="">Select unit</option>
@@ -86,7 +86,7 @@ export async function renderAssistantEntry(
                                         </select>
                                     </label>
                                 </div>
-                                <p class="hc-hint">Physical distance represented by one realized geometry unit.</p>
+                                <p class="hc-hint" data-calibration-hint>Optional for cell-step rulesets. Distance-based rules require a physical scale and unit.</p>
                             </fieldset>
                             <div class="hc-form" data-custom-unit hidden>
                                 <label>Custom symbol <input name="symbol" autocomplete="off"></label>
@@ -139,6 +139,7 @@ export async function renderAssistantEntry(
 
     const mode = form.querySelector<HTMLSelectElement>('select[name="mode"]');
     const unit = select(form, "unit");
+    let calibrationRequired = false;
 
     const usesAbstract = (): boolean =>
         assistant === "navigation" || (assistant === "travel" && mode?.value === "abstract");
@@ -148,9 +149,12 @@ export async function renderAssistantEntry(
         abstractPanel.hidden = !abstract;
         nonSpatialPanel.hidden = abstract;
         input(form, "contextName").required = abstract;
-        input(form, "scale").required = abstract;
-        unit.required = abstract;
+        input(form, "scale").required = abstract && calibrationRequired;
+        unit.required = abstract && calibrationRequired;
         input(form, "nonSpatialName").required = !abstract;
+        required<HTMLElement>(form, "[data-calibration-hint]").textContent = calibrationRequired
+            ? "This distance-based ruleset requires physical distance and unit."
+            : "Physical scale is optional for cell-step exploration. Leave both fields empty to run uncalibrated.";
         syncUnit();
     };
 
@@ -165,6 +169,8 @@ export async function renderAssistantEntry(
         const mechanics = required<HTMLElement>(form, "[data-procedure-mechanics]");
         mechanics.replaceChildren();
         if (!procedure.value) {
+            calibrationRequired = false;
+            syncMode();
             required<HTMLElement>(form, "[data-procedure-summary]").textContent = "No procedure is available.";
             submit.disabled = true;
             return;
@@ -176,23 +182,31 @@ export async function renderAssistantEntry(
             startChoiceSummary(choice, savedProcedures, presets);
         if (choice.kind === "preset") {
             const preset = presets.find(candidate => candidate.presetKey === choice.presetKey);
+            calibrationRequired = preset?.procedure.runtime?.travelResolution === "ContinuousDistance";
+            syncMode();
             if (preset) {
                 required<HTMLElement>(form, "[data-procedure-summary]").textContent =
                     `${preset.description} · ${campaignProcedureSummary(preset.procedure)} · creates a new saved procedure when the assistant session begins`;
                 renderProcedureMechanicList(mechanics, preset.procedure);
             }
-            submit.disabled = false;
+            submit.disabled = pending;
             return;
         }
 
+        // Saved revision metadata determines the calibration requirement.
+        // Prevent submitting until the exact revision has been inspected.
+        submit.disabled = true;
         const saved = await composerApi.getProcedure(choice.procedureId, choice.revision);
         if (disposed || procedure.value !== selectedValue) return;
+        calibrationRequired = saved.modules.some(module => module.moduleKey === "movement.resolution"
+            && module.parameters.travelResolution === "ContinuousDistance");
+        syncMode();
         for (const module of saved.modules) {
             const item = document.createElement("li");
             item.textContent = `${module.displayName}: ${module.mechanic.displayName}`;
             mechanics.append(item);
         }
-        submit.disabled = false;
+        submit.disabled = pending;
     };
 
     mode?.addEventListener("change", syncMode);
@@ -302,14 +316,22 @@ function buildRequest(
         };
     }
 
+    const scaleText = input(form, "scale").value.trim();
     const unitKind = select(form, "unit").value as DistanceUnitKind;
+    if (Boolean(scaleText) !== Boolean(unitKind))
+        throw new Error("Provide both physical map scale distance and unit, or leave both empty.");
+    const calibration = scaleText
+        ? {
+            physicalDistancePerWorldUnit: positive(input(form, "scale")),
+            distanceUnit: distanceUnit(unitKind, form)
+        }
+        : {};
     return {
         name,
         context: {
             kind: "MaplessSpatial",
             name: input(form, "contextName").value.trim(),
-            physicalDistancePerWorldUnit: positive(input(form, "scale")),
-            distanceUnit: distanceUnit(unitKind, form)
+            ...calibration
         }
     };
 }
