@@ -56,6 +56,7 @@ const labels: Record<string, string> = {
     durationTicks: "Travel period",
     travelResolution: "Movement method",
     actualDistanceResolution: "Actual distance",
+    adjacencyMode: "Allowed tile contacts",
     neighborCenterDistanceFactor: "Turning effort as a fraction of the neighboring cell-center distance",
     supportsDeliberateDoubleBack: "Allow deliberate double-back",
     usesNavigationChecks: "Checks required",
