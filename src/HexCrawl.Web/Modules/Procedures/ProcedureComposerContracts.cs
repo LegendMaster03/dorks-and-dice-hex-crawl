@@ -14,7 +14,8 @@ public sealed record ProcedureComposerDraftRequest(
     string? Name,
     IReadOnlyList<ProcedureComposerModuleSelectionRequest>? ModuleSelections,
     IReadOnlyList<ProcedureComposerOverrideRequest>? Overrides,
-    string? TilingDsSymbol = null);
+    string? TilingDsSymbol = null,
+    ProcedureMapBoundsInput? PlayableBounds = null);
 
 public sealed record ProcedureComposerCreateRequest(
     string? PresetKey,
@@ -22,14 +23,31 @@ public sealed record ProcedureComposerCreateRequest(
     string? Name,
     IReadOnlyList<ProcedureComposerModuleSelectionRequest>? ModuleSelections,
     IReadOnlyList<ProcedureComposerOverrideRequest>? Overrides,
-    string? TilingDsSymbol = null);
+    string? TilingDsSymbol = null,
+    ProcedureMapBoundsInput? PlayableBounds = null);
 
 public sealed record ProcedureComposerRevisionRequest(
     int ExpectedRevision,
     string? Name,
     IReadOnlyList<ProcedureComposerModuleSelectionRequest>? ModuleSelections,
     IReadOnlyList<ProcedureComposerOverrideRequest>? Overrides,
-    string? TilingDsSymbol = null);
+    string? TilingDsSymbol = null,
+    ProcedureMapBoundsInput? PlayableBounds = null);
+
+public sealed record ProcedureMapBoundsInput(int? Width = null, int? Height = null,
+    long? MinU = null, long? MinV = null)
+{
+    public PeriodicMapBounds? ToDomain()
+    {
+        if (Width is null && Height is null && MinU is null && MinV is null)
+            return null;
+        if (Width is not { } width || Height is not { } height)
+            throw new ArgumentException("Specify both map dimensions, or neither for an unbounded ruleset.");
+        var bounds = new PeriodicMapBounds(width, height, MinU ?? 0, MinV ?? 0);
+        bounds.Validate();
+        return bounds;
+    }
+}
 
 public sealed record ProcedureComposerModuleSelectionRequest(string ModuleKey, bool Included)
 {

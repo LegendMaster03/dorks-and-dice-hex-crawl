@@ -148,6 +148,9 @@ export type ProcedureComposerDraftInput = {
     moduleSelections?: ProcedureComposerModuleSelectionInput[];
     overrides?: ProcedureComposerOverrideInput[];
     tilingDsSymbol?: string | null;
+    playableBounds?: { width?: number; height?: number; minU?: number; minV?: number };
+    playableBounds?: { width?: number; height?: number; minU?: number; minV?: number };
+    playableBounds?: { width?: number; height?: number; minU?: number; minV?: number };
 };
 
 export type ProcedureComposerCreateInput = {
