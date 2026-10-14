@@ -255,6 +255,58 @@ public sealed class Phase18CellWatchRuntimeTests
     }
 
     [Fact]
+    public void ExplicitVertexCourseDecisionRequiresPinnedPolicyAndResumesThroughPointContact()
+    {
+        var (world, initialProcedure, state, plan) = Setup("<1:1,1,1:4,4>", calibrated: true);
+        var cell = world.Resolve(state.Traversal.CurrentCell.Address);
+        var contact = Assert.Single(
+            world.VertexOnlyContacts(cell.Id.Address), c => c.FromVertexIndex == 0);
+        var heading = contact.Point - cell.Center;
+        state = state with
+        {
+            Traversal = state.Traversal with { SelectedExitInterfaceIndex = null }
+        };
+        var engine = new CrawlRuntimeEngine();
+        var paused = engine.AdvanceCellWatch(
+            world, initialProcedure, state, plan with { IntendedHeading = heading }, Inputs(1));
+        Assert.Equal(RuntimePauseReason.CellCourseAdjudicationRequired, paused.PauseReason);
+
+        var decision = new CellCourseDecision(heading, null, Manual)
+        {
+            SelectedExitVertexNeighbor = contact.To
+        };
+        Assert.Throws<InvalidOperationException>(() =>
+            engine.ResolveCellCourse(world, paused.Expedition, decision));
+
+        var enabledProcedure = initialProcedure with
+        {
+            Modules = initialProcedure.Modules.Select(module =>
+            {
+                if (module.Mechanic.ExecutionHandler != GenericProcedureExecutionHandlers.MovementResolutionPolicy)
+                    return module;
+                var parameters = module.Parameters.ToDictionary(item => item.Key, item => item.Value);
+                parameters["adjacencyMode"] = CellAdjacencyMode.EdgeAndVertex.ToString();
+                return module with { Parameters = parameters };
+            }).ToArray()
+        };
+        enabledProcedure.Validate();
+
+        var resolved = engine.ResolveCellCourse(
+            world, paused.Expedition, decision, CellAdjacencyMode.EdgeAndVertex);
+        Assert.Equal(contact.To, resolved.Expedition.Traversal.SelectedExitVertexNeighbor);
+        Assert.Null(resolved.Expedition.Traversal.SelectedExitInterfaceIndex);
+        Assert.Contains(resolved.Events, e => e.Kind == CrawlRuntimeEventKind.ResolutionProvenanceRecorded
+            && e.Message.Contains("point-only vertex", StringComparison.Ordinal));
+        var continued = engine.AdvanceCellWatch(
+            world, enabledProcedure, resolved.Expedition,
+            resolved.Expedition.ActiveWatch!.Plan, Inputs(1));
+        Assert.Equal(contact.To, continued.Expedition.Traversal.CurrentCell);
+        Assert.Equal(contact.ToVertexIndex, continued.Expedition.Traversal.EntryVertexIndex);
+        Assert.Null(continued.Expedition.Traversal.EntryInterfaceIndex);
+        Assert.Null(continued.PauseReason);
+    }
+
+    [Fact]
     public void ExplicitAtomicExitDecisionResolvesVertexPauseWithoutInventingAdjacency()
     {
         var (world, procedure, state, plan) = Setup("<1:1,1,1:4,4>", calibrated: true);

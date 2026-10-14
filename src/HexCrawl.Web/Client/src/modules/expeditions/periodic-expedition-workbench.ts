@@ -7,7 +7,7 @@ import type {
     WorldCellGeometry, WorldPoint, ToolHostContext
 } from "../../types";
 import { showUiError, clearUiError } from "../../ui-error";
-import { currentPeriodicCellAdjacency } from "./current-cell-topology";
+import { currentPeriodicCellAdjacency, sameWorldCell } from "./current-cell-topology";
 import { renderCurrentCellNavigator } from "./cell-navigator";
 import { adjacencyForIntent } from "./spatial-adjacency";
 import { guidancePreferenceButton } from "../../ui/guidance";
@@ -43,6 +43,15 @@ export async function renderPeriodicExpeditionWorkbench(
     let runtime = initial;
     let topology = await api.getCellTopology(initial.id);
     let selectedExit = topology.selectedExitInterfaceIndex;
+    const selectedVertexFor = (
+        cell: typeof topology,
+        destination: import("../../types").WorldCellId | null | undefined
+    ): NonNullable<typeof topology.vertexOnlyContacts>[number] | null =>
+        destination
+            ? cell.vertexOnlyContacts?.find(contact => sameWorldCell(contact.to, destination)) ?? null
+            : null;
+    let selectedVertex = selectedVertexFor(topology,
+        initial.expedition.cellTraversal?.selectedExitVertexNeighbor);
     let disposed = false;
     let busy = false;
     let refreshGeneration = 0;
@@ -391,6 +400,7 @@ export async function renderPeriodicExpeditionWorkbench(
     };
     const selectHeading = (interfaceIndex: number | null): void => {
         selectedExit = interfaceIndex;
+        selectedVertex = null;
         if (interfaceIndex === null) {
             // Clearing a proposed boundary must not silently submit the old
             // manually chosen heading as a new travel intent.
@@ -483,6 +493,9 @@ export async function renderPeriodicExpeditionWorkbench(
             journeyAttention = null;
             topology = await api.getCellTopology(runtime.id);
             selectedExit = topology.selectedExitInterfaceIndex;
+            selectedVertex = selectedVertexFor(topology,
+                runtime.expedition.isSpatial
+                    ? runtime.expedition.cellTraversal?.selectedExitVertexNeighbor : null);
             if (!world) map.centerOn(topology.position);
             render();
             gameplay.sync();
@@ -519,6 +532,9 @@ export async function renderPeriodicExpeditionWorkbench(
             required<HTMLButtonElement>("[data-world]").hidden = world === null;
             topology = nextTopology;
             selectedExit = topology.selectedExitInterfaceIndex;
+            selectedVertex = selectedVertexFor(topology,
+                runtime.expedition.isSpatial
+                    ? runtime.expedition.cellTraversal?.selectedExitVertexNeighbor : null);
             if (!world) map.centerOn(topology.position);
             render();
             gameplay.sync();
@@ -699,13 +715,15 @@ export async function renderPeriodicExpeditionWorkbench(
     });
     required<HTMLButtonElement>("[data-confirm-course]").addEventListener("click", () => void progress(
         () => {
-            if (selectedExit === null) throw new Error("Choose a specific exit interface first.");
+            if (selectedExit === null && selectedVertex === null)
+                throw new Error("Choose an adjacent edge or permitted vertex destination first.");
             return api.resolveCellCourse(runtime.id, {
                 expectedVersion: runtime.version,
                 decision: {
                     intendedHeading: selectedHeading(),
                     selectedExitInterfaceIndex: selectedExit,
-                    provenance: { source: "DmOverride", note: "DM-selected atomic exit" }
+                    selectedExitVertexNeighbor: selectedVertex?.to ?? null,
+                    provenance: { source: "DmOverride", note: "DM-selected geometric contact" }
                 }
             });
         }));
@@ -932,9 +950,65 @@ export async function renderPeriodicExpeditionWorkbench(
             ? { ...adjacencies, selectedAdjacencyId: null }
             : { ...adjacencies,
                 selectedAdjacencyId: adjacencyForIntent(adjacencies, selectedExit)?.id ?? null };
+        const allowedVertices = runtime.procedure.runtime?.adjacency === "EdgeAndVertex"
+            ? topology.vertexOnlyContacts ?? [] : [];
+        const minX = Math.min(...topology.polygon.map(point => point.x));
+        const maxX = Math.max(...topology.polygon.map(point => point.x));
+        const minY = Math.min(...topology.polygon.map(point => point.y));
+        const maxY = Math.max(...topology.polygon.map(point => point.y));
+        const scale = 0.68 / Math.max(maxX - minX, maxY - minY);
+        const vertexId = (contact: (typeof allowedVertices)[number]): string =>
+            `vertex:${contact.fromVertexIndex}:${contact.to.address.motifCellId}:${contact.to.address.translation.u}:${contact.to.address.translation.v}`;
+        const toggleVertex = (contact: (typeof allowedVertices)[number]): void => {
+            if (generated) invalidateGenerated();
+            if (selectedVertex && sameWorldCell(selectedVertex.to, contact.to)) {
+                selectedVertex = null;
+                selectHeading(null);
+            } else {
+                selectedExit = null;
+                selectedVertex = contact;
+                const delta = {
+                    x: contact.point.x - topology.position.x,
+                    y: contact.point.y - topology.position.y
+                };
+                const fallback = {
+                    x: contact.point.x - topology.center.x,
+                    y: contact.point.y - topology.center.y
+                };
+                const heading = Math.hypot(delta.x, delta.y) > 1e-12 ? delta : fallback;
+                input("headingX").value = String(heading.x);
+                input("headingY").value = String(heading.y);
+            }
+            render();
+        };
         const navigation = renderCurrentCellNavigator(selected, {
             selectable: !busy,
             actualIntent: topology.selectedExitInterfaceIndex,
+            vertexChoices: allowedVertices.map(contact => {
+                const dx = contact.point.x - (minX + maxX) / 2;
+                const dy = contact.point.y - (minY + maxY) / 2;
+                return {
+                    id: vertexId(contact),
+                    label: `Travel through vertex ${contact.fromVertexIndex + 1} to ${contact.to.address.motifCellId} (${contact.to.address.translation.u}, ${contact.to.address.translation.v})`,
+                    anchor: {
+                        x: Math.max(0.02, Math.min(0.98, 0.5 + dx * scale + dx * 0.055 / Math.max(maxX - minX, Number.EPSILON))),
+                        y: Math.max(0.02, Math.min(0.98, 0.5 + dy * scale + dy * 0.055 / Math.max(maxY - minY, Number.EPSILON)))
+                    },
+                    selected: selectedVertex !== null && sameWorldCell(selectedVertex.to, contact.to)
+                };
+            }),
+            onVertexToggle: id => {
+                const contact = allowedVertices.find(entry => vertexId(entry) === id);
+                if (!contact) return;
+                toggleVertex(contact);
+                queueMicrotask(() => {
+                    if (disposed) return;
+                    const controls = root.querySelectorAll<HTMLButtonElement>(
+                        "[data-cell-navigator] .hc-adjacency-vertex");
+                    [...controls].find(control =>
+                        control.dataset.adjacencyInterfaceId === id)?.focus();
+                });
+            },
             onToggle: edge => {
                 // The navigator is outside the travel form. A new atomic
                 // course still invalidates all previously generated rolls.
@@ -953,11 +1027,14 @@ export async function renderPeriodicExpeditionWorkbench(
             }
         });
         required<HTMLElement>("[data-cell-navigator]").replaceChildren(navigation);
+        // Point-only destinations now share the existing navigator compass.
         const selectedEdge = topology.interfaces.find(edge => edge.interfaceIndex === selectedExit);
         renderPhase15Chrome();
-        text("[data-course]", selectedEdge
-            ? `Intended boundary ${selectedExit! + 1}; adjacent cell selected. Travel has not been resolved.`
-            : "Select an adjacent boundary for intended travel. This does not move the party.");
+        text("[data-course]", selectedVertex
+            ? "Intended point-only neighbor selected. Travel has not been resolved."
+            : selectedEdge
+                ? `Intended boundary ${selectedExit! + 1}; adjacent cell selected. Travel has not been resolved.`
+                : "Select an adjacent boundary or permitted vertex neighbor for travel. This does not move the party.");
         if (input("headingX").value === "" || input("headingY").value === "") {
             if (state.intendedHeading) {
                 input("headingX").value = String(state.intendedHeading.x);
@@ -1050,7 +1127,7 @@ export async function renderPeriodicExpeditionWorkbench(
         required<HTMLButtonElement>("[data-advance]").disabled =
             busy || pausedForCourse || !!pendingEncounter || !resolutions;
         required<HTMLButtonElement>("[data-confirm-course]").disabled =
-            busy || !pausedForCourse || selectedExit === null;
+            busy || !pausedForCourse || selectedExit === null && selectedVertex === null;
         required<HTMLButtonElement>("[data-resolve-encounter]").disabled =
             busy || !pendingEncounter;
         required<HTMLButtonElement>("[data-handoff-encounter]").disabled =

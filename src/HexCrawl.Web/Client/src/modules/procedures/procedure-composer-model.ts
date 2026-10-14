@@ -9,6 +9,16 @@ export function selectableTilings(entries: TilingCatalogEntry[]): TilingCatalogE
     return entries.filter(entry => entry.showInRulesetSelector);
 }
 
+/** Geometry authority comes from the server's realized periodic tiling, never its name. */
+export function supportsVertexAdjacency(
+    entries: TilingCatalogEntry[], symbol: string | null | undefined): boolean {
+    return entries.find(entry => entry.dsSymbol === symbol)?.supportsVertexOnlyAdjacency === true;
+}
+
+export function visibleMovementParameter(key: string, vertexAdjacencySupported: boolean): boolean {
+    return key !== "adjacencyMode" || vertexAdjacencySupported;
+}
+
 export function hasSaveableComposerChanges(
     mode: string, structuredChanges: boolean, jsonText: string, jsonBaseline: string): boolean {
     return mode === "json"

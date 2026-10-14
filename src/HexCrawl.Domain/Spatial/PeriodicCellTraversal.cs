@@ -14,8 +14,10 @@ public sealed record PeriodicCellTraversal
     public required WorldPoint Position { get; init; }
     public WorldCellId? EnteredFrom { get; init; }
     public int? EntryInterfaceIndex { get; init; }
+    public int? EntryVertexIndex { get; init; }
     public WorldPoint? TravelHeading { get; init; }
     public int? SelectedExitInterfaceIndex { get; init; }
+    public WorldCellId? SelectedExitVertexNeighbor { get; init; }
 
     public void Validate(PeriodicWorldTiling world)
     {
@@ -29,8 +31,8 @@ public sealed record PeriodicCellTraversal
         if (!FeatureIntersection.PointInPolygon(Position, world.Resolve(CurrentCell.Address).Polygon))
             throw new InvalidOperationException("Traversal position is outside the authoritative current cell.");
 
-        if (EnteredFrom.HasValue != EntryInterfaceIndex.HasValue)
-            throw new InvalidOperationException("Entry cell and reciprocal interface must be recorded together.");
+        if (EnteredFrom.HasValue != (EntryInterfaceIndex.HasValue ^ EntryVertexIndex.HasValue))
+            throw new InvalidOperationException("Entry must identify exactly one reciprocal edge or point-only vertex contact.");
         if (EntryInterfaceIndex is int entry)
         {
             var boundaries = world.Boundaries(CurrentCell.Address);
@@ -38,6 +40,16 @@ public sealed record PeriodicCellTraversal
                 throw new InvalidOperationException("Traversal entry interface does not lead to the recorded prior cell.");
             world.Reciprocal(boundaries[entry]);
         }
+        if (EntryVertexIndex is int entryVertex
+            && !world.VertexOnlyContacts(CurrentCell.Address).Any(contact =>
+                contact.FromVertexIndex == entryVertex && contact.To == EnteredFrom))
+            throw new InvalidOperationException("Recorded entry vertex has no reciprocal point-only contact.");
+
+        if (SelectedExitInterfaceIndex.HasValue && SelectedExitVertexNeighbor.HasValue)
+            throw new InvalidOperationException("A course can select an edge or a vertex neighbor, not both.");
+        if (SelectedExitVertexNeighbor is { } selectedVertex
+            && !world.VertexOnlyContacts(CurrentCell.Address).Any(contact => contact.To == selectedVertex))
+            throw new InvalidOperationException("Selected vertex destination does not touch the current cell at a point.");
 
         if (SelectedExitInterfaceIndex is int selected
             && (selected < 0 || selected >= world.Boundaries(CurrentCell.Address).Count))
@@ -63,7 +75,11 @@ public sealed record CellCrossingResolution(
     WorldPoint? Point,
     double? DistanceWorldUnits,
     IReadOnlyList<WorldCellBoundary> Candidates,
-    string? Reason);
+    string? Reason)
+{
+    /// <summary>Set only for an actual point-only transition; edge interfaces remain null.</summary>
+    public WorldCellVertexContact? VertexContact { get; init; }
+}
 
 public sealed record CellTraversalAdvance(
     PeriodicCellTraversal Traversal,
@@ -83,13 +99,16 @@ public static class PeriodicCellTraversalGeometry
 
     private sealed record Hit(
         WorldCellBoundary Boundary, WorldPoint Point, double Distance,
-        bool Endpoint);
+        bool Endpoint, int? EndpointVertexIndex);
 
     public static CellCrossingResolution NextCrossing(
         PeriodicWorldTiling world,
-        PeriodicCellTraversal traversal)
+        PeriodicCellTraversal traversal,
+        CellAdjacencyMode adjacency = CellAdjacencyMode.EdgeOnly)
     {
         ArgumentNullException.ThrowIfNull(world);
+        if (!Enum.IsDefined(adjacency))
+            throw new ArgumentOutOfRangeException(nameof(adjacency));
         ArgumentNullException.ThrowIfNull(traversal);
         traversal.Validate(world);
         if (traversal.TravelHeading is not { } heading)
@@ -149,7 +168,10 @@ public static class PeriodicCellTraversalGeometry
 
             var atEndpoint = fraction <= edgeTolerance || fraction >= 1 - edgeTolerance;
             var point = traversal.Position + direction * Math.Max(0d, distance);
-            hits.Add(new Hit(boundary, point, Math.Max(0d, distance), atEndpoint));
+            int? vertex = fraction <= edgeTolerance ? boundary.InterfaceIndex
+                : fraction >= 1 - edgeTolerance ? (boundary.InterfaceIndex + 1) % boundaries.Count
+                : null;
+            hits.Add(new Hit(boundary, point, Math.Max(0d, distance), atEndpoint, vertex));
         }
 
         // A known first intersection permits safe movement through the clear ray prefix.
@@ -158,6 +180,22 @@ public static class PeriodicCellTraversalGeometry
             double? distanceToFirstIntersection = null) =>
             new(CellCrossingStatus.RequiresAdjudication, null, null, null,
                 distanceToFirstIntersection, candidates, reason);
+
+        // A saved cursor can be exactly on the vertex at the beginning of
+        // a resumed watch. Treat this identically to approaching that vertex
+        // from inside the cell; do not silently consume another edge.
+        if (adjacency == CellAdjacencyMode.EdgeAndVertex
+            && traversal.SelectedExitInterfaceIndex is null)
+        {
+            var currentVertices = Enumerable.Range(0, polygon.Count)
+                .Where(index => traversal.Position.DistanceTo(polygon[index]) <= positionTolerance)
+                .ToArray();
+            if (currentVertices.Length == 1
+                && ResolveVertexContact(world, traversal, currentVertices[0],
+                    traversal.Position, 0d, direction, positionTolerance, cellScale)
+                    is { } immediateContact)
+                return immediateContact;
+        }
 
         if (collinear.Count > 0)
             return ResolveAdjudication(collinear,
@@ -173,6 +211,21 @@ public static class PeriodicCellTraversalGeometry
         var closest = hits.Min(h => h.Distance);
         var nearest = hits.Where(h => Math.Abs(h.Distance - closest) <= positionTolerance)
             .ToArray();
+
+        if (adjacency == CellAdjacencyMode.EdgeAndVertex
+            && traversal.SelectedExitInterfaceIndex is null)
+        {
+            var vertices = nearest.Where(hit => hit.EndpointVertexIndex is not null)
+                .Select(hit => hit.EndpointVertexIndex!.Value).Distinct().ToArray();
+            if (vertices.Length == 1
+                && ResolveVertexContact(world, traversal, vertices[0],
+                    nearest[0].Point, closest, direction, positionTolerance, cellScale)
+                    is { } vertexContact)
+                return vertexContact;
+        }
+        if (traversal.SelectedExitVertexNeighbor is not null)
+            return ResolveAdjudication(nearest.Select(hit => hit.Boundary).ToArray(),
+                "The requested point-only destination is not entered by this course.", closest);
 
         Hit chosen;
         if (traversal.SelectedExitInterfaceIndex is int requested)
@@ -252,6 +305,51 @@ public static class PeriodicCellTraversalGeometry
             chosen.Point, chosen.Distance, [chosen.Boundary], null);
     }
 
+    private static CellCrossingResolution? ResolveVertexContact(
+        PeriodicWorldTiling world, PeriodicCellTraversal traversal,
+        int vertexIndex, WorldPoint intersection, double distance,
+        WorldPoint direction, double tolerance, double sourceSpan)
+    {
+        var touching = world.VertexOnlyContacts(traversal.CurrentCell.Address)
+            .Where(contact => contact.FromVertexIndex == vertexIndex
+                && (traversal.SelectedExitVertexNeighbor is null
+                    || traversal.SelectedExitVertexNeighbor == contact.To))
+            .ToArray();
+        var admitted = touching.Where(contact =>
+        {
+            var polygon = world.Resolve(contact.To.Address).Polygon;
+            var span = Math.Max(polygon.Max(point => point.X) - polygon.Min(point => point.X),
+                polygon.Max(point => point.Y) - polygon.Min(point => point.Y));
+            var sampleDistance = Math.Min(sourceSpan, span) * 1e-4;
+            if (!(sampleDistance > 4 * tolerance))
+                return false;
+            var sample = intersection + direction * sampleDistance;
+            if (!FeatureIntersection.PointInPolygon(sample, polygon))
+                return false;
+            // Point-in-polygon includes the perimeter for lookup. A ray
+            // following a side must never count as entering its interior.
+            foreach (var (start, end) in polygon.Select((point, index) =>
+                (point, polygon[(index + 1) % polygon.Count])))
+            {
+                var segment = end - start;
+                var squared = segment.X * segment.X + segment.Y * segment.Y;
+                if (!(squared > 0)) return false;
+                var fraction = Math.Clamp(
+                    ((sample.X - start.X) * segment.X + (sample.Y - start.Y) * segment.Y)
+                    / squared, 0d, 1d);
+                var nearest = start + segment * fraction;
+                if (sample.DistanceTo(nearest) <= 2 * tolerance)
+                    return false;
+            }
+            return true;
+        }).ToArray();
+
+        if (admitted.Length != 1) return null;
+        return new CellCrossingResolution(
+            CellCrossingStatus.Crosses, null, null, intersection, distance, [], null)
+        { VertexContact = admitted[0] };
+    }
+
     /// <summary>
     /// Advance at most once across an authoritative interface. Callers handle
     /// watch budgets, encounter policy, and any remaining movement; the
@@ -260,11 +358,12 @@ public static class PeriodicCellTraversalGeometry
     public static CellTraversalAdvance Advance(
         PeriodicWorldTiling world,
         PeriodicCellTraversal traversal,
-        double availableWorldUnits)
+        double availableWorldUnits,
+        CellAdjacencyMode adjacency = CellAdjacencyMode.EdgeOnly)
     {
         if (!double.IsFinite(availableWorldUnits) || availableWorldUnits < 0)
             throw new ArgumentOutOfRangeException(nameof(availableWorldUnits));
-        var crossing = NextCrossing(world, traversal);
+        var crossing = NextCrossing(world, traversal, adjacency);
         var heading = traversal.TravelHeading!.Value;
         var length = Length(heading);
         var unit = new WorldPoint(heading.X / length, heading.Y / length);
@@ -301,6 +400,22 @@ public static class PeriodicCellTraversalGeometry
         if (crossing.Status != CellCrossingStatus.Crosses)
             throw new InvalidOperationException("A finite cell must have a boundary along any nonzero interior course.");
 
+        if (crossing.VertexContact is { } vertex)
+        {
+            var arrived = traversal with
+            {
+                CurrentCell = vertex.To,
+                Position = crossing.Point!.Value,
+                EnteredFrom = vertex.From,
+                EntryInterfaceIndex = null,
+                EntryVertexIndex = vertex.ToVertexIndex,
+                SelectedExitInterfaceIndex = null,
+                SelectedExitVertexNeighbor = null
+            };
+            arrived.Validate(world);
+            return new CellTraversalAdvance(arrived, needed, crossing);
+        }
+
         var exit = crossing.Exit!;
         var entry = crossing.Entry!;
         var entered = traversal with
@@ -309,7 +424,9 @@ public static class PeriodicCellTraversalGeometry
             Position = crossing.Point!.Value,
             EnteredFrom = exit.From,
             EntryInterfaceIndex = entry.InterfaceIndex,
-            SelectedExitInterfaceIndex = null
+            EntryVertexIndex = null,
+            SelectedExitInterfaceIndex = null,
+            SelectedExitVertexNeighbor = null
         };
         entered.Validate(world);
         return new CellTraversalAdvance(entered, needed, crossing);

@@ -204,6 +204,7 @@ export type TilingCatalogEntry = {
     dsSymbol: string;
     displayName: string;
     showInRulesetSelector: boolean;
+    supportsVertexOnlyAdjacency: boolean;
     realization: {
         translationU: { x: number; y: number };
         translationV: { x: number; y: number };

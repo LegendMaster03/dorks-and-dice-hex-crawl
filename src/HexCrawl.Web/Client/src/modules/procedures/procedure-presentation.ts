@@ -56,6 +56,7 @@ const labels: Record<string, string> = {
     durationTicks: "Travel period",
     travelResolution: "Movement method",
     actualDistanceResolution: "Actual distance",
+    adjacencyMode: "Allowed tile contacts",
     neighborCenterDistanceFactor: "Turning effort as a fraction of the neighboring cell-center distance",
     supportsDeliberateDoubleBack: "Allow deliberate double-back",
     usesNavigationChecks: "Checks required",
@@ -159,6 +160,10 @@ const numericHelp: Partial<Record<string, string>> = {
 const choiceSets: Record<string, Array<{ value: string; label: string }>> = {
     "movement.resolution.travelResolution": choices("ContinuousDistance", "CellSteps"),
     "movement.resolution.actualDistanceResolution": choices("Fixed", "VariableResolved"),
+    "movement.resolution.adjacencyMode": [
+        { value: "EdgeOnly", label: "Edge only" },
+        { value: "EdgeAndVertex", label: "Edge and vertex" }
+    ],
     "encounters.cadence.cadence": choices("None", "PerWatch", "PerDay"),
     "movement.budget.budgetModel": choices(
         "fixed-per-interval", "fixed-per-day", "distance-per-hour", "speed-and-pace",
@@ -270,7 +275,7 @@ const presentationSectionLayouts: Record<string, PresentationSectionLayout[]> = 
         { key: "context", label: "Routes and weather", parameters: ["routeAdjustmentModel", "weatherAdjustmentModel"] }
     ],
     "movement.resolution": [
-        { key: "resolution", label: "Movement resolution", parameters: ["travelResolution", "actualDistanceResolution"] }
+        { key: "resolution", label: "Movement resolution", parameters: ["travelResolution", "actualDistanceResolution", "adjacencyMode"] }
     ],
     "movement.turn-cost": [
         { key: "turning", label: "Turning and backtracking", parameters: ["neighborCenterDistanceFactor", "supportsDeliberateDoubleBack"] }

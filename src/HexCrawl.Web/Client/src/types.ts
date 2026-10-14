@@ -30,6 +30,14 @@ export type CellInterface = {
     end: WorldPoint;
 };
 
+export type CellVertexContact = {
+    from: WorldCellId;
+    fromVertexIndex: number;
+    to: WorldCellId;
+    toVertexIndex: number;
+    point: WorldPoint;
+};
+
 export type CellTraversalContext = {
     formatVersion: number;
     currentCell: WorldCellId;
@@ -42,6 +50,8 @@ export type CellTraversalContext = {
     selectedExitInterfaceIndex: number | null;
     hasPhysicalCalibration: boolean;
     interfaces: CellInterface[];
+    supportsVertexOnlyAdjacency?: boolean;
+    vertexOnlyContacts?: CellVertexContact[];
 };
 
 
@@ -187,6 +197,7 @@ export type ProcedureRuntime = {
     intervalHours: number;
     travelResolution: TravelResolutionMode;
     actualDistanceResolution: ActualDistanceResolutionMode;
+    adjacency?: "EdgeOnly" | "EdgeAndVertex";
     encounterCadence: EncounterCadence;
     usesNavigationChecks: boolean;
     usesPersistentVeer: boolean;
@@ -325,6 +336,8 @@ export type SpatialRuntimeExpedition = {
         entryInterfaceIndex: number | null;
         travelHeading: WorldPoint | null;
         selectedExitInterfaceIndex: number | null;
+        selectedExitVertexNeighbor?: WorldCellId | null;
+        entryVertexIndex?: number | null;
     } | null;
     intendedHeading?: WorldPoint | null;
     actualHeading?: WorldPoint | null;
@@ -668,7 +681,8 @@ export type CellCourseRequest = {
     expectedVersion: number;
     decision: {
         intendedHeading: WorldPoint;
-        selectedExitInterfaceIndex: number;
+        selectedExitInterfaceIndex: number | null;
+        selectedExitVertexNeighbor?: WorldCellId | null;
         provenance: { source: ResolutionSource; note?: string };
     };
 };

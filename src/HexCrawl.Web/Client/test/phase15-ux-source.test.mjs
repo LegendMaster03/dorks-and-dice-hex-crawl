@@ -1034,3 +1034,28 @@ test("Tiling presentation uses shared geometry and editor selections", () => {
     assert.match(mapRenderer, /traceTilePolygon/);
     assert.doesNotMatch(preview, /case "hex"|case "triangle"|case "square"/);
 });
+
+test("vertex adjacency augments the existing tiling card and compass, without parallel controls", () => {
+    const authoring = fs.readFileSync(
+        path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"), "utf8");
+    const expedition = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/periodic-expedition-workbench.ts"), "utf8");
+    const navigator = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/cell-navigator.ts"), "utf8");
+
+    const tilingCard = authoring.indexOf('tilingField.className = "hc-procedure-tiling-picker"');
+    const selector = authoring.indexOf('selector.dataset.tilingAdjacency = ""');
+    const identityAppend = authoring.indexOf("identity.append(tilingField)", tilingCard);
+    assert.ok(tilingCard >= 0 && selector > tilingCard && selector < identityAppend);
+    assert.match(authoring, /supportsVertexAdjacency\(tilings, draft!\.tilingDsSymbol\)/);
+    assert.match(authoring, /withParameter\([\s\S]*?"adjacencyMode", selector\.value/);
+
+    assert.match(expedition, /runtime\.procedure\.runtime\?\.adjacency === "EdgeAndVertex"/);
+    assert.match(expedition, /vertexChoices: allowedVertices\.map/);
+    assert.match(expedition, /onVertexToggle: id =>/);
+    assert.match(navigator, /hc-adjacency-interface hc-adjacency-vertex/);
+    assert.match(navigator, /coincident\.length > 1/);
+    assert.match(navigator, /candidate\.anchor\.x - contact\.anchor\.x/);
+    assert.doesNotMatch(expedition, /data-vertex-contacts/);
+    assert.doesNotMatch(expedition, /vertexContainer/);
+});

@@ -240,6 +240,10 @@ export function ensurePhase15Styles(): void {
         #tool-root.hex-crawl-app button.hc-adjacency-interface:active:not(:disabled) { transform:translate(calc(-50% + var(--hc-adjacency-feedback-x)),calc(-50% + var(--hc-adjacency-feedback-y))) scale(1.02); border-color:transparent; background:transparent; }
         #tool-root.hex-crawl-app button.hc-adjacency-interface:active:not(:disabled) .hc-adjacency-arrow-shape path { stroke:var(--hc-primary); }
         .hc-adjacency-interface.is-selected .hc-adjacency-arrow-shape path { stroke:var(--hc-primary); }
+        #tool-root.hex-crawl-app button.hc-adjacency-vertex { width:2rem; height:2rem; min-width:2rem; min-height:2rem; font-size:1.4rem; color:var(--hc-text-strong); text-shadow:0 1px 3px rgba(0,0,0,.65); }
+        #tool-root.hex-crawl-app button.hc-adjacency-vertex.is-selected { color:var(--hc-primary); }
+        .hc-adjacency-vertex span { pointer-events:none; }
+
         .hc-adjacency-interface.is-actual-course:not(.is-selected) .hc-adjacency-arrow-shape path { stroke:var(--hc-warning); }
         #tool-root.hex-crawl-app button.hc-adjacency-interface:disabled { border-color:transparent; background:transparent; color:inherit; opacity:.45; cursor:not-allowed; }
         .hc-map-context-overlay { position:absolute; z-index:5; right:.75rem; bottom:.75rem; width:min(22rem,calc(100% - 1.5rem)); max-height:min(18rem,55%); overflow:auto; display:grid; gap:.5rem; padding:.7rem .8rem; border:1px solid var(--hc-border); border-radius:.7rem; background:color-mix(in srgb,var(--hc-surface) 92%,transparent); color:var(--hc-text); box-shadow:0 .3rem .9rem rgba(0,0,0,.2); }

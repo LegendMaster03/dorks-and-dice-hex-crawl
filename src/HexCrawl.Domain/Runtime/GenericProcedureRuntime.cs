@@ -1,5 +1,6 @@
 using System.Globalization;
 using HexCrawl.Domain.Procedure;
+using HexCrawl.Domain.Spatial;
 
 namespace HexCrawl.Domain.Runtime;
 
@@ -73,7 +74,8 @@ public sealed record ProcedureTimeRuntime(TimeSpan IntervalDuration);
 
 public sealed record ProcedureMovementRuntime(
     TravelResolutionMode TravelResolution,
-    ActualDistanceResolutionMode ActualDistanceResolution);
+    ActualDistanceResolutionMode ActualDistanceResolution,
+    CellAdjacencyMode Adjacency = CellAdjacencyMode.EdgeOnly);
 
 /// <summary>
 /// Nongeometric budget charges are distinct from cursor displacement.
@@ -153,7 +155,10 @@ public sealed class GenericProcedureRuntime
             new ProcedureTimeRuntime(TimeSpan.FromTicks(Long(time, "durationTicks"))),
             new ProcedureMovementRuntime(
                 EnumValue<TravelResolutionMode>(movement, "travelResolution"),
-                EnumValue<ActualDistanceResolutionMode>(movement, "actualDistanceResolution")),
+                EnumValue<ActualDistanceResolutionMode>(movement, "actualDistanceResolution"),
+                movement.Parameters.ContainsKey("adjacencyMode")
+                    ? EnumValue<CellAdjacencyMode>(movement, "adjacencyMode")
+                    : CellAdjacencyMode.EdgeOnly),
             turning is null ? null : new ProcedureSpatialTurnRuntime(
                 Double(turning, "neighborCenterDistanceFactor"),
                 Boolean(turning, "supportsDeliberateDoubleBack")),
@@ -177,6 +182,8 @@ public sealed class GenericProcedureRuntime
 
         ResolutionHelpers?.Validate();
         TurnPolicy?.CreateBudgetPolicy().Validate();
+        if (!Enum.IsDefined(Movement.Adjacency))
+            throw new InvalidOperationException("Unknown geometric movement adjacency mode.");
         if (TurnPolicy is { NeighborCenterDistanceFactor: > 0d }
             && Movement.TravelResolution != TravelResolutionMode.ContinuousDistance)
             throw new InvalidOperationException(

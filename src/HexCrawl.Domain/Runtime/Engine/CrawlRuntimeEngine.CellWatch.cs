@@ -11,8 +11,11 @@ public sealed record ResolvedCellNavigation(
 
 public sealed record CellCourseDecision(
     WorldPoint IntendedHeading,
-    int SelectedExitInterfaceIndex,
-    ResolutionProvenance Provenance);
+    int? SelectedExitInterfaceIndex,
+    ResolutionProvenance Provenance)
+{
+    public WorldCellId? SelectedExitVertexNeighbor { get; init; }
+}
 
 public sealed record CellWatchAdvanceInputs(
     ResolvedTravelAmount Travel,
@@ -114,8 +117,10 @@ public sealed partial class CrawlRuntimeEngine
             if (runtime.TurnPolicy is { SupportsDeliberateDoubleBack: false })
                 throw new InvalidOperationException(
                     "The pinned procedure does not permit deliberate double-back movement.");
-            if (state.Traversal.EntryInterfaceIndex is null)
-                throw new InvalidOperationException("Double-back requires a known entry interface.");
+            if (state.Traversal.EntryInterfaceIndex is null
+                && (runtime.Movement.Adjacency != CellAdjacencyMode.EdgeAndVertex
+                    || state.Traversal.EntryVertexIndex is null))
+                throw new InvalidOperationException("Double-back requires a known entry interface or an authorized entry vertex.");
         }
         var dmOverrideNote = ResolveDmOverrideNote(
             inputs.Travel.Provenance,
@@ -164,7 +169,9 @@ public sealed partial class CrawlRuntimeEngine
                 IsLost = false, ResolvedVeerDegrees = null,
                 Traversal = state.Traversal with
                 {
-                    SelectedExitInterfaceIndex = state.Traversal.EntryInterfaceIndex!.Value
+                    SelectedExitInterfaceIndex = state.Traversal.EntryInterfaceIndex,
+                    SelectedExitVertexNeighbor = state.Traversal.EntryVertexIndex is not null
+                        ? state.Traversal.EnteredFrom : null
                 }
             };
         }
@@ -200,7 +207,8 @@ public sealed partial class CrawlRuntimeEngine
         var hasResolvedTravelBudget = segmentTravel.CellSteps is > 0
             || segmentTravel.ActualDistance is { Value: > 0d };
         var tentativeCrossing = hasResolvedTravelBudget
-            ? PeriodicCellTraversalGeometry.NextCrossing(world, state.Traversal) : null;
+            ? PeriodicCellTraversalGeometry.NextCrossing(
+                world, state.Traversal, runtime.Movement.Adjacency) : null;
         // An intersection farther down the ray still permits real travel and
         // a legitimate turn cost. Only present-position ambiguity defers it.
         var unresolvedCourse = tentativeCrossing is not null
@@ -339,7 +347,8 @@ public sealed partial class CrawlRuntimeEngine
     /// </summary>
     public CellWatchAdvanceResult ResolveCellCourse(
         PeriodicWorldTiling world, CellExpeditionState expedition,
-        CellCourseDecision decision)
+        CellCourseDecision decision,
+        CellAdjacencyMode adjacency = CellAdjacencyMode.EdgeOnly)
     {
         ArgumentNullException.ThrowIfNull(world);
         ArgumentNullException.ThrowIfNull(expedition);
@@ -357,16 +366,26 @@ public sealed partial class CrawlRuntimeEngine
             || decision.IntendedHeading.X == 0 && decision.IntendedHeading.Y == 0)
             throw new InvalidOperationException("The resolved course requires a finite, nonzero heading.");
 
+        if (!Enum.IsDefined(adjacency))
+            throw new ArgumentOutOfRangeException(nameof(adjacency));
+        if (decision.SelectedExitInterfaceIndex.HasValue == decision.SelectedExitVertexNeighbor.HasValue)
+            throw new InvalidOperationException("Select exactly one edge interface or point-only vertex destination.");
+        if (decision.SelectedExitVertexNeighbor is not null && adjacency != CellAdjacencyMode.EdgeAndVertex)
+            throw new InvalidOperationException("The pinned movement policy does not permit vertex-only crossings.");
+
         var actual = RotateCellHeading(decision.IntendedHeading,
             expedition.IsLost ? expedition.ResolvedVeerDegrees ?? 0d : 0d);
         var traversal = expedition.Traversal with
         {
             TravelHeading = actual,
-            SelectedExitInterfaceIndex = decision.SelectedExitInterfaceIndex
+            SelectedExitInterfaceIndex = decision.SelectedExitInterfaceIndex,
+            SelectedExitVertexNeighbor = decision.SelectedExitVertexNeighbor
         };
         traversal.Validate(world);
-        var crossing = PeriodicCellTraversalGeometry.NextCrossing(world, traversal);
-        if (crossing.Status != CellCrossingStatus.Crosses)
+        var crossing = PeriodicCellTraversalGeometry.NextCrossing(world, traversal, adjacency);
+        if (crossing.Status != CellCrossingStatus.Crosses
+            || decision.SelectedExitVertexNeighbor is not null
+                && crossing.VertexContact?.To != decision.SelectedExitVertexNeighbor)
             throw new InvalidOperationException(crossing.Reason
                 ?? "This course has no uniquely adjudicated atomic exit interface.");
 
@@ -389,13 +408,16 @@ public sealed partial class CrawlRuntimeEngine
         next.Validate(world);
         var events = new EventCollector(expedition.History);
         var watchNumber = active?.WatchNumber ?? Math.Max(1, next.CompletedWatches + 1);
+        var contactDescription = decision.SelectedExitVertexNeighbor is { } vertex
+            ? $"point-only vertex destination {vertex}" 
+            : $"atomic exit interface {decision.SelectedExitInterfaceIndex}";
         AddCellEvent(events, watchNumber, CrawlRuntimeEventKind.DirectionChanged, next,
-            $"Resolved atomic exit interface {decision.SelectedExitInterfaceIndex} for the current cell.");
+            $"Resolved {contactDescription} for the current cell.");
         if (decision.Provenance.Source == ResolutionSource.DmOverride)
             AddCellEvent(events, watchNumber, CrawlRuntimeEventKind.DmOverrideApplied,
                 next, decision.Provenance.Note ?? "DM confirmed a cell course decision.");
         AddCellEvent(events, watchNumber, CrawlRuntimeEventKind.ResolutionProvenanceRecorded,
-            next, $"Cell course resolved through {decision.Provenance.Source}; selected atomic interface {decision.SelectedExitInterfaceIndex}."
+            next, $"Cell course resolved through {decision.Provenance.Source}; selected {contactDescription}."
                 + (string.IsNullOrWhiteSpace(decision.Provenance.Note)
                     ? "" : $" Note: {decision.Provenance.Note.Trim()}"));
         return FinishCell(next, null, active?.Remaining ?? TimeSpan.Zero, events);
@@ -511,7 +533,7 @@ public sealed partial class CrawlRuntimeEngine
 
     private static void AddCellCrossingEvent(
         EventCollector events, int watch, CrawlRuntimeEventKind kind,
-        TimeSpan elapsed, WorldCellId cell, int interfaceIndex, int reciprocalIndex)
+        TimeSpan elapsed, WorldCellId cell, int? interfaceIndex, int? reciprocalIndex)
     {
         events.Add(watch, kind, elapsed, $"Cell {cell} boundary crossed.",
             cell: cell, boundaryInterfaceIndex: interfaceIndex,

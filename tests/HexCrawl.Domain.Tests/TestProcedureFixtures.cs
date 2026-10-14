@@ -1,6 +1,7 @@
 using System.Globalization;
 using HexCrawl.Domain.Procedure;
 using HexCrawl.Domain.Runtime;
+using HexCrawl.Domain.Spatial;
 
 namespace HexCrawl.Domain.Tests;
 
@@ -11,6 +12,7 @@ internal sealed record TestProcedureFixture
     public TimeSpan WatchLength { get; init; } = TimeSpan.FromHours(4);
     public TravelResolutionMode TravelResolution { get; init; } = TravelResolutionMode.ContinuousDistance;
     public ActualDistanceResolutionMode ActualDistanceResolution { get; init; } = ActualDistanceResolutionMode.Fixed;
+    public CellAdjacencyMode Adjacency { get; init; } = CellAdjacencyMode.EdgeOnly;
     public EncounterCheckCadence EncounterCadence { get; init; } = EncounterCheckCadence.PerWatch;
     public bool UsesNavigationChecks { get; init; }
     public bool UsesPersistentVeer { get; init; }
@@ -33,7 +35,8 @@ internal sealed record TestProcedureFixture
                 GenericProcedureExecutionHandlers.MovementResolutionPolicy,
                 Values(
                     ("travelResolution", TravelResolution.ToString()),
-                    ("actualDistanceResolution", ActualDistanceResolution.ToString())),
+                    ("actualDistanceResolution", ActualDistanceResolution.ToString()),
+                    ("adjacencyMode", Adjacency.ToString())),
                 version: 2),
             Module(
                 "test.turn",

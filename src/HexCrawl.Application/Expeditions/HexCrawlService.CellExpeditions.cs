@@ -282,7 +282,8 @@ public sealed partial class HexCrawlService
         ArgumentNullException.ThrowIfNull(decision);
         RequireClientCellProvenance(decision.Provenance);
         var geometry = await ResolveCellGeometryAsync(expedition, ownerUserId, cancellationToken);
-        var result = _runtime.ResolveCellCourse(geometry.Tiling, state, decision);
+        var adjacency = GenericProcedureRuntime.Bind(expedition.CampaignProcedure).Movement.Adjacency;
+        var result = _runtime.ResolveCellCourse(geometry.Tiling, state, decision, adjacency);
         return await SaveExpeditionAsync(expedition with
         {
             Runtime = result.Expedition,

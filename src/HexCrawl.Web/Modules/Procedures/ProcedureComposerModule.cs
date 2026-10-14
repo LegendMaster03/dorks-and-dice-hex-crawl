@@ -44,7 +44,8 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
         string DsSymbol,
         string DisplayName,
         bool ShowInRulesetSelector,
-        PeriodicMetricRealization? Realization);
+        PeriodicMetricRealization? Realization,
+        bool SupportsVertexOnlyAdjacency);
 
     private static readonly Lazy<IReadOnlyList<NamedTilingOption>> TilingOptions =
         new(BuildTilingOptions);
@@ -52,9 +53,13 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
     private static IReadOnlyList<NamedTilingOption> BuildTilingOptions()
     {
         var result = CrawlTilingNames.Catalog.ListEntries()
-            .Select(entry => new NamedTilingOption(
-                entry.CanonicalDsSymbol, entry.PreferredName, entry.ShowInRulesetSelector,
-                CrawlTilingNames.RepresentativePreview(entry))).ToList();
+            .Select(entry =>
+            {
+                var preview = CrawlTilingNames.RepresentativePreview(entry);
+                return new NamedTilingOption(
+                    entry.CanonicalDsSymbol, entry.PreferredName, entry.ShowInRulesetSelector,
+                    preview, HasVertexOnlyContacts(entry.CanonicalDsSymbol));
+            }).ToList();
         var known = result.Select(entry => entry.DsSymbol).ToHashSet(StringComparer.Ordinal);
         // A new preset need not be present in the friendly-name vocabulary to be usable.
         foreach (var preset in CrawlProcedureCatalog.Catalog)
@@ -65,9 +70,21 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
             var metric = generated.Status == "realized" ? generated.Realization : null;
             var label = CrawlTilingNames.Catalog.Describe(symbol, metric)?.Label
                 ?? "Unlisted repeating tile pattern";
-            result.Add(new NamedTilingOption(symbol, label, false, metric));
+            result.Add(new NamedTilingOption(symbol, label, false, metric,
+                HasVertexOnlyContacts(symbol)));
         }
         return result;
+    }
+
+    private static bool HasVertexOnlyContacts(string symbol)
+    {
+        var generated = DelaneyDressHarmonicMetricRealization.Construct(symbol, 1, "unit");
+        if (generated.Status != "realized" || generated.Topology is null || generated.Realization is null)
+            return false;
+        var world = new PeriodicWorldTiling(Guid.NewGuid(),
+            generated.Topology, generated.Realization, new WorldPoint(0, 0));
+        world.Validate();
+        return world.HasVertexOnlyContacts();
     }
 
     private static IResult ListTilings() => Results.Ok(TilingOptions.Value);

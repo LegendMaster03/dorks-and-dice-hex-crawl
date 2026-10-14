@@ -45,7 +45,8 @@ public sealed partial class CrawlRuntimeEngine
             case TravelResolutionMode.ContinuousDistance:
                 ValidateCellDistanceTravelPolicy(policy, travel);
                 return PeriodicTraversalExecution.AdvanceDistance(
-                    world, traversal, travel.ActualDistance!.Value, continueAcrossBoundaries);
+                    world, traversal, travel.ActualDistance!.Value, continueAcrossBoundaries,
+                    policy.Adjacency);
 
             case TravelResolutionMode.CellSteps:
                 if (travel.CellSteps is not { } steps || steps < 0
@@ -54,7 +55,7 @@ public sealed partial class CrawlRuntimeEngine
                     throw new InvalidOperationException(
                         "Cell-step travel requires one resolved, non-negative boundary-transition count.");
                 return PeriodicTraversalExecution.AdvanceCellSteps(
-                    world, traversal, steps, continueAcrossBoundaries);
+                    world, traversal, steps, continueAcrossBoundaries, policy.Adjacency);
 
             default:
                 throw new InvalidOperationException(

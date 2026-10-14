@@ -1,6 +1,7 @@
 using HexCrawl.Application;
 using HexCrawl.Domain.Procedure;
 using HexCrawl.Domain.Runtime;
+using HexCrawl.Domain.Spatial;
 
 namespace HexCrawl.Web.Api;
 
@@ -59,6 +60,8 @@ public sealed record ProcedureRuntimeContract(
     bool UsesPersistentVeer,
     ProcedureResolutionHelperProfileContract? ResolutionHelpers)
 {
+    public CellAdjacencyMode Adjacency { get; init; } = CellAdjacencyMode.EdgeOnly;
+
     public static ProcedureRuntimeContract From(GenericProcedureRuntime runtime) => new(
         runtime.Time.IntervalDuration.TotalHours,
         runtime.Movement.TravelResolution,
@@ -66,7 +69,8 @@ public sealed record ProcedureRuntimeContract(
         runtime.Encounters.Cadence,
         runtime.Navigation.UsesNavigationChecks,
         runtime.Navigation.UsesPersistentVeer,
-        runtime.ResolutionHelpers is null ? null : ProcedureResolutionHelperProfileContract.From(runtime.ResolutionHelpers));
+        runtime.ResolutionHelpers is null ? null : ProcedureResolutionHelperProfileContract.From(runtime.ResolutionHelpers))
+    { Adjacency = runtime.Movement.Adjacency };
 }
 
 public sealed record FocusedIntervalPolicyContract(

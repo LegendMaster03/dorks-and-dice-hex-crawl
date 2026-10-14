@@ -76,7 +76,7 @@ public sealed class Phase18TraversalExecutionTests
         Assert.Equal(3, result.Transitions.Count);
         Assert.All(result.Transitions, transition =>
         {
-            var reciprocal = world.Boundaries(transition.To.Address)[transition.EntryInterfaceIndex];
+            var reciprocal = world.Boundaries(transition.To.Address)[transition.EntryInterfaceIndex!.Value];
             Assert.Equal(transition.From, reciprocal.To);
             Assert.Equal(transition.ExitInterfaceIndex, reciprocal.ReciprocalInterfaceIndex);
         });

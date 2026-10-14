@@ -16,7 +16,7 @@ import type { ProcedurePreset } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
 import { badge, openWorkspaceDrawer, textElement, type WorkspaceDrawer } from "../../ui/workspace";
 import { applyGuidedExperience, guidedCallout, guidedDisclosure, guidancePreferenceButton } from "../../ui/guidance";
-import { executionSummary, inputSourceLabel, saveBlocked, withBehavior, withParameter, selectableTilings, hasSaveableComposerChanges } from "./procedure-composer-model";
+import { executionSummary, inputSourceLabel, saveBlocked, withBehavior, withParameter, selectableTilings, hasSaveableComposerChanges, supportsVertexAdjacency, visibleMovementParameter } from "./procedure-composer-model";
 import { presetGuidance } from "./preset-guidance";
 import { tilingPreview } from "./tiling-preview";
 import {
@@ -729,6 +729,28 @@ export async function renderProcedureAuthoringWorkspace(
                 choices.append(option);
             }
             tilingField.append(choices);
+            const movement = draft!.modules.find(module => module.moduleKey === "movement.resolution");
+            if (movement && supportsVertexAdjacency(tilings, draft!.tilingDsSymbol)) {
+                const adjacency = document.createElement("label");
+                adjacency.className = "hc-compact-field";
+                adjacency.append(textElement("span", "Permitted movement"));
+                const selector = document.createElement("select");
+                selector.dataset.tilingAdjacency = "";
+                for (const [value, label] of [["EdgeOnly", "Edge only"], ["EdgeAndVertex", "Edge and vertex"]]) {
+                    const option = document.createElement("option");
+                    option.value = value;
+                    option.textContent = label;
+                    selector.append(option);
+                }
+                selector.value = movement.parameters.adjacencyMode ?? "EdgeOnly";
+                selector.disabled = historical() || savePending || tilingPending;
+                selector.addEventListener("change", () =>
+                    void setOverride(withParameter(
+                        movement, pending.get(movement.moduleKey), "adjacencyMode", selector.value)));
+                adjacency.append(selector, textElement("small",
+                    "Movement between tiles sharing an edge, or also those touching only at a vertex."));
+                tilingField.append(adjacency);
+            }
             identity.append(tilingField);
             page.append(identity);
         }
@@ -1056,6 +1078,9 @@ export async function renderProcedureAuthoringWorkspace(
         modules: current.modules.filter(module => module.moduleKey === section)
     });
 
+    // The adjacency control lives on the existing Map tiling card.
+    const visibleParameter = (key: string): boolean => key !== "adjacencyMode";
+
     const populateCompactArea = (body: HTMLElement, modules: ProcedureModuleComposer[]): void => {
         body.replaceChildren();
         const module = modules[0];
@@ -1089,9 +1114,11 @@ export async function renderProcedureAuthoringWorkspace(
         const grid = document.createElement("div");
         grid.className = "hc-compact-field-grid";
         for (const [key, definition] of parameterDefinitions(module)) {
+            if (!visibleParameter(key)) continue;
             const presentation = compactParameter(key, definition, module.moduleKey);
             if (!presentation) continue;
-            const value = module.parameters[key] ?? definition.defaultValue ?? "";
+            const value = module.parameters[key] ?? definition.defaultValue
+                ?? (key === "adjacencyMode" ? "EdgeOnly" : "");
             grid.append(compactEditor(module, key, value, presentation));
         }
         body.append(grid);
@@ -1386,12 +1413,20 @@ export async function renderProcedureAuthoringWorkspace(
         const grid = document.createElement("div");
         grid.className = "hc-advanced-parameter-grid";
         for (const [key, definition] of parameterDefinitions(module)) {
+            if (!visibleParameter(key)) continue;
+            if (key === "adjacencyMode") {
+                const presentation = compactParameter(key, definition, module.moduleKey);
+                if (presentation) grid.append(compactEditor(
+                    module, key, module.parameters[key] ?? "EdgeOnly", presentation));
+                continue;
+            }
             const field = document.createElement("label");
             field.className = "hc-compact-field";
             field.append(code(key));
             const input = document.createElement("input");
             input.type = "text";
-            input.value = module.parameters[key] ?? definition.defaultValue ?? "";
+            input.value = module.parameters[key] ?? definition.defaultValue
+                ?? (key === "adjacencyMode" ? "EdgeOnly" : "");
             input.addEventListener("change", () => void setOverride(withParameter(module, pending.get(module.moduleKey), key, input.value)));
             field.append(input);
             if (definition.description) field.append(textElement("small", definition.description));
