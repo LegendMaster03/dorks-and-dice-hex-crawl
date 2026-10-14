@@ -4,8 +4,9 @@ import type { TilingCatalogEntry } from "../../procedure-composer-types";
 /** Render a bounded, noninteractive patch of the server-realized periodic geometry. */
 export function tilingPreview(entry: TilingCatalogEntry | undefined, width = 74, height = 52): HTMLElement {
     const canvas = document.createElement("canvas");
-    canvas.width = width * Math.min(2, window.devicePixelRatio || 1);
-    canvas.height = height * Math.min(2, window.devicePixelRatio || 1);
+    const ratio = Math.max(1, Math.min(2, Math.ceil(window.devicePixelRatio || 1)));
+    canvas.width = width * ratio;
+    canvas.height = height * ratio;
     canvas.style.width = `${width}px`;
     canvas.style.height = `${height}px`;
     canvas.style.flexShrink = "0";
@@ -28,7 +29,6 @@ export function tilingPreview(entry: TilingCatalogEntry | undefined, width = 74,
     if (!lengths.length) return canvas;
     const side = Math.min(...lengths);
     const scale = Math.min(22 / side, 220);
-    const ratio = canvas.width / width;
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     ctx.fillStyle = "#88888813";
     ctx.fillRect(0, 0, width, height);
