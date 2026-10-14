@@ -60,6 +60,7 @@ export async function renderProcedureAuthoringWorkspace(
     let tilings: TilingCatalogEntry[] = [];
     let tilingFilter = "all";
     let tilingOverride: string | null = null;
+    let baselineTiling: string | null = null;
     let savedProcedures: SavedProcedureSummary[] = [];
     let revisions: ProcedureRevisionSummary[] = [];
     let savePending = false;
@@ -127,6 +128,7 @@ export async function renderProcedureAuthoringWorkspace(
         }
         draft = await composerApi.composeDraft(currentInput());
         baselineName = draft.name;
+        baselineTiling = draft.tilingDsSymbol;
         jsonText = "";
         jsonBaseline = "";
         jsonLoadFailed = false;
@@ -692,8 +694,7 @@ export async function renderProcedureAuthoringWorkspace(
                 option.setAttribute("aria-pressed", String(tiling.dsSymbol === draft!.tilingDsSymbol));
                 option.disabled = historical() || savePending;
                 option.addEventListener("click", () => {
-                    tilingOverride = tiling.dsSymbol === draft!.tilingDsSymbol
-                        ? tilingOverride : tiling.dsSymbol;
+                    tilingOverride = tiling.dsSymbol === baselineTiling ? null : tiling.dsSymbol;
                     void refreshDraft();
                 });
                 choices.append(option);
