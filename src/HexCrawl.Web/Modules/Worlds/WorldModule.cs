@@ -310,6 +310,19 @@ public sealed class WorldModule : IHexCrawlModule
         var bounds = new HexCrawl.Domain.Spatial.WorldBounds(minX, minY, maxX, maxY);
         bounds.Validate();
         var world = await service.GetOverworldAsync(overworldId, UserId(context), cancellationToken);
+        // Clamp the search *before* candidate enumeration. A large viewport
+        // cannot make an otherwise small bounded map exceed the enumeration cap.
+        if (world.World.SpatialTiling.PlayableEnvelope() is { } envelope)
+        {
+            if (bounds.MaxX < envelope.MinX || bounds.MinX > envelope.MaxX
+                || bounds.MaxY < envelope.MinY || bounds.MinY > envelope.MaxY)
+                return Results.Ok(Array.Empty<HexCrawl.Domain.Spatial.WorldCellGeometry>());
+            bounds = new HexCrawl.Domain.Spatial.WorldBounds(
+                Math.Max(bounds.MinX, envelope.MinX),
+                Math.Max(bounds.MinY, envelope.MinY),
+                Math.Min(bounds.MaxX, envelope.MaxX),
+                Math.Min(bounds.MaxY, envelope.MaxY));
+        }
         // Hard cap on candidate enumeration, not merely on response length.
         return Results.Ok(world.World.SpatialTiling.Intersecting(bounds, limit: 2500)
             .Where(world.World.SpatialTiling.IsPlayable).ToArray());
