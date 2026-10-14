@@ -46,10 +46,29 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
         bool ShowInRulesetSelector,
         PeriodicMetricRealization? Realization);
 
-    private static readonly Lazy<IReadOnlyList<NamedTilingOption>> TilingOptions = new(() =>
-        CrawlTilingNames.Catalog.ListEntries().Select(entry => new NamedTilingOption(
-            entry.CanonicalDsSymbol, entry.PreferredName, entry.ShowInRulesetSelector,
-            PreviewRealization(entry))).ToArray());
+    private static readonly Lazy<IReadOnlyList<NamedTilingOption>> TilingOptions =
+        new(BuildTilingOptions);
+
+    private static IReadOnlyList<NamedTilingOption> BuildTilingOptions()
+    {
+        var result = CrawlTilingNames.Catalog.ListEntries()
+            .Select(entry => new NamedTilingOption(
+                entry.CanonicalDsSymbol, entry.PreferredName, entry.ShowInRulesetSelector,
+                PreviewRealization(entry))).ToList();
+        var known = result.Select(entry => entry.DsSymbol).ToHashSet(StringComparer.Ordinal);
+        // A new preset need not be present in the friendly-name vocabulary to be usable.
+        foreach (var preset in CrawlProcedureCatalog.Catalog)
+        {
+            var symbol = preset.MaterializeGeneric().Procedure.TilingDsSymbol;
+            if (!known.Add(symbol)) continue;
+            var generated = DelaneyDressHarmonicMetricRealization.Construct(symbol, 1, "unit");
+            var metric = generated.Status == "realized" ? generated.Realization : null;
+            var label = CrawlTilingNames.Catalog.Describe(symbol, metric)?.Label
+                ?? "Unlisted repeating tile pattern";
+            result.Add(new NamedTilingOption(symbol, label, false, metric));
+        }
+        return result;
+    }
 
     private static IResult ListTilings() => Results.Ok(TilingOptions.Value);
 
