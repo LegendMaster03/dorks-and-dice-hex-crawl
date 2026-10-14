@@ -999,7 +999,15 @@ export async function renderPeriodicExpeditionWorkbench(
             }),
             onVertexToggle: id => {
                 const contact = allowedVertices.find(entry => vertexId(entry) === id);
-                if (contact) toggleVertex(contact);
+                if (!contact) return;
+                toggleVertex(contact);
+                queueMicrotask(() => {
+                    if (disposed) return;
+                    const controls = root.querySelectorAll<HTMLButtonElement>(
+                        "[data-cell-navigator] .hc-adjacency-vertex");
+                    [...controls].find(control =>
+                        control.dataset.adjacencyInterfaceId === id)?.focus();
+                });
             },
             onToggle: edge => {
                 // The navigator is outside the travel form. A new atomic
