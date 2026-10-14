@@ -235,6 +235,7 @@ export async function renderProcedureAuthoringWorkspace(
                 : await composerApi.createProcedure({
                     presetKey: sourcePresetKey,
                     name: nameOverride,
+                    tilingDsSymbol: tilingOverride,
                     moduleSelections: moduleSelectionInputs(moduleSelections),
                     overrides: [...pending.values()]
                 });
