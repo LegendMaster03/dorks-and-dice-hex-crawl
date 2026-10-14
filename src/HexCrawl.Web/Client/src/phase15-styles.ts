@@ -34,7 +34,15 @@ export function ensurePhase15Styles(): void {
         .hc-preset-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,22rem),26rem)); gap:.85rem; align-items:stretch; }
         .hc-preset-card { border:1px solid var(--hc-border); border-radius:.85rem; padding:1rem; display:grid; grid-template-rows:auto auto auto; align-content:start; gap:.75rem; background:var(--hc-surface); color:var(--hc-text); min-width:0; }
         .hc-preset-card h3 { margin:0; color:var(--hc-text-strong); }
-        .hc-preset-card-head { min-height:0; }
+        .hc-preset-card-head { min-height:0; display:flex; align-items:flex-start; justify-content:space-between; gap:.7rem; }
+        .hc-preset-card-head > div { flex:1; min-width:0; }
+        .hc-preset-card-head canvas { border:1px solid var(--hc-border); border-radius:.35rem; }
+        .hc-procedure-tiling-picker { display:grid; gap:.4rem; padding-block:.65rem; }
+        .hc-procedure-tiling-picker h3, .hc-procedure-tiling-picker p { margin:0; }
+        .hc-procedure-tiling-picker details { max-width:28rem; }
+        .hc-procedure-tiling-picker details > button { background:var(--hc-surface); color:var(--hc-text); cursor:pointer; }
+        .hc-procedure-tiling-picker details > button[aria-pressed="true"] { border-color:var(--hc-accent); }
+        .hc-procedure-tiling-picker details > button:disabled { cursor:default; opacity:.7; }
         .hc-preset-caution { margin:0; padding:.55rem .65rem; border-inline-start:3px solid var(--hc-warning); background:var(--hc-warning-bg); color:var(--hc-warning-text); font-size:.88rem; }
         .hc-preset-card-head p { margin:.3rem 0 0; color:var(--hc-muted); }
         .hc-preset-facts, .hc-rule-facts { display:grid; grid-template-columns:minmax(7rem,auto) minmax(0,1fr); gap:.3rem .75rem; margin:0; align-content:start; }
