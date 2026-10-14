@@ -283,7 +283,8 @@ export async function renderExpedition(
         side.append(
             textElement("h2", "At the table"),
             railAction("Party & roles", journeyRoleSummary(runtime), openPartyWorkspace));
-        if (presentation.capabilities.resources || presentation.capabilities.survival || presentation.capabilities.effects) {
+        if (presentation.capabilities.resources || presentation.capabilities.survival
+            || presentation.capabilities.effects || (effects?.pendingConsequences.length ?? 0) > 0) {
             side.append(railAction("Resources & effects", resourcesEffectsDetail(survival, effects), openSurvivalWorkspace));
         }
         if (journey?.eventPolicy.support === "Supported") {
@@ -390,7 +391,8 @@ export async function renderExpedition(
         row.className = "hc-button-row hc-gm-tools";
         row.append(button("Party & roles", openPartyWorkspace),
             button("Environment", openEnvironmentWorkspace));
-        if (presentation.capabilities.resources || presentation.capabilities.survival || presentation.capabilities.effects)
+        if (presentation.capabilities.resources || presentation.capabilities.survival
+            || presentation.capabilities.effects || (effects?.pendingConsequences.length ?? 0) > 0)
             row.append(button("Survival, resources & effects", openSurvivalWorkspace));
         if (presentation.capabilities.journey)
             row.append(button("Journey", openJourneyWorkspace));
@@ -469,13 +471,10 @@ export async function renderExpedition(
     const openSurvivalWorkspace = (
         focus: "all" | "attention" | "effects" = "all"): void => {
         const capabilities = expeditionWorkspacePresentation(runtime, journey, survival, effects).capabilities;
-        const panelFocus = focus === "effects" ? "effects"
-            : focus === "attention"
-                ? survival?.forcedTravel.checkDue
-                    ? "forcedTravel"
-                    : "pendingResourceConsequences"
-                : "all";
-        const title = panelFocus === "effects" ? "Pending effect consequence"
+        const panelFocus = focus === "attention"
+            ? survival?.forcedTravel.checkDue ? "forcedTravel" : "pendingResourceConsequences"
+            : "all";
+        const title = focus === "effects" ? "Pending effect consequence"
             : panelFocus === "forcedTravel"
                 ? "Forced travel"
             : panelFocus === "pendingResourceConsequences"
@@ -484,7 +483,10 @@ export async function renderExpedition(
         openDrawer(title, body => {
             body.classList.add("hc-page");
             const cleanups: Array<() => void> = [];
-            if (capabilities.effects) {
+            // An unsupported or missing effect module can still leave an
+            // explicitly pending consequence that requires DM adjudication.
+            if (capabilities.effects || focus === "effects"
+                || (effects?.pendingConsequences.length ?? 0) > 0) {
                 const effectPanel = new ExpeditionEffectsPanel(
                     body,
                     effectsApi,
@@ -511,7 +513,7 @@ export async function renderExpedition(
                     async (_control, action) => {
                         await runUiMutation(action);
                     },
-                    panelFocus === "effects" ? "all" : panelFocus);
+                    panelFocus);
                 void panel.sync();
                 queueMicrotask(() => {
                     const details = body.querySelector<HTMLDetailsElement>("[data-survival-resources-panel]");
