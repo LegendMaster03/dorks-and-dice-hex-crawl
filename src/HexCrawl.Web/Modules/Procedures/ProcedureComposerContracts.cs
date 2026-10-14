@@ -3,6 +3,7 @@ using HexCrawl.Application;
 using HexCrawl.Application.Persistence;
 using HexCrawl.Domain.Procedure;
 using HexCrawl.Domain.Runtime;
+using HexCrawl.Domain.Spatial;
 
 namespace HexCrawl.Web.Modules.Procedures;
 
@@ -468,6 +469,8 @@ public sealed record ProcedureComposerContract(
     IReadOnlyList<ProcedureDependencyFixContract> DependencyFixes,
     IReadOnlyList<ProcedureOverrideContract> Overrides)
 {
+    public PeriodicMapBounds? PlayableBounds { get; init; }
+
     public static ProcedureComposerContract From(ProcedureComposerDraft draft)
     {
         var executable = false;
@@ -499,7 +502,10 @@ public sealed record ProcedureComposerContract(
             (draft.DependencyFixes ?? [])
                 .Select(ProcedureDependencyFixContract.From)
                 .ToArray(),
-            draft.Procedure.Overrides.Select(ProcedureOverrideContract.From).ToArray());
+            draft.Procedure.Overrides.Select(ProcedureOverrideContract.From).ToArray())
+        {
+            PlayableBounds = draft.Procedure.PlayableBounds
+        };
     }
 }
 
