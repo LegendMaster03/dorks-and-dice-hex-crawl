@@ -43,6 +43,7 @@ export async function renderPeriodicExpeditionWorkbench(
     let runtime = initial;
     let topology = await api.getCellTopology(initial.id);
     let selectedExit = topology.selectedExitInterfaceIndex;
+    let selectedVertex: NonNullable<typeof topology.vertexOnlyContacts>[number] | null = null;
     let disposed = false;
     let busy = false;
     let refreshGeneration = 0;
@@ -84,6 +85,7 @@ export async function renderPeriodicExpeditionWorkbench(
                     <section class="hc-current-travel" aria-label="Current travel">
                         <h3>Current travel</h3><p data-status></p><p data-actual></p>
                         <div data-cell-navigator></div>
+                        <div data-vertex-contacts class="hc-button-row"></div>
                         <p class="hc-hint" data-course>Choose a boundary to set intended travel.</p>
                         <button type="button" data-open-travel>Resolve travel / watch</button>
                     </section>
@@ -391,6 +393,7 @@ export async function renderPeriodicExpeditionWorkbench(
     };
     const selectHeading = (interfaceIndex: number | null): void => {
         selectedExit = interfaceIndex;
+        selectedVertex = null;
         if (interfaceIndex === null) {
             // Clearing a proposed boundary must not silently submit the old
             // manually chosen heading as a new travel intent.
@@ -483,6 +486,8 @@ export async function renderPeriodicExpeditionWorkbench(
             journeyAttention = null;
             topology = await api.getCellTopology(runtime.id);
             selectedExit = topology.selectedExitInterfaceIndex;
+            selectedVertex = null;
+            selectedVertex = null;
             if (!world) map.centerOn(topology.position);
             render();
             gameplay.sync();
@@ -699,13 +704,15 @@ export async function renderPeriodicExpeditionWorkbench(
     });
     required<HTMLButtonElement>("[data-confirm-course]").addEventListener("click", () => void progress(
         () => {
-            if (selectedExit === null) throw new Error("Choose a specific exit interface first.");
+            if (selectedExit === null && selectedVertex === null)
+                throw new Error("Choose an adjacent edge or permitted vertex destination first.");
             return api.resolveCellCourse(runtime.id, {
                 expectedVersion: runtime.version,
                 decision: {
                     intendedHeading: selectedHeading(),
                     selectedExitInterfaceIndex: selectedExit,
-                    provenance: { source: "DmOverride", note: "DM-selected atomic exit" }
+                    selectedExitVertexNeighbor: selectedVertex?.to ?? null,
+                    provenance: { source: "DmOverride", note: "DM-selected geometric contact" }
                 }
             });
         }));
@@ -953,11 +960,52 @@ export async function renderPeriodicExpeditionWorkbench(
             }
         });
         required<HTMLElement>("[data-cell-navigator]").replaceChildren(navigation);
+        const vertexContainer = required<HTMLElement>("[data-vertex-contacts]");
+        vertexContainer.replaceChildren();
+        const allowedVertices = runtime.procedure.runtime?.adjacency === "EdgeAndVertex"
+            ? topology.vertexOnlyContacts ?? [] : [];
+        for (const contact of allowedVertices) {
+            const choice = document.createElement("button");
+            choice.type = "button";
+            const current = selectedVertex?.to.tilingId === contact.to.tilingId
+                && selectedVertex?.to.address.motifCellId === contact.to.address.motifCellId
+                && selectedVertex?.to.address.translation.u === contact.to.address.translation.u
+                && selectedVertex?.to.address.translation.v === contact.to.address.translation.v;
+            choice.textContent = `Vertex neighbor ${contact.fromVertexIndex + 1} · ${contact.to.address.motifCellId} (${contact.to.address.translation.u}, ${contact.to.address.translation.v})`;
+            choice.setAttribute("aria-pressed", String(current));
+            choice.disabled = busy;
+            choice.addEventListener("click", () => {
+                if (generated) invalidateGenerated();
+                if (current) {
+                    selectedVertex = null;
+                    selectHeading(null);
+                } else {
+                    selectedExit = null;
+                    selectedVertex = contact;
+                    const offset = {
+                        x: contact.point.x - topology.position.x,
+                        y: contact.point.y - topology.position.y
+                    };
+                    const centerOffset = {
+                        x: contact.point.x - topology.center.x,
+                        y: contact.point.y - topology.center.y
+                    };
+                    const heading = Math.hypot(offset.x, offset.y) > 1e-12 ? offset : centerOffset;
+                    input("headingX").value = String(heading.x);
+                    input("headingY").value = String(heading.y);
+                }
+                render();
+            });
+            vertexContainer.append(choice);
+        }
+        vertexContainer.hidden = allowedVertices.length === 0;
         const selectedEdge = topology.interfaces.find(edge => edge.interfaceIndex === selectedExit);
         renderPhase15Chrome();
-        text("[data-course]", selectedEdge
-            ? `Intended boundary ${selectedExit! + 1}; adjacent cell selected. Travel has not been resolved.`
-            : "Select an adjacent boundary for intended travel. This does not move the party.");
+        text("[data-course]", selectedVertex
+            ? "Intended point-only neighbor selected. Travel has not been resolved."
+            : selectedEdge
+                ? `Intended boundary ${selectedExit! + 1}; adjacent cell selected. Travel has not been resolved.`
+                : "Select an adjacent boundary or permitted vertex neighbor for travel. This does not move the party.");
         if (input("headingX").value === "" || input("headingY").value === "") {
             if (state.intendedHeading) {
                 input("headingX").value = String(state.intendedHeading.x);
@@ -1050,7 +1098,7 @@ export async function renderPeriodicExpeditionWorkbench(
         required<HTMLButtonElement>("[data-advance]").disabled =
             busy || pausedForCourse || !!pendingEncounter || !resolutions;
         required<HTMLButtonElement>("[data-confirm-course]").disabled =
-            busy || !pausedForCourse || selectedExit === null;
+            busy || !pausedForCourse || selectedExit === null && selectedVertex === null;
         required<HTMLButtonElement>("[data-resolve-encounter]").disabled =
             busy || !pendingEncounter;
         required<HTMLButtonElement>("[data-handoff-encounter]").disabled =
