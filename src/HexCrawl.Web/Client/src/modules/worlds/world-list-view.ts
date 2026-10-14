@@ -1,4 +1,5 @@
 import type { HexCrawlApi } from "../../api";
+import { ProcedureComposerApi } from "../../procedure-composer-api";
 import { clearUiError, showUiError } from "../../ui-error";
 import { canonicalDistanceUnit } from "./world-form";
 import type { DistanceUnitKind } from "./world-form";
@@ -25,6 +26,7 @@ export async function renderWorldList(
                     <h2>New world / map</h2>
 
                     <form data-create-world class="hc-form">
+                        <label>Map tiling <select name="tilingDsSymbol"><option value="<1:1,1,1:6,3>">Hexagonal tiling</option></select></label>
                         <label>Name <input name="name" required value="New overworld" autocomplete="off"></label>
                         <fieldset class="hc-field-group hc-map-scale-field">
                             <legend>Physical map scale</legend>
@@ -42,7 +44,7 @@ export async function renderWorldList(
                             <p class="hc-hint">Leave both blank for an unbounded map. Bounds apply to all tile patterns, not only squares.</p>
                         </fieldset>
                         <p class="hc-hint">Leave both calibration fields blank for cell-step worlds. Distance-based travel rules require physical calibration.</p>
-                        <p class="hc-hint">New maps currently use the established hexagonal tiling preset through the periodic-cell engine. Additional tiling controls will be available after review.</p>
+                        <p class="hc-hint">The same optional world bounds apply to any selected tiling.</p>
                         <button type="submit" class="hc-primary-action" data-create-button>Create world</button>
                     </form>
                 </section>
@@ -59,6 +61,23 @@ export async function renderWorldList(
     let disposed = false;
     let busy = false;
     let worldCount = 0;
+    try {
+        const catalog = await (await ProcedureComposerApi.create(root)).listTilings();
+        if (!disposed) {
+            const picker = select(form, "tilingDsSymbol");
+            picker.replaceChildren();
+            for (const tiling of catalog.filter(item =>
+                item.showInRulesetSelector && item.realization !== null)) {
+                const option = document.createElement("option");
+                option.value = tiling.dsSymbol;
+                option.textContent = tiling.displayName;
+                picker.append(option);
+            }
+            picker.value = "<1:1,1,1:6,3>";
+        }
+    } catch (catalogError) {
+        if (!disposed) showUiError(error, catalogError);
+    }
 
     const syncWorldCount = (): void => {
         count.textContent = worldCount === 1 ? "1 world" : `${worldCount} worlds`;
@@ -171,7 +190,7 @@ export async function renderWorldList(
                     throw new Error("Map dimensions must be positive.");
                 const world = await api.createPeriodicOverworld({
                     name: input(form, "name").value.trim(),
-                    tilingDsSymbol: "<1:1,1,1:6,3>",
+                    tilingDsSymbol: select(form, "tilingDsSymbol").value,
                     worldUnitsPerAbstractPeriod: 1,
                     origin: { x: 0, y: 0 },
                     rotationDegrees: 0,
