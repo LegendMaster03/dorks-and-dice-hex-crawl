@@ -1,6 +1,7 @@
 """Exercise timing against real shell exits and unavailable diagnostic storage."""
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -45,6 +46,17 @@ class DeploymentTimingTests(unittest.TestCase):
             unavailable = str(Path(directory) / "missing" / "directory")
             self.assertEqual(0, self.run_step(directory, "true", RUNNER_TEMP=unavailable).returncode)
             self.assertEqual(23, self.run_step(directory, "exit 23", RUNNER_TEMP=unavailable).returncode)
+
+    def test_image_build_timeout_allows_layer_export_without_exhausting_job_budget(self):
+        workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/deploy.yml").read_text()
+        job_header = workflow.split("jobs:\n  deploy:", 1)[1].split("\n    steps:", 1)[0]
+        build_step = workflow.split("      - name: Build image\n", 1)[1].split("      - name:", 1)[0]
+        job_timeout = int(re.search(r"(?m)^    timeout-minutes: (\d+)$", job_header).group(1))
+        build_timeout = int(re.search(r"(?m)^        timeout-minutes: (\d+)$", build_step).group(1))
+        self.assertGreaterEqual(build_timeout, 20)
+        self.assertGreaterEqual(job_timeout, build_timeout + 25)
+        self.assertIn('measure-action.py "Build image"', build_step)
+        self.assertIn("docker build --progress=plain", build_step)
 
 
 if __name__ == "__main__":

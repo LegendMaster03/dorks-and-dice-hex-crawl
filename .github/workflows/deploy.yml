@@ -25,7 +25,8 @@ jobs:
        github.event.workflow_run.head_branch == 'main' &&
        github.event.workflow_run.conclusion == 'success')
     runs-on: [self-hosted, dorks-and-dice-hex-crawl]
-    timeout-minutes: 30
+    # Include headroom for the image build plus PostgreSQL smoke and rollback-safe verification.
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
         with:
@@ -71,7 +72,9 @@ jobs:
 
       - name: Build image
         shell: python3 .github/scripts/measure-action.py "Build image" {0}
-        timeout-minutes: 10
+        # The shared TrueNAS runner has exceeded 10 minutes during image layer export
+        # even after frontend and .NET publish completed successfully. Keep a finite bound.
+        timeout-minutes: 20
         run: |
           docker build --progress=plain --label "org.opencontainers.image.revision=$DEPLOY_SHA" \
             -t dorks-and-dice-hex-crawl:latest -t "dorks-and-dice-hex-crawl:$DEPLOY_SHA" \
