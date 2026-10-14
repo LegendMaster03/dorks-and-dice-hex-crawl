@@ -1071,7 +1071,7 @@ test("bounded world compass omits exits with destinations outside playable bound
         "modules/expeditions/current-cell-topology.ts"), "utf8");
 
     if (contracts !== null) {
-        assert.match(contracts, /exits\.Where\(edge => world\.IsPlayable\(edge\.To\.Address\)\)/);
+        assert.match(contracts, /world\.Boundaries\(cursor\.CurrentCell\.Address\)\s*\.Where\(edge => world\.IsPlayable\(edge\.To\.Address\)\)/);
         assert.match(contracts, /world\.VertexOnlyContacts\(cursor\.CurrentCell\.Address\)\s*\.Where\(contact => world\.IsPlayable\(contact\.To\.Address\)\)/);
     }
     assert.match(topology, /context\.interfaces\.map\(/);
