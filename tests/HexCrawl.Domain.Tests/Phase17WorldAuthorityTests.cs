@@ -87,6 +87,33 @@ public sealed class Phase17WorldAuthorityTests
             }
     }
 
+    [Theory]
+    [InlineData("<1:1,1,1:3,6>")]
+    [InlineData("<1:1,1,1:4,4>")]
+    [InlineData("<1:1,1,1:6,3>")]
+    public void OptionalPlayableBoundsWorkForEveryTiling(string symbol)
+    {
+        var built = DelaneyDressHarmonicMetricRealization.Construct(symbol, 1, "unit");
+        Assert.Equal("realized", built.Status);
+        var baseTiling = new PeriodicWorldTiling(Guid.NewGuid(),
+            built.Topology!, built.Realization!, new WorldPoint(0, 0));
+        var address = new PeriodicCellAddress(baseTiling.Topology.MotifCells[0].Id, new(0, 0));
+        var inside = baseTiling.Resolve(address).Center;
+        Assert.True(baseTiling.IsPlayable(address));
+
+        var bounded = baseTiling with
+        {
+            PlayableBounds = new WorldBounds(inside.X - 0.1, inside.Y - 0.1,
+                inside.X + 0.1, inside.Y + 0.1)
+        };
+        bounded.Validate();
+        Assert.True(bounded.IsPlayable(address));
+        Assert.False(bounded.IsPlayable(new PeriodicCellAddress(address.MotifCellId,
+            new LatticeDisplacement(100, 100))));
+        Assert.Throws<InvalidOperationException>(() =>
+            (bounded with { PlayableBounds = new WorldBounds(0, 0, 0, 1) }).Validate());
+    }
+
     [Fact]
     public void WorldAuthorityRejectsFabricatedTopologyAndMetric()
     {
