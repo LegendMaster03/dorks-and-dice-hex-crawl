@@ -56,7 +56,7 @@ public sealed class WorldModule : IHexCrawlModule
         HexCrawl.Domain.Spatial.WorldPoint Origin,
         double RotationDegrees = 0,
         HexCrawl.Domain.Spatial.DistanceMeasure? PhysicalDistancePerWorldUnit = null,
-        HexCrawl.Domain.Spatial.WorldBounds? PlayableBounds = null,
+        HexCrawl.Domain.Spatial.PeriodicMapBounds? PlayableBounds = null,
         double? PeriodULengthWorldUnits = null,
         double? PeriodVLengthWorldUnits = null,
         double? PeriodAngleDegrees = null,
