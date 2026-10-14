@@ -55,6 +55,20 @@ public sealed record PeriodicWorldTiling(
     int Revision = 1,
     DistanceMeasure? PhysicalDistancePerWorldUnit = null)
 {
+    /// <summary>
+    /// Optional playable area, expressed in authoritative world coordinates.
+    /// Missing bounds preserve the unbounded periodic world. The geometry
+    /// itself remains periodic and is not clipped or renumbered.
+    /// </summary>
+    public WorldBounds? PlayableBounds { get; init; }
+
+    public bool IsPlayable(WorldCellGeometry cell) =>
+        PlayableBounds is not { } bounds
+        || (cell.Center.X >= bounds.MinX && cell.Center.X < bounds.MaxX
+            && cell.Center.Y >= bounds.MinY && cell.Center.Y < bounds.MaxY);
+
+    public bool IsPlayable(PeriodicCellAddress address) => IsPlayable(Resolve(address));
+
     /// <summary>Explicit physical travel-budget reference for deliberate turns.</summary>
     public DistanceMeasure? PhysicalTurnCostReference { get; init; }
 
@@ -63,6 +77,12 @@ public sealed record PeriodicWorldTiling(
         if (Id == Guid.Empty || Revision <= 0
             || !double.IsFinite(Origin.X) || !double.IsFinite(Origin.Y))
             throw new InvalidOperationException("A periodic world requires a stable identity, revision and finite origin.");
+        if (PlayableBounds is { } playable)
+        {
+            playable.Validate();
+            if (playable.MinX == playable.MaxX || playable.MinY == playable.MaxY)
+                throw new InvalidOperationException("Playable map dimensions must be positive.");
+        }
         ArgumentNullException.ThrowIfNull(Topology);
         ArgumentNullException.ThrowIfNull(Realization);
         Topology.ValidateAdjacency();
