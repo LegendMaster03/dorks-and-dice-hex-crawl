@@ -207,6 +207,10 @@ public sealed partial class HexCrawlService
             throw new InvalidOperationException("A keyed location encounter requires an authored world.");
         var result = _runtime.AdvanceCellWatch(
             geometry.Tiling, expedition.CampaignProcedure, state, plan, inputs);
+        if (geometry.World is { } boundedWorld
+            && !boundedWorld.SpatialTiling.IsPlayable(result.Expedition.Traversal.CurrentCell.Address))
+            throw new InvalidOperationException(
+                "Travel would leave the playable map bounds. Choose a destination within the map.");
         // World knowledge is only projected for authored worlds. Mapless
         // sessions retain their real cell event history without invented maps.
         var updatedState = result.Expedition;
@@ -314,6 +318,10 @@ public sealed partial class HexCrawlService
             throw new InvalidOperationException(
                 "Resolve the suspended watch or pending decision before repositioning this expedition.");
         var geometry = await ResolveCellGeometryAsync(expedition, ownerUserId, cancellationToken);
+        if (geometry.World is { } authored
+            && !authored.SpatialTiling.IsPlayable(destination.Address))
+            throw new InvalidOperationException(
+                "The chosen reposition destination is outside the playable map bounds.");
         var corrected = CrawlRuntimeActions.RepositionCell(
             geometry.Tiling, state, destination, position, note);
         var knowledge = expedition.Knowledge;
