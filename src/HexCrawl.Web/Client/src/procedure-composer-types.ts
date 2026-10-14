@@ -102,6 +102,7 @@ export type ProcedureComposer = {
     name: string;
     schemaVersion: string;
     tilingDsSymbol: string;
+    playableBounds?: { width: number; height: number; minU: number; minV: number } | null;
     isExecutable: boolean;
     modificationCount: number;
     modifiedModuleCount: number;
