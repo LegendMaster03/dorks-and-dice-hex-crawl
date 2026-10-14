@@ -42,6 +42,20 @@ public sealed class Phase16NomenclatureTests
         Assert.False(catalog.Describe(Square)!.IsNamed);
     }
 
+    [Fact]
+    public void MixedTriangleQuadrilateralStaysNamedButOutsideRulesetChoices()
+    {
+        var entry = Assert.Single(CrawlTilingNames.Catalog.ListEntries(),
+            value => value.PreferredName == "Triangle and quadrilateral tiling");
+        Assert.False(entry.ShowInRulesetSelector);
+        Assert.DoesNotContain(CrawlTilingNames.Catalog.ListEntries(rulesetSelectorOnly: true),
+            value => value.CanonicalDsSymbol == entry.CanonicalDsSymbol);
+        Assert.Contains(CrawlTilingNames.Catalog.ListEntries(),
+            value => value.CanonicalDsSymbol == entry.CanonicalDsSymbol);
+        Assert.Equal(entry.PreferredName,
+            CrawlTilingNames.Catalog.Describe(entry.CanonicalDsSymbol)!.Label);
+    }
+
     [Theory]
     [InlineData("<1:1,1,1:3,6>")]
     [InlineData("<1:1,1,1:4,4>")]
