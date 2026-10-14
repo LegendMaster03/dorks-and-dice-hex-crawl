@@ -1,3 +1,5 @@
+using HexCrawl.Domain.Presentation;
+using HexCrawl.Domain.Spatial;
 using System.Security.Claims;
 using HexCrawl.Application;
 using HexCrawl.Web.Framework;
@@ -22,6 +24,7 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
 
     public void MapEndpoints(RouteGroupBuilder api)
     {
+        api.MapGet("/procedures/tilings", ListTilings);
         api.MapPost("/procedures/composer/draft", ComposeDraftAsync);
         api.MapPost("/procedures/composer/canonical/draft", ComposeCanonicalDraftAsync);
         api.MapPost("/procedures/composer/canonical/validate", ValidateCanonicalAsync);
@@ -36,6 +39,20 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
         api.MapPost("/procedures/{procedureId:guid}/revisions", CreateProcedureRevisionAsync);
         api.MapPost("/procedures/{procedureId:guid}/canonical/revisions", CreateCanonicalProcedureRevisionAsync);
     }
+
+    private static IResult ListTilings() => Results.Ok(
+        CrawlTilingNames.Catalog.ListEntries().Select(entry =>
+        {
+            var geometry = DelaneyDressHarmonicMetricRealization.Construct(
+                entry.CanonicalDsSymbol, 1, "unit");
+            return new
+            {
+                DsSymbol = entry.CanonicalDsSymbol,
+                DisplayName = entry.PreferredName,
+                entry.ShowInRulesetSelector,
+                Realization = geometry.Status == "realized" ? geometry.Realization : null
+            };
+        }).ToArray());
 
     private static async Task<IResult> ComposeDraftAsync(
         ProcedureComposerDraftRequest request,
