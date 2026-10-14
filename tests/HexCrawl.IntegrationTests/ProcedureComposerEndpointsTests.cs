@@ -49,7 +49,7 @@ public sealed class ProcedureComposerEndpointsTests
                 new
                 {
                     expectedRevision = 1,
-                    playableBounds = new { }
+                    playableBounds = new Dictionary<string, int>()
                 });
             clear.EnsureSuccessStatusCode();
             var cleared = await clear.Content.ReadFromJsonAsync<JsonElement>();
