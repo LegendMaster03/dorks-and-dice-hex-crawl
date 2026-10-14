@@ -59,7 +59,8 @@ public sealed class ProcedurePresetIdentityTests
         {
             var procedure = CrawlProcedureCatalog.Resolve(key).MaterializeGeneric().Procedure;
             Assert.Equal("<1:1,1,1:4,4>", procedure.TilingDsSymbol);
-            Assert.Equal(new PeriodicMapBounds(expectedSize, expectedSize), procedure.PlayableBounds);
+            Assert.Equal(new PeriodicMapBounds(expectedSize, expectedSize,
+                expectedSize == 9 ? -4 : 0, expectedSize == 9 ? -4 : 0), procedure.PlayableBounds);
             var copy = JsonSerializer.Deserialize<CampaignProcedure>(JsonSerializer.Serialize(procedure));
             Assert.NotNull(copy);
             copy.Validate();
