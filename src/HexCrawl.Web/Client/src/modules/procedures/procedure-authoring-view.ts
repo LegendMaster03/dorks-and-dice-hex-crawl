@@ -1395,6 +1395,12 @@ export async function renderProcedureAuthoringWorkspace(
         grid.className = "hc-advanced-parameter-grid";
         for (const [key, definition] of parameterDefinitions(module)) {
             if (!visibleParameter(key)) continue;
+            if (key === "adjacencyMode") {
+                const presentation = compactParameter(key, definition, module.moduleKey);
+                if (presentation) grid.append(compactEditor(
+                    module, key, module.parameters[key] ?? "EdgeOnly", presentation));
+                continue;
+            }
             const field = document.createElement("label");
             field.className = "hc-compact-field";
             field.append(code(key));
