@@ -1,3 +1,4 @@
+import { traceTilePolygon } from "../../tile-polygon-canvas";
 import type { TilingCatalogEntry } from "../../procedure-composer-types";
 
 /** Render a bounded, noninteractive patch of the server-realized periodic geometry. */
@@ -44,14 +45,10 @@ export function tilingPreview(entry: TilingCatalogEntry | undefined, width = 74,
             const offsetX = a * u.x + b * v.x - center.x;
             const offsetY = a * u.y + b * v.y - center.y;
             for (const polygon of polygons) {
-                ctx.beginPath();
-                polygon.forEach((p, index) => {
-                    const x = width / 2 + (p.x + offsetX) * scale;
-                    const y = height / 2 - (p.y + offsetY) * scale;
-                    if (index === 0) ctx.moveTo(x, y);
-                    else ctx.lineTo(x, y);
-                });
-                ctx.closePath();
+                traceTilePolygon(ctx, polygon, p => ({
+                    x: width / 2 + (p.x + offsetX) * scale,
+                    y: height / 2 - (p.y + offsetY) * scale
+                }));
                 ctx.fill();
                 ctx.stroke();
             }
