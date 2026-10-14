@@ -76,9 +76,11 @@ public static class GenericProcedureCatalog
             [TimeIntervalModule],
             [],
             [MovementResolutionPolicyMechanic],
-            RequiredMany(
-                ("travelResolution", "enum", "Travel resolution mode."),
-                ("actualDistanceResolution", "enum", "Actual-distance resolution mode."))),
+            WithOptional(
+                RequiredMany(
+                    ("travelResolution", "enum", "Travel resolution mode."),
+                    ("actualDistanceResolution", "enum", "Actual-distance resolution mode.")),
+                ("adjacencyMode", "enum", "EdgeOnly or EdgeAndVertex, when vertex-only contacts exist.")),
         Module(
             SpatialTurnCostModule,
             "Movement",
@@ -362,9 +364,11 @@ public static class GenericProcedureCatalog
             "Uses periodic-cell crossings with calibrated physical distance or discrete boundary-transition counts.",
             ["time.interval-duration"],
             ["movement.resolution-mode"],
-            RequiredMany(
-                ("travelResolution", "enum", "ContinuousDistance or CellSteps."),
-                ("actualDistanceResolution", "enum", "Actual-distance resolution mode.")),
+            WithOptional(
+                RequiredMany(
+                    ("travelResolution", "enum", "ContinuousDistance or CellSteps."),
+                    ("actualDistanceResolution", "enum", "Actual-distance resolution mode.")),
+                ("adjacencyMode", "enum", "EdgeOnly or EdgeAndVertex.")),
             GenericProcedureExecutionHandlers.MovementResolutionPolicy,
             ProcedureAutomationLevel.Automatic,
             version: 2),

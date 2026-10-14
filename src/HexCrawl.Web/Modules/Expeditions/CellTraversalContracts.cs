@@ -41,6 +41,10 @@ public sealed record CellTraversalContextContract(
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public DistanceContract? PhysicalDistancePerWorldUnit { get; init; }
 
+    /// <summary>Geometric applicability, independent of the pinned movement rule.</summary>
+    public bool SupportsVertexOnlyAdjacency { get; init; }
+    public IReadOnlyList<WorldCellVertexContact> VertexOnlyContacts { get; init; } = [];
+
     public static CellTraversalContextContract From(
         PeriodicWorldTiling world,
         CellExpeditionState expedition)
@@ -76,7 +80,9 @@ public sealed record CellTraversalContextContract(
             exits.Select(CellInterfaceContract.From).ToArray())
         {
             PhysicalDistancePerWorldUnit = world.PhysicalDistancePerWorldUnit is { } calibration
-                ? DistanceContract.From(calibration) : null
+                ? DistanceContract.From(calibration) : null,
+            SupportsVertexOnlyAdjacency = world.HasVertexOnlyContacts(),
+            VertexOnlyContacts = world.VertexOnlyContacts(cursor.CurrentCell.Address)
         };
     }
 }

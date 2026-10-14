@@ -15,13 +15,14 @@ public static class SpatialCourseSelection
     /// traversal must still resolve that boundary, including vertex ties.
     /// </summary>
     public static WorldPoint ParallelToNeighborCenters(
-        PeriodicWorldTiling world, WorldCellId current, WorldCellId neighbor)
+        PeriodicWorldTiling world, WorldCellId current, WorldCellId neighbor,
+        CellAdjacencyMode adjacency = CellAdjacencyMode.EdgeOnly)
     {
         ArgumentNullException.ThrowIfNull(world);
         if (current.TilingId != world.Id || neighbor.TilingId != world.Id)
             throw new InvalidOperationException("Both cell identities must belong to the authoritative tiling.");
-        if (!world.Neighbors(current.Address).Contains(neighbor))
-            throw new InvalidOperationException("A discrete neighbor selection requires a reciprocal atomic adjacency.");
+        if (!world.MovementNeighbors(current.Address, adjacency).Contains(neighbor))
+            throw new InvalidOperationException("Selected cells are not adjacent under the configured geometric movement rule.");
 
         var heading = world.Resolve(neighbor.Address).Center - world.Resolve(current.Address).Center;
         RequireHeading(heading);

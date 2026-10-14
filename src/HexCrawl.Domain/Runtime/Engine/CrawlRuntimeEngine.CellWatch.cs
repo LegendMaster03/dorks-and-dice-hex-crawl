@@ -114,8 +114,10 @@ public sealed partial class CrawlRuntimeEngine
             if (runtime.TurnPolicy is { SupportsDeliberateDoubleBack: false })
                 throw new InvalidOperationException(
                     "The pinned procedure does not permit deliberate double-back movement.");
-            if (state.Traversal.EntryInterfaceIndex is null)
-                throw new InvalidOperationException("Double-back requires a known entry interface.");
+            if (state.Traversal.EntryInterfaceIndex is null
+                && (runtime.Movement.Adjacency != CellAdjacencyMode.EdgeAndVertex
+                    || state.Traversal.EntryVertexIndex is null))
+                throw new InvalidOperationException("Double-back requires an authorized recorded entry contact.");
         }
         var dmOverrideNote = ResolveDmOverrideNote(
             inputs.Travel.Provenance,
@@ -164,7 +166,9 @@ public sealed partial class CrawlRuntimeEngine
                 IsLost = false, ResolvedVeerDegrees = null,
                 Traversal = state.Traversal with
                 {
-                    SelectedExitInterfaceIndex = state.Traversal.EntryInterfaceIndex!.Value
+                    SelectedExitInterfaceIndex = state.Traversal.EntryInterfaceIndex,
+                    SelectedExitVertexNeighbor = state.Traversal.EntryVertexIndex is not null
+                        ? state.Traversal.EnteredFrom : null
                 }
             };
         }
@@ -200,7 +204,8 @@ public sealed partial class CrawlRuntimeEngine
         var hasResolvedTravelBudget = segmentTravel.CellSteps is > 0
             || segmentTravel.ActualDistance is { Value: > 0d };
         var tentativeCrossing = hasResolvedTravelBudget
-            ? PeriodicCellTraversalGeometry.NextCrossing(world, state.Traversal) : null;
+            ? PeriodicCellTraversalGeometry.NextCrossing(
+                world, state.Traversal, runtime.Movement.Adjacency) : null;
         // An intersection farther down the ray still permits real travel and
         // a legitimate turn cost. Only present-position ambiguity defers it.
         var unresolvedCourse = tentativeCrossing is not null
@@ -362,7 +367,8 @@ public sealed partial class CrawlRuntimeEngine
         var traversal = expedition.Traversal with
         {
             TravelHeading = actual,
-            SelectedExitInterfaceIndex = decision.SelectedExitInterfaceIndex
+            SelectedExitInterfaceIndex = decision.SelectedExitInterfaceIndex,
+            SelectedExitVertexNeighbor = null
         };
         traversal.Validate(world);
         var crossing = PeriodicCellTraversalGeometry.NextCrossing(world, traversal);

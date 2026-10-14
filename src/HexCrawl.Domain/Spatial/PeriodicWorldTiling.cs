@@ -25,6 +25,17 @@ public sealed record WorldCellBoundary(
     WorldCellId From, int InterfaceIndex, int BoundarySideIndex,
     WorldCellId To, int ReciprocalInterfaceIndex, WorldPoint Start, WorldPoint End);
 
+/// <summary>Movement eligibility is a rule; contacts are established by the tiling.</summary>
+public enum CellAdjacencyMode { EdgeOnly, EdgeAndVertex }
+
+/// <summary>
+/// A point-only incidence between two distinct periodic cells. Vertex indices
+/// refer to the authoritative atomic polygon boundaries, not drawn sides.
+/// </summary>
+public sealed record WorldCellVertexContact(
+    WorldCellId From, int FromVertexIndex,
+    WorldCellId To, int ToVertexIndex, WorldPoint Point);
+
 public enum WorldCellLookupStatus { NotFound, Unique, Ambiguous }
 
 public sealed record WorldCellLookup(
@@ -148,6 +159,82 @@ public sealed record PeriodicWorldTiling(
 
     public IReadOnlyList<WorldCellId> Neighbors(PeriodicCellAddress address) =>
         Boundaries(address).Select(edge => edge.To).Distinct().ToArray();
+
+    /// <summary>
+    /// Follow the two reciprocal atomic interfaces meeting each boundary
+    /// vertex until its complete incident-cell orbit is known. This is purely
+    /// topological: the computation does not use compass directions, point
+    /// tolerance, polygon appearance, or a predefined tiling family.
+    /// Return only contacts without a shared edge.
+    /// </summary>
+    public IReadOnlyList<WorldCellVertexContact> VertexOnlyContacts(PeriodicCellAddress address)
+    {
+        var source = RequireCell(address);
+        var sourceId = new WorldCellId(Id, address);
+        var edgeNeighbors = Neighbors(address).ToHashSet();
+        var polygon = Resolve(address).Polygon;
+        var contacts = new List<WorldCellVertexContact>();
+        var recorded = new HashSet<(WorldCellId Cell, int SourceVertex, int TargetVertex)>();
+
+        for (var originVertex = 0; originVertex < source.Boundary.Count; originVertex++)
+        {
+            var seen = new HashSet<(PeriodicCellAddress Address, int Vertex)>();
+            var queue = new Queue<(PeriodicCellAddress Address, int Vertex)>();
+            queue.Enqueue((address, originVertex));
+            while (queue.Count > 0)
+            {
+                var (currentAddress, vertex) = queue.Dequeue();
+                if (!seen.Add((currentAddress, vertex))) continue;
+                if (seen.Count > 4096)
+                    throw new InvalidOperationException("A periodic vertex orbit exceeded its safe incidence bound.");
+                var motif = RequireCell(currentAddress);
+                var targetId = new WorldCellId(Id, currentAddress);
+                if (targetId != sourceId && !edgeNeighbors.Contains(targetId)
+                    && recorded.Add((targetId, originVertex, vertex)))
+                    contacts.Add(new WorldCellVertexContact(
+                        sourceId, originVertex, targetId, vertex, polygon[originVertex]));
+
+                // The boundary list is counterclockwise. A reciprocal edge
+                // reverses orientation: source start maps to target end,
+                // source end maps to target start.
+                foreach (var edgeIndex in new[]
+                    { (vertex + motif.Boundary.Count - 1) % motif.Boundary.Count, vertex })
+                {
+                    var edge = motif.Boundary[edgeIndex];
+                    var nextAddress = new PeriodicCellAddress(edge.TargetMotifCellId,
+                        currentAddress.Translation.Add(edge.TargetTranslation));
+                    var next = RequireCell(nextAddress);
+                    var nextVertex = edgeIndex == vertex
+                        ? (edge.ReciprocalInterfaceIndex + 1) % next.Boundary.Count
+                        : edge.ReciprocalInterfaceIndex;
+                    queue.Enqueue((nextAddress, nextVertex));
+                }
+            }
+        }
+
+        return contacts.OrderBy(contact => contact.FromVertexIndex)
+            .ThenBy(contact => contact.To.Address.Translation.U)
+            .ThenBy(contact => contact.To.Address.Translation.V)
+            .ThenBy(contact => contact.To.Address.MotifCellId, StringComparer.Ordinal)
+            .ThenBy(contact => contact.ToVertexIndex).ToArray();
+    }
+
+    /// <summary>Whether the periodic tiling admits a movement choice beyond edge sharing.</summary>
+    public bool HasVertexOnlyContacts() =>
+        Topology.MotifCells.Any(cell => VertexOnlyContacts(
+            new PeriodicCellAddress(cell.Id, new LatticeDisplacement(0, 0))).Count > 0);
+
+    public IReadOnlyList<WorldCellId> MovementNeighbors(
+        PeriodicCellAddress address, CellAdjacencyMode adjacency)
+    {
+        if (!Enum.IsDefined(adjacency))
+            throw new ArgumentOutOfRangeException(nameof(adjacency));
+        var edges = Neighbors(address);
+        if (adjacency == CellAdjacencyMode.EdgeOnly)
+            return edges;
+        return edges.Concat(VertexOnlyContacts(address).Select(contact => contact.To))
+            .Distinct().ToArray();
+    }
 
     public WorldCellBoundary Reciprocal(WorldCellBoundary boundary)
     {

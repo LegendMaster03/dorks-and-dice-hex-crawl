@@ -6,8 +6,11 @@ namespace HexCrawl.Domain.Spatial;
 /// </summary>
 public sealed record PeriodicTraversalTransition(
     WorldCellId From, WorldCellId To,
-    int ExitInterfaceIndex, int EntryInterfaceIndex,
-    WorldPoint CrossingPoint, double CumulativeWorldDistance);
+    int? ExitInterfaceIndex, int? EntryInterfaceIndex,
+    WorldPoint CrossingPoint, double CumulativeWorldDistance)
+{
+    public WorldCellVertexContact? VertexContact { get; init; }
+}
 
 public sealed record PeriodicTraversalExecutionResult(
     PeriodicCellTraversal Traversal,
@@ -39,7 +42,8 @@ public static class PeriodicTraversalExecution
         PeriodicWorldTiling world,
         PeriodicCellTraversal start,
         DistanceMeasure distance,
-        bool continueAcrossBoundaries)
+        bool continueAcrossBoundaries,
+        CellAdjacencyMode adjacency = CellAdjacencyMode.EdgeOnly)
     {
         ArgumentNullException.ThrowIfNull(world);
         var calibration = world.PhysicalDistancePerWorldUnit
@@ -49,7 +53,7 @@ public static class PeriodicTraversalExecution
         var worldUnits = converted.Value / calibration.Value;
         if (!double.IsFinite(worldUnits))
             throw new ArgumentOutOfRangeException(nameof(distance), "Travel budget exceeds finite world units.");
-        return Execute(world, start, worldUnits, null, continueAcrossBoundaries);
+        return Execute(world, start, worldUnits, null, continueAcrossBoundaries, adjacency);
     }
 
     /// <summary>
@@ -61,10 +65,11 @@ public static class PeriodicTraversalExecution
         PeriodicWorldTiling world,
         PeriodicCellTraversal start,
         int steps,
-        bool continueAcrossBoundaries)
+        bool continueAcrossBoundaries,
+        CellAdjacencyMode adjacency = CellAdjacencyMode.EdgeOnly)
     {
         if (steps < 0) throw new ArgumentOutOfRangeException(nameof(steps));
-        return Execute(world, start, null, steps, continueAcrossBoundaries);
+        return Execute(world, start, null, steps, continueAcrossBoundaries, adjacency);
     }
 
     private static PeriodicTraversalExecutionResult Execute(
@@ -72,7 +77,8 @@ public static class PeriodicTraversalExecution
         PeriodicCellTraversal start,
         double? worldDistanceBudget,
         int? stepBudget,
-        bool continueAcrossBoundaries)
+        bool continueAcrossBoundaries,
+        CellAdjacencyMode adjacency)
     {
         ArgumentNullException.ThrowIfNull(world);
         ArgumentNullException.ThrowIfNull(start);
@@ -90,7 +96,7 @@ public static class PeriodicTraversalExecution
         while ((remaining is > 0 || stepBudget is { } requestedTotal && steps < requestedTotal)
             && transitions.Count < MaxTransitionsPerCall)
         {
-            var crossing = PeriodicCellTraversalGeometry.NextCrossing(world, cursor);
+            var crossing = PeriodicCellTraversalGeometry.NextCrossing(world, cursor, adjacency);
             if (crossing.Status == CellCrossingStatus.RequiresAdjudication
                 && (remaining is null || crossing.DistanceWorldUnits is null))
             {
@@ -106,7 +112,7 @@ public static class PeriodicTraversalExecution
                 throw new InvalidOperationException("Unable to establish a finite authoritative cell crossing.");
 
             var available = remaining ?? needed;
-            var step = PeriodicCellTraversalGeometry.Advance(world, cursor, available);
+            var step = PeriodicCellTraversalGeometry.Advance(world, cursor, available, adjacency);
             cursor = step.Traversal;
             consumed += step.ConsumedWorldUnits;
             if (remaining.HasValue)
@@ -120,11 +126,18 @@ public static class PeriodicTraversalExecution
             if (step.Crossing.Status != CellCrossingStatus.Crosses)
                 break;
 
-            var exit = step.Crossing.Exit!;
-            var entry = step.Crossing.Entry!;
-            transitions.Add(new PeriodicTraversalTransition(
-                exit.From, exit.To, exit.InterfaceIndex, entry.InterfaceIndex,
-                step.Crossing.Point!.Value, consumed));
+            if (step.Crossing.VertexContact is { } contact)
+                transitions.Add(new PeriodicTraversalTransition(
+                    contact.From, contact.To, null, null,
+                    step.Crossing.Point!.Value, consumed) { VertexContact = contact });
+            else
+            {
+                var exit = step.Crossing.Exit!;
+                var entry = step.Crossing.Entry!;
+                transitions.Add(new PeriodicTraversalTransition(
+                    exit.From, exit.To, exit.InterfaceIndex, entry.InterfaceIndex,
+                    step.Crossing.Point!.Value, consumed));
+            }
             steps++;
 
             if (!continueAcrossBoundaries
