@@ -68,7 +68,8 @@ public sealed class ProcedureComposerService(CampaignProcedureService procedures
         IReadOnlyList<CampaignProcedureOverride> overrides,
         Guid? campaignId = null,
         CancellationToken cancellationToken = default,
-        string? name = null)
+        string? name = null,
+        string? tilingDsSymbol = null)
     {
         var owner = RequireOwner(ownerUserId);
         ArgumentNullException.ThrowIfNull(moduleSelections);
@@ -101,7 +102,8 @@ public sealed class ProcedureComposerService(CampaignProcedureService procedures
         IReadOnlyList<ProcedureModuleSelection> moduleSelections,
         IReadOnlyList<CampaignProcedureOverride> overrides,
         CancellationToken cancellationToken = default,
-        string? name = null)
+        string? name = null,
+        string? tilingDsSymbol = null)
     {
         var owner = RequireOwner(ownerUserId);
         if (procedureId == Guid.Empty)
