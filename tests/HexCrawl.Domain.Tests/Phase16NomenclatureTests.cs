@@ -58,6 +58,26 @@ public sealed class Phase16NomenclatureTests
     }
 
     [Fact]
+    public void EveryCatalogPreviewHasVerifiedGeometryIncludingMixedCells()
+    {
+        foreach (var entry in CrawlTilingNames.Catalog.ListEntries())
+        {
+            var preview = CrawlTilingNames.RepresentativePreview(entry);
+            Assert.NotNull(preview);
+            Assert.Equal(entry.PreferredName, CrawlTilingNames.Catalog.Describe(entry.CanonicalDsSymbol, preview)!.Label);
+            Assert.True(Math.Abs(preview.TranslationU.X * preview.TranslationV.Y
+                - preview.TranslationU.Y * preview.TranslationV.X) > 1e-8);
+            Assert.All(preview.Polygons.Values, polygon =>
+            {
+                Assert.True(polygon.Count >= 3);
+                Assert.All(polygon, point => Assert.True(double.IsFinite(point.X) && double.IsFinite(point.Y)));
+            });
+            if (entry.PreferredName == "Triangle and quadrilateral tiling")
+                Assert.Equal(new[] { 3, 4 }, preview.Polygons.Values.Select(p => p.Count).Distinct().Order());
+        }
+    }
+
+    [Fact]
     public void NotationIsSuppressedOutsideExplicitlyAuthorizedSurfaces()
     {
         Assert.Null(TilingNotationPresentationPolicy.Display(Square, TilingNotationSurface.Normal, true, false));
