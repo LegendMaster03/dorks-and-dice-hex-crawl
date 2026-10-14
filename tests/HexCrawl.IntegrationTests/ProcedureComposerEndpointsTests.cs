@@ -8,6 +8,57 @@ namespace HexCrawl.IntegrationTests;
 
 public sealed class ProcedureComposerEndpointsTests
 {
+    [Fact]
+    public async Task OptionalMapBoundsRoundTripThroughDraftCreateAndRevision()
+    {
+        var database = TestWebHost.NewDatabasePath();
+        try
+        {
+            using var factory = TestWebHost.Create(database);
+            using var client = factory.CreateClient();
+            using var preset = await client.PostAsJsonAsync("/api/procedures/composer/draft",
+                new { presetKey = CrawlProcedureCatalog.WastelandWandererPresetKey });
+            preset.EnsureSuccessStatusCode();
+            var initial = await preset.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(5, initial.GetProperty("playableBounds").GetProperty("width").GetInt32());
+            Assert.Equal(5, initial.GetProperty("playableBounds").GetProperty("height").GetInt32());
+
+            using var composed = await client.PostAsJsonAsync("/api/procedures/composer/draft",
+                new
+                {
+                    presetKey = CrawlProcedureCatalog.WastelandWandererPresetKey,
+                    playableBounds = new { width = 7, height = 6 }
+                });
+            composed.EnsureSuccessStatusCode();
+            var edited = await composed.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(7, edited.GetProperty("playableBounds").GetProperty("width").GetInt32());
+
+            using var create = await client.PostAsJsonAsync("/api/procedures",
+                new
+                {
+                    presetKey = CrawlProcedureCatalog.WastelandWandererPresetKey,
+                    playableBounds = new { width = 7, height = 6 }
+                });
+            create.EnsureSuccessStatusCode();
+            var created = await create.Content.ReadFromJsonAsync<JsonElement>();
+            var procedureId = created.GetProperty("procedureId").GetGuid();
+            Assert.Equal(6, created.GetProperty("playableBounds").GetProperty("height").GetInt32());
+
+            using var clear = await client.PostAsJsonAsync(
+                $"/api/procedures/{procedureId:D}/revisions",
+                new
+                {
+                    expectedRevision = 1,
+                    playableBounds = new { }
+                });
+            clear.EnsureSuccessStatusCode();
+            var cleared = await clear.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(JsonValueKind.Null, cleared.GetProperty("playableBounds").ValueKind);
+            Assert.Equal(2, cleared.GetProperty("revision").GetInt32());
+        }
+        finally { TestWebHost.DeleteDatabase(database); }
+    }
+
     [Theory]
     [InlineData("/api/procedures/composer/draft")]
     [InlineData("/api/procedures/composer/canonical/draft")]
