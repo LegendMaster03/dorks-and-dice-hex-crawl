@@ -72,13 +72,28 @@ export function renderCurrentCellNavigator<TCell, TIntent>(
         control.addEventListener("click", () => options.onToggle(candidate));
         navigator.append(control);
     }
-    for (const contact of options.vertexChoices ?? []) {
+    const vertexChoices = options.vertexChoices ?? [];
+    for (const [index, contact] of vertexChoices.entries()) {
+        // Multiple point-only destinations can meet at the same geometric
+        // vertex. Separate their buttons without changing contact identity.
+        const coincident = vertexChoices
+            .map((candidate, candidateIndex) => ({ candidate, candidateIndex }))
+            .filter(({ candidate }) =>
+                Math.hypot(candidate.anchor.x - contact.anchor.x,
+                    candidate.anchor.y - contact.anchor.y) < 0.005);
+        const ordinal = coincident.findIndex(item => item.candidateIndex === index);
+        const angle = coincident.length > 1 ? 2 * Math.PI * ordinal / coincident.length : 0;
+        const offset = coincident.length > 1 ? 0.075 : 0;
+        const anchor = {
+            x: Math.max(0.025, Math.min(0.975, contact.anchor.x + Math.cos(angle) * offset)),
+            y: Math.max(0.025, Math.min(0.975, contact.anchor.y + Math.sin(angle) * offset))
+        };
         const control = document.createElement("button");
         control.type = "button";
         control.className = "hc-adjacency-interface hc-adjacency-vertex";
         control.dataset.adjacencyInterfaceId = contact.id;
-        control.style.setProperty("--hc-adjacency-x", `${contact.anchor.x * 100}%`);
-        control.style.setProperty("--hc-adjacency-y", `${contact.anchor.y * 100}%`);
+        control.style.setProperty("--hc-adjacency-x", `${anchor.x * 100}%`);
+        control.style.setProperty("--hc-adjacency-y", `${anchor.y * 100}%`);
         control.style.setProperty("--hc-adjacency-feedback-x", "0rem");
         control.style.setProperty("--hc-adjacency-feedback-y", "0rem");
         control.style.setProperty("--hc-adjacency-angle", "0deg");
