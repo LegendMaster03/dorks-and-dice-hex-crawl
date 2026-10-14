@@ -67,6 +67,39 @@ public sealed class Phase20MaplessCellApplicationTests
     }
 
     [Fact]
+    public async Task UncalibratedCellStepsSurviveRestartAndDistanceRulesFailClosed()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var store = new PostgresHexCrawlStore(database.ConnectionString);
+        await store.InitializeAsync();
+        var procedures = new CampaignProcedureService(store);
+        var starter = new ExpeditionStartService(store, new HexCrawlService(store), procedures);
+
+        var created = await starter.StartStandaloneCellsAsync(
+            "owner", "Uncalibrated steps",
+            new ProcedureStartSelection(PresetKey: "simple-hex-step"),
+            new MaplessSpatialStartOptions("Mapless steps"));
+        var context = Assert.IsType<MaplessSpatialCrawlSessionContext>(created.Context);
+        Assert.Null(context.Tiling.PhysicalDistancePerWorldUnit);
+        Assert.Null(context.Tiling.PhysicalTurnCostReference);
+        Assert.Null(Assert.IsType<CellExpeditionState>(created.Runtime).DistanceTraveled);
+
+        var restarted = new PostgresHexCrawlStore(database.ConnectionString);
+        await restarted.InitializeAsync();
+        var loaded = (await restarted.GetExpeditionAsync(created.Id, "owner"))!;
+        Assert.Null(Assert.IsType<MaplessSpatialCrawlSessionContext>(loaded.Context)
+            .Tiling.PhysicalDistancePerWorldUnit);
+        var geometry = await new HexCrawlService(restarted).ResolveCellGeometryAsync(loaded, "owner");
+        Assert.Null(geometry.Tiling.PhysicalDistancePerWorldUnit);
+        Assert.IsType<CellExpeditionState>(loaded.Runtime).Validate(geometry.Tiling);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            starter.StartStandaloneCellsAsync("owner", "Missing distance", new ProcedureStartSelection(
+                PresetKey: "simple-fixed-distance"), new MaplessSpatialStartOptions("Uncalibrated")));
+        Assert.Single(await store.ListExpeditionsAsync("owner"));
+    }
+
+    [Fact]
     public async Task MaplessWatchUsesSameCellRuntimeAndOwnerVersionProtection()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();

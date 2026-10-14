@@ -677,8 +677,8 @@ export type StandaloneCrawlContextInput =
     | {
         kind: "MaplessSpatial";
         name: string;
-        physicalDistancePerWorldUnit: number;
-        distanceUnit: DistanceUnit;
+        physicalDistancePerWorldUnit?: number;
+        distanceUnit?: DistanceUnit;
     }
     | {
         kind: "NonSpatial";

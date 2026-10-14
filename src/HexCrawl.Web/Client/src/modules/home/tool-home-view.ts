@@ -84,10 +84,10 @@ export async function renderToolHome(
                                 <fieldset class="hc-field-group hc-map-scale-field">
                                     <legend>Map scale</legend>
                                     <div class="hc-inline">
-                                        <label>Distance <input name="scale" type="number" min="0.001" step="any" placeholder="required"></label>
+                                        <label>Distance <input name="scale" type="number" min="0.001" step="any" placeholder="Optional for cell steps"></label>
                                         <label>Unit <select name="unit"><option value="">Select unit</option><option value="Mile">Miles</option><option value="Kilometer">Kilometers</option><option value="Custom">Custom</option></select></label>
                                     </div>
-                                    <p class="hc-hint">Physical travel distance represented by one world geometry unit.</p>
+                                    <p class="hc-hint">Optional for cell-step exploration. Distance-based rules require a positive physical scale and unit.</p>
                                 </fieldset>
                                 <div class="hc-form" data-custom-unit hidden>
                                     <label>Custom symbol <input name="symbol" autocomplete="off"></label>
@@ -212,7 +212,7 @@ export async function renderToolHome(
         input(form, "scale"),
         "Map scale",
         "This is the physical distance represented by one geometry unit of the selected ruleset.",
-        "Set the travel scale and unit explicitly before starting a mapless session.");
+        "Leave both fields empty for uncalibrated cell-step exploration. Distance-based rulesets require both fields.");
     attachFieldHelp(
         unit,
         "Map scale unit",
@@ -236,8 +236,8 @@ export async function renderToolHome(
         const spatial = Boolean(context.value) && !nonSpatial;
         periodicStart.hidden = !(spatial && selectedWorld !== null);
         input(form, "contextName").required = abstract;
-        input(form, "scale").required = abstract;
-        unit.required = abstract;
+        input(form, "scale").required = false;
+        unit.required = false;
         select(form, "motifCellId").required = !periodicStart.hidden;
         input(form, "u").required = !periodicStart.hidden;
         input(form, "v").required = !periodicStart.hidden;
@@ -377,14 +377,22 @@ export async function renderToolHome(
                 const name = input(form, "name").value.trim();
                 let expedition;
                 if (context.value === ABSTRACT_CONTEXT) {
+                    const scaleText = input(form, "scale").value.trim();
                     const unitKind = unit.value as DistanceUnitKind;
+                    if (Boolean(scaleText) !== Boolean(unitKind))
+                        throw new Error("Provide both physical map scale distance and unit, or leave both empty.");
+                    const calibration = scaleText
+                        ? {
+                            physicalDistancePerWorldUnit: numeric(input(form, "scale")),
+                            distanceUnit: distanceUnit(unitKind, form)
+                        }
+                        : {};
                     const base: Omit<StartStandaloneCrawlSessionInput, "procedureKey"> = {
                         name,
                         context: {
                             kind: "MaplessSpatial",
                             name: input(form, "contextName").value.trim(),
-                            physicalDistancePerWorldUnit: numeric(input(form, "scale")),
-                            distanceUnit: distanceUnit(unitKind, form)
+                            ...calibration
                         }
                     };
                     expedition = await api.startStandaloneCellSession(applyStandaloneProcedureChoice(base, choice));

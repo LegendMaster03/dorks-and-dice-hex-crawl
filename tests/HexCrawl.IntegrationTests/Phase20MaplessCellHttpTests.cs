@@ -36,6 +36,47 @@ public sealed class Phase20MaplessCellHttpTests
     };
 
     [Fact]
+    public async Task HttpMaplessCellStepsCanStartWithoutCalibrationButDistanceRulesCannot()
+    {
+        var database = TestWebHost.NewDatabasePath();
+        try
+        {
+            using var factory = TestWebHost.Create(database, "alice");
+            using var client = factory.CreateClient();
+            using var uncalibrated = await client.PostAsJsonAsync("/api/expeditions/cells",
+                new {
+                    name = "Uncalibrated mapless",
+                    procedureKey = "simple-hex-step",
+                    context = new { kind = "MaplessSpatial", name = "Uncalibrated" }
+                }, ApiJson);
+            Assert.Equal(HttpStatusCode.Created, uncalibrated.StatusCode);
+            var body = await uncalibrated.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(JsonValueKind.Null, body.GetProperty("context").GetProperty("tiling")
+                .GetProperty("physicalDistancePerWorldUnit").ValueKind);
+
+            using var distance = await client.PostAsJsonAsync("/api/expeditions/cells",
+                new {
+                    name = "Missing physical calibration",
+                    procedureKey = "simple-fixed-distance",
+                    context = new { kind = "MaplessSpatial", name = "Uncalibrated" }
+                }, ApiJson);
+            Assert.Equal(HttpStatusCode.BadRequest, distance.StatusCode);
+
+            using var partial = await client.PostAsJsonAsync("/api/expeditions/cells",
+                new {
+                    name = "Incomplete calibration",
+                    procedureKey = "simple-hex-step",
+                    context = new { kind = "MaplessSpatial", physicalDistancePerWorldUnit = 1 }
+                }, ApiJson);
+            Assert.Equal(HttpStatusCode.BadRequest, partial.StatusCode);
+        }
+        finally
+        {
+            TestWebHost.DeleteDatabase(database);
+        }
+    }
+
+    [Fact]
     public async Task MaplessStartTopologyAndAdvanceRemainOwnerScopedVersionedAndGeometric()
     {
         var database = TestWebHost.NewDatabasePath();
