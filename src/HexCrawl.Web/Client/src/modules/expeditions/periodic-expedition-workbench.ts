@@ -43,10 +43,15 @@ export async function renderPeriodicExpeditionWorkbench(
     let runtime = initial;
     let topology = await api.getCellTopology(initial.id);
     let selectedExit = topology.selectedExitInterfaceIndex;
-    let selectedVertex: NonNullable<typeof topology.vertexOnlyContacts>[number] | null =
-        topology.vertexOnlyContacts?.find(contact =>
-            initial.expedition.cellTraversal?.selectedExitVertexNeighbor
-                && sameWorldCell(contact.to, initial.expedition.cellTraversal.selectedExitVertexNeighbor)) ?? null;
+    const selectedVertexFor = (
+        cell: typeof topology,
+        destination: import("../../types").WorldCellId | null | undefined
+    ): NonNullable<typeof topology.vertexOnlyContacts>[number] | null =>
+        destination
+            ? cell.vertexOnlyContacts?.find(contact => sameWorldCell(contact.to, destination)) ?? null
+            : null;
+    let selectedVertex = selectedVertexFor(topology,
+        initial.expedition.cellTraversal?.selectedExitVertexNeighbor);
     let disposed = false;
     let busy = false;
     let refreshGeneration = 0;
@@ -489,9 +494,9 @@ export async function renderPeriodicExpeditionWorkbench(
             journeyAttention = null;
             topology = await api.getCellTopology(runtime.id);
             selectedExit = topology.selectedExitInterfaceIndex;
-            selectedVertex = topology.vertexOnlyContacts?.find(contact =>
-                runtime.expedition.cellTraversal?.selectedExitVertexNeighbor
-                    && sameWorldCell(contact.to, runtime.expedition.cellTraversal.selectedExitVertexNeighbor)) ?? null;
+            selectedVertex = selectedVertexFor(topology,
+                runtime.expedition.isSpatial
+                    ? runtime.expedition.cellTraversal?.selectedExitVertexNeighbor : null);
             if (!world) map.centerOn(topology.position);
             render();
             gameplay.sync();
@@ -528,9 +533,9 @@ export async function renderPeriodicExpeditionWorkbench(
             required<HTMLButtonElement>("[data-world]").hidden = world === null;
             topology = nextTopology;
             selectedExit = topology.selectedExitInterfaceIndex;
-            selectedVertex = topology.vertexOnlyContacts?.find(contact =>
-                runtime.expedition.cellTraversal?.selectedExitVertexNeighbor
-                    && sameWorldCell(contact.to, runtime.expedition.cellTraversal.selectedExitVertexNeighbor)) ?? null;
+            selectedVertex = selectedVertexFor(topology,
+                runtime.expedition.isSpatial
+                    ? runtime.expedition.cellTraversal?.selectedExitVertexNeighbor : null);
             if (!world) map.centerOn(topology.position);
             render();
             gameplay.sync();
