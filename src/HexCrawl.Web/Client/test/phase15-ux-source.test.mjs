@@ -1029,7 +1029,7 @@ test("Tiling presentation uses shared geometry and editor selections", () => {
     assert.match(workspace, /Filter by tiling/);
     assert.match(workspace, /tilingPreview\(tiling\)/);
     assert.match(workspace, /tilingDsSymbol: tilingOverride/);
-    assert.match(workspace, /t\.showInRulesetSelector/);
+    assert.match(workspace, /selectableTilings\(tilings\)/);
     assert.match(preview, /traceTilePolygon/);
     assert.match(mapRenderer, /traceTilePolygon/);
     assert.doesNotMatch(preview, /case "hex"|case "triangle"|case "square"/);

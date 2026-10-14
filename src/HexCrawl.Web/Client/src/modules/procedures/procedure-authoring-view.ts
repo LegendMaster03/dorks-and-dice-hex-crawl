@@ -16,7 +16,7 @@ import type { ProcedurePreset } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
 import { badge, openWorkspaceDrawer, textElement, type WorkspaceDrawer } from "../../ui/workspace";
 import { applyGuidedExperience, guidedCallout, guidedDisclosure, guidancePreferenceButton } from "../../ui/guidance";
-import { executionSummary, inputSourceLabel, saveBlocked, withBehavior, withParameter } from "./procedure-composer-model";
+import { executionSummary, inputSourceLabel, saveBlocked, withBehavior, withParameter, selectableTilings, hasSaveableComposerChanges } from "./procedure-composer-model";
 import { presetGuidance } from "./preset-guidance";
 import { tilingPreview } from "./tiling-preview";
 import {
@@ -64,6 +64,7 @@ export async function renderProcedureAuthoringWorkspace(
     let savedProcedures: SavedProcedureSummary[] = [];
     let revisions: ProcedureRevisionSummary[] = [];
     let savePending = false;
+    let tilingPending = false;
     let refreshSerial = 0;
     let activeDrawer: WorkspaceDrawer | null = null;
     let advancedSelectedModuleKey: string | null = null;
@@ -102,6 +103,7 @@ export async function renderProcedureAuthoringWorkspace(
     });
 
     const resetEdits = (): void => {
+        ++refreshSerial;
         pending.clear();
         moduleSelections.clear();
         nameOverride = null;
@@ -154,6 +156,34 @@ export async function renderProcedureAuthoringWorkspace(
         } catch (error) {
             const target = root.querySelector<HTMLElement>("[data-error]");
             if (target) showUiError(target, error);
+        }
+    };
+
+    const changeTiling = async (symbol: string): Promise<void> => {
+        if (tilingPending || savePending || historical() || symbol === draft?.tilingDsSymbol) return;
+        const nextOverride = symbol === baselineTiling ? null : symbol;
+        const serial = ++refreshSerial;
+        tilingPending = true;
+        render();
+        let failure: unknown = null;
+        try {
+            const next = await composerApi.composeDraft({ ...currentInput(), tilingDsSymbol: nextOverride });
+            if (disposed || serial !== refreshSerial) return;
+            tilingOverride = nextOverride;
+            draft = next;
+            jsonText = "";
+            jsonBaseline = "";
+            jsonValidation = null;
+            jsonLoadFailed = false;
+        } catch (error) {
+            if (serial === refreshSerial) failure = error;
+        } finally {
+            tilingPending = false;
+            if (!disposed) {
+                render();
+                const target = root.querySelector<HTMLElement>("[data-error]");
+                if (failure !== null && target) showUiError(target, failure);
+            }
         }
     };
 
@@ -219,7 +249,7 @@ export async function renderProcedureAuthoringWorkspace(
     };
 
     const saveStructured = async (): Promise<void> => {
-        if (!draft || savePending || historical()) return;
+        if (!draft || savePending || tilingPending || historical()) return;
         const error = root.querySelector<HTMLElement>("[data-error]");
         if (error) clearUiError(error);
         let failure: unknown | null = null;
@@ -303,6 +333,7 @@ export async function renderProcedureAuthoringWorkspace(
     };
 
     const changeMode = async (next: ProcedureAuthoringMode): Promise<void> => {
+        if (tilingPending) return;
         if (mode === "json"
             && next !== "json"
             && jsonText.length > 0
@@ -329,11 +360,7 @@ export async function renderProcedureAuthoringWorkspace(
         || (jsonText.length > 0 && jsonText !== jsonBaseline);
 
     const hasSaveableChanges = (): boolean =>
-        mode === "json"
-            ? sourceProcedureId === null
-                ? hasStructuredChanges() || (jsonText.length > 0 && jsonText !== jsonBaseline)
-                : jsonText.length > 0 && jsonText !== jsonBaseline
-            : hasStructuredChanges();
+        hasSaveableComposerChanges(mode, hasStructuredChanges(), jsonText, jsonBaseline);
 
     const hasBlockingStructuredIssues = (): boolean =>
         draft?.dependencies.hasErrors === true
@@ -630,7 +657,7 @@ export async function renderProcedureAuthoringWorkspace(
 
         const save = button(savePending ? "Saving…" : sourceProcedureId ? "Save new revision" : "Save ruleset", "primary");
         save.dataset.procedureSave = "";
-        save.disabled = savePending
+        save.disabled = savePending || tilingPending
             || historical()
             || !hasSaveableChanges()
             || (mode !== "json" && hasBlockingStructuredIssues());
@@ -685,8 +712,7 @@ export async function renderProcedureAuthoringWorkspace(
             const summary = document.createElement("summary");
             summary.textContent = "Change tiling";
             choices.append(summary);
-            for (const tiling of tilings.filter(t => t.showInRulesetSelector ||
-                t.dsSymbol === draft!.tilingDsSymbol)) {
+            for (const tiling of selectableTilings(tilings)) {
                 const option = document.createElement("button");
                 option.type = "button";
                 option.className = "hc-panel";
@@ -698,11 +724,8 @@ export async function renderProcedureAuthoringWorkspace(
                 option.style.marginTop = ".4rem";
                 option.append(textElement("span", tiling.displayName), tilingPreview(tiling));
                 option.setAttribute("aria-pressed", String(tiling.dsSymbol === draft!.tilingDsSymbol));
-                option.disabled = historical() || savePending;
-                option.addEventListener("click", () => {
-                    tilingOverride = tiling.dsSymbol === baselineTiling ? null : tiling.dsSymbol;
-                    void refreshDraft();
-                });
+                option.disabled = historical() || savePending || tilingPending;
+                option.addEventListener("click", () => void changeTiling(tiling.dsSymbol));
                 choices.append(option);
             }
             tilingField.append(choices);

@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
     composerSection,
+    selectableTilings,
+    hasSaveableComposerChanges,
     createPendingOverride,
     executionSummary,
     groupComposerModules,
@@ -15,6 +17,23 @@ import {
     withParameter
 } from "../.test-dist/modules/procedures/procedure-composer-model.js";
 import { parseToolRoute } from "../.test-dist/tool-route.js";
+
+test("structured tiling edits remain saveable when the generated JSON is unchanged", () => {
+    assert.equal(hasSaveableComposerChanges("json", true, "square", "square"), true);
+    assert.equal(hasSaveableComposerChanges("json", true, "", ""), false);
+    assert.equal(hasSaveableComposerChanges("json", false, "square", "square"), false);
+    assert.equal(hasSaveableComposerChanges("json", false, "triangle", "square"), true);
+    assert.equal(hasSaveableComposerChanges("compact", true, "", ""), true);
+});
+
+test("hidden tilings stay resolvable and filterable but never become selector choices", () => {
+    const hidden = { dsSymbol: "hidden", showInRulesetSelector: false };
+    const visible = { dsSymbol: "visible", showInRulesetSelector: true };
+    const catalog = [hidden, visible];
+    assert.deepEqual(selectableTilings(catalog), [visible]);
+    assert.equal(catalog.find(entry => entry.dsSymbol === "hidden"), hidden);
+    assert.equal(catalog.length, 2);
+});
 
 function mechanic(overrides = {}) {
     return {
