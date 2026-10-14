@@ -7,7 +7,8 @@ public sealed record ProcedureCanonicalDraftRequest(
     string? Name,
     IReadOnlyList<ProcedureComposerModuleSelectionRequest>? ModuleSelections,
     IReadOnlyList<ProcedureComposerOverrideRequest>? Overrides,
-    string? TilingDsSymbol = null);
+    string? TilingDsSymbol = null,
+    ProcedureMapBoundsInput? PlayableBounds = null);
 
 public sealed record ProcedureCanonicalValidationRequest(string CanonicalJson);
 
