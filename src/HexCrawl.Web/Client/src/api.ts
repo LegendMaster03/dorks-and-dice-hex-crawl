@@ -219,7 +219,7 @@ export class HexCrawlApi {
         worldUnitsPerAbstractPeriod: number;
         origin: WorldPoint;
         rotationDegrees: number;
-        playableBounds?: { minX: number; minY: number; maxX: number; maxY: number };
+        playableBounds?: { width: number; height: number; minU?: number; minV?: number };
         physicalDistancePerWorldUnit?: { value: number; unit: DistanceUnit };
         periodULengthWorldUnits?: number;
         periodVLengthWorldUnits?: number;
