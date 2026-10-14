@@ -1056,6 +1056,12 @@ export async function renderProcedureAuthoringWorkspace(
         modules: current.modules.filter(module => module.moduleKey === section)
     });
 
+    const supportsVertexAdjacency = (): boolean =>
+        tilings.find(item => item.dsSymbol === draft?.tilingDsSymbol)?.supportsVertexOnlyAdjacency ?? false;
+
+    const visibleParameter = (key: string): boolean =>
+        key !== "adjacencyMode" || supportsVertexAdjacency();
+
     const populateCompactArea = (body: HTMLElement, modules: ProcedureModuleComposer[]): void => {
         body.replaceChildren();
         const module = modules[0];
@@ -1089,9 +1095,11 @@ export async function renderProcedureAuthoringWorkspace(
         const grid = document.createElement("div");
         grid.className = "hc-compact-field-grid";
         for (const [key, definition] of parameterDefinitions(module)) {
+            if (!visibleParameter(key)) continue;
             const presentation = compactParameter(key, definition, module.moduleKey);
             if (!presentation) continue;
-            const value = module.parameters[key] ?? definition.defaultValue ?? "";
+            const value = module.parameters[key] ?? definition.defaultValue
+                ?? (key === "adjacencyMode" ? "EdgeOnly" : "");
             grid.append(compactEditor(module, key, value, presentation));
         }
         body.append(grid);
@@ -1386,12 +1394,14 @@ export async function renderProcedureAuthoringWorkspace(
         const grid = document.createElement("div");
         grid.className = "hc-advanced-parameter-grid";
         for (const [key, definition] of parameterDefinitions(module)) {
+            if (!visibleParameter(key)) continue;
             const field = document.createElement("label");
             field.className = "hc-compact-field";
             field.append(code(key));
             const input = document.createElement("input");
             input.type = "text";
-            input.value = module.parameters[key] ?? definition.defaultValue ?? "";
+            input.value = module.parameters[key] ?? definition.defaultValue
+                ?? (key === "adjacencyMode" ? "EdgeOnly" : "");
             input.addEventListener("change", () => void setOverride(withParameter(module, pending.get(module.moduleKey), key, input.value)));
             field.append(input);
             if (definition.description) field.append(textElement("small", definition.description));
