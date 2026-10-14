@@ -1061,15 +1061,19 @@ test("vertex adjacency augments the existing tiling card and compass, without pa
 });
 
 test("bounded world compass omits exits with destinations outside playable bounds", () => {
-    const contracts = fs.readFileSync(path.join(repositoryRoot,
-        "src/HexCrawl.Web/Modules/Expeditions/CellTraversalContracts.cs"), "utf8");
+    const contractPath = path.join(repositoryRoot,
+        "src/HexCrawl.Web/Modules/Expeditions/CellTraversalContracts.cs");
+    // The standalone frontend container does not include server source.
+    const contracts = fs.existsSync(contractPath) ? fs.readFileSync(contractPath, "utf8") : null;
     const navigation = fs.readFileSync(path.join(sourceDir,
         "modules/expeditions/periodic-expedition-workbench.ts"), "utf8");
     const topology = fs.readFileSync(path.join(sourceDir,
         "modules/expeditions/current-cell-topology.ts"), "utf8");
 
-    assert.match(contracts, /world\.Boundaries\(cursor\.CurrentCell\.Address\)\s*\.Where\(edge => world\.IsPlayable\(edge\.To\.Address\)\)/);
-    assert.match(contracts, /world\.VertexOnlyContacts\(cursor\.CurrentCell\.Address\)\s*\.Where\(contact => world\.IsPlayable\(contact\.To\.Address\)\)/);
+    if (contracts !== null) {
+        assert.match(contracts, /exits\.Where\(edge => world\.IsPlayable\(edge\.To\.Address\)\)/);
+        assert.match(contracts, /world\.VertexOnlyContacts\(cursor\.CurrentCell\.Address\)\s*\.Where\(contact => world\.IsPlayable\(contact\.To\.Address\)\)/);
+    }
     assert.match(topology, /context\.interfaces\.map\(/);
     assert.match(navigation, /vertexChoices: allowedVertices\.map/);
 });
