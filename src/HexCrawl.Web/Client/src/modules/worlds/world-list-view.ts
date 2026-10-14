@@ -39,9 +39,9 @@ export async function renderWorldList(
                         </fieldset>
                         <fieldset class="hc-field-group">
                             <legend>Optional map bounds</legend>
-                            <label>Width (world units) <input name="mapWidth" type="number" min="0.000001" step="any" placeholder="Unbounded"></label>
-                            <label>Height (world units) <input name="mapHeight" type="number" min="0.000001" step="any" placeholder="Unbounded"></label>
-                            <p class="hc-hint">Leave both blank for an unbounded map. Bounds apply to all tile patterns, not only squares.</p>
+                            <label>Width (periods) <input name="mapWidth" type="number" min="1" step="1" placeholder="Unbounded"></label>
+                            <label>Height (periods) <input name="mapHeight" type="number" min="1" step="1" placeholder="Unbounded"></label>
+                            <p class="hc-hint">Leave both blank for an unbounded map. A period may include multiple cells in a mixed tiling.</p>
                         </fieldset>
                         <p class="hc-hint">Leave both calibration fields blank for cell-step worlds. Distance-based travel rules require physical calibration.</p>
                         <p class="hc-hint">The same optional world bounds apply to any selected tiling.</p>
@@ -186,8 +186,9 @@ export async function renderWorldList(
                     throw new Error("Provide both map dimensions, or leave both blank for an unbounded world.");
                 const width = widthText ? numeric(input(form, "mapWidth")) : null;
                 const height = heightText ? numeric(input(form, "mapHeight")) : null;
-                if ((width !== null && width <= 0) || (height !== null && height <= 0))
-                    throw new Error("Map dimensions must be positive.");
+                if ((width !== null && (!Number.isSafeInteger(width) || width <= 0))
+                    || (height !== null && (!Number.isSafeInteger(height) || height <= 0)))
+                    throw new Error("Map dimensions must be positive whole numbers of periodic tiling units.");
                 const world = await api.createPeriodicOverworld({
                     name: input(form, "name").value.trim(),
                     tilingDsSymbol: select(form, "tilingDsSymbol").value,
@@ -195,7 +196,7 @@ export async function renderWorldList(
                     origin: { x: 0, y: 0 },
                     rotationDegrees: 0,
                     ...(width === null || height === null ? {} : {
-                        playableBounds: { minX: 0, minY: 0, maxX: width, maxY: height }
+                        playableBounds: { width, height }
                     }),
                     ...(distance === null ? {} : {
                         physicalDistancePerWorldUnit: {
