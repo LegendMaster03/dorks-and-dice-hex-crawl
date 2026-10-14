@@ -1,5 +1,6 @@
 using HexCrawl.Application.Persistence;
 using HexCrawl.Domain.Procedure;
+using HexCrawl.Domain.Spatial;
 
 namespace HexCrawl.Application;
 
@@ -33,15 +34,16 @@ public sealed class ProcedureComposerService(CampaignProcedureService procedures
         IReadOnlyList<ProcedureModuleSelection> moduleSelections,
         IReadOnlyList<CampaignProcedureOverride> overrides,
         CancellationToken cancellationToken = default,
-        string? name = null)
+        string? name = null,
+        string? tilingDsSymbol = null)
     {
         var owner = RequireOwner(ownerUserId);
         ArgumentNullException.ThrowIfNull(moduleSelections);
         ArgumentNullException.ThrowIfNull(overrides);
         var source = await ResolveSourceAsync(owner, presetKey, procedureId, revision, cancellationToken);
-        var draft = ApplyName(
+        var draft = ApplyTiling(ApplyName(
             CampaignProcedureMaterializer.CreateDraft(source.Procedure, moduleSelections, overrides),
-            name);
+            name), tilingDsSymbol);
         var dependencies = draft.EvaluateDependencies();
         return new ProcedureComposerDraft(
             draft,
@@ -67,15 +69,16 @@ public sealed class ProcedureComposerService(CampaignProcedureService procedures
         IReadOnlyList<CampaignProcedureOverride> overrides,
         Guid? campaignId = null,
         CancellationToken cancellationToken = default,
-        string? name = null)
+        string? name = null,
+        string? tilingDsSymbol = null)
     {
         var owner = RequireOwner(ownerUserId);
         ArgumentNullException.ThrowIfNull(moduleSelections);
         ArgumentNullException.ThrowIfNull(overrides);
         var source = ResolveCreationSource(presetKey);
-        var procedure = ApplyName(
+        var procedure = ApplyTiling(ApplyName(
             CampaignProcedureMaterializer.CreateInitialRevision(source.Procedure, moduleSelections, overrides),
-            name);
+            name), tilingDsSymbol);
         procedure.Validate();
         return await procedures.CreateAsync(
             owner,
@@ -100,7 +103,8 @@ public sealed class ProcedureComposerService(CampaignProcedureService procedures
         IReadOnlyList<ProcedureModuleSelection> moduleSelections,
         IReadOnlyList<CampaignProcedureOverride> overrides,
         CancellationToken cancellationToken = default,
-        string? name = null)
+        string? name = null,
+        string? tilingDsSymbol = null)
     {
         var owner = RequireOwner(ownerUserId);
         if (procedureId == Guid.Empty)
@@ -113,7 +117,7 @@ public sealed class ProcedureComposerService(CampaignProcedureService procedures
         }
         ArgumentNullException.ThrowIfNull(moduleSelections);
         ArgumentNullException.ThrowIfNull(overrides);
-        if (moduleSelections.Count == 0 && overrides.Count == 0 && name is null)
+        if (moduleSelections.Count == 0 && overrides.Count == 0 && name is null && tilingDsSymbol is null)
         {
             throw new InvalidOperationException("Saving a new procedure revision requires at least one explicit change.");
         }
@@ -125,9 +129,9 @@ public sealed class ProcedureComposerService(CampaignProcedureService procedures
                 $"Campaign procedure revision {expectedRevision} is stale; the current revision is {current.Revision}.");
         }
 
-        var draft = ApplyName(
+        var draft = ApplyTiling(ApplyName(
             CampaignProcedureMaterializer.CreateDraft(current.Procedure, moduleSelections, overrides),
-            name);
+            name), tilingDsSymbol);
         draft.Validate();
 
         // Override records are audit/history metadata. A newly submitted override that resolves to
@@ -337,6 +341,16 @@ public sealed class ProcedureComposerService(CampaignProcedureService procedures
         return keys
             .Select(ProcedureComposerCustomProcedureFactory.CreateDefaultModule)
             .ToArray();
+    }
+
+    private static CampaignProcedure ApplyTiling(CampaignProcedure procedure, string? symbol)
+    {
+        if (symbol is null) return procedure;
+        var inspection = DelaneyDressTopology.Inspect(symbol, 2048);
+        if (inspection.Status != DelaneyDressStatus.Euclidean)
+            throw new InvalidOperationException(
+                "Campaign procedure tiling must be a structurally valid supported Euclidean Delaney-Dress symbol.");
+        return procedure with { TilingDsSymbol = inspection.Symbol!.Canonical };
     }
 
     private static CampaignProcedure ApplyName(CampaignProcedure procedure, string? name)

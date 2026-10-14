@@ -1014,3 +1014,23 @@ test("the active polygonal workbench resolves pace without browser-stored axial 
     assert.match(pace, /keys\.includes\(selected\)/);
     assert.doesNotMatch(periodic, /loadTravelPreferences|mergeRuntimeTravelPreferences|normalizeTravelDirectionPreference/);
 });
+
+test("Tiling presentation uses shared geometry and editor selections", () => {
+    const workspace = fs.readFileSync(
+        path.join(sourceDir, "modules/procedures/procedure-authoring-view.ts"), "utf8");
+    const preview = fs.readFileSync(
+        path.join(sourceDir, "modules/procedures/tiling-preview.ts"), "utf8");
+    const mapRenderer = fs.readFileSync(
+        path.join(sourceDir, "canvas-renderer.ts"), "utf8");
+    const api = fs.readFileSync(
+        path.join(sourceDir, "procedure-composer-api.ts"), "utf8");
+
+    assert.match(api, /\/api\/procedures\/tilings/);
+    assert.match(workspace, /Filter by tiling/);
+    assert.match(workspace, /tilingPreview\(tiling\)/);
+    assert.match(workspace, /tilingDsSymbol: tilingOverride/);
+    assert.match(workspace, /selectableTilings\(tilings\)/);
+    assert.match(preview, /traceTilePolygon/);
+    assert.match(mapRenderer, /traceTilePolygon/);
+    assert.doesNotMatch(preview, /case "hex"|case "triangle"|case "square"/);
+});

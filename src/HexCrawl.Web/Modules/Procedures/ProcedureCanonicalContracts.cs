@@ -6,7 +6,8 @@ public sealed record ProcedureCanonicalDraftRequest(
     int? Revision,
     string? Name,
     IReadOnlyList<ProcedureComposerModuleSelectionRequest>? ModuleSelections,
-    IReadOnlyList<ProcedureComposerOverrideRequest>? Overrides);
+    IReadOnlyList<ProcedureComposerOverrideRequest>? Overrides,
+    string? TilingDsSymbol = null);
 
 public sealed record ProcedureCanonicalValidationRequest(string CanonicalJson);
 

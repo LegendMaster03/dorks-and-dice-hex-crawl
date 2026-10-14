@@ -12,20 +12,23 @@ public sealed record ProcedureComposerDraftRequest(
     int? Revision,
     string? Name,
     IReadOnlyList<ProcedureComposerModuleSelectionRequest>? ModuleSelections,
-    IReadOnlyList<ProcedureComposerOverrideRequest>? Overrides);
+    IReadOnlyList<ProcedureComposerOverrideRequest>? Overrides,
+    string? TilingDsSymbol = null);
 
 public sealed record ProcedureComposerCreateRequest(
     string? PresetKey,
     Guid? CampaignId,
     string? Name,
     IReadOnlyList<ProcedureComposerModuleSelectionRequest>? ModuleSelections,
-    IReadOnlyList<ProcedureComposerOverrideRequest>? Overrides);
+    IReadOnlyList<ProcedureComposerOverrideRequest>? Overrides,
+    string? TilingDsSymbol = null);
 
 public sealed record ProcedureComposerRevisionRequest(
     int ExpectedRevision,
     string? Name,
     IReadOnlyList<ProcedureComposerModuleSelectionRequest>? ModuleSelections,
-    IReadOnlyList<ProcedureComposerOverrideRequest>? Overrides);
+    IReadOnlyList<ProcedureComposerOverrideRequest>? Overrides,
+    string? TilingDsSymbol = null);
 
 public sealed record ProcedureComposerModuleSelectionRequest(string ModuleKey, bool Included)
 {

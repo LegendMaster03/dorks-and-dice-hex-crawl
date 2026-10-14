@@ -1,8 +1,20 @@
 import type {
     ProcedureComposerOverrideInput,
     ProcedureModuleComposer,
-    ProcedureParameterDefinition
+    ProcedureParameterDefinition,
+    TilingCatalogEntry
 } from "../../procedure-composer-types";
+
+export function selectableTilings(entries: TilingCatalogEntry[]): TilingCatalogEntry[] {
+    return entries.filter(entry => entry.showInRulesetSelector);
+}
+
+export function hasSaveableComposerChanges(
+    mode: string, structuredChanges: boolean, jsonText: string, jsonBaseline: string): boolean {
+    return mode === "json"
+        ? jsonText.length > 0 && (structuredChanges || jsonText !== jsonBaseline)
+        : structuredChanges;
+}
 
 export const composerSectionOrder = [
     "Time",

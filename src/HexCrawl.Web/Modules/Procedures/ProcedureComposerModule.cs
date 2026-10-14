@@ -1,3 +1,5 @@
+using HexCrawl.Domain.Presentation;
+using HexCrawl.Domain.Spatial;
 using System.Security.Claims;
 using HexCrawl.Application;
 using HexCrawl.Web.Framework;
@@ -22,6 +24,7 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
 
     public void MapEndpoints(RouteGroupBuilder api)
     {
+        api.MapGet("/procedures/tilings", ListTilings);
         api.MapPost("/procedures/composer/draft", ComposeDraftAsync);
         api.MapPost("/procedures/composer/canonical/draft", ComposeCanonicalDraftAsync);
         api.MapPost("/procedures/composer/canonical/validate", ValidateCanonicalAsync);
@@ -37,6 +40,38 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
         api.MapPost("/procedures/{procedureId:guid}/canonical/revisions", CreateCanonicalProcedureRevisionAsync);
     }
 
+    private sealed record NamedTilingOption(
+        string DsSymbol,
+        string DisplayName,
+        bool ShowInRulesetSelector,
+        PeriodicMetricRealization? Realization);
+
+    private static readonly Lazy<IReadOnlyList<NamedTilingOption>> TilingOptions =
+        new(BuildTilingOptions);
+
+    private static IReadOnlyList<NamedTilingOption> BuildTilingOptions()
+    {
+        var result = CrawlTilingNames.Catalog.ListEntries()
+            .Select(entry => new NamedTilingOption(
+                entry.CanonicalDsSymbol, entry.PreferredName, entry.ShowInRulesetSelector,
+                CrawlTilingNames.RepresentativePreview(entry))).ToList();
+        var known = result.Select(entry => entry.DsSymbol).ToHashSet(StringComparer.Ordinal);
+        // A new preset need not be present in the friendly-name vocabulary to be usable.
+        foreach (var preset in CrawlProcedureCatalog.Catalog)
+        {
+            var symbol = preset.MaterializeGeneric().Procedure.TilingDsSymbol;
+            if (!known.Add(symbol)) continue;
+            var generated = DelaneyDressHarmonicMetricRealization.Construct(symbol, 1, "unit");
+            var metric = generated.Status == "realized" ? generated.Realization : null;
+            var label = CrawlTilingNames.Catalog.Describe(symbol, metric)?.Label
+                ?? "Unlisted repeating tile pattern";
+            result.Add(new NamedTilingOption(symbol, label, false, metric));
+        }
+        return result;
+    }
+
+    private static IResult ListTilings() => Results.Ok(TilingOptions.Value);
+
     private static async Task<IResult> ComposeDraftAsync(
         ProcedureComposerDraftRequest request,
         HttpContext context,
@@ -51,7 +86,8 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
             ModuleSelections(request.ModuleSelections),
             Overrides(request.Overrides),
             cancellationToken,
-            request.Name);
+            request.Name,
+            request.TilingDsSymbol);
         return Results.Ok(ProcedureComposerContract.From(draft));
     }
 
@@ -70,7 +106,8 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
             ModuleSelections(request.ModuleSelections),
             Overrides(request.Overrides),
             cancellationToken,
-            request.Name);
+            request.Name,
+            request.TilingDsSymbol);
         var canonicalJson = canonical.Serialize(draft.Procedure);
 
         return Results.Ok(new ProcedureCanonicalJsonContract(
@@ -116,7 +153,8 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
             Overrides(request.Overrides),
             request.CampaignId,
             cancellationToken,
-            request.Name);
+            request.Name,
+            request.TilingDsSymbol);
         var draft = await service.CreateDraftAsync(
             owner,
             null,
@@ -242,7 +280,8 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
             ModuleSelections(request.ModuleSelections),
             Overrides(request.Overrides),
             cancellationToken,
-            request.Name);
+            request.Name,
+            request.TilingDsSymbol);
         var draft = await service.CreateDraftAsync(
             owner,
             null,
