@@ -19,7 +19,8 @@ public sealed record TilingNameEntry(
     string Description,
     string Provenance,
     string? LocalizationKey = null,
-    TilingGeometryQualifier? Geometry = null);
+    TilingGeometryQualifier? Geometry = null,
+    bool ShowInRulesetSelector = true);
 public sealed record TilingDisplayDescription(string Label, bool IsNamed, string CanonicalDsSymbol);
 
 public enum TilingNotationSurface { Normal, JsonEditor, MissingSupportedNameError }
@@ -55,6 +56,14 @@ public sealed class TilingNomenclatureCatalog
         }
         entries = grouped;
     }
+
+    /// <summary>Enumerates presentation vocabulary; this is not an allowlist of valid tilings.</summary>
+    public IReadOnlyList<TilingNameEntry> ListEntries(bool rulesetSelectorOnly = false) =>
+        entries.Values.SelectMany(group => group)
+            .Where(entry => !rulesetSelectorOnly || entry.ShowInRulesetSelector)
+            .OrderBy(entry => entry.PreferredName, StringComparer.Ordinal)
+            .ThenBy(entry => entry.CanonicalDsSymbol, StringComparer.Ordinal)
+            .ToArray();
 
     public TilingDisplayDescription? Describe(
         string dsSymbol,
