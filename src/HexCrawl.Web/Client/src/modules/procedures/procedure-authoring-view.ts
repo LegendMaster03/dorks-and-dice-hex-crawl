@@ -729,6 +729,10 @@ export async function renderProcedureAuthoringWorkspace(
                 choices.append(option);
             }
             tilingField.append(choices);
+            const mapBounds = draft!.playableBounds;
+            tilingField.append(textElement("p", mapBounds
+                ? `Map limit: ${mapBounds.width} × ${mapBounds.height} periodic units. Origin: (${mapBounds.minU}, ${mapBounds.minV}).`
+                : "Map limit: Unbounded."));
             const movement = draft!.modules.find(module => module.moduleKey === "movement.resolution");
             if (movement && supportsVertexAdjacency(tilings, draft!.tilingDsSymbol)) {
                 const adjacency = document.createElement("label");
