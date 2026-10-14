@@ -509,7 +509,9 @@ export async function renderProcedureAuthoringWorkspace(
         card.className = "hc-panel hc-preset-card";
         const head = document.createElement("div");
         head.className = "hc-preset-card-head";
-        head.append(textElement("h3", preset.displayName), textElement("p", presetTagline(preset)));
+        const heading = document.createElement("div");
+        heading.append(textElement("h3", preset.displayName), textElement("p", presetTagline(preset)));
+        head.append(heading);
         const tiling = tilings.find(t => t.dsSymbol === preset.procedure.tilingDsSymbol);
         const preview = tilingPreview(tiling);
         preview.title = tiling?.displayName ?? "Unlisted tiling";
