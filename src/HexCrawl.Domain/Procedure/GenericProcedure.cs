@@ -1,4 +1,5 @@
 using HexCrawl.Domain.Spatial;
+using System.Text.Json.Serialization;
 namespace HexCrawl.Domain.Procedure;
 
 public enum ProcedureAutomationLevel
@@ -365,6 +366,7 @@ public sealed record CampaignProcedure
     public required string Name { get; init; }
     public string SchemaVersion { get; init; } = CampaignProcedureSchema.CurrentVersion;
     public string TilingDsSymbol { get; init; } = CampaignProcedureSchema.CurrentHexTilingDsSymbol;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public PeriodicMapBounds? PlayableBounds { get; init; }
     public required IReadOnlyList<MaterializedProcedureModule> Modules { get; init; }
     public IReadOnlyList<CampaignProcedureOverride> Overrides { get; init; } = [];
