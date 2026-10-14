@@ -41,7 +41,7 @@ export function ensurePhase15Styles(): void {
         .hc-procedure-tiling-picker h3, .hc-procedure-tiling-picker p { margin:0; }
         .hc-procedure-tiling-picker details { max-width:28rem; }
         .hc-procedure-tiling-picker details > button { background:var(--hc-surface); color:var(--hc-text); cursor:pointer; }
-        .hc-procedure-tiling-picker details > button[aria-pressed="true"] { border-color:var(--hc-accent); }
+        .hc-procedure-tiling-picker details > button[aria-pressed="true"] { border-color:var(--hc-primary); }
         .hc-procedure-tiling-picker details > button:disabled { cursor:default; opacity:.7; }
         .hc-preset-caution { margin:0; padding:.55rem .65rem; border-inline-start:3px solid var(--hc-warning); background:var(--hc-warning-bg); color:var(--hc-warning-text); font-size:.88rem; }
         .hc-preset-card-head p { margin:.3rem 0 0; color:var(--hc-muted); }
