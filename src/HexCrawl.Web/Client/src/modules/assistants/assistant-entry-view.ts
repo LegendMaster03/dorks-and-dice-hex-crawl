@@ -86,7 +86,7 @@ export async function renderAssistantEntry(
                                         </select>
                                     </label>
                                 </div>
-                                <p class="hc-hint">Optional for cell-step rulesets. Distance-based rules require a physical scale and unit.</p>
+                                <p class="hc-hint" data-calibration-hint>Optional for cell-step rulesets. Distance-based rules require a physical scale and unit.</p>
                             </fieldset>
                             <div class="hc-form" data-custom-unit hidden>
                                 <label>Custom symbol <input name="symbol" autocomplete="off"></label>
@@ -139,6 +139,7 @@ export async function renderAssistantEntry(
 
     const mode = form.querySelector<HTMLSelectElement>('select[name="mode"]');
     const unit = select(form, "unit");
+    let calibrationRequired = false;
 
     const usesAbstract = (): boolean =>
         assistant === "navigation" || (assistant === "travel" && mode?.value === "abstract");
@@ -148,9 +149,12 @@ export async function renderAssistantEntry(
         abstractPanel.hidden = !abstract;
         nonSpatialPanel.hidden = abstract;
         input(form, "contextName").required = abstract;
-        input(form, "scale").required = false;
-        unit.required = false;
+        input(form, "scale").required = abstract && calibrationRequired;
+        unit.required = abstract && calibrationRequired;
         input(form, "nonSpatialName").required = !abstract;
+        required<HTMLElement>(form, "[data-calibration-hint]").textContent = calibrationRequired
+            ? "This distance-based ruleset requires physical distance and unit."
+            : "Physical scale is optional for cell-step exploration. Leave both fields empty to run uncalibrated.";
         syncUnit();
     };
 
@@ -165,6 +169,8 @@ export async function renderAssistantEntry(
         const mechanics = required<HTMLElement>(form, "[data-procedure-mechanics]");
         mechanics.replaceChildren();
         if (!procedure.value) {
+            calibrationRequired = false;
+            syncMode();
             required<HTMLElement>(form, "[data-procedure-summary]").textContent = "No procedure is available.";
             submit.disabled = true;
             return;
@@ -176,6 +182,8 @@ export async function renderAssistantEntry(
             startChoiceSummary(choice, savedProcedures, presets);
         if (choice.kind === "preset") {
             const preset = presets.find(candidate => candidate.presetKey === choice.presetKey);
+            calibrationRequired = preset?.procedure.runtime?.travelResolution === "ContinuousDistance";
+            syncMode();
             if (preset) {
                 required<HTMLElement>(form, "[data-procedure-summary]").textContent =
                     `${preset.description} · ${campaignProcedureSummary(preset.procedure)} · creates a new saved procedure when the assistant session begins`;
@@ -187,6 +195,9 @@ export async function renderAssistantEntry(
 
         const saved = await composerApi.getProcedure(choice.procedureId, choice.revision);
         if (disposed || procedure.value !== selectedValue) return;
+        calibrationRequired = saved.modules.some(module => module.moduleKey === "movement.resolution"
+            && module.parameters.travelResolution === "ContinuousDistance");
+        syncMode();
         for (const module of saved.modules) {
             const item = document.createElement("li");
             item.textContent = `${module.displayName}: ${module.mechanic.displayName}`;

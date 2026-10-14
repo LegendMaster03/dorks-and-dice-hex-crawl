@@ -74,8 +74,12 @@ test("crawl creation surfaces do not assume a 12-mile physical scale", () => {
         assert.doesNotMatch(source, /name="(?:meters|metersPerUnit)"[^>]*value="1"/);
     }
     assert.match(world, /Physical map scale/);
-    assert.match(home, /unit\.required = false/);
-    assert.match(assistant, /unit\.required = false/);
+    assert.match(home, /unit\.required = requiredScale/);
+    assert.match(assistant, /unit\.required = abstract && calibrationRequired/);
+    for (const source of [home, assistant]) {
+        assert.match(source, /runtime\?\.travelResolution === "ContinuousDistance"/);
+        assert.match(source, /module\.parameters\.travelResolution === "ContinuousDistance"/);
+    }
     assert.match(home, /Boolean\(scaleText\) !== Boolean\(unitKind\)/);
     assert.match(assistant, /Boolean\(scaleText\) !== Boolean\(unitKind\)/);
     assert.match(world, /Boolean\(scaleText\) !== Boolean\(unit\)/);

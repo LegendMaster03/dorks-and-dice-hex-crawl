@@ -87,7 +87,7 @@ export async function renderToolHome(
                                         <label>Distance <input name="scale" type="number" min="0.001" step="any" placeholder="Optional for cell steps"></label>
                                         <label>Unit <select name="unit"><option value="">Select unit</option><option value="Mile">Miles</option><option value="Kilometer">Kilometers</option><option value="Custom">Custom</option></select></label>
                                     </div>
-                                    <p class="hc-hint">Optional for cell-step exploration. Distance-based rules require a positive physical scale and unit.</p>
+                                    <p class="hc-hint" data-calibration-hint>Optional for cell-step exploration. Distance-based rules require a positive physical scale and unit.</p>
                                 </fieldset>
                                 <div class="hc-form" data-custom-unit hidden>
                                     <label>Custom symbol <input name="symbol" autocomplete="off"></label>
@@ -228,6 +228,15 @@ export async function renderToolHome(
     const composerApi = await ProcedureComposerApi.create(root);
 
     const periodicStart = required<HTMLElement>(form, "[data-periodic-start]");
+    let calibrationRequired = false;
+    const syncCalibration = (): void => {
+        const requiredScale = context.value === ABSTRACT_CONTEXT && calibrationRequired;
+        input(form, "scale").required = requiredScale;
+        unit.required = requiredScale;
+        required<HTMLElement>(form, "[data-calibration-hint]").textContent = calibrationRequired
+            ? "This distance-based ruleset requires physical distance and unit."
+            : "Physical scale is optional for cell-step exploration. Leave both fields empty to run uncalibrated.";
+    };
     const syncContext = (): void => {
         const abstract = context.value === ABSTRACT_CONTEXT;
         const nonSpatial = context.value === NON_SPATIAL_CONTEXT;
@@ -236,8 +245,7 @@ export async function renderToolHome(
         const spatial = Boolean(context.value) && !nonSpatial;
         periodicStart.hidden = !(spatial && selectedWorld !== null);
         input(form, "contextName").required = abstract;
-        input(form, "scale").required = false;
-        unit.required = false;
+        syncCalibration();
         select(form, "motifCellId").required = !periodicStart.hidden;
         input(form, "u").required = !periodicStart.hidden;
         input(form, "v").required = !periodicStart.hidden;
@@ -286,14 +294,19 @@ export async function renderToolHome(
         mechanics.replaceChildren();
         rulesNext.disabled = !procedure.value;
         if (!procedure.value) {
+            calibrationRequired = false;
+            syncCalibration();
             required<HTMLElement>(form, "[data-procedure-summary]").textContent = "No runnable exploration ruleset is available.";
             return;
         }
-        const choice = readProcedureStartChoice(procedure.value);
+        const selectedValue = procedure.value;
+        const choice = readProcedureStartChoice(selectedValue);
         required<HTMLElement>(form, "[data-procedure-summary]").textContent =
             startChoiceSummary(choice, savedProcedures, presets);
         if (choice.kind === "preset") {
             const preset = presets.find(candidate => candidate.presetKey === choice.presetKey);
+            calibrationRequired = preset?.procedure.runtime?.travelResolution === "ContinuousDistance";
+            syncCalibration();
             if (preset) {
                 required<HTMLElement>(form, "[data-procedure-summary]").textContent =
                     `${preset.description} · ${campaignProcedureSummary(preset.procedure)} · saves an editable campaign copy when play begins`;
@@ -302,6 +315,10 @@ export async function renderToolHome(
             return;
         }
         const saved = await composerApi.getProcedure(choice.procedureId, choice.revision);
+        if (disposed || procedure.value !== selectedValue) return;
+        calibrationRequired = saved.modules.some(module => module.moduleKey === "movement.resolution"
+            && module.parameters.travelResolution === "ContinuousDistance");
+        syncCalibration();
         for (const module of saved.modules) {
             const item = document.createElement("li");
             item.textContent = `${module.displayName}: ${module.mechanic.displayName}`;
