@@ -149,6 +149,7 @@ export type PeriodicWorldTiling = {
     origin: WorldPoint;
     topology: { motifCells: { id: string }[]; quotientDsSymbol: string };
     physicalDistancePerWorldUnit: DistanceValue | null;
+    playableBounds?: { minX: number; minY: number; maxX: number; maxY: number } | null;
 };
 
 export type Overworld = {
