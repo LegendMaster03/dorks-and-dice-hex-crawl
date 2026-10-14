@@ -51,8 +51,8 @@ class DeploymentTimingTests(unittest.TestCase):
         workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/deploy.yml").read_text()
         job_header = workflow.split("jobs:\n  deploy:", 1)[1].split("\n    steps:", 1)[0]
         build_step = workflow.split("      - name: Build image\n", 1)[1].split("      - name:", 1)[0]
-        job_timeout = int(re.search(r"(?m)^    timeout-minutes: (\\d+)$", job_header).group(1))
-        build_timeout = int(re.search(r"(?m)^        timeout-minutes: (\\d+)$", build_step).group(1))
+        job_timeout = int(re.search(r"(?m)^    timeout-minutes: (\d+)$", job_header).group(1))
+        build_timeout = int(re.search(r"(?m)^        timeout-minutes: (\d+)$", build_step).group(1))
         self.assertGreaterEqual(build_timeout, 20)
         self.assertGreaterEqual(job_timeout, build_timeout + 25)
         self.assertIn('measure-action.py "Build image"', build_step)
