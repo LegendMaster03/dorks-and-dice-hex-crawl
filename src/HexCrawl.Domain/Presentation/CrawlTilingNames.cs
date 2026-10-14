@@ -1,4 +1,4 @@
-using HexCrawl.Domain.Presentation;
+using HexCrawl.Domain.Spatial;
 
 namespace HexCrawl.Domain.Presentation;
 
@@ -24,4 +24,32 @@ public static class CrawlTilingNames
             "A periodic tessellation of rhombi", "Phase 16 metric fixture",
             Geometry: new(4, EqualSideLengths: true))
     ]);
+
+    /// <summary>Finds a verified geometric representative; never infers regularity from topology alone.</summary>
+    public static PeriodicMetricRealization? RepresentativePreview(TilingNameEntry entry)
+    {
+        var candidates = new (double U, double V, double Angle)[]
+        {
+            (1, 1, 90), (1, 1, 60), (1, 1, 120),
+            (1, Math.Sqrt(3), 60), (Math.Sqrt(3), 1, 60),
+            (1, Math.Sqrt(3), 90), (Math.Sqrt(3), 1, 90)
+        };
+        foreach (var (u, v, angle) in candidates)
+        {
+            TilingMetricConstraint[] constraints =
+            [
+                new("period-u-length", "unit", u, u),
+                new("period-v-length", "unit", v, v),
+                new("period-angle-degrees", "degrees", angle, angle)
+            ];
+            var candidate = DelaneyDressHarmonicMetricRealization.Construct(
+                entry.CanonicalDsSymbol, 1, "unit", constraints: constraints);
+            if (candidate.Status != "realized" || candidate.Realization is null) continue;
+            var resolved = Catalog.Describe(entry.CanonicalDsSymbol, candidate.Realization);
+            if (resolved is { IsNamed: true }
+                && string.Equals(resolved.Label, entry.PreferredName, StringComparison.Ordinal))
+                return candidate.Realization;
+        }
+        return null;
+    }
 }
