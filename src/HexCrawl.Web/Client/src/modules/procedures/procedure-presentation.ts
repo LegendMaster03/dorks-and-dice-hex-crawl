@@ -127,6 +127,8 @@ const labels: Record<string, string> = {
     firstVisitAction: "New location action",
     repeatVisitAction: "Previously visited action",
     restSiteAction: "Rest-site action",
+    actionSelectionStageKey: "Action selection stage",
+    actionResolutionStageKey: "Action resolution stage",
     progressFloor: "Minimum progress",
     progressCeiling: "Maximum progress",
     allowNegativeProgress: "Allow lost progress",

@@ -80,6 +80,62 @@ public sealed class Phase20ExplorationFlowEndpointsTests
 
                 for (var index = 0; index < stageKeys.Length; index++)
                 {
+                    if (presetKey == CrawlProcedureCatalog.WastelandWarfarePresetKey && index == 1)
+                    {
+                        // A selected action creates an unresolved event; resolving the
+                        // existing generic event atomically completes the action stage.
+                        using var recorded = await client.PostAsJsonAsync(
+                            $"/api/expeditions/{expeditionId:D}/journeys/exploration-cell",
+                            new
+                            {
+                                expectedVersion = version,
+                                operationId = Guid.NewGuid(),
+                                processId, actionKey = "explore", markVisited = true,
+                                markRestSite = false, provenance = Provenance("record-action")
+                            }, JsonOptions);
+                        recorded.EnsureSuccessStatusCode();
+                        journey = (await recorded.Content.ReadFromJsonAsync<JsonElement>())
+                            .GetProperty("state");
+                        version = journey.GetProperty("expeditionVersion").GetInt64();
+                        Assert.Equal(stageKeys[index], journey.GetProperty("activeProcesses")[0]
+                            .GetProperty("currentStageKey").GetString());
+                        var eventId = journey.GetProperty("eventOccurrences")[0].GetProperty("id").GetGuid();
+
+                        using var bypass = await client.PostAsJsonAsync(
+                            $"/api/expeditions/{expeditionId:D}/journeys/processes/{processId:D}/resolve",
+                            new
+                            {
+                                expectedVersion = version,
+                                captureCurrentEnvironment = false,
+                                resolution = new
+                                {
+                                    resolutionId = Guid.NewGuid(), processId,
+                                    stageKey = stageKeys[index], completeStage = true,
+                                    consequences = Array.Empty<object>(), provenance = Provenance("bypass")
+                                }
+                            }, JsonOptions);
+                        Assert.Equal(HttpStatusCode.BadRequest, bypass.StatusCode);
+
+                        using var encounter = await client.PostAsJsonAsync(
+                            $"/api/expeditions/{expeditionId:D}/journeys/events/{eventId:D}/resolve",
+                            new
+                            {
+                                expectedVersion = version,
+                                captureCurrentEnvironment = false,
+                                resolution = new
+                                {
+                                    occurrenceId = eventId, status = "Resolved",
+                                    eventKey = "resolved-encounter", targetKind = "Expedition",
+                                    consequences = Array.Empty<object>(), provenance = Provenance("resolve-encounter")
+                                }
+                            }, JsonOptions);
+                        encounter.EnsureSuccessStatusCode();
+                        journey = (await encounter.Content.ReadFromJsonAsync<JsonElement>())
+                            .GetProperty("state");
+                        version = journey.GetProperty("expeditionVersion").GetInt64();
+                        continue;
+                    }
+
                     using var resolved = await client.PostAsJsonAsync(
                         $"/api/expeditions/{expeditionId:D}/journeys/processes/{processId:D}/resolve",
                         new
@@ -91,6 +147,8 @@ public sealed class Phase20ExplorationFlowEndpointsTests
                                 resolutionId = Guid.NewGuid(),
                                 processId,
                                 stageKey = stageKeys[index],
+                                outcomeKey = presetKey == CrawlProcedureCatalog.WastelandWarfarePresetKey
+                                    ? "explore" : null,
                                 successDelta = 0,
                                 failureDelta = 0,
                                 complicationDelta = 0,
@@ -114,6 +172,9 @@ public sealed class Phase20ExplorationFlowEndpointsTests
                 Assert.Equal(processId,
                     journey.GetProperty("closedProcesses")[0].GetProperty("id").GetGuid());
                 Assert.Equal(expectedStages, journey.GetProperty("resolutions").GetArrayLength());
+                if (presetKey == CrawlProcedureCatalog.WastelandWarfarePresetKey)
+                    Assert.Equal("Resolved", journey.GetProperty("eventOccurrences")[0]
+                        .GetProperty("status").GetString());
             }
 
             using (var restarted = TestWebHost.Create(database, "alice"))

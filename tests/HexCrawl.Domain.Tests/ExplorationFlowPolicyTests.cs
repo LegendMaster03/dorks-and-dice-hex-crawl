@@ -43,6 +43,25 @@ public sealed class ExplorationFlowPolicyTests
     }
 
     [Fact]
+    public void ActionDrivenStagesRequireAdjacentStagesAndConfiguredActions()
+    {
+        new ExplorationFlowPolicy(
+            ["choose", "resolve", "journal"],
+            ExplorationDiscoveryTrigger.OnExplore,
+            ExplorationEncounterTrigger.OnExploreOrOptionalTravel,
+            "explore", "travel", "rest", "choose", "resolve").Validate();
+
+        Assert.Throws<InvalidOperationException>(() => new ExplorationFlowPolicy(
+            ["choose", "resolve"], ExplorationDiscoveryTrigger.OnExplore,
+            ExplorationEncounterTrigger.Manual,
+            "explore", "travel", "rest", "choose", null).Validate());
+        Assert.Throws<InvalidOperationException>(() => new ExplorationFlowPolicy(
+            ["choose", "journal", "resolve"], ExplorationDiscoveryTrigger.OnExplore,
+            ExplorationEncounterTrigger.Manual,
+            "explore", "travel", "rest", "choose", "resolve").Validate());
+    }
+
+    [Fact]
     public void InvalidStagesAndUnknownTriggersAreRejected()
     {
         Assert.Throws<InvalidOperationException>(() => new ExplorationFlowPolicy(
