@@ -29,6 +29,19 @@ public sealed class Phase19RasterRegistrationTests
     }
 
     [Fact]
+    public void ConstructedMotifCorrectionRetainsFiniteWorldWindow()
+    {
+        var (world, observed) = Fixture("<1:1,1,1:4,4>");
+        var bounded = world with { PlayableBounds = new PeriodicMapBounds(5, 5, -2, -2) };
+        var corrected = Phase19RasterRegistration.ConstructReplacement(bounded, observed);
+        Assert.NotNull(corrected);
+        Assert.Equal(bounded.PlayableBounds, corrected.PlayableBounds);
+        Assert.Equal(bounded.Origin, corrected.Origin);
+        Assert.Equal(bounded.Revision + 1, corrected.Revision);
+        Assert.NotEqual(bounded.Id, corrected.Id);
+    }
+
+    [Fact]
     public void RasterMismatchOrIncompleteMetricCannotBeAccepted()
     {
         var (world, observed) = Fixture("<1:1,1,1:4,4>");

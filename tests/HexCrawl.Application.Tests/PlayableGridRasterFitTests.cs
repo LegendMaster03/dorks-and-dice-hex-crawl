@@ -41,6 +41,53 @@ public sealed class PlayableGridRasterFitTests
             new WorldPoint(corners[1].X + periods * v.X, corners[1].Y + periods * v.Y)));
     }
 
+    [Theory]
+    [InlineData(5, 5, -2, -2, 1200, 900, 0)]
+    [InlineData(9, 9, -4, -4, 1800, 1600, 19)]
+    [InlineData(4, 7, 6, -8, 1250, 900, 23)]
+    public void AllPrintedCellCornersAlignOnRotatedAndOffsetFiniteGrids(
+        int width, int height, int minU, int minV,
+        int imageWidth, int imageHeight, double rotation)
+    {
+        var realized = DelaneyDressHarmonicMetricRealization.Construct(
+            "<1:1,1,1:4,4>", 1, "world-unit", rotationDegrees: rotation);
+        Assert.Equal("realized", realized.Status);
+        var tiling = new PeriodicWorldTiling(
+            Guid.NewGuid(), realized.Topology!, realized.Realization!,
+            new WorldPoint(5, -3))
+        {
+            PlayableBounds = new PeriodicMapBounds(width, height, minU, minV)
+        };
+        var fit = PlayableGridRasterFit.Calculate(tiling, imageWidth, imageHeight);
+        for (var u = 0; u < width; u++)
+        for (var v = 0; v < height; v++)
+        {
+            var cell = tiling.Resolve(new PeriodicCellAddress(
+                tiling.Topology.MotifCells[0].Id,
+                new LatticeDisplacement(minU + u, minV + v)));
+            var rasterCorner = fit.ToWorld(new WorldPoint(
+                (double)u * imageWidth / width, (double)v * imageHeight / height));
+            Assert.Contains(cell.Polygon, point => Close(point, rasterCorner));
+        }
+        Assert.True(double.IsFinite(fit.M11) && double.IsFinite(fit.M22));
+    }
+
+    [Fact]
+    public void NonQuadrilateralGridDoesNotOfferFullBleedImageFit()
+    {
+        var realized = DelaneyDressHarmonicMetricRealization.Construct(
+            "<1:1,1,1:6,3>", 1, "world-unit");
+        Assert.Equal("realized", realized.Status);
+        var tiling = new PeriodicWorldTiling(
+            Guid.NewGuid(), realized.Topology!, realized.Realization!,
+            new WorldPoint(0, 0))
+        {
+            PlayableBounds = new PeriodicMapBounds(5, 5, -2, -2)
+        };
+        Assert.Throws<InvalidOperationException>(() =>
+            PlayableGridRasterFit.Calculate(tiling, 1024, 1024));
+    }
+
     [Fact]
     public void UnboundedMapIsNotFittedToAnArbitraryImageSize()
     {

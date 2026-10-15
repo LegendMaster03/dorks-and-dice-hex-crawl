@@ -22,6 +22,15 @@ public sealed class Phase19UnusedWorldCorrectionTests
             var newTiling = BuildTiling("<1:1,1,1:3,6>", revision: 2);
             var alignment = MapRegistrationTransform.Affine(.01, 0, 0, .01, 10, 20);
             var sourceMaps = new SourceMapApplicationService(store);
+            await Assert.ThrowsAsync<ArgumentException>(() =>
+                sourceMaps.ReplaceUnusedPeriodicWorldAsync(
+                    original.World.Id, sourceId, "alice",
+                    newTiling with { PlayableBounds = null }, alignment, 1));
+            var beforeCorrection = await store.GetOverworldAsync(original.World.Id, "alice");
+            Assert.NotNull(beforeCorrection);
+            Assert.Equal(1L, beforeCorrection!.Version);
+            Assert.Equal(new PeriodicMapBounds(5, 5, -2, -2),
+                beforeCorrection.World.SpatialTiling.PlayableBounds);
             var corrected = await sourceMaps.ReplaceUnusedPeriodicWorldAsync(
                 original.World.Id, sourceId, "alice", newTiling, alignment, 1);
             Assert.Equal(2L, corrected.Version);

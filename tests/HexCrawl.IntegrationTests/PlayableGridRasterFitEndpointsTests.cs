@@ -57,6 +57,18 @@ public sealed class PlayableGridRasterFitEndpointsTests
                 var alignment = proposal.GetProperty("alignment");
                 Assert.Equal("Affine", alignment.GetProperty("kind").GetString());
 
+                using (var otherHost = TestWebHost.Create(database, "bob"))
+                using (var other = otherHost.CreateClient())
+                {
+                    using var deniedPreview = await other.GetAsync(
+                        $"/api/overworlds/{worldId:D}/source-maps/{sourceMapId:D}/playable-grid-fit");
+                    Assert.Equal(HttpStatusCode.NotFound, deniedPreview.StatusCode);
+                    using var deniedSave = await other.PutAsJsonAsync(
+                        $"/api/overworlds/{worldId:D}/source-maps/{sourceMapId:D}/playable-grid-fit",
+                        new { expectedVersion = version });
+                    Assert.Equal(HttpStatusCode.NotFound, deniedSave.StatusCode);
+                }
+
                 using var saved = await client.PutAsJsonAsync(
                     $"/api/overworlds/{worldId:D}/source-maps/{sourceMapId:D}/playable-grid-fit",
                     new { expectedVersion = version });
