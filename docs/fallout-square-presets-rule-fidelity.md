@@ -41,3 +41,12 @@ The location form accepts explicit GM-authored range tables, with scope `Locatio
 GM-supplied random tables use the same `ProcedureResolutionResolver` as the hex-oriented movement, navigation, and encounter mechanics. The reusable domain contract `ProcedureRangeTable` owns range validation independent of tiling, ruleset, or subject. The expedition action applies the generic outcome to an authorized location or region, retaining source attribution, idempotent replay, and restart persistence.
 
 The provisional expedition-local saved-table catalog was removed because reusable authored procedure data does not belong in the journey-state ledger. Future cross-expedition table authoring should extend the existing versioned campaign-procedure workflow rather than introducing a parallel exploration-only repository. Complete one-off table definitions may still be supplied by the DM when resolving a location action.
+
+## Shared spatial observations versus world and player authority
+
+GM notes, expedition-observed visits, and table outcomes can be recorded on **any spatial expedition**, including existing hex-oriented procedures with no exploration-flow mechanic. A missing flow is interpreted as manual action policy, not as a reason to create another movement, encounter, or dice engine. Tests exercise both the existing simple hex-step and Alexandrian hex presets alongside the square presets. Encounter checks for hex-oriented procedures remain exclusively with the already-selected shared runtime mechanics.
+
+These expedition-local notes do not author or replace `OverworldDefinition.Locations`, `OverworldDefinition.Features`, or its real spatial regions. World-bound locations/features remain the canonical map objects. Nor do GM observations automatically update `PlayerKnowledgeState`; revealing information is a separate explicit knowledge operation. The journal stores a *record of play*, not a second world geometry or map projection.
+
+The table evaluator, procedure rolls, spatial traversal, travel/watch cadence, event engine, consequence executor, and encounter handling are shared across tilings and rulesets. Only configured exploration-flow stage/action restrictions differ by preset.
+
