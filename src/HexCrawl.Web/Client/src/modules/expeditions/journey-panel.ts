@@ -209,10 +209,10 @@ export class ExpeditionJourneyPanel {
     }
 
     private explorationCellView(state: ExpeditionJourneyState): HTMLElement {
-        const section = this.section("Current exploration location");
+        const section = this.section("Current cell and GM observations");
         const cell = state.explorationCell;
         if (!cell) {
-            section.append(this.muted("This expedition has no spatial exploration-flow location."));
+            section.append(this.muted("This expedition does not have an authoritative spatial cell."));
             return section;
         }
         const address = cell.cell.address;
