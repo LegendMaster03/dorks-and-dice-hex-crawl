@@ -137,9 +137,10 @@ public sealed class ExpeditionJourneyService(
     }
 
     /// <summary>
-    /// Records a DM-confirmed visit, rest-site designation, or manually resolved
-    /// location. This does not fabricate a random result, advance a stage,
-    /// consume resources, or alter player-visible knowledge.
+    /// Persists DM-confirmed location, region, and table outcomes. When a
+    /// configured action stage is linked, its eligible progress and explicitly
+    /// supplied consequences are committed atomically with the cell record.
+    /// No random table result is fabricated or player knowledge revealed.
     /// </summary>
     public async Task<JourneyOperationResult> RecordExplorationCellAsync(
         Guid expeditionId,
@@ -847,6 +848,9 @@ public sealed class ExpeditionJourneyService(
         StoredExpedition expedition,
         IReadOnlyList<ExpeditionConsequence> consequences)
     {
+        if (consequences.Select(value => value.Id).Distinct().Count() != consequences.Count)
+            throw new InvalidOperationException(
+                "Journey operation consequence ids must be unique within one submission.");
         var existing = expedition.Effects.AppliedConsequences
             .Select(value => value.ConsequenceId)
             .ToHashSet();
