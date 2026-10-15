@@ -134,7 +134,13 @@ public sealed class ProcedurePresetIdentityTests
 
                 var source = File.ReadAllText(file);
                 foreach (var key in namedSystemKeys)
-                    Assert.DoesNotContain(key, source, StringComparison.OrdinalIgnoreCase);
+                {
+                    // Short keys such as "bx" collide with ordinary local
+                    // variable names in geometric algorithms. Require a
+                    // quoted preset-key literal in that case.
+                    var token = key.Length < 5 ? $"\"{key}\"" : key;
+                    Assert.DoesNotContain(token, source, StringComparison.OrdinalIgnoreCase);
+                }
                 Assert.DoesNotContain("fallout-wasteland-", source,
                     StringComparison.OrdinalIgnoreCase);
                 Assert.DoesNotContain("alexandrian", source,
@@ -159,7 +165,10 @@ public sealed class ProcedurePresetIdentityTests
         {
             var source = File.ReadAllText(file);
             foreach (var key in namedSystemKeys)
-                Assert.DoesNotContain(key, source, StringComparison.OrdinalIgnoreCase);
+            {
+                var token = key.Length < 5 ? $"\"{key}\"" : key;
+                Assert.DoesNotContain(token, source, StringComparison.OrdinalIgnoreCase);
+            }
             Assert.DoesNotContain("fallout-wasteland-", source,
                 StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("alexandrian", source,
