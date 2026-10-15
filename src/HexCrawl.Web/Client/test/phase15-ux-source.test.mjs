@@ -1077,6 +1077,22 @@ test("expedition preset selection uses spatial capabilities, not system keys", (
     assert.match(assistant, /runtime\.encounterCadence/);
 });
 
+test("generic exploration does not relocate the established expedition compass", () => {
+    const expedition = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/periodic-expedition-workbench.ts"), "utf8");
+    const journey = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/journey-panel.ts"), "utf8");
+
+    // The travel card remains the first content in the table rail.
+    // Stage help already exists in the journey panel, not above navigation.
+    assert.match(expedition, /<aside class="hc-panel hc-sidebar hc-table-rail" aria-label="At the table">\s*<h2>At the table<\/h2>\s*<section class="hc-current-travel"/);
+    assert.match(expedition, /<div data-cell-navigator><\/div>/);
+    assert.doesNotMatch(expedition, /data-exploration-flow|data-exploration-stages/);
+    assert.match(journey, /this\.startView\(state\),\s*this\.processesView\(state\),\s*this\.eventsView\(state\),\s*this\.historyView\(state\)/);
+    assert.match(journey, /disclosure\.dataset\.gmCellObservations = ""/);
+    assert.match(journey, /disclosure\.append\(summary, this\.explorationCellView\(state\)\)/);
+});
+
 test("bounded world compass omits exits with destinations outside playable bounds", () => {
     const contractPath = path.join(repositoryRoot,
         "src/HexCrawl.Web/Modules/Expeditions/CellTraversalContracts.cs");
