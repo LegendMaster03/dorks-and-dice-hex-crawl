@@ -273,6 +273,25 @@ public sealed class Phase20ExplorationFlowEndpointsTests
                         markRestSite = false, provenance = Provenance("bad-action") }, JsonOptions);
                 Assert.Equal(HttpStatusCode.BadRequest, wrongAction.StatusCode);
 
+                if (firstAction is not null)
+                {
+                    using var missingRegion = await client.PostAsJsonAsync(
+                        $"/api/expeditions/{expeditionId:D}/journeys/exploration-cell",
+                        new { expectedVersion = version, operationId = Guid.NewGuid(),
+                            actionKey = firstAction, markVisited = true,
+                            locationName = "Confirmed location", markRestSite = false,
+                            provenance = Provenance("no-region") }, JsonOptions);
+                    Assert.Equal(HttpStatusCode.BadRequest, missingRegion.StatusCode);
+
+                    using var missingLocation = await client.PostAsJsonAsync(
+                        $"/api/expeditions/{expeditionId:D}/journeys/exploration-cell",
+                        new { expectedVersion = version, operationId = Guid.NewGuid(),
+                            actionKey = firstAction, markVisited = true,
+                            regionKey = "sector-1", markRestSite = false,
+                            provenance = Provenance("no-location") }, JsonOptions);
+                    Assert.Equal(HttpStatusCode.BadRequest, missingLocation.StatusCode);
+                }
+
                 using var visit = await client.PostAsJsonAsync(
                     $"/api/expeditions/{expeditionId:D}/journeys/exploration-cell",
                     new { expectedVersion = version, operationId,

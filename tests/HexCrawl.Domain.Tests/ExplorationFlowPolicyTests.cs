@@ -75,6 +75,23 @@ public sealed class ExplorationFlowPolicyTests
     }
 
     [Fact]
+    public void DiscoveryRequirementsAreGenericAndRejectInvalidResultTableKeys()
+    {
+        new ExplorationFlowPolicy(
+            ["choose", "resolve"], ExplorationDiscoveryTrigger.OnExplore,
+            ExplorationEncounterTrigger.OnExploreOrOptionalTravel,
+            "explore", "travel", null, "choose", "resolve",
+            RequireResolvedLocationOnDiscovery: true,
+            RequireRegionOnDiscovery: true,
+            LocationResultTableKey: "location").Validate();
+
+        Assert.Throws<InvalidOperationException>(() => new ExplorationFlowPolicy(
+            ["choose", "resolve"], ExplorationDiscoveryTrigger.OnExplore,
+            ExplorationEncounterTrigger.Manual,
+            LocationResultTableKey: "  ").Validate());
+    }
+
+    [Fact]
     public void InvalidStagesAndUnknownTriggersAreRejected()
     {
         Assert.Throws<InvalidOperationException>(() => new ExplorationFlowPolicy(
