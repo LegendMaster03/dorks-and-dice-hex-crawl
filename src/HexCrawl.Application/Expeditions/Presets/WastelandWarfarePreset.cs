@@ -54,7 +54,7 @@ internal static class WastelandWarfarePreset
                         ("terrainInfluence", "manual"),
                         ("consequenceModel", "event"),
                         ("requiresResolvedTrigger", "false"),
-                        ("blocksRelevantTravelWhileResolutionRequired", "false"))]).ToArray(),
+                        ("blocksRelevantTravelWhileResolutionRequired", "true"))]).ToArray(),
             attribution: "Adapted square-map starting point inspired by Modiphius Fallout exploration.",
             disclaimer: "Campaign action eligibility and encounter opportunities are configured; region generation, encounter tables, resting recovery, and opposition remain manual. The interval is a placeholder.",
             category: "Fallout square-map starting points",

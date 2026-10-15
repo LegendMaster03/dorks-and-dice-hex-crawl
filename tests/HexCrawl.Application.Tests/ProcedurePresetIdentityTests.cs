@@ -90,6 +90,13 @@ public sealed class ProcedurePresetIdentityTests
         Assert.Equal(["explore", "rest"], warfare.AvailableActions(false, true));
         Assert.Equal(["travel"], warfare.AvailableActions(true, false));
         Assert.False(warfare.RequiresEncounterAfterTravel());
+        var warfareProcedure = CrawlProcedureCatalog.Resolve(
+            CrawlProcedureCatalog.WastelandWarfarePresetKey).MaterializeGeneric().Procedure;
+        var eventPolicy = JourneyProcedurePolicyResolver.ResolveEvents(warfareProcedure);
+        Assert.Equal(JourneyPolicySupport.Supported, eventPolicy.Support);
+        Assert.True(eventPolicy.BlocksRelevantTravelWhileResolutionRequired);
+        Assert.True(eventPolicy.Supports(JourneyEventTriggerKind.External));
+        Assert.Equal(JourneyEventLinkMode.Standalone, eventPolicy.LinkMode);
     }
 
     [Fact]
