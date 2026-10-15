@@ -6,9 +6,19 @@ This document records the implemented generic procedure architecture established
 
 Every catalog preset is defined in exactly one file under `src/HexCrawl.Application/Expeditions/Presets/`. `CrawlProcedureCatalog` registers these definitions in stable display order and resolves preset keys; it does not contain preset parameter data. `CrawlProcedurePresetFactory` contains only shared, system-neutral recipe construction helpers. The OSE preset explicitly reuses the B/X recipe as intentional source identity, not as a separate execution path.
 
-Each preset explicitly supplies its tiling D-symbol as creation-time data. The shared factory and generic preset recipe do not impose an implicit hexagonal default; initial familiar presets continue to select a hex tiling independently until nonhex preset authoring is introduced.
+Each preset explicitly supplies its tiling D-symbol as creation-time data. The shared factory and generic preset recipe do not impose an implicit hexagonal default. Square, hexagonal, triangular, and mixed periodic geometries use the same application and domain services. A preset may also declare optional playable map bounds in periodic lattice coordinates; missing bounds mean unbounded. Neither map size nor tiling shape selects a game-specific execution branch.
 
 Adding a preset requires a single new preset definition file and its catalog registration. Any new generic capability belongs in the appropriate system-neutral mechanic contract, not in edition-specific runtime branching. Tests and documentation may be updated separately.
+
+### No named-system execution paths
+
+Named tabletop systems supply **configuration data only**: tiling, optional map bounds, module selections, mechanic versions, parameters, presentation text, and attribution. The catalog's references to preset classes are registration, not dispatch. No gameplay engine, world API, expedition service, map renderer, compass, or browser start workflow may branch on a preset key, title, edition, or publisher.
+
+Runtime eligibility is derived from generic procedure capabilities (for example, a bindable movement procedure with a spatial turning policy), and movement options are derived from authoritative tiling geometry, the pinned adjacency rule, and optional playable bounds. Adding another 5×5, 9×9, or differently shaped preset must not require a new geometry path.
+
+When a published procedure includes an action, encounter trigger, map-advancement rule, or journaling stage not yet modeled, implement a reusable mechanic contract and shared executor first. The game's preset may then select or parameterize that mechanic. If execution support is not available, mark the unsupported or manual behavior honestly in the preset; do not simulate it with game-key conditionals or silently invent published values.
+
+Regression tests protect this boundary: reidentifying and retiling a preset does not change its bound mechanics; movement eligibility is tested across tilings; the browser starts expeditions by capability rather than named-key allowlists; and named-system identifiers are barred from shared execution/UI source files.
 
 ## Architectural boundary
 
