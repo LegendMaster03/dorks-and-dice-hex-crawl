@@ -178,8 +178,9 @@ public sealed class ExpeditionJourneyService(
         command.Provenance.Validate();
         if (expedition.Runtime is not CellExpeditionState spatial)
             throw new InvalidOperationException("Exploration cell recording requires a spatial expedition.");
-        var flow = GenericProcedureRuntime.Bind(expedition.CampaignProcedure).ExplorationFlow
-            ?? throw new InvalidOperationException("The exact pinned procedure has no exploration flow.");
+        // Cell observations are shared spatial state. Only action and stage
+        // restrictions come from the optional pinned exploration-flow module.
+        var flow = GenericProcedureRuntime.Bind(expedition.CampaignProcedure).ExplorationFlow;
         var (tiling, _) = await coreService.ResolveCellGeometryAsync(
             expedition, ownerUserId, cancellationToken);
         var cell = spatial.Traversal.CurrentCell;
@@ -188,7 +189,7 @@ public sealed class ExpeditionJourneyService(
         JourneyProcessInstance? linkedProcess = null;
         if (command.ProcessId is { } processId)
         {
-            if (flow.ActionResolutionStageKey is null)
+            if (flow?.ActionResolutionStageKey is null)
                 throw new InvalidOperationException("The pinned exploration policy does not link location actions to stages.");
             linkedProcess = expedition.Journey.ActiveProcesses.SingleOrDefault(value =>
                 value.Id == processId &&
@@ -207,7 +208,7 @@ public sealed class ExpeditionJourneyService(
             if (!command.MarkVisited)
                 throw new InvalidOperationException("Linked exploration actions require confirmed resolution.");
         }
-        else if (command.MarkVisited && flow.ActionResolutionStageKey is not null
+        else if (command.MarkVisited && flow?.ActionResolutionStageKey is not null
             && expedition.Journey.ActiveProcesses.Any(value =>
                 value.Execution.ExecutionHandler == GenericProcedureExecutionHandlers.ExplorationFlowPolicy
                 && value.CurrentStageKey == flow.ActionResolutionStageKey))
@@ -215,7 +216,7 @@ public sealed class ExpeditionJourneyService(
         // Rest-site eligibility is prior authoritative state, not a flag that
         // a request can grant to authorize its own rest action.
         var restSite = existing?.RestSite == true;
-        var allowed = flow.AvailableActions(existing?.Visited == true, restSite);
+        var allowed = flow?.AvailableActions(existing?.Visited == true, restSite) ?? [];
         if (string.IsNullOrWhiteSpace(command.ActionKey))
         {
             if (command.MarkVisited && allowed.Count > 0)
@@ -247,7 +248,7 @@ public sealed class ExpeditionJourneyService(
         var assignedRegion = command.RegionKey ?? existing?.RegionKey;
         if (assignedRegion is null && rollRequests.Any(value => value.Scope == ExplorationTableScope.Region))
             throw new InvalidOperationException("A region table roll requires an assigned region key.");
-        if (command.MarkVisited && flow.ShouldGenerateLocation(existing?.Visited == true, command.ActionKey)
+        if (command.MarkVisited && flow?.ShouldGenerateLocation(existing?.Visited == true, command.ActionKey) == true
             && flow.RequireRegionOnDiscovery && assignedRegion is null)
             throw new InvalidOperationException("Resolve the discovered region before completing this action.");
         // Evaluate the supplied tables once, only on a fresh, version-valid
@@ -271,7 +272,7 @@ public sealed class ExpeditionJourneyService(
             command.RegionTableResults ?? priorRegion?.TableResults ?? [],
             rolled.Where(value => value.Scope == ExplorationTableScope.Region)
                 .Select(value => value.Result).ToArray());
-        if (command.MarkVisited && flow.ShouldGenerateLocation(existing?.Visited == true, command.ActionKey))
+        if (command.MarkVisited && flow?.ShouldGenerateLocation(existing?.Visited == true, command.ActionKey) == true)
         {
             if (flow.RequireRegionOnDiscovery && assignedRegion is null)
                 throw new InvalidOperationException("Resolve the discovered region before completing this action.");
@@ -292,7 +293,10 @@ public sealed class ExpeditionJourneyService(
             throw new InvalidOperationException(
                 "An exploration action consequence requires a confirmed action.");
         ValidateNewConsequenceIds(expedition, actionConsequences);
-        var obligation = flow.EncounterForAction(existing?.Visited == true, command.ActionKey);
+        // Existing hex presets own encounters through the shared runtime.
+        // Journal-only updates must not schedule a second encounter check.
+        var obligation = flow?.EncounterForAction(existing?.Visited == true, command.ActionKey)
+            ?? ExplorationEncounterRequirement.None;
         if (command.MarkVisited && obligation == ExplorationEncounterRequirement.OptionalOrRiskBased
             && !command.EncounterOccurs.HasValue)
             throw new InvalidOperationException(

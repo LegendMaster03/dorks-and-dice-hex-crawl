@@ -104,21 +104,23 @@ public sealed record ExplorationCellContextContract(
         if (expedition.Runtime is not CellExpeditionState spatial)
             return null;
         var flow = GenericProcedureRuntime.Bind(expedition.CampaignProcedure).ExplorationFlow;
-        if (flow is null) return null;
         var cell = spatial.Traversal.CurrentCell;
         var entry = expedition.Journey.ExplorationCells.SingleOrDefault(value => value.Cell == cell);
         var visited = entry?.Visited == true;
         var rest = entry?.RestSite == true;
-        var actions = flow.AvailableActions(visited, rest);
-        var evaluations = actions.Count > 0
-            ? actions.Select(action => new ExplorationActionEncounterContract(
-                action, flow.EncounterForAction(visited, action))).ToArray()
-            : new[] { new ExplorationActionEncounterContract(
-                null, flow.EncounterForAction(visited, null)) };
+        IReadOnlyList<string> actions = flow?.AvailableActions(visited, rest) ?? [];
+        IReadOnlyList<ExplorationActionEncounterContract> evaluations = flow is null
+            ? []
+            : actions.Count > 0
+                ? actions.Select(action => new ExplorationActionEncounterContract(
+                    action, flow.EncounterForAction(visited, action))).ToArray()
+                : [new ExplorationActionEncounterContract(
+                    null, flow.EncounterForAction(visited, null))];
         var region = entry?.RegionKey is null ? null
             : expedition.Journey.ExplorationRegions.SingleOrDefault(value => value.Key == entry.RegionKey);
         return new(cell, visited, rest, entry?.LocationName, entry?.DmNote,
-            actions, evaluations, flow.DiscoveryTrigger, flow.EncounterTrigger,
+            actions, evaluations, flow?.DiscoveryTrigger ?? ExplorationDiscoveryTrigger.Manual,
+            flow?.EncounterTrigger ?? ExplorationEncounterTrigger.Manual,
             entry?.RegionKey, region?.Name, region?.DmNote,
             entry?.TableResults ?? [], region?.TableResults ?? []);
     }
