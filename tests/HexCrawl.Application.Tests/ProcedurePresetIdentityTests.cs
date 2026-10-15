@@ -100,7 +100,7 @@ public sealed class ProcedurePresetIdentityTests
     }
 
     [Fact]
-    public void FalloutSystemNamesDoNotAppearInGenericRuntimeImplementation()
+    public void NamedSystemsDoNotAppearInGenericRuntimeImplementation()
     {
         // The preset catalog registers implementations. All game-specific
         // values and terminology otherwise belong to the data recipes under
@@ -130,6 +130,8 @@ public sealed class ProcedurePresetIdentityTests
                 var source = File.ReadAllText(file);
                 Assert.DoesNotContain("fallout-wasteland-", source,
                     StringComparison.OrdinalIgnoreCase);
+                Assert.DoesNotContain("alexandrian", source,
+                    StringComparison.OrdinalIgnoreCase);
                 Assert.DoesNotContain("WastelandWandererPreset", source,
                     StringComparison.Ordinal);
                 Assert.DoesNotContain("WastelandWarfarePreset", source,
@@ -150,6 +152,8 @@ public sealed class ProcedurePresetIdentityTests
         {
             var source = File.ReadAllText(file);
             Assert.DoesNotContain("fallout-wasteland-", source,
+                StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("alexandrian", source,
                 StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("Wasteland Warfare", source,
                 StringComparison.OrdinalIgnoreCase);

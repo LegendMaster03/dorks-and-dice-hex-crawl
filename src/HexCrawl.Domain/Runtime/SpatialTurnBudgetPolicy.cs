@@ -14,10 +14,10 @@ public sealed record NonGeometricTravelCharge(DistanceMeasure BudgetCost, string
 /// independent of the actual geometric cursor. This policy does not dispatch
 /// based on the name or geometry of the tiling.
 ///
-/// The old Alexandrian 1/6-center-distance cost can be represented by factor
-/// 1/6 in a regular, calibrated hex tiling. For an inhomogeneous tiling, the
-/// procedure must supply an explicit cost reference instead of silently
-/// selecting an arbitrary adjacent center distance.
+/// A fractional neighboring center-distance charge can be represented by
+/// its configured factor for any regular, calibrated tiling. For an
+/// inhomogeneous tiling, the procedure must supply an explicit cost reference
+/// instead of silently selecting an arbitrary adjacent center distance.
 /// </summary>
 public sealed record SpatialTurnBudgetPolicy(double NeighborCenterDistanceFactor)
 {
