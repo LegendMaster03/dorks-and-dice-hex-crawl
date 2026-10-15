@@ -175,7 +175,7 @@ public sealed class GenericProcedureRuntime
             new ProcedureEncounterRuntime(EnumValue<EncounterCheckCadence>(encounters, "cadence")),
             helpers is null ? null : ReadHelpers(helpers),
             flow is null ? null : new ExplorationFlowPolicy(
-                flow.Parameters["stageKeys"].Split(',', StringSplitOptions.TrimEntries).ToArray(),
+                flow.Parameters["stageKeys"].Split(';', StringSplitOptions.TrimEntries).ToArray(),
                 EnumValue<ExplorationDiscoveryTrigger>(flow, "discoveryTrigger"),
                 EnumValue<ExplorationEncounterTrigger>(flow, "encounterTrigger"),
                 flow.Parameters.GetValueOrDefault("firstVisitAction"),

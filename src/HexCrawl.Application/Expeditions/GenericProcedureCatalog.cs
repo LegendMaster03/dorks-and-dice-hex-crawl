@@ -360,7 +360,7 @@ public static class GenericProcedureCatalog
             [ExplorationFlowMechanic],
             WithOptional(
                 RequiredMany(
-                    ("stageKeys", "key-list", "Ordered stages, written as comma-separated keys."),
+                    ("stageKeys", "key-list", "Ordered stages, separated by semicolons."),
                     ("discoveryTrigger", "enum", "Manual, OnFirstVisit, or OnExplore."),
                     ("encounterTrigger", "enum", "Manual, EveryTravel, or OnExploreOrOptionalTravel.")),
                 ("firstVisitAction", "string", "Action offered at an unexplored location."),

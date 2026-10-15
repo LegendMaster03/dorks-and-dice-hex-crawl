@@ -78,7 +78,7 @@ internal static class CrawlProcedurePresetFactory
     {
         var parameters = new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["stageKeys"] = string.Join(",", orderedStages),
+            ["stageKeys"] = string.Join(";", orderedStages),
             ["discoveryTrigger"] = discoveryTrigger.ToString(),
             ["encounterTrigger"] = encounterTrigger.ToString()
         };

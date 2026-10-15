@@ -206,7 +206,7 @@ test("semantic value formatting preserves decimal numbers and decimal mappings",
 });
 
 
-test("all 19 authoring modules use their semantic layouts with representative real parameters", () => {
+test("all 20 authoring modules use their semantic layouts with representative real parameters", () => {
     const samples = {
         "time.interval": { durationTicks: "144000000000" },
         "party.activities": { assignmentScope: "participant", roleKeys: "navigator;scout", activityBudgetModel: "one-per-watch", activityKeys: "navigate;scout" },
@@ -226,6 +226,7 @@ test("all 19 authoring modules use their semantic layouts with representative re
         "effects.expedition": { effectKinds: "fatigue;exhaustion", scope: "participant", accumulationModel: "levels", recoveryModel: "rest" },
         "journey.process": { stageModel: "ordered", stageKeys: "approach;crossing;arrival", progressModel: "accumulated", progressKind: "numeric", progressUnit: "legs", progressFloor: "0", progressCeiling: "6", allowNegativeProgress: "false", roleDriven: "true", roleAssignmentModel: "current-at-resolution", stageTransitionModel: "sequential", completionModel: "stage-completion", intervalIntegrationModel: "none" },
         "journey.events": { triggerModel: "explicit", triggerSources: "process-progress;stage-transition", linkMode: "process-linked", targetingModel: "role-or-party", terrainInfluence: "snapshot", consequenceModel: "expedition-consequence", requiresResolvedTrigger: "false", blocksRelevantTravelWhileResolutionRequired: "true" },
+        "exploration.flow": { stageKeys: "travel;encounter;action;journal", discoveryTrigger: "OnFirstVisit", encounterTrigger: "EveryTravel", firstVisitAction: "explore", repeatVisitAction: "travel", restSiteAction: "rest" },
         "procedure.helpers": { "travel.enabled": "true", "travel.diceCount": "2", "travel.dieSides": "6", "travel.modifier": "3", "travel.distanceFactor": "0.1", "navigation.enabled": "true", "navigation.diceCount": "1", "navigation.dieSides": "20", "navigation.modifier": "0", "encounter.enabled": "true", "encounter.diceCount": "1", "encounter.dieSides": "6", "encounter.modifier": "0", "encounter.wanderingResults": "1;2", "encounter.keyedLocationResults": "6", "encounter.timingSlots": "4" }
     };
     const expectedSectionKeys = {
@@ -247,12 +248,13 @@ test("all 19 authoring modules use their semantic layouts with representative re
         "effects.expedition": ["effect", "application", "recovery"],
         "journey.process": ["stages", "progress", "roles", "transition"],
         "journey.events": ["trigger", "target", "resolution"],
+        "exploration.flow": ["stages", "actions", "triggers"],
         "procedure.helpers": ["travel", "navigation", "encounter"]
     };
 
     const rules = compactRuleCatalog();
-    assert.equal(rules.length, 19);
-    assert.equal(Object.keys(samples).length, 19);
+    assert.equal(rules.length, 20);
+    assert.equal(Object.keys(samples).length, 20);
     assert.deepEqual(
         new Set(Object.keys(samples)),
         new Set(rules.map(rule => rule.moduleKey)));
