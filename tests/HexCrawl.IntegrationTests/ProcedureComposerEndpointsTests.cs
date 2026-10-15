@@ -59,6 +59,41 @@ public sealed class ProcedureComposerEndpointsTests
         finally { TestWebHost.DeleteDatabase(database); }
     }
 
+    [Fact]
+    public async Task PresetStartCapabilityIsDeterminedByExecutableSpatialModules()
+    {
+        var database = TestWebHost.NewDatabasePath();
+        try
+        {
+            using var host = TestWebHost.Create(database);
+            using var client = host.CreateClient();
+            var presets = await client.GetFromJsonAsync<JsonElement>("/api/procedures/presets");
+            foreach (var preset in presets.EnumerateArray())
+            {
+                var procedure = preset.GetProperty("procedure");
+                var executable = procedure.GetProperty("isExecutable").GetBoolean();
+                var supportsSpatial = procedure.GetProperty("supportsSpatialExecution").GetBoolean();
+                var hasTurnPolicy = procedure.GetProperty("modules").EnumerateArray().Any(
+                    module => module.GetProperty("moduleKey").GetString()
+                        == GenericProcedureCatalog.SpatialTurnCostModule);
+                Assert.Equal(executable && hasTurnPolicy, supportsSpatial);
+            }
+
+            foreach (var key in new[]
+            {
+                CrawlProcedureCatalog.WastelandWandererPresetKey,
+                CrawlProcedureCatalog.WastelandWarfarePresetKey
+            })
+            {
+                var preset = presets.EnumerateArray().Single(
+                    p => p.GetProperty("presetKey").GetString() == key);
+                Assert.True(preset.GetProperty("procedure")
+                    .GetProperty("supportsSpatialExecution").GetBoolean());
+            }
+        }
+        finally { TestWebHost.DeleteDatabase(database); }
+    }
+
     [Theory]
     [InlineData("/api/procedures/composer/draft")]
     [InlineData("/api/procedures/composer/canonical/draft")]
