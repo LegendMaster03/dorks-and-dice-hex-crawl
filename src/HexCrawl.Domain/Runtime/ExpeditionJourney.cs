@@ -804,6 +804,7 @@ public sealed record ExpeditionJourneyState
     public IReadOnlyList<Guid> ConsumedResolutionIds { get; init; } = [];
     public IReadOnlyList<string> ObservedRuntimeOccurrenceIds { get; init; } = [];
     public IReadOnlyList<ExplorationCellRecord> ExplorationCells { get; init; } = [];
+    public IReadOnlyList<ExplorationRegionRecord> ExplorationRegions { get; init; } = [];
     public IReadOnlyList<Guid> ConsumedExplorationOperationIds { get; init; } = [];
     public IReadOnlyList<ExplorationStageActionRecord> ExplorationStageActions { get; init; } = [];
     public IReadOnlyList<ExplorationOperationRecord> ExplorationOperations { get; init; } = [];
@@ -823,12 +824,20 @@ public sealed record ExpeditionJourneyState
             if (!ConsumedExplorationOperationIds.Contains(operation.OperationId))
                 throw new InvalidOperationException("A retained exploration operation must have been applied.");
         }
+        var regionKeys = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var region in ExplorationRegions)
+        {
+            region.Validate();
+            if (!regionKeys.Add(region.Key) || !ConsumedExplorationOperationIds.Contains(region.LastOperationId))
+                throw new InvalidOperationException("Exploration regions must be unique and reference an applied operation.");
+        }
         var cellIds = new HashSet<HexCrawl.Domain.Spatial.WorldCellId>();
         foreach (var cell in ExplorationCells)
         {
             cell.Validate();
-            if (!cellIds.Add(cell.Cell) || !ConsumedExplorationOperationIds.Contains(cell.LastOperationId))
-                throw new InvalidOperationException("Exploration cells must be unique and reference an applied operation.");
+            if (!cellIds.Add(cell.Cell) || !ConsumedExplorationOperationIds.Contains(cell.LastOperationId)
+                || cell.RegionKey is not null && !regionKeys.Contains(cell.RegionKey))
+                throw new InvalidOperationException("Exploration cells must be unique and reference an applied operation and valid region.");
         }
         foreach (var action in ExplorationStageActions)
         {

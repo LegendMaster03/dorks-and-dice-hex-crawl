@@ -37,7 +37,12 @@ public sealed record RecordExplorationCellCommand(
     bool? EncounterOccurs,
     ExpeditionConsequenceProvenance Provenance,
     Guid? ProcessId = null,
-    IReadOnlyList<ExpeditionConsequence>? Consequences = null);
+    IReadOnlyList<ExpeditionConsequence>? Consequences = null,
+    string? RegionKey = null,
+    string? RegionName = null,
+    string? RegionDmNote = null,
+    IReadOnlyList<ExplorationTableResult>? LocationTableResults = null,
+    IReadOnlyList<ExplorationTableResult>? RegionTableResults = null);
 
 public sealed record ResolveJourneyProcessCommand(
     long ExpectedVersion,
@@ -216,8 +221,26 @@ public sealed class ExpeditionJourneyService(
         if (command.LocationName is { Length: > 300 } || command.DmNote is { Length: > 4000 })
             throw new InvalidOperationException("Exploration location details exceed their limits.");
         if (!command.MarkVisited && !command.MarkRestSite
-            && command.LocationName is null && command.DmNote is null)
+            && command.LocationName is null && command.DmNote is null
+            && command.RegionKey is null && command.RegionName is null
+            && command.RegionDmNote is null && command.LocationTableResults is null
+            && command.RegionTableResults is null)
             throw new InvalidOperationException("No exploration information was supplied.");
+        if (command.RegionKey is not null)
+            ExplorationTableResult.RequireKey(command.RegionKey, "Exploration region key", 120);
+        if (command.RegionName is not null)
+            ExpeditionConsequenceProvenance.ValidateOptional(command.RegionName, 300, "Region name");
+        if (command.RegionDmNote is not null)
+            ExpeditionConsequenceProvenance.ValidateOptional(command.RegionDmNote, 4000, "Region DM note");
+        if (command.LocationTableResults is not null)
+            ExplorationTableResult.ValidateCollection(command.LocationTableResults);
+        if (command.RegionTableResults is not null)
+            ExplorationTableResult.ValidateCollection(command.RegionTableResults);
+        var assignedRegion = command.RegionKey ?? existing?.RegionKey;
+        if (assignedRegion is null
+            && (command.RegionName is not null || command.RegionDmNote is not null
+                || command.RegionTableResults is not null))
+            throw new InvalidOperationException("A region key is required before recording region results.");
         var actionConsequences = command.Consequences ?? [];
         if (actionConsequences.Count > 0 && !command.MarkVisited)
             throw new InvalidOperationException(
@@ -241,15 +264,37 @@ public sealed class ExpeditionJourneyService(
             Cell = cell,
             Visited = existing?.Visited == true || command.MarkVisited,
             RestSite = restSite || command.MarkRestSite,
+            RegionKey = assignedRegion,
+            TableResults = command.LocationTableResults ?? existing?.TableResults ?? [],
             LocationName = command.LocationName is null ? existing?.LocationName : command.LocationName.Trim(),
             DmNote = command.DmNote is null ? existing?.DmNote : command.DmNote.Trim(),
             LastOperationId = command.OperationId,
             Provenance = command.Provenance
         };
         updated.Validate();
+        var priorRegion = assignedRegion is null ? null :
+            expedition.Journey.ExplorationRegions.SingleOrDefault(value => value.Key == assignedRegion);
+        var regions = expedition.Journey.ExplorationRegions;
+        if (assignedRegion is not null
+            && (priorRegion is null || command.RegionName is not null
+                || command.RegionDmNote is not null || command.RegionTableResults is not null))
+        {
+            var region = new ExplorationRegionRecord
+            {
+                Key = assignedRegion,
+                Name = command.RegionName is null ? priorRegion?.Name : command.RegionName.Trim(),
+                DmNote = command.RegionDmNote is null ? priorRegion?.DmNote : command.RegionDmNote.Trim(),
+                TableResults = command.RegionTableResults ?? priorRegion?.TableResults ?? [],
+                LastOperationId = command.OperationId,
+                Provenance = command.Provenance
+            };
+            region.Validate();
+            regions = [.. regions.Where(value => value.Key != assignedRegion), region];
+        }
         var next = expedition.Journey with
         {
             ExplorationCells = [.. expedition.Journey.ExplorationCells.Where(value => value.Cell != cell), updated],
+            ExplorationRegions = regions,
             ConsumedExplorationOperationIds =
                 [.. expedition.Journey.ConsumedExplorationOperationIds, command.OperationId],
             ExplorationOperations =
@@ -593,12 +638,22 @@ public sealed class ExpeditionJourneyService(
         // with changed time, resource, recovery, or other consequence inputs.
         var fingerprint = consequences.Count == 0 ? null :
             Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(consequences)));
+        var tableFingerprint = command.LocationTableResults is null && command.RegionTableResults is null
+            ? null
+            : Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                command.LocationTableResults, command.RegionTableResults
+            })));
         return new ExplorationOperationRecord(command.OperationId, cell, command.ActionKey?.Trim(),
             command.MarkVisited, command.MarkRestSite, command.LocationName?.Trim(),
             command.DmNote?.Trim(), command.EncounterOccurs, command.ProcessId,
             command.Provenance)
         {
-            ConsequenceFingerprint = fingerprint
+            ConsequenceFingerprint = fingerprint,
+            RegionKey = command.RegionKey,
+            RegionName = command.RegionName?.Trim(),
+            RegionDmNote = command.RegionDmNote?.Trim(),
+            TableFingerprint = tableFingerprint
         };
     }
 
