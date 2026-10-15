@@ -7,7 +7,6 @@ import type {
     ExpeditionJourneyState,
     JourneyOperation,
     RecordExplorationCellRequest,
-    SetExplorationTableRequest,
     ResolveJourneyEventRequest,
     ResolveJourneyProcessRequest,
     StartJourneyProcessRequest
@@ -40,12 +39,6 @@ export class JourneyApi {
         return this.sendJson("POST",
             `/api/expeditions/${encodeURIComponent(expeditionId)}/journeys/exploration-cell`,
             request, "Record exploration cell");
-    }
-
-    public setExplorationTable(expeditionId: string, request: SetExplorationTableRequest): Promise<JourneyOperation> {
-        return this.sendJson("POST",
-            `/api/expeditions/${encodeURIComponent(expeditionId)}/journeys/exploration-tables`,
-            request, "Save or remove exploration table");
     }
 
     public resolveProcess(expeditionId: string, processId: string, request: ResolveJourneyProcessRequest): Promise<JourneyOperation> {

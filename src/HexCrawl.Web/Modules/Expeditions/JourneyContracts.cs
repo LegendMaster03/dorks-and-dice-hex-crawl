@@ -135,8 +135,7 @@ public sealed record ExpeditionJourneyStateContract(
     IReadOnlyList<JourneyHistoryRecord> History,
     ExplorationCellContextContract? ExplorationCell,
     IReadOnlyList<ExplorationCellRecord> ExplorationCells,
-    IReadOnlyList<ExplorationRegionRecord> ExplorationRegions,
-    IReadOnlyList<ExplorationSavedTable> ExplorationSavedTables)
+    IReadOnlyList<ExplorationRegionRecord> ExplorationRegions)
 {
     public static ExpeditionJourneyStateContract From(StoredExpedition expedition) => new(
         expedition.Version,
@@ -149,8 +148,7 @@ public sealed record ExpeditionJourneyStateContract(
         expedition.Journey.History,
         ExplorationCellContextContract.From(expedition),
         expedition.Journey.ExplorationCells,
-        expedition.Journey.ExplorationRegions,
-        expedition.Journey.ExplorationSavedTables);
+        expedition.Journey.ExplorationRegions);
 }
 
 public sealed record JourneyOperationContract(
@@ -185,26 +183,13 @@ public sealed record RecordExplorationCellRequest(
     string? RegionDmNote = null,
     IReadOnlyList<ExplorationTableResult>? LocationTableResults = null,
     IReadOnlyList<ExplorationTableResult>? RegionTableResults = null,
-    IReadOnlyList<ExplorationTableRollRequest>? TableRolls = null,
-    IReadOnlyList<ExplorationSavedTableReference>? SavedTableReferences = null)
+    IReadOnlyList<ExplorationTableRollRequest>? TableRolls = null)
 {
     public RecordExplorationCellCommand ToCommand() =>
         new(ExpectedVersion, OperationId, ActionKey, MarkVisited,
             MarkRestSite, LocationName, DmNote, EncounterOccurs, Provenance,
             ProcessId, Consequences, RegionKey, RegionName, RegionDmNote,
-            LocationTableResults, RegionTableResults, TableRolls, SavedTableReferences);
-}
-
-public sealed record SetExplorationTableRequest(
-    long ExpectedVersion,
-    Guid OperationId,
-    ExplorationTableScope Scope,
-    string TableKey,
-    ExplorationTableRollRequest? Definition,
-    ExpeditionConsequenceProvenance Provenance)
-{
-    public SetExplorationTableCommand ToCommand() =>
-        new(ExpectedVersion, OperationId, Scope, TableKey, Definition, Provenance);
+            LocationTableResults, RegionTableResults, TableRolls);
 }
 
 public sealed record StartExplorationFlowRequest(
