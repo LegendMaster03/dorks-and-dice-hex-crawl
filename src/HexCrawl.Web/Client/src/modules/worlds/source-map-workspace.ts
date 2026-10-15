@@ -846,7 +846,20 @@ export class SourceMapWorkspace {
         this.map.requestRender();
         this.selected = uploadedSourceMaps[0] ?? null;
         this.renderSelected();
-        if (uploadedSourceMaps.length > 0) {
+        // A single grid-bearing reference for an explicitly bounded world
+        // gets an immediate, unsaved alignment preview. Never infer the count
+        // of printed tiles or commit geometry solely from raster dimensions.
+        if (uploadedSourceMaps.length === 1 && this.selected?.containsBakedGrid
+            && this.getWorld().tiling?.playableBounds) {
+            try {
+                await this.previewFullGridFit();
+            } catch (failure) {
+                const reason = failure instanceof Error ? failure.message : String(failure);
+                this.mapHint.textContent =
+                    `Grid-fit preview was not available: ${reason} Use verified grid detection or manual placement.`;
+            }
+        }
+        if (uploadedSourceMaps.length > 0 && !this.gridFitPreview) {
             this.mapHint.textContent = `${uploadedSourceMaps.length} reference map${uploadedSourceMaps.length === 1 ? "" : "s"} uploaded to map set ${geographyKey}. Unaligned map images are visible with temporary placement until aligned.`;
         }
     }

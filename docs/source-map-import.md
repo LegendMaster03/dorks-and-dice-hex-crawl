@@ -221,6 +221,14 @@ Promoted semantic objects remain ordinary world objects and are not deleted when
 
 Territory and other source geometry is retained as stored, including coordinates outside the nominal raster canvas. The source layer does not silently clamp geometry. Any later semantic promotion passes through the normal semantic geometry validation separately.
 
+## Finite-board image alignment
+
+A finite playable window is measured in periodic tiling translations, independently of raster pixel dimensions. Creating a finite world in the UI now defaults its minimum U/V to the centered range: a 5×5 single-cell square motif occupies -2..+2, and a 9×9 motif occupies -4..+4. An author may override the minimum period coordinates for a non-centered map. Pinned procedure bounds still intersect with world bounds; the two windows must use the same intended origin and coordinates to cover the full board.
+
+A source image is never cropped, reduced, or resized in storage to satisfy this window. In the source-map editor, **Fit image to playable grid** requests a read-only, server-computed affine registration for the complete raster against finite bounds. The fit is available only when one quadrilateral motif cell exactly spans its periodic basis and the bounds are finite. A grid-marked single-image upload automatically opens this as an **unsaved preview** when eligible. Previewing does not mutate the world. The GM checks that the artwork is full-bleed and contains precisely the configured number of tile rows/columns, then explicitly accepts the fit. The server recomputes the placement at the save boundary under world optimistic concurrency; client-supplied matrices are not trusted.
+
+The fit is not an image-content detector: padding, decorative borders, clipped cells, a rotated image, an additional grid row, or different tile counts will not be automatically corrected. In those cases use detected pattern registration or the existing three-landmark manual registration, preserving the entire image. The saved image's world coverage is its transformed four raster corners, while selectable/playable cells remain constrained by the canonical tiling. A world whose periodic tiling is replaced after verified grid analysis retains its existing playable bounds and explicit turning calibration; the correction service refuses replacement values that silently erase those settings.
+
 ## Intentionally deferred analysis
 
 The importer preserves source truth without pretending to understand cartographic meaning that Wonderdraft does not encode explicitly. The following remain separate future work:
