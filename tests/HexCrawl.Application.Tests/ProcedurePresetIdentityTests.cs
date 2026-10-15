@@ -112,6 +112,11 @@ public sealed class ProcedurePresetIdentityTests
             root = root.Parent;
         Assert.NotNull(root);
 
+        var namedSystemKeys = CrawlProcedureCatalog.Catalog
+            .Where(preset => preset.Category != "Generic starting points")
+            .Select(preset => preset.PresetKey)
+            .ToArray();
+
         foreach (var project in new[]
         {
             "HexCrawl.Domain", "HexCrawl.Application", "HexCrawl.Web", "HexCrawl.Infrastructure"
@@ -128,6 +133,8 @@ public sealed class ProcedurePresetIdentityTests
                     continue;
 
                 var source = File.ReadAllText(file);
+                foreach (var key in namedSystemKeys)
+                    Assert.DoesNotContain(key, source, StringComparison.OrdinalIgnoreCase);
                 Assert.DoesNotContain("fallout-wasteland-", source,
                     StringComparison.OrdinalIgnoreCase);
                 Assert.DoesNotContain("alexandrian", source,
@@ -151,6 +158,8 @@ public sealed class ProcedurePresetIdentityTests
             SearchOption.AllDirectories))
         {
             var source = File.ReadAllText(file);
+            foreach (var key in namedSystemKeys)
+                Assert.DoesNotContain(key, source, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("fallout-wasteland-", source,
                 StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("alexandrian", source,
