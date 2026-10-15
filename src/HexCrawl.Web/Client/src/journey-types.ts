@@ -271,6 +271,7 @@ export type RecordExplorationCellRequest = {
     locationName: string | null;
     dmNote: string | null;
     encounterOccurs: boolean | null;
+    processId: string | null;
     provenance: StartJourneyProcessRequest["provenance"];
 };
 

@@ -33,7 +33,8 @@ public sealed record RecordExplorationCellCommand(
     string? LocationName,
     string? DmNote,
     bool? EncounterOccurs,
-    ExpeditionConsequenceProvenance Provenance);
+    ExpeditionConsequenceProvenance Provenance,
+    Guid? ProcessId = null);
 
 public sealed record ResolveJourneyProcessCommand(
     long ExpectedVersion,
@@ -157,7 +158,36 @@ public sealed class ExpeditionJourneyService(
         var cell = spatial.Traversal.CurrentCell;
         tiling.Resolve(cell.Address);
         var existing = expedition.Journey.ExplorationCells.SingleOrDefault(value => value.Cell == cell);
-        var restSite = existing?.RestSite == true || command.MarkRestSite;
+        JourneyProcessInstance? linkedProcess = null;
+        if (command.ProcessId is { } processId)
+        {
+            if (flow.ActionResolutionStageKey is null)
+                throw new InvalidOperationException("The pinned exploration policy does not link location actions to stages.");
+            linkedProcess = expedition.Journey.ActiveProcesses.SingleOrDefault(value =>
+                value.Id == processId &&
+                value.Execution.ExecutionHandler == GenericProcedureExecutionHandlers.ExplorationFlowPolicy)
+                ?? throw new InvalidOperationException("The linked exploration process is not active.");
+            if (linkedProcess.CurrentStageKey != flow.ActionResolutionStageKey)
+                throw new InvalidOperationException("Resolve the selection stage before recording its chosen action.");
+            if (expedition.Journey.ExplorationStageActions.Any(action => action.ProcessId == processId))
+                throw new InvalidOperationException("An action has already been recorded for this exploration process.");
+            var selection = expedition.Journey.Resolutions.LastOrDefault(value =>
+                value.ProcessId == processId && value.StageKey == flow.ActionSelectionStageKey
+                && value.TransitionToStageKey == flow.ActionResolutionStageKey);
+            if (selection is null || !string.Equals(selection.OutcomeKey, command.ActionKey,
+                    StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Recorded action must match the selected action persisted in this process.");
+            if (!command.MarkVisited)
+                throw new InvalidOperationException("Linked exploration actions require confirmed resolution.");
+        }
+        else if (command.MarkVisited && flow.ActionResolutionStageKey is not null
+            && expedition.Journey.ActiveProcesses.Any(value =>
+                value.Execution.ExecutionHandler == GenericProcedureExecutionHandlers.ExplorationFlowPolicy
+                && value.CurrentStageKey == flow.ActionResolutionStageKey))
+            throw new InvalidOperationException("Record this action against the active exploration process.");
+        // Rest-site eligibility is prior authoritative state, not a flag that
+        // a request can grant to authorize its own rest action.
+        var restSite = existing?.RestSite == true;
         var allowed = flow.AvailableActions(existing?.Visited == true, restSite);
         if (string.IsNullOrWhiteSpace(command.ActionKey))
         {
@@ -188,7 +218,7 @@ public sealed class ExpeditionJourneyService(
         {
             Cell = cell,
             Visited = existing?.Visited == true || command.MarkVisited,
-            RestSite = restSite,
+            RestSite = restSite || command.MarkRestSite,
             LocationName = command.LocationName is null ? existing?.LocationName : command.LocationName.Trim(),
             DmNote = command.DmNote is null ? existing?.DmNote : command.DmNote.Trim(),
             LastOperationId = command.OperationId,
@@ -225,10 +255,29 @@ public sealed class ExpeditionJourneyService(
                 next = created.State;
             }
         }
+        if (linkedProcess is not null)
+        {
+            next = next with
+            {
+                ExplorationStageActions =
+                [
+                    .. next.ExplorationStageActions,
+                    new ExplorationStageActionRecord(
+                        command.OperationId, linkedProcess.Id, linkedProcess.CurrentStageKey,
+                        command.ActionKey!, cell, encounterId)
+                ]
+            };
+            if (!encounterId.HasValue)
+                next = CompleteRecordedExplorationAction(
+                    next, linkedProcess.Id, command.OperationId,
+                    command.Provenance, expedition);
+        }
         var saved = await SaveAsync(
             expedition with { Journey = next }, command.ExpectedVersion, cancellationToken);
-        return new(saved, "Recorded exploration information for the current cell.", true,
-            EventOccurrenceId: encounterId);
+        return new(saved, encounterId.HasValue
+                ? "Exploration action recorded; encounter resolution is pending."
+                : "Exploration action and eligible stage progress recorded.", true,
+            linkedProcess?.Id, encounterId);
     }
 
     public async Task<JourneyOperationResult> ResolveProcessAsync(
@@ -239,6 +288,31 @@ public sealed class ExpeditionJourneyService(
     {
         var expedition = await LoadAsync(expeditionId, ownerUserId, command.ExpectedVersion, cancellationToken);
         ValidateRoleKey(expedition, command.Resolution.RoleKey);
+        var selectedProcess = expedition.Journey.ActiveProcesses.SingleOrDefault(
+            value => value.Id == command.Resolution.ProcessId);
+        if (selectedProcess is { Execution.ExecutionHandler:
+                GenericProcedureExecutionHandlers.ExplorationFlowPolicy })
+        {
+            var flow = GenericProcedureRuntime.Bind(expedition.CampaignProcedure).ExplorationFlow!;
+            if (selectedProcess.CurrentStageKey == flow.ActionResolutionStageKey)
+                throw new InvalidOperationException(
+                    "This exploration action stage advances when the recorded action and its encounter are resolved.");
+            if (selectedProcess.CurrentStageKey == flow.ActionSelectionStageKey)
+            {
+                if (!command.Resolution.CompleteStage
+                    || command.Resolution.FailProcess || command.Resolution.CompleteProcess
+                    || command.Resolution.Consequences.Count > 0)
+                    throw new InvalidOperationException(
+                        "Select and complete the exploration choice without applying action consequences.");
+                if (expedition.Runtime is not CellExpeditionState spatial)
+                    throw new InvalidOperationException("Action selection requires an authoritative spatial cell.");
+                var entry = expedition.Journey.ExplorationCells.SingleOrDefault(
+                    value => value.Cell == spatial.Traversal.CurrentCell);
+                var actions = flow.AvailableActions(entry?.Visited == true, entry?.RestSite == true);
+                if (!actions.Contains(command.Resolution.OutcomeKey, StringComparer.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("The selected action is not eligible for the current location.");
+            }
+        }
         var resolutionClock = JourneyClockReference.From(expedition.Runtime);
         var transition = JourneyProcessEngine.Resolve(
             expedition.Journey,
@@ -397,6 +471,11 @@ public sealed class ExpeditionJourneyService(
                 transition.Occurrence.ProcessId, transition.Occurrence.Id);
         }
         ValidateNewConsequenceIds(expedition, resolution.Consequences);
+        var linkedAction = expedition.Journey.ExplorationStageActions.SingleOrDefault(
+            value => value.EncounterOccurrenceId == resolution.OccurrenceId);
+        if (linkedAction is not null && resolution.Status != JourneyEventStatus.Resolved)
+            throw new InvalidOperationException(
+                "A generated exploration encounter requires explicit resolution before its action can complete.");
 
         var working = expedition with { Journey = transition.State };
         foreach (var consequence in resolution.Consequences)
@@ -405,10 +484,17 @@ public sealed class ExpeditionJourneyService(
             var applied = ExpeditionConsequenceAggregateTransition.Apply(working, sourced, resolution.Provenance);
             working = applied.Expedition;
         }
+        if (linkedAction is not null)
+            working = working with
+            {
+                Journey = CompleteRecordedExplorationAction(
+                    working.Journey, linkedAction.ProcessId,
+                    linkedAction.OperationId, resolution.Provenance, working)
+            };
         ValidateJourneyAggregate(working);
         var saved = await SaveAsync(working, command.ExpectedVersion, cancellationToken);
-        return new(saved, "Journey event resolution and generated consequences were committed atomically.", true,
-            transition.Occurrence.ProcessId, transition.Occurrence.Id);
+        return new(saved, "Journey event resolution, consequences, and eligible stage progress were committed atomically.", true,
+            linkedAction?.ProcessId ?? transition.Occurrence.ProcessId, transition.Occurrence.Id);
     }
 
     public Task<JourneyOperationResult> CompleteProcessAsync(
@@ -462,6 +548,34 @@ public sealed class ExpeditionJourneyService(
             command.Provenance);
         var saved = await SaveAsync(expedition with { Journey = journey }, command.ExpectedVersion, cancellationToken);
         return new(saved, $"Journey process marked {command.Status}.", true, processId);
+    }
+
+    private static ExpeditionJourneyState CompleteRecordedExplorationAction(
+        ExpeditionJourneyState journey, Guid processId, Guid operationId,
+        ExpeditionConsequenceProvenance provenance, StoredExpedition expedition)
+    {
+        var process = journey.ActiveProcesses.SingleOrDefault(value => value.Id == processId)
+            ?? throw new InvalidOperationException("The recorded exploration process is no longer active.");
+        var action = journey.ExplorationStageActions.Single(value =>
+            value.ProcessId == processId && value.OperationId == operationId);
+        if (process.CurrentStageKey != action.StageKey)
+            throw new InvalidOperationException("The recorded action no longer matches the active stage.");
+        if (action.EncounterOccurrenceId is { } eventId
+            && journey.EventOccurrences.Single(value => value.Id == eventId).Status
+                != JourneyEventStatus.Resolved)
+            throw new InvalidOperationException("The recorded encounter remains unresolved.");
+        var transition = JourneyProcessEngine.Resolve(
+            journey, new JourneyProcessResolutionInput
+            {
+                ResolutionId = JourneyProcessEngine.DeterministicId(operationId, "exploration-stage-completed"),
+                ProcessId = processId,
+                StageKey = action.StageKey,
+                OutcomeKey = action.ActionKey,
+                ProgressState = "resolved",
+                CompleteStage = true,
+                Provenance = provenance
+            }, JourneyClockReference.From(expedition.Runtime), expedition.Party);
+        return transition.State;
     }
 
     private async Task<StoredExpedition> LoadAsync(

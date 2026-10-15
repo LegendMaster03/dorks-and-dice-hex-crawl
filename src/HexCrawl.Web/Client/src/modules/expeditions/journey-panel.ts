@@ -215,6 +215,16 @@ export class ExpeditionJourneyPanel {
             return section;
         }
         const address = cell.cell.address;
+        const runtime = this.getRuntime().procedure.runtime?.explorationFlow;
+        const selectionStage = runtime?.actionSelectionStageKey ?? null;
+        const resolutionStage = runtime?.actionResolutionStageKey ?? null;
+        const resolvingProcess = state.activeProcesses.find(process =>
+            process.execution.executionHandler === "procedure.exploration.flow" &&
+            process.currentStageKey === resolutionStage);
+        const selectedAction = resolvingProcess
+            ? state.resolutions.find(value => value.processId === resolvingProcess.id
+                && value.stageKey === selectionStage)?.outcomeKey ?? null
+            : null;
         section.append(this.muted(
             `Cell ${address.translation.u}, ${address.translation.v} (${address.motifCellId}). ` +
             `${cell.visited ? "Previously visited." : "Visit not yet recorded."} ` +
@@ -237,6 +247,10 @@ export class ExpeditionJourneyPanel {
         const action = this.select("Exploration action", ["", ...cell.availableActions.map(key =>
             `${key}|${humanize(key)}`)]);
         if (cell.availableActions.length > 0) action.control.value = cell.availableActions[0];
+        if (selectedAction !== null) {
+            action.control.value = selectedAction;
+            action.control.disabled = true;
+        }
         const visited = this.checkbox("Record this exploration action / visit", true);
         const rest = this.checkbox("Designate as rest site", false);
         const name = this.input("Resolved location name (GM only)", "text", cell.locationName ?? "");
@@ -266,6 +280,7 @@ export class ExpeditionJourneyPanel {
                     locationName: nullable(name.control.value),
                     dmNote: nullable(note.control.value),
                     encounterOccurs: encounter.control.value === "" ? null : encounter.control.value === "true",
+                    processId: resolvingProcess?.id ?? null,
                     provenance: dmJourneyProvenance("exploration-cell-record")
                 });
                 this.apply(result.state);
@@ -305,7 +320,23 @@ export class ExpeditionJourneyPanel {
         if (process.pendingActions.length > 0) card.append(this.muted(`Pending: ${process.pendingActions.map(value => `${humanize(value.kind)}${value.detail ? ` — ${value.detail}` : ""}`).join(" | ")}`));
         card.append(this.processStageSummary(process));
         if (process.execution.executionHandler === "procedure.exploration.flow") {
-            const completed = this.button("Mark current stage resolved");
+            const flow = this.getRuntime().procedure.runtime?.explorationFlow;
+            const isChoosingAction = !!flow?.actionSelectionStageKey &&
+                process.currentStageKey === flow.actionSelectionStageKey;
+            const isResolvingAction = !!flow?.actionResolutionStageKey &&
+                process.currentStageKey === flow.actionResolutionStageKey;
+            const choices = isChoosingAction ? this.requireState().explorationCell?.availableActions ?? [] : [];
+            const choice = isChoosingAction
+                ? this.select("Choose exploration action", choices.map(value => `${value}|${humanize(value)}`))
+                : null;
+            if (choice) card.append(choice.wrapper);
+            const completed = this.button(isChoosingAction ? "Select action and continue" : "Mark current stage resolved");
+            if (isResolvingAction) {
+                card.append(this.muted(
+                    "Resolve the selected action in Current exploration location. Encounter results must be resolved before this stage advances."));
+                return card;
+            }
+            completed.disabled = isChoosingAction && choices.length === 0;
             completed.addEventListener("click", () => {
                 void this.mutate(completed, async () => {
                     const result = await this.api.resolveProcess(
@@ -320,6 +351,7 @@ export class ExpeditionJourneyPanel {
                                 failureDelta: 0,
                                 complicationDelta: 0,
                                 completeStage: true,
+                                outcomeKey: choice?.control.value ?? null,
                                 completeProcess: false,
                                 failProcess: false,
                                 consequences: [],
