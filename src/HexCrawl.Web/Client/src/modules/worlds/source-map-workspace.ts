@@ -35,8 +35,8 @@ export class SourceMapWorkspace {
         sourceMapId: string;
         worldVersion: number;
         alignment: import("../../types").MapRegistrationTransform;
-        observedColumns: number;
-        observedRows: number;
+        observedColumns: number | null;
+        observedRows: number | null;
         margins: { leftPercent: number; topPercent: number; rightPercent: number; bottomPercent: number };
     } | null = null;
     private disposed = false;
@@ -569,17 +569,14 @@ export class SourceMapWorkspace {
                 sourceMapId: source.id, transform: candidate.alignment
             };
             this.map.requestRender();
-            if (candidate.status === "reported-match"
-                && options.observedColumns !== null && options.observedRows !== null) {
-                this.gridFitPreview = {
-                    sourceMapId: source.id,
-                    worldVersion: candidate.worldVersion,
-                    alignment: candidate.alignment,
-                    observedColumns: options.observedColumns,
-                    observedRows: options.observedRows,
-                    margins: options.margins
-                };
-            }
+            this.gridFitPreview = {
+                sourceMapId: source.id,
+                worldVersion: candidate.worldVersion,
+                alignment: candidate.alignment,
+                observedColumns: options.observedColumns,
+                observedRows: options.observedRows,
+                margins: options.margins
+            };
             this.mapHint.textContent =
                 "Check the printed cell boundaries against the playable grid inside the chosen margins. The source image is not cropped.";
         } else {
@@ -591,7 +588,8 @@ export class SourceMapWorkspace {
     private async acceptFullGridFit(): Promise<void> {
         const preview = this.gridFitPreview;
         const world = this.getWorld();
-        if (!preview || !this.selected || this.selected.id !== preview.sourceMapId
+        if (!preview || preview.observedColumns === null || preview.observedRows === null
+            || !this.selected || this.selected.id !== preview.sourceMapId
             || world.version !== preview.worldVersion
             || this.map.renderer.registrationPreview?.sourceMapId !== preview.sourceMapId
             || this.map.renderer.registrationPreview.transform !== preview.alignment)
