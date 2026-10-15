@@ -97,47 +97,17 @@ public sealed class ExpeditionJourneyService(
     {
         var expedition = await LoadAsync(
             expeditionId, ownerUserId, command.ExpectedVersion, cancellationToken);
-        var runtime = GenericProcedureRuntime.Bind(expedition.CampaignProcedure);
-        var flow = runtime.ExplorationFlow
-            ?? throw new InvalidOperationException(
-                "The pinned procedure has no executable exploration flow.");
+        var projection = ExplorationFlowProcessSnapshot.From(expedition.CampaignProcedure);
         if (expedition.Journey.ActiveProcesses.Any(process =>
                 process.Execution.ExecutionHandler ==
                     GenericProcedureExecutionHandlers.ExplorationFlowPolicy))
             throw new InvalidOperationException(
                 "Resolve or close the active exploration flow before starting another.");
 
-        var selected = expedition.CampaignProcedure.Modules.Single(module =>
-            module.Mechanic.ExecutionHandler ==
-                GenericProcedureExecutionHandlers.ExplorationFlowPolicy);
-        var definition = new JourneyProcessDefinition
-        {
-            ProcessKey = "exploration-flow",
-            DisplayName = "Exploration flow",
-            InitialStageKey = flow.StageKeys[0],
-            StageOrder = flow.StageKeys,
-            Stages = flow.StageKeys.Select(key => new JourneyStageDefinition
-            {
-                StageKey = key,
-                DisplayName = Humanize(key),
-                CompletionModel = JourneyStageCompletionModel.Explicit,
-                InitialProgressState = "unresolved"
-            }).ToArray()
-        };
-        var snapshot = new JourneyProcessExecutionSnapshot
-        {
-            StageModel = "ordered-exploration",
-            StageTransitionModel = JourneyStageTransitionModel.Sequential,
-            ProgressModel = "explicit-resolution",
-            ProgressKind = JourneyProgressValueKind.ExplicitState,
-            CompletionModel = "final-stage-completion",
-            RoleDriven = false,
-            MechanicKey = selected.Mechanic.Key,
-            MechanicVersion = selected.Mechanic.Version,
-            ExecutionHandler = selected.Mechanic.ExecutionHandler
-        };
+ 
         var transition = JourneyProcessEngine.Start(
-            expedition.Journey, command.ProcessId, definition, snapshot,
+            expedition.Journey, command.ProcessId,
+            projection.Definition, projection.Execution,
             JourneyClockReference.From(expedition.Runtime), expedition.Party,
             command.Provenance);
         var saved = await SaveAsync(
