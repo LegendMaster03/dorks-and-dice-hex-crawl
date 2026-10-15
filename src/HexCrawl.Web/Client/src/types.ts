@@ -194,11 +194,21 @@ export type ProcedureResolutionHelpers = {
     } | null;
 };
 
+export type ExplorationFlow = {
+    stageKeys: string[];
+    discoveryTrigger: "Manual" | "OnFirstVisit" | "OnExplore";
+    encounterTrigger: "Manual" | "EveryTravel" | "OnExploreOrOptionalTravel";
+    firstVisitAction: string | null;
+    repeatVisitAction: string | null;
+    restSiteAction: string | null;
+};
+
 export type ProcedureRuntime = {
     intervalHours: number;
     travelResolution: TravelResolutionMode;
     actualDistanceResolution: ActualDistanceResolutionMode;
     adjacency?: "EdgeOnly" | "EdgeAndVertex";
+    explorationFlow?: ExplorationFlow | null;
     encounterCadence: EncounterCadence;
     usesNavigationChecks: boolean;
     usesPersistentVeer: boolean;
