@@ -156,10 +156,10 @@ public sealed class WorldModule : IHexCrawlModule
                 && request.StraightEdgeSubdivisions is not { Count: > 0 }
                 && CrawlTilingNames.VerifiedDefaultPeriod(request.TilingDsSymbol) is { } period)
             {
-                var u = RequireLength(period.U * request.WorldUnitsPerAbstractPeriod, "period U");
-                var v = RequireLength(period.V * request.WorldUnitsPerAbstractPeriod, "period V");
-                constraints.Add(new("period-u-length", "world-unit", u, u));
-                constraints.Add(new("period-v-length", "world-unit", v, v));
+                var periodU = RequireLength(period.U * request.WorldUnitsPerAbstractPeriod, "period U");
+                var periodV = RequireLength(period.V * request.WorldUnitsPerAbstractPeriod, "period V");
+                constraints.Add(new("period-u-length", "world-unit", periodU, periodU));
+                constraints.Add(new("period-v-length", "world-unit", periodV, periodV));
                 constraints.Add(new("period-angle-degrees", "degrees",
                     period.AngleDegrees, period.AngleDegrees));
             }
