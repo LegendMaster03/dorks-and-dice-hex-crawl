@@ -803,11 +803,23 @@ public sealed record ExpeditionJourneyState
     public IReadOnlyList<JourneyHistoryRecord> History { get; init; } = [];
     public IReadOnlyList<Guid> ConsumedResolutionIds { get; init; } = [];
     public IReadOnlyList<string> ObservedRuntimeOccurrenceIds { get; init; } = [];
+    public IReadOnlyList<ExplorationCellRecord> ExplorationCells { get; init; } = [];
+    public IReadOnlyList<Guid> ConsumedExplorationOperationIds { get; init; } = [];
 
     public static ExpeditionJourneyState Empty { get; } = new();
 
     public void Validate(CrawlPartySheet party, IReadOnlySet<Guid>? knownConsequenceIds = null)
     {
+        if (ConsumedExplorationOperationIds.Any(id => id == Guid.Empty)
+            || ConsumedExplorationOperationIds.Distinct().Count() != ConsumedExplorationOperationIds.Count)
+            throw new InvalidOperationException("Exploration operation ids must be nonempty and unique.");
+        var cellIds = new HashSet<HexCrawl.Domain.Spatial.WorldCellId>();
+        foreach (var cell in ExplorationCells)
+        {
+            cell.Validate();
+            if (!cellIds.Add(cell.Cell) || !ConsumedExplorationOperationIds.Contains(cell.LastOperationId))
+                throw new InvalidOperationException("Exploration cells must be unique and reference an applied operation.");
+        }
         var processes = new Dictionary<Guid, JourneyProcessInstance>();
         foreach (var process in ActiveProcesses)
         {

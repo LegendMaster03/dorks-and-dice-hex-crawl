@@ -24,6 +24,16 @@ public sealed record StartExplorationFlowCommand(
     Guid ProcessId,
     ExpeditionConsequenceProvenance Provenance);
 
+public sealed record RecordExplorationCellCommand(
+    long ExpectedVersion,
+    Guid OperationId,
+    string? ActionKey,
+    bool MarkVisited,
+    bool MarkRestSite,
+    string? LocationName,
+    string? DmNote,
+    ExpeditionConsequenceProvenance Provenance);
+
 public sealed record ResolveJourneyProcessCommand(
     long ExpectedVersion,
     JourneyProcessResolutionInput Resolution,
@@ -114,6 +124,72 @@ public sealed class ExpeditionJourneyService(
             expedition with { Journey = transition.State },
             command.ExpectedVersion, cancellationToken);
         return new(saved, "Started the pinned exploration flow.", true, command.ProcessId);
+    }
+
+    /// <summary>
+    /// Records a DM-confirmed visit, rest-site designation, or manually resolved
+    /// location. This does not fabricate a random result, advance a stage,
+    /// consume resources, or alter player-visible knowledge.
+    /// </summary>
+    public async Task<JourneyOperationResult> RecordExplorationCellAsync(
+        Guid expeditionId,
+        string ownerUserId,
+        RecordExplorationCellCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        var expedition = await coreService.GetExpeditionAsync(
+            expeditionId, ownerUserId, cancellationToken);
+        if (command.OperationId == Guid.Empty)
+            throw new InvalidOperationException("Exploration operation id is required.");
+        if (expedition.Journey.ConsumedExplorationOperationIds.Contains(command.OperationId))
+            return new(expedition, "Exploration operation was already recorded.", false);
+        if (expedition.Version != command.ExpectedVersion)
+            throw new HexCrawlConcurrencyException(
+                "The expedition changed. Reload exploration state before applying this operation.");
+        command.Provenance.Validate();
+        if (expedition.Runtime is not CellExpeditionState spatial)
+            throw new InvalidOperationException("Exploration cell recording requires a spatial expedition.");
+        var flow = GenericProcedureRuntime.Bind(expedition.CampaignProcedure).ExplorationFlow
+            ?? throw new InvalidOperationException("The exact pinned procedure has no exploration flow.");
+        var (tiling, _) = await coreService.ResolveCellGeometryAsync(
+            expedition, ownerUserId, cancellationToken);
+        var cell = spatial.Traversal.CurrentCell;
+        tiling.Resolve(cell.Address);
+        var existing = expedition.Journey.ExplorationCells.SingleOrDefault(value => value.Cell == cell);
+        var restSite = existing?.RestSite == true || command.MarkRestSite;
+        var allowed = flow.AvailableActions(existing?.Visited == true, restSite);
+        if (string.IsNullOrWhiteSpace(command.ActionKey))
+        {
+            if (command.MarkVisited && allowed.Count > 0)
+                throw new InvalidOperationException("Choose an eligible exploration action for this location.");
+        }
+        else if (!allowed.Contains(command.ActionKey.Trim(), StringComparer.OrdinalIgnoreCase))
+            throw new InvalidOperationException("The selected exploration action is not available at this location.");
+        if (command.LocationName is { Length: > 300 } || command.DmNote is { Length: > 4000 })
+            throw new InvalidOperationException("Exploration location details exceed their limits.");
+        if (!command.MarkVisited && !command.MarkRestSite
+            && command.LocationName is null && command.DmNote is null)
+            throw new InvalidOperationException("No exploration information was supplied.");
+        var updated = new ExplorationCellRecord
+        {
+            Cell = cell,
+            Visited = existing?.Visited == true || command.MarkVisited,
+            RestSite = restSite,
+            LocationName = command.LocationName is null ? existing?.LocationName : command.LocationName.Trim(),
+            DmNote = command.DmNote is null ? existing?.DmNote : command.DmNote.Trim(),
+            LastOperationId = command.OperationId,
+            Provenance = command.Provenance
+        };
+        updated.Validate();
+        var next = expedition.Journey with
+        {
+            ExplorationCells = [.. expedition.Journey.ExplorationCells.Where(value => value.Cell != cell), updated],
+            ConsumedExplorationOperationIds =
+                [.. expedition.Journey.ConsumedExplorationOperationIds, command.OperationId]
+        };
+        var saved = await SaveAsync(
+            expedition with { Journey = next }, command.ExpectedVersion, cancellationToken);
+        return new(saved, "Recorded exploration information for the current cell.", true);
     }
 
     public async Task<JourneyOperationResult> ResolveProcessAsync(

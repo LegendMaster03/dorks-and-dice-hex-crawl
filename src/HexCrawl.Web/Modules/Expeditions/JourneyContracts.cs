@@ -1,6 +1,7 @@
 using HexCrawl.Application;
 using HexCrawl.Application.Persistence;
 using HexCrawl.Domain.Runtime;
+using HexCrawl.Domain.Spatial;
 
 namespace HexCrawl.Web.Modules.Expeditions;
 
@@ -78,6 +79,31 @@ public sealed record JourneyEventPolicyContract(
         policy.UnsupportedReason);
 }
 
+public sealed record ExplorationCellContextContract(
+    WorldCellId Cell,
+    bool Visited,
+    bool RestSite,
+    string? LocationName,
+    string? DmNote,
+    IReadOnlyList<string> AvailableActions,
+    ExplorationDiscoveryTrigger DiscoveryTrigger,
+    ExplorationEncounterTrigger EncounterTrigger)
+{
+    public static ExplorationCellContextContract? From(StoredExpedition expedition)
+    {
+        if (expedition.Runtime is not CellExpeditionState spatial)
+            return null;
+        var flow = GenericProcedureRuntime.Bind(expedition.CampaignProcedure).ExplorationFlow;
+        if (flow is null) return null;
+        var cell = spatial.Traversal.CurrentCell;
+        var entry = expedition.Journey.ExplorationCells.SingleOrDefault(value => value.Cell == cell);
+        var visited = entry?.Visited == true;
+        var rest = entry?.RestSite == true;
+        return new(cell, visited, rest, entry?.LocationName, entry?.DmNote,
+            flow.AvailableActions(visited, rest), flow.DiscoveryTrigger, flow.EncounterTrigger);
+    }
+}
+
 public sealed record ExpeditionJourneyStateContract(
     long ExpeditionVersion,
     JourneyProcessPolicyContract ProcessPolicy,
@@ -86,7 +112,8 @@ public sealed record ExpeditionJourneyStateContract(
     IReadOnlyList<JourneyProcessInstance> ClosedProcesses,
     IReadOnlyList<JourneyEventOccurrence> EventOccurrences,
     IReadOnlyList<JourneyResolutionRecord> Resolutions,
-    IReadOnlyList<JourneyHistoryRecord> History)
+    IReadOnlyList<JourneyHistoryRecord> History,
+    ExplorationCellContextContract? ExplorationCell)
 {
     public static ExpeditionJourneyStateContract From(StoredExpedition expedition) => new(
         expedition.Version,
@@ -96,7 +123,8 @@ public sealed record ExpeditionJourneyStateContract(
         expedition.Journey.ClosedProcesses,
         expedition.Journey.EventOccurrences,
         expedition.Journey.Resolutions,
-        expedition.Journey.History);
+        expedition.Journey.History,
+        ExplorationCellContextContract.From(expedition));
 }
 
 public sealed record JourneyOperationContract(
@@ -112,6 +140,21 @@ public sealed record JourneyOperationContract(
         result.ProcessId,
         result.EventOccurrenceId,
         ExpeditionJourneyStateContract.From(result.Expedition));
+}
+
+public sealed record RecordExplorationCellRequest(
+    long ExpectedVersion,
+    Guid OperationId,
+    string? ActionKey,
+    bool MarkVisited,
+    bool MarkRestSite,
+    string? LocationName,
+    string? DmNote,
+    ExpeditionConsequenceProvenance Provenance)
+{
+    public RecordExplorationCellCommand ToCommand() =>
+        new(ExpectedVersion, OperationId, ActionKey, MarkVisited,
+            MarkRestSite, LocationName, DmNote, Provenance);
 }
 
 public sealed record StartExplorationFlowRequest(

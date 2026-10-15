@@ -131,6 +131,86 @@ public sealed class Phase20ExplorationFlowEndpointsTests
         finally { TestWebHost.DeleteDatabase(database); }
     }
 
+
+    [Theory]
+    [InlineData(CrawlProcedureCatalog.WastelandWandererPresetKey, null)]
+    [InlineData(CrawlProcedureCatalog.WastelandWarfarePresetKey, "explore")]
+    public async Task ExplorationCellActionsArePinnedPersistentAndIdempotent(
+        string presetKey, string? firstAction)
+    {
+        var database = TestWebHost.NewDatabasePath();
+        try
+        {
+            Guid expeditionId, operationId = Guid.NewGuid();
+            long version;
+            using (var host = TestWebHost.Create(database, "alice"))
+            using (var client = host.CreateClient())
+            {
+                using var started = await client.PostAsJsonAsync("/api/expeditions/cells", new
+                {
+                    name = "Site ledger",
+                    procedureKey = presetKey,
+                    context = new { kind = "MaplessSpatial", name = "Unexplored world" }
+                }, JsonOptions);
+                started.EnsureSuccessStatusCode();
+                var created = await started.Content.ReadFromJsonAsync<JsonElement>();
+                expeditionId = created.GetProperty("id").GetGuid();
+                version = created.GetProperty("version").GetInt64();
+
+                using var wrongAction = await client.PostAsJsonAsync(
+                    $"/api/expeditions/{expeditionId:D}/journeys/exploration-cell",
+                    new { expectedVersion = version, operationId = Guid.NewGuid(),
+                        actionKey = "nonexistent-action", markVisited = true,
+                        markRestSite = false, provenance = Provenance("bad-action") }, JsonOptions);
+                Assert.Equal(HttpStatusCode.BadRequest, wrongAction.StatusCode);
+
+                using var visit = await client.PostAsJsonAsync(
+                    $"/api/expeditions/{expeditionId:D}/journeys/exploration-cell",
+                    new { expectedVersion = version, operationId,
+                        actionKey = firstAction, markVisited = true, markRestSite = false,
+                        locationName = "Manually resolved site", dmNote = "GM only",
+                        provenance = Provenance("site-visit") }, JsonOptions);
+                visit.EnsureSuccessStatusCode();
+                var response = await visit.Content.ReadFromJsonAsync<JsonElement>();
+                var state = response.GetProperty("state");
+                version = state.GetProperty("expeditionVersion").GetInt64();
+                var site = state.GetProperty("explorationCell");
+                Assert.True(site.GetProperty("visited").GetBoolean());
+                Assert.Equal("Manually resolved site", site.GetProperty("locationName").GetString());
+                Assert.Equal("GM only", site.GetProperty("dmNote").GetString());
+                if (firstAction is not null)
+                    Assert.Contains("travel", site.GetProperty("availableActions")
+                        .EnumerateArray().Select(value => value.GetString()));
+
+                using var replay = await client.PostAsJsonAsync(
+                    $"/api/expeditions/{expeditionId:D}/journeys/exploration-cell",
+                    new { expectedVersion = version - 1, operationId,
+                        actionKey = firstAction, markVisited = true, markRestSite = false,
+                        provenance = Provenance("site-visit") }, JsonOptions);
+                replay.EnsureSuccessStatusCode();
+                var duplicate = await replay.Content.ReadFromJsonAsync<JsonElement>();
+                Assert.False(duplicate.GetProperty("stateChanged").GetBoolean());
+                Assert.Equal(version,
+                    duplicate.GetProperty("state").GetProperty("expeditionVersion").GetInt64());
+
+                using var stale = await client.PostAsJsonAsync(
+                    $"/api/expeditions/{expeditionId:D}/journeys/exploration-cell",
+                    new { expectedVersion = version - 1, operationId = Guid.NewGuid(),
+                        markRestSite = true, provenance = Provenance("stale") }, JsonOptions);
+                Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
+            }
+
+            using (var restarted = TestWebHost.Create(database, "alice"))
+            using (var client = restarted.CreateClient())
+            {
+                var persisted = await client.GetFromJsonAsync<JsonElement>(
+                    $"/api/expeditions/{expeditionId:D}/journeys", JsonOptions);
+                Assert.Equal(version, persisted.GetProperty("expeditionVersion").GetInt64());
+                Assert.True(persisted.GetProperty("explorationCell").GetProperty("visited").GetBoolean());
+            }
+        }
+        finally { TestWebHost.DeleteDatabase(database); }
+    }
     [Fact]
     public async Task UnconfiguredProcedureCannotStartExplorationFlow()
     {
