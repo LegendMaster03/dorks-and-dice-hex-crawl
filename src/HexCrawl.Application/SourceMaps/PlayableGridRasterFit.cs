@@ -4,19 +4,48 @@ using HexCrawl.Domain.World;
 namespace HexCrawl.Application;
 
 /// <summary>
-/// Exact source-pixel-to-world placement for a full-bleed finite periodic
-/// quadrilateral grid. Neither an image's dimensions nor a ruleset name
+/// Source-pixel-to-world placement for a finite periodic quadrilateral grid,
+/// allowing margins outside the declared rectangular grid window.
+/// Neither an image's dimensions nor a ruleset name
 /// proves that its artwork has the claimed cell count: the DM must preview
 /// and explicitly accept this suggested registration.
 /// </summary>
+public sealed record RasterGridMargins(
+    double LeftPercent = 0,
+    double TopPercent = 0,
+    double RightPercent = 0,
+    double BottomPercent = 0)
+{
+    public (double Left, double Top, double Right, double Bottom) InnerRectangle(
+        int pixelWidth, int pixelHeight)
+    {
+        if (pixelWidth <= 0 || pixelHeight <= 0)
+            throw new InvalidOperationException("The raster must have valid dimensions.");
+        var values = new[] { LeftPercent, TopPercent, RightPercent, BottomPercent };
+        if (values.Any(value => !double.IsFinite(value) || value < 0 || value >= 100)
+            || LeftPercent + RightPercent >= 100
+            || TopPercent + BottomPercent >= 100)
+            throw new InvalidOperationException(
+                "Map margins must be finite non-negative percentages and leave a positive interior grid.");
+        var left = pixelWidth * LeftPercent / 100;
+        var top = pixelHeight * TopPercent / 100;
+        var right = pixelWidth * (100 - RightPercent) / 100;
+        var bottom = pixelHeight * (100 - BottomPercent) / 100;
+        if (right - left <= 1e-6 || bottom - top <= 1e-6)
+            throw new InvalidOperationException("Map margins leave too little space for a grid.");
+        return (left, top, right, bottom);
+    }
+}
+
 public static class PlayableGridRasterFit
 {
     public static MapRegistrationTransform Calculate(
-        PeriodicWorldTiling tiling, int pixelWidth, int pixelHeight)
+        PeriodicWorldTiling tiling, int pixelWidth, int pixelHeight,
+        RasterGridMargins? margins = null)
     {
         ArgumentNullException.ThrowIfNull(tiling);
-        if (pixelWidth <= 0 || pixelHeight <= 0)
-            throw new InvalidOperationException("A grid-fit requires a raster with valid pixel dimensions.");
+        var (left, top, right, bottom) =
+            (margins ?? new RasterGridMargins()).InnerRectangle(pixelWidth, pixelHeight);
         if (tiling.PlayableBounds is not { } bounds)
             throw new InvalidOperationException(
                 "Set finite world map bounds before fitting the entire raster to the playable grid.");
@@ -68,9 +97,9 @@ public static class PlayableGridRasterFit
             origin.X + bounds.Height * v.X, origin.Y + bounds.Height * v.Y);
         var alignment = AffineRegistrationSolver.Solve(
         [
-            new(new WorldPoint(0, 0), origin),
-            new(new WorldPoint(pixelWidth, 0), farU),
-            new(new WorldPoint(0, pixelHeight), farV)
+            new(new WorldPoint(left, top), origin),
+            new(new WorldPoint(right, top), farU),
+            new(new WorldPoint(left, bottom), farV)
         ]);
         var coverage = AffineRegistrationSolver.Coverage(alignment, pixelWidth, pixelHeight);
         if (coverage.Any(point => !double.IsFinite(point.X) || !double.IsFinite(point.Y)))
