@@ -59,16 +59,22 @@ public static class PlayableGridRasterFit
             throw new InvalidOperationException(
                 "The tile motif is not exactly the rectangle of its periodic translations. Use detected or manual registration.");
 
-        var imageToWorld = MapRegistrationTransform.Affine(
-            u.X * bounds.Width / pixelWidth,
-            v.X * bounds.Height / pixelHeight,
-            u.Y * bounds.Width / pixelWidth,
-            v.Y * bounds.Height / pixelHeight,
-            origin.X, origin.Y);
-        // Keep all math server-authoritative and reject non-finite results.
-        var worldCorner = imageToWorld.ToWorld(new WorldPoint(pixelWidth, pixelHeight));
-        if (!double.IsFinite(worldCorner.X) || !double.IsFinite(worldCorner.Y))
+        // Use the same three-point affine registration solver as manual
+        // source-map placement. Bounds only supply the authoritative matching
+        // corners; they do not introduce another image-transform algorithm.
+        var farU = new WorldPoint(
+            origin.X + bounds.Width * u.X, origin.Y + bounds.Width * u.Y);
+        var farV = new WorldPoint(
+            origin.X + bounds.Height * v.X, origin.Y + bounds.Height * v.Y);
+        var alignment = AffineRegistrationSolver.Solve(
+        [
+            new(new WorldPoint(0, 0), origin),
+            new(new WorldPoint(pixelWidth, 0), farU),
+            new(new WorldPoint(0, pixelHeight), farV)
+        ]);
+        var coverage = AffineRegistrationSolver.Coverage(alignment, pixelWidth, pixelHeight);
+        if (coverage.Any(point => !double.IsFinite(point.X) || !double.IsFinite(point.Y)))
             throw new InvalidOperationException("The fitted grid exceeds representable world coordinates.");
-        return imageToWorld;
+        return alignment;
     }
 }
