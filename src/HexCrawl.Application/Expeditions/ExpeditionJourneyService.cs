@@ -42,7 +42,8 @@ public sealed record RecordExplorationCellCommand(
     string? RegionName = null,
     string? RegionDmNote = null,
     IReadOnlyList<ExplorationTableResult>? LocationTableResults = null,
-    IReadOnlyList<ExplorationTableResult>? RegionTableResults = null);
+    IReadOnlyList<ExplorationTableResult>? RegionTableResults = null,
+    IReadOnlyList<ExplorationTableRollRequest>? TableRolls = null);
 
 public sealed record ResolveJourneyProcessCommand(
     long ExpectedVersion,
@@ -74,7 +75,8 @@ public sealed record JourneyOperationResult(
 
 public sealed class ExpeditionJourneyService(
     IHexCrawlStore store,
-    HexCrawlService coreService)
+    HexCrawlService coreService,
+    ExplorationTableRoller tableRoller)
 {
     public async Task<JourneyOperationResult> StartProcessAsync(
         Guid expeditionId,
@@ -225,7 +227,8 @@ public sealed class ExpeditionJourneyService(
             && command.LocationName is null && command.DmNote is null
             && command.RegionKey is null && command.RegionName is null
             && command.RegionDmNote is null && command.LocationTableResults is null
-            && command.RegionTableResults is null)
+            && command.RegionTableResults is null
+            && (command.TableRolls is null || command.TableRolls.Count == 0))
             throw new InvalidOperationException("No exploration information was supplied.");
         if (command.RegionKey is not null)
             ExplorationTableResult.RequireKey(command.RegionKey, "Exploration region key", 120);
@@ -237,14 +240,35 @@ public sealed class ExpeditionJourneyService(
             ExplorationTableResult.ValidateCollection(command.LocationTableResults);
         if (command.RegionTableResults is not null)
             ExplorationTableResult.ValidateCollection(command.RegionTableResults);
+        var rollRequests = command.TableRolls ?? [];
+        ExplorationTableRollRequest.ValidateCollection(rollRequests);
         var assignedRegion = command.RegionKey ?? existing?.RegionKey;
+        if (assignedRegion is null && rollRequests.Any(value => value.Scope == ExplorationTableScope.Region))
+            throw new InvalidOperationException("A region table roll requires an assigned region key.");
+        if (command.MarkVisited && flow.ShouldGenerateLocation(existing?.Visited == true, command.ActionKey)
+            && flow.RequireRegionOnDiscovery && assignedRegion is null)
+            throw new InvalidOperationException("Resolve the discovered region before completing this action.");
+        // Evaluate the supplied tables once, only on a fresh, version-valid
+        // operation. Replay is checked above, before any random source is used.
+        var rolled = rollRequests.Count == 0
+            ? [] : tableRoller.Roll(rollRequests);
+        var locationResults = OverlayResults(
+            command.LocationTableResults ?? existing?.TableResults ?? [],
+            rolled.Where(value => value.Scope == ExplorationTableScope.Location)
+                .Select(value => value.Result).ToArray());
+        var priorRegion = assignedRegion is null ? null :
+            expedition.Journey.ExplorationRegions.SingleOrDefault(value => value.Key == assignedRegion);
+        var regionResults = OverlayResults(
+            command.RegionTableResults ?? priorRegion?.TableResults ?? [],
+            rolled.Where(value => value.Scope == ExplorationTableScope.Region)
+                .Select(value => value.Result).ToArray());
         if (command.MarkVisited && flow.ShouldGenerateLocation(existing?.Visited == true, command.ActionKey))
         {
             if (flow.RequireRegionOnDiscovery && assignedRegion is null)
                 throw new InvalidOperationException("Resolve the discovered region before completing this action.");
             var locationIsNamed = !string.IsNullOrWhiteSpace(command.LocationName ?? existing?.LocationName);
             var locationTable = flow.LocationResultTableKey ?? "location";
-            var locationIsResolved = (command.LocationTableResults ?? existing?.TableResults ?? [])
+            var locationIsResolved = locationResults
                 .Any(result => string.Equals(result.TableKey, locationTable, StringComparison.OrdinalIgnoreCase));
             if (flow.RequireResolvedLocationOnDiscovery && !locationIsNamed && !locationIsResolved)
                 throw new InvalidOperationException(
@@ -278,26 +302,25 @@ public sealed class ExpeditionJourneyService(
             Visited = existing?.Visited == true || command.MarkVisited,
             RestSite = restSite || command.MarkRestSite,
             RegionKey = assignedRegion,
-            TableResults = command.LocationTableResults ?? existing?.TableResults ?? [],
+            TableResults = locationResults,
             LocationName = command.LocationName is null ? existing?.LocationName : command.LocationName.Trim(),
             DmNote = command.DmNote is null ? existing?.DmNote : command.DmNote.Trim(),
             LastOperationId = command.OperationId,
             Provenance = command.Provenance
         };
         updated.Validate();
-        var priorRegion = assignedRegion is null ? null :
-            expedition.Journey.ExplorationRegions.SingleOrDefault(value => value.Key == assignedRegion);
         var regions = expedition.Journey.ExplorationRegions;
         if (assignedRegion is not null
             && (priorRegion is null || command.RegionName is not null
-                || command.RegionDmNote is not null || command.RegionTableResults is not null))
+                || command.RegionDmNote is not null || command.RegionTableResults is not null
+                || rolled.Any(value => value.Scope == ExplorationTableScope.Region)))
         {
             var region = new ExplorationRegionRecord
             {
                 Key = assignedRegion,
                 Name = command.RegionName is null ? priorRegion?.Name : command.RegionName.Trim(),
                 DmNote = command.RegionDmNote is null ? priorRegion?.DmNote : command.RegionDmNote.Trim(),
-                TableResults = command.RegionTableResults ?? priorRegion?.TableResults ?? [],
+                TableResults = regionResults,
                 LastOperationId = command.OperationId,
                 Provenance = command.Provenance
             };
@@ -643,6 +666,17 @@ public sealed class ExpeditionJourneyService(
         return new(saved, $"Journey process marked {command.Status}.", true, processId);
     }
 
+    private static IReadOnlyList<ExplorationTableResult> OverlayResults(
+        IReadOnlyList<ExplorationTableResult> existing,
+        IReadOnlyList<ExplorationTableResult> rolled)
+    {
+        ExplorationTableResult.ValidateCollection(existing);
+        ExplorationTableResult.ValidateCollection(rolled);
+        var replacement = rolled.Select(value => value.TableKey)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return [.. existing.Where(value => !replacement.Contains(value.TableKey)), .. rolled];
+    }
+
     private static ExplorationOperationRecord ExplorationSubmission(
         RecordExplorationCellCommand command, HexCrawl.Domain.Spatial.WorldCellId cell)
     {
@@ -651,11 +685,12 @@ public sealed class ExpeditionJourneyService(
         // with changed time, resource, recovery, or other consequence inputs.
         var fingerprint = consequences.Count == 0 ? null :
             Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(consequences)));
-        var tableFingerprint = command.LocationTableResults is null && command.RegionTableResults is null
+        var tableFingerprint = command.LocationTableResults is null
+            && command.RegionTableResults is null && (command.TableRolls?.Count ?? 0) == 0
             ? null
             : Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
             {
-                command.LocationTableResults, command.RegionTableResults
+                command.LocationTableResults, command.RegionTableResults, command.TableRolls
             })));
         return new ExplorationOperationRecord(command.OperationId, cell, command.ActionKey?.Trim(),
             command.MarkVisited, command.MarkRestSite, command.LocationName?.Trim(),

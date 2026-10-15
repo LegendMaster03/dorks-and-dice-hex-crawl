@@ -182,13 +182,14 @@ public sealed record RecordExplorationCellRequest(
     string? RegionName = null,
     string? RegionDmNote = null,
     IReadOnlyList<ExplorationTableResult>? LocationTableResults = null,
-    IReadOnlyList<ExplorationTableResult>? RegionTableResults = null)
+    IReadOnlyList<ExplorationTableResult>? RegionTableResults = null,
+    IReadOnlyList<ExplorationTableRollRequest>? TableRolls = null)
 {
     public RecordExplorationCellCommand ToCommand() =>
         new(ExpectedVersion, OperationId, ActionKey, MarkVisited,
             MarkRestSite, LocationName, DmNote, EncounterOccurs, Provenance,
             ProcessId, Consequences, RegionKey, RegionName, RegionDmNote,
-            LocationTableResults, RegionTableResults);
+            LocationTableResults, RegionTableResults, TableRolls);
 }
 
 public sealed record StartExplorationFlowRequest(

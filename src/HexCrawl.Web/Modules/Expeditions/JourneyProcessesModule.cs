@@ -16,8 +16,11 @@ public sealed class JourneyProcessesModule : IHexCrawlModule
         Dependencies = ["expeditions", "environment-context", "survival-resources"]
     };
 
-    public void RegisterServices(IServiceCollection services) =>
+    public void RegisterServices(IServiceCollection services)
+    {
+        services.AddScoped<ExplorationTableRoller>();
         services.AddScoped<ExpeditionJourneyService>();
+    }
 
     public void MapEndpoints(RouteGroupBuilder api)
     {
