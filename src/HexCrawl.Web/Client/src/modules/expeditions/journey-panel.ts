@@ -341,9 +341,8 @@ export class ExpeditionJourneyPanel {
             if (isResolvingAction) {
                 card.append(this.muted(
                     "Resolve the selected action in Current exploration location. Encounter results must be resolved before this stage advances."));
-                return card;
-            }
-            completed.disabled = isChoosingAction && choices.length === 0;
+            } else {
+                completed.disabled = isChoosingAction && choices.length === 0;
             completed.addEventListener("click", () => {
                 void this.mutate(completed, async () => {
                     const result = await this.api.resolveProcess(
@@ -373,6 +372,7 @@ export class ExpeditionJourneyPanel {
             manualSummary.textContent = "Advanced stage resolution and consequences";
             manual.append(manualSummary, this.resolveProcessForm(process));
             card.append(this.muted("Mark the stage only after resolving its action, encounter, or journal step at the table."), completed, manual);
+            }
         } else {
             card.append(this.resolveProcessForm(process));
         }
