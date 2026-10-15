@@ -355,14 +355,35 @@ function chooseDefaultProcedure(
         if (current.kind === "saved") return;
     }
 
-    const preferred = assistant === "travel" ? "simple-fixed-distance" : "alexandrian-advanced";
-    if (!presets.some(preset => preset.presetKey === preferred)) return;
-    const option = [...selectElement.options].find(candidate => {
-        if (!candidate.value) return false;
-        const choice = readProcedureStartChoice(candidate.value);
-        return choice.kind === "preset" && choice.presetKey === preferred;
-    });
-    if (option) selectElement.value = option.value;
+    // Select by the actual mechanic capability, not a preferred game's identity.
+    // Travel favors a light-weight journey; navigation and encounters favor
+    // presets exposing their corresponding procedures.
+    const scored = presets
+        .filter(preset => preset.procedure.isExecutable && preset.procedure.runtime !== null)
+        .map(preset => {
+            const runtime = preset.procedure.runtime!;
+            const penalty = assistant === "travel"
+                ? (runtime.travelResolution === "ContinuousDistance" ? 0 : 4)
+                    + (runtime.usesNavigationChecks ? 1 : 0)
+                    + (runtime.encounterCadence === "None" ? 0 : 1)
+                : assistant === "navigation"
+                    ? (runtime.usesNavigationChecks ? 0 : 4)
+                    : (runtime.encounterCadence === "None" ? 4 : 0);
+            return { preset, penalty };
+        })
+        .sort((left, right) => left.penalty - right.penalty
+            || left.preset.procedure.modules.length - right.preset.procedure.modules.length);
+
+    const choices = [...selectElement.options].filter(option => option.value);
+    for (const candidate of scored) {
+        const match = choices.find(option => {
+            const choice = readProcedureStartChoice(option.value);
+            return choice.kind === "preset" && choice.presetKey === candidate.preset.presetKey;
+        });
+        if (!match) continue;
+        selectElement.value = match.value;
+        break;
+    }
 }
 
 function title(assistant: ExpeditionAssistant): string {

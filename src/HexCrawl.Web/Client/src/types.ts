@@ -237,6 +237,7 @@ export type CampaignProcedure = {
     schemaVersion: string;
     tilingDsSymbol: string;
     isExecutable: boolean;
+    supportsSpatialExecution?: boolean;
     runtime: ProcedureRuntime | null;
     focusedIntervalPolicy: FocusedIntervalPolicy;
     modules: ProcedureModule[];
