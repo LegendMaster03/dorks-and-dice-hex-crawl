@@ -108,8 +108,8 @@ public sealed record ExplorationCellContextContract(
         var evaluations = actions.Count > 0
             ? actions.Select(action => new ExplorationActionEncounterContract(
                 action, flow.EncounterForAction(visited, action))).ToArray()
-            : [new ExplorationActionEncounterContract(
-                null, flow.EncounterForAction(visited, null))];
+            : new[] { new ExplorationActionEncounterContract(
+                null, flow.EncounterForAction(visited, null)) };
         return new(cell, visited, rest, entry?.LocationName, entry?.DmNote,
             actions, evaluations, flow.DiscoveryTrigger, flow.EncounterTrigger);
     }
