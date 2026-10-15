@@ -279,7 +279,7 @@ export type SetExplorationTableRequest = {
     scope: ExplorationSavedTableReference["scope"];
     tableKey: string;
     definition: ExplorationTableRollRequest | null;
-    provenance: ConsequenceProvenance;
+    provenance: StartJourneyProcessRequest["provenance"];
 };
 
 export type ExplorationCellContext = {
