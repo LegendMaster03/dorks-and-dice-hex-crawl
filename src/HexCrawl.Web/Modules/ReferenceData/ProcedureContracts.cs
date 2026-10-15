@@ -57,11 +57,14 @@ public sealed record ExplorationFlowContract(
     ExplorationEncounterTrigger EncounterTrigger,
     string? FirstVisitAction,
     string? RepeatVisitAction,
-    string? RestSiteAction)
+    string? RestSiteAction,
+    string? ActionSelectionStageKey,
+    string? ActionResolutionStageKey)
 {
     public static ExplorationFlowContract From(ExplorationFlowPolicy policy) => new(
         policy.StageKeys, policy.DiscoveryTrigger, policy.EncounterTrigger,
-        policy.FirstVisitAction, policy.RepeatVisitAction, policy.RestSiteAction);
+        policy.FirstVisitAction, policy.RepeatVisitAction, policy.RestSiteAction,
+        policy.ActionSelectionStageKey, policy.ActionResolutionStageKey);
 }
 
 public sealed record ProcedureRuntimeContract(
