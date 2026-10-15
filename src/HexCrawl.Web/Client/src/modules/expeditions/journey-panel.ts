@@ -232,6 +232,16 @@ export class ExpeditionJourneyPanel {
         section.append(this.muted(
             `Discovery trigger: ${humanize(cell.discoveryTrigger)}. Encounter trigger: ${humanize(cell.encounterTrigger)}. ` +
             "Location details are entered after manual resolution; nothing is generated or revealed to players automatically."));
+        if (cell.regionKey) section.append(this.muted(
+            `Region: ${cell.regionName ?? cell.regionKey} (${cell.regionKey}). ${cell.regionDmNote ?? ""}`));
+        const describeTableResults = (subject: string, results: typeof cell.locationTableResults): void => {
+            for (const entry of results) section.append(this.muted(
+                `${subject} / ${entry.tableKey}: ${entry.resultText}` +
+                (entry.roll ? ` · Roll: ${entry.roll}` : "") +
+                (entry.sourceReference ? ` · Source: ${entry.sourceReference}` : "")));
+        };
+        describeTableResults("Location result", cell.locationTableResults);
+        describeTableResults("Region result", cell.regionTableResults);
         for (const opportunity of cell.encounterOpportunities) {
             if (opportunity.requirement === "None") continue;
             section.append(this.muted(
@@ -251,10 +261,48 @@ export class ExpeditionJourneyPanel {
             action.control.value = selectedAction;
             action.control.disabled = true;
         }
-        const visited = this.checkbox("Record this exploration action / visit", true);
+        const visited = this.checkbox("Record this exploration action / visit", !cell.visited || !!resolvingProcess);
         const rest = this.checkbox("Designate as rest site", false);
         const name = this.input("Resolved location name (GM only)", "text", cell.locationName ?? "");
         const note = this.input("Location notes (GM only)", "text", cell.dmNote ?? "");
+        const regionGroup = document.createElement("details");
+        const regionTitle = document.createElement("summary");
+        regionTitle.textContent = "Region membership and manually resolved table results";
+        const regionKey = this.input("Region key (GM grouping)", "text", cell.regionKey ?? "");
+        const regionName = this.input("Resolved region name", "text", cell.regionName ?? "");
+        const regionNote = this.input("Region notes (GM only)", "text", cell.regionDmNote ?? "");
+        const tableFields = (subject: string): {
+            group: HTMLElement;
+            build: (existing: typeof cell.locationTableResults) => typeof cell.locationTableResults | null;
+        } => {
+            const group = document.createElement("fieldset");
+            const legend = document.createElement("legend");
+            legend.textContent = subject + " table outcome (optional)";
+            const key = this.input("Table key", "text");
+            const result = this.input("Resolved result text", "text");
+            const roll = this.input("Roll / drawn entry", "text");
+            const source = this.input("Source reference", "text");
+            group.append(legend, key.wrapper, result.wrapper, roll.wrapper, source.wrapper);
+            return {
+                group,
+                build: existing => {
+                    const tableKey = key.control.value.trim();
+                    const resultText = result.control.value.trim();
+                    if (!tableKey && !resultText) return null;
+                    if (!tableKey || !resultText)
+                        throw new Error(subject + " table key and resolved result text are both required.");
+                    const entry = {
+                        tableKey, resultText, roll: nullable(roll.control.value),
+                        sourceReference: nullable(source.control.value)
+                    };
+                    return [...existing.filter(value => value.tableKey.toLowerCase() !== tableKey.toLowerCase()), entry];
+                }
+            };
+        };
+        const locationTable = tableFields("Location");
+        const regionTable = tableFields("Region");
+        regionGroup.append(regionTitle, regionKey.wrapper, regionName.wrapper, regionNote.wrapper,
+            locationTable.group, regionTable.group);
         const encounter = this.select("Optional / risk-based encounter result",
             ["|Unresolved", "true|Encounter occurs", "false|No encounter"]);
         const syncEncounter = (): void => {
@@ -272,22 +320,34 @@ export class ExpeditionJourneyPanel {
         advancedResult.append(advancedSummary, costs.container);
         const submit = this.button("Record exploration details");
         form.append(action.wrapper, visited.wrapper, rest.wrapper, name.wrapper, note.wrapper,
-            encounter.wrapper, advancedResult, submit);
+            regionGroup, encounter.wrapper, advancedResult, submit);
         form.addEventListener("submit", domEvent => {
             domEvent.preventDefault();
             void this.mutate(submit, async () => {
                 const operationId = crypto.randomUUID();
+                const locationTableResults = locationTable.build(cell.locationTableResults);
+                const regionTableResults = regionTable.build(cell.regionTableResults);
+                const resolvedRegionKey = nullable(regionKey.control.value);
+                if ((regionTableResults || nullable(regionName.control.value) ||
+                    nullable(regionNote.control.value)) && !resolvedRegionKey)
+                    throw new Error("Choose a region key before recording region data.");
                 const result = await this.api.recordExplorationCell(this.expeditionId, {
                     expectedVersion: this.requireState().expeditionVersion,
                     operationId,
-                    actionKey: nullable(action.control.value),
+                    actionKey: visited.control.checked ? nullable(action.control.value) : null,
                     markVisited: visited.control.checked,
                     markRestSite: rest.control.checked,
                     locationName: nullable(name.control.value),
                     dmNote: nullable(note.control.value),
-                    encounterOccurs: encounter.control.value === "" ? null : encounter.control.value === "true",
-                    processId: resolvingProcess?.id ?? null,
-                    consequences: costs.build("exploration-action", operationId, operationId),
+                    encounterOccurs: !visited.control.checked || encounter.control.value === ""
+                        ? null : encounter.control.value === "true",
+                    processId: visited.control.checked ? resolvingProcess?.id ?? null : null,
+                    consequences: visited.control.checked ? costs.build("exploration-action", operationId, operationId) : [],
+                    regionKey: resolvedRegionKey,
+                    regionName: nullable(regionName.control.value),
+                    regionDmNote: nullable(regionNote.control.value),
+                    locationTableResults,
+                    regionTableResults,
                     provenance: dmJourneyProvenance("exploration-cell-record")
                 });
                 this.apply(result.state);

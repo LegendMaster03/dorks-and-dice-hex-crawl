@@ -92,7 +92,12 @@ public sealed record ExplorationCellContextContract(
     IReadOnlyList<string> AvailableActions,
     IReadOnlyList<ExplorationActionEncounterContract> EncounterOpportunities,
     ExplorationDiscoveryTrigger DiscoveryTrigger,
-    ExplorationEncounterTrigger EncounterTrigger)
+    ExplorationEncounterTrigger EncounterTrigger,
+    string? RegionKey,
+    string? RegionName,
+    string? RegionDmNote,
+    IReadOnlyList<ExplorationTableResult> LocationTableResults,
+    IReadOnlyList<ExplorationTableResult> RegionTableResults)
 {
     public static ExplorationCellContextContract? From(StoredExpedition expedition)
     {
@@ -110,8 +115,12 @@ public sealed record ExplorationCellContextContract(
                 action, flow.EncounterForAction(visited, action))).ToArray()
             : new[] { new ExplorationActionEncounterContract(
                 null, flow.EncounterForAction(visited, null)) };
+        var region = entry?.RegionKey is null ? null
+            : expedition.Journey.ExplorationRegions.SingleOrDefault(value => value.Key == entry.RegionKey);
         return new(cell, visited, rest, entry?.LocationName, entry?.DmNote,
-            actions, evaluations, flow.DiscoveryTrigger, flow.EncounterTrigger);
+            actions, evaluations, flow.DiscoveryTrigger, flow.EncounterTrigger,
+            entry?.RegionKey, region?.Name, region?.DmNote,
+            entry?.TableResults ?? [], region?.TableResults ?? []);
     }
 }
 
@@ -164,12 +173,18 @@ public sealed record RecordExplorationCellRequest(
     bool? EncounterOccurs,
     ExpeditionConsequenceProvenance Provenance,
     Guid? ProcessId = null,
-    IReadOnlyList<ExpeditionConsequence>? Consequences = null)
+    IReadOnlyList<ExpeditionConsequence>? Consequences = null,
+    string? RegionKey = null,
+    string? RegionName = null,
+    string? RegionDmNote = null,
+    IReadOnlyList<ExplorationTableResult>? LocationTableResults = null,
+    IReadOnlyList<ExplorationTableResult>? RegionTableResults = null)
 {
     public RecordExplorationCellCommand ToCommand() =>
         new(ExpectedVersion, OperationId, ActionKey, MarkVisited,
             MarkRestSite, LocationName, DmNote, EncounterOccurs, Provenance,
-            ProcessId, Consequences);
+            ProcessId, Consequences, RegionKey, RegionName, RegionDmNote,
+            LocationTableResults, RegionTableResults);
 }
 
 public sealed record StartExplorationFlowRequest(

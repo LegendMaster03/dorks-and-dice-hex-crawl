@@ -247,6 +247,13 @@ export type JourneyEventPolicy = {
     unsupportedReason: string | null;
 };
 
+export type ExplorationTableResult = {
+    tableKey: string;
+    resultText: string;
+    roll: string | null;
+    sourceReference: string | null;
+};
+
 export type ExplorationCellContext = {
     cell: WorldCellId;
     visited: boolean;
@@ -260,6 +267,11 @@ export type ExplorationCellContext = {
     }>;
     discoveryTrigger: "Manual" | "OnFirstVisit" | "OnExplore";
     encounterTrigger: "Manual" | "EveryTravel" | "OnExploreOrOptionalTravel";
+    regionKey: string | null;
+    regionName: string | null;
+    regionDmNote: string | null;
+    locationTableResults: ExplorationTableResult[];
+    regionTableResults: ExplorationTableResult[];
 };
 
 export type RecordExplorationCellRequest = {
@@ -273,6 +285,11 @@ export type RecordExplorationCellRequest = {
     encounterOccurs: boolean | null;
     processId: string | null;
     consequences: ExpeditionConsequenceInput[];
+    regionKey: string | null;
+    regionName: string | null;
+    regionDmNote: string | null;
+    locationTableResults: ExplorationTableResult[] | null;
+    regionTableResults: ExplorationTableResult[] | null;
     provenance: StartJourneyProcessRequest["provenance"];
 };
 
