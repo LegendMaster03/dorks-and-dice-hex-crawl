@@ -17,7 +17,7 @@ Both presets use the same periodic geometry, movement, optional bounds, pinned e
 - Derive eligible exploration actions from the pinned flow and the recorded visit/rest-site state.
 - Explain mandatory versus discretionary/risk-dependent encounter requirements **without** fabricating a roll, encounter, opponent, or location table. A procedure with a supported pinned generic journey-event policy can persist the unresolved encounter occurrence; Warfare configures this capability. A discretionary encounter requires an explicit DM result before recording the action. While such a journey-event encounter remains unresolved, the pinned event policy prevents further travel. Wanderer's existing per-watch runtime encounter remains the encounter authority for its configured travel cadence.
 - Preserve player-facing map knowledge separately. DM-entered site details are **not** automatically revealed to players.
-- Existing generic journey-stage resolutions support explicit consequences, including time, resources, and encounter circumstances, where the DM supplies a resolved result.
+- Existing generic journey-stage and exploration-action resolutions support explicit consequences, including time, resources, and encounter circumstances, where the DM supplies a resolved result. An action applies its supplied consequences atomically with its location record and any resulting event; replaying the operation identifier can not apply them again. These are manual amounts, not guessed published costs.
 
 ## Deliberately manual or not yet integrated
 

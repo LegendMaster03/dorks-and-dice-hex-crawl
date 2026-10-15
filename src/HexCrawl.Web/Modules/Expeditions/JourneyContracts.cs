@@ -163,11 +163,13 @@ public sealed record RecordExplorationCellRequest(
     string? DmNote,
     bool? EncounterOccurs,
     ExpeditionConsequenceProvenance Provenance,
-    Guid? ProcessId = null)
+    Guid? ProcessId = null,
+    IReadOnlyList<ExpeditionConsequence>? Consequences = null)
 {
     public RecordExplorationCellCommand ToCommand() =>
         new(ExpectedVersion, OperationId, ActionKey, MarkVisited,
-            MarkRestSite, LocationName, DmNote, EncounterOccurs, Provenance, ProcessId);
+            MarkRestSite, LocationName, DmNote, EncounterOccurs, Provenance,
+            ProcessId, Consequences);
 }
 
 public sealed record StartExplorationFlowRequest(

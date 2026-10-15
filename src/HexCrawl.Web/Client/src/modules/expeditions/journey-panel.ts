@@ -265,15 +265,21 @@ export class ExpeditionJourneyPanel {
         };
         action.control.addEventListener("change", syncEncounter);
         syncEncounter();
+        const costs = this.consequenceFields();
+        const advancedResult = document.createElement("details");
+        const advancedSummary = document.createElement("summary");
+        advancedSummary.textContent = "Optional time, resource, or recovery result";
+        advancedResult.append(advancedSummary, costs.container);
         const submit = this.button("Record exploration details");
         form.append(action.wrapper, visited.wrapper, rest.wrapper, name.wrapper, note.wrapper,
-            encounter.wrapper, submit);
+            encounter.wrapper, advancedResult, submit);
         form.addEventListener("submit", domEvent => {
             domEvent.preventDefault();
             void this.mutate(submit, async () => {
+                const operationId = crypto.randomUUID();
                 const result = await this.api.recordExplorationCell(this.expeditionId, {
                     expectedVersion: this.requireState().expeditionVersion,
-                    operationId: crypto.randomUUID(),
+                    operationId,
                     actionKey: nullable(action.control.value),
                     markVisited: visited.control.checked,
                     markRestSite: rest.control.checked,
@@ -281,6 +287,7 @@ export class ExpeditionJourneyPanel {
                     dmNote: nullable(note.control.value),
                     encounterOccurs: encounter.control.value === "" ? null : encounter.control.value === "true",
                     processId: resolvingProcess?.id ?? null,
+                    consequences: costs.build("exploration-action", operationId, operationId),
                     provenance: dmJourneyProvenance("exploration-cell-record")
                 });
                 this.apply(result.state);

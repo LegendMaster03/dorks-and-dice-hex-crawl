@@ -68,8 +68,14 @@ public sealed record ExplorationOperationRecord(
     Guid? ProcessId,
     ExpeditionConsequenceProvenance Provenance)
 {
+    public string? ConsequenceFingerprint { get; init; }
+
     public void Validate()
     {
+        if (ConsequenceFingerprint is not null &&
+            (ConsequenceFingerprint.Length != 64 ||
+             ConsequenceFingerprint.Any(value => !char.IsAsciiHexDigit(value))))
+            throw new InvalidOperationException("Exploration consequence fingerprint is malformed.");
         if (OperationId == Guid.Empty || Cell.TilingId == Guid.Empty
             || ProcessId == Guid.Empty)
             throw new InvalidOperationException("Exploration operation identifiers must be valid.");

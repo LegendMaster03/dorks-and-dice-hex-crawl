@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text.Json;
 using HexCrawl.Application.Persistence;
 using HexCrawl.Domain.Runtime;
 using HexCrawl.Domain.World;
@@ -34,7 +36,8 @@ public sealed record RecordExplorationCellCommand(
     string? DmNote,
     bool? EncounterOccurs,
     ExpeditionConsequenceProvenance Provenance,
-    Guid? ProcessId = null);
+    Guid? ProcessId = null,
+    IReadOnlyList<ExpeditionConsequence>? Consequences = null);
 
 public sealed record ResolveJourneyProcessCommand(
     long ExpectedVersion,
@@ -215,6 +218,11 @@ public sealed class ExpeditionJourneyService(
         if (!command.MarkVisited && !command.MarkRestSite
             && command.LocationName is null && command.DmNote is null)
             throw new InvalidOperationException("No exploration information was supplied.");
+        var actionConsequences = command.Consequences ?? [];
+        if (actionConsequences.Count > 0 && !command.MarkVisited)
+            throw new InvalidOperationException(
+                "An exploration action consequence requires a confirmed action.");
+        ValidateNewConsequenceIds(expedition, actionConsequences);
         var obligation = flow.EncounterForAction(existing?.Visited == true, command.ActionKey);
         if (command.MarkVisited && obligation == ExplorationEncounterRequirement.OptionalOrRiskBased
             && !command.EncounterOccurs.HasValue)
@@ -283,13 +291,24 @@ public sealed class ExpeditionJourneyService(
                         command.ActionKey!, cell, encounterId)
                 ]
             };
-            if (!encounterId.HasValue)
-                next = CompleteRecordedExplorationAction(
-                    next, linkedProcess.Id, command.OperationId,
-                    command.Provenance, expedition);
         }
+        var working = expedition with { Journey = next };
+        foreach (var consequence in actionConsequences)
+        {
+            var sourced = WithSourceReference(
+                consequence, $"exploration-action:{command.OperationId:D}");
+            working = ExpeditionConsequenceAggregateTransition.Apply(
+                working, sourced, command.Provenance).Expedition;
+        }
+        if (linkedProcess is not null && !encounterId.HasValue)
+            working = working with
+            {
+                Journey = CompleteRecordedExplorationAction(
+                    working.Journey, linkedProcess.Id, command.OperationId,
+                    command.Provenance, working)
+            };
         var saved = await SaveAsync(
-            expedition with { Journey = next }, command.ExpectedVersion, cancellationToken);
+            working, command.ExpectedVersion, cancellationToken);
         return new(saved, encounterId.HasValue
                 ? "Exploration action recorded; encounter resolution is pending."
                 : "Exploration action and eligible stage progress recorded.", true,
@@ -567,11 +586,21 @@ public sealed class ExpeditionJourneyService(
     }
 
     private static ExplorationOperationRecord ExplorationSubmission(
-        RecordExplorationCellCommand command, HexCrawl.Domain.Spatial.WorldCellId cell) =>
-        new(command.OperationId, cell, command.ActionKey?.Trim(),
+        RecordExplorationCellCommand command, HexCrawl.Domain.Spatial.WorldCellId cell)
+    {
+        var consequences = command.Consequences ?? [];
+        // Typed, deterministic serialization prevents replay of an operation ID
+        // with changed time, resource, recovery, or other consequence inputs.
+        var fingerprint = consequences.Count == 0 ? null :
+            Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(consequences)));
+        return new ExplorationOperationRecord(command.OperationId, cell, command.ActionKey?.Trim(),
             command.MarkVisited, command.MarkRestSite, command.LocationName?.Trim(),
             command.DmNote?.Trim(), command.EncounterOccurs, command.ProcessId,
-            command.Provenance);
+            command.Provenance)
+        {
+            ConsequenceFingerprint = fingerprint
+        };
+    }
 
     private static ExpeditionJourneyState CompleteRecordedExplorationAction(
         ExpeditionJourneyState journey, Guid processId, Guid operationId,
