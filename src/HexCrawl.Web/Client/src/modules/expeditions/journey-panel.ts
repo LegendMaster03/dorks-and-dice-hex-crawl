@@ -218,6 +218,17 @@ export class ExpeditionJourneyPanel {
         const runtime = this.getRuntime().procedure.runtime?.explorationFlow;
         const selectionStage = runtime?.actionSelectionStageKey ?? null;
         const resolutionStage = runtime?.actionResolutionStageKey ?? null;
+        if (!cell.visited && (runtime?.requireResolvedLocationOnDiscovery ||
+            runtime?.requireRegionOnDiscovery))
+            section.append(this.muted(
+                "This new-location action requires " +
+                [
+                    runtime.requireRegionOnDiscovery ? "a region key" : null,
+                    runtime.requireResolvedLocationOnDiscovery
+                        ? `a location name or resolved ${runtime.locationResultTableKey ?? "location"} table result`
+                        : null
+                ].filter(Boolean).join(" and ") +
+                ". Supply your resolved result; the application does not infer a roll."));
         const resolvingProcess = state.activeProcesses.find(process =>
             process.execution.executionHandler === "procedure.exploration.flow" &&
             process.currentStageKey === resolutionStage);

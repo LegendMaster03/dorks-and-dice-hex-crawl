@@ -204,6 +204,9 @@ export type ExplorationFlow = {
     actionSelectionStageKey: string | null;
     actionResolutionStageKey: string | null;
     watchCompletionStageKey: string | null;
+    requireResolvedLocationOnDiscovery: boolean;
+    requireRegionOnDiscovery: boolean;
+    locationResultTableKey: string | null;
 };
 
 export type ProcedureRuntime = {

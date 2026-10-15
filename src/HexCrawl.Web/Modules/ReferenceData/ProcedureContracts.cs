@@ -60,13 +60,17 @@ public sealed record ExplorationFlowContract(
     string? RestSiteAction,
     string? ActionSelectionStageKey,
     string? ActionResolutionStageKey,
-    string? WatchCompletionStageKey)
+    string? WatchCompletionStageKey,
+    bool RequireResolvedLocationOnDiscovery,
+    bool RequireRegionOnDiscovery,
+    string? LocationResultTableKey)
 {
     public static ExplorationFlowContract From(ExplorationFlowPolicy policy) => new(
         policy.StageKeys, policy.DiscoveryTrigger, policy.EncounterTrigger,
         policy.FirstVisitAction, policy.RepeatVisitAction, policy.RestSiteAction,
         policy.ActionSelectionStageKey, policy.ActionResolutionStageKey,
-        policy.WatchCompletionStageKey);
+        policy.WatchCompletionStageKey, policy.RequireResolvedLocationOnDiscovery,
+        policy.RequireRegionOnDiscovery, policy.LocationResultTableKey);
 }
 
 public sealed record ProcedureRuntimeContract(
