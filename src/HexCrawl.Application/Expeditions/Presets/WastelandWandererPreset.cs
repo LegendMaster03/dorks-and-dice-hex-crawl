@@ -1,5 +1,6 @@
 using HexCrawl.Domain.Procedure;
 using HexCrawl.Domain.Spatial;
+using HexCrawl.Domain.Runtime;
 using static HexCrawl.Application.CrawlProcedurePresetFactory;
 using static HexCrawl.Application.CrawlProcedureCatalog;
 
@@ -12,7 +13,7 @@ internal static class WastelandWandererPreset
             "<1:1,1,1:4,4>",
             "fallout-wasteland-wanderer",
             "Fallout: Wasteland Wanderer",
-            "Solo wasteland exploration starting point on a bounded 5 by 5 square map. Encounters and journaling remain manual.",
+            "Solo wasteland travel with a 5 by 5 square map and ordered travel, encounter, action, and journal stages. Narrative resolution remains manual.",
             "fallout-wasteland-wanderer",
             "Wasteland Wanderer exploration",
             ExecutableCore(
@@ -23,9 +24,13 @@ internal static class WastelandWandererPreset
                 usesNavigationChecks: false,
                 usesPersistentVeer: false,
                 neighborCenterDistanceFactor: 0d,
-                supportsDeliberateDoubleBack: false),
+                supportsDeliberateDoubleBack: false)
+                .Concat([NativeExplorationFlow(
+                    ["travel", "encounter", "take-action", "journal"],
+                    ExplorationDiscoveryTrigger.OnFirstVisit,
+                    ExplorationEncounterTrigger.EveryTravel)]).ToArray(),
             attribution: "Adapted square-map starting point inspired by Modiphius Fallout exploration.",
-            disclaimer: "This is a functional generalized movement scaffold, not a full transcription of the published encounter, location, and activity rules. Travel interval is a configurable starting value.",
+            disclaimer: "Exploration stages and encounter timing are configured; encounter tables, supplies, health and narrative journaling are not automated. The interval is a placeholder, not a quoted rule.",
             category: "Fallout square-map starting points",
-            playableBounds: new PeriodicMapBounds(5, 5));
+            playableBounds: new PeriodicMapBounds(5, 5, -2, -2));
 }

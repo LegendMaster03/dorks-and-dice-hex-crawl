@@ -60,7 +60,7 @@ public sealed class ProcedurePresetIdentityTests
             var procedure = CrawlProcedureCatalog.Resolve(key).MaterializeGeneric().Procedure;
             Assert.Equal("<1:1,1,1:4,4>", procedure.TilingDsSymbol);
             Assert.Equal(new PeriodicMapBounds(expectedSize, expectedSize,
-                expectedSize == 9 ? -4 : 0, expectedSize == 9 ? -4 : 0), procedure.PlayableBounds);
+                expectedSize == 9 ? -4 : -2, expectedSize == 9 ? -4 : -2), procedure.PlayableBounds);
             var copy = JsonSerializer.Deserialize<CampaignProcedure>(JsonSerializer.Serialize(procedure));
             Assert.NotNull(copy);
             copy.Validate();
@@ -96,6 +96,7 @@ public sealed class ProcedurePresetIdentityTests
             Assert.Equal(expected.Navigation, actual.Navigation);
             Assert.Equal(expected.Encounters, actual.Encounters);
             Assert.Equal(expected.ResolutionHelpers, actual.ResolutionHelpers);
+            Assert.Equal(expected.ExplorationFlow, actual.ExplorationFlow);
         }
     }
 

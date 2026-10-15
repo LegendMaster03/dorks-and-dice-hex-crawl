@@ -68,6 +68,28 @@ internal static class CrawlProcedurePresetFactory
             HelperValues(resolutionHelpers))
     ];
 
+    internal static ProcedureModuleRecipe NativeExplorationFlow(
+        IReadOnlyList<string> orderedStages,
+        ExplorationDiscoveryTrigger discoveryTrigger,
+        ExplorationEncounterTrigger encounterTrigger,
+        string? firstVisitAction = null,
+        string? repeatVisitAction = null,
+        string? restSiteAction = null)
+    {
+        var parameters = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["stageKeys"] = string.Join(",", orderedStages),
+            ["discoveryTrigger"] = discoveryTrigger.ToString(),
+            ["encounterTrigger"] = encounterTrigger.ToString()
+        };
+        if (firstVisitAction is not null) parameters["firstVisitAction"] = firstVisitAction;
+        if (repeatVisitAction is not null) parameters["repeatVisitAction"] = repeatVisitAction;
+        if (restSiteAction is not null) parameters["restSiteAction"] = restSiteAction;
+        return new ProcedureModuleRecipe(
+            GenericProcedureCatalog.ExplorationFlowModule,
+            GenericProcedureCatalog.ExplorationFlowMechanic, 1, parameters);
+    }
+
     internal static ProcedureModuleRecipe NativeTime(TimeSpan interval) =>
         Structural(
             GenericProcedureCatalog.TimeIntervalModule,
