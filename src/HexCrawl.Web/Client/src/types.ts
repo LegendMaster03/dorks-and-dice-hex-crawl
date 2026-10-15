@@ -201,6 +201,8 @@ export type ExplorationFlow = {
     firstVisitAction: string | null;
     repeatVisitAction: string | null;
     restSiteAction: string | null;
+    actionSelectionStageKey: string | null;
+    actionResolutionStageKey: string | null;
 };
 
 export type ProcedureRuntime = {
