@@ -33,7 +33,7 @@ public sealed class ProcedureResolutionResolver(IProcedureResolutionRandomSource
             var row = table.Rows.Single(value => value.From <= face && face <= value.Through);
             results.Add(new ProcedureRangeTableOutcome(
                 table.TableKey, row.ResultText, table.SourceReference,
-                table.DieSides, face));
+                rolls.Single()));
         }
         return results;
     }

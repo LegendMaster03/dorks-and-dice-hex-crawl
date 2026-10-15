@@ -32,8 +32,9 @@ public sealed class ProcedureRangeTableTests
             .ResolveRangeTables([Table()]));
         Assert.Equal("location", result.TableKey);
         Assert.Equal("Middle result", result.ResultText);
-        Assert.Equal(6, result.DieSides);
-        Assert.Equal(4, result.RolledFace);
+        Assert.Equal("1d6", result.Roll.Formula);
+        Assert.Equal(4, result.Roll.Total);
+        Assert.Equal(4, Assert.Single(result.Roll.Dice));
         Assert.Equal("GM-authored fixture", result.SourceReference);
         Assert.Equal(1, source.Calls);
     }
@@ -87,7 +88,7 @@ public sealed class ProcedureRangeTableTests
             var outcome = Assert.Single(
                 new ProcedureResolutionResolver(source).ResolveRangeTables([Table()]));
             Assert.Equal("Middle result", outcome.ResultText);
-            Assert.Equal(4, outcome.RolledFace);
+            Assert.Equal(4, outcome.Roll.Total);
             Assert.Equal(1, source.Calls);
         }
     }

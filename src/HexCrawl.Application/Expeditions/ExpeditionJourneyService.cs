@@ -258,7 +258,7 @@ public sealed class ExpeditionJourneyService(
             tableOutcomes.Select((outcome, index) =>
                 (rollRequests[index].Scope, new ExplorationTableResult(
                     outcome.TableKey, outcome.ResultText,
-                    $"1d{outcome.DieSides}={outcome.RolledFace}",
+                    $"{outcome.Roll.Formula}={outcome.Roll.Total}",
                     outcome.SourceReference))).ToArray();
         var locationResults = OverlayResults(
             command.LocationTableResults ?? existing?.TableResults ?? [],

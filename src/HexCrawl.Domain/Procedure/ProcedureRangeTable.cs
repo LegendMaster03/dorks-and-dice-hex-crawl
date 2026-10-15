@@ -43,10 +43,3 @@ public sealed record ProcedureRangeTable(
                 $"{label} must be a nonempty, trimmed string of at most {limit} characters.");
     }
 }
-
-public sealed record ProcedureRangeTableOutcome(
-    string TableKey,
-    string ResultText,
-    string SourceReference,
-    int DieSides,
-    int RolledFace);
