@@ -17,6 +17,8 @@ public static partial class SourceMapApiEndpoints
         api.MapPost("/{sourceMapId:guid}/wonderdraft/promote", ImportStoredWonderdraftCandidatesAsync);
         api.MapPut("/{sourceMapId:guid}", UpdateMetadataAsync);
         api.MapPut("/{sourceMapId:guid}/registration", RegisterAsync);
+        api.MapGet("/{sourceMapId:guid}/playable-grid-fit", PreviewPlayableGridFitAsync);
+        api.MapPut("/{sourceMapId:guid}/playable-grid-fit", SavePlayableGridFitAsync);
         api.MapPost("/{sourceMapId:guid}/motif-investigation", InvestigateMotifAsync);
         api.MapPost("/{sourceMapId:guid}/motif-compatibility", AssessMotifCompatibilityAsync);
         api.MapPut("/{sourceMapId:guid}/motif-registration", ApplyMotifRegistrationAsync);
