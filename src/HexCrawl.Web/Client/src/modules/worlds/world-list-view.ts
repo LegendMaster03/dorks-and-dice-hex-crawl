@@ -41,7 +41,9 @@ export async function renderWorldList(
                             <legend>Optional map bounds</legend>
                             <label>Width (periods) <input name="mapWidth" type="number" min="1" step="1" placeholder="Unbounded"></label>
                             <label>Height (periods) <input name="mapHeight" type="number" min="1" step="1" placeholder="Unbounded"></label>
-                            <p class="hc-hint">Leave both blank for an unbounded map. A period may include multiple cells in a mixed tiling.</p>
+                            <label>Minimum U (optional) <input name="minU" type="number" step="1" placeholder="Centered"></label>
+                            <label>Minimum V (optional) <input name="minV" type="number" step="1" placeholder="Centered"></label>
+                            <p class="hc-hint">Leave width and height blank for an unbounded world. Finite maps are centered on the periodic origin by default, so a 5×5 map spans −2 to +2 and a 9×9 map spans −4 to +4. Enter minimum U/V to offset the map. A period may contain multiple cells.</p>
                         </fieldset>
                         <p class="hc-hint">Leave both calibration fields blank for cell-step worlds. Distance-based travel rules require physical calibration.</p>
                         <p class="hc-hint">The same optional world bounds apply to any selected tiling.</p>
@@ -189,6 +191,19 @@ export async function renderWorldList(
                 if ((width !== null && (!Number.isSafeInteger(width) || width <= 0))
                     || (height !== null && (!Number.isSafeInteger(height) || height <= 0)))
                     throw new Error("Map dimensions must be positive whole numbers of periodic tiling units.");
+                const minUText = input(form, "minU").value.trim();
+                const minVText = input(form, "minV").value.trim();
+                if (width === null && (minUText || minVText))
+                    throw new Error("Map offset requires a finite width and height.");
+                const minU = width === null ? null
+                    : minUText ? Number(minUText) : -Math.floor(width / 2);
+                const minV = height === null ? null
+                    : minVText ? Number(minVText) : -Math.floor(height / 2);
+                if ((minU !== null && (!Number.isSafeInteger(minU)
+                    || !Number.isSafeInteger(minU + width!)))
+                    || (minV !== null && (!Number.isSafeInteger(minV)
+                    || !Number.isSafeInteger(minV + height!))))
+                    throw new Error("Map offsets and their complete finite ranges must be safe whole numbers.");
                 const world = await api.createPeriodicOverworld({
                     name: input(form, "name").value.trim(),
                     tilingDsSymbol: select(form, "tilingDsSymbol").value,
@@ -196,7 +211,7 @@ export async function renderWorldList(
                     origin: { x: 0, y: 0 },
                     rotationDegrees: 0,
                     ...(width === null || height === null ? {} : {
-                        playableBounds: { width, height }
+                        playableBounds: { width, height, minU: minU!, minV: minV! }
                     }),
                     ...(distance === null ? {} : {
                         physicalDistancePerWorldUnit: {

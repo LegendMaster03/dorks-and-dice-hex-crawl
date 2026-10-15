@@ -58,9 +58,11 @@ public sealed partial class SourceMapApplicationService
         if (replacementTiling.Id == old.Tiling.Id
             || replacementTiling.Revision != old.Tiling.Revision + 1
             || replacementTiling.Origin != old.Tiling.Origin
-            || replacementTiling.PhysicalDistancePerWorldUnit is not null)
+            || replacementTiling.PhysicalDistancePerWorldUnit is not null
+            || replacementTiling.PlayableBounds != old.Tiling.PlayableBounds
+            || replacementTiling.PhysicalTurnCostReference != old.Tiling.PhysicalTurnCostReference)
             throw new ArgumentException(
-                "An unused-world correction must have a new tiling identity, next revision, and unchanged world origin.");
+                "An unused-world correction must preserve the world origin, playable bounds and turn calibration while using a new tiling identity and next revision.");
 
         replacementTiling.Validate();
         ValidateAffine(alignment);
