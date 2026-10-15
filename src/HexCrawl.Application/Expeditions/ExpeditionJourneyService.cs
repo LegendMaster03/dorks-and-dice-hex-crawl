@@ -143,8 +143,22 @@ public sealed class ExpeditionJourneyService(
             expeditionId, ownerUserId, cancellationToken);
         if (command.OperationId == Guid.Empty)
             throw new InvalidOperationException("Exploration operation id is required.");
+        var prior = expedition.Journey.ExplorationOperations.SingleOrDefault(value =>
+            value.OperationId == command.OperationId);
+        if (prior is not null)
+        {
+            // A retry never changes state, but the same token may not be used
+            // for another action, even if the original cell is no longer current.
+            var supplied = ExplorationSubmission(command, prior.Cell);
+            if (prior != supplied)
+                throw new InvalidOperationException(
+                    "Exploration operation id already belongs to a different submitted action.");
+            return new(expedition, "Exploration operation was already recorded.", false,
+                ProcessId: prior.ProcessId);
+        }
         if (expedition.Journey.ConsumedExplorationOperationIds.Contains(command.OperationId))
-            return new(expedition, "Exploration operation was already recorded.", false);
+            throw new InvalidOperationException(
+                "Exploration operation was previously consumed without a verifiable submission.");
         if (expedition.Version != command.ExpectedVersion)
             throw new HexCrawlConcurrencyException(
                 "The expedition changed. Reload exploration state before applying this operation.");
@@ -229,7 +243,9 @@ public sealed class ExpeditionJourneyService(
         {
             ExplorationCells = [.. expedition.Journey.ExplorationCells.Where(value => value.Cell != cell), updated],
             ConsumedExplorationOperationIds =
-                [.. expedition.Journey.ConsumedExplorationOperationIds, command.OperationId]
+                [.. expedition.Journey.ConsumedExplorationOperationIds, command.OperationId],
+            ExplorationOperations =
+                [.. expedition.Journey.ExplorationOperations, ExplorationSubmission(command, cell)]
         };
         Guid? encounterId = null;
         if (command.MarkVisited && obligation != ExplorationEncounterRequirement.None
@@ -549,6 +565,13 @@ public sealed class ExpeditionJourneyService(
         var saved = await SaveAsync(expedition with { Journey = journey }, command.ExpectedVersion, cancellationToken);
         return new(saved, $"Journey process marked {command.Status}.", true, processId);
     }
+
+    private static ExplorationOperationRecord ExplorationSubmission(
+        RecordExplorationCellCommand command, HexCrawl.Domain.Spatial.WorldCellId cell) =>
+        new(command.OperationId, cell, command.ActionKey?.Trim(),
+            command.MarkVisited, command.MarkRestSite, command.LocationName?.Trim(),
+            command.DmNote?.Trim(), command.EncounterOccurs, command.ProcessId,
+            command.Provenance);
 
     private static ExpeditionJourneyState CompleteRecordedExplorationAction(
         ExpeditionJourneyState journey, Guid processId, Guid operationId,

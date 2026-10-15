@@ -51,3 +51,31 @@ public sealed record ExplorationStageActionRecord(
             throw new InvalidOperationException("An exploration process action must have valid identifiers and keys.");
     }
 }
+
+/// <summary>
+/// A retained exact submission allows safe idempotent replay even after the
+/// active cell changes or later edits replace its current location details.
+/// </summary>
+public sealed record ExplorationOperationRecord(
+    Guid OperationId,
+    WorldCellId Cell,
+    string? ActionKey,
+    bool MarkVisited,
+    bool MarkRestSite,
+    string? LocationName,
+    string? DmNote,
+    bool? EncounterOccurs,
+    Guid? ProcessId,
+    ExpeditionConsequenceProvenance Provenance)
+{
+    public void Validate()
+    {
+        if (OperationId == Guid.Empty || Cell.TilingId == Guid.Empty
+            || ProcessId == Guid.Empty)
+            throw new InvalidOperationException("Exploration operation identifiers must be valid.");
+        ExpeditionConsequenceProvenance.ValidateOptional(ActionKey, 200, "Exploration action key");
+        ExpeditionConsequenceProvenance.ValidateOptional(LocationName, 300, "Exploration location name");
+        ExpeditionConsequenceProvenance.ValidateOptional(DmNote, 4000, "Exploration DM note");
+        Provenance.Validate();
+    }
+}

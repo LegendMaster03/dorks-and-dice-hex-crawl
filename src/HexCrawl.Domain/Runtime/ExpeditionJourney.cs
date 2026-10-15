@@ -806,6 +806,7 @@ public sealed record ExpeditionJourneyState
     public IReadOnlyList<ExplorationCellRecord> ExplorationCells { get; init; } = [];
     public IReadOnlyList<Guid> ConsumedExplorationOperationIds { get; init; } = [];
     public IReadOnlyList<ExplorationStageActionRecord> ExplorationStageActions { get; init; } = [];
+    public IReadOnlyList<ExplorationOperationRecord> ExplorationOperations { get; init; } = [];
 
     public static ExpeditionJourneyState Empty { get; } = new();
 
@@ -814,6 +815,14 @@ public sealed record ExpeditionJourneyState
         if (ConsumedExplorationOperationIds.Any(id => id == Guid.Empty)
             || ConsumedExplorationOperationIds.Distinct().Count() != ConsumedExplorationOperationIds.Count)
             throw new InvalidOperationException("Exploration operation ids must be nonempty and unique.");
+        if (ExplorationOperations.Select(value => value.OperationId).Distinct().Count() != ExplorationOperations.Count)
+            throw new InvalidOperationException("Exploration operation submission ids must be unique.");
+        foreach (var operation in ExplorationOperations)
+        {
+            operation.Validate();
+            if (!ConsumedExplorationOperationIds.Contains(operation.OperationId))
+                throw new InvalidOperationException("A retained exploration operation must have been applied.");
+        }
         var cellIds = new HashSet<HexCrawl.Domain.Spatial.WorldCellId>();
         foreach (var cell in ExplorationCells)
         {

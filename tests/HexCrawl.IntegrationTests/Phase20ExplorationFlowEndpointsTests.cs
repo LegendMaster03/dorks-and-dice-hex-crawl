@@ -254,12 +254,21 @@ public sealed class Phase20ExplorationFlowEndpointsTests
                     $"/api/expeditions/{expeditionId:D}/journeys/exploration-cell",
                     new { expectedVersion = version - 1, operationId,
                         actionKey = firstAction, markVisited = true, markRestSite = false,
+                        locationName = "Manually resolved site", dmNote = "GM only",
                         provenance = Provenance("site-visit") }, JsonOptions);
                 replay.EnsureSuccessStatusCode();
                 var duplicate = await replay.Content.ReadFromJsonAsync<JsonElement>();
                 Assert.False(duplicate.GetProperty("stateChanged").GetBoolean());
                 Assert.Equal(version,
                     duplicate.GetProperty("state").GetProperty("expeditionVersion").GetInt64());
+
+                using var mismatchedReplay = await client.PostAsJsonAsync(
+                    $"/api/expeditions/{expeditionId:D}/journeys/exploration-cell",
+                    new { expectedVersion = version - 1, operationId,
+                        actionKey = firstAction, markVisited = true, markRestSite = false,
+                        locationName = "Different location", dmNote = "GM only",
+                        provenance = Provenance("site-visit") }, JsonOptions);
+                Assert.Equal(HttpStatusCode.BadRequest, mismatchedReplay.StatusCode);
 
                 if (firstAction is not null)
                 {
