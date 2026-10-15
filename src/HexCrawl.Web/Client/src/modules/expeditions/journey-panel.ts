@@ -242,6 +242,28 @@ export class ExpeditionJourneyPanel {
         };
         describeTableResults("Location result", cell.locationTableResults);
         describeTableResults("Region result", cell.regionTableResults);
+        const ledger = document.createElement("details");
+        const ledgerSummary = document.createElement("summary");
+        ledgerSummary.textContent = `GM exploration ledger (${state.explorationCells.length} cells, ${state.explorationRegions.length} regions)`;
+        ledger.append(ledgerSummary,
+            this.muted("These expedition-local records are never published to the player map automatically."));
+        for (const region of state.explorationRegions) {
+            const members = state.explorationCells.filter(value => value.regionKey === region.key);
+            ledger.append(this.muted(
+                `Region ${region.key}: ${region.name ?? "unnamed"} · ${members.length} recorded cells` +
+                (region.dmNote ? ` · ${region.dmNote}` : "")));
+            for (const entry of region.tableResults)
+                ledger.append(this.muted(`  ${entry.tableKey}: ${entry.resultText}` +
+                    (entry.sourceReference ? ` · ${entry.sourceReference}` : "")));
+        }
+        for (const entry of state.explorationCells) {
+            const position = entry.cell.address.translation;
+            ledger.append(this.muted(
+                `Cell ${position.u}, ${position.v}: ${entry.locationName ?? "unnamed"}` +
+                (entry.regionKey ? ` · region ${entry.regionKey}` : "") +
+                (entry.visited ? " · visited" : " · not visited")));
+        }
+        section.append(ledger);
         for (const opportunity of cell.encounterOpportunities) {
             if (opportunity.requirement === "None") continue;
             section.append(this.muted(
@@ -269,8 +291,8 @@ export class ExpeditionJourneyPanel {
         const regionTitle = document.createElement("summary");
         regionTitle.textContent = "Region membership and manually resolved table results";
         const regionKey = this.input("Region key (GM grouping)", "text", cell.regionKey ?? "");
-        const regionName = this.input("Resolved region name", "text", cell.regionName ?? "");
-        const regionNote = this.input("Region notes (GM only)", "text", cell.regionDmNote ?? "");
+        const regionName = this.input("Update region name (optional)", "text");
+        const regionNote = this.input("Update region notes (optional)", "text");
         const currentLocationResults = cell.locationTableResults;
         const tableFields = (subject: string): {
             group: HTMLElement;
@@ -312,8 +334,14 @@ export class ExpeditionJourneyPanel {
             encounter.wrapper.hidden = requirement !== "OptionalOrRiskBased";
             if (requirement !== "OptionalOrRiskBased") encounter.control.value = "";
         };
+        const syncVisited = (): void => {
+            action.wrapper.hidden = !visited.control.checked;
+            syncEncounter();
+            if (!visited.control.checked) encounter.wrapper.hidden = true;
+        };
         action.control.addEventListener("change", syncEncounter);
-        syncEncounter();
+        visited.control.addEventListener("change", syncVisited);
+        syncVisited();
         const costs = this.consequenceFields();
         const advancedResult = document.createElement("details");
         const advancedSummary = document.createElement("summary");

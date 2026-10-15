@@ -293,6 +293,23 @@ export type RecordExplorationCellRequest = {
     provenance: StartJourneyProcessRequest["provenance"];
 };
 
+export type ExplorationCellLedgerRecord = {
+    cell: WorldCellId;
+    visited: boolean;
+    restSite: boolean;
+    regionKey: string | null;
+    locationName: string | null;
+    dmNote: string | null;
+    tableResults: ExplorationTableResult[];
+};
+
+export type ExplorationRegionLedgerRecord = {
+    key: string;
+    name: string | null;
+    dmNote: string | null;
+    tableResults: ExplorationTableResult[];
+};
+
 export type ExpeditionJourneyState = {
     expeditionVersion: number;
     processPolicy: JourneyProcessPolicy;
@@ -303,6 +320,8 @@ export type ExpeditionJourneyState = {
     resolutions: JourneyResolutionRecord[];
     history: JourneyHistoryRecord[];
     explorationCell: ExplorationCellContext | null;
+    explorationCells: ExplorationCellLedgerRecord[];
+    explorationRegions: ExplorationRegionLedgerRecord[];
 };
 
 export type TimeDelayUnit = "Minutes" | "Hours" | "Days";

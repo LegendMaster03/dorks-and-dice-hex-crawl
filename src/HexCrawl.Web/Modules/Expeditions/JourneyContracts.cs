@@ -133,7 +133,9 @@ public sealed record ExpeditionJourneyStateContract(
     IReadOnlyList<JourneyEventOccurrence> EventOccurrences,
     IReadOnlyList<JourneyResolutionRecord> Resolutions,
     IReadOnlyList<JourneyHistoryRecord> History,
-    ExplorationCellContextContract? ExplorationCell)
+    ExplorationCellContextContract? ExplorationCell,
+    IReadOnlyList<ExplorationCellRecord> ExplorationCells,
+    IReadOnlyList<ExplorationRegionRecord> ExplorationRegions)
 {
     public static ExpeditionJourneyStateContract From(StoredExpedition expedition) => new(
         expedition.Version,
@@ -144,7 +146,9 @@ public sealed record ExpeditionJourneyStateContract(
         expedition.Journey.EventOccurrences,
         expedition.Journey.Resolutions,
         expedition.Journey.History,
-        ExplorationCellContextContract.From(expedition));
+        ExplorationCellContextContract.From(expedition),
+        expedition.Journey.ExplorationCells,
+        expedition.Journey.ExplorationRegions);
 }
 
 public sealed record JourneyOperationContract(
