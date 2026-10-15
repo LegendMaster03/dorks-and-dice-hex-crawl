@@ -134,7 +134,27 @@ public sealed class ProcedurePresetIdentityTests
                     StringComparison.Ordinal);
                 Assert.DoesNotContain("WastelandWarfarePreset", source,
                     StringComparison.Ordinal);
+                Assert.DoesNotContain("Wasteland Warfare", source,
+                    StringComparison.OrdinalIgnoreCase);
+                Assert.DoesNotContain("Wasteland Wanderer", source,
+                    StringComparison.OrdinalIgnoreCase);
             }
+        }
+
+        // The browser likewise consumes generic procedure and cell contracts;
+        // no named-game movement logic belongs in the client.
+        var clientRoot = Path.Combine(root!.FullName, "src",
+            "HexCrawl.Web", "Client", "src");
+        foreach (var file in Directory.EnumerateFiles(clientRoot, "*.ts",
+            SearchOption.AllDirectories))
+        {
+            var source = File.ReadAllText(file);
+            Assert.DoesNotContain("fallout-wasteland-", source,
+                StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Wasteland Warfare", source,
+                StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Wasteland Wanderer", source,
+                StringComparison.OrdinalIgnoreCase);
         }
     }
 
