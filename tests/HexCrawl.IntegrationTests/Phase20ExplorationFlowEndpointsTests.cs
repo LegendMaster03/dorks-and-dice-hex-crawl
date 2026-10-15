@@ -91,7 +91,7 @@ public sealed class Phase20ExplorationFlowEndpointsTests
                             expectedVersion = version,
                             operationId = actionOperationId,
                             processId, actionKey = "explore", markVisited = true,
-                            markRestSite = false,
+                            markRestSite = false, locationName = "Resolved site", regionKey = "sector-1",
                             provenance = Provenance("record-action"),
                             consequences = new[]
                             {
@@ -132,7 +132,8 @@ public sealed class Phase20ExplorationFlowEndpointsTests
                                 expectedVersion = recordedAction.expectedVersion,
                                 operationId = actionOperationId, processId,
                                 actionKey = "explore", markVisited = true,
-                                markRestSite = false, provenance = Provenance("record-action"),
+                                markRestSite = false, locationName = "Resolved site", regionKey = "sector-1",
+                                provenance = Provenance("record-action"),
                                 consequences = new[]
                                 {
                                     new
@@ -277,6 +278,7 @@ public sealed class Phase20ExplorationFlowEndpointsTests
                     new { expectedVersion = version, operationId,
                         actionKey = firstAction, markVisited = true, markRestSite = false,
                         locationName = "Manually resolved site", dmNote = "GM only",
+                        regionKey = firstAction is null ? null : "sector-1",
                         encounterOccurs = (bool?)null,
                         provenance = Provenance("site-visit") }, JsonOptions);
                 visit.EnsureSuccessStatusCode();
@@ -302,6 +304,7 @@ public sealed class Phase20ExplorationFlowEndpointsTests
                     new { expectedVersion = version - 1, operationId,
                         actionKey = firstAction, markVisited = true, markRestSite = false,
                         locationName = "Manually resolved site", dmNote = "GM only",
+                        regionKey = firstAction is null ? null : "sector-1",
                         provenance = Provenance("site-visit") }, JsonOptions);
                 replay.EnsureSuccessStatusCode();
                 var duplicate = await replay.Content.ReadFromJsonAsync<JsonElement>();
@@ -314,6 +317,7 @@ public sealed class Phase20ExplorationFlowEndpointsTests
                     new { expectedVersion = version - 1, operationId,
                         actionKey = firstAction, markVisited = true, markRestSite = false,
                         locationName = "Different location", dmNote = "GM only",
+                        regionKey = firstAction is null ? null : "sector-1",
                         provenance = Provenance("site-visit") }, JsonOptions);
                 Assert.Equal(HttpStatusCode.BadRequest, mismatchedReplay.StatusCode);
 
