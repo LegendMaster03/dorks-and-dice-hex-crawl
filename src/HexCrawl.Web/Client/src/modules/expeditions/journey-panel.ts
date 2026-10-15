@@ -3,6 +3,7 @@ import { JourneyApi } from "../../journey-api";
 import type {
     ExpeditionConsequenceInput,
     ExpeditionJourneyState,
+    ExplorationTableRollRequest,
     JourneyApproachDefinition,
     JourneyEventOccurrence,
     JourneyEventTargetKind,
@@ -376,8 +377,7 @@ export class ExpeditionJourneyPanel {
         libraryForm.addEventListener("submit", event => {
             event.preventDefault();
             void this.mutate(saveTable, async () => {
-                const definition = JSON.parse(required(tableEditor.value, "Table definition"))
-                    as import("../../journey-types").ExplorationTableRollRequest;
+                const definition = JSON.parse(required(tableEditor.value, "Table definition")) as ExplorationTableRollRequest;
                 if (!definition || typeof definition !== "object" ||
                     typeof definition.scope !== "string" || typeof definition.tableKey !== "string")
                     throw new Error("The table definition requires a valid scope and table key.");
