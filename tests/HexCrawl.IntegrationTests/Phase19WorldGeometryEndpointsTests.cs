@@ -8,6 +8,56 @@ namespace HexCrawl.IntegrationTests;
 public sealed class Phase19WorldGeometryEndpointsTests
 {
     [Fact]
+    public async Task NewDefaultHexWorldHasRegularEuclideanCellGeometry()
+    {
+        var database = TestWebHost.NewDatabasePath();
+        try
+        {
+            using var host = TestWebHost.Create(database, "alice");
+            using var client = host.CreateClient();
+            using var created = await client.PostAsJsonAsync("/api/overworlds/periodic", new
+            {
+                name = "Hex default geometry",
+                tilingDsSymbol = "<1:1,1,1:6,3>",
+                worldUnitsPerAbstractPeriod = 1.0,
+                origin = new { x = 0.0, y = 0.0 }
+            });
+            created.EnsureSuccessStatusCode();
+            var world = await created.Content.ReadFromJsonAsync<JsonElement>();
+            using var viewport = await client.GetAsync(
+                $"/api/overworlds/{world.GetProperty("id").GetGuid():D}/cells/viewport?minX=-3&minY=-3&maxX=3&maxY=3");
+            viewport.EnsureSuccessStatusCode();
+            var cells = await viewport.Content.ReadFromJsonAsync<JsonElement>();
+            var polygon = cells.EnumerateArray().First().GetProperty("polygon").EnumerateArray()
+                .Select(point => (X: point.GetProperty("x").GetDouble(),
+                    Y: point.GetProperty("y").GetDouble())).ToArray();
+            Assert.Equal(6, polygon.Length);
+            var lengths = Enumerable.Range(0, polygon.Length).Select(index =>
+            {
+                var from = polygon[index];
+                var to = polygon[(index + 1) % polygon.Length];
+                return Math.Sqrt(Math.Pow(to.X - from.X, 2) + Math.Pow(to.Y - from.Y, 2));
+            }).ToArray();
+            Assert.All(lengths, length => Assert.InRange(length / lengths[0], 0.9999, 1.0001));
+            for (var index = 0; index < polygon.Length; index++)
+            {
+                var previous = polygon[(index + polygon.Length - 1) % polygon.Length];
+                var current = polygon[index];
+                var next = polygon[(index + 1) % polygon.Length];
+                var ax = previous.X - current.X;
+                var ay = previous.Y - current.Y;
+                var bx = next.X - current.X;
+                var by = next.Y - current.Y;
+                var angle = Math.Acos(Math.Clamp(
+                    (ax * bx + ay * by) / (lengths[(index + polygon.Length - 1) % polygon.Length] * lengths[index]),
+                    -1, 1)) * 180 / Math.PI;
+                Assert.InRange(angle, 119.99, 120.01);
+            }
+        }
+        finally { TestWebHost.DeleteDatabase(database); }
+    }
+
+    [Fact]
     public async Task OptionalSquareMapExtentClampsViewportAndRejectsOutsideCells()
     {
         var database = TestWebHost.NewDatabasePath();
