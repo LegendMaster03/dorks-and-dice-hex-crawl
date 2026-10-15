@@ -241,8 +241,11 @@ export class ExpeditionJourneyPanel {
         const rest = this.checkbox("Designate as rest site", false);
         const name = this.input("Resolved location name (GM only)", "text", cell.locationName ?? "");
         const note = this.input("Location notes (GM only)", "text", cell.dmNote ?? "");
+        const encounter = this.select("Optional / risk-based encounter result",
+            ["|Unresolved", "true|Encounter occurs", "false|No encounter"]);
         const submit = this.button("Record exploration details");
-        form.append(action.wrapper, visited.wrapper, rest.wrapper, name.wrapper, note.wrapper, submit);
+        form.append(action.wrapper, visited.wrapper, rest.wrapper, name.wrapper, note.wrapper,
+            encounter.wrapper, submit);
         form.addEventListener("submit", domEvent => {
             domEvent.preventDefault();
             void this.mutate(submit, async () => {
@@ -254,6 +257,7 @@ export class ExpeditionJourneyPanel {
                     markRestSite: rest.control.checked,
                     locationName: nullable(name.control.value),
                     dmNote: nullable(note.control.value),
+                    encounterOccurs: encounter.control.value === "" ? null : encounter.control.value === "true",
                     provenance: dmJourneyProvenance("exploration-cell-record")
                 });
                 this.apply(result.state);

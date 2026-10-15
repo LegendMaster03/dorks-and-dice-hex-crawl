@@ -32,6 +32,7 @@ public sealed record RecordExplorationCellCommand(
     bool MarkRestSite,
     string? LocationName,
     string? DmNote,
+    bool? EncounterOccurs,
     ExpeditionConsequenceProvenance Provenance);
 
 public sealed record ResolveJourneyProcessCommand(
@@ -170,6 +171,16 @@ public sealed class ExpeditionJourneyService(
         if (!command.MarkVisited && !command.MarkRestSite
             && command.LocationName is null && command.DmNote is null)
             throw new InvalidOperationException("No exploration information was supplied.");
+        var obligation = flow.EncounterForAction(existing?.Visited == true, command.ActionKey);
+        if (command.MarkVisited && obligation == ExplorationEncounterRequirement.OptionalOrRiskBased
+            && !command.EncounterOccurs.HasValue)
+            throw new InvalidOperationException(
+                "An optional or risk-dependent exploration encounter needs an explicit DM result.");
+        if (command.MarkVisited && obligation == ExplorationEncounterRequirement.Required
+            && command.EncounterOccurs == false)
+            throw new InvalidOperationException("The pinned procedure requires an encounter for this action.");
+        if (command.EncounterOccurs == true && obligation == ExplorationEncounterRequirement.None)
+            throw new InvalidOperationException("This exploration action does not authorize an encounter.");
         var updated = new ExplorationCellRecord
         {
             Cell = cell,
@@ -187,9 +198,34 @@ public sealed class ExpeditionJourneyService(
             ConsumedExplorationOperationIds =
                 [.. expedition.Journey.ConsumedExplorationOperationIds, command.OperationId]
         };
+        Guid? encounterId = null;
+        if (command.MarkVisited && obligation != ExplorationEncounterRequirement.None
+            && (obligation == ExplorationEncounterRequirement.Required || command.EncounterOccurs == true))
+        {
+            var events = JourneyProcedurePolicyResolver.ResolveEvents(expedition.CampaignProcedure);
+            if (events.Support == JourneyPolicySupport.Supported
+                && events.Supports(JourneyEventTriggerKind.External)
+                && events.LinkMode is JourneyEventLinkMode.Standalone or JourneyEventLinkMode.Both)
+            {
+                encounterId = JourneyProcessEngine.DeterministicId(
+                    command.OperationId, "exploration-encounter");
+                var created = JourneyEventEngine.CreateOpportunity(
+                    next, events, new JourneyEventOpportunityInput
+                    {
+                        OccurrenceId = encounterId.Value,
+                        Trigger = JourneyEventTriggerKind.External,
+                        TriggerReference = command.OperationId.ToString("D"),
+                        TargetKind = JourneyEventTargetKind.Unresolved,
+                        Provenance = command.Provenance,
+                        Note = "An exploration encounter requires explicit resolution; no table result or opposition was inferred."
+                    }, JourneyClockReference.From(expedition.Runtime), expedition.Party);
+                next = created.State;
+            }
+        }
         var saved = await SaveAsync(
             expedition with { Journey = next }, command.ExpectedVersion, cancellationToken);
-        return new(saved, "Recorded exploration information for the current cell.", true);
+        return new(saved, "Recorded exploration information for the current cell.", true,
+            EventOccurrenceId: encounterId);
     }
 
     public async Task<JourneyOperationResult> ResolveProcessAsync(

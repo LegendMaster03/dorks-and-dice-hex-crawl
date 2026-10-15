@@ -270,6 +270,7 @@ export type RecordExplorationCellRequest = {
     markRestSite: boolean;
     locationName: string | null;
     dmNote: string | null;
+    encounterOccurs: boolean | null;
     provenance: StartJourneyProcessRequest["provenance"];
 };
 

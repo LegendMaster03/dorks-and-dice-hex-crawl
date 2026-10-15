@@ -169,6 +169,7 @@ public sealed class Phase20ExplorationFlowEndpointsTests
                     new { expectedVersion = version, operationId,
                         actionKey = firstAction, markVisited = true, markRestSite = false,
                         locationName = "Manually resolved site", dmNote = "GM only",
+                        encounterOccurs = (bool?)null,
                         provenance = Provenance("site-visit") }, JsonOptions);
                 visit.EnsureSuccessStatusCode();
                 var response = await visit.Content.ReadFromJsonAsync<JsonElement>();
@@ -179,8 +180,14 @@ public sealed class Phase20ExplorationFlowEndpointsTests
                 Assert.Equal("Manually resolved site", site.GetProperty("locationName").GetString());
                 Assert.Equal("GM only", site.GetProperty("dmNote").GetString());
                 if (firstAction is not null)
+                {
+                    Assert.Single(state.GetProperty("eventOccurrences").EnumerateArray());
+                    Assert.Equal("ResolutionRequired",
+                        state.GetProperty("eventOccurrences")[0].GetProperty("status").GetString());
                     Assert.Contains("travel", site.GetProperty("availableActions")
                         .EnumerateArray().Select(value => value.GetString()));
+                }
+                else Assert.Empty(state.GetProperty("eventOccurrences").EnumerateArray());
 
                 using var replay = await client.PostAsJsonAsync(
                     $"/api/expeditions/{expeditionId:D}/journeys/exploration-cell",
