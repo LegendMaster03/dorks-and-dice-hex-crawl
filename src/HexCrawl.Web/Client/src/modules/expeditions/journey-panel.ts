@@ -336,93 +336,9 @@ export class ExpeditionJourneyPanel {
         };
         const locationTable = tableFields("Location");
         const regionTable = tableFields("Region");
-        const library = document.createElement("details");
-        const libraryHeading = document.createElement("summary");
-        libraryHeading.textContent = `Reusable GM tables (${state.explorationSavedTables.length})`;
-        const savedChoices = this.select("Edit an existing table", [
-            "|Create a new table",
-            ...state.explorationSavedTables.map((entry, index) =>
-                `${index}|${entry.definition.scope}: ${entry.definition.tableKey}`)
-        ]);
-        const editorLabel = document.createElement("label");
-        editorLabel.textContent = "Table definition (JSON)";
-        const tableEditor = document.createElement("textarea");
-        tableEditor.rows = 7;
-        tableEditor.placeholder = JSON.stringify({
-            scope: "Location", tableKey: runtime?.locationResultTableKey ?? "location",
-            dieSides: 6, sourceReference: "GM-authored table source",
-            rows: [{ from: 1, through: 3, resultText: "First user-supplied result" },
-                { from: 4, through: 6, resultText: "Second user-supplied result" }]
-        }, null, 2);
-        editorLabel.append(tableEditor);
-        const selectedSaved = (): typeof state.explorationSavedTables[number] | null => {
-            const idx = savedChoices.control.value;
-            return idx === "" ? null : state.explorationSavedTables[Number(idx)] ?? null;
-        };
-        savedChoices.control.addEventListener("change", () => {
-            tableEditor.value = selectedSaved() ?
-                JSON.stringify(selectedSaved()!.definition, null, 2) : "";
-        });
-        const libraryForm = document.createElement("form");
-        libraryForm.className = "hc-form hc-form-grid";
-        const saveTable = this.button("Save reusable table");
-        const removeTable = this.button("Delete selected table");
-        removeTable.type = "button";
-        const syncSelectedTable = (): void => {
-            removeTable.disabled = selectedSaved() === null;
-        };
-        savedChoices.control.addEventListener("change", syncSelectedTable);
-        syncSelectedTable();
-        libraryForm.append(savedChoices.wrapper, editorLabel, saveTable, removeTable);
-        libraryForm.addEventListener("submit", event => {
-            event.preventDefault();
-            void this.mutate(saveTable, async () => {
-                const definition = JSON.parse(required(tableEditor.value, "Table definition")) as ExplorationTableRollRequest;
-                if (!definition || typeof definition !== "object" ||
-                    typeof definition.scope !== "string" || typeof definition.tableKey !== "string")
-                    throw new Error("The table definition requires a valid scope and table key.");
-                const editing = selectedSaved();
-                if (editing && (editing.definition.scope !== definition.scope ||
-                    editing.definition.tableKey !== definition.tableKey))
-                    throw new Error("Changing a saved table identity requires creating a new table.");
-                const result = await this.api.setExplorationTable(this.expeditionId, {
-                    expectedVersion: this.requireState().expeditionVersion,
-                    operationId: crypto.randomUUID(),
-                    scope: definition.scope, tableKey: definition.tableKey,
-                    definition, provenance: dmJourneyProvenance("exploration-saved-table")
-                });
-                this.apply(result.state);
-            });
-        });
-        removeTable.addEventListener("click", () => {
-            const saved = selectedSaved();
-            if (!saved) return;
-            void this.mutate(removeTable, async () => {
-                const result = await this.api.setExplorationTable(this.expeditionId, {
-                    expectedVersion: this.requireState().expeditionVersion,
-                    operationId: crypto.randomUUID(),
-                    scope: saved.definition.scope, tableKey: saved.definition.tableKey,
-                    definition: null, provenance: dmJourneyProvenance("exploration-saved-table")
-                });
-                this.apply(result.state);
-            });
-        });
-        library.append(libraryHeading,
-            this.muted("These tables are stored with this expedition and are GM-only. " +
-                "Updating or deleting a table does not rewrite previously rolled results."),
-            libraryForm);
-        const savedTableChecks = state.explorationSavedTables.map(entry => {
-            const choice = this.checkbox(
-                `Roll saved ${entry.definition.scope.toLowerCase()} table: ${entry.definition.tableKey}`,
-                false);
-            library.append(choice.wrapper);
-            return { entry, choice };
-        });
-        section.append(library);
         const rollGuide = this.muted(
-            "Optional one-time GM-authored table rolls. Paste a JSON array of definitions, " +
-            "or select reusable tables above. Every die face must match exactly one row; " +
-            "the server rolls and saves the selected outcome and source.");
+            "Supply complete GM-authored table definitions as JSON. Every die face must match exactly one row. " +
+            "The shared procedure resolver rolls and saves the selected result and source.");
         const rollLabel = document.createElement("label");
         rollLabel.textContent = "Roll supplied tables (JSON, optional)";
         const rollInput = document.createElement("textarea");
@@ -494,12 +410,6 @@ export class ExpeditionJourneyPanel {
                     locationTableResults,
                     regionTableResults,
                     tableRolls,
-                    savedTableReferences: savedTableChecks
-                        .filter(value => value.choice.control.checked)
-                        .map(value => ({
-                            scope: value.entry.definition.scope,
-                            tableKey: value.entry.definition.tableKey
-                        })),
                     provenance: dmJourneyProvenance("exploration-cell-record")
                 });
                 this.apply(result.state);
