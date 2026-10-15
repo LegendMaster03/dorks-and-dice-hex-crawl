@@ -35,3 +35,12 @@ A full published-rules equivalence claim requires checking the relevant rulebook
 ## User-supplied automatic table rolls
 
 The location form accepts explicit GM-authored range tables, with scope `Location` or `Region`, a unique table key per scope, `dieSides`, required `sourceReference`, and rows with inclusive `from`/`through` bounds and `resultText`. All die faces must be covered exactly once. For a new first-visit location that requires a resolved location result, a configured roll of the matching table key satisfies the requirement. Each roll uses the application's existing cryptographic procedure-random source and records the actual die and result text with the GM-supplied source in the expedition-local ledger. The submission is saved atomically with the exploration action, region, encounters, and any explicit resource/time consequences. Replays check the exact table request fingerprint and do not roll again. No official Fallout tables are bundled, imported, or inferred.
+
+
+## Reusable expedition-local table library
+
+The GM journey panel now includes an expedition-local library for validated table definitions. A table is identified by a generic location/region scope and a table key. The GM can create a table by supplying its complete JSON definition, edit the selected existing table, or delete it. An exploration action can select one or more saved definitions for rolling, alongside any one-off definitions entered on the action. Duplicate scope/key selections are rejected before rolling.
+
+Table-library edits use the same optimistic expedition version control and immutable operation receipts as other journey mutations. A repeated save or delete token is idempotent only for the identical request. Rolls resolve saved definitions against the current expedition version; the resulting outcome and source are stored in the existing GM-only cell/region records. Later edits or removal of a saved table do not rewrite historical results, and retries of an already-applied exploration action do not roll again.
+
+This library is scoped to an expedition rather than hardcoded to a published ruleset, a map tiling, or the global procedure catalog. It does not introduce canonical publisher tables, automatic campaign faction/opposition construction, or automatic player-map revelation. Reusing tables between separate expeditions is a future enhancement.
