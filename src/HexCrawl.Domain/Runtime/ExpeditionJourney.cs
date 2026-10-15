@@ -808,6 +808,8 @@ public sealed record ExpeditionJourneyState
     public IReadOnlyList<Guid> ConsumedExplorationOperationIds { get; init; } = [];
     public IReadOnlyList<ExplorationStageActionRecord> ExplorationStageActions { get; init; } = [];
     public IReadOnlyList<ExplorationOperationRecord> ExplorationOperations { get; init; } = [];
+    public IReadOnlyList<ExplorationSavedTable> ExplorationSavedTables { get; init; } = [];
+    public IReadOnlyList<ExplorationSavedTableMutation> ExplorationSavedTableMutations { get; init; } = [];
 
     public static ExpeditionJourneyState Empty { get; } = new();
 
@@ -816,6 +818,26 @@ public sealed record ExpeditionJourneyState
         if (ConsumedExplorationOperationIds.Any(id => id == Guid.Empty)
             || ConsumedExplorationOperationIds.Distinct().Count() != ConsumedExplorationOperationIds.Count)
             throw new InvalidOperationException("Exploration operation ids must be nonempty and unique.");
+        if (ExplorationSavedTables.Count > 256 || ExplorationSavedTableMutations.Count > 100000)
+            throw new InvalidOperationException("Exploration table library exceeds its supported capacity.");
+        var libraryKeys = new HashSet<(ExplorationTableScope, string)>();
+        foreach (var table in ExplorationSavedTables)
+        {
+            table.Validate();
+            if (!libraryKeys.Add((table.Definition.Scope, table.Definition.TableKey.ToLowerInvariant()))
+                || !ConsumedExplorationOperationIds.Contains(table.LastOperationId))
+                throw new InvalidOperationException("Saved exploration tables must have unique scoped keys and applied mutations.");
+        }
+        var mutationIds = new HashSet<Guid>();
+        foreach (var mutation in ExplorationSavedTableMutations)
+        {
+            mutation.Validate();
+            if (!mutationIds.Add(mutation.OperationId)
+                || !ConsumedExplorationOperationIds.Contains(mutation.OperationId))
+                throw new InvalidOperationException("Saved table mutation ids must be unique and applied.");
+        }
+        if (ExplorationOperations.Any(value => mutationIds.Contains(value.OperationId)))
+            throw new InvalidOperationException("Exploration operation ids cannot be reused for table mutations.");
         if (ExplorationOperations.Select(value => value.OperationId).Distinct().Count() != ExplorationOperations.Count)
             throw new InvalidOperationException("Exploration operation submission ids must be unique.");
         foreach (var operation in ExplorationOperations)

@@ -43,7 +43,16 @@ public sealed record RecordExplorationCellCommand(
     string? RegionDmNote = null,
     IReadOnlyList<ExplorationTableResult>? LocationTableResults = null,
     IReadOnlyList<ExplorationTableResult>? RegionTableResults = null,
-    IReadOnlyList<ExplorationTableRollRequest>? TableRolls = null);
+    IReadOnlyList<ExplorationTableRollRequest>? TableRolls = null,
+    IReadOnlyList<ExplorationSavedTableReference>? SavedTableReferences = null);
+
+public sealed record SetExplorationTableCommand(
+    long ExpectedVersion,
+    Guid OperationId,
+    ExplorationTableScope Scope,
+    string TableKey,
+    ExplorationTableRollRequest? Definition,
+    ExpeditionConsequenceProvenance Provenance);
 
 public sealed record ResolveJourneyProcessCommand(
     long ExpectedVersion,
@@ -144,6 +153,75 @@ public sealed class ExpeditionJourneyService(
     /// supplied consequences are committed atomically with the cell record.
     /// No random table result is fabricated or player knowledge revealed.
     /// </summary>
+    /// <summary>
+    /// Saves, replaces or removes a reusable GM-defined table. Each mutation
+    /// uses the same expedition CAS version and operation-id model as an action.
+    /// The library is expedition-local and cannot alter pinned procedures.
+    /// </summary>
+    public async Task<JourneyOperationResult> SetExplorationTableAsync(
+        Guid expeditionId,
+        string ownerUserId,
+        SetExplorationTableCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        var expedition = await coreService.GetExpeditionAsync(
+            expeditionId, ownerUserId, cancellationToken);
+        if (command.OperationId == Guid.Empty || !Enum.IsDefined(command.Scope))
+            throw new InvalidOperationException("Saved table operation requires valid identifiers.");
+        ExplorationTableResult.RequireKey(command.TableKey, "Saved table key", 120);
+        command.Provenance.Validate();
+        if (command.Definition is { } definition)
+        {
+            definition.Validate();
+            if (definition.Scope != command.Scope ||
+                !string.Equals(definition.TableKey, command.TableKey, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Table identity must match the definition being saved.");
+        }
+        var fingerprint = command.Definition is null ? null :
+            Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(command.Definition)));
+        var mutation = new ExplorationSavedTableMutation(
+            command.OperationId, command.Scope, command.TableKey, fingerprint, command.Provenance);
+        var prior = expedition.Journey.ExplorationSavedTableMutations.SingleOrDefault(
+            value => value.OperationId == command.OperationId);
+        if (prior is not null)
+        {
+            if (prior != mutation)
+                throw new InvalidOperationException("Saved table operation id belongs to a different mutation.");
+            return new(expedition, "Exploration table mutation already applied.", false);
+        }
+        if (expedition.Journey.ConsumedExplorationOperationIds.Contains(command.OperationId))
+            throw new InvalidOperationException("Exploration operation id was already consumed.");
+        if (expedition.Version != command.ExpectedVersion)
+            throw new HexCrawlConcurrencyException(
+                "The expedition changed. Reload its table library before editing.");
+        if (GenericProcedureRuntime.Bind(expedition.CampaignProcedure).ExplorationFlow is null)
+            throw new InvalidOperationException("The pinned procedure has no exploration flow.");
+        var entries = expedition.Journey.ExplorationSavedTables;
+        var old = entries.SingleOrDefault(value => value.Definition.Scope == command.Scope
+            && string.Equals(value.Definition.TableKey, command.TableKey,
+                StringComparison.OrdinalIgnoreCase));
+        if (command.Definition is null && old is null)
+            throw new InvalidOperationException("The exploration table to delete does not exist.");
+        if (command.Definition is not null && old is null && entries.Count >= 256)
+            throw new InvalidOperationException("The exploration table library is full.");
+
+        var replacement = command.Definition is null ? null :
+            new ExplorationSavedTable(command.Definition, command.OperationId, command.Provenance);
+        var journey = expedition.Journey with
+        {
+            ExplorationSavedTables = replacement is null
+                ? [.. entries.Where(value => value != old)]
+                : [.. entries.Where(value => value != old), replacement],
+            ExplorationSavedTableMutations = [.. expedition.Journey.ExplorationSavedTableMutations, mutation],
+            ConsumedExplorationOperationIds =
+                [.. expedition.Journey.ConsumedExplorationOperationIds, command.OperationId]
+        };
+        var saved = await SaveAsync(
+            expedition with { Journey = journey }, command.ExpectedVersion, cancellationToken);
+        return new(saved, replacement is null ? "Removed the saved exploration table."
+            : "Saved the reusable exploration table.", true);
+    }
+
     public async Task<JourneyOperationResult> RecordExplorationCellAsync(
         Guid expeditionId,
         string ownerUserId,
@@ -228,7 +306,8 @@ public sealed class ExpeditionJourneyService(
             && command.RegionKey is null && command.RegionName is null
             && command.RegionDmNote is null && command.LocationTableResults is null
             && command.RegionTableResults is null
-            && (command.TableRolls is null || command.TableRolls.Count == 0))
+            && (command.TableRolls is null || command.TableRolls.Count == 0)
+            && (command.SavedTableReferences is null || command.SavedTableReferences.Count == 0))
             throw new InvalidOperationException("No exploration information was supplied.");
         if (command.RegionKey is not null)
             ExplorationTableResult.RequireKey(command.RegionKey, "Exploration region key", 120);
@@ -240,7 +319,16 @@ public sealed class ExpeditionJourneyService(
             ExplorationTableResult.ValidateCollection(command.LocationTableResults);
         if (command.RegionTableResults is not null)
             ExplorationTableResult.ValidateCollection(command.RegionTableResults);
-        var rollRequests = command.TableRolls ?? [];
+        var savedRefs = command.SavedTableReferences ?? [];
+        ExplorationSavedTableReference.ValidateCollection(savedRefs);
+        var rollRequests = (command.TableRolls ?? []).Concat(savedRefs.Select(reference =>
+            expedition.Journey.ExplorationSavedTables.SingleOrDefault(table =>
+                table.Definition.Scope == reference.Scope
+                && string.Equals(table.Definition.TableKey, reference.TableKey,
+                    StringComparison.OrdinalIgnoreCase))?.Definition
+            ?? throw new InvalidOperationException(
+                $"The selected saved table '{reference.Scope}:{reference.TableKey}' does not exist.")))
+            .ToArray();
         ExplorationTableRollRequest.ValidateCollection(rollRequests);
         var assignedRegion = command.RegionKey ?? existing?.RegionKey;
         if (assignedRegion is null && rollRequests.Any(value => value.Scope == ExplorationTableScope.Region))
@@ -687,10 +775,12 @@ public sealed class ExpeditionJourneyService(
             Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(consequences)));
         var tableFingerprint = command.LocationTableResults is null
             && command.RegionTableResults is null && (command.TableRolls?.Count ?? 0) == 0
+            && (command.SavedTableReferences?.Count ?? 0) == 0
             ? null
             : Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
             {
-                command.LocationTableResults, command.RegionTableResults, command.TableRolls
+                command.LocationTableResults, command.RegionTableResults, command.TableRolls,
+                command.SavedTableReferences
             })));
         return new ExplorationOperationRecord(command.OperationId, cell, command.ActionKey?.Trim(),
             command.MarkVisited, command.MarkRestSite, command.LocationName?.Trim(),
