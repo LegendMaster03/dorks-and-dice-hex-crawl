@@ -251,7 +251,7 @@ public sealed class ExpeditionJourneyService(
             throw new InvalidOperationException("Resolve the discovered region before completing this action.");
         // Evaluate the supplied tables once, only on a fresh, version-valid
         // operation. Replay is checked above, before any random source is used.
-        IReadOnlyList<ProcedureRangeTableOutcome> tableOutcomes = rollRequests.Length == 0
+        IReadOnlyList<ProcedureRangeTableOutcome> tableOutcomes = rollRequests.Count == 0
             ? [] : procedureResolver.ResolveRangeTables(
                 rollRequests.Select(request => request.ToProcedureRangeTable()).ToArray());
         IReadOnlyList<(ExplorationTableScope Scope, ExplorationTableResult Result)> rolled =
