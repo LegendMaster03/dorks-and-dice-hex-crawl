@@ -7,6 +7,19 @@ namespace HexCrawl.Application.Tests;
 public sealed class PlayableGridRasterFitTests
 {
     [Theory]
+    [InlineData(CrawlProcedureCatalog.WastelandWandererPresetKey, 5, -2)]
+    [InlineData(CrawlProcedureCatalog.WastelandWarfarePresetKey, 9, -4)]
+    public void CenteredWorldBoundsRetainTheWholeConfiguredSquarePreset(
+        string presetKey, int count, int minimum)
+    {
+        var worldBounds = new PeriodicMapBounds(count, count, minimum, minimum);
+        var procedure = CrawlProcedureCatalog.Resolve(presetKey).MaterializeGeneric().Procedure;
+        var effective = PeriodicMapBounds.Intersection(worldBounds, procedure.PlayableBounds);
+        Assert.Equal(worldBounds, effective);
+        Assert.Equal(count * count, effective!.Value.Width * effective.Value.Height);
+    }
+
+    [Theory]
     [InlineData(5, -2)]
     [InlineData(9, -4)]
     public void SquareGridFitMapsFullRasterToEveryFiniteCell(int periods, int minimum)
