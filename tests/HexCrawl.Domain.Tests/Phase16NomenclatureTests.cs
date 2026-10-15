@@ -71,6 +71,27 @@ public sealed class Phase16NomenclatureTests
         Assert.Equal(entry.PreferredName, resolved!.Label);
     }
 
+    [Theory]
+    [InlineData("<1:1,1,1:3,6>")]
+    [InlineData("<1:1,1,1:4,4>")]
+    [InlineData("<1:1,1,1:6,3>")]
+    public void NamedRegularTilingDefaultsAreExtractedFromVerifiedGeometry(string symbol)
+    {
+        var period = CrawlTilingNames.VerifiedDefaultPeriod(symbol);
+        Assert.NotNull(period);
+        var result = DelaneyDressHarmonicMetricRealization.Construct(
+            symbol, 2, "world-unit", constraints:
+            [
+                new("period-u-length", "world-unit", 2 * period.Value.U, 2 * period.Value.U),
+                new("period-v-length", "world-unit", 2 * period.Value.V, 2 * period.Value.V),
+                new("period-angle-degrees", "degrees",
+                    period.Value.AngleDegrees, period.Value.AngleDegrees)
+            ]);
+        Assert.Equal("realized", result.Status);
+        Assert.Equal(CrawlTilingNames.Catalog.Describe(symbol, result.Realization)!.Label,
+            CrawlTilingNames.Catalog.ListEntries().Single(x => x.CanonicalDsSymbol == symbol).PreferredName);
+    }
+
     [Fact]
     public void EveryCatalogPreviewHasVerifiedGeometryIncludingMixedCells()
     {

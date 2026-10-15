@@ -72,6 +72,8 @@ public sealed class Phase19MotifCompatibilityTests
         Assert.Equal(status == "unsupported" ? "unsupported" : "inconclusive", assessed.Status);
         Assert.Null(assessed.ObservedShape);
         Assert.False(assessed.CanCorrectInPlace);
+        Assert.Contains("Detector result (" + status + "): No qualified observation",
+            assessed.Explanation);
     }
 
     private static PeriodicWorldTiling World()

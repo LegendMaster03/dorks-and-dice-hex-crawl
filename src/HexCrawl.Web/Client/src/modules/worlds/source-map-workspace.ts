@@ -380,6 +380,11 @@ export class SourceMapWorkspace {
     }
 
     private ensureVisibleForEditing(sourceMap: SourceMapDetail): void {
+        // Previewing an already visible GM/player image must not switch the
+        // selected map view to manual and restore hidden alternate versions.
+        if (!this.map.renderer.hiddenSourceMapIds.has(sourceMap.id)) return;
+        // Explicitly editing a hidden version is different: reveal that
+        // version in manual mode so it can actually be inspected.
         if (isCoordinatedViewSource(sourceMap)) this.switchToManualVisibility();
         this.map.renderer.hiddenSourceMapIds.delete(sourceMap.id);
         this.syncVisibilityControls();
