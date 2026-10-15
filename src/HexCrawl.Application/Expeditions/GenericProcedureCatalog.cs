@@ -369,7 +369,10 @@ public static class GenericProcedureCatalog
                 ("restSiteAction", "string", "Additional action offered at a rest-capable location."),
                 ("actionSelectionStageKey", "string", "Stage that persists the chosen exploration action."),
                 ("actionResolutionStageKey", "string", "Next stage that resolves the selected exploration action."),
-                ("watchCompletionStageKey", "string", "Stage receiving a resolution opportunity when an authoritative watch completes.")),
+                ("watchCompletionStageKey", "string", "Stage receiving a resolution opportunity when an authoritative watch completes."),
+                ("requireResolvedLocationOnDiscovery", "boolean", "Require a confirmed location name or a result from the configured location table when discovering a new cell."),
+                ("requireRegionOnDiscovery", "boolean", "Require a DM-confirmed region assignment when discovering a new cell."),
+                ("locationResultTableKey", "string", "Source table key whose recorded result counts as a resolved location.")),
             phase: "3")
     ];
 

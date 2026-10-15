@@ -20,7 +20,10 @@ public sealed record ExplorationFlowPolicy(
     string? RestSiteAction = null,
     string? ActionSelectionStageKey = null,
     string? ActionResolutionStageKey = null,
-    string? WatchCompletionStageKey = null)
+    string? WatchCompletionStageKey = null,
+    bool RequireResolvedLocationOnDiscovery = false,
+    bool RequireRegionOnDiscovery = false,
+    string? LocationResultTableKey = null)
 {
     public void Validate()
     {
@@ -35,6 +38,8 @@ public sealed record ExplorationFlowPolicy(
                 throw new InvalidOperationException("Exploration action keys cannot be blank.");
         if ((ActionSelectionStageKey is null) != (ActionResolutionStageKey is null))
             throw new InvalidOperationException("Action-driven exploration requires both selection and resolution stages.");
+        if (LocationResultTableKey is not null)
+            ExplorationTableResult.RequireKey(LocationResultTableKey, "Location result table key", 120);
         if (WatchCompletionStageKey is not null
             && !StageKeys.Contains(WatchCompletionStageKey, StringComparer.Ordinal))
             throw new InvalidOperationException(

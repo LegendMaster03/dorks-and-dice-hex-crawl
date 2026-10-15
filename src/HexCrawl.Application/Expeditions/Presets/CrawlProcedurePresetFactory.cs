@@ -77,7 +77,10 @@ internal static class CrawlProcedurePresetFactory
         string? restSiteAction = null,
         string? actionSelectionStageKey = null,
         string? actionResolutionStageKey = null,
-        string? watchCompletionStageKey = null)
+        string? watchCompletionStageKey = null,
+        bool requireResolvedLocationOnDiscovery = false,
+        bool requireRegionOnDiscovery = false,
+        string? locationResultTableKey = null)
     {
         var parameters = new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -91,6 +94,9 @@ internal static class CrawlProcedurePresetFactory
         if (actionSelectionStageKey is not null) parameters["actionSelectionStageKey"] = actionSelectionStageKey;
         if (actionResolutionStageKey is not null) parameters["actionResolutionStageKey"] = actionResolutionStageKey;
         if (watchCompletionStageKey is not null) parameters["watchCompletionStageKey"] = watchCompletionStageKey;
+        if (requireResolvedLocationOnDiscovery) parameters["requireResolvedLocationOnDiscovery"] = "true";
+        if (requireRegionOnDiscovery) parameters["requireRegionOnDiscovery"] = "true";
+        if (locationResultTableKey is not null) parameters["locationResultTableKey"] = locationResultTableKey;
         return new ProcedureModuleRecipe(
             GenericProcedureCatalog.ExplorationFlowModule,
             GenericProcedureCatalog.ExplorationFlowMechanic, 1, parameters);

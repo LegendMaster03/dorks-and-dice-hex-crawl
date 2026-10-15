@@ -183,7 +183,12 @@ public sealed class GenericProcedureRuntime
                 flow.Parameters.GetValueOrDefault("restSiteAction"),
                 flow.Parameters.GetValueOrDefault("actionSelectionStageKey"),
                 flow.Parameters.GetValueOrDefault("actionResolutionStageKey"),
-                flow.Parameters.GetValueOrDefault("watchCompletionStageKey")));
+                flow.Parameters.GetValueOrDefault("watchCompletionStageKey"),
+                flow.Parameters.ContainsKey("requireResolvedLocationOnDiscovery")
+                    && Boolean(flow, "requireResolvedLocationOnDiscovery"),
+                flow.Parameters.ContainsKey("requireRegionOnDiscovery")
+                    && Boolean(flow, "requireRegionOnDiscovery"),
+                flow.Parameters.GetValueOrDefault("locationResultTableKey")));
     }
 
     private void Validate()

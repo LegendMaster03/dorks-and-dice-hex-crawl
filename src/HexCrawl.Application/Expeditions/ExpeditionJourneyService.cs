@@ -237,6 +237,18 @@ public sealed class ExpeditionJourneyService(
         if (command.RegionTableResults is not null)
             ExplorationTableResult.ValidateCollection(command.RegionTableResults);
         var assignedRegion = command.RegionKey ?? existing?.RegionKey;
+        if (command.MarkVisited && flow.ShouldGenerateLocation(existing?.Visited == true, command.ActionKey))
+        {
+            if (flow.RequireRegionOnDiscovery && assignedRegion is null)
+                throw new InvalidOperationException("Resolve the discovered region before completing this action.");
+            var locationIsNamed = !string.IsNullOrWhiteSpace(command.LocationName ?? existing?.LocationName);
+            var locationTable = flow.LocationResultTableKey ?? "location";
+            var locationIsResolved = (command.LocationTableResults ?? existing?.TableResults ?? [])
+                .Any(result => string.Equals(result.TableKey, locationTable, StringComparison.OrdinalIgnoreCase));
+            if (flow.RequireResolvedLocationOnDiscovery && !locationIsNamed && !locationIsResolved)
+                throw new InvalidOperationException(
+                    "Resolve the discovered location or its configured table outcome before completing this action.");
+        }
         if (assignedRegion is null
             && (command.RegionName is not null || command.RegionDmNote is not null
                 || command.RegionTableResults is not null))
