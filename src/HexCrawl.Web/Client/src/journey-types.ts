@@ -254,6 +254,10 @@ export type ExplorationCellContext = {
     locationName: string | null;
     dmNote: string | null;
     availableActions: string[];
+    encounterOpportunities: Array<{
+        actionKey: string | null;
+        requirement: "None" | "Required" | "OptionalOrRiskBased";
+    }>;
     discoveryTrigger: "Manual" | "OnFirstVisit" | "OnExplore";
     encounterTrigger: "Manual" | "EveryTravel" | "OnExploreOrOptionalTravel";
 };

@@ -9,6 +9,7 @@ namespace HexCrawl.Domain.Runtime;
 /// </summary>
 public enum ExplorationDiscoveryTrigger { Manual, OnFirstVisit, OnExplore }
 public enum ExplorationEncounterTrigger { Manual, EveryTravel, OnExploreOrOptionalTravel }
+public enum ExplorationEncounterRequirement { None, Required, OptionalOrRiskBased }
 
 public sealed record ExplorationFlowPolicy(
     IReadOnlyList<string> StageKeys,
@@ -58,4 +59,30 @@ public sealed record ExplorationFlowPolicy(
     /// </summary>
     public bool RequiresEncounterAfterTravel() =>
         EncounterTrigger == ExplorationEncounterTrigger.EveryTravel;
+
+    /// <summary>
+    /// Reports what the pinned rule requires before an encounter can be resolved.
+    /// No roll, encounter content, or combat state is generated here.
+    /// </summary>
+    public ExplorationEncounterRequirement EncounterForAction(
+        bool previouslyVisited, string? chosenAction)
+    {
+        if (chosenAction is not null && RestSiteAction is not null
+            && string.Equals(chosenAction, RestSiteAction, StringComparison.OrdinalIgnoreCase))
+            return ExplorationEncounterRequirement.None;
+        return EncounterTrigger switch
+        {
+            ExplorationEncounterTrigger.Manual => ExplorationEncounterRequirement.None,
+            ExplorationEncounterTrigger.EveryTravel => ExplorationEncounterRequirement.Required,
+            ExplorationEncounterTrigger.OnExploreOrOptionalTravel
+                when !previouslyVisited && FirstVisitAction is not null
+                    && string.Equals(chosenAction, FirstVisitAction, StringComparison.OrdinalIgnoreCase)
+                => ExplorationEncounterRequirement.Required,
+            ExplorationEncounterTrigger.OnExploreOrOptionalTravel
+                when previouslyVisited && RepeatVisitAction is not null
+                    && string.Equals(chosenAction, RepeatVisitAction, StringComparison.OrdinalIgnoreCase)
+                => ExplorationEncounterRequirement.OptionalOrRiskBased,
+            _ => ExplorationEncounterRequirement.None
+        };
+    }
 }

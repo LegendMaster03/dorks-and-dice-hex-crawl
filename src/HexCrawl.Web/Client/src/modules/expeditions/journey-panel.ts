@@ -222,6 +222,15 @@ export class ExpeditionJourneyPanel {
         section.append(this.muted(
             `Discovery trigger: ${humanize(cell.discoveryTrigger)}. Encounter trigger: ${humanize(cell.encounterTrigger)}. ` +
             "Location details are entered after manual resolution; nothing is generated or revealed to players automatically."));
+        for (const opportunity of cell.encounterOpportunities) {
+            if (opportunity.requirement === "None") continue;
+            section.append(this.muted(
+                `${opportunity.actionKey ? humanize(opportunity.actionKey) : "Travel"}: ` +
+                (opportunity.requirement === "Required"
+                    ? "Encounter resolution required."
+                    : "Encounter is optional or depends on a separately resolved risk check.") +
+                " This panel does not roll or resolve the encounter."));
+        }
 
         const form = document.createElement("form");
         form.className = "hc-form hc-form-grid";

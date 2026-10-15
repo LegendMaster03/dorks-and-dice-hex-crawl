@@ -15,6 +15,7 @@ public sealed class ExplorationFlowPolicyTests
         Assert.True(flow.ShouldGenerateLocation(false, null));
         Assert.False(flow.ShouldGenerateLocation(true, null));
         Assert.True(flow.RequiresEncounterAfterTravel());
+        Assert.Equal(ExplorationEncounterRequirement.Required, flow.EncounterForAction(false, null));
         Assert.Empty(flow.AvailableActions(false, false));
     }
 
@@ -35,6 +36,10 @@ public sealed class ExplorationFlowPolicyTests
         Assert.False(flow.ShouldGenerateLocation(false, "travel"));
         Assert.False(flow.ShouldGenerateLocation(true, "explore"));
         Assert.False(flow.RequiresEncounterAfterTravel());
+        Assert.Equal(ExplorationEncounterRequirement.Required, flow.EncounterForAction(false, "explore"));
+        Assert.Equal(ExplorationEncounterRequirement.OptionalOrRiskBased, flow.EncounterForAction(true, "travel"));
+        Assert.Equal(ExplorationEncounterRequirement.None, flow.EncounterForAction(true, "rest"));
+        Assert.Equal(ExplorationEncounterRequirement.None, flow.EncounterForAction(false, "travel"));
     }
 
     [Fact]

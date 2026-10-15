@@ -79,6 +79,10 @@ public sealed record JourneyEventPolicyContract(
         policy.UnsupportedReason);
 }
 
+public sealed record ExplorationActionEncounterContract(
+    string? ActionKey,
+    ExplorationEncounterRequirement Requirement);
+
 public sealed record ExplorationCellContextContract(
     WorldCellId Cell,
     bool Visited,
@@ -86,6 +90,7 @@ public sealed record ExplorationCellContextContract(
     string? LocationName,
     string? DmNote,
     IReadOnlyList<string> AvailableActions,
+    IReadOnlyList<ExplorationActionEncounterContract> EncounterOpportunities,
     ExplorationDiscoveryTrigger DiscoveryTrigger,
     ExplorationEncounterTrigger EncounterTrigger)
 {
@@ -99,8 +104,14 @@ public sealed record ExplorationCellContextContract(
         var entry = expedition.Journey.ExplorationCells.SingleOrDefault(value => value.Cell == cell);
         var visited = entry?.Visited == true;
         var rest = entry?.RestSite == true;
+        var actions = flow.AvailableActions(visited, rest);
+        var evaluations = actions.Count > 0
+            ? actions.Select(action => new ExplorationActionEncounterContract(
+                action, flow.EncounterForAction(visited, action))).ToArray()
+            : [new ExplorationActionEncounterContract(
+                null, flow.EncounterForAction(visited, null))];
         return new(cell, visited, rest, entry?.LocationName, entry?.DmNote,
-            flow.AvailableActions(visited, rest), flow.DiscoveryTrigger, flow.EncounterTrigger);
+            actions, evaluations, flow.DiscoveryTrigger, flow.EncounterTrigger);
     }
 }
 
