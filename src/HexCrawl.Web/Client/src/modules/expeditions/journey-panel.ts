@@ -63,6 +63,7 @@ export class ExpeditionJourneyPanel {
             this.policySummary(state),
             this.rolesView(),
             this.startView(state),
+            this.explorationCellView(state),
             this.processesView(state),
             this.eventsView(state),
             this.historyView(state));
@@ -203,6 +204,53 @@ export class ExpeditionJourneyPanel {
             this.muted("Use exact process, stage, and approach keys only when the generic procedure intentionally leaves the journey structure unresolved."),
             custom);
         section.append(advanced);
+        return section;
+    }
+
+    private explorationCellView(state: ExpeditionJourneyState): HTMLElement {
+        const section = this.section("Current exploration location");
+        const cell = state.explorationCell;
+        if (!cell) {
+            section.append(this.muted("This expedition has no spatial exploration-flow location."));
+            return section;
+        }
+        const address = cell.cell.address;
+        section.append(this.muted(
+            `Cell ${address.translation.u}, ${address.translation.v} (${address.motifCellId}). ` +
+            `${cell.visited ? "Previously visited." : "Visit not yet recorded."} ` +
+            `${cell.restSite ? "Rest site." : "Not designated as a rest site."}`));
+        section.append(this.muted(
+            `Discovery trigger: ${humanize(cell.discoveryTrigger)}. Encounter trigger: ${humanize(cell.encounterTrigger)}. ` +
+            "Location details are entered after manual resolution; nothing is generated or revealed to players automatically."));
+
+        const form = document.createElement("form");
+        form.className = "hc-form hc-form-grid";
+        const action = this.select("Exploration action", ["", ...cell.availableActions.map(key =>
+            `${key}|${humanize(key)}`)]);
+        if (cell.availableActions.length > 0) action.control.value = cell.availableActions[0];
+        const visited = this.checkbox("Confirm this cell was visited", !cell.visited);
+        const rest = this.checkbox("Designate as rest site", false);
+        const name = this.input("Resolved location name (GM only)", "text", cell.locationName ?? "");
+        const note = this.input("Location notes (GM only)", "text", cell.dmNote ?? "");
+        const submit = this.button("Record exploration details");
+        form.append(action.wrapper, visited.wrapper, rest.wrapper, name.wrapper, note.wrapper, submit);
+        form.addEventListener("submit", domEvent => {
+            domEvent.preventDefault();
+            void this.mutate(submit, async () => {
+                const result = await this.api.recordExplorationCell(this.expeditionId, {
+                    expectedVersion: this.requireState().expeditionVersion,
+                    operationId: crypto.randomUUID(),
+                    actionKey: nullable(action.control.value),
+                    markVisited: visited.control.checked,
+                    markRestSite: rest.control.checked,
+                    locationName: nullable(name.control.value),
+                    dmNote: nullable(note.control.value),
+                    provenance: dmJourneyProvenance("exploration-cell-record")
+                });
+                this.apply(result.state);
+            });
+        });
+        section.append(form);
         return section;
     }
 

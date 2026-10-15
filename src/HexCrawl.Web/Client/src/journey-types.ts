@@ -1,3 +1,4 @@
+import type { WorldCellId } from "./types";
 import type {
     ConsequenceProvenance,
     ConsequenceProvenanceRequest,
@@ -246,6 +247,28 @@ export type JourneyEventPolicy = {
     unsupportedReason: string | null;
 };
 
+export type ExplorationCellContext = {
+    cell: WorldCellId;
+    visited: boolean;
+    restSite: boolean;
+    locationName: string | null;
+    dmNote: string | null;
+    availableActions: string[];
+    discoveryTrigger: "Manual" | "OnFirstVisit" | "OnExplore";
+    encounterTrigger: "Manual" | "EveryTravel" | "OnExploreOrOptionalTravel";
+};
+
+export type RecordExplorationCellRequest = {
+    expectedVersion: number;
+    operationId: string;
+    actionKey: string | null;
+    markVisited: boolean;
+    markRestSite: boolean;
+    locationName: string | null;
+    dmNote: string | null;
+    provenance: StartJourneyProcessRequest["provenance"];
+};
+
 export type ExpeditionJourneyState = {
     expeditionVersion: number;
     processPolicy: JourneyProcessPolicy;
@@ -255,6 +278,7 @@ export type ExpeditionJourneyState = {
     eventOccurrences: JourneyEventOccurrence[];
     resolutions: JourneyResolutionRecord[];
     history: JourneyHistoryRecord[];
+    explorationCell: ExplorationCellContext | null;
 };
 
 export type TimeDelayUnit = "Minutes" | "Hours" | "Days";
