@@ -94,6 +94,11 @@ public sealed class ProcedurePresetIdentityTests
             CrawlProcedureCatalog.WastelandWarfarePresetKey).MaterializeGeneric().Procedure;
         var eventPolicy = JourneyProcedurePolicyResolver.ResolveEvents(warfareProcedure);
         Assert.Equal(JourneyPolicySupport.Supported, eventPolicy.Support);
+        Assert.Equal(GenericProcedureCatalog.ManualJourneyEventPolicyMechanic, eventPolicy.MechanicKey);
+        Assert.Equal(MovementCompositionPolicySupport.None,
+            MovementCompositionPolicyResolver.Resolve(warfareProcedure).Support);
+        Assert.Equal(ParticipantActivityPolicySupport.None,
+            ParticipantActivityPolicyResolver.Resolve(warfareProcedure).Support);
         Assert.True(eventPolicy.BlocksRelevantTravelWhileResolutionRequired);
         Assert.True(eventPolicy.Supports(JourneyEventTriggerKind.External));
         Assert.Equal(JourneyEventLinkMode.Standalone, eventPolicy.LinkMode);

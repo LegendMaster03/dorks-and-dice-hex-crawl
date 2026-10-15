@@ -25,7 +25,7 @@ Both presets use the same periodic geometry, movement, optional bounds, pinned e
 - Exploration-cell records are DM confirmations, **not** automatic records of every runtime cell entry. A recorded visit and map visibility are distinct.
 - Warfare exploration actions create durable unresolved encounter opportunities via the existing generic journey-event engine; selecting and resolving opposition remains manual. These opportunities do **not** automatically start a Block Initiative combat session. Wanderer's per-watch runtime encounter support remains separate and no duplicate event is synthesized on site recording.
 - Rest-site eligibility is recorded manually; resting recovery, costs, and supply consumption are not inferred.
-- Warfare selects the generic participant-activity and terrain-adjustment producers required by the existing journey-event module. They use manual activity budgeting, no declared roles, and a neutral default terrain multiplier; the preset does not infer published activity budgets or terrain modifiers.
+- Warfare uses the generic manual-target journey-event mechanic. It has no participant-activity, terrain, or movement-budget dependencies, since an explicitly adjudicated encounter needs none of those inputs. The existing role/terrain-dependent event mechanics retain their stricter producer requirements.
 - The presets' four-hour interval is a **placeholder**, not a verified duration for either published game. No unverified recovery or resource quantities are executed.
 - The Wasteland Wanderer 5×5 bounds and its first-visit discovery trigger are carried over from project input/configuration, not independently verified from the publicly accessible publisher summary.
 

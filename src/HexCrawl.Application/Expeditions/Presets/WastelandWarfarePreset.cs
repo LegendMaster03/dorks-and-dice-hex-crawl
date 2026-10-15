@@ -26,18 +26,6 @@ internal static class WastelandWarfarePreset
                 neighborCenterDistanceFactor: 0d,
                 supportsDeliberateDoubleBack: false)
                 .Concat([
-                    Structural(GenericProcedureCatalog.TerrainMovementModule,
-                        GenericProcedureCatalog.TerrainMovementPolicyMechanic,
-                        ("adjustmentModel", "multiplier"),
-                        ("terrainAdjustments", "default=1"),
-                        ("routeAdjustmentModel", "none"),
-                        ("weatherAdjustmentModel", "manual")),
-                    Structural(GenericProcedureCatalog.PartyActivitiesModule,
-                        GenericProcedureCatalog.ParticipantActivityPolicyMechanic,
-                        ("assignmentScope", "participant"),
-                        ("activityBudgetModel", "manual"),
-                        ("activityKeys", "explore;travel;rest"),
-                        ("roleKeys", "none")),
                     NativeExplorationFlow(
                     ["choose-campaign-action", "resolve-campaign-action"],
                     ExplorationDiscoveryTrigger.OnExplore,
@@ -46,7 +34,7 @@ internal static class WastelandWarfarePreset
                     repeatVisitAction: "travel",
                     restSiteAction: "rest"),
                     Structural(GenericProcedureCatalog.JourneyEventsModule,
-                        GenericProcedureCatalog.JourneyEventPolicyMechanic,
+                        GenericProcedureCatalog.ManualJourneyEventPolicyMechanic,
                         ("triggerModel", "action-dependent-encounter"),
                         ("triggerSources", "external"),
                         ("linkMode", "standalone"),

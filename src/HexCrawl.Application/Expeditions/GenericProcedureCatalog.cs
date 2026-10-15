@@ -49,6 +49,7 @@ public static class GenericProcedureCatalog
     public const string ForcedTravelPolicyMechanic = "forced-travel-policy";
     public const string ProgressiveExpeditionEffectMechanic = "progressive-expedition-effect";
     public const string JourneyEventPolicyMechanic = "journey-event-policy";
+    public const string ManualJourneyEventPolicyMechanic = "manual-journey-event-policy";
     public const string ProgressTriggeredJourneyEventPolicyMechanic = "progress-triggered-journey-event-policy";
     public const string MultiStageExpeditionProcessMechanic = "multi-stage-expedition-process";
     public const string ExplorationFlowMechanic = "exploration-flow-policy";
@@ -323,7 +324,7 @@ public static class GenericProcedureCatalog
             ["journey.event", "effects.transient"],
             [],
             [PartyActivitiesModule, TerrainMovementModule, JourneyProcessModule],
-            [JourneyEventPolicyMechanic, ProgressTriggeredJourneyEventPolicyMechanic],
+            [JourneyEventPolicyMechanic, ManualJourneyEventPolicyMechanic, ProgressTriggeredJourneyEventPolicyMechanic],
             RequiredMany(
                 ("triggerModel", "enum", "How journey events are placed or triggered."),
                 ("targetingModel", "enum", "How an event selects a participant or role."),
@@ -693,6 +694,20 @@ public static class GenericProcedureCatalog
             GenericProcedureExecutionHandlers.DeclarativeContract,
             ProcedureAutomationLevel.Manual,
             ["journey", "event", "phase-3"]),
+        Mechanic(
+            ManualJourneyEventPolicyMechanic,
+            "Manual-target journey event policy",
+            "Records explicitly targeted encounters and events without depending on journey roles, movement budgets, or terrain modifiers.",
+            [],
+            ["journey.event", "effects.transient"],
+            RequiredMany(
+                ("triggerModel", "enum", "Journey event trigger model."),
+                ("targetingModel", "enum", "Journey event target model."),
+                ("terrainInfluence", "enum", "Terrain influence model."),
+                ("consequenceModel", "enum", "Event consequence model.")),
+            GenericProcedureExecutionHandlers.DeclarativeContract,
+            ProcedureAutomationLevel.Manual,
+            ["journey", "event", "explicit-target"]),
         Mechanic(
             ProgressTriggeredJourneyEventPolicyMechanic,
             "Progress-triggered journey event policy",
