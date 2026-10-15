@@ -22,6 +22,108 @@ public sealed class ExplorationTableRollEndpointsTests
         sourceKind = "Dm", sourceKey = key
     };
 
+    [Theory]
+    [InlineData("simple-hex-step")]
+    [InlineData("alexandrian-advanced")]
+    public async Task ExistingHexPresetsShareSpatialGMNotesAndGenericRangeTablesWithoutNewFlow(
+        string hexPreset)
+    {
+        var database = TestWebHost.NewDatabasePath();
+        try
+        {
+            Guid expeditionId;
+            long version;
+            var operationId = Guid.NewGuid();
+            using (var host = TestWebHost.Create(database, "alice"))
+            using (var client = host.CreateClient())
+            {
+                using var created = await client.PostAsJsonAsync("/api/expeditions/cells",
+                    new
+                    {
+                        name = "Shared spatial outcome journal",
+                        procedureKey = hexPreset,
+                        context = new { kind = "MaplessSpatial", name = "Hexagonal expedition" }
+                    }, JsonOptions);
+                created.EnsureSuccessStatusCode();
+                var expedition = await created.Content.ReadFromJsonAsync<JsonElement>();
+                expeditionId = expedition.GetProperty("id").GetGuid();
+                version = expedition.GetProperty("version").GetInt64();
+
+                var initial = await client.GetFromJsonAsync<JsonElement>(
+                    $"/api/expeditions/{expeditionId:D}/journeys", JsonOptions);
+                var site = initial.GetProperty("explorationCell");
+                Assert.Equal("Manual", site.GetProperty("discoveryTrigger").GetString());
+                Assert.Equal("Manual", site.GetProperty("encounterTrigger").GetString());
+                Assert.Empty(site.GetProperty("availableActions").EnumerateArray());
+
+                var recorded = new
+                {
+                    expectedVersion = version,
+                    operationId,
+                    markVisited = true,
+                    markRestSite = false,
+                    regionKey = "hex-region",
+                    dmNote = "Only available to the GM",
+                    tableRolls = new[]
+                    {
+                        new
+                        {
+                            scope = "Location",
+                            tableKey = "site",
+                            dieSides = 4,
+                            sourceReference = "GM-defined shared procedure table",
+                            rows = new[]
+                            {
+                                new { from = 1, through = 2, resultText = "Synthetic grove" },
+                                new { from = 3, through = 4, resultText = "Synthetic bridge" }
+                            }
+                        }
+                    },
+                    provenance = Source("shared-range-table")
+                };
+                using var response = await client.PostAsJsonAsync(
+                    $"/api/expeditions/{expeditionId:D}/journeys/exploration-cell",
+                    recorded, JsonOptions);
+                response.EnsureSuccessStatusCode();
+                var updated = (await response.Content.ReadFromJsonAsync<JsonElement>())
+                    .GetProperty("state");
+                version = updated.GetProperty("expeditionVersion").GetInt64();
+                site = updated.GetProperty("explorationCell");
+                Assert.True(site.GetProperty("visited").GetBoolean());
+                Assert.Equal("hex-region", site.GetProperty("regionKey").GetString());
+                Assert.Equal("Only available to the GM", site.GetProperty("dmNote").GetString());
+                var result = site.GetProperty("locationTableResults")[0];
+                Assert.Equal("site", result.GetProperty("tableKey").GetString());
+                Assert.Equal("GM-defined shared procedure table",
+                    result.GetProperty("sourceReference").GetString());
+                Assert.StartsWith("1d4=", result.GetProperty("roll").GetString());
+                Assert.Empty(updated.GetProperty("eventOccurrences").EnumerateArray());
+                Assert.Empty(updated.GetProperty("activeProcesses").EnumerateArray());
+
+                using var replay = await client.PostAsJsonAsync(
+                    $"/api/expeditions/{expeditionId:D}/journeys/exploration-cell",
+                    recorded, JsonOptions);
+                replay.EnsureSuccessStatusCode();
+                var repeated = await replay.Content.ReadFromJsonAsync<JsonElement>();
+                Assert.False(repeated.GetProperty("stateChanged").GetBoolean());
+                Assert.Equal(version, repeated.GetProperty("state")
+                    .GetProperty("expeditionVersion").GetInt64());
+            }
+
+            using (var restarted = TestWebHost.Create(database, "alice"))
+            using (var client = restarted.CreateClient())
+            {
+                var persisted = await client.GetFromJsonAsync<JsonElement>(
+                    $"/api/expeditions/{expeditionId:D}/journeys", JsonOptions);
+                Assert.Equal(version, persisted.GetProperty("expeditionVersion").GetInt64());
+                Assert.Equal("hex-region", persisted.GetProperty("explorationCell")
+                    .GetProperty("regionKey").GetString());
+                Assert.Single(persisted.GetProperty("explorationCells").EnumerateArray());
+            }
+        }
+        finally { TestWebHost.DeleteDatabase(database); }
+    }
+
     [Fact]
     public async Task SuppliedRollSatisfiesDiscoveryAndDoesNotRerollOnReplayOrRestart()
     {
