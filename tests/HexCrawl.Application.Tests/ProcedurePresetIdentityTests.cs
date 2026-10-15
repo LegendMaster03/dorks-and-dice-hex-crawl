@@ -115,7 +115,18 @@ public sealed class ProcedurePresetIdentityTests
             Assert.Equal(expected.Navigation, actual.Navigation);
             Assert.Equal(expected.Encounters, actual.Encounters);
             Assert.Equal(expected.ResolutionHelpers, actual.ResolutionHelpers);
-            Assert.Equal(expected.ExplorationFlow, actual.ExplorationFlow);
+            Assert.Equal(expected.ExplorationFlow?.StageKeys,
+                actual.ExplorationFlow?.StageKeys);
+            Assert.Equal(expected.ExplorationFlow?.DiscoveryTrigger,
+                actual.ExplorationFlow?.DiscoveryTrigger);
+            Assert.Equal(expected.ExplorationFlow?.EncounterTrigger,
+                actual.ExplorationFlow?.EncounterTrigger);
+            Assert.Equal(expected.ExplorationFlow?.FirstVisitAction,
+                actual.ExplorationFlow?.FirstVisitAction);
+            Assert.Equal(expected.ExplorationFlow?.RepeatVisitAction,
+                actual.ExplorationFlow?.RepeatVisitAction);
+            Assert.Equal(expected.ExplorationFlow?.RestSiteAction,
+                actual.ExplorationFlow?.RestSiteAction);
         }
     }
 

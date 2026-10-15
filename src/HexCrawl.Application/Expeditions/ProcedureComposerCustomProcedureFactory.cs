@@ -158,6 +158,12 @@ internal static class ProcedureComposerCustomProcedureFactory
             ("roleAssignmentModel", "current-at-resolution"),
             ("intervalIntegrationModel", "completed-watch-resolution-opportunity"),
             ("blocksRelevantTravelWhileResolutionRequired", "false")),
+        GenericProcedureCatalog.ExplorationFlowModule => Select(
+            GenericProcedureCatalog.ExplorationFlowModule,
+            GenericProcedureCatalog.ExplorationFlowMechanic,
+            ("stageKeys", "travel;resolution"),
+            ("discoveryTrigger", ExplorationDiscoveryTrigger.Manual.ToString()),
+            ("encounterTrigger", ExplorationEncounterTrigger.Manual.ToString())),
         _ => throw new InvalidOperationException(
             $"Module '{moduleKey}' does not have a generic Composer default selection.")
     };
