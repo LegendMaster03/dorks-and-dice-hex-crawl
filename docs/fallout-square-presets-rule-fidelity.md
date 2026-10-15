@@ -44,7 +44,7 @@ The provisional expedition-local saved-table catalog was removed because reusabl
 
 ## Shared spatial observations versus world and player authority
 
-GM notes, expedition-observed visits, and table outcomes can be recorded on **any spatial expedition**, including existing hex-oriented procedures with no exploration-flow mechanic. A missing flow is interpreted as manual action policy, not as a reason to create another movement, encounter, or dice engine. Tests exercise both the existing simple hex-step and Alexandrian hex presets alongside the square presets. Encounter checks for hex-oriented procedures remain exclusively with the already-selected shared runtime mechanics.
+GM notes, expedition-observed visits, and table outcomes can be recorded on **any spatial expedition**, including existing hex-oriented procedures with no exploration-flow mechanic. A missing flow is interpreted as manual action policy, not as a reason to create another movement, encounter, or dice engine. Integration tests exercise the existing simple hex-step preset alongside square presets. Other hex presets retain their existing travel and calibration requirements; table evaluation itself is tested independently of preset geometry. Encounter checks for hex-oriented procedures remain exclusively with the already-selected shared runtime mechanics.
 
 These expedition-local notes do not author or replace `OverworldDefinition.Locations`, `OverworldDefinition.Features`, or its real spatial regions. World-bound locations/features remain the canonical map objects. Nor do GM observations automatically update `PlayerKnowledgeState`; revealing information is a separate explicit knowledge operation. The journal stores a *record of play*, not a second world geometry or map projection.
 
