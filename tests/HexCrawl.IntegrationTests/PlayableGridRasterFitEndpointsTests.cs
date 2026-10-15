@@ -54,7 +54,33 @@ public sealed class PlayableGridRasterFitEndpointsTests
                 Assert.Equal(version, proposal.GetProperty("worldVersion").GetInt64());
                 Assert.Equal(size, proposal.GetProperty("playableBounds").GetProperty("width").GetInt32());
                 Assert.Equal(min, proposal.GetProperty("playableBounds").GetProperty("minU").GetInt32());
+                Assert.Equal("unverified", proposal.GetProperty("status").GetString());
                 var alignment = proposal.GetProperty("alignment");
+                Assert.Equal("Affine", alignment.GetProperty("kind").GetString());
+                using var unverifiedSave = await client.PutAsJsonAsync(
+                    $"/api/overworlds/{worldId:D}/source-maps/{sourceMapId:D}/playable-grid-fit",
+                    new { expectedVersion = version });
+                Assert.Equal(HttpStatusCode.BadRequest, unverifiedSave.StatusCode);
+
+                using var mismatch = await client.GetAsync(
+                    $"/api/overworlds/{worldId:D}/source-maps/{sourceMapId:D}/playable-grid-fit?observedColumns={size + 1}&observedRows={size}");
+                mismatch.EnsureSuccessStatusCode();
+                var issue = await mismatch.Content.ReadFromJsonAsync<JsonElement>();
+                Assert.Equal("incompatible", issue.GetProperty("status").GetString());
+                Assert.Equal(JsonValueKind.Null, issue.GetProperty("alignment").ValueKind);
+                Assert.Contains($"{size + 1} columns", issue.GetProperty("note").GetString());
+                Assert.Contains($"{size} columns", issue.GetProperty("note").GetString());
+                using var rejectedMismatch = await client.PutAsJsonAsync(
+                    $"/api/overworlds/{worldId:D}/source-maps/{sourceMapId:D}/playable-grid-fit",
+                    new { expectedVersion = version, observedColumns = size + 1, observedRows = size });
+                Assert.Equal(HttpStatusCode.BadRequest, rejectedMismatch.StatusCode);
+
+                using var marginPreview = await client.GetAsync(
+                    $"/api/overworlds/{worldId:D}/source-maps/{sourceMapId:D}/playable-grid-fit?observedColumns={size}&observedRows={size}&leftPercent=5&topPercent=8&rightPercent=7&bottomPercent=9");
+                marginPreview.EnsureSuccessStatusCode();
+                var reviewed = await marginPreview.Content.ReadFromJsonAsync<JsonElement>();
+                Assert.Equal("reported-match", reviewed.GetProperty("status").GetString());
+                alignment = reviewed.GetProperty("alignment");
                 Assert.Equal("Affine", alignment.GetProperty("kind").GetString());
 
                 using (var otherHost = TestWebHost.Create(database, "bob"))
@@ -71,7 +97,11 @@ public sealed class PlayableGridRasterFitEndpointsTests
 
                 using var saved = await client.PutAsJsonAsync(
                     $"/api/overworlds/{worldId:D}/source-maps/{sourceMapId:D}/playable-grid-fit",
-                    new { expectedVersion = version });
+                    new
+                    {
+                        expectedVersion = version, observedColumns = size, observedRows = size,
+                        margins = new { leftPercent = 5, topPercent = 8, rightPercent = 7, bottomPercent = 9 }
+                    });
                 saved.EnsureSuccessStatusCode();
                 var updated = await saved.Content.ReadFromJsonAsync<JsonElement>();
                 Assert.Equal(version + 1, updated.GetProperty("version").GetInt64());
@@ -81,6 +111,11 @@ public sealed class PlayableGridRasterFitEndpointsTests
                     .GetProperty("worldCoverageBoundary").GetArrayLength());
                 Assert.Equal(min, updated.GetProperty("tiling")
                     .GetProperty("playableBounds").GetProperty("minU").GetInt32());
+                var coverage = updated.GetProperty("sourceMaps")[0]
+                    .GetProperty("worldCoverageBoundary");
+                var playable = updated.GetProperty("tiling").GetProperty("playableBounds");
+                Assert.Equal(size, playable.GetProperty("height").GetInt32());
+                Assert.Equal(4, coverage.GetArrayLength());
 
                 using var stale = await client.PutAsJsonAsync(
                     $"/api/overworlds/{worldId:D}/source-maps/{sourceMapId:D}/playable-grid-fit",

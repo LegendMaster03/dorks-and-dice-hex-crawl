@@ -85,6 +85,52 @@ public sealed class PlayableGridRasterFitTests
         Assert.True(double.IsFinite(fit.M11) && double.IsFinite(fit.M22));
     }
 
+    [Theory]
+    [InlineData(5, -2, 10, 8, 5, 7)]
+    [InlineData(9, -4, 2, 10, 15, 6)]
+    public void DecorativeMarginsDoNotChangeCellSpacingOrSourceImageSize(
+        int count, int min, double leftMargin, double topMargin,
+        double rightMargin, double bottomMargin)
+    {
+        var built = DelaneyDressHarmonicMetricRealization.Construct(
+            "<1:1,1,1:4,4>", 1, "world-unit");
+        Assert.Equal("realized", built.Status);
+        var world = new PeriodicWorldTiling(
+            Guid.NewGuid(), built.Topology!, built.Realization!, new WorldPoint(3, 7))
+        {
+            PlayableBounds = new PeriodicMapBounds(count, count, min, min)
+        };
+        var margin = new RasterGridMargins(leftMargin, topMargin, rightMargin, bottomMargin);
+        var (left, top, right, bottom) = margin.InnerRectangle(1200, 900);
+        var fit = PlayableGridRasterFit.Calculate(world, 1200, 900, margin);
+        var cell = world.Resolve(new PeriodicCellAddress(
+            world.Topology.MotifCells[0].Id, new LatticeDisplacement(min, min)));
+        Assert.Contains(cell.Polygon, point => Close(point, fit.ToWorld(new WorldPoint(left, top))));
+        var u = world.Realization.TranslationU;
+        var v = world.Realization.TranslationV;
+        Assert.True(Close(fit.ToWorld(new WorldPoint(right, top)),
+            new WorldPoint(fit.ToWorld(new WorldPoint(left, top)).X + count * u.X,
+                fit.ToWorld(new WorldPoint(left, top)).Y + count * u.Y)));
+        Assert.True(Close(fit.ToWorld(new WorldPoint(left, bottom)),
+            new WorldPoint(fit.ToWorld(new WorldPoint(left, top)).X + count * v.X,
+                fit.ToWorld(new WorldPoint(left, top)).Y + count * v.Y)));
+        var full = AffineRegistrationSolver.Coverage(fit, 1200, 900);
+        Assert.Equal(4, full.Count);
+        Assert.False(Close(full[0], fit.ToWorld(new WorldPoint(left, top))));
+    }
+
+    [Theory]
+    [InlineData(-1, 0, 0, 0)]
+    [InlineData(50, 0, 50, 0)]
+    [InlineData(0, 61, 0, 40)]
+    [InlineData(double.NaN, 0, 0, 0)]
+    public void InvalidMarginsCannotProduceRegistration(
+        double left, double top, double right, double bottom)
+    {
+        var margins = new RasterGridMargins(left, top, right, bottom);
+        Assert.Throws<InvalidOperationException>(() => margins.InnerRectangle(1200, 900));
+    }
+
     [Fact]
     public void NonQuadrilateralGridDoesNotOfferFullBleedImageFit()
     {
