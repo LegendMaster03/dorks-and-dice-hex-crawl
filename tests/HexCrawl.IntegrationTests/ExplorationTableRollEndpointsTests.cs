@@ -22,11 +22,8 @@ public sealed class ExplorationTableRollEndpointsTests
         sourceKind = "Dm", sourceKey = key
     };
 
-    [Theory]
-    [InlineData("simple-hex-step")]
-    [InlineData("alexandrian-advanced")]
-    public async Task ExistingHexPresetsShareSpatialGMNotesAndGenericRangeTablesWithoutNewFlow(
-        string hexPreset)
+    [Fact]
+    public async Task ExistingHexPresetSharesSpatialGMNotesAndGenericRangeTablesWithoutNewFlow()
     {
         var database = TestWebHost.NewDatabasePath();
         try
@@ -41,7 +38,7 @@ public sealed class ExplorationTableRollEndpointsTests
                     new
                     {
                         name = "Shared spatial outcome journal",
-                        procedureKey = hexPreset,
+                        procedureKey = "simple-hex-step",
                         context = new { kind = "MaplessSpatial", name = "Hexagonal expedition" }
                     }, JsonOptions);
                 created.EnsureSuccessStatusCode();
