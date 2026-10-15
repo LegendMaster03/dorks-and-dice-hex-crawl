@@ -60,14 +60,28 @@ export class ExpeditionJourneyPanel {
 
     private render(): void {
         const state = this.requireState();
+        const wasCellDetailsOpen = this.body
+            .querySelector<HTMLDetailsElement>("[data-gm-cell-observations]")?.open ?? false;
         this.body.replaceChildren(
             this.policySummary(state),
             this.rolesView(),
             this.startView(state),
-            this.explorationCellView(state),
             this.processesView(state),
             this.eventsView(state),
             this.historyView(state));
+
+        // Optional GM-only data belongs inside the existing journey workspace,
+        // not ahead of the compass or in the main travel layout. Preserve the
+        // previous journey section order for every existing ruleset.
+        if (state.explorationCell) {
+            const disclosure = document.createElement("details");
+            disclosure.dataset.gmCellObservations = "";
+            disclosure.open = wasCellDetailsOpen;
+            const summary = document.createElement("summary");
+            summary.textContent = "GM cell observations and resolved tables";
+            disclosure.append(summary, this.explorationCellView(state));
+            this.body.append(disclosure);
+        }
     }
 
     private policySummary(state: ExpeditionJourneyState): HTMLElement {

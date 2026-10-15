@@ -90,12 +90,6 @@ export async function renderPeriodicExpeditionWorkbench(
                 </div>
                 <aside class="hc-panel hc-sidebar hc-table-rail" aria-label="At the table">
                     <h2>At the table</h2>
-                    <details data-exploration-flow hidden>
-                        <summary>Exploration procedure</summary>
-                        <ol data-exploration-stages></ol>
-                        <p data-exploration-actions class="hc-hint"></p>
-                        <p class="hc-hint">Action outcomes and optional encounters still require their own resolution. This guide does not advance stages automatically.</p>
-                    </details>
                     <section class="hc-current-travel" aria-label="Current travel">
                         <h3>Current travel</h3><p data-status></p><p data-actual></p>
                         <div data-cell-navigator></div>
@@ -201,31 +195,6 @@ export async function renderPeriodicExpeditionWorkbench(
     const text = (selector: string, value: string): void => {
         required<HTMLElement>(selector).textContent = value;
     };
-    const flow = runtime.procedure.runtime?.explorationFlow;
-    if (flow) {
-        const disclosure = required<HTMLDetailsElement>("[data-exploration-flow]");
-        disclosure.hidden = false;
-        const stages = required<HTMLOListElement>("[data-exploration-stages]");
-        for (const stage of flow.stageKeys) {
-            const item = document.createElement("li");
-            item.textContent = stage.replace(/[-_]/g, " ");
-            stages.append(item);
-        }
-        const actions: string[] = [];
-        if (flow.firstVisitAction)
-            actions.push(`Unexplored location: ${flow.firstVisitAction}`);
-        if (flow.repeatVisitAction)
-            actions.push(`Explored location: ${flow.repeatVisitAction}`);
-        if (flow.restSiteAction)
-            actions.push(`Rest-capable location: ${flow.restSiteAction}`);
-        actions.push(flow.encounterTrigger === "EveryTravel"
-            ? "An encounter follows each travel."
-            : flow.encounterTrigger === "OnExploreOrOptionalTravel"
-                ? "Exploring leads to an encounter; travel encounters depend on the chosen risk."
-                : "Encounters are adjudicated manually.");
-        required<HTMLElement>("[data-exploration-actions]").textContent =
-            actions.join(" · ");
-    }
     const error = required<HTMLElement>("[data-error]");
     const form = required<HTMLFormElement>("[data-travel-form]");
     const travelContent = required<HTMLElement>("[data-travel-content]");
