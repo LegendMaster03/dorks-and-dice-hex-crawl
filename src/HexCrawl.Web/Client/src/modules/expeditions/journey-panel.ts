@@ -237,12 +237,20 @@ export class ExpeditionJourneyPanel {
         const action = this.select("Exploration action", ["", ...cell.availableActions.map(key =>
             `${key}|${humanize(key)}`)]);
         if (cell.availableActions.length > 0) action.control.value = cell.availableActions[0];
-        const visited = this.checkbox("Confirm this cell was visited", !cell.visited);
+        const visited = this.checkbox("Record this exploration action / visit", true);
         const rest = this.checkbox("Designate as rest site", false);
         const name = this.input("Resolved location name (GM only)", "text", cell.locationName ?? "");
         const note = this.input("Location notes (GM only)", "text", cell.dmNote ?? "");
         const encounter = this.select("Optional / risk-based encounter result",
             ["|Unresolved", "true|Encounter occurs", "false|No encounter"]);
+        const syncEncounter = (): void => {
+            const requirement = cell.encounterOpportunities.find(value =>
+                value.actionKey === nullable(action.control.value))?.requirement ?? "None";
+            encounter.wrapper.hidden = requirement !== "OptionalOrRiskBased";
+            if (requirement !== "OptionalOrRiskBased") encounter.control.value = "";
+        };
+        action.control.addEventListener("change", syncEncounter);
+        syncEncounter();
         const submit = this.button("Record exploration details");
         form.append(action.wrapper, visited.wrapper, rest.wrapper, name.wrapper, note.wrapper,
             encounter.wrapper, submit);
