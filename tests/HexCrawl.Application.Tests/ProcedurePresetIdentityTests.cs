@@ -71,6 +71,25 @@ public sealed class ProcedurePresetIdentityTests
     }
 
     [Fact]
+    public void SquarePresetsConfigureDistinctGenericExplorationFlows()
+    {
+        var wanderer = GenericProcedureRuntime.Bind(
+            CrawlProcedureCatalog.Resolve(CrawlProcedureCatalog.WastelandWandererPresetKey)
+                .MaterializeGeneric().Procedure).ExplorationFlow;
+        var warfare = GenericProcedureRuntime.Bind(
+            CrawlProcedureCatalog.Resolve(CrawlProcedureCatalog.WastelandWarfarePresetKey)
+                .MaterializeGeneric().Procedure).ExplorationFlow;
+        Assert.NotNull(wanderer);
+        Assert.NotNull(warfare);
+        Assert.Equal(["travel", "encounter", "take-action", "journal"],
+            wanderer.StageKeys);
+        Assert.True(wanderer.RequiresEncounterAfterTravel());
+        Assert.Equal(["explore", "rest"], warfare.AvailableActions(false, true));
+        Assert.Equal(["travel"], warfare.AvailableActions(true, false));
+        Assert.False(warfare.RequiresEncounterAfterTravel());
+    }
+
+    [Fact]
     public void SquarePresetRulesUseTheSameGenericRuntimeAfterIdentityAndGeometryChanges()
     {
         foreach (var key in new[]
