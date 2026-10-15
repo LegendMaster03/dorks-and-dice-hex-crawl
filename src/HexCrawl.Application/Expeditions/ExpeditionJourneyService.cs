@@ -338,8 +338,8 @@ public sealed class ExpeditionJourneyService(
             throw new InvalidOperationException("Resolve the discovered region before completing this action.");
         // Evaluate the supplied tables once, only on a fresh, version-valid
         // operation. Replay is checked above, before any random source is used.
-        var rolled = rollRequests.Count == 0
-            ? [] : tableRoller.Roll(rollRequests);
+        IReadOnlyList<(ExplorationTableScope Scope, ExplorationTableResult Result)> rolled =
+            rollRequests.Length == 0 ? [] : tableRoller.Roll(rollRequests);
         var locationResults = OverlayResults(
             command.LocationTableResults ?? existing?.TableResults ?? [],
             rolled.Where(value => value.Scope == ExplorationTableScope.Location)
