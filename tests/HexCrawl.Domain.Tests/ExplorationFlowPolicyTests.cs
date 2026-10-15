@@ -62,6 +62,19 @@ public sealed class ExplorationFlowPolicyTests
     }
 
     [Fact]
+    public void WatchCompletionTargetsOnlyAConfiguredStage()
+    {
+        new ExplorationFlowPolicy(["travel", "encounter", "journal"],
+            ExplorationDiscoveryTrigger.OnFirstVisit,
+            ExplorationEncounterTrigger.EveryTravel,
+            WatchCompletionStageKey: "travel").Validate();
+        Assert.Throws<InvalidOperationException>(() => new ExplorationFlowPolicy(
+            ["travel", "journal"], ExplorationDiscoveryTrigger.Manual,
+            ExplorationEncounterTrigger.Manual,
+            WatchCompletionStageKey: "missing").Validate());
+    }
+
+    [Fact]
     public void InvalidStagesAndUnknownTriggersAreRejected()
     {
         Assert.Throws<InvalidOperationException>(() => new ExplorationFlowPolicy(

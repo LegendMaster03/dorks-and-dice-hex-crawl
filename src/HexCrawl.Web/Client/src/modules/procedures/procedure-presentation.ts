@@ -129,6 +129,7 @@ const labels: Record<string, string> = {
     restSiteAction: "Rest-site action",
     actionSelectionStageKey: "Action selection stage",
     actionResolutionStageKey: "Action resolution stage",
+    watchCompletionStageKey: "Completed watch stage",
     progressFloor: "Minimum progress",
     progressCeiling: "Maximum progress",
     allowNegativeProgress: "Allow lost progress",

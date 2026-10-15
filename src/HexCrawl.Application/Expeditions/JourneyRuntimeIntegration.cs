@@ -40,8 +40,17 @@ public static class JourneyRuntimeIntegration
         var watchEventsApply = eventPolicy.Support == JourneyPolicySupport.Supported
             && eventPolicy.Supports(JourneyEventTriggerKind.WatchCompleted)
             && eventPolicy.LinkMode is JourneyEventLinkMode.Standalone or JourneyEventLinkMode.Both;
-        var watchStage = GenericProcedureRuntime.Bind(expedition.CampaignProcedure)
-            .ExplorationFlow?.WatchCompletionStageKey;
+        // Pure journey processes do not need a spatial procedure runtime.
+        // Bind it only when a native exploration process actually consumes
+        // authoritative watch completion.
+        var watchStage = state.ActiveProcesses.Any(process =>
+                process.Execution.ExecutionHandler ==
+                    GenericProcedureExecutionHandlers.ExplorationFlowPolicy
+                && process.Execution.IntervalIntegrationModel ==
+                    JourneyIntervalIntegrationModel.CompletedWatchResolutionOpportunity)
+            ? GenericProcedureRuntime.Bind(expedition.CampaignProcedure)
+                .ExplorationFlow?.WatchCompletionStageKey
+            : null;
         bool UsesWatch(JourneyProcessInstance process) =>
             process.Execution.IntervalIntegrationModel ==
                 JourneyIntervalIntegrationModel.CompletedWatchResolutionOpportunity

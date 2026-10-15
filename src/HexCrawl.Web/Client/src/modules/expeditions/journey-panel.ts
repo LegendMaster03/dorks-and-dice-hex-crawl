@@ -358,6 +358,8 @@ export class ExpeditionJourneyPanel {
                                 complicationDelta: 0,
                                 completeStage: true,
                                 outcomeKey: choice?.control.value ?? null,
+                                pendingActionId: process.pendingActions.find(value =>
+                                    value.kind === "WatchResolution")?.id ?? null,
                                 completeProcess: false,
                                 failProcess: false,
                                 consequences: [],

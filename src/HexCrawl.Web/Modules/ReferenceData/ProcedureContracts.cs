@@ -59,12 +59,14 @@ public sealed record ExplorationFlowContract(
     string? RepeatVisitAction,
     string? RestSiteAction,
     string? ActionSelectionStageKey,
-    string? ActionResolutionStageKey)
+    string? ActionResolutionStageKey,
+    string? WatchCompletionStageKey)
 {
     public static ExplorationFlowContract From(ExplorationFlowPolicy policy) => new(
         policy.StageKeys, policy.DiscoveryTrigger, policy.EncounterTrigger,
         policy.FirstVisitAction, policy.RepeatVisitAction, policy.RestSiteAction,
-        policy.ActionSelectionStageKey, policy.ActionResolutionStageKey);
+        policy.ActionSelectionStageKey, policy.ActionResolutionStageKey,
+        policy.WatchCompletionStageKey);
 }
 
 public sealed record ProcedureRuntimeContract(

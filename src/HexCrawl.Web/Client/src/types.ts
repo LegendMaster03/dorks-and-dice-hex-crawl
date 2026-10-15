@@ -203,6 +203,7 @@ export type ExplorationFlow = {
     restSiteAction: string | null;
     actionSelectionStageKey: string | null;
     actionResolutionStageKey: string | null;
+    watchCompletionStageKey: string | null;
 };
 
 export type ProcedureRuntime = {
