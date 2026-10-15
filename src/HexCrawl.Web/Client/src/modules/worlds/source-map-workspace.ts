@@ -557,6 +557,13 @@ export class SourceMapWorkspace {
             || this.getWorld().version !== candidate.worldVersion)
             throw new Error("The source map or its grid changed. Reload and preview again.");
         this.registrationController.cancelActive();
+        // Remove any previous motif candidate overlay before presenting a
+        // mismatch or a new fit. A stale overlay must never imply that an
+        // incompatible grid was successfully positioned.
+        if (this.map.renderer.registrationPreview) {
+            this.map.renderer.registrationPreview = null;
+            this.map.requestRender();
+        }
         this.ensureVisibleForEditing(source);
         this.gridFitPreview = null;
         required<HTMLElement>(this.editForm, "[data-playable-fit-description]").textContent =
