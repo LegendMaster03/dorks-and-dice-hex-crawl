@@ -368,6 +368,144 @@ public sealed class Phase20ExplorationFlowEndpointsTests
         finally { TestWebHost.DeleteDatabase(database); }
     }
     [Fact]
+    public async Task ResolvedRegionAndLocationTableOutcomesRemainPrivatePersistentAndReplaySafe()
+    {
+        var database = TestWebHost.NewDatabasePath();
+        try
+        {
+            Guid expeditionId;
+            long version;
+            using (var host = TestWebHost.Create(database, "alice"))
+            using (var client = host.CreateClient())
+            {
+                using var started = await client.PostAsJsonAsync("/api/expeditions/cells", new
+                {
+                    name = "Manually resolved region ledger",
+                    procedureKey = CrawlProcedureCatalog.WastelandWarfarePresetKey,
+                    context = new { kind = "MaplessSpatial", name = "Region-aware square map" }
+                }, JsonOptions);
+                started.EnsureSuccessStatusCode();
+                var expedition = await started.Content.ReadFromJsonAsync<JsonElement>();
+                expeditionId = expedition.GetProperty("id").GetGuid();
+                version = expedition.GetProperty("version").GetInt64();
+
+                using var missingRegion = await client.PostAsJsonAsync(
+                    $"/api/expeditions/{expeditionId:D}/journeys/exploration-cell",
+                    new { expectedVersion = version, operationId = Guid.NewGuid(),
+                        markVisited = false, regionName = "Unnamed district",
+                        provenance = Provenance("missing-region") }, JsonOptions);
+                Assert.Equal(HttpStatusCode.BadRequest, missingRegion.StatusCode);
+
+                using var repeatedTable = await client.PostAsJsonAsync(
+                    $"/api/expeditions/{expeditionId:D}/journeys/exploration-cell",
+                    new { expectedVersion = version, operationId = Guid.NewGuid(),
+                        markVisited = false, regionKey = "region-1",
+                        locationTableResults = new[]
+                        {
+                            new { tableKey = "place", resultText = "First site" },
+                            new { tableKey = "PLACE", resultText = "Duplicate site" }
+                        }, provenance = Provenance("repeated-table") }, JsonOptions);
+                Assert.Equal(HttpStatusCode.BadRequest, repeatedTable.StatusCode);
+
+                var operationId = Guid.NewGuid();
+                var result = new
+                {
+                    expectedVersion = version, operationId,
+                    markVisited = false, markRestSite = false,
+                    regionKey = "region-1", regionName = "Eastern quarter",
+                    regionDmNote = "Keep hidden from player view",
+                    locationName = "Old gatehouse",
+                    locationTableResults = new[]
+                    {
+                        new { tableKey = "site", resultText = "Old gatehouse",
+                            roll = "17", sourceReference = "GM supplied example table" }
+                    },
+                    regionTableResults = new[]
+                    {
+                        new { tableKey = "climate", resultText = "Dry",
+                            roll = "4", sourceReference = "GM supplied region table" }
+                    },
+                    provenance = Provenance("resolved-table-result")
+                };
+                using var recorded = await client.PostAsJsonAsync(
+                    $"/api/expeditions/{expeditionId:D}/journeys/exploration-cell",
+                    result, JsonOptions);
+                recorded.EnsureSuccessStatusCode();
+                var journey = (await recorded.Content.ReadFromJsonAsync<JsonElement>())
+                    .GetProperty("state");
+                version = journey.GetProperty("expeditionVersion").GetInt64();
+                var cell = journey.GetProperty("explorationCell");
+                Assert.False(cell.GetProperty("visited").GetBoolean());
+                Assert.Equal("region-1", cell.GetProperty("regionKey").GetString());
+                Assert.Equal("Eastern quarter", cell.GetProperty("regionName").GetString());
+                Assert.Equal("Old gatehouse", cell.GetProperty("locationName").GetString());
+                Assert.Equal("Old gatehouse", cell.GetProperty("locationTableResults")[0]
+                    .GetProperty("resultText").GetString());
+                Assert.Equal("Dry", cell.GetProperty("regionTableResults")[0]
+                    .GetProperty("resultText").GetString());
+
+                using var replay = await client.PostAsJsonAsync(
+                    $"/api/expeditions/{expeditionId:D}/journeys/exploration-cell",
+                    result, JsonOptions);
+                replay.EnsureSuccessStatusCode();
+                var duplicate = await replay.Content.ReadFromJsonAsync<JsonElement>();
+                Assert.False(duplicate.GetProperty("stateChanged").GetBoolean());
+                Assert.Equal(version, duplicate.GetProperty("state")
+                    .GetProperty("expeditionVersion").GetInt64());
+
+                using var changedRoll = await client.PostAsJsonAsync(
+                    $"/api/expeditions/{expeditionId:D}/journeys/exploration-cell",
+                    new { expectedVersion = version - 1, operationId,
+                        markVisited = false, markRestSite = false, regionKey = "region-1",
+                        regionName = "Eastern quarter", regionDmNote = "Keep hidden from player view",
+                        locationName = "Old gatehouse",
+                        locationTableResults = new[]
+                        {
+                            new { tableKey = "site", resultText = "Old gatehouse",
+                                roll = "18", sourceReference = "GM supplied example table" }
+                        },
+                        regionTableResults = new[]
+                        {
+                            new { tableKey = "climate", resultText = "Dry",
+                                roll = "4", sourceReference = "GM supplied region table" }
+                        },
+                        provenance = Provenance("resolved-table-result") }, JsonOptions);
+                Assert.Equal(HttpStatusCode.BadRequest, changedRoll.StatusCode);
+
+                using var noteOnly = await client.PostAsJsonAsync(
+                    $"/api/expeditions/{expeditionId:D}/journeys/exploration-cell",
+                    new { expectedVersion = version, operationId = Guid.NewGuid(),
+                        markVisited = false, dmNote = "Secret passage under the gate",
+                        provenance = Provenance("secret-note") }, JsonOptions);
+                noteOnly.EnsureSuccessStatusCode();
+                var updated = (await noteOnly.Content.ReadFromJsonAsync<JsonElement>())
+                    .GetProperty("state");
+                version = updated.GetProperty("expeditionVersion").GetInt64();
+                Assert.Equal("region-1", updated.GetProperty("explorationCell")
+                    .GetProperty("regionKey").GetString());
+                Assert.Single(updated.GetProperty("explorationCell")
+                    .GetProperty("regionTableResults").EnumerateArray());
+            }
+
+            using (var restarted = TestWebHost.Create(database, "alice"))
+            using (var client = restarted.CreateClient())
+            {
+                var saved = await client.GetFromJsonAsync<JsonElement>(
+                    $"/api/expeditions/{expeditionId:D}/journeys", JsonOptions);
+                Assert.Equal(version, saved.GetProperty("expeditionVersion").GetInt64());
+                var cell = saved.GetProperty("explorationCell");
+                Assert.Equal("Eastern quarter", cell.GetProperty("regionName").GetString());
+                Assert.Equal("Secret passage under the gate", cell.GetProperty("dmNote").GetString());
+                Assert.Equal("17", cell.GetProperty("locationTableResults")[0]
+                    .GetProperty("roll").GetString());
+                Assert.Equal("GM supplied region table", cell.GetProperty("regionTableResults")[0]
+                    .GetProperty("sourceReference").GetString());
+            }
+        }
+        finally { TestWebHost.DeleteDatabase(database); }
+    }
+
+    [Fact]
     public async Task UnconfiguredProcedureCannotStartExplorationFlow()
     {
         var database = TestWebHost.NewDatabasePath();
