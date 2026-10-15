@@ -84,15 +84,31 @@ public sealed class Phase20ExplorationFlowEndpointsTests
                     {
                         // A selected action creates an unresolved event; resolving the
                         // existing generic event atomically completes the action stage.
+                        var actionOperationId = Guid.NewGuid();
+                        var timeConsequenceId = Guid.NewGuid();
+                        var recordedAction = new
+                        {
+                            expectedVersion = version,
+                            operationId = actionOperationId,
+                            processId, actionKey = "explore", markVisited = true,
+                            markRestSite = false,
+                            provenance = Provenance("record-action"),
+                            consequences = new[]
+                            {
+                                new
+                                {
+                                    id = timeConsequenceId,
+                                    consequenceKey = "resolved-action-time",
+                                    category = "TimeDelay",
+                                    target = new { scope = "Expedition" },
+                                    components = new[] { new { kind = "timeDelay", value = 15d, unit = "Minutes" } },
+                                    provenance = Provenance("resolved-action-time")
+                                }
+                            }
+                        };
                         using var recorded = await client.PostAsJsonAsync(
                             $"/api/expeditions/{expeditionId:D}/journeys/exploration-cell",
-                            new
-                            {
-                                expectedVersion = version,
-                                operationId = Guid.NewGuid(),
-                                processId, actionKey = "explore", markVisited = true,
-                                markRestSite = false, provenance = Provenance("record-action")
-                            }, JsonOptions);
+                            recordedAction, JsonOptions);
                         recorded.EnsureSuccessStatusCode();
                         journey = (await recorded.Content.ReadFromJsonAsync<JsonElement>())
                             .GetProperty("state");
@@ -100,6 +116,35 @@ public sealed class Phase20ExplorationFlowEndpointsTests
                         Assert.Equal(stageKeys[index], journey.GetProperty("activeProcesses")[0]
                             .GetProperty("currentStageKey").GetString());
                         var eventId = journey.GetProperty("eventOccurrences")[0].GetProperty("id").GetGuid();
+                        using var repeated = await client.PostAsJsonAsync(
+                            $"/api/expeditions/{expeditionId:D}/journeys/exploration-cell",
+                            recordedAction, JsonOptions);
+                        repeated.EnsureSuccessStatusCode();
+                        var repeatedValue = await repeated.Content.ReadFromJsonAsync<JsonElement>();
+                        Assert.False(repeatedValue.GetProperty("stateChanged").GetBoolean());
+                        Assert.Equal(version, repeatedValue.GetProperty("state")
+                            .GetProperty("expeditionVersion").GetInt64());
+
+                        using var changedConsequence = await client.PostAsJsonAsync(
+                            $"/api/expeditions/{expeditionId:D}/journeys/exploration-cell",
+                            new
+                            {
+                                expectedVersion = recordedAction.expectedVersion,
+                                operationId = actionOperationId, processId,
+                                actionKey = "explore", markVisited = true,
+                                markRestSite = false, provenance = Provenance("record-action"),
+                                consequences = new[]
+                                {
+                                    new
+                                    {
+                                        id = timeConsequenceId, consequenceKey = "resolved-action-time",
+                                        category = "TimeDelay", target = new { scope = "Expedition" },
+                                        components = new[] { new { kind = "timeDelay", value = 30d, unit = "Minutes" } },
+                                        provenance = Provenance("resolved-action-time")
+                                    }
+                                }
+                            }, JsonOptions);
+                        Assert.Equal(HttpStatusCode.BadRequest, changedConsequence.StatusCode);
 
                         using var bypass = await client.PostAsJsonAsync(
                             $"/api/expeditions/{expeditionId:D}/journeys/processes/{processId:D}/resolve",
@@ -133,6 +178,8 @@ public sealed class Phase20ExplorationFlowEndpointsTests
                         journey = (await encounter.Content.ReadFromJsonAsync<JsonElement>())
                             .GetProperty("state");
                         version = journey.GetProperty("expeditionVersion").GetInt64();
+                        Assert.Equal("00:15:00", journey.GetProperty("history")
+                            .EnumerateArray().Last().GetProperty("expeditionTime").GetString());
                         continue;
                     }
 
