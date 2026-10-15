@@ -179,6 +179,9 @@ public sealed class ExpeditionJourneyService(
         if (command.MarkVisited && obligation == ExplorationEncounterRequirement.Required
             && command.EncounterOccurs == false)
             throw new InvalidOperationException("The pinned procedure requires an encounter for this action.");
+        if (command.EncounterOccurs.HasValue && !command.MarkVisited)
+            throw new InvalidOperationException(
+                "An exploration encounter result requires a confirmed action or visit.");
         if (command.EncounterOccurs == true && obligation == ExplorationEncounterRequirement.None)
             throw new InvalidOperationException("This exploration action does not authorize an encounter.");
         var updated = new ExplorationCellRecord

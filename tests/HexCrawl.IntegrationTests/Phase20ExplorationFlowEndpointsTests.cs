@@ -200,6 +200,38 @@ public sealed class Phase20ExplorationFlowEndpointsTests
                 Assert.Equal(version,
                     duplicate.GetProperty("state").GetProperty("expeditionVersion").GetInt64());
 
+                if (firstAction is not null)
+                {
+                    using var unresolved = await client.PostAsJsonAsync(
+                        $"/api/expeditions/{expeditionId:D}/journeys/exploration-cell",
+                        new { expectedVersion = version, operationId = Guid.NewGuid(),
+                            actionKey = "travel", markVisited = true, markRestSite = false,
+                            provenance = Provenance("travel-unresolved") }, JsonOptions);
+                    Assert.Equal(HttpStatusCode.BadRequest, unresolved.StatusCode);
+
+                    using var declined = await client.PostAsJsonAsync(
+                        $"/api/expeditions/{expeditionId:D}/journeys/exploration-cell",
+                        new { expectedVersion = version, operationId = Guid.NewGuid(),
+                            actionKey = "travel", markVisited = true, markRestSite = false,
+                            encounterOccurs = false, provenance = Provenance("travel-declined") }, JsonOptions);
+                    declined.EnsureSuccessStatusCode();
+                    var declinedState = (await declined.Content.ReadFromJsonAsync<JsonElement>())
+                        .GetProperty("state");
+                    Assert.Single(declinedState.GetProperty("eventOccurrences").EnumerateArray());
+                    version = declinedState.GetProperty("expeditionVersion").GetInt64();
+
+                    using var triggered = await client.PostAsJsonAsync(
+                        $"/api/expeditions/{expeditionId:D}/journeys/exploration-cell",
+                        new { expectedVersion = version, operationId = Guid.NewGuid(),
+                            actionKey = "travel", markVisited = true, markRestSite = false,
+                            encounterOccurs = true, provenance = Provenance("travel-triggered") }, JsonOptions);
+                    triggered.EnsureSuccessStatusCode();
+                    var triggeredState = (await triggered.Content.ReadFromJsonAsync<JsonElement>())
+                        .GetProperty("state");
+                    Assert.Equal(2, triggeredState.GetProperty("eventOccurrences").GetArrayLength());
+                    version = triggeredState.GetProperty("expeditionVersion").GetInt64();
+                }
+
                 using var stale = await client.PostAsJsonAsync(
                     $"/api/expeditions/{expeditionId:D}/journeys/exploration-cell",
                     new { expectedVersion = version - 1, operationId = Guid.NewGuid(),

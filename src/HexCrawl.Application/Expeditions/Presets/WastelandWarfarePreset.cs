@@ -25,7 +25,20 @@ internal static class WastelandWarfarePreset
                 usesPersistentVeer: false,
                 neighborCenterDistanceFactor: 0d,
                 supportsDeliberateDoubleBack: false)
-                .Concat([NativeExplorationFlow(
+                .Concat([
+                    Structural(GenericProcedureCatalog.TerrainMovementModule,
+                        GenericProcedureCatalog.TerrainMovementPolicyMechanic,
+                        ("adjustmentModel", "multiplier"),
+                        ("terrainAdjustments", "default=1"),
+                        ("routeAdjustmentModel", "none"),
+                        ("weatherAdjustmentModel", "manual")),
+                    Structural(GenericProcedureCatalog.PartyActivitiesModule,
+                        GenericProcedureCatalog.ParticipantActivityPolicyMechanic,
+                        ("assignmentScope", "participant"),
+                        ("activityBudgetModel", "manual"),
+                        ("activityKeys", "explore;travel;rest"),
+                        ("roleKeys", "none")),
+                    NativeExplorationFlow(
                     ["choose-campaign-action", "resolve-campaign-action"],
                     ExplorationDiscoveryTrigger.OnExplore,
                     ExplorationEncounterTrigger.OnExploreOrOptionalTravel,
